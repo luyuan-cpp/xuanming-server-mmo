@@ -99,7 +99,7 @@ func (p *WeChatMiniGameProvider) Validate(ctx context.Context, code string) (*Au
 		return nil, err
 	}
 	logx.Infof("WeChat mini game auth ok: account=%s openid=%s union=%v", account, maskOAuthId(r.OpenId), r.UnionId != "")
-	return &AuthResult{Account: account}, nil
+	return &AuthResult{Account: account, OpenID: r.OpenId}, nil
 }
 
 // wechatMiniGameErrCodeIsProviderSide 判断 code2Session 的 errcode 是否指向本服务的渠道配置或微信自身状态。
@@ -186,7 +186,7 @@ func (p *DouyinMiniGameProvider) Validate(ctx context.Context, code string) (*Au
 		return nil, err
 	}
 	logx.Infof("Douyin mini game auth ok: account=%s openid=%s union=%v", account, maskOAuthId(r.OpenId), r.UnionId != "")
-	return &AuthResult{Account: account}, nil
+	return &AuthResult{Account: account, OpenID: r.OpenId}, nil
 }
 
 // miniGameAccount 按 unionid 策略拼账号名:有 unionid 就用它;没有时只有显式允许才回落 openid,否则拒绝并标

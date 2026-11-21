@@ -296,7 +296,7 @@ func (a *Apple) classify(txn *appleTransaction) (QueryResult, error) {
 	payment := &Payment{TransactionID: txn.TransactionID, OrderID: strings.ToLower(txn.AppAccountToken), Currency: "", PaidAt: time.UnixMilli(txn.PurchaseDate),
 		ProductID: txn.ProductID, StorePriced: true, StoreCurrency: txn.Currency, Test: txn.Environment == "Sandbox"}
 	if txn.Price > 0 {
-		payment.StoreAmountMinor = uint64(txn.Price) / 10 // milliunits → 最小单位(两位小数的币种)
+		payment.StoreAmountMinor = appleMilliunitsToMinor(txn.Price, txn.Currency)
 	}
 	switch {
 	case txn.Type != "Consumable":
@@ -310,6 +310,22 @@ func (a *Apple) classify(txn *appleTransaction) (QueryResult, error) {
 		return QueryResult{State: TradeRefundedOutside, Payment: payment}, nil
 	}
 	return QueryResult{State: TradePaid, Payment: payment}, nil
+}
+
+// appleMilliunitsToMinor 将 StoreKit 2 固定毫单位(×1000)价格按 ISO-4217 币种小数位折算成最小货币单位：
+// 0 位小数(JPY/KRW/VND 等) ÷1000，3 位小数(BHD/KWD/OMR 等) ÷1，其余常规 2 位小数(CNY/USD/EUR 等) ÷10。
+func appleMilliunitsToMinor(price int64, currency string) uint64 {
+	if price <= 0 {
+		return 0
+	}
+	switch strings.ToUpper(strings.TrimSpace(currency)) {
+	case "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF":
+		return uint64(price) / 1000
+	case "BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND":
+		return uint64(price)
+	default:
+		return uint64(price) / 10
+	}
 }
 
 // Verify 按客户端上报的交易号向 App Store 核实。两个环境都查不到:交易号是假的或不是本应用的,不记账。

@@ -201,6 +201,7 @@ enum PayFinalizeState : int {
   PAY_FINALIZE_STATE_NONE = 0,
   PAY_FINALIZE_STATE_PENDING = 1,
   PAY_FINALIZE_STATE_DONE = 2,
+  PAY_FINALIZE_STATE_FAILED = 3,
   PayFinalizeState_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PayFinalizeState_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -211,11 +212,11 @@ extern const uint32_t PayFinalizeState_internal_data_[];
 inline constexpr PayFinalizeState PayFinalizeState_MIN =
     static_cast<PayFinalizeState>(0);
 inline constexpr PayFinalizeState PayFinalizeState_MAX =
-    static_cast<PayFinalizeState>(2);
+    static_cast<PayFinalizeState>(3);
 [[nodiscard]] inline bool PayFinalizeState_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int PayFinalizeState_ARRAYSIZE = 2 + 1;
+inline constexpr int PayFinalizeState_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PayFinalizeState_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PayFinalizeState) {
@@ -230,7 +231,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PayFinalizeState_Name(PayFinalizeState value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PayFinalizeState_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PayFinalizeState_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PayFinalizeState_Parse(

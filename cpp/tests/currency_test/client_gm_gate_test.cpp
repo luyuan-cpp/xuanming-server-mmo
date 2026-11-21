@@ -2,7 +2,7 @@
 //
 // 闸门本身是两件事的组合:
 //   ① **判据**:这个方法名是不是 GM 指令 —— scene_gm_guard::IsClientGmMethodName;
-//   ② **策略**:GM 指令在当前运行模式下放不放行 —— gate_security::ClassifyGmClientMessage
+//   ② **策略**:GM 指令在当前运行模式下放不放行 —— gm_security::ClassifyGmClientMessage
 //      (判据读 SCENE_RUN_MODE,默认 prod = 拒绝,见 cpp/nodes/gate/SECURITY.md §3)。
 // 接线在 SceneHandler::ProcessClientPlayerMessage(客户端唯一入口)与各 Gm* handler
 // (原为挡节点路由入口 InvokePlayerService;该入口已于批 7 退役并从 proto 删除,这层保留作纵深防御)。
@@ -144,20 +144,20 @@ TEST(ClientGmGateTest, BagServiceExposesGmGrantItemAndItIsGated)
 
 TEST(ClientGmGateTest, DefaultRunModeRefusesGmCommands)
 {
-	using gate_security::ClassifyGmClientMessage;
-	using gate_security::GmClientMessageVerdict;
+	using gm_security::ClassifyGmClientMessage;
+	using gm_security::GmClientMessageVerdict;
 
 	// 默认值在安全侧:未设置 / 拼错的值都被 ParseRunMode 归成 prod,prod 一律拒绝。
 	// 这条与 gate_security_test.cpp 的同名断言重复是**故意**的:scene 这一侧的闸门
 	// 依赖的正是这个结论,而两份测试分属两个可执行文件,任何一侧单独跑都得能发现回归。
 	EXPECT_EQ(GmClientMessageVerdict::kRefuse,
-			  ClassifyGmClientMessage(gate_security::ParseRunMode("", nullptr)));
+			  ClassifyGmClientMessage(token_security::ParseRunMode("", nullptr)));
 	EXPECT_EQ(GmClientMessageVerdict::kRefuse,
-			  ClassifyGmClientMessage(gate_security::ParseRunMode("prodd", nullptr)));
+			  ClassifyGmClientMessage(token_security::ParseRunMode("prodd", nullptr)));
 	EXPECT_EQ(GmClientMessageVerdict::kAllow,
-			  ClassifyGmClientMessage(gate_security::ParseRunMode("dev", nullptr)));
+			  ClassifyGmClientMessage(token_security::ParseRunMode("dev", nullptr)));
 	EXPECT_EQ(GmClientMessageVerdict::kAllow,
-			  ClassifyGmClientMessage(gate_security::ParseRunMode("test", nullptr)));
+			  ClassifyGmClientMessage(token_security::ParseRunMode("test", nullptr)));
 }
 
 TEST(ClientGmGateTest, SceneGateReadsItsOwnRunModeVariable)

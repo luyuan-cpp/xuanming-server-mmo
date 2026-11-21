@@ -69,6 +69,9 @@ func NameOf(id paymentpb.PayChannel) string {
 // ErrBadSignature:回调验签不过、信封认不出、或者不是发给本商户的。不落任何状态,按渠道约定回失败。
 var ErrBadSignature = errors.New("payment channel: notification rejected (signature, envelope or merchant mismatch)")
 
+// ErrTempUnavailable:回调验签依赖的远端临时不可达(如 Google OIDC 公钥拉取失败),不是验签失败;回调入口按 retry 记账并让渠道重投。
+var ErrTempUnavailable = errors.New("payment channel: notification verification temporarily unavailable")
+
 // ErrOrderPaid:下单时渠道说这笔订单已经付过(微信 ORDERPAID)。调用方应改为查单记账,而不是回给玩家失败。
 var ErrOrderPaid = errors.New("payment channel: the order is already paid")
 
@@ -216,6 +219,8 @@ var refundUnsupported = RefundResult{State: RefundFailed, Detail: "NO_REFUND_API
 // 本服务还没记过这笔就收到撤销,要按「撤销后才记账」记成人工,不能发货。
 type Revocation struct {
 	TransactionID string
+	OutTradeNo    string // 渠道在退款通知里附带的商户单号(微信支付/支付宝),用于退款先于付款回调时写墓碑
+	OutRefundNo   string // 渠道在退款通知里附带的商户退款单号(微信支付),用于识别本服务自己发起的退款
 	Revoked       bool
 	ObservedAt    time.Time
 	Detail        string

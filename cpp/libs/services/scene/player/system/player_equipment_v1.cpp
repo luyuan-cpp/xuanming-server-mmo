@@ -1,7 +1,9 @@
 #include "player_equipment_v1.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -17,6 +19,7 @@
 #include "player/system/player_attribute.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_feature_snapshot.h"
+#include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "battle/system/player_battle.h"
@@ -29,6 +32,7 @@
 #include "table/code/equipenhance_table.h"
 #include "table/code/equipv1affix_table.h"
 #include "table/code/item_table.h"
+#include "table/code/table_loader.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -142,6 +146,52 @@ uint32_t BuildDefinition(GetEquipmentCraftRulesResponse& rules) {
     rules.set_rules_fingerprint(ClientRequestFingerprintDigest(rules));
     return kSuccess;
 }
+struct CraftDefinitionCacheKey {
+    uint64_t tableLoadVersion{0};
+    std::array<std::uintptr_t, 5> snapshots{};
+    std::array<std::size_t, 5> rowCounts{};
+    bool operator==(const CraftDefinitionCacheKey&) const = default;
+};
+struct CraftDefinitionCache {
+    bool initialized{false};
+    CraftDefinitionCacheKey key{};
+    uint32_t error{kFeatureUnavailable};
+    GetEquipmentCraftRulesResponse rules{};
+};
+CraftDefinitionCache& DefinitionCache() {
+    static CraftDefinitionCache cache;
+    return cache;
+}
+CraftDefinitionCacheKey CurrentDefinitionCacheKey() {
+    const auto& items = ItemTableManager::Instance();
+    const auto& attrs = EquipAttributeTableManager::Instance();
+    const auto& enhances = EquipEnhanceTableManager::Instance();
+    const auto& affixes = EquipV1AffixTableManager::Instance();
+    const auto& artifacts = EquipArtifactTableManager::Instance();
+    return CraftDefinitionCacheKey{
+        GetTableLoadVersion(),
+        {
+            reinterpret_cast<std::uintptr_t>(&items.GetSnapshot()),
+            reinterpret_cast<std::uintptr_t>(&attrs.GetSnapshot()),
+            reinterpret_cast<std::uintptr_t>(&enhances.GetSnapshot()),
+            reinterpret_cast<std::uintptr_t>(&affixes.GetSnapshot()),
+            reinterpret_cast<std::uintptr_t>(&artifacts.GetSnapshot()),
+        },
+        {items.Count(), attrs.Count(), enhances.Count(), affixes.Count(), artifacts.Count()},
+    };
+}
+const CraftDefinitionCache& CachedDefinition() {
+    auto& cache = DefinitionCache();
+    const auto key = CurrentDefinitionCacheKey();
+    if (!cache.initialized || !(cache.key == key)) {
+        GetEquipmentCraftRulesResponse rebuilt;
+        cache.error = BuildDefinition(rebuilt);
+        cache.rules = (cache.error == kSuccess) ? std::move(rebuilt) : GetEquipmentCraftRulesResponse{};
+        cache.key = key;
+        cache.initialized = true;
+    }
+    return cache;
+}
 uint32_t CheckPlayer(entt::entity player) {
     if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
     const auto* identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
@@ -162,8 +212,7 @@ bool Durable(entt::entity player, uint64_t revision) {
     const auto* identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
     const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
     if (revision == 0 || identity == nullptr || !player_mutability::HasFencedOwnership(player) ||
-        owner == nullptr || persisted == nullptr || !persisted->HasSnapshot() ||
-        persisted->committed_owner_epoch != owner->epoch || persisted->committed_save_seq == 0) return false;
+        owner == nullptr || persisted == nullptr || !persisted->IsCommittedForOwner(owner->epoch)) return false;
     const auto& saved = persisted->snapshot->player_database_data();
     return saved.player_id() == identity->value && saved.client_request_ledger().forge_revision() >= revision;
 }
@@ -271,7 +320,9 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
 uint32_t PlayerEquipmentV1System::GetRules(entt::entity player, GetEquipmentCraftRulesResponse& response) {
     response.Clear();
     if (const auto error = CheckPlayer(player); error != kSuccess) return error;
-    if (const auto error = BuildDefinition(response); error != kSuccess) { response.Clear(); return error; }
+    const auto& cached = CachedDefinition();
+    if (cached.error != kSuccess) return cached.error;
+    response = cached.rules;
     response.set_forge_revision(tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).forge_revision());
     return kSuccess;
 }
@@ -334,7 +385,7 @@ uint32_t Availability(entt::entity player,const PreparedCraft& prepared) {
     const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player);
     const auto* row = ItemRow(prepared.result.config_id());
     if (level == nullptr || row == nullptr) return kServiceUnavailable;
-    if (level->level() < row->equip_level()) return kEquipLevelNotEnough;
+    if (playerlevel::CappedLevel(level->level()) < row->equip_level()) return kEquipLevelNotEnough;
     auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
     const auto verdict = BagService::CheckRemovable(player,inventory,{{prepared.materialId,prepared.materialCount}});
     if (verdict == BagService::RemovalVerdict::kInsufficient) return kEquipEnhanceMaterialNotEnough;
@@ -372,13 +423,13 @@ uint32_t PlayerEquipmentV1System::Preview(entt::entity player,const PreviewEquip
     response.Clear();
     if (const auto error = CheckPlayer(player); error != kSuccess) return error;
     if (!request.has_choice() || UnknownFields(request)) return kInvalidParameter;
-    GetEquipmentCraftRulesResponse rules;
-    if (const auto error = BuildDefinition(rules); error != kSuccess) return error;
+    const auto& cached = CachedDefinition();
+    if (cached.error != kSuccess) return cached.error;
     PreparedCraft prepared;
     if (const auto error = PrepareChoice(player,request.choice(),prepared); error != kSuccess) return error;
     auto& preview = *response.mutable_preview();
     *preview.mutable_choice() = request.choice();
-    preview.set_rules_fingerprint(rules.rules_fingerprint());
+    preview.set_rules_fingerprint(cached.rules.rules_fingerprint());
     preview.set_expected_forge_revision(tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).forge_revision());
     FillProduct(prepared.result,*preview.mutable_result());
     FillMaterial(player,prepared,*preview.mutable_material());
@@ -411,9 +462,9 @@ void PlayerEquipmentV1System::Commit(entt::entity player,const CommitEquipmentCr
     if (request.expected_forge_revision() != ledger.forge_revision()) {
         reject(kEquipEnhanceLevelChanged,false); return;
     }
-    GetEquipmentCraftRulesResponse rules;
-    if (const auto error = BuildDefinition(rules); error != kSuccess) { reject(error); return; }
-    if (request.rules_fingerprint() != rules.rules_fingerprint()) { reject(kInvalidParameter); return; }
+    const auto& cached = CachedDefinition();
+    if (cached.error != kSuccess) { reject(cached.error); return; }
+    if (request.rules_fingerprint() != cached.rules.rules_fingerprint()) { reject(kInvalidParameter); return; }
     PreparedCraft prepared;
     if (const auto error = PrepareChoice(player,request.choice(),prepared); error != kSuccess) { reject(error); return; }
     if (const auto error = Availability(player,prepared); error != kSuccess) { reject(error); return; }
@@ -456,4 +507,8 @@ void PlayerEquipmentV1System::Commit(entt::entity player,const CommitEquipmentCr
 
 void PlayerEquipmentV1System::SetPersistForTest(PersistFn fn) {
     persistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
+}
+
+void PlayerEquipmentV1System::InvalidateRulesCacheForTest() {
+    DefinitionCache().initialized = false;
 }

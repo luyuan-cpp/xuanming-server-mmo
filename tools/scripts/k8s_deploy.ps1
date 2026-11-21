@@ -1,4 +1,4 @@
-param(
+﻿param(
 	[Parameter(Mandatory = $true)]
 	# infra-kafka-topics:只重跑审计 topic + 控制面命令 topic 的预建 Job(Apply-KafkaTopicInitJob)。
 	# Kafka 换成 StatefulSet + PVC 之后(R06),普通重启不再丢 topic;仍然保留这条止血路径,
@@ -576,7 +576,8 @@ param(
 	[switch]$ConfirmRedisCoreRestart,
 	# 部署替运维维护 domain-service-secrets 里 16 把内部 HMAC 密钥($script:ManagedDomainServiceSecrets):缺的自动补齐(从 infra 的规范值复制,
 	# 都没有就生成),已有的合格值沿用。各 namespace 值不同、过短或两把同值时默认在任何写操作之前拒绝;给了这个开关才改成统一值
-	# (infra 那份合格就以它为准,否则生成新值),并重启读这些键的 Pod(删 Pod 由控制器重建,不是滚动)。只在修复时显式加;不粘滞;
+	# (infra 那份合格就以它为准,否则生成新值),并对读这些键的 StatefulSet / Deployment 触发滚动重启(kubectl rollout restart;
+	# Agones scene Fleet 不直接删 Pod,而是告警提示用 k8s_scene_roll.ps1 -Restart 逐台排空替换)。只在修复时显式加;不粘滞;
 	# dev_tools.ps1 只在被指定时透传。
 	[switch]$ResyncDomainServiceSecrets,
 	# 通用资产通道(帮会捐献 / 商店兑换、聚宝斋上架;docs/design/guild-phase2/04-asset-channel.md §4.32、90-consistency.md G-05)。
@@ -671,7 +672,19 @@ param(
 	# 开着的渠道要的密钥由运维预置在 infra namespace 的 Secret payment-channel-secrets(键名 = 配置里各 *Env 指的变量名):本脚本在任何写操作之前
 	# 核对它在、键齐,不读值、不建、不删;改了密钥要 kubectl rollout restart statefulset/payment。合规闸(go/payment 的 config.Validate)不在这里放宽。
 	# 不粘滞:上次给过、这次没给,模板落回缺省段,商城的允许支付渠道跟着变。
-	[string]$PaymentConfigPath = ""
+	[string]$PaymentConfigPath = "",
+	# 配置表热更分发 sidecar(docs/design/config-table-hot-reload.md §7):
+	#   - 不传 -TableSyncS3Endpoint 也不传 -TableSyncDevFixture 时不启用表包模式,所有 Pod 模板与既有完全一致;
+	#   - 启用后给 C++ gate/scene/battle(含 Agones Fleet 与金丝雀池)和 Go 读表服务(guild/login/mail/match/rank/scene-manager)
+	#     注入原生 sidecar table-sync(initContainers + restartPolicy: Always)、table-bundles/table-status 卷与环境变量;
+	#   - 非读表服务(player-locator/trade/payment/chat/friend/data-service/db 等)不挂 sidecar;
+	#   - -TableSyncDevFixture 仅限 -ReleaseProfile dev,复用 infra 的 SeaweedFS 夹具并建 mmorpg-tables 桶与只读 Secret。
+	[string]$TableSyncImage = "",
+	[string]$TableSyncS3Endpoint = "",
+	[string]$TableSyncS3Bucket = "",
+	[string]$TableSyncS3Region = "",
+	[string]$TableSyncS3SecretName = "",
+	[switch]$TableSyncDevFixture
 )
 
 $ErrorActionPreference = "Stop"
@@ -686,6 +699,16 @@ $JavaSvcManifestsDir = Join-Path $K8sRoot "manifests\java-svc"
 # C++ 日志 sidecar(见参数 -NoCppLogSidecar)。留空时写 infra namespace 里的 Loki Service。
 # 容器日志采集 DaemonSet(Go / Java 的日志与 C++ 容器的 stdout / stderr)与它同开同关、推同一个地址(Test-PodLogCollectorDeployed)。
 $script:CppLogSidecarEnabled = -not $NoCppLogSidecar
+# 配置表热更分发 sidecar(docs/design/config-table-hot-reload.md §7):只有显式传 -TableSyncS3Endpoint 或 -TableSyncDevFixture 才启用,
+# 未启用时业务容器不设 MMORPG_TABLE_BUNDLE_ROOT,所有清单逐字不变。
+$script:TableSyncEnabled = ([bool]$TableSyncDevFixture) -or (-not [string]::IsNullOrWhiteSpace($TableSyncS3Endpoint))
+$script:TableSyncGoServices = @('guild', 'login', 'mail', 'match', 'rank', 'scene-manager')
+$script:TableSyncMountPath = '/var/lib/mmorpg/tables'
+$script:TableSyncStatusPath = '/var/lib/mmorpg/tables-status'
+$script:TableSyncDevReadAccessKey = 'mmorpg-tables-ro-dev'
+$script:TableSyncDevReadSecretKey = 'mmorpg-tables-ro-dev-secret-0123456789'
+$script:TableSyncDevWriteAccessKey = 'mmorpg-tables-rw-dev'
+$script:TableSyncDevWriteSecretKey = 'mmorpg-tables-rw-dev-secret-0123456789'
 $script:CppLogSidecarPushUrl = if ([string]::IsNullOrWhiteSpace($LokiPushUrl)) {
 	"http://loki.${InfraNamespace}:3100/loki/api/v1/push"
 } else {
@@ -923,8 +946,8 @@ $script:GrpcAllowLists = [ordered]@{
 	payment = [pscustomobject]@{ PolicyName = 'payment-grpc-allowlist'; TargetApps = @('payment'); AllowedApps = @('client-rpc-router') }
 	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment') }
 	# 2026-11-20 内容安全(docs/design/rename-and-content-safety.md §6.1):调用方是收玩家文字的服务——login(建角名)、guild(帮会名、公告)、
-	# chat(聊天)、Scene(角色改名、宠物名)。它没有调用方签名(只读、无副作用),来源只靠这张名单限制;客户端经路由服到不了它,所以名单里没有 client-rpc-router。
-	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'scene', 'scene-world', 'scene-instance') }
+	# chat(聊天)、trade(人民币寄售标题)、Scene(角色改名、宠物名)。它没有调用方签名(只读、无副作用),来源只靠这张名单限制;客户端经路由服到不了它,所以名单里没有 client-rpc-router。
+	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'trade', 'scene', 'scene-world', 'scene-instance') }
 }
 # 共享 Redis 口令(MMORPG_REDIS_PASSWORD),由 Initialize-InjectedSecrets 解析:dev 档未注入时是空串。$null = 还没解析,
 # 控制端点在单实例时的口令来源(Get-ControlRedisPasswordSource → Get-SharedRedisClientPassword)与 Secret 同步(Sync-RedisAuthSecret)据此拒绝,不把「没解析」当成「没口令」。
@@ -1629,7 +1652,7 @@ function Initialize-InjectedSecrets {
 	# Java 网关数据源的用户名,只写进 java-svc-gateway-config 模板。dev 回落值以 deploy/docker-compose.yml + gateway_node
 	# application.yaml 的口径为准(appuser):mysql.yaml 用 MYSQL_USER 建的就是这个账号。
 	# 数据源口令不解析、不注入(2026-11-12 起):gateway 是写者,常驻进程的数据源账号与口令在运维预置的 runtimeConfigSecret 里
-	# (每个槽位一个账号),模板里口令写空串;以前要求的 MMORPG_GATEWAY_DB_PASSWORD 没有任何读者,不再要。
+	# (每个槽位一个账号),模板里口令写空串;以前要求的数据源口令变量没有任何读者,不再要。
 	$script:GatewayDbUser = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_USER" `
 		-DevFallback "appuser" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源用户名" -MinLength 1
 
@@ -4160,7 +4183,11 @@ function Get-RedisStatefulSetTemplateElement {
 	catch { throw "共享 Redis 重启闸:$Label 不是合法的 JSON,无法比较 Pod 模板。" }
 	try {
 		$root = $document.RootElement
-		$kind = $null; $metadata = $null; $name = $null; $spec = $null; $template = $null
+		[System.Text.Json.JsonElement]$kind = [System.Text.Json.JsonElement]::new()
+		[System.Text.Json.JsonElement]$metadata = [System.Text.Json.JsonElement]::new()
+		[System.Text.Json.JsonElement]$name = [System.Text.Json.JsonElement]::new()
+		[System.Text.Json.JsonElement]$spec = [System.Text.Json.JsonElement]::new()
+		[System.Text.Json.JsonElement]$template = [System.Text.Json.JsonElement]::new()
 		$isRedis = $root.ValueKind -eq 'Object' -and
 			$root.TryGetProperty('kind', [ref]$kind) -and $kind.ValueKind -eq 'String' -and $kind.GetString() -ceq 'StatefulSet' -and
 			$root.TryGetProperty('metadata', [ref]$metadata) -and $metadata.ValueKind -eq 'Object' -and
@@ -4210,7 +4237,8 @@ function Compare-RedisPodTemplateJson {
 	$changedPaths = [System.Collections.Generic.List[string]]::new()
 	if ($liveText -cne $desiredText) {
 		foreach ($section in @('metadata', 'spec')) {
-			$liveSection = $null; $desiredSection = $null
+			[System.Text.Json.JsonElement]$liveSection = [System.Text.Json.JsonElement]::new()
+			[System.Text.Json.JsonElement]$desiredSection = [System.Text.Json.JsonElement]::new()
 			$liveHas = $live.TryGetProperty($section, [ref]$liveSection)
 			$desiredHas = $desired.TryGetProperty($section, [ref]$desiredSection)
 			$liveSectionText = if ($liveHas) { ConvertTo-CanonicalJsonText -Element $liveSection } else { '' }
@@ -4224,7 +4252,8 @@ function Compare-RedisPodTemplateJson {
 			foreach ($property in $liveSection.EnumerateObject()) { [void]$keys.Add($property.Name) }
 			foreach ($property in $desiredSection.EnumerateObject()) { [void]$keys.Add($property.Name) }
 			foreach ($key in $keys) {
-				$liveChild = $null; $desiredChild = $null
+				[System.Text.Json.JsonElement]$liveChild = [System.Text.Json.JsonElement]::new()
+				[System.Text.Json.JsonElement]$desiredChild = [System.Text.Json.JsonElement]::new()
 				$liveChildText = if ($liveSection.TryGetProperty($key, [ref]$liveChild)) { ConvertTo-CanonicalJsonText -Element $liveChild } else { '' }
 				$desiredChildText = if ($desiredSection.TryGetProperty($key, [ref]$desiredChild)) { ConvertTo-CanonicalJsonText -Element $desiredChild } else { '' }
 				if ($liveChildText -cne $desiredChildText) { $changedPaths.Add("$section.$key") }
@@ -5953,7 +5982,7 @@ $JavaSvcCatalogue = @{
 
 # 目录里随 zone 部署的 Java 服务名,按名字排序(理由见 Get-GlobalGoSvcNames)。Global = $true 的全局服务(目前只有 mall)不在其中。
 function Get-ZoneScopedJavaSvcNames {
-	return @($JavaSvcCatalogue.Keys | Where-Object { -not $JavaSvcCatalogue[$_].Global } | Sort-Object)
+	return @($JavaSvcCatalogue.Keys | Sort-Object | Where-Object { -not $JavaSvcCatalogue[$_].Global })
 }
 
 # 注意:OpsProfile 的副本数下限只作用于 legacy 单池参数 $SceneReplicas 与全局的 $BattleReplicas。
@@ -6137,14 +6166,36 @@ $script:LokiS3SecretAccessKey = ''
 $script:LokiS3SecretName = 'loki-s3'
 $script:SeaweedFsDevConfigSecretName = 'seaweedfs-dev-s3-config'
 
-# SeaweedFS 夹具的 S3 身份配置(weed server -s3.config):只有一个身份,就是 Loki 用的那对开发密钥。只进 Secret。
+# SeaweedFS 夹具的 S3 身份配置(weed server -s3.config):按需包含 Loki 身份与配置表热更(只读 sidecar + 写发布工具)身份。只进 Secret。
 function New-SeaweedFsDevS3Config {
-	$identity = [ordered]@{
-		name        = 'loki'
-		credentials = @([ordered]@{ accessKey = $script:LokiS3AccessKeyId; secretKey = $script:LokiS3SecretAccessKey })
-		actions     = @('Admin', 'Read', 'Write', 'List', 'Tagging')
+	$identities = @()
+	if (-not [string]::IsNullOrWhiteSpace($script:LokiS3AccessKeyId)) {
+		$identities += [ordered]@{
+			name        = 'loki'
+			credentials = @([ordered]@{ accessKey = $script:LokiS3AccessKeyId; secretKey = $script:LokiS3SecretAccessKey })
+			actions     = @('Admin', 'Read', 'Write', 'List', 'Tagging')
+		}
 	}
-	return (ConvertTo-Json -InputObject ([ordered]@{ identities = @($identity) }) -Depth 6 -Compress)
+	if ($TableSyncDevFixture) {
+		$identities += [ordered]@{
+			name        = 'tables-readonly'
+			credentials = @([ordered]@{ accessKey = $script:TableSyncDevReadAccessKey; secretKey = $script:TableSyncDevReadSecretKey })
+			actions     = @('Read', 'List')
+		}
+		$identities += [ordered]@{
+			name        = 'tables-admin'
+			credentials = @([ordered]@{ accessKey = $script:TableSyncDevWriteAccessKey; secretKey = $script:TableSyncDevWriteSecretKey })
+			actions     = @('Admin', 'Read', 'Write', 'List')
+		}
+	}
+	if ($identities.Count -eq 0) {
+		$identities += [ordered]@{
+			name        = 'loki'
+			credentials = @([ordered]@{ accessKey = 'mmorpg-loki-dev'; secretKey = 'mmorpg-loki-dev-secret-0123456789' })
+			actions     = @('Admin', 'Read', 'Write', 'List', 'Tagging')
+		}
+	}
+	return (ConvertTo-Json -InputObject ([ordered]@{ identities = $identities }) -Depth 6 -Compress)
 }
 
 function Initialize-LokiS3Credentials {
@@ -7743,27 +7794,38 @@ function New-DomainServiceSecretEntry {
 	return [pscustomobject]@{ Base64 = $Base64; Digest = $digest; Bytes = $bytes.Length }
 }
 
-# 一次列出集群里全部 domain-service-secrets,返回 namespace → { Exists = $true; Entries = 键 → New-DomainServiceSecretEntry }(只含 -Keys 里有的键)。
-# 只收 infra 与名字以 "<-NamespacePrefix>-" 开头的 namespace:本环境的 zone,与 Find-ReadyDataServiceNamespace 同一判据,zones.json 没列的 zone 也算
-# (它的 data-service 同样接全集群的调用)。没有这个 Secret 的 namespace 不在返回值里。kubectl 失败、输出不是 JSON、base64 不合法都 throw:
-# 读不到不等于没有。报错只点键名与 namespace,值不出这个函数与它的返回值之外。
+# 列出集群里的 namespace,再只读 infra 与 "<-NamespacePrefix>-*" 里各自的 domain-service-secrets,返回
+# namespace → { Exists = $true; Entries = 键 → New-DomainServiceSecretEntry }(只含 -Keys 里有的键)。
+# 不用 get secrets --all-namespaces:K8s RBAC 的 --field-selector 不收敛权限,全集群 list secrets 会把 kube-system 与同集群
+# 其它环境的 Secret 全部暴露给部署账号;先列 namespace(非敏感元数据)再按 namespace 读,RBAC 可收口到按 namespace 的
+# resourceNames: ["domain-service-secrets"]。zones.json 没列的 zone 也算(它的 data-service 同样接全集群的调用)。
+# 没有这个 Secret 的 namespace 不在返回值里。kubectl 失败、输出不是 JSON、base64 不合法都 throw:读不到不等于没有。
+# 报错只点键名与 namespace,值不出这个函数与它的返回值之外。
 function Read-DomainServiceSecretEntries {
 	param([Parameter(Mandatory = $true)][string[]]$Keys)
 
-	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'secrets', '--all-namespaces', '--field-selector', 'metadata.name=domain-service-secrets', '-o', 'json') `
+	$nsResult = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'namespaces', '-o', 'name') `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
-	if ($result.ExitCode -ne 0) {
-		throw "Cannot list Secret domain-service-secrets across namespaces (kubectl exit code $($result.ExitCode)): $($result.Stderr). Nothing was written."
+	if ($nsResult.ExitCode -ne 0) {
+		throw "Cannot list namespaces to check Secret domain-service-secrets (kubectl exit code $($nsResult.ExitCode)): $($nsResult.Stderr). Nothing was written."
 	}
-	# 解析错误的原文可能带上 Secret 的片段,不往外抛。
-	try { $list = ([string]$result.Stdout) | ConvertFrom-Json -ErrorAction Stop }
-	catch { throw "The kubectl output for Secret domain-service-secrets is not valid JSON. Nothing was written." }
 	$prefix = "$NamespacePrefix-"
+	$namespaces = @(([string]$nsResult.Stdout) -split "\r?\n" |
+		ForEach-Object { $_.Trim() -creplace '^namespace/', '' } |
+		Where-Object { $_ -ceq $InfraNamespace -or $_.StartsWith($prefix, [System.StringComparison]::Ordinal) } |
+		Sort-Object -Unique)
 	$states = @{}
-	foreach ($item in @($list.items)) {
-		if ($null -eq $item) { continue }
-		$namespace = [string]$item.metadata.namespace
-		if ($namespace -cne $InfraNamespace -and -not $namespace.StartsWith($prefix, [System.StringComparison]::Ordinal)) { continue }
+	foreach ($namespace in $namespaces) {
+		$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'secret', 'domain-service-secrets', '-n', $namespace, '--ignore-not-found', '-o', 'json') `
+			-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
+		if ($result.ExitCode -ne 0) {
+			throw "Cannot read Secret domain-service-secrets in namespace $namespace (kubectl exit code $($result.ExitCode)): $($result.Stderr). Nothing was written."
+		}
+		$text = ([string]$result.Stdout).Trim()
+		if ([string]::IsNullOrEmpty($text)) { continue }
+		# 解析错误的原文可能带上 Secret 的片段,不往外抛。
+		try { $item = $text | ConvertFrom-Json -ErrorAction Stop }
+		catch { throw "The kubectl output for Secret domain-service-secrets in namespace $namespace is not valid JSON. Nothing was written." }
 		$entries = [ordered]@{}
 		foreach ($key in $Keys) {
 			$encoded = if ($null -eq $item.data) { '' } else { [string]$item.data.$key }
@@ -7778,14 +7840,16 @@ function Read-DomainServiceSecretEntries {
 
 <#
 .SYNOPSIS
-	托管内部密钥的写入计划。纯函数:只看入参,返回 { Errors; Writes; Restarts; Exists },不调 kubectl、不打印。
+	托管内部密钥的写入计划。纯函数:只看入参,返回 { Errors; Writes; Restarts; InfraManualRestarts; Exists },不调 kubectl、不打印。
 
 .DESCRIPTION
 	-Keys 是本次要维护的键(表的顺序);-Infra 与 -Zones 是各 namespace 的 { Exists; Entries }(Read-DomainServiceSecretEntries 的结果,没有这个
 	Secret 的记 Exists = $false;-Zones:namespace → 结果,含集群里本次没部署的 zone,它们只用来判同值,缺键不补);-ScopeZones 是本次部署的 zone namespace,-ZoneKeys 是它们要有的键;-Resync 即 -ResyncDomainServiceSecrets。
 	规范值:infra 那份合格(去掉首尾空白后至少 32 字节)就用它;infra 没有就用各 zone 一致且合格的那个;都没有就生成(-NewValue)。
 	记进 Errors 的情形:infra 那份过短;infra 没有而各 zone 值不同或过短;两把同值;任何 namespace 的值与规范值不同。-Resync 时改为:
-	规范值不合格或撞值就生成新值;持有不同值的 namespace 一律改写,并把读这些键的 Pod 记进 Restarts。
+	规范值不合格或撞值就生成新值;持有不同值的 namespace 一律改写,并把读这些键的工作负载记进 Restarts。如果某把共享键在 zone 被改写而
+	infra 没被改写(例如运维按换值步骤先手工改了 infra 再跑 -Resync),把 infra 侧读它且不在 Restarts[infra] 里的服务记进 InfraManualRestarts,
+	写入后提醒运维按需手工 rollout restart(不擅自重启:若是修单个漂移 zone,infra 原本正常,无需打断)。
 	Writes:namespace → 键 → base64,只含缺的与要改写的;infra 存全部规范值(只在 zone 用的键也存一份)。Exists:namespace → 那里有没有这个 Secret
 	(写入时决定 create 还是 merge patch)。Errors 只写键名与 namespace,不带值。
 #>
@@ -7840,9 +7904,10 @@ function Get-ManagedDomainServiceSecretPlan {
 		$keyByDigest[$values[$key].Digest] = $key
 	}
 
-	# 每个 namespace 要写什么、改写了谁就重启谁。
+	# 每个 namespace 要写什么、改写了谁就重启谁。$InfraNamespace 排在最前,所以处理 zone 时已知道 infra 侧是否改写/已列入重启。
 	$writes = [ordered]@{}
 	$restarts = [ordered]@{}
+	$infraManualRestarts = [System.Collections.Generic.List[string]]::new()
 	$exists = [ordered]@{}
 	foreach ($ns in $states.Keys) {
 		$isInfra = $ns -ceq $InfraNamespace
@@ -7858,29 +7923,43 @@ function Get-ManagedDomainServiceSecretPlan {
 				continue
 			}
 			else {
-				# 改写已有值:读它的 Pod 只在启动时读 secretKeyRef,要重启才拿到新值。
+				# 改写已有值:读它的 Pod 只在启动时读 secretKeyRef,要滚动重启才拿到新值。
 				$apps = if ($isInfra) { @($rowOf[$key].InfraConsumers | ForEach-Object { $_; "$_-canary" }) }
 				else { @($rowOf[$key].ZoneConsumers | ForEach-Object { if ($_ -ceq 'scene') { 'scene'; 'scene-world'; 'scene-instance' } else { $_ } }) }
 				foreach ($app in $apps) {
 					if (-not $restarts.Contains($ns)) { $restarts[$ns] = [System.Collections.Generic.List[string]]::new() }
 					if (-not $restarts[$ns].Contains($app)) { $restarts[$ns].Add($app) }
 				}
+				if (-not $isInfra -and -not ($writes.Contains($InfraNamespace) -and $writes[$InfraNamespace].Contains($key))) {
+					foreach ($consumer in @($rowOf[$key].InfraConsumers)) {
+						$alreadyRestarted = $restarts.Contains($InfraNamespace) -and $restarts[$InfraNamespace].Contains($consumer)
+						if (-not $alreadyRestarted -and -not $infraManualRestarts.Contains($consumer)) {
+							$infraManualRestarts.Add($consumer)
+						}
+					}
+				}
 			}
 			if (-not $writes.Contains($ns)) { $writes[$ns] = [ordered]@{} }
 			$writes[$ns][$key] = $values[$key].Base64
 		}
 	}
-	return [pscustomobject]@{ Errors = [string[]]$errors.ToArray(); Writes = $writes; Restarts = $restarts; Exists = $exists }
+	return [pscustomobject]@{
+		Errors              = [string[]]$errors.ToArray()
+		Writes              = $writes
+		Restarts            = $restarts
+		InfraManualRestarts = [string[]]$infraManualRestarts.ToArray()
+		Exists              = $exists
+	}
 }
 
 <#
 .SYNOPSIS
 	托管内部密钥($script:ManagedDomainServiceSecrets)的写前门禁:只读,算出写入计划存进 $script:ManagedDomainServiceSecretPlan,
-	判不了的情形在任何写操作之前 throw。由写路径入口调用;真正写在所有只读门禁之后的 Sync-ManagedDomainServiceSecrets。
+	判不了的情形在任何写操作之前 throw。由写路径入口调用;真正写在 Apply-Infra / Apply-Zone 通过各自写前闸之后的 Sync-ManagedDomainServiceSecrets。
 
 .DESCRIPTION
 	本次要维护的键:部署全局 Go 服务时是 infra 侧有用者的那些;zone-up / all-up 时再加 zone 要有的(只发 C++ 节点时只有 scene 读的四把)。
-	一次列出集群里的 domain-service-secrets,比 infra 与每个 "<-NamespacePrefix>-*" namespace(本次部署的 zone 还没有这个 Secret 的,记为待建):
+	先列 namespace 再逐个读 infra 与每个 "<-NamespacePrefix>-*" 的 domain-service-secrets(本次部署的 zone 还没有这个 Secret 的,记为待建):
 	data-service 与 go/db 是全局池,本次没部署的 zone、zones.json 没列的 zone 也会接到调用,它的值不同同样要拦。规则见
 	Get-ManagedDomainServiceSecretPlan。值只在内存里,不打印、不写进日志与报错;这是本脚本里唯一读取 domain-service-secrets 真实值的地方
 	(「同值」只能靠比较得到)。DryRun 不连集群,只打一行将要维护什么。
@@ -7916,7 +7995,7 @@ function Initialize-ManagedDomainServiceSecrets {
 	$plan = Get-ManagedDomainServiceSecretPlan -Table $script:ManagedDomainServiceSecrets -Keys $keys -InfraNamespace $InfraNamespace `
 		-Infra $infra -Zones $zones -ScopeZones $scopeZones -ZoneKeys $zoneKeys -Resync ([bool]$ResyncDomainServiceSecrets)
 	if ($plan.Errors.Count -gt 0) {
-		throw ("domain-service-secrets check failed ($($plan.Errors.Count) problem(s)); nothing was written. Rerun with -ResyncDomainServiceSecrets to give every namespace one value per key (generated when the current ones are unusable) and restart the Pods that read them:`n  - " + ($plan.Errors -join "`n  - "))
+		throw ("domain-service-secrets check failed ($($plan.Errors.Count) problem(s)); nothing was written. Rerun with -ResyncDomainServiceSecrets to give every namespace one value per key (generated when the current ones are unusable) and roll the workloads that read them:`n  - " + ($plan.Errors -join "`n  - "))
 	}
 	$pending = @($plan.Writes.Keys | ForEach-Object { "$_ ($(@($plan.Writes[$_].Keys).Count) key(s))" })
 	Write-Host "[preflight] domain-service-secrets: $($keys.Count) managed keys agree across namespace $InfraNamespace and $($zones.Count) zone namespace(s); to write: $(if ($pending.Count -gt 0) { $pending -join ', ' } else { 'nothing' })"
@@ -7925,17 +8004,23 @@ function Initialize-ManagedDomainServiceSecrets {
 
 <#
 .SYNOPSIS
-	按 Initialize-ManagedDomainServiceSecrets 的计划写托管内部密钥:写路径门禁块的最后一步,所有只读门禁之后、任何工作负载之前。
+	按 Initialize-ManagedDomainServiceSecrets 的计划写托管内部密钥:在 Apply-Infra / Apply-Zone 通过各自的写前闸之后、任何工作负载之前调用,
+	一次运行只执行一遍(执行后清掉 $script:ManagedDomainServiceSecretPlan,all-up 不会重复写)。
 
 .DESCRIPTION
 	已有这个 Secret 的 namespace 用 merge patch 只增改计划里的键(不用 apply:对运维建的 Secret 做部分 apply 会记下 last-applied,
 	下次只写别的键时 3-way merge 会删掉这次写的键);没有的先建 namespace,再 create 一个只含这些键的 Secret。patch 内容经临时文件交给
-	kubectl(值不进命令行),用完即删。-ResyncDomainServiceSecrets 改写了已有值的 namespace,删掉读这些键的 Pod 由控制器重建
-	(secretKeyRef 只在容器启动时读);只补缺的不用重启:缺键的 Pod 本来就卡在 CreateContainerConfigError,键到了 kubelet 自己重试。
+	kubectl(值不进命令行),用完即删。-ResyncDomainServiceSecrets 改写了已有值的 namespace,按 Get-WorkloadKind 区分 StatefulSet 与
+	Deployment,先查本 namespace 里实际存在的对象再执行 kubectl rollout restart(不用 delete pod -l:delete pod 无视 PDB 与滚动策略,
+	会把 scene 与 db 全部副本同时强杀,也会把 Agones scene Fleet 的 Allocated GameServer 直接打成 Unhealthy 踢人);若 scene 在重启名单里
+	但本 namespace 没有 scene/scene-world/scene-instance Deployment(Agones Fleet 形态),打印告警提示用 k8s_scene_roll.ps1 -Restart 逐台排空替换。
+	若只改写了 zone 里的共享键而 infra 没动(例如换值步骤先手工改了 infra),打印告警列出 infra 侧需手工 rollout restart 的工作负载。
+	只补缺的不重启:缺键的 Pod 本来就卡在 CreateContainerConfigError,键到了 kubelet 自己重试。
 #>
 function Sync-ManagedDomainServiceSecrets {
 	$plan = $script:ManagedDomainServiceSecretPlan
 	if ($DryRun -or $null -eq $plan) { return }
+	$script:ManagedDomainServiceSecretPlan = $null
 	foreach ($namespace in $plan.Writes.Keys) {
 		$written = @($plan.Writes[$namespace].Keys)
 		if ($plan.Exists[$namespace]) {
@@ -7955,8 +8040,40 @@ function Sync-ManagedDomainServiceSecrets {
 	}
 	foreach ($namespace in $plan.Restarts.Keys) {
 		$apps = @($plan.Restarts[$namespace])
-		Invoke-Kubectl -Args @('delete', 'pod', '-n', $namespace, '-l', "app in ($($apps -join ','))", '--wait=false')
-		Write-Host "[secrets] restarted the Pods of $($apps -join ', ') in namespace $namespace so that they read the resynced values"
+		$byKind = [ordered]@{
+			statefulset = @($apps | Where-Object { (Get-WorkloadKind -Name $_) -ceq 'statefulset' })
+			deployment  = @($apps | Where-Object { (Get-WorkloadKind -Name $_) -ceq 'deployment' })
+		}
+		$restartedSceneDeployments = 0
+		foreach ($kind in $byKind.Keys) {
+			$wanted = @($byKind[$kind])
+			if ($wanted.Count -eq 0) { continue }
+			$listResult = Invoke-ClientEntryKubectl -KubectlArgs @('get', $kind, '-n', $namespace, '-o', 'name') `
+				-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
+			if ($listResult.ExitCode -ne 0) {
+				throw "Cannot list ${kind}s in namespace $namespace to restart after resyncing domain-service-secrets (kubectl exit code $($listResult.ExitCode)): $($listResult.Stderr)"
+			}
+			$existing = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+			foreach ($line in (([string]$listResult.Stdout) -split "\r?\n")) {
+				$name = $line.Trim() -creplace '^[^/]+/', ''
+				if (-not [string]::IsNullOrEmpty($name)) { $null = $existing.Add($name) }
+			}
+			$present = @($wanted | Where-Object { $existing.Contains($_) })
+			if ($present.Count -eq 0) { continue }
+			if ($kind -ceq 'deployment') {
+				$restartedSceneDeployments = @($present | Where-Object { $_ -cin @('scene', 'scene-world', 'scene-instance') }).Count
+			}
+			$targets = @($present | ForEach-Object { "$kind/$_" })
+			Invoke-Kubectl -Args (@('rollout', 'restart', '-n', $namespace) + $targets)
+			Write-Host "[secrets] triggered rolling restart of $($targets -join ', ') in namespace $namespace so that they read the resynced values"
+		}
+		if (($apps -ccontains 'scene') -and $restartedSceneDeployments -eq 0) {
+			Write-Warning "[secrets] No scene/scene-world/scene-instance Deployment found in namespace $namespace to roll; if this zone runs scene as an Agones Fleet, drain and replace it with tools/scripts/k8s_scene_roll.ps1 -Namespace $namespace -Fleet <scene|scene-world|scene-instance> -Restart."
+		}
+	}
+	if (@($plan.InfraManualRestarts).Count -gt 0) {
+		$manualTargets = @($plan.InfraManualRestarts | ForEach-Object { "$(Get-WorkloadKind -Name $_)/$_" })
+		Write-Warning "[secrets] Resynced shared key(s) in zone namespace(s) without modifying namespace $InfraNamespace. If you just rotated these key(s) in namespace $InfraNamespace, run: kubectl -n $InfraNamespace rollout restart $($manualTargets -join ' ') (plus any active -canary workloads)."
 	}
 }
 
@@ -8613,15 +8730,23 @@ function New-NodeDeploymentYaml {
 	# Deployment 模板用制表符缩进,Invoke-KubectlWithInputFile 把每个制表符换成 4 空格,
 	# 所以 `containers:`(1 制表符 + 2 空格)换算后落第 6 列、列表项落第 8 列。
 	# 这里的片段直接按字面空格拼(6 / 8),不能再用制表符,否则会被再乘 4。
-	$sidecarInitBlock = ""
-	$sidecarVolumeBlock = ""
+	$sidecarInitItems = @()
+	$sidecarVolItems = @()
 	if ($script:CppLogSidecarEnabled) {
 		$zoneLabelForSidecar = if ([string]::IsNullOrWhiteSpace($CurrentZoneName)) { "global" } else { $CurrentZoneName }
 		# 放 initContainers + restartPolicy: Always(原生 sidecar),理由见 New-CppLogSidecarContainerYaml。
 		# initContainers 与 containers 共用同一个 spec.volumes,所以卷片段不动。
-		$sidecarInitBlock = "`n      initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar -AsNativeSidecar)
-		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "        ")
+		$sidecarInitItems += (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar -AsNativeSidecar)
+		$sidecarVolItems += (New-CppLogSidecarVolumeYaml -ItemIndent "        ")
 	}
+	$tableSyncMountBlock = ""
+	if ($script:TableSyncEnabled) {
+		$sidecarInitItems += (New-TableSyncSidecarContainerYaml -ItemIndent "        " -Track $Track)
+		$sidecarVolItems += (New-TableSyncVolumeYaml -ItemIndent "        ")
+		$tableSyncMountBlock = "`n" + (New-TableSyncMainVolumeMountYaml -ItemIndent "`t`t`t")
+	}
+	$sidecarInitBlock = if ($sidecarInitItems.Count -gt 0) { "`n      initContainers:`n" + ($sidecarInitItems -join "`n") } else { "" }
+	$sidecarVolumeBlock = if ($sidecarVolItems.Count -gt 0) { "`n" + ($sidecarVolItems -join "`n") } else { "" }
 	# Pod 模板注解:sidecar 配置指纹(开 sidecar 时)+ zone Redis 口令指纹(有口令时),同一个 annotations: 段,列位置同上(6 / 8)。
 	# scene(SceneNodeType ≥ 0)在 -AssetOps on 时另带两条资产密钥指纹,见 New-CppPodAnnotationBlock。
 	$podAnnotationBlock = New-CppPodAnnotationBlock -KeyIndent "      " -SceneAssetOp:($SceneNodeType -ge 0) -Role $NodeName
@@ -8660,6 +8785,9 @@ function New-NodeDeploymentYaml {
 	}
 	# gate、battle 不连 Redis(缺口第 34 条第 3 批),不注入任何 Redis 口令。
 	# 工作负载密钥(gate:gate 令牌与观战凭证;battle:battle 票据与 gate 令牌;scene 不读):经本 namespace 的 Secret 注入,
+	if ($script:TableSyncEnabled) {
+		$extraEnvLines += @(New-TableSyncMainEnvLines -ItemIndent "`t`t`t")
+	}
 	# node-config / battle-node-config 里这几键写空串,config.cpp 用变量覆盖 yaml(Get-CppNodeWorkloadSecretEnvEntries)。
 	foreach ($entry in @(Get-CppNodeWorkloadSecretEnvEntries -Role $NodeName)) {
 		$extraEnvLines += "`t`t`t- name: $($entry.Name)"
@@ -8818,7 +8946,7 @@ $grpcEnvBlock
 			  mountPath: /app/bin/etc
 			  readOnly: true
 			- name: node-logs
-			  mountPath: /app/bin/logs
+			  mountPath: /app/bin/logs$tableSyncMountBlock
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc$metricsPortBlock
@@ -9159,6 +9287,247 @@ function New-CppLogSidecarVolumeYaml {
 	return ($lines -join "`n")
 }
 
+# ── 配置表热更分发 sidecar(table-sync,docs/design/config-table-hot-reload.md §7) ──
+
+function Assert-TableSyncPreflight {
+	$auxGiven = (-not [string]::IsNullOrWhiteSpace($TableSyncImage)) -or
+		(-not [string]::IsNullOrWhiteSpace($TableSyncS3Bucket)) -or
+		(-not [string]::IsNullOrWhiteSpace($TableSyncS3Region)) -or
+		(-not [string]::IsNullOrWhiteSpace($TableSyncS3SecretName))
+	if (-not $script:TableSyncEnabled) {
+		if ($auxGiven) {
+			throw "-TableSyncImage / -TableSyncS3Bucket / -TableSyncS3Region / -TableSyncS3SecretName require -TableSyncS3Endpoint or -TableSyncDevFixture. Nothing was written."
+		}
+		return
+	}
+	if ($TableSyncDevFixture -and -not [string]::IsNullOrWhiteSpace($TableSyncS3Endpoint)) {
+		throw "-TableSyncDevFixture and -TableSyncS3Endpoint cannot be specified together. Nothing was written."
+	}
+	if ($TableSyncDevFixture -and $ReleaseProfile -ne 'dev') {
+		throw "-TableSyncDevFixture is a single-process SeaweedFS test fixture for dev and kind only; $ReleaseProfile requires an external S3 endpoint (-TableSyncS3Endpoint). Nothing was written."
+	}
+	$settings = Get-TableSyncSettings
+	if ([string]::IsNullOrWhiteSpace($settings.Endpoint) -or [string]::IsNullOrWhiteSpace($settings.Bucket)) {
+		throw "table-sync requires non-empty S3 endpoint and bucket. Nothing was written."
+	}
+}
+
+function Get-TableSyncSettings {
+	$endpoint = if ($TableSyncDevFixture) { "http://seaweedfs-s3.${InfraNamespace}:8333" } else { $TableSyncS3Endpoint }
+	$bucket = if ([string]::IsNullOrWhiteSpace($TableSyncS3Bucket)) { 'mmorpg-tables' } else { $TableSyncS3Bucket }
+	$region = if ([string]::IsNullOrWhiteSpace($TableSyncS3Region)) { 'us-east-1' } else { $TableSyncS3Region }
+	$secretName = if ([string]::IsNullOrWhiteSpace($TableSyncS3SecretName)) { 'table-sync-s3' } else { $TableSyncS3SecretName }
+	$registry = if ([string]::IsNullOrWhiteSpace($GoSvcRegistry)) { 'ghcr.io/luyuancpp' } else { $GoSvcRegistry }
+	$tag = if ([string]::IsNullOrWhiteSpace($GoSvcTag)) { 'dev' } else { $GoSvcTag }
+	$image = if ([string]::IsNullOrWhiteSpace($TableSyncImage)) { "${registry}/mmorpg-table-sync:${tag}" } else { $TableSyncImage }
+	return [pscustomobject]@{
+		Endpoint    = $endpoint
+		Bucket      = $bucket
+		Region      = $region
+		SecretName  = $secretName
+		Image       = $image
+		PathStyle   = $true
+		Insecure    = [bool]$TableSyncDevFixture
+		EtcdAddress = "etcd.${InfraNamespace}:2379"
+	}
+}
+
+function New-TableSyncMainEnvLines {
+	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+	$keyIndent = $ItemIndent + "  "
+	return @(
+		"${ItemIndent}- name: MMORPG_TABLE_BUNDLE_ROOT",
+		"${keyIndent}value: `"$script:TableSyncMountPath`"",
+		"${ItemIndent}- name: MMORPG_TABLE_STATUS_ROOT",
+		"${keyIndent}value: `"$script:TableSyncStatusPath`""
+	)
+}
+
+function New-TableSyncMainEnvEntries {
+	return @(
+		@{ Name = 'MMORPG_TABLE_BUNDLE_ROOT'; Value = $script:TableSyncMountPath },
+		@{ Name = 'MMORPG_TABLE_STATUS_ROOT'; Value = $script:TableSyncStatusPath }
+	)
+}
+
+function New-TableSyncMainVolumeMountYaml {
+	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+	$keyIndent = $ItemIndent + "  "
+	return (@(
+		"${ItemIndent}- name: table-bundles",
+		"${keyIndent}mountPath: $script:TableSyncMountPath",
+		"${keyIndent}readOnly: true",
+		"${ItemIndent}- name: table-status",
+		"${keyIndent}mountPath: $script:TableSyncStatusPath"
+	) -join "`n")
+}
+
+function New-TableSyncVolumeYaml {
+	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+	$keyIndent = $ItemIndent + "  "
+	return (@(
+		"${ItemIndent}- name: table-bundles",
+		"${keyIndent}emptyDir: { sizeLimit: 1Gi }",
+		"${ItemIndent}- name: table-status",
+		"${keyIndent}emptyDir: { sizeLimit: 16Mi }"
+	) -join "`n")
+}
+
+function New-TableSyncSidecarContainerYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$ItemIndent,
+		[string]$Track = 'stable'
+	)
+	$settings = Get-TableSyncSettings
+	$effectiveTrack = if ([string]::IsNullOrWhiteSpace($Track)) { 'stable' } else { $Track }
+	$pullPolicy = Resolve-ImagePullPolicy -ImageRef $settings.Image
+	$keyIndent = $ItemIndent + "  "
+	$lines = @(
+		"${ItemIndent}- name: table-sync",
+		"${keyIndent}image: $($settings.Image)",
+		"${keyIndent}imagePullPolicy: $pullPolicy",
+		"${keyIndent}restartPolicy: Always",
+		"${keyIndent}ports:",
+		"${keyIndent}  - containerPort: 9099",
+		"${keyIndent}    name: table-sync-http",
+		"${keyIndent}startupProbe:",
+		"${keyIndent}  httpGet:",
+		"${keyIndent}    path: /readyz",
+		"${keyIndent}    port: 9099",
+		"${keyIndent}  periodSeconds: 2",
+		"${keyIndent}  failureThreshold: 30",
+		"${keyIndent}securityContext:",
+		"${keyIndent}  runAsUser: 10001",
+		"${keyIndent}  runAsGroup: 10001",
+		"${keyIndent}  runAsNonRoot: true",
+		"${keyIndent}  allowPrivilegeEscalation: false",
+		"${keyIndent}  readOnlyRootFilesystem: true",
+		"${keyIndent}  capabilities:",
+		"${keyIndent}    drop:",
+		"${keyIndent}      - ALL",
+		"${keyIndent}env:",
+		"${keyIndent}  - name: POD_NAME",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      fieldRef:",
+		"${keyIndent}        fieldPath: metadata.name",
+		"${keyIndent}  - name: MMORPG_RELEASE_TRACK",
+		"${keyIndent}    value: `"$effectiveTrack`"",
+		"${keyIndent}  - name: MMORPG_TABLE_SYNC_ETCD_ENDPOINTS",
+		"${keyIndent}    value: `"$($settings.EtcdAddress)`"",
+		"${keyIndent}  - name: MMORPG_TABLE_BUNDLE_ROOT",
+		"${keyIndent}    value: `"$script:TableSyncMountPath`"",
+		"${keyIndent}  - name: MMORPG_TABLE_STATUS_ROOT",
+		"${keyIndent}    value: `"$script:TableSyncStatusPath`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_ENDPOINT",
+		"${keyIndent}    value: `"$($settings.Endpoint)`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_BUCKET",
+		"${keyIndent}    value: `"$($settings.Bucket)`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_REGION",
+		"${keyIndent}    value: `"$($settings.Region)`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_PATH_STYLE",
+		"${keyIndent}    value: `"true`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_INSECURE",
+		"${keyIndent}    value: `"$(if ($settings.Insecure) { 'true' } else { 'false' })`"",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_ACCESS_KEY",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      secretKeyRef: {name: $($settings.SecretName), key: access-key-id, optional: false}",
+		"${keyIndent}  - name: MMORPG_TABLE_S3_SECRET_KEY",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      secretKeyRef: {name: $($settings.SecretName), key: secret-access-key, optional: false}",
+		"${keyIndent}volumeMounts:",
+		"${keyIndent}  - name: table-bundles",
+		"${keyIndent}    mountPath: $script:TableSyncMountPath",
+		"${keyIndent}  - name: table-status",
+		"${keyIndent}    mountPath: $script:TableSyncStatusPath",
+		"${keyIndent}    readOnly: true",
+		"${keyIndent}resources:",
+		"${keyIndent}  requests:",
+		"${keyIndent}    cpu: 10m",
+		"${keyIndent}    memory: 32Mi",
+		"${keyIndent}  limits:",
+		"${keyIndent}    memory: 128Mi"
+	)
+	return ($lines -join "`n")
+}
+
+function Add-TableSyncSidecarToGoSvcManifest {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$ManifestContent,
+		[string]$Track = 'stable'
+	)
+	if (-not $script:TableSyncEnabled -or $SvcName -notin $script:TableSyncGoServices) {
+		return $ManifestContent
+	}
+	$updated = $ManifestContent
+	# 1. initContainers: 已有段则追加到段首,没有则在 containers: 之前插入。
+	if ([regex]::IsMatch($updated, '(?m)^      initContainers:[ \t]*\r?\n')) {
+		$sidecarYaml = New-TableSyncSidecarContainerYaml -ItemIndent '        ' -Track $Track
+		$updated = [regex]::Replace($updated, '(?m)^(      initContainers:[ \t]*\r?\n)', ('$1' + $sidecarYaml + "`n"), 1)
+	}
+	elseif ([regex]::IsMatch($updated, '(?m)^      containers:[ \t]*\r?\n')) {
+		$sidecarYaml = New-TableSyncSidecarContainerYaml -ItemIndent '        ' -Track $Track
+		$updated = [regex]::Replace($updated, '(?m)^(      containers:[ \t]*\r?\n)', ("      initContainers:`n" + $sidecarYaml + "`n`$1"), 1)
+	}
+	else {
+		throw "Cannot inject table-sync sidecar into Go service $SvcName manifest: missing pod spec containers: block."
+	}
+
+	# 2. 主容器 env 与 volumeMounts(只作用于 containers: 之后、volumes: 之前那一段,避免误改 initContainers)。
+	$containersMatch = [regex]::Match($updated, '(?m)^      containers:[ \t]*\r?\n')
+	if (-not $containersMatch.Success) {
+		throw "Cannot locate containers: block in Go service $SvcName manifest."
+	}
+	$prefix = $updated.Substring(0, $containersMatch.Index)
+	$suffix = $updated.Substring($containersMatch.Index)
+
+	$envLines = (New-TableSyncMainEnvLines -ItemIndent '            ') -join "`n"
+	if ([regex]::IsMatch($suffix, '(?m)^          env:[ \t]*\r?\n')) {
+		$suffix = [regex]::Replace($suffix, '(?m)^(          env:[ \t]*\r?\n)', ('$1' + $envLines + "`n"), 1)
+	} else {
+		throw "Cannot inject table-sync env into Go service $SvcName manifest: missing main container env: block."
+	}
+
+	$mountLines = New-TableSyncMainVolumeMountYaml -ItemIndent '            '
+	if ([regex]::IsMatch($suffix, '(?m)^          volumeMounts:[ \t]*\r?\n')) {
+		$suffix = [regex]::Replace($suffix, '(?m)^(          volumeMounts:[ \t]*\r?\n)', ('$1' + $mountLines + "`n"), 1)
+	} else {
+		throw "Cannot inject table-sync volumeMounts into Go service $SvcName manifest: missing main container volumeMounts: block."
+	}
+
+	$volLines = New-TableSyncVolumeYaml -ItemIndent '        '
+	if ([regex]::IsMatch($suffix, '(?m)^      volumes:[ \t]*\r?\n')) {
+		$suffix = [regex]::Replace($suffix, '(?m)^(      volumes:[ \t]*\r?\n)', ('$1' + $volLines + "`n"), 1)
+	} else {
+		throw "Cannot inject table-sync volumes into Go service $SvcName manifest: missing pod spec volumes: block."
+	}
+
+	return $prefix + $suffix
+}
+
+function Apply-TableSyncDevSecret {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+	if (-not $TableSyncDevFixture) { return }
+	$settings = Get-TableSyncSettings
+	if ($DryRun) {
+		Write-Host "[dry-run] would ensure dev table-sync S3 read-only Secret $($settings.SecretName) in namespace $Namespace (values hidden)"
+		return
+	}
+	$secretYaml = @"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $($settings.SecretName)
+  labels:
+    app: table-sync
+type: Opaque
+stringData:
+  access-key-id: "$script:TableSyncDevReadAccessKey"
+  secret-access-key: "$script:TableSyncDevReadSecretKey"
+"@
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $secretYaml
+}
+
 <#
 .SYNOPSIS
 启用日志 sidecar 时,在 apply 之前提醒三件会静默失败的事。
@@ -9410,12 +9779,22 @@ function New-SceneFleetYaml {
 	# container: 那一行现在是冗余的(移进 initContainers 后 containers 只剩 1 个,Agones 的
 	# applyContainerDefaults 会自己认),但显式写出仍然合法,而且将来再加第二个普通容器时
 	# 不写这行 Fleet 会被 Agones 拒掉 —— 所以保留,别顺手删。
-	$sidecarInitBlock = ""
-	$sidecarVolumeBlock = ""
+	$sidecarInitItems = @()
+	$sidecarVolItems = @()
 	$gameServerContainerLine = ""
 	if ($script:CppLogSidecarEnabled) {
-		$sidecarInitBlock = "`n          initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel -AsNativeSidecar)
-		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "            ")
+		$sidecarInitItems += (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel -AsNativeSidecar)
+		$sidecarVolItems += (New-CppLogSidecarVolumeYaml -ItemIndent "            ")
+	}
+	$tableSyncFleetMountBlock = ""
+	if ($script:TableSyncEnabled) {
+		$sidecarInitItems += (New-TableSyncSidecarContainerYaml -ItemIndent "            " -Track $ReleaseTrack)
+		$sidecarVolItems += (New-TableSyncVolumeYaml -ItemIndent "            ")
+		$tableSyncFleetMountBlock = "`n" + (New-TableSyncMainVolumeMountYaml -ItemIndent "                ")
+	}
+	$sidecarInitBlock = if ($sidecarInitItems.Count -gt 0) { "`n          initContainers:`n" + ($sidecarInitItems -join "`n") } else { "" }
+	$sidecarVolumeBlock = if ($sidecarVolItems.Count -gt 0) { "`n" + ($sidecarVolItems -join "`n") } else { "" }
+	if ($sidecarInitItems.Count -gt 0) {
 		$gameServerContainerLine = "      container: $FleetName`n"
 	}
 	# Pod 模板注解(sidecar 配置指纹 + zone Redis 口令指纹),同 New-NodeDeploymentYaml;Fleet 的 Pod 模板 metadata 子键在第 10 列。
@@ -9462,6 +9841,9 @@ function New-SceneFleetYaml {
 	$sceneAssetEnvLines += @(New-CppMetricsEnvLines -ItemIndent (' ' * 16))
 	# 发布轨道(-ReleaseTrack canary)同样借用这个插入点;stable 不写,Fleet 逐字不变。
 	$sceneAssetEnvLines += @(New-CppReleaseTrackEnvLines -ItemIndent (' ' * 16))
+	if ($script:TableSyncEnabled) {
+		$sceneAssetEnvLines += @(New-TableSyncMainEnvLines -ItemIndent (' ' * 16))
+	}
 	# 轨道标签加在 GameServer 模板和它的 Pod 模板两层(kubectl get gs / pods -l 都筛得出);Fleet 自己的 labels 不加。stable 不写。
 	$gameServerTrackLabel = New-CppReleaseTrackPodLabelLine -ItemIndent (' ' * 8)
 	$fleetPodTrackLabel = New-CppReleaseTrackPodLabelLine -ItemIndent (' ' * 12)
@@ -9541,7 +9923,7 @@ $sceneAssetEnvBlock
                   mountPath: /app/bin/etc
                   readOnly: true
                 - name: node-logs
-                  mountPath: /app/bin/logs
+                  mountPath: /app/bin/logs$tableSyncFleetMountBlock
               ports:
                 - containerPort: $RpcPort
                   name: rpc$fleetMetricsPortBlock
@@ -9833,11 +10215,18 @@ function New-CppNodePodCommon {
 	# 工作负载密钥的 env(按 -Role 取,不传时没有)。
 	$secretEnv = @()
 	if (-not [string]::IsNullOrEmpty($Role)) { $secretEnv += @(Get-CppNodeWorkloadSecretEnvEntries -Role $Role) }
+	$tableSyncCommon = @{}
+	if ($script:TableSyncEnabled) {
+		$tableSyncCommon.ExtraInitContainerYaml = New-TableSyncSidecarContainerYaml -ItemIndent '  ' -Track $Track
+		$tableSyncCommon.ExtraVolumeYaml = New-TableSyncVolumeYaml -ItemIndent '  '
+		$tableSyncCommon.ExtraMainVolumeMountYaml = New-TableSyncMainVolumeMountYaml -ItemIndent '  '
+		$tableSyncCommon.ExtraMainEnv = New-TableSyncMainEnvEntries
+	}
 	return New-ClientEntryPodCommon -Image $Image -ImagePullPolicy $PullPolicy `
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
 		-ReleaseTrack $Track -BuildLabel (Get-CppBuildLabelValue -Image $Image) -ClientWsBaseUrl (Get-ClientWsBaseUrl) `
-		-ConnectionAdmissionEnv (Get-CppConnectionAdmissionEnv -Role $Role) -SecretEnv $secretEnv @sidecar
+		-ConnectionAdmissionEnv (Get-CppConnectionAdmissionEnv -Role $Role) -SecretEnv $secretEnv @sidecar @tableSyncCommon
 }
 
 # 小游戏 WebSocket 入口的基地址(-WsEdgeHost,docs/design/minigame-websocket-gate.md W7):gate / battle 据它自报
@@ -10554,10 +10943,10 @@ function Get-LoginAuthProviderParamErrors {
 	}
 	# Apple 撤销令牌的两项:开发者账号里的 Team ID 与 .p8 私钥的 Key ID,login 对别的形状、只写一项都拒绝启动。
 	foreach ($revoke in @(
-			[pscustomobject]@{ Param = '-LoginAppleTeamId'; What = 'Team ID'; Value = $AppleTeamId }
+			[pscustomobject]@{ Param = '-LoginAppleTeamId'; What = ' Team ID'; Value = $AppleTeamId }
 			[pscustomobject]@{ Param = '-LoginAppleKeyId'; What = '私钥的 Key ID'; Value = $AppleKeyId })) {
 		if (-not [string]::IsNullOrEmpty($revoke.Value) -and $revoke.Value -cnotmatch '^[A-Z0-9]{10}\z') {
-			$errors.Add("$($revoke.Param) 须是 Apple 开发者账号里的 $($revoke.What)(10 位大写字母或数字),login 对别的值拒绝启动。")
+			$errors.Add("$($revoke.Param) 须是 Apple 开发者账号里的$($revoke.What)(10 位大写字母或数字),login 对别的值拒绝启动。")
 		}
 	}
 	$hasAppleTeamId = -not [string]::IsNullOrEmpty($AppleTeamId)
@@ -11598,6 +11987,8 @@ function New-GoSvcConfigMapYaml {
 	$matchTeamAllowCrossZone     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'Team.AllowCrossZone'
 	# 队伍补位匹配的应急开关(team-backfill-matching.md §4.6):不渲染的话 Pod 里永远是缺省值,开关按不动。
 	$matchTeamFillQueueDisabled  = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'Team.FillQueueDisabled'
+	# 战报回放的全局录制与回滚开关(battle-report-replay.md §7.1、§11):与 FillQueueDisabled 同口径,从服务 yaml 镜像。
+	$matchBattleReportEnabled    = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'BattleReport.Enabled'
 	$matchDataServiceRpcTimeout  = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.Timeout'
 	$matchDataServiceRpcNonBlock = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.NonBlock'
 	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
@@ -11651,7 +12042,7 @@ function New-GoSvcConfigMapYaml {
 		# 不会出现「本地没配、K8s 却多写了一个值」的漂移,go/chat 与本脚本也能分开落地。
 		$chatOptional = New-Object System.Collections.Generic.List[string]
 		$chatYamlFull = Join-Path $RepoRoot ($chatYaml -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-		foreach ($chatKey in @('HistoryDefaultLimit', 'HistoryMaxLimit', 'RequestIdTTLSeconds', 'WorldHistoryCacheMs', 'WorldChannelCooldownMs')) {
+		foreach ($chatKey in @('HistoryDefaultLimit', 'HistoryMaxLimit', 'RequestIdTTLSeconds', 'WorldHistoryCacheMs', 'WorldChannelCooldownMs', 'WorldMinLevel', 'DuplicateSpamWindowMs', 'DuplicateSpamMaxSenders', 'DuplicateSpamMaxPerSender', 'NewAccountAgeHours', 'NewAccountDailyPrivateLimit')) {
 			$chatScalar = Get-YamlScalar -Path $chatYamlFull -KeyPath $chatKey
 			if ($chatScalar.Found) {
 				$chatOptional.Add("${chatKey}: $($chatScalar.Value)")
@@ -11952,9 +12343,13 @@ function New-GoSvcConfigMapYaml {
 			$loginRedisBlock = New-PlayerRedisConfigYaml -Section 'LoginRedis' -Topology $playerTopology -PoolSizePerNode $playerPools.Login -ClusterPasswordEnv $playerPasswordEnv
 		}
 	}
-	# trade 的 Rmb 段整段镜像服务 yaml(同 Commerce / Mall 的做法)。
+	# trade 的 Rmb 与 ContentGuard 段整段镜像服务 yaml(ContentGuard 删掉本机 Optional)。
 	$tradeRmbBlock = ''
-	if ($SvcName -eq 'trade') { $tradeRmbBlock = Get-AuthoritativeYamlBlock -RelativePath 'go/trade/etc/trade.yaml' -Key 'Rmb' }
+	$tradeContentGuardBlock = ''
+	if ($SvcName -eq 'trade') {
+		$tradeRmbBlock = Get-AuthoritativeYamlBlock -RelativePath 'go/trade/etc/trade.yaml' -Key 'Rmb'
+		$tradeContentGuardBlock = New-ContentGuardClientYaml -RelativePath 'go/trade/etc/trade.yaml'
+	}
 
 	# go-redis 直连客户端的连接池上限(P0-E 第 3 批):从服务 yaml 镜像,并核过「正整数」(Get-RedisPoolMirror);
 	# Redis 连接总账读的是同一批键。以前 ConfigMap 不写它,池上限 = go-redis 缺省 10 × GOMAXPROCS,跟着 CPU limit 漂。
@@ -12294,7 +12689,7 @@ Placement:
 # 生产者、消费者、kafka-topic-init 预建的 topic 名由同一处派生,不可能分家(分家不报任何错,流水写进没人消费的 topic)。
 # Brokers 为空 = 不投:发件箱只积不丢,db_audit_outbox_relay_enabled 报 0,积压告警会响(deploy/k8s/audit-outbox-alerts.yaml)。
 # 只有 -AuditOutboxRelay paused 会把它写成空列表(审计 topic 换代时暂停转发,docs/ops/audit-topic-generation-bump-runbook.md §2.2)。
-# canary 副本不投(进程按 MMORPG_RELEASE_TRACK 自己判断),转发按 (存档库, 片) 分给本地域全部 stable go/db。
+# canary 副本不投(进程按发布轨道环境变量自己判断),转发按 (存档库, 片) 分给本地域全部 stable go/db。
 AuditOutbox:
 ${dbAuditOutboxBrokersYaml}
   TopicGeneration: ${dsKafkaTopicGeneration}
@@ -12501,8 +12896,9 @@ SceneManagerRpc:
 # 读失败即登录失败;建角、EnterGame 的目录读写同样 fail-closed。只有角色列表上的归属 / 名字回填是 fail-open 的展示数据
 # (查不到按建角 zone、空名字原样返回)。原注释「data-service 是弱依赖、熔断后按保留建角 zone 放行」已不成立。
 # NonBlock: true —— 只让 login 起服时不被 data-service 的拨号卡住;data-service 不可用期间登录照样失败,不是降级放行。
-# Breaker: true —— 与 go/login/etc/login.yaml 一致:data-service 僵住但 etcd 键还在时,让调用快速失败(登录 / 建角直接回故障码,
-# 角色列表的回填按建角 zone 返回),而不是每次都白等满各自的预算。
+# Breaker: false —— 不开 zrpc 客户端按方法熔断(docs/design/data-service-breaker-per-logical-db.md):
+# 否则单个逻辑库异常时同一方法上的其他逻辑库会被连坐熔断。按逻辑库的快速失败由 data-service 服务端建连闸口承担,
+# 调用方代码亦通过 shared/dsclient.Conf 强制关闭客户端熔断。
 DataServiceRpc:
   Etcd:
     Hosts:
@@ -12511,7 +12907,7 @@ DataServiceRpc:
   Timeout: 3000
   NonBlock: true
   Middlewares:
-    Breaker: true
+    Breaker: false
 # 建角名送检(内容安全服务;New-ContentGuardClientYaml 从 go/login/etc/login.yaml 镜像,不带本机的 Optional)。
 ${loginContentGuardBlock}
 # PlayerId 号段发号(node-id-overhaul-plan §6)。
@@ -12738,6 +13134,9 @@ DataServiceRpc:
   Middlewares:
     Breaker: false
 ${matchSpectateBlock}
+# 战报回放录制开关(battle-report-replay.md §7.1、§11),从 go/match/etc/match_service.yaml 镜像。
+BattleReport:
+  Enabled: ${matchBattleReportEnabled}
 # 与 match.yaml 里的 metrics 容器端口一致
 MetricsListenAddr: ":9170"
 "@
@@ -12775,6 +13174,7 @@ Middlewares:
   StatConf:
     IgnoreContentMethods:
       - /chatpb.ClientPlayerChat/SendChat
+      - /chatpb.ClientPlayerChat/ReportChat
 # Etcd 段 **Key 显式留空**:chat 按 C++ 约定注册 ChatNodeService.rpc/zone/<z>/...(go/shared/noderegistry),
 # 路由服按这个前缀发现它;没有任何 Go 调用方经 go-zero 发现键找 chat,填了 Key 只会多一条无人消费的注册,
 # 本地 -Zone 派生还会给它加 .z<N> 后缀。等首个 Go 调用方出现再同批拍板(port-decisions D-13)。
@@ -12854,6 +13254,7 @@ Middlewares:
   StatConf:
     IgnoreContentMethods:
       - /content_guard.ContentGuard/CheckText
+      - /content_guard.ContentGuard/CheckPlatformText
 # Go 调用方(login / guild / chat)按这个发现键找它:go-zero 在键下的全部实例之间轮询,不像走 Service 地址那样整条连接落在一个 Pod 上。
 # scene 按 NodeInfo 前缀 ContentGuardNodeService.rpc 找,与这个键无关。
 Etcd:
@@ -12872,6 +13273,13 @@ LexiconPrefix: ""
 # staging / prod 固定 true:没加载到词库的副本不就绪、不判定。首次部署前先发布词库。
 RequireLexicon: ${contentGuardRequireLexicon}
 MaxTextBytes: ${contentGuardMaxTextBytes}
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: 500
+  NonBlock: true
 "@
 		}
 		"trade" {
@@ -12961,6 +13369,7 @@ ${tradeAssetOpBlock}
 ${tradeCommerceBlock}
 ${tradeMallBlock}
 ${tradeRmbBlock}
+${tradeContentGuardBlock}
 "@
 		}
 		"friend" {
@@ -14814,6 +15223,13 @@ function Apply-OneGoSvc {
 		$manifestContent = [regex]::Replace($manifestContent, $podSpecPattern, "    spec:`n      serviceAccountName: scene-manager`n      containers:")
 		$sceneManagerAgonesRbac = Get-Content -LiteralPath (Join-Path $GoSvcManifestsDir 'scene-manager-agones-rbac.yaml') -Raw
 	}
+	# 配置表热更分发 sidecar(table-sync,docs/design/config-table-hot-reload.md §7):
+	# 排在 serviceAccountName 注入之后,只对读表服务(guild/login/mail/match/rank/scene-manager)且显式启用表包模式时注入。
+	# 开关变量放在 -and 左边:按 AST 单独抽出本函数的测试未定义 $script:TableSyncEnabled 时短路不求值。
+	if ($script:TableSyncEnabled -and $SvcName -in $script:TableSyncGoServices) {
+		$tableSyncTrack = if ($Canary) { 'canary' } else { $ReleaseTrack }
+		$manifestContent = Add-TableSyncSidecarToGoSvcManifest -SvcName $SvcName -ManifestContent $manifestContent -Track $tableSyncTrack
+	}
 
 	# data-service 在运行期读本 K8s 集群的身份(kube-system 的 UID),发号器把地域码绑在它上面(docs/design/player-data-tidb-scaling-plan.md §6.3)。
 	# Pod 用 ServiceAccount data-service(写死在 data-service.yaml),权限是 data-service-identity-rbac.yaml 里只读 namespaces/kube-system 的
@@ -16067,10 +16483,16 @@ server:
   address: 0.0.0.0
   port: $($JavaSvcCatalogue['mall'].HttpPort)
 management:
+  server:
+    port: 18121
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
 $mallOtlpBlock
 spring:
   datasource:
-    url: jdbc:mysql://$($mallSql.Host)/mmorpg_mall?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&connectTimeout=3000&socketTimeout=10000
+    url: jdbc:mysql://$($mallSql.Host)/mmorpg_mall?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&connectTimeout=3000&socketTimeout=6000
     username: "$mallDbUser"
     password: ""
 commerce:
@@ -16188,9 +16610,14 @@ function Apply-MallWorkload {
 	$manifestContent = Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $InfraNamespace -SvcName $svcName -RuntimeKind java
 	$manifestContent = Add-SqlWriterPlacementEnv -ManifestContent $manifestContent
 	$slotRetirerYaml = New-SqlWriterSlotRetirerManifest -Namespace $InfraNamespace -StatefulSet $svcName
+	# Prometheus 抓取注解(与 gateway 一致):独立管理口 18121 暴露 /actuator/prometheus(含 Hikari 池指标 pool="mall"),
+	# 经 Add-PodTemplateAnnotation 写入,不在 manifest 里手写 annotations 段。
+	$manifestContent = Add-PodTemplateAnnotation -SvcName $svcName -ManifestContent $manifestContent `
+		-Key 'prometheus.io/scrape' -Value 'true' `
+		-AdditionalAnnotations ([ordered]@{ 'prometheus.io/port' = '18121'; 'prometheus.io/path' = '/actuator/prometheus' })
 	# 四把调用密钥:每把一条 secretKeyRef env 与一条指纹注解(工作负载密钥目录)。
 	$manifestContent = Add-WorkloadSecretsToManifest -SvcName $svcName -ManifestContent $manifestContent
-	# 内部 HTTP 口准入(-NetworkPolicies on):只放行 trade 与 payment。清单里没有声明别的端口,开放端口是空表。
+	# 内部 HTTP 口准入(-NetworkPolicies on):18120 只放行 trade 与 payment;管理口 18121(探针与 Prometheus 抓取)对集群内开放。
 	$allowList = $script:GrpcAllowLists[$svcName]
 	$policyYaml = $null
 	if ($script:NetworkPoliciesOn) {
@@ -16374,43 +16801,51 @@ function Get-ZonesFromJson {
 
 		$zones = @()
 		$currentZone = $null
+		$newZone = {
+			[ordered]@{
+				name = $null
+				zoneId = $null
+				gateNodePortBase = $null
+				replicas = [ordered]@{
+					centre = $null
+					gate = $null
+					scene = $null
+					scene_world = $null
+					scene_instance = $null
+				}
+			}
+		}
 
 		$lines = $YamlText -split "`r?`n"
-		foreach ($line in $lines) {
-			$trimmed = $line.Trim()
+		for ($idx = 0; $idx -lt $lines.Count; $idx++) {
+			$stripped = Remove-YamlInlineComment -Value $lines[$idx]
+			$trimmed = $stripped.Trim()
 			if ([string]::IsNullOrWhiteSpace($trimmed)) {
 				continue
 			}
 
-			if ($trimmed.StartsWith("#")) {
+			if ($trimmed -eq "zones:" -or $trimmed -eq "replicas:") {
 				continue
 			}
 
-			if ($trimmed -eq "zones:") {
-				continue
-			}
-
-			if ($trimmed -match "^-\s*name\s*:\s*(.+)$") {
+			if ($trimmed -match "^-\s*(.*)$") {
 				if ($null -ne $currentZone) {
 					$zones += $currentZone
 				}
-
-				$currentZone = [ordered]@{
-					name = $matches[1].Trim().Trim('"', "'")
-					zoneId = $null
-					gateNodePortBase = $null
-					replicas = [ordered]@{
-						centre = $null
-						gate = $null
-						scene = $null
-						scene_world = $null
-						scene_instance = $null
-					}
+				$currentZone = & $newZone
+				$rest = $matches[1].Trim()
+				if ([string]::IsNullOrWhiteSpace($rest)) {
+					continue
 				}
-				continue
+				$trimmed = $rest
 			}
 
 			if ($null -eq $currentZone) {
+				throw "Unexpected line $($idx + 1) before first zone entry in zones yaml: '$($lines[$idx].Trim())'"
+			}
+
+			if ($trimmed -match "^name\s*:\s*(.+)$") {
+				$currentZone.name = $matches[1].Trim().Trim('"', "'")
 				continue
 			}
 
@@ -16429,6 +16864,8 @@ function Get-ZonesFromJson {
 				$currentZone.replicas[$matches[1]] = [int]$matches[2]
 				continue
 			}
+
+			throw "Unrecognized line $($idx + 1) in zones yaml (install powershell-yaml or fix syntax): '$($lines[$idx].Trim())'"
 		}
 
 		if ($null -ne $currentZone) {
@@ -16633,6 +17070,8 @@ function Apply-Zone {
 		# 先渲染网关的建表 Job:目录里 gateway 条目缺 schema Secret 或 registrar 镜像时,一个 Job 都还没跑就拒绝。
 		$gatewaySchemaJob = if (Test-ZoneGatewayDeployed) { New-GatewaySchemaJobManifests -Namespace $namespace } else { $null }
 		Ensure-Namespace -Namespace $namespace
+		# 托管内部密钥放到通过本 zone 的写前闸之后再写(且早于任何 Job / 工作负载);一次运行只写一遍。
+		Sync-ManagedDomainServiceSecrets
 		Apply-GoSvcManifests -Namespace $namespace -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId -Stage Prepare
 		Invoke-GatewaySchemaJob -Namespace $namespace -Rendered $gatewaySchemaJob
 		Write-Host "Zone schema Jobs finished, no workload was started: namespace=$namespace. Read route_meta.generation of each logical database, write the boot rosters, then re-run without -SqlSchemaOnly (docs/ops/k8s-open-server-runbook.md section 5)."
@@ -16692,9 +17131,12 @@ function Apply-Zone {
 	$gateObsoleteResources = Get-GateObsoleteResources -ClientEntryMode $ClientEntryMode -GateReplicas $CurrentGateReplicas
 	Remove-ClientEntryObsoleteResources -Namespace $namespace -Resources $gateObsoleteResources `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -AllowDisruptiveSwitch:$AllowDisruptiveSwitch -DryRun:$DryRun
+	# 托管内部密钥(Initialize-ManagedDomainServiceSecrets 算好的计划):排在名册、服务端预演与旧形态删除闸全部通过之后、
+	# 任何工作负载(scene / Go 服务)之前;all-up 若已在 Apply-Infra 写过则这里是空操作。
+	Sync-ManagedDomainServiceSecrets
+	Apply-TableSyncDevSecret -Namespace $namespace
 
 	# Agones 模式:必须先在本 namespace 里建 agones-sdk 的 SA + RoleBinding,
-	# 否则 GameServer 控制器建 Pod 会被 API server 拒掉,GameServer 全进 Error。
 	# 必须在 Fleet 之前 apply —— 反过来的话第一批 GameServer 会先失败一轮。
 	if ($SceneOrchestrator -eq "agones") {
 		$rbacYaml = New-AgonesSdkRbacYaml -Namespace $namespace
@@ -16839,10 +17281,20 @@ function Apply-Zone {
 	Write-Host "Zone deployment applied: namespace=$namespace"
 }
 
+function Assert-NamespaceDeleteConfirmed {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+	if ($DryRun) { return }
+	$isDevNamespace = ($ReleaseProfile -eq 'dev') -and ($Namespace -match '^mmorpg-(dev|local|test|stress)(-|$)')
+	if ($isDevNamespace) { return }
+	if ($env:MMORPG_CONFIRM_DELETE_NAMESPACE -ceq $Namespace -or $env:MMORPG_CONFIRM_DELETE_ALL -ceq 'YES') { return }
+	throw "Refusing to delete namespace '$Namespace' (ReleaseProfile=$ReleaseProfile): set MMORPG_CONFIRM_DELETE_NAMESPACE='$Namespace' (or MMORPG_CONFIRM_DELETE_ALL='YES' for all-down) to confirm."
+}
+
 function Remove-Zone {
 	param([Parameter(Mandatory = $true)][string]$CurrentZoneName)
 
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
+	Assert-NamespaceDeleteConfirmed -Namespace $namespace
 	Write-Host "Deleting zone namespace: $namespace"
 	Invoke-Kubectl -Args @("delete", "namespace", $namespace) -AllowFailure
 	# data-service 读集群身份的 ClusterRoleBinding 是集群级对象,删命名空间带不走(名字见 data-service-identity-rbac.yaml)。
@@ -17353,9 +17805,12 @@ function Apply-Infra {
 	Write-Host ("Kubernetes cluster uid: {0}{1} (carried by the etcd bootstrap tokens)" -f $kubeClusterUid, $(if ($DryRun) { ' [dry-run marker]' } else { '' }))
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs)"
 	Ensure-Namespace -Namespace $InfraNamespace
+	# 托管内部密钥(Initialize-ManagedDomainServiceSecrets 算好的计划):排在 Apply-Infra 全部写前闸(核心 Redis 重启闸、Loki 形态闸、
+	# 集群 UID、TLS Secret)之后、任何 infra 清单与工作负载之前;执行后清掉计划,all-up 进 Apply-Zone 不重复写。
+	Sync-ManagedDomainServiceSecrets
+	Apply-TableSyncDevSecret -Namespace $InfraNamespace
 
 	# redis-match-cluster.yaml:match 私有的 Redis Cluster(StatefulSet + 建群 Job)。
-	# 里面的 Job 幂等(已建群就跳过);但 Job 的 template 一旦落地就不可变,改了
 	# 建群脚本要先 `kubectl -n <infra> delete job redis-match-cluster-init` 再 apply。
 	# Loki 只在"要用集群内 Loki 当 C++ 日志 sidecar 的写入目标"时才部署:
 	# 关了 sidecar(-NoCppLogSidecar)或指定了外部 Loki(-LokiPushUrl)时不占集群资源。
@@ -17387,6 +17842,9 @@ function Apply-Infra {
 			$infraManifests += "seaweedfs-dev.yaml"
 		}
 		$infraManifests += $lokiTopology.Manifest
+	}
+	if ($TableSyncDevFixture -and ($infraManifests -notcontains "seaweedfs-dev.yaml")) {
+		$infraManifests += "seaweedfs-dev.yaml"
 	}
 	# Tempo(span 存储,docs/design/distributed-tracing.md §10.3):与日志采集同开同关,排在采集器之前(采集器在这个循环之后 apply)。
 	# 网关级 Alloy(按 trace_id 收齐一条 trace、尾部采样、写 Tempo)与节点级采集器在同一份 pod-log-collector.yaml 里。
@@ -17521,8 +17979,11 @@ function Apply-Infra {
 
 		if ($manifest -eq "seaweedfs-dev.yaml") {
 			$seaweedConfig = New-SeaweedFsDevS3Config
+			$lokiBucketForSeaweed = if ($null -ne $lokiS3 -and $lokiS3.DevFixture) { $lokiS3.Bucket } else { 'none' }
+			$tableSyncBucketForSeaweed = if ($TableSyncDevFixture) { (Get-TableSyncSettings).Bucket } else { 'none' }
 			$manifestContent = $manifestContent.Replace("__SEAWEEDFS_S3_CONFIG_HASH__", (Get-InjectedSecretFingerprint -SecretName $script:SeaweedFsDevConfigSecretName -Value $seaweedConfig))
-			$manifestContent = $manifestContent.Replace("__LOKI_S3_BUCKET__", $lokiS3.Bucket)
+			$manifestContent = $manifestContent.Replace("__LOKI_S3_BUCKET__", $lokiBucketForSeaweed)
+			$manifestContent = $manifestContent.Replace("__TABLE_SYNC_S3_BUCKET__", $tableSyncBucketForSeaweed)
 		}
 		if ($manifest -eq "loki-ha.yaml") {
 			$manifestContent = $manifestContent.Replace("__LOKI_S3_ENDPOINT__", $lokiS3.Endpoint).Replace("__LOKI_S3_BUCKET__", $lokiS3.Bucket).Replace("__LOKI_S3_REGION__", $lokiS3.Region)
@@ -17621,6 +18082,7 @@ function Apply-Infra {
 }
 
 function Remove-Infra {
+	Assert-NamespaceDeleteConfirmed -Namespace $InfraNamespace
 	Write-Host "Deleting shared infrastructure namespace: $InfraNamespace"
 	Invoke-Kubectl -Args @("delete", "namespace", $InfraNamespace) -AllowFailure
 	# 容器日志采集器的 ClusterRoleBinding 是集群级对象,删命名空间带不走(名字见 manifests/infra/pod-log-collector.yaml)。
@@ -17703,6 +18165,8 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-CommerceDeployPreflight
 	# 集群内 Loki:-LokiReplicas 不是 1 / 3、3 副本缺对象存储参数、夹具用在非 dev,或本次根本不部署集群内 Loki 却给了这些参数,在这里拒绝。
 	Assert-LokiDeployPreflight
+	# 配置表热更分发 sidecar 参数组合校验(非 dev 禁止夹具,未开表包模式禁止单独传附加参数)。
+	Assert-TableSyncPreflight
 	# 日志推送地址会原样写进两份采集器 ConfigMap(C++ sidecar 与容器日志 DaemonSet):带凭据或写坏 Alloy 字符串的地址在这里拒绝。
 	Assert-LokiPushUrlSafe -Url $LokiPushUrl
 	# 全局服务金丝雀副本(-CanaryServices):本次不部署全局 Go 服务,或写 SQL 的服务缺 <ns>/<svc>-canary 条目、副本数对不上,在这里拒绝。
@@ -17726,7 +18190,7 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
 	# 部署替运维维护的内部密钥($script:ManagedDomainServiceSecrets:账号目录与查实名的调用密钥、角色护栏、存盘、战斗掉落改投邮件):
 	# 全集群每把一个值。这里只读、只算计划:缺的待补、值不同 / 过短 / 两把同值在任何写操作之前拒绝(-ResyncDomainServiceSecrets 改成统一值)。
-	# 真正写在本块最后一步(Sync-ManagedDomainServiceSecrets)。DryRun 只打一行说明。
+	# 真正写在 Apply-Infra / Apply-Zone 通过各自的写前闸之后(Sync-ManagedDomainServiceSecrets)。DryRun 只打一行说明。
 	Initialize-ManagedDomainServiceSecrets
 	Assert-GrpcClientDeadlineBudget
 	# 收件箱写前门禁(交接 player-inbox-handoff-20261015 §6 H1):渲染值只取 git 跟踪的两份 yaml;-PlayerInboxConsumer 与 yaml 不一致、
@@ -17755,8 +18219,6 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 		Write-KafkaDiskLedger -Plan $script:KafkaDiskPlan
 		Assert-KafkaStorageChangeIsSafe -Plan $script:KafkaDiskPlan
 	}
-	# 第一个写操作:上面的只读门禁全部通过之后,先把托管内部密钥补齐(Initialize-ManagedDomainServiceSecrets 算好的计划),再进 switch 部署工作负载。
-	Sync-ManagedDomainServiceSecrets
 }
 
 switch ($Command) {

@@ -182,10 +182,11 @@ func run(c config.Config, migrate bool) (runErr error) {
 	if err != nil {
 		return err
 	}
-	realNames, err := realNameClient(c)
+	realNames, closeRealNames, err := realNameClient(c)
 	if err != nil {
 		return err
 	}
+	defer closeRealNames()
 	svc, err := core.New(data.New(db), mallClient, channels, platforms, serviceOptions(c, realNames))
 	if err != nil {
 		return err

@@ -88,20 +88,29 @@ func planResume(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow
 	return nil
 }
 
-// planReissue 给没到账的最终发放腿各补发一条:原样的资产、原样的收件人,原腿标被它取代;回到原阶段,
-// 原阶段的判定(finalCredits)只看没被取代的腿。
+// planReissue 给没到账的最终发放腿(以及官方订单付款修订后没到账的扣回/补发腿)各重发一条:原样的资产、原样的收件人,
+// 原腿标被它取代;回到原阶段,原阶段的判定(finalCredits / officialHeld)只看没被取代的腿。
 func planReissue(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, q *tradepb.TradeCommerceQuarantine, result *ManualResult) error {
 	if !reissuable(q) {
-		return notAllowed("reissue 只处理发放没到账的合同(原因 %s,原阶段 %s)", q.Reason, q.Stage)
+		return notAllowed("reissue 只处理发放或付款修订扣回没到账的合同(原因 %s,原阶段 %s)", q.Reason, q.Stage)
 	}
-	failed := failedCredits(w)
+	var failed []*tradepb.TradeCommerceLeg
+	if q.GetReason() == manualReasonPaymentReversal {
+		failed = failedOfficialReversalLegs(w)
+	} else {
+		failed = failedCredits(w)
+	}
 	if len(failed) == 0 {
-		return notAllowed("没有没到账的发放腿")
+		return notAllowed("没有没到账的发放或扣回腿")
 	}
 	for _, l := range failed {
 		role := reissueRole(w, l.Role)
 		l.SupersededBy = role
-		addEscrowLeg(w, role, l.PlayerId, l.EscrowOwnerId, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
+		if q.GetReason() == manualReasonPaymentReversal {
+			addLeg(w, role, l.PlayerId, l.Stream, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
+		} else {
+			addEscrowLeg(w, role, l.PlayerId, l.EscrowOwnerId, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
+		}
 		result.NewLegs = append(result.NewLegs, role)
 		result.SupersededLegs = append(result.SupersededLegs, l.Role)
 	}
@@ -109,16 +118,32 @@ func planReissue(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 	return nil
 }
 
-// reissuable 报告转人工的原因是不是「发放没到账」:最终发放腿(deliver / return 阶段),或人民币寄售的退回腿。
-// 补发之后回到原阶段,原阶段的判定沿 currentLeg 找到补发腿。
+// reissuable 报告转人工的原因是不是「可重发腿」:最终发放腿(deliver / return 阶段)、人民币寄售退回腿,或官方订单付款修订扣回/补发腿。
+// 补发之后回到原阶段,原阶段的判定沿 currentLeg / officialHeld 找到新腿。
 func reissuable(q *tradepb.TradeCommerceQuarantine) bool {
 	switch q.GetReason() {
 	case manualReasonFinalCredit:
 		return q.GetStage() == "deliver" || q.GetStage() == "return"
 	case manualReasonRmbReturn:
 		return true
+	case manualReasonPaymentReversal:
+		return q.GetStage() == stageOfficialDeliver
 	}
 	return false
+}
+
+// failedOfficialReversalLegs 是官方合同上没到账、也没被取代的扣回腿(Stream=3)或补发腿(Stream=4)。
+func failedOfficialReversalLegs(w *tradepb.TradeCommerceWorkflow) []*tradepb.TradeCommerceLeg {
+	var out []*tradepb.TradeCommerceLeg
+	for _, l := range w.Legs {
+		if l.SupersededBy != "" || !done(l) || applied(l) || l.Outcome == partialOutcome {
+			continue
+		}
+		if l.Stream == 4 || (l.Stream == 3 && isOfficialReverseLeg(l.Role)) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // failedCredits 是没到账、也没被取代的发放腿。部分发放的腿不在其中:它有一部分已到账,只能按缺口补(partial)。

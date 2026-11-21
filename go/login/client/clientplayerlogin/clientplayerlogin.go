@@ -14,9 +14,14 @@ import (
 )
 
 type (
+	AccountDeletionBlocker            = login.AccountDeletionBlocker
+	AccountDeletionRequest            = login.AccountDeletionRequest
+	AccountDeletionResponse           = login.AccountDeletionResponse
 	AccountSimplePlayerWrapper        = login.AccountSimplePlayerWrapper
+	AntiAddictionStatus               = login.AntiAddictionStatus
 	AssignGateRequest                 = login.AssignGateRequest
 	AssignGateResponse                = login.AssignGateResponse
+	CancelAccountDeletionRequest      = login.CancelAccountDeletionRequest
 	CreatePlayerRequest               = login.CreatePlayerRequest
 	CreatePlayerResponse              = login.CreatePlayerResponse
 	EnterGameRequest                  = login.EnterGameRequest
@@ -38,6 +43,11 @@ type (
 	RemovePlayersFromAccountsResponse = login.RemovePlayersFromAccountsResponse
 	RenewSessionRequest               = login.RenewSessionRequest
 	RenewSessionResponse              = login.RenewSessionResponse
+	ResetAccountRealNameRequest       = login.ResetAccountRealNameRequest
+	ResetAccountRealNameResponse      = login.ResetAccountRealNameResponse
+	ScheduleAccountDeletionRequest    = login.ScheduleAccountDeletionRequest
+	SubmitRealNameRequest             = login.SubmitRealNameRequest
+	SubmitRealNameResponse            = login.SubmitRealNameResponse
 	TestResponse                      = login.TestResponse
 	ZoneRoleCountRequest              = login.ZoneRoleCountRequest
 	ZoneRoleCountResponse             = login.ZoneRoleCountResponse

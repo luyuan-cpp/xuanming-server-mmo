@@ -13,6 +13,12 @@ public final class DeliveryApi {
         public PollEntry(Intent intent, String cursor) { this(intent, cursor, 0); }
     }
     public record PollPage(List<PollEntry> entries) {}
+    /** 退款待办分页请求(/internal/refunds/poll,payment 角色):limit=0 沿用默认 100,cursor 为空表示从头扫。 */
+    public record RefundPoll(int limit, String cursor) {
+        public RefundPoll() { this(100, ""); }
+        public RefundPoll(String cursor) { this(100, cursor == null ? "" : cursor); }
+    }
+    public record RefundPage(List<CommerceApi.PendingRefund> entries, String nextCursor) {}
     // 发放物二选一:物品(itemConfigId × itemCount)或货币(currencyType × currencyAmount,已乘过购买数量);另一种全为 0。
     // 货币种类 0 是银两,有没有货币发放看 currencyAmount 是否大于 0。
     public record Intent(String orderId, String buyerId, String buyerAccount, String buyerOwnerRevision,

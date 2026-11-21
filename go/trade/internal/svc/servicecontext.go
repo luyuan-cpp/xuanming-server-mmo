@@ -25,6 +25,7 @@ import (
 	"shared/authoritysql"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/dsclient"
 	"shared/etcdwatch"
 	"shared/idsegment"
 	"shared/mergedzone"
@@ -148,7 +149,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(fmt.Errorf("trade: %w", err))
 	}
 
-	conn := zrpc.MustNewClient(c.DataServiceRpc)
+	conn := zrpc.MustNewClient(dsclient.Conf(c.DataServiceRpc))
 	dsClient := dspb.NewDataServiceClient(conn.Conn())
 
 	seg, err := NewListingIDSegment(c.IdSegment, dsClient, relay)

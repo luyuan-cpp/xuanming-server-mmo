@@ -24,8 +24,8 @@ struct FCfgActorActionStateSnapshot
 {
 	/// 全部行,按 actoractionstate.json 里的出现顺序。
 	TArray<FCfgActorActionStateRow> Rows;
-	/// id -> 行下标。
-	TMap<int32, int32> IdIndex;
+	/// 主键可重复((cfg_multi)):id -> 全部命中行的下标。
+	TMap<int32, TArray<int32>> IdIndex;
 };
 
 /**
@@ -96,14 +96,17 @@ public:
 
 	// ---- 主键 ----
 
-	/// 命中不到返回 nullptr **并打一条 Warning**。
-	const FCfgActorActionStateRow* FindById(int32 Id) const;
+	/// 这张表的主键可重复((cfg_multi)),**没有 FindById** —— 单值语义不成立,
+	/// 提供它只会让调用方悄悄只看第一行。
+	TArray<const FCfgActorActionStateRow*> FindAllById(int32 Id) const;
 
-	/// 命中不到返回 nullptr,不打日志(「查不到是正常分支」的场景用这个)。
-	const FCfgActorActionStateRow* FindByIdSilent(int32 Id) const;
+	/// 零分配版:直接拿下标数组,配 RowAt() 用。命中不到返回空数组。
+	const TArray<int32>& FindAllIdIndices(int32 Id) const;
 
-	UFUNCTION(BlueprintCallable, Category = "Config|ActorActionState", DisplayName = "Find By Id")
-	bool K2_FindById(int32 Id, FCfgActorActionStateRow& OutRow) const;
+	UFUNCTION(BlueprintCallable, Category = "Config|ActorActionState", DisplayName = "Find All By Id")
+	void K2_FindAllById(int32 Id, TArray<FCfgActorActionStateRow>& OutRows) const;
+
+	int32 CountById(int32 Id) const;
 
 	UFUNCTION(BlueprintPure, Category = "Config|ActorActionState")
 	bool Exists(int32 Id) const { return Snapshot->IdIndex.Contains(Id); }

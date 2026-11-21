@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"content_guard/internal/contact"
 	"content_guard/internal/textnorm"
 	"content_guard/internal/wordlist"
 )
@@ -17,13 +18,15 @@ import (
 type SceneClass uint8
 
 const (
-	// SceneName 名字和标签(角色名、帮会名、宠物名、私有标签):任何类别命中都拒绝。
+	// SceneName 名字(角色名、帮会名、宠物名、寄售标题):任何类别命中都拒绝,并启用联系方式广告检测。
 	SceneName SceneClass = 0
-	// SceneNotice 长期展示的自由文本(帮会公告):冒充官方那一类不管,其余命中都拒绝。
+	// SceneNotice 长期展示的自由文本(帮会公告):冒充官方那一类不管,其余命中与引流广告都拒绝。
 	SceneNotice SceneClass = 1
-	// SceneChat 聊天:冒充官方那一类不管,辱骂打码后放行,其余命中拒绝。
-	SceneChat     SceneClass = 2
-	sceneClassEnd SceneClass = 3
+	// SceneChat 聊天:冒充官方那一类不管,辱骂打码后放行,其余命中与引流广告拒绝。
+	SceneChat SceneClass = 2
+	// ScenePrivateLabel 玩家仅自己可见的私有标签(预设方案名等):走词库拒绝规则,不做联系方式广告启发式拦截。
+	ScenePrivateLabel SceneClass = 3
+	sceneClassEnd     SceneClass = 4
 )
 
 type action uint8
@@ -130,6 +133,14 @@ func (e *Engine) Check(class SceneClass, text string) Result {
 				result.Category = hit.Category
 			}
 			maskSpan(orig, hit.Start, hit.End)
+		}
+	}
+	if class != ScenePrivateLabel {
+		allowSpans := snapshot.Matcher.AllowOrigSpans(elems)
+		if contact.ContainsAd(text, elems, func(startOrig, endOrig int32) bool {
+			return wordlist.OrigCovered(allowSpans, startOrig, endOrig)
+		}) {
+			return Result{Verdict: VerdictReject, Category: wordlist.CategoryAd, Version: snapshot.Version}
 		}
 	}
 	if masked {

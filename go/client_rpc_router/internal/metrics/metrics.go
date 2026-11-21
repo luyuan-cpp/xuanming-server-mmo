@@ -44,6 +44,7 @@ const (
 	OutcomeKillSwitch          = "killswitch"            // 目标方法被热关停规则拒绝(docs/design/rpc-kill-switch.md §7),回信封 1003
 	OutcomeInvalidReleaseTrack = "invalid_release_track" // gate 自报的 release_track 不是空串 / stable / canary(契约违例)
 	OutcomeNoTarget            = "no_target"             // 目标类型没有可用实例(zone-scoped 时指同 zone 内)
+	OutcomeCircuitOpen         = "circuit_open"          // 候选目标实例全部处于熔断打开期,快速失败回 1003
 	OutcomeDialError           = "dial_error"            // 建目标连接失败
 	OutcomeUpstreamTimeout     = "upstream_timeout"      // 目标在 ForwardTimeoutMs 内未响应
 	OutcomeUpstreamError       = "upstream_error"        // 目标返回其它 gRPC 错误
@@ -63,7 +64,7 @@ var (
 	forwardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "forward_total",
-		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|killswitch|invalid_release_track|no_target|dial_error|upstream_timeout|upstream_error).",
+		Help:      "Forward calls by client message id and outcome (ok|missing_session|invalid_request|unknown_message|not_client_protocol|battle_rejected|killswitch|invalid_release_track|no_target|circuit_open|dial_error|upstream_timeout|upstream_error).",
 	}, []string{"message_id", "outcome"})
 
 	forwardByTrackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{

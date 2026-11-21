@@ -123,7 +123,9 @@ UnqualifiedHolderRevokeGraceSeconds: 120
 # zone 并打 WARN + 计数(scene_manager_home_zone_lookup_total{outcome="unconfigured"});
 # 多 zone 部署必须配。
 # NonBlock: true —— data_service 没起时 scene_manager 照常起服,查询按不可用拒绝。
-# Breaker: true —— data_service "死了但 etcd 键还在"时快速失败,不让每次进场景都白等满超时。
+# Breaker: false —— 不开 zrpc 客户端按方法熔断(docs/design/data-service-breaker-per-logical-db.md),
+# 避免单个逻辑库异常把所有逻辑库一并熔断;按逻辑库的快速失败由 data_service 服务端建连闸口承担,
+# 代码入口亦通过 shared/dsclient.Conf 强制关闭。
 # 没配 DataServiceRpc 时是否把 gate zone 当归属 zone。只有单 zone 部署才成立,默认 false
 # (没配就拒绝进场景)。下面已配 DataServiceRpc,此开关不起作用,列在这里只为说明。
 AllowGateZoneAsHomeZone: false
@@ -135,7 +137,7 @@ DataServiceRpc:
   Timeout: 3000
   NonBlock: true
   Middlewares:
-    Breaker: true
+    Breaker: false
 
 # EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。串在每次进场景上,超时按
 # 「归属未知」拒绝(可重试),不能太长;与 login 的 EnterLookupTimeout 对齐。

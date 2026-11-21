@@ -13,6 +13,7 @@ message BuffTable {
   option (cfg_sheet)       = "Buff";
   option (cfg_source_file) = "Buff.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   int32 designer = 9001 [(cfg_owner) = "designer"];

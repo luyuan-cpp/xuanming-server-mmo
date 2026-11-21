@@ -17,6 +17,8 @@ Excel header format (5 rows):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -211,6 +213,8 @@ class TableSchema:
     multi_primary_key: bool = False
     # 行 id 只增不删:由表级 (cfg_ids_permanent) 决定,门禁见 core/permanent_ids.py。
     ids_permanent: bool = False
+    # 允许运行期热更:由表级 (cfg_hot_reload) 决定,缺省 false(docs/design/config-table-hot-reload.md §5.3)。
+    hot_reload: bool = False
     has_constants_name: bool = False
     constants_name_index: Optional[int] = None
 
@@ -409,3 +413,81 @@ def positional_field_numbers(schema: TableSchema) -> dict[str, int]:
         out[name] = idx
         idx += 1
     return out
+
+
+SCHEMA_DIGEST_HEX_LEN = 16
+
+
+def compute_schema_digest(tables: list[TableSchema]) -> str:
+    """计算整批配置表的服务端数据布局摘要(16 位小写十六进制)。
+
+    设计依据:docs/design/config-table-hot-reload.md §5.1。
+    只覆盖实际进入服务端 proto 产物的布局:表名、数据文件前缀、服务端列(owner 为 server / common)
+    的字段号、字段名、形态(scalar / repeated / set / map / group)、类型与子消息结构。
+    注释、索引、外键、位序、(cfg_hot_reload)、(cfg_ids_permanent) 以及非服务端列均不计入,
+    因此改注释或放开热更名单不会切出新 schema 线。
+    """
+    canonical_tables: list[dict] = []
+    for table in sorted(tables, key=lambda t: t.name):
+        field_nums = table.field_numbers or positional_field_numbers(table)
+        col_to_group = table.col_to_group
+        seen: set[str] = set()
+        fields: list[dict] = []
+
+        for col in table.server_columns:
+            if col.name in seen:
+                continue
+            seen.add(col.name)
+            if col.map_role == "set":
+                fields.append({
+                    "number": field_nums[col.name],
+                    "name": col.name,
+                    "kind": "set",
+                    "type": col.data_type,
+                })
+            elif col.map_role in ("map_key", "map_value"):
+                continue
+            elif col.name in table.arrays:
+                fields.append({
+                    "number": field_nums[col.name],
+                    "name": col.name,
+                    "kind": "repeated",
+                    "type": col.data_type,
+                })
+            elif col.excel_index not in col_to_group:
+                fields.append({
+                    "number": field_nums[col.name],
+                    "name": col.name,
+                    "kind": "scalar",
+                    "type": col.data_type,
+                })
+
+        for m in table.maps.values():
+            fields.append({
+                "number": field_nums[m.name],
+                "name": m.name,
+                "kind": "map",
+                "key_type": m.key_type,
+                "value_type": m.value_type,
+            })
+
+        for g in table.groups.values():
+            fields.append({
+                "number": field_nums[g.name],
+                "name": g.name,
+                "kind": "group",
+                "subfields": [
+                    {"number": i, "name": c.name, "type": c.data_type}
+                    for i, c in enumerate(g.columns, start=1)
+                ],
+            })
+
+        fields.sort(key=lambda f: (f["number"], f["name"]))
+        canonical_tables.append({
+            "name": table.name,
+            "file": table.name.lower(),
+            "fields": fields,
+        })
+
+    encoded = json.dumps(canonical_tables, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:SCHEMA_DIGEST_HEX_LEN]

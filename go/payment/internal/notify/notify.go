@@ -20,13 +20,21 @@ import (
 	"payment/internal/core"
 	"shared/authoritysql"
 	"shared/drainproof"
+	"shared/tracing"
 )
 
 // maxBodyBytes 是回调正文的上限。App Store 的通知(三张证书的 JWS 套 JWS)约十几 KB,其余渠道都在几 KB 以内。
 const maxBodyBytes = 256 << 10
 
-// handleTimeout 是一条回调落库的上限:最紧的是微信小游戏的 3 秒应答时限。
-const handleTimeout = 2500 * time.Millisecond
+// parseTimeout 限制回调验签解析的最长时间(含 Google OIDC 公钥冷拉)。
+const parseTimeout = 5 * time.Second
+
+// handleTimeout 是一条直接落库回调的上限:最紧的是微信小游戏的 3 秒应答时限。
+// receiptHandleTimeout 给需要回查商店接口的回调(Google Pub/Sub 购买通知)留足外网往返 + 落库时间。
+const (
+	handleTimeout        = 2500 * time.Millisecond
+	receiptHandleTimeout = 8 * time.Second
+)
 
 type Server struct {
 	svc      *core.Service
@@ -97,25 +105,53 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer finish()
+	reqCtx, endSpan := tracing.StartRootSpan(r.Context(), "/notify/"+ch.Name())
+	var spanErr error
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			s.relay.Hold()
+			logx.WithContext(reqCtx).Errorf("[payment] Panic while handling a %s notification: %v", ch.Name(), recovered)
+			ch.WriteAck(w, channel.AckRetry)
+			core.ObserveNotification(ch.Name(), "retry")
+			endSpan(errors.New("notification handler panic"))
+			return
+		}
+		endSpan(spanErr)
+	}()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
+		spanErr = err
 		ch.WriteAck(w, channel.AckRejected)
 		core.ObserveNotification(ch.Name(), "rejected")
 		return
 	}
-	note, err := ch.ParseNotification(r, body)
+	parseCtx, cancelParse := context.WithTimeout(reqCtx, parseTimeout)
+	note, err := ch.ParseNotification(r.WithContext(parseCtx), body)
+	cancelParse()
 	if err != nil {
+		spanErr = err
+		if errors.Is(err, channel.ErrTempUnavailable) {
+			logx.WithContext(reqCtx).Errorf("[payment] Verifying a %s notification temporarily failed, asking the channel to resend: %v", ch.Name(), err)
+			ch.WriteAck(w, channel.AckRetry)
+			core.ObserveNotification(ch.Name(), "retry")
+			return
+		}
 		if !errors.Is(err, channel.ErrBadSignature) {
-			logx.WithContext(r.Context()).Errorf("[payment] Parsing a %s notification failed: %v", ch.Name(), err)
+			logx.WithContext(reqCtx).Errorf("[payment] Parsing a %s notification failed: %v", ch.Name(), err)
 		}
 		ch.WriteAck(w, channel.AckRejected)
 		core.ObserveNotification(ch.Name(), "rejected")
 		return
 	}
 	// 渠道断开连接也把这一次处理做完:处理是幂等的,做完下一次重发就是重复报告。
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), handleTimeout)
+	budget := handleTimeout
+	if len(note.Receipts) > 0 {
+		budget = receiptHandleTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(reqCtx), budget)
 	defer cancel()
 	if err := s.svc.HandleNotification(ctx, ch, note); err != nil {
+		spanErr = err
 		if authoritysql.ClassifyOutcome(err) == authoritysql.OutcomeUnknown {
 			s.relay.Hold()
 		}

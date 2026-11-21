@@ -14,18 +14,40 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ClientCalls;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-/** 七项明确的在线玩家管理操作；节点地址仅由部署配置提供，不接受玩家会话或任意 RPC。 */
+/** 七项明确的在线玩家管理操作；节点地址仅来自静态部署映射或可信 etcd 注册表，不接受浏览器传入地址。 */
 final class GamePlayerAdmin {
     static final String EXECUTE = "scene_node.SceneNodeGrpc/GmExecutePlayerCommand";
     // 对齐 cpp/libs/services/scene/player/system/player_level_rules.h 的可写等级范围。
     static final int MAX_PLAYER_LEVEL = 85;
+    static final long DEFAULT_DISCOVERY_TTL_MS = 5_000L;
+    private static final long MISS_REFRESH_COOLDOWN_MS = 1_000L;
+    private static final int MAX_SCENE_CHANNELS = 1024;
+    private static final int MAX_ETCD_RESPONSE_BYTES = 4 * 1024 * 1024;
+    private static final String SCENE_RPC_PREFIX = "SceneNodeService.rpc/";
+    private static final String SCENE_RPC_RANGE_END = "SceneNodeService.rpc0";
+    private static final String ETCD_RANGE_BODY = "{\"key\":\""
+            + Base64.getEncoder().encodeToString(SCENE_RPC_PREFIX.getBytes(StandardCharsets.UTF_8))
+            + "\",\"range_end\":\""
+            + Base64.getEncoder().encodeToString(SCENE_RPC_RANGE_END.getBytes(StandardCharsets.UTF_8))
+            + "\"}";
     private static final BigInteger UINT64_MAX = new BigInteger("18446744073709551615");
     private static final Set<String> FIELDS = Set.of("operation", "arguments", "requestId", "playerId",
             "operator", "reason", "issuedAtMs");
@@ -33,26 +55,50 @@ final class GamePlayerAdmin {
             "currency.add", "addCurrency", "currency.deduct", "deductCurrency",
             "currency.block", "blockCurrency", "currency.unblock", "unblockCurrency",
             "player.level", "setLevel", "pet.grant", "grantPet", "item.grant", "grantItem");
+
     private final GameProto proto;
     private final ObjectMapper mapper;
     private final ManagedChannel locator;
-    private final Map<String, ManagedChannel> scenes;
+    private final Map<String, ManagedChannel> staticScenes;
+    private final URI sceneEtcdRangeUri;
+    private final Function<String, ManagedChannel> channelFactory;
     private final String secret;
     private final long budgetMillis;
+    private final long discoveryTtlMs;
+    private final HttpClient http;
+    private final Object discoveryLock = new Object();
+    private final LinkedHashMap<String, SceneChannel> dynamicScenes = new LinkedHashMap<>(16, 0.75f, true);
+    private Map<String, String> discoveredEndpoints = Map.of();
+    private Set<String> ambiguousNodes = Set.of();
+    private long lastDiscoveryMs;
 
     GamePlayerAdmin(GameProto proto, ObjectMapper mapper, ManagedChannel locator, String targetsJson,
             String secret, long budgetMillis, Function<String, ManagedChannel> channels) {
+        this(proto, mapper, locator, targetsJson, "", secret, budgetMillis, DEFAULT_DISCOVERY_TTL_MS, channels);
+    }
+
+    GamePlayerAdmin(GameProto proto, ObjectMapper mapper, ManagedChannel locator, String targetsJson,
+            String sceneEtcdUrl, String secret, long budgetMillis, long discoveryTtlMs,
+            Function<String, ManagedChannel> channels) {
         this.proto = proto;
         this.mapper = mapper;
         this.locator = locator;
-        this.secret = secret == null ? "" : secret;
+        this.secret = secret == null ? "" : secret.strip();
         this.budgetMillis = budgetMillis;
+        this.discoveryTtlMs = Math.max(0L, discoveryTtlMs);
+        this.channelFactory = channels;
+        this.sceneEtcdRangeUri = parseEtcdRangeUri(sceneEtcdUrl);
+        this.http = this.sceneEtcdRangeUri == null ? null
+                : HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2))
+                        .followRedirects(HttpClient.Redirect.NEVER).build();
         Map<String, ManagedChannel> configured = new HashMap<>();
         try {
             JsonNode targets = mapper.reader().with(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
                     .with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                     .readTree(targetsJson == null || targetsJson.isBlank() ? "{}" : targetsJson);
-            if (!targets.isObject() || targets.size() > 64) throw new IllegalArgumentException("场景地址映射非法");
+            if (!targets.isObject() || targets.size() > MAX_SCENE_CHANNELS) {
+                throw new IllegalArgumentException("场景地址映射非法");
+            }
             var entries = targets.fields();
             while (entries.hasNext()) {
                 var entry = entries.next();
@@ -62,13 +108,20 @@ final class GamePlayerAdmin {
                 }
                 configured.put(entry.getKey(), channels.apply(entry.getValue().textValue()));
             }
-        } catch (IOException error) { throw new IllegalArgumentException("场景地址映射无法解析"); }
-        scenes = Map.copyOf(configured);
-        if (!scenes.isEmpty()) proto.descriptor(EXECUTE);
+        } catch (IOException error) {
+            shutdownChannels(configured.values());
+            throw new IllegalArgumentException("场景地址映射无法解析");
+        } catch (RuntimeException error) {
+            shutdownChannels(configured.values());
+            throw error;
+        }
+        staticScenes = Map.copyOf(configured);
+        if (!staticScenes.isEmpty() || sceneEtcdRangeUri != null) proto.descriptor(EXECUTE);
     }
 
     boolean enabled() {
-        return locator != null && !scenes.isEmpty() && secret.strip().getBytes(StandardCharsets.UTF_8).length >= 32;
+        return locator != null && (!staticScenes.isEmpty() || sceneEtcdRangeUri != null)
+                && secret.getBytes(StandardCharsets.UTF_8).length >= 32;
     }
 
     ObjectNode execute(ObjectNode frozen) {
@@ -112,8 +165,7 @@ final class GamePlayerAdmin {
         if (!playerId.equals(session.path("playerId").asText())) throw failure("INVALID_RESPONSE", "玩家定位结果不匹配", false, 0);
         String targetNodeId = session.path("sceneNodeId").asText();
         long target = nodeId(targetNodeId);
-        ManagedChannel scene = scenes.get(targetNodeId);
-        if (scene == null) throw failure("SCENE_NOT_CONFIGURED", "玩家所在场景未接入管理服务", false, 0);
+        ManagedChannel scene = resolveScene(targetNodeId, deadline);
         long sessionId = uint32(session.get("sessionId"), "会话 ID", false);
         String generation = decimal(session.get("loginGeneration"), "登录代次");
         wire.put("targetNodeId", target).put("expectedSessionId", sessionId).put("expectedLoginGeneration", generation);
@@ -129,6 +181,167 @@ final class GamePlayerAdmin {
             throw failure("INVALID_RESPONSE", "玩家命令缺少匹配的完成凭据", true, 0);
         }
         return response;
+    }
+
+    void close() {
+        List<ManagedChannel> all = new ArrayList<>(staticScenes.values());
+        synchronized (discoveryLock) {
+            for (SceneChannel entry : dynamicScenes.values()) all.add(entry.channel);
+            dynamicScenes.clear();
+        }
+        shutdownChannels(all);
+    }
+
+    private ManagedChannel resolveScene(String targetNodeId, Deadline deadline) {
+        ManagedChannel configured = staticScenes.get(targetNodeId);
+        if (configured != null) return configured;
+        if (sceneEtcdRangeUri == null) throw failure("SCENE_NOT_CONFIGURED", "玩家所在场景未接入管理服务", false, 0);
+        synchronized (discoveryLock) {
+            long nowMs = System.currentTimeMillis();
+            boolean expired = lastDiscoveryMs == 0 || (nowMs - lastDiscoveryMs >= discoveryTtlMs);
+            boolean missRefreshable = !discoveredEndpoints.containsKey(targetNodeId)
+                    && !ambiguousNodes.contains(targetNodeId)
+                    && (nowMs - lastDiscoveryMs >= Math.min(MISS_REFRESH_COOLDOWN_MS, discoveryTtlMs));
+            if (expired || missRefreshable) refreshFromEtcd(deadline);
+            if (ambiguousNodes.contains(targetNodeId)) {
+                throw failure("SCENE_AMBIGUOUS", "目标场景节点存在重复注册，已拒绝执行", false, 0);
+            }
+            String endpoint = discoveredEndpoints.get(targetNodeId);
+            if (endpoint == null) throw failure("SCENE_NOT_CONFIGURED", "玩家所在场景未接入管理服务", false, 0);
+            SceneChannel existing = dynamicScenes.get(targetNodeId);
+            if (existing != null && existing.endpoint.equals(endpoint)) return existing.channel;
+            if (existing != null) {
+                dynamicScenes.remove(targetNodeId);
+                existing.channel.shutdown();
+            }
+            if (dynamicScenes.size() >= MAX_SCENE_CHANNELS) {
+                Iterator<Map.Entry<String, SceneChannel>> it = dynamicScenes.entrySet().iterator();
+                if (it.hasNext()) {
+                    SceneChannel evicted = it.next().getValue();
+                    it.remove();
+                    evicted.channel.shutdown();
+                }
+            }
+            ManagedChannel created;
+            try { created = channelFactory.apply(endpoint); }
+            catch (IllegalArgumentException error) {
+                throw failure("SCENE_TARGET_INVALID", "发现的场景地址不符合连接安全策略", false, 0);
+            }
+            dynamicScenes.put(targetNodeId, new SceneChannel(endpoint, created));
+            return created;
+        }
+    }
+
+    private void refreshFromEtcd(Deadline deadline) {
+        long remainingMs = deadline.timeRemaining(TimeUnit.MILLISECONDS);
+        if (remainingMs <= 0) throw failure("DEADLINE_EXCEEDED", "场景发现前调用预算已耗尽", false, 0);
+        long timeoutMs = Math.max(200L, Math.min(3_000L, remainingMs));
+        HttpRequest request = HttpRequest.newBuilder(sceneEtcdRangeUri)
+                .timeout(Duration.ofMillis(timeoutMs))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(ETCD_RANGE_BODY, StandardCharsets.UTF_8))
+                .build();
+        JsonNode root;
+        try {
+            HttpResponse<java.io.InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            try (var stream = response.body()) {
+                byte[] bytes = stream.readNBytes(MAX_ETCD_RESPONSE_BYTES + 1);
+                if (response.statusCode() != 200 || bytes.length > MAX_ETCD_RESPONSE_BYTES) {
+                    throw failure("SCENE_DISCOVERY_UNAVAILABLE", "场景服务发现返回异常状态", false, 0);
+                }
+                root = mapper.readTree(bytes);
+            }
+        } catch (GameServices.CallFailure error) {
+            throw error;
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw failure("SCENE_DISCOVERY_UNAVAILABLE", "场景服务发现被中断", false, 0);
+        } catch (IOException error) {
+            throw failure("SCENE_DISCOVERY_UNAVAILABLE", "场景服务发现不可用", false, 0);
+        }
+
+        Map<String, String> endpoints = new HashMap<>();
+        Set<String> ambiguous = new HashSet<>();
+        JsonNode kvs = root.path("kvs");
+        if (kvs.isArray()) {
+            for (JsonNode kv : kvs) {
+                String keyText = decodeBase64(kv.path("key").asText(""));
+                // noderegistry 在同一前缀下写入 /allocated/ 占位键，不是节点注册记录。
+                if (keyText == null || keyText.contains("/allocated/")) continue;
+                String valueText = decodeBase64(kv.path("value").asText(""));
+                if (valueText == null) continue;
+                JsonNode reg;
+                try { reg = mapper.readTree(valueText); }
+                catch (IOException ignored) { continue; }
+                if (!reg.isObject()) continue;
+                JsonNode nodeIdField = reg.get("nodeId");
+                if (nodeIdField == null || !nodeIdField.isIntegralNumber() || !nodeIdField.canConvertToLong()) continue;
+                long id = nodeIdField.longValue();
+                if (id <= 0 || id > 0xffff_ffffL) continue;
+                // 只认 grpcEndpoint，绝不回退到 endpoint（那是 muduo raw TCP 端口）。
+                JsonNode grpcEndpoint = reg.path("grpcEndpoint");
+                String ip = grpcEndpoint.path("ip").asText("").strip();
+                int port = grpcEndpoint.path("port").asInt(0);
+                if (ip.isEmpty() || port < 1 || port > 65535) continue;
+                String nodeKey = Long.toString(id);
+                String endpoint = formatEndpoint(ip, port);
+                if (ambiguous.contains(nodeKey)) continue;
+                String prior = endpoints.get(nodeKey);
+                if (prior != null && !prior.equals(endpoint)) {
+                    endpoints.remove(nodeKey);
+                    ambiguous.add(nodeKey);
+                } else {
+                    endpoints.put(nodeKey, endpoint);
+                }
+            }
+        }
+        discoveredEndpoints = Map.copyOf(endpoints);
+        ambiguousNodes = Set.copyOf(ambiguous);
+        lastDiscoveryMs = System.currentTimeMillis();
+        // 清理已下线或更换地址的旧连接，使用优雅关闭以免中断在途调用。
+        Iterator<Map.Entry<String, SceneChannel>> it = dynamicScenes.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, SceneChannel> entry = it.next();
+            String latest = discoveredEndpoints.get(entry.getKey());
+            if (latest == null || !latest.equals(entry.getValue().endpoint)) {
+                it.remove();
+                entry.getValue().channel.shutdown();
+            }
+        }
+    }
+
+    private static URI parseEtcdRangeUri(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        URI uri;
+        try { uri = URI.create(raw.strip()); }
+        catch (IllegalArgumentException error) { throw new IllegalArgumentException("场景发现 etcd 地址非法"); }
+        String host = uri.getHost();
+        boolean loopback = "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "[::1]".equals(host) || "::1".equals(host);
+        if (host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
+                || !("https".equals(uri.getScheme()) || ("http".equals(uri.getScheme()) && loopback))) {
+            throw new IllegalArgumentException("场景发现 etcd 仅允许 HTTPS 或本机回环 HTTP");
+        }
+        String base = uri.toString().replaceAll("/+$", "");
+        return URI.create(base + "/v3/kv/range");
+    }
+
+    private static String decodeBase64(String encoded) {
+        if (encoded == null || encoded.isEmpty()) return null;
+        try { return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8); }
+        catch (IllegalArgumentException error) { return null; }
+    }
+
+    private static String formatEndpoint(String ip, int port) {
+        if (ip.contains(":") && !ip.startsWith("[")) return "[" + ip + "]:" + port;
+        return ip + ":" + port;
+    }
+
+    private static void shutdownChannels(Iterable<ManagedChannel> channels) {
+        for (ManagedChannel channel : channels) channel.shutdownNow();
+        for (ManagedChannel channel : channels) {
+            try { channel.awaitTermination(2, TimeUnit.SECONDS); }
+            catch (InterruptedException error) { Thread.currentThread().interrupt(); return; }
+        }
     }
 
     private void validateArguments(String operation, ObjectNode arguments) {
@@ -206,4 +419,6 @@ final class GamePlayerAdmin {
     private static GameServices.CallFailure failure(String code, String message, boolean unknown, int tip) {
         return new GameServices.CallFailure(code, message, unknown, tip);
     }
+
+    private record SceneChannel(String endpoint, ManagedChannel channel) { }
 }

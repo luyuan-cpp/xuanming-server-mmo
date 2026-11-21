@@ -53,25 +53,40 @@ func NewAttributeAutoPlanTableManager() *AttributeAutoPlanTableManager {
 }
 
 func (m *AttributeAutoPlanTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *AttributeAutoPlanTableManager) swapSnapshot(snap *attributeautoplanSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *AttributeAutoPlanTableManager) loadSnapshot(configDir string, useBinary bool) (*attributeautoplanSnapshot, error) {
     var container pb.AttributeAutoPlanTableData
 
     if useBinary {
         path := filepath.Join(configDir, "attributeautoplan.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "attributeautoplan.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -96,8 +111,7 @@ func (m *AttributeAutoPlanTableManager) Load(configDir string, useBinary bool) e
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *AttributeAutoPlanTableManager) FindAll() []*pb.AttributeAutoPlanTable {

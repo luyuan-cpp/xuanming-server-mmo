@@ -51,11 +51,26 @@ class GateTokenSecretGuardTest {
         assertDoesNotThrow(() -> guard(STRONG, "prod").validate());
     }
 
+    @Test
+    void productionRefusesPlaceholderOrShortAdminApiKeyWithoutEchoing() {
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> guard(STRONG, "change-me-in-production", "prod").validate());
+        assertFalse(failure.getMessage().contains("change-me"), "the error must not echo admin.api-key");
+        assertThrows(IllegalStateException.class, () -> guard(STRONG, "${ADMIN_APIKEY}", "prod").validate());
+        assertThrows(IllegalStateException.class, () -> guard(STRONG, "short-admin-key", "prod").validate());
+        assertDoesNotThrow(() -> guard(STRONG, "change-me-in-production", "dev").validate());
+    }
+
     private static GateTokenSecretGuard guard(String secret, String runMode) {
+        return guard(secret, STRONG, runMode);
+    }
+
+    private static GateTokenSecretGuard guard(String secret, String adminApiKey, String runMode) {
         GateProperties properties = new GateProperties();
         properties.setTokenSecret(secret);
         MockEnvironment environment = new MockEnvironment();
         environment.setProperty("mmorpg.run-mode", runMode);
+        environment.setProperty("admin.api-key", adminApiKey);
         return new GateTokenSecretGuard(properties, environment);
     }
 }

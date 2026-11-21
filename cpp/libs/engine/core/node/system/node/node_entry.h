@@ -11,6 +11,7 @@
 #include "node/system/node/node.h"
 #include "node/system/node/node_kafka_command_handler.h"
 #include "table/code/table_loader.h"
+#include "table_bundle/table_bundle_manager.h"
 #include "thread_context/ecs_context.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 
@@ -61,7 +62,16 @@ template <typename THooks>
 void ApplyPreConstructionHooks()
 {
     if constexpr (!std::is_void_v<THooks> && has_table_load_handler<THooks>::value) {
-        OnTablesLoadSuccess([] { THooks::TableLoadHandler::OnLoaded(); });
+        using Handler = typename THooks::TableLoadHandler;
+        OnTablesLoadSuccess([] { Handler::OnLoaded(); });
+        table_bundle::Hooks bundleHooks;
+        if constexpr (requires(std::string& err) { { Handler::Validate(err) } -> std::convertible_to<bool>; }) {
+            bundleHooks.validate = [](std::string& err) { return Handler::Validate(err); };
+        }
+        if constexpr (requires(const std::shared_ptr<const TableSet>& set) { Handler::OnCommitted(set); }) {
+            bundleHooks.onCommitted = [](const std::shared_ptr<const TableSet>& set) { Handler::OnCommitted(set); };
+        }
+        table_bundle::TableBundleManager::SetProcessHooks(std::move(bundleHooks));
     }
     // 地址来源工厂必须在 Node 构造之前注册:Node 构造函数里的 InitRpcServer 就要解析
     // client_endpoint(早于 main 的 configure lambda),configure 里再注册已经太晚。

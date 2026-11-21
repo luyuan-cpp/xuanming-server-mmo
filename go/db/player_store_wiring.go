@@ -22,6 +22,7 @@ import (
 	"proto/common/base"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/dsclient"
 	"shared/generated/persistschema"
 	"shared/noderegistry"
 )
@@ -71,7 +72,7 @@ func newStorageResolver(c *config.Config) (playerstore.StorageResolver, error) {
 	if c.DataServiceRpc.Etcd.Key == "" && len(c.DataServiceRpc.Endpoints) == 0 && c.DataServiceRpc.Target == "" {
 		return nil, fmt.Errorf("DataServiceRpc needs one of Etcd.Key, Endpoints or Target: go/db reads player placements through data_service")
 	}
-	client, err := zrpc.NewClient(c.DataServiceRpc)
+	client, err := zrpc.NewClient(dsclient.Conf(c.DataServiceRpc))
 	if err != nil {
 		return nil, fmt.Errorf("connect data_service: %w", err)
 	}

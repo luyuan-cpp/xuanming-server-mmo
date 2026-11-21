@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include <array>
 #include <limits>
 #include <filesystem>
 #include <fstream>
@@ -181,13 +182,22 @@ protected:
     }
 
     void SetActionPolicy(uint32_t followingTip) {
-        const auto allowed = "{\"state_mode\":" + std::to_string(kActionStatePermitted) +
-            ",\"state_tip\":" + std::to_string(kSuccess) + "}";
-        const auto following = "{\"state_mode\":" + std::to_string(kActionStateMutualExclusion) +
-            ",\"state_tip\":" + std::to_string(followingTip) + "}";
-        ASSERT_TRUE(WriteTable("actoractionstate.json", "{\"data\":[{\"id\":0,\"state\":[" +
-            allowed + "," + following + "," + allowed + "]},{\"id\":1,\"state\":[" +
-            allowed + "," + allowed + "," + allowed + "]}]}"));
+        const auto row = [](uint32_t actionId, uint32_t stateId, uint32_t mode, uint32_t tip) {
+            return "{\"id\":" + std::to_string(actionId) +
+                ",\"state_id\":" + std::to_string(stateId) +
+                ",\"state_mode\":" + std::to_string(mode) +
+                ",\"state_tip\":" + std::to_string(tip) + "}";
+        };
+        const uint32_t followMode = (followingTip == kSuccess)
+            ? static_cast<uint32_t>(kActionStatePermitted)
+            : static_cast<uint32_t>(kActionStateMutualExclusion);
+        ASSERT_TRUE(WriteTable("actoractionstate.json", "{\"data\":[" +
+            row(kActorActionUseSkill, kActorStateCombat, kActionStatePermitted, kSuccess) + "," +
+            row(kActorActionUseSkill, kActorStateTeamFollow, followMode, followingTip) + "," +
+            row(kActorActionUseSkill, kActorStateMounted, kActionStatePermitted, kSuccess) + "," +
+            row(kActorActionJoinFollow, kActorStateCombat, kActionStatePermitted, kSuccess) + "," +
+            row(kActorActionJoinFollow, kActorStateTeamFollow, kActionStatePermitted, kSuccess) + "," +
+            row(kActorActionJoinFollow, kActorStateMounted, kActionStatePermitted, kSuccess) + "]}"));
         ActorActionStateTableManager::Instance().Load();
     }
 
@@ -225,6 +235,8 @@ protected:
     }
 
     void TearDown() override {
+        ActorActionStateSystem::ResetRulesToTable();
+        ActorActionStateSystem::ClearAllExitHooks();
         SkillUtilTest::TearDown();
         auto& config = tlsNodeConfigManager.GetBaseDeployConfig();
         config.set_table_data_directory(previousDirectory);
@@ -281,6 +293,31 @@ TEST_F(SkillPrecheckPolicyTest, ActionConflictRefusalPreservesPriorPhaseAndConte
     SetActionPolicy(kSkillCannotBeCastInCurrentState);
     ASSERT_EQ(kSuccess, ActorActionStateSystem::TryPerformAction(caster, kActorActionJoinFollow, kActorStateTeamFollow));
     ExpectRejectionPreservesOldCast();
+}
+
+TEST_F(SkillPrecheckPolicyTest, CombatStateExitHookInterruptsActiveCastCleanly) {
+    ActorActionStateSystem::RegisterExitHook(
+        kActorStateCombat,
+        [](entt::entity actor, ActorActionStateSystem::ExitReason reason) {
+            if (reason == ActorActionStateSystem::ExitReason::kInterrupted) {
+                SkillSystem::InterruptActiveCast(actor);
+            }
+        });
+    const std::array<combat_ai::StateRule, 1> rules{{
+        {kActorActionMountActor, kActorStateCombat, combat_ai::StateMode::kInterrupt, 0},
+    }};
+    ASSERT_EQ(0u, ActorActionStateSystem::LoadRules(rules));
+
+    EXPECT_EQ(kSuccess, ActorActionStateSystem::TryPerformAction(caster, kActorActionMountActor, kActorStateMounted));
+    EXPECT_FALSE(ActorActionStateSystem::HasState(caster, kActorStateCombat));
+    EXPECT_TRUE(ActorActionStateSystem::HasState(caster, kActorStateMounted));
+    EXPECT_FALSE((tlsEcs.actorRegistry.any_of<CastingTimerComp, RecoveryTimerComp,
+        ChannelFinishTimerComp, ChannelIntervalTimerComp>(caster)));
+    const auto* contexts = tlsEcs.actorRegistry.try_get<SkillContextCompMap>(caster);
+    EXPECT_TRUE(contexts == nullptr || !contexts->contains(oldSkillId));
+
+    ActorActionStateSystem::ResetRulesToTable();
+    ActorActionStateSystem::ClearAllExitHooks();
 }
 
 TEST_F(SkillUtilTest, ValidateTarget_InvalidTarget_ReturnsError) {

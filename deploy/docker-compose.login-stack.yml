@@ -142,7 +142,8 @@ services:
       - MMORPG_SQL_WRITER_CONSUME_DIR=/run/sql-writer/consume
       - MMORPG_SQL_DEPLOYMENT_ID=${GATEWAY_SQL_DEPLOYMENT_ID:?set fixed gateway boot deployment id}
       - MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256=${SQL_PHYSICAL_AUTHORITY_SHA256:?set physical authority evidence sha256}
-      - LOGIN_GRPC_ENDPOINTS=login:51000
+      - MMORPG_RUN_MODE=dev
+      - LOGIN_GRPC_ENDPOINTS=1=login:51000
       - ETCD_ENDPOINTS=http://${INFRA_HOST:-host.docker.internal}:2379
       # Pin the JPA dialect so a slow MySQL handshake at startup
       # doesn't bomb metadata probing (we hit this twice during dev).

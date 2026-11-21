@@ -1,20 +1,30 @@
 ﻿#pragma once
 
+#include <cstdint>
+#include <deque>
 #include <unordered_map>
-#include <boost/circular_buffer.hpp>
 
+// Per-session, per-message-id monotonic sliding window rate limiter.
+// Shared by Gate (GateClientSessionHandler) and Battle direct edge (BattleClientEdge).
 class MessageLimiter {
 public:
-    MessageLimiter() {}
+    MessageLimiter() = default;
 
-    MessageLimiter(uint8_t defaultMaxRequests, uint32_t defaultTimeWindow);
+    MessageLimiter(uint32_t defaultMaxRequests, uint32_t defaultTimeWindowSeconds);
 
-    // 成功时记录本次请求并消耗窗口额度；返回成功码或拒绝的 tip 错误码。
+    // Consumes quota using the process monotonic steady clock (milliseconds).
+    // Returns kSuccess when allowed or kRateLimitExceeded (1008) when rejected.
     uint32_t TryConsumeRequestQuota(uint32_t messageId);
-    
-private:
-    uint8_t defaultMaxRequests{3};  // max requests per window
-    uint32_t defaultTimeWindow{1};   // window duration (seconds)
-    std::unordered_map<uint32_t, boost::circular_buffer<uint64_t>> requestRecords;
-};
 
+    // Deterministic entry point for tests and callers providing a monotonic millisecond timestamp.
+    uint32_t TryConsumeRequestQuotaAt(uint32_t messageId, uint64_t nowMs);
+
+    void Reset() { requestRecords.clear(); }
+
+private:
+    static uint64_t NowSteadyMs();
+
+    uint32_t defaultMaxRequests{3};       // max requests per window; 0 = unlimited
+    uint32_t defaultTimeWindowSeconds{1}; // window duration in seconds
+    std::unordered_map<uint32_t, std::deque<uint64_t>> requestRecords;
+};

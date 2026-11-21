@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_login_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025login_error_tip.proto*\372\013\n\013login_error\022"
+    "\n\025login_error_tip.proto*\263\r\n\013login_error\022"
     "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF"
     "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n"
     "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k"
@@ -73,15 +73,19 @@ const char descriptor_table_protodef_login_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "lNameTooManyAttempts\020\375\017\022\037\n\032kLoginRealNam"
     "eAlreadyBound\020\376\017\022%\n kLoginRealNameServic"
     "eUnavailable\020\377\017\022\035\n\030kLoginMinorNotInPlayT"
-    "ime\020\200\020\022\034\n\027kLoginMinorPlayTimeOver\020\201\020B$\n\016"
-    "com.game.tableZ\022generated/pb/tableb\006prot"
-    "o3"
+    "ime\020\200\020\022\034\n\027kLoginMinorPlayTimeOver\020\201\020\022\036\n\031"
+    "kRoleNameCheckUnavailable\020\202\020\022\030\n\023kRoleRen"
+    "ameCooldown\020\203\020\022\026\n\021kRoleRenameNoCard\020\204\020\022\032"
+    "\n\025kRoleRenameInProgress\020\205\020\022\026\n\021kRoleRenam"
+    "eFrozen\020\206\020\022\030\n\023kRoleRenameSameName\020\207\020\022\027\n\022"
+    "kRoleRenameExpired\020\210\020B$\n\016com.game.tableZ"
+    "\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_login_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_login_5ferror_5ftip_2eproto = {
     false,
     false,
-    1602,
+    1787,
     descriptor_table_protodef_login_5ferror_5ftip_2eproto,
     "login_error_tip.proto",
     &descriptor_table_login_5ferror_5ftip_2eproto_once,
@@ -100,7 +104,7 @@ login_error_descriptor() {
   return file_level_enum_descriptors_login_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t login_error_internal_data_[] = {
-    65536u, 3276800u, 2031u, 2015u, 2042u, 2007u, 2023u, 2038u, 2046u, 2003u, 2011u, 2019u, 2027u, 2035u, 2040u, 2044u, 2048u, 2001u, 2005u, 2009u, 2013u, 2017u, 2021u, 2025u, 2029u, 2033u, 2037u, 2039u, 2041u, 2043u, 2045u, 2047u, 2049u, 2000u, 2002u, 2004u, 2006u, 2008u, 2010u, 2012u, 2014u, 2016u, 2018u, 2020u, 2022u, 2024u, 2026u, 2028u, 2030u, 2032u, 2034u, 2036u, };
+    65536u, 3735552u, 2031u, 2015u, 2047u, 2007u, 2023u, 2039u, 2053u, 2003u, 2011u, 2019u, 2027u, 2035u, 2043u, 2051u, 2055u, 2001u, 2005u, 2009u, 2013u, 2017u, 2021u, 2025u, 2029u, 2033u, 2037u, 2041u, 2045u, 2049u, 2052u, 2054u, 2056u, 2000u, 2002u, 2004u, 2006u, 2008u, 2010u, 2012u, 2014u, 2016u, 2018u, 2020u, 2022u, 2024u, 2026u, 2028u, 2030u, 2032u, 2034u, 2036u, 2038u, 2040u, 2042u, 2044u, 2046u, 2048u, 2050u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

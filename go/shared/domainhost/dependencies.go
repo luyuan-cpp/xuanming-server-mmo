@@ -5,6 +5,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
 	dspb "proto/data_service"
+	"shared/dsclient"
 	"shared/idsegment"
 	"time"
 )
@@ -20,7 +21,7 @@ type IDClients struct {
 }
 
 func OpenIDs(ctx context.Context, c zrpc.RpcClientConf, tags ...string) (result *IDClients, err error) {
-	rpc, err := zrpc.NewClient(c)
+	rpc, err := zrpc.NewClient(dsclient.Conf(c))
 	if err != nil {
 		return nil, err
 	}

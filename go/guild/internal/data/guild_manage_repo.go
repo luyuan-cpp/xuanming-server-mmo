@@ -410,6 +410,7 @@ const (
 	opReview        = "review"
 	opDisband       = "disband"
 	opAnnouncement  = "announcement"
+	opRename        = "rename"
 	opVerifyMapping = "verify_mapping"
 	opScore         = "score"
 

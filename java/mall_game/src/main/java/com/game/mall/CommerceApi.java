@@ -86,7 +86,12 @@ public final class CommerceApi {
     public record Refund(String orderId, String channel, String paymentTransactionId, String transactionId,
                          long amountMinor, String currency) {}
     public record Order(String orderId, String buyerId, long skuId, int quantity, long amountMinor,
-                        String currency, String state, long paymentDeadlineMs) {}
+                        String currency, String state, long paymentDeadlineMs, int paymentRevision) {
+        public Order(String orderId, String buyerId, long skuId, int quantity, long amountMinor,
+                     String currency, String state, long paymentDeadlineMs) {
+            this(orderId, buyerId, skuId, quantity, amountMinor, currency, state, paymentDeadlineMs, 0);
+        }
+    }
     // 仅供已认证的 payment 角色查原订单；金额与归属均由服务器原记录返回。
     public record OrderQuery(@NotBlank @Size(max=36) String orderId) {}
 

@@ -41,4 +41,8 @@ enum trade_error {
 
   kTradeAssetNotTradable = 20015;
 
+  kTradeTitleSensitive = 20016;
+
+  kTradeTextCheckUnavailable = 20017;
+
 };

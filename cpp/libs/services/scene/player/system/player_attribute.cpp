@@ -28,6 +28,7 @@
 #include "player/system/player_equipment_v1.h"
 #include "proto/common/component/equipment_effects.pb.h"
 #include "player/system/player_level_rules.h"
+#include "player/system/player_mutability.h"
 #include "player/system/player_pet.h"
 #include "player/system/player_skill.h"
 #include "player/system/player_mission.h"
@@ -589,13 +590,16 @@ uint32_t CheckAttributeInputs(entt::entity player) {
 	return kSuccess;
 }
 
-// 写操作额外限制跨 zone 冻结与战斗;只读面板/自动建议不复用这些写限制。
+// 写操作额外限制不可写窗口(冻结、交接、退出、无归属围栏)与战斗;只读面板/自动建议不复用这些写限制。
 uint32_t CheckWritable(entt::entity player) {
 	if (const auto err = CheckAttributeInputs(player); err != kSuccess) {
 		return err;
 	}
-	if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player)) {
-		LOG_WARN << "[PlayerAttribute] Rejected: cross-zone freeze in progress player_id=" << tlsEcs.GetPlayerId(player);
+	if (const auto mutability = player_mutability::ClassifyPlayerMutability(player);
+		mutability != player_mutability::PlayerMutability::kMutable) {
+		LOG_WARN << "[PlayerAttribute] Rejected: player not mutable reason="
+				 << player_mutability::PlayerMutabilityName(mutability)
+				 << " player_id=" << tlsEcs.GetPlayerId(player);
 		return kInvalidParameter;
 	}
 	if (PlayerBattleSystem::IsInBattle(player)) {

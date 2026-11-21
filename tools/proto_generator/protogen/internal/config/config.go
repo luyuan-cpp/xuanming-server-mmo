@@ -906,7 +906,6 @@ func createRequiredDirs() error {
 	dirs := []string{
 		Global.Paths.GeneratedOutputDir,
 		Global.Paths.GrpcOutputDir,
-		Global.Paths.ProtoBufCLuaDir,
 		Global.Paths.TempFileGenDir,
 		Global.Paths.ProtoBufDescDir,
 		Global.Paths.SceneNodeEventHandlerDirectory,

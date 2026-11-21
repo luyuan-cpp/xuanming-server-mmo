@@ -77,4 +77,22 @@ public final class GuildRuleTableComp {
         }
     }
 
+    public record Rename_cooldown_seconds(int value) {
+        public static Rename_cooldown_seconds from(GuildRuleTable row) {
+            return new Rename_cooldown_seconds(row.getRenameCooldownSeconds());
+        }
+    }
+
+    public record Name_hold_seconds(int value) {
+        public static Name_hold_seconds from(GuildRuleTable row) {
+            return new Name_hold_seconds(row.getNameHoldSeconds());
+        }
+    }
+
+    public record Rename_cost_funds(long value) {
+        public static Rename_cost_funds from(GuildRuleTable row) {
+            return new Rename_cost_funds(row.getRenameCostFunds());
+        }
+    }
+
 }

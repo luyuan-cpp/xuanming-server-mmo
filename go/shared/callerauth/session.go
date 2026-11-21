@@ -8,8 +8,9 @@ import (
 
 	base "proto/common/base"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -18,19 +19,18 @@ import (
 )
 
 // 在线域验签闸门的指标。label 只放 Reason 的有限枚举，绝不放 caller 或玩家标识（低基数纪律）。
+// 使用 promauto 直接注册到默认 Prometheus 注册表，不依赖 go-zero/core/prometheus.Enable()。
 // 稳态下 result!="ok" 应恒 0：非 0 说明 gate 的签名私钥与服务的公钥列表不配对、时钟漂移超窗、签名格式被改写或有伪造调用。
 var (
-	sessionVerifyTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+	sessionVerifyTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "caller_auth",
 		Name:      "session_verify_total",
 		Help:      "带会话身份的内部请求验签结果；result 取值见 callerauth.Reason。",
-		Labels:    []string{"result"},
-	})
-	sessionNonceOverflowTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+	}, []string{"result"})
+	sessionNonceOverflowTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: "caller_auth",
 		Name:      "nonce_overflow_total",
 		Help:      "nonce 表超过上限被迫提前翻代的次数；非 0 表示本进程的重放窗口被临时缩短。",
-		Labels:    []string{},
 	})
 )
 
@@ -84,7 +84,7 @@ func SessionInterceptor(v *Verifier) grpc.UnaryServerInterceptor {
 			return next(ctx, request)
 		}
 		verified, _, err := v.AuthenticateContext(ctx, info.FullMethod)
-		sessionVerifyTotal.Inc(Reason(err))
+		sessionVerifyTotal.WithLabelValues(Reason(err)).Inc()
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, "内部会话身份验证失败")
 		}

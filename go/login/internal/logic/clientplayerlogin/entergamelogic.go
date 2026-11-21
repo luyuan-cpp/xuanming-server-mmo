@@ -794,18 +794,19 @@ func (l *EnterGameLogic) persistEnterGameSession(
 	state enterGameSessionState,
 	loginGeneration uint64,
 ) (uint32, error) {
+	ownZone := config.AppConfig.Node.ZoneId
 	switch decision {
 	case sessionmanager.FirstLogin, sessionmanager.ReplaceLogin:
 		newSession := sessionmanager.NewOnlineSession(existing, sessionmanager.OnlineSessionInput{
-			PlayerID:        state.playerID,
-			SessionID:       state.sessionID,
-			GateID:          state.gateID,
-			GateInstanceID:  state.gateInstanceID,
-			Account:         state.account,
-			RequestID:       state.requestID,
-			Now:             time.Now(),
-			LoginGeneration: loginGeneration,
-
+			PlayerID:           state.playerID,
+			SessionID:          state.sessionID,
+			GateID:             state.gateID,
+			GateInstanceID:     state.gateInstanceID,
+			GateZoneID:         ownZone,
+			Account:            state.account,
+			RequestID:          state.requestID,
+			Now:                time.Now(),
+			LoginGeneration:    loginGeneration,
 			SessionIncarnation: state.fenceKey.Incarnation,
 		})
 		if err := sessionmanager.SetSession(ctx, l.svcCtx.PlayerLocatorClient, newSession); err != nil {
@@ -833,6 +834,7 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			state.gateID,
 			state.gateInstanceID,
 			state.fenceKey.Incarnation,
+			ownZone,
 			state.account,
 			state.requestID,
 			loginGeneration,

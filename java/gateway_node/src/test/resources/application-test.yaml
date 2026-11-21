@@ -48,9 +48,6 @@ zone-probe:
 gateway:
   home-zone-ids: []
 
-cdn:
-  base-url: "https://cdn.example.com"
-
 # test profile 按 test 档运行:上面的 gate.token-secret 是测试占位值,GateTokenSecretGuard 在 test / dev 档只告警,生产档会拒启。
 mmorpg:
   run-mode: test

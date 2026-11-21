@@ -33,6 +33,7 @@ const (
 	FinalizeNone    = uint32(paymentpb.PayFinalizeState_PAY_FINALIZE_STATE_NONE)
 	FinalizePending = uint32(paymentpb.PayFinalizeState_PAY_FINALIZE_STATE_PENDING)
 	FinalizeDone    = uint32(paymentpb.PayFinalizeState_PAY_FINALIZE_STATE_DONE)
+	FinalizeFailed  = uint32(paymentpb.PayFinalizeState_PAY_FINALIZE_STATE_FAILED)
 )
 
 // Revoked 报告修订号表示的事实:奇数 = 已被渠道撤销。
@@ -253,6 +254,29 @@ func (r *Repo) FlipFact(ctx context.Context, rec *paymentpb.PaymentTxnRecord, ob
 		now, MallPending, MallBound, MallRefundQueued, observedMs, now, rec.Channel, rec.TxnHi, rec.TxnLo, rec.FactRevision))
 }
 
+// TouchFactObserved 在事实方向未变但收到了更新的观测时刻(例如 App Store 乱序先收到 REFUND_REVERSED)时单调推高 fact_observed_ms,
+// 挡住晚到的更早撤销通知。
+func (r *Repo) TouchFactObserved(ctx context.Context, rec *paymentpb.PaymentTxnRecord, observedMs, now uint64) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE payment_txn SET fact_observed_ms=?,updated_ms=? "+
+		"WHERE channel=? AND txn_hi=? AND txn_lo=? AND fact_revision=? AND fact_observed_ms<?",
+		observedMs, now, rec.Channel, rec.TxnHi, rec.TxnLo, rec.FactRevision, observedMs)
+	return err
+}
+
+// OldestMallPendingMs 返回库里所有待同步商城(含首次记账与修订同步,含退避中的行)的付款里最早的 created_ms;没有返回 0。
+func (r *Repo) OldestMallPendingMs(ctx context.Context) (uint64, error) {
+	var oldest uint64
+	err := r.db.QueryRowContext(ctx, "SELECT COALESCE(MIN(created_ms), 0) FROM payment_txn WHERE mall_due=1").Scan(&oldest)
+	return oldest, err
+}
+
+// OldestFinalizePendingMs 返回库里所有待做渠道收尾(如 Google consume)的付款里最早的 created_ms;没有返回 0。
+func (r *Repo) OldestFinalizePendingMs(ctx context.Context) (uint64, error) {
+	var oldest uint64
+	err := r.db.QueryRowContext(ctx, "SELECT COALESCE(MIN(created_ms), 0) FROM payment_txn WHERE finalize_state=?", FinalizePending).Scan(&oldest)
+	return oldest, err
+}
+
 // DueMallTxns 列出到点该推进商城的付款,按到点先后。走 (mall_due, next_attempt_ms) 索引。
 func (r *Repo) DueMallTxns(ctx context.Context, now uint64, limit int) ([]*paymentpb.PaymentTxnRecord, error) {
 	rows, err := r.db.QueryContext(ctx, "SELECT "+txnColumns+" FROM payment_txn WHERE mall_due=1 AND next_attempt_ms<=? ORDER BY next_attempt_ms LIMIT ?", now, limit)
@@ -295,10 +319,17 @@ func (r *Repo) DeferMall(ctx context.Context, rec *paymentpb.PaymentTxnRecord, l
 	return err
 }
 
-// ClaimRefund 领一次退款处理:refund_next_ms 仍是读到的值才推到租约到期时刻。已回执商城、已判失败的不再领。
-func (r *Repo) ClaimRefund(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease, now uint64) (bool, error) {
-	return changed(r.db.ExecContext(ctx, "UPDATE payment_txn SET refund_next_ms=?,refund_attempts=refund_attempts+1,updated_ms=? WHERE channel=? AND txn_hi=? AND txn_lo=? AND refund_state IN (?,?,?) AND refund_next_ms=?",
-		lease, now, rec.Channel, rec.TxnHi, rec.TxnLo, RefundNone, RefundRequested, RefundSucceeded, rec.RefundNextMs))
+// ClaimRefund 领一次退款处理:refund_next_ms 仍是读到的值才推到租约到期时刻。
+// 首次领取(RefundNone)时同时把 refund_state 原子转成 RefundRequested 并落盘 out_refund_no,
+// 避免调用渠道退款途中收到自己的退款回调时被误判为外部撤销;RefundReported / RefundFailed 同样走租约防多副本并发撞商城。
+func (r *Repo) ClaimRefund(ctx context.Context, rec *paymentpb.PaymentTxnRecord, outRefundNo string, lease, now uint64) (bool, error) {
+	return changed(r.db.ExecContext(ctx, "UPDATE payment_txn SET "+
+		"refund_state=CASE WHEN refund_state=? THEN ? ELSE refund_state END,"+
+		"out_refund_no=CASE WHEN out_refund_no='' THEN ? ELSE out_refund_no END,"+
+		"refund_next_ms=?,refund_attempts=refund_attempts+1,updated_ms=? "+
+		"WHERE channel=? AND txn_hi=? AND txn_lo=? AND refund_state IN (?,?,?,?,?) AND refund_next_ms=?",
+		RefundNone, RefundRequested, outRefundNo, lease, now,
+		rec.Channel, rec.TxnHi, rec.TxnLo, RefundNone, RefundRequested, RefundSucceeded, RefundReported, RefundFailed, rec.RefundNextMs))
 }
 
 // RefundProgress 是一次退款处理之后要写回的全部字段。

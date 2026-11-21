@@ -158,6 +158,39 @@ private static final long serialVersionUID = 0L;
     return trialInviteCooldownSeconds_;
   }
 
+  public static final int RENAME_COOLDOWN_SECONDS_FIELD_NUMBER = 11;
+  private int renameCooldownSeconds_ = 0;
+  /**
+   * <code>uint32 rename_cooldown_seconds = 11;</code>
+   * @return The renameCooldownSeconds.
+   */
+  @java.lang.Override
+  public int getRenameCooldownSeconds() {
+    return renameCooldownSeconds_;
+  }
+
+  public static final int NAME_HOLD_SECONDS_FIELD_NUMBER = 12;
+  private int nameHoldSeconds_ = 0;
+  /**
+   * <code>uint32 name_hold_seconds = 12;</code>
+   * @return The nameHoldSeconds.
+   */
+  @java.lang.Override
+  public int getNameHoldSeconds() {
+    return nameHoldSeconds_;
+  }
+
+  public static final int RENAME_COST_FUNDS_FIELD_NUMBER = 13;
+  private long renameCostFunds_ = 0L;
+  /**
+   * <code>uint64 rename_cost_funds = 13;</code>
+   * @return The renameCostFunds.
+   */
+  @java.lang.Override
+  public long getRenameCostFunds() {
+    return renameCostFunds_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -201,6 +234,15 @@ private static final long serialVersionUID = 0L;
     }
     if (trialInviteCooldownSeconds_ != 0) {
       output.writeUInt32(10, trialInviteCooldownSeconds_);
+    }
+    if (renameCooldownSeconds_ != 0) {
+      output.writeUInt32(11, renameCooldownSeconds_);
+    }
+    if (nameHoldSeconds_ != 0) {
+      output.writeUInt32(12, nameHoldSeconds_);
+    }
+    if (renameCostFunds_ != 0L) {
+      output.writeUInt64(13, renameCostFunds_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -246,6 +288,18 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(10, trialInviteCooldownSeconds_);
     }
+    if (renameCooldownSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(11, renameCooldownSeconds_);
+    }
+    if (nameHoldSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(12, nameHoldSeconds_);
+    }
+    if (renameCostFunds_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(13, renameCostFunds_);
+    }
     return size;
   }
   @java.lang.Override
@@ -290,6 +344,12 @@ private static final long serialVersionUID = 0L;
         != other.getTrialInviteTtlSeconds()) return false;
     if (getTrialInviteCooldownSeconds()
         != other.getTrialInviteCooldownSeconds()) return false;
+    if (getRenameCooldownSeconds()
+        != other.getRenameCooldownSeconds()) return false;
+    if (getNameHoldSeconds()
+        != other.getNameHoldSeconds()) return false;
+    if (getRenameCostFunds()
+        != other.getRenameCostFunds()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -321,6 +381,13 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getTrialInviteTtlSeconds();
     hash = (37 * hash) + TRIAL_INVITE_COOLDOWN_SECONDS_FIELD_NUMBER;
     hash = (53 * hash) + getTrialInviteCooldownSeconds();
+    hash = (37 * hash) + RENAME_COOLDOWN_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getRenameCooldownSeconds();
+    hash = (37 * hash) + NAME_HOLD_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getNameHoldSeconds();
+    hash = (37 * hash) + RENAME_COST_FUNDS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getRenameCostFunds());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -462,6 +529,9 @@ private static final long serialVersionUID = 0L;
       activityJoinMinHours_ = 0;
       trialInviteTtlSeconds_ = 0;
       trialInviteCooldownSeconds_ = 0;
+      renameCooldownSeconds_ = 0;
+      nameHoldSeconds_ = 0;
+      renameCostFunds_ = 0L;
       return this;
     }
 
@@ -525,6 +595,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000200) != 0)) {
         result.trialInviteCooldownSeconds_ = trialInviteCooldownSeconds_;
       }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.renameCooldownSeconds_ = renameCooldownSeconds_;
+      }
+      if (((from_bitField0_ & 0x00000800) != 0)) {
+        result.nameHoldSeconds_ = nameHoldSeconds_;
+      }
+      if (((from_bitField0_ & 0x00001000) != 0)) {
+        result.renameCostFunds_ = renameCostFunds_;
+      }
     }
 
     @java.lang.Override
@@ -568,6 +647,15 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getTrialInviteCooldownSeconds() != 0) {
         setTrialInviteCooldownSeconds(other.getTrialInviteCooldownSeconds());
+      }
+      if (other.getRenameCooldownSeconds() != 0) {
+        setRenameCooldownSeconds(other.getRenameCooldownSeconds());
+      }
+      if (other.getNameHoldSeconds() != 0) {
+        setNameHoldSeconds(other.getNameHoldSeconds());
+      }
+      if (other.getRenameCostFunds() != 0L) {
+        setRenameCostFunds(other.getRenameCostFunds());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -645,6 +733,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000200;
               break;
             } // case 80
+            case 88: {
+              renameCooldownSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 88
+            case 96: {
+              nameHoldSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000800;
+              break;
+            } // case 96
+            case 104: {
+              renameCostFunds_ = input.readUInt64();
+              bitField0_ |= 0x00001000;
+              break;
+            } // case 104
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -978,6 +1081,102 @@ private static final long serialVersionUID = 0L;
     public Builder clearTrialInviteCooldownSeconds() {
       bitField0_ = (bitField0_ & ~0x00000200);
       trialInviteCooldownSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int renameCooldownSeconds_ ;
+    /**
+     * <code>uint32 rename_cooldown_seconds = 11;</code>
+     * @return The renameCooldownSeconds.
+     */
+    @java.lang.Override
+    public int getRenameCooldownSeconds() {
+      return renameCooldownSeconds_;
+    }
+    /**
+     * <code>uint32 rename_cooldown_seconds = 11;</code>
+     * @param value The renameCooldownSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRenameCooldownSeconds(int value) {
+
+      renameCooldownSeconds_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 rename_cooldown_seconds = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRenameCooldownSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000400);
+      renameCooldownSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int nameHoldSeconds_ ;
+    /**
+     * <code>uint32 name_hold_seconds = 12;</code>
+     * @return The nameHoldSeconds.
+     */
+    @java.lang.Override
+    public int getNameHoldSeconds() {
+      return nameHoldSeconds_;
+    }
+    /**
+     * <code>uint32 name_hold_seconds = 12;</code>
+     * @param value The nameHoldSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNameHoldSeconds(int value) {
+
+      nameHoldSeconds_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 name_hold_seconds = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNameHoldSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000800);
+      nameHoldSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long renameCostFunds_ ;
+    /**
+     * <code>uint64 rename_cost_funds = 13;</code>
+     * @return The renameCostFunds.
+     */
+    @java.lang.Override
+    public long getRenameCostFunds() {
+      return renameCostFunds_;
+    }
+    /**
+     * <code>uint64 rename_cost_funds = 13;</code>
+     * @param value The renameCostFunds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRenameCostFunds(long value) {
+
+      renameCostFunds_ = value;
+      bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 rename_cost_funds = 13;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRenameCostFunds() {
+      bitField0_ = (bitField0_ & ~0x00001000);
+      renameCostFunds_ = 0L;
       onChanged();
       return this;
     }

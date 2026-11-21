@@ -112,6 +112,10 @@ static void RoleNameRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& Row
 	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("max_chars"), TEXT("max_chars"), RowIndex, 2147483647.0, TEXT("uint32"));
 	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("generated_suffix_len"), TEXT("generated_suffix_len"), RowIndex, 2147483647.0, TEXT("uint32"));
 	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("max_generate_attempts"), TEXT("max_generate_attempts"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("rename_cooldown_seconds"), TEXT("rename_cooldown_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("old_name_hold_seconds"), TEXT("old_name_hold_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("rename_item_id"), TEXT("rename_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RoleNameRuleTableCheckNarrowedField(RowObject, TEXT("rename_item_count"), TEXT("rename_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool URoleNameRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

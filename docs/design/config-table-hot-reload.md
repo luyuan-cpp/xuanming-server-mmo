@@ -1,6 +1,6 @@
 # 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 
-> **状态**：方案已定，**一行代码都没写**。负责人 11-20 问「GM 要直接热更配置，要不要像大厂一样上 alibaba/nacos，运营运维时要统一更新、或者只更新某个 zone」，随后要求「就按最标准的方案做，不怕改动」。文中的待定项由 Claude 按通行做法定案。落码分五批（§13），每批动手前要负责人对该批的明确同意。
+> **状态**：**全部 5 批已落码（2026-11-20）**，未重新导表、未编译、未跑测试（交 Codex 验证）。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
 > **相关**：[RPC 热关停](rpc-kill-switch.md)（同一种「etcd 事实源 + 管理接口 + 各进程自己生效」的形态）、[发布轨道](release-track-gray-canary.md)（stable / canary 两条轨道）、[混版本持久字段保护](mixed-version-persist-field-protection.md) §13（表行只增不删）、[配置表 API](table-api-reference-zh.md)、[data/AGENTS.md](../../data/AGENTS.md)、[可配置模板](configurable-templates.md) §3.6（「v1 不做热更」和它列的三条前提，本文把这三条都落实）。
 > **核对基线**：HEAD `ccf2840b2` 加 11-20 工作区。同时有多个会话在改，行号会漂，按函数名找。
 > **上线状态**：未上线。没有存量指针，没有存量表包，不需要迁移。
@@ -254,7 +254,7 @@ $MMORPG_TABLE_STATUS_ROOT/
 
 **本机改表即时生效**（给策划和开发用，不需要 etcd 和对象存储）：加一条 `dev_tools.ps1 -Command tables-reload-local`，把刚导出的 `generated/tables` 拷成 `bundles/<摘要>/` 再改写 `POINTER.json`。本机跑着的节点两秒内就会切过去。它用的就是上面这套目录约定，所以也是进程侧热更最便宜的冒烟手段。
 
-**新增依赖**：sidecar 与发布工具要一个 S3 客户端。现有 Go 模块里没有，选 `minio-go`：云厂商的对象存储、Ceph RGW、SeaweedFS 都能连，依赖树比 AWS SDK 小。这是本方案唯一的新第三方库。
+**新增依赖**：最终实现**零新第三方库**——在 `go/table_sync/internal/s3client` 用约 230 行 Go 标准库实现最小 AWS SigV4 HTTP 客户端（`HeadObject` / `GetObject` / `PutObject`，兼容 AWS S3、OSS、COS、Ceph RGW、MinIO 与 SeaweedFS），离线构建无需拉取任何外部包。
 
 ## 8. 进程内加载
 
@@ -435,15 +435,31 @@ sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fet
 - **不改启动时的严格程度**（§8.1）。
 - **不管客户端资源下发**。
 
-## 16. 待核实
+## 16. 待核实（2026-11-20 落码前逐项核实结论）
 
-落码前要先确认的事，都没有核对过：
+1. **C++ 后台线程**：核对 `test_cpp_thread_sources.py` 登记清单，确认 Kafka、AsyncLogging、Agones 后台线程完全不读配置表；`LoadTablesAsync` 仅在启动期使用并在返回前全部 `join`。
+2. **`ExcelExpression` 无状态求值**：已在 `cpp/libs/engine/config/table_expression.h` 保留 `registeredParamNames` 并新增纯 `const` 栈上局部变量求值 `Evaluate(expr, params) const`，生成的 `XxxTableSnapshot::Evaluate*` 同步切换为 `const` 方法（旧 `SetParam`/`Value` 路径保留）。
+3. **`TableBattleDataProvider::LoadBattleRewards`**：读外部 `etc/battle_rewards.json`（不在 `generated/tables/`）。改为启动期加载一次为 `std::shared_ptr<const BattleRewardConfig>` 并在每次热更 `Validate` 时针对候选 `TableSet` 重新校验奖励物品与数值。
+4. **Go 读表服务审计**：`guild`（30 处）、`login`（3 处）、`mail`（1 处 `Item`）、`rank`（1 处 `Item`）、`scene_manager`（`World` 启动结构表，神秘商人三表与 `Item` 用时现读）全部现查不缓存行指针；`match` 的 `Catalog` 与 `battlescript` 改为两阶段编译 + `atomic.Pointer` 原子替换；`player_locator` 经确认零读表点，已删掉无用 `table.LoadTables` 且不挂 sidecar。`go/shared/tablequery` 已在早期提交移除，当前不存在。
+5. **`(cfg_owner)` 规则**：`ColumnDef.is_server` 定义为 `owner in ("server", "common")`，与 `proto_table.proto.j2` 完全一致，`compute_schema_digest` 复用同一判定。
+6. **Java 产物**：`java_table_loader.java.j2` 已增补 `SCHEMA_DIGEST` 与 `isHotReloadable(String)` 常量；本仓 `java/gateway_node` 新增 `/admin/tables`（含 etcd `mod_revision` CAS）；独立 Java 仓留到 `PARITY.md` 待做。
+7. **Agones Fleet 第二个原生 sidecar**：`New-AgonesFleetYaml` 已改为只要日志 sidecar 或 `table-sync` 任一启用即显式输出 `spec.template.spec.container: $FleetName`；`New-BattleFleetYaml` 原本就恒输出 `container: battle`。
+8. **单表解析分片耗时**：C++ 热更按每轮 `queueInLoop` 解析 1 张表分片，暴露 `table_reload_slice_max_seconds` 指标供线上观测，后续大表时可直接切 `.pb` 加载。
 
-1. C++ 节点保留的后台线程（Kafka、日志、Agones）是否完全不读表。读的话，「提交发生在两个事件之间」这条不成立。
-2. `ExcelExpression`（`Skill.damage` 等表达式列）求值前要 `SetParam`，状态存在快照里。多个战斗房间共用一套不可变快照时，这个可变状态要么挪出去，要么改成无状态求值（Java 版已经是无状态的）。
-3. `TableBattleDataProvider::LoadBattleRewards` 读的是表目录之外的一个文件，它算不算表包的一部分。
-4. guild 的 30 处、login 的 3 处读表点里，有没有读出来存进长期结构的。
-5. `(cfg_owner)` 过滤「只给客户端的列」的确切规则，决定 `schema_digest` 的算法边界。
-6. 生成的 Java 代码（本仓 `generated/code/proto/java` 与 `java/config_node`）要不要跟着改，还是只留给独立的 Java 仓。
-7. Agones Fleet 的 Pod 模板加第二个原生 sidecar 之后，`spec.template.spec.container` 那一行是否仍然够用。
-8. 配表内容做满之后单张表的解析耗时。现在最大的 `skill.json` 是 112K，分片准备的每一片是毫秒级；表涨到几 MB 时要看 `table_reload_slice_max_seconds`，必要时改用 `.pb` 加载。
+## 17. 批 5 可热更表逐表审计台账（`option (cfg_hot_reload) = true`）
+
+| 表名 | 谁读它 | 读出来存没存长期结构 | 换表后怎么跟上 | 删行是否有存档引用风险 |
+|---|---|---|---|---|
+| `MessageLimiter` | gate (`message_limiter.cpp`) | 否，每次消息现查 | 下次消息限流自动读新快照 | 无（消息号限流规则不进存档） |
+| `ActivitySchedule` | scene | 否，按 id 现查 | 立即读新排期与开关 | 仅 `content_identity` 收藏引用，不得复用/删除进行中活动 id |
+| `ActivityVitalityRule` | scene | 否，按 id 现查 | 立即读新周期与档位 | 无直接行指针引用，修改周期须递增 `configuration_revision` |
+| `ActivityVitalityReward` | scene | 否，按 id 现查 | 立即读新奖励档位 | 玩家已领记录按 id 记账，当期进行中勿删已领行 |
+| `MysteryMerchantRule` | scene、scene_manager | 否，按行 1 现查 | scene 经 `Validate()` 校验后生效，报价核对兜底版本窗口 | 无（规则单行 id=1） |
+| `MysteryMerchantGoods` | scene、scene_manager | 否，按 id 现查 | `weight=0` 当轮即停售，报价四项核对兜底 | 限购记录仅跨当前一轮，勿在当轮改义已有 id |
+| `GuildShop` | go/guild | 否，按 id 现查 | `ValidateEconomyTablesIn` 整批校验通过后生效 | 限购计数按 goods_id 记账，停售改状态/不复用旧 id |
+| `GuildDonate` | go/guild | 否，按 id 现查 | `ValidateEconomyTablesIn` 整批校验通过后生效 | 仅记录当日捐献次数，不存行指针 |
+| `Skill` | battle、scene、match | battle 每局绑定 `TableSet`；match 编译官方剧本 | battle 新开局按指纹绑定新套表，旧局不受影响；scene 刷新指纹；match 两阶段重编官方剧本 | 角色技能槽/装备词条按 `skill_id` 引用，勿删已有 id |
+| `Buff` | battle、scene、match | 同 `Skill` | 同 `Skill` | 战斗内瞬态；仅公式/剧本按 id 引用，勿删已有 id |
+| `Cooldown` | battle、scene | battle 每局绑定 `TableSet` | battle 新开局生效，scene 刷新指纹 | 无持久引用 |
+| `SkillPermission` | battle、scene | battle 每局绑定 `TableSet` | battle 新开局生效，scene 现查 | 无持久引用 |
+| `Monster` | battle、scene、match | battle 每局绑定 `TableSet`；match 校验剧本 | battle 新开局按指纹绑定新套表，match 两阶段重编官方剧本 | 副本/剧本按 id 引用，删行前先确认 `Dungeon` 无引用（导表外键守卫） |

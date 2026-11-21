@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     在隔离目录运行真实 dev_tools.ps1 入口，验证生成器失败不会被包装成成功。
@@ -433,6 +433,124 @@ Test-Case 'proto-gen-build 打戳：构建期间保存的源码晚于戳，构�
     Assert-True ($null -ne $result.SavedDuringBuildWriteTimeUtc) '进程桩必须在构建期间写入源码'
     Assert-True ($primaryWriteTimeUtc -lt $result.SavedDuringBuildWriteTimeUtc) "戳必须取构建开始而非构建结束时刻（戳 $($primaryWriteTimeUtc.ToString('o'))，构建期间保存 $($result.SavedDuringBuildWriteTimeUtc.ToString('o'))）"
     Assert-ProtoGenRunRestored $result.State
+}
+
+# ── goctl 生成后钩子（go/build.ps1）：暂存 proto 存在时自动刷新 db/login 包装，失败或缺失必须 fail-closed ──
+function Invoke-GoctlPostHookCase {
+    param(
+        [int]$ToolExit = 0,
+        [bool]$CreateMarker = $true,
+        [bool]$CreateBuildScript = $true,
+        [int]$BuildScriptExit = 0
+    )
+    $markerFile = Join-Path $fixture 'generated/proto/login/proto/login/login.proto'
+    $buildScript = Join-Path $fixture 'go/build.ps1'
+    $hookRecord = Join-Path $fixture 'goctl-hook-record.txt'
+    $recordPath = Join-Path $fixture 'generator-record.txt'
+    $statePath = Join-Path $fixture 'restored.json'
+    $primaryPath = Join-Path $generatorDir 'proto-gen.exe'
+    $primaryExisted = Test-Path -LiteralPath $primaryPath
+    Copy-Item -LiteralPath $stubExe -Destination $primaryPath -Force
+    foreach ($p in @($hookRecord, $recordPath, $statePath)) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p }
+    }
+    try {
+        if ($CreateMarker) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $markerFile) -Force | Out-Null
+            Set-Content -LiteralPath $markerFile -Value '// fixture staged login.proto'
+        }
+        if ($CreateBuildScript) {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $buildScript) -Force | Out-Null
+            @"
+Set-Content -LiteralPath '$hookRecord' -Value "called=1"
+exit $BuildScriptExit
+"@ | Set-Content -LiteralPath $buildScript -Encoding utf8
+        }
+        $output = & $pwshPath -NoProfile -NonInteractive -File $childPath -FixtureRoot $fixture -Mode 'binary-primary' -ToolExit $ToolExit -InitialEnvironment:$false 2>&1 | Out-String
+        $processExit = $LASTEXITCODE
+        $state = if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json -AsHashtable } else { $null }
+        return [pscustomobject]@{
+            Output     = $output
+            Exit       = $processExit
+            HookCalled = (Test-Path -LiteralPath $hookRecord)
+            State      = $state
+        }
+    } finally {
+        foreach ($dir in @((Join-Path $fixture 'generated'), (Join-Path $fixture 'go'))) {
+            if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        }
+        if (Test-Path -LiteralPath $hookRecord) { Remove-Item -LiteralPath $hookRecord -Force }
+        if (-not $primaryExisted -and (Test-Path -LiteralPath $primaryPath)) { Remove-Item -LiteralPath $primaryPath }
+    }
+}
+
+Test-Case 'goctl 后钩子：暂存 proto 存在且生成器成功时自动执行 go/build.ps1' {
+    $result = Invoke-GoctlPostHookCase -ToolExit 0 -CreateMarker $true -CreateBuildScript $true -BuildScriptExit 0
+    Assert-Equal 0 $result.Exit "钩子成功时入口必须成功退出，输出：$($result.Output)"
+    Assert-True $result.HookCalled 'proto-gen-run 成功后必须自动调用 go/build.ps1'
+    Assert-Match $result.Output '\[proto-gen post-hook\] goctl: go/build\.ps1' '日志标明执行了 goctl 生成后钩子'
+    Assert-ProtoGenRunRestored $result.State
+}
+
+Test-Case 'goctl 后钩子：生成器本身失败时不执行 go/build.ps1' {
+    $result = Invoke-GoctlPostHookCase -ToolExit 23 -CreateMarker $true -CreateBuildScript $true -BuildScriptExit 0
+    Assert-True ($result.Exit -ne 0) '生成器失败时入口必须失败'
+    Assert-True (-not $result.HookCalled) '生成器失败时不得用旧暂存 proto 跑 go/build.ps1'
+}
+
+Test-Case 'goctl 后钩子：go/build.ps1 以非 0 退出时必须失败并带出退出码' {
+    $result = Invoke-GoctlPostHookCase -ToolExit 0 -CreateMarker $true -CreateBuildScript $true -BuildScriptExit 17
+    Assert-True ($result.Exit -ne 0) "go/build.ps1 返回 17 时入口必须失败，实际退出 $($result.Exit)"
+    Assert-True $result.HookCalled '确实调用了 go/build.ps1'
+    Assert-Match $result.Output '17' '失败诊断必须包含 go/build.ps1 原始退出码'
+    Assert-ProtoGenRunRestored $result.State
+}
+
+Test-Case 'goctl 后钩子：暂存 proto 存在但 go/build.ps1 缺失时 fail-closed' {
+    $result = Invoke-GoctlPostHookCase -ToolExit 0 -CreateMarker $true -CreateBuildScript $false
+    Assert-True ($result.Exit -ne 0) 'go/build.ps1 缺失时不得静默跳过'
+    Assert-Match $result.Output 'build\.ps1' '失败诊断点名缺失的 go/build.ps1'
+    Assert-ProtoGenRunRestored $result.State
+}
+
+Test-Case 'go/build.ps1 自身：goctl 以非 0 退出时必须抛出失败并恢复工作目录与 PATH' {
+    $goBuildFixture = Join-Path $fixture 'go-build-check'
+    foreach ($d in @('go/db', 'go/login', 'generated/proto/db/proto/db', 'generated/proto/login/proto/login', 'stub-goctl')) {
+        New-Item -ItemType Directory -Path (Join-Path $goBuildFixture $d) -Force | Out-Null
+    }
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../../../go/build.ps1') -Destination (Join-Path $goBuildFixture 'go/build.ps1')
+    Copy-Item -LiteralPath $stubExe -Destination (Join-Path $goBuildFixture 'stub-goctl/goctl.exe')
+    Set-Content -LiteralPath (Join-Path $goBuildFixture 'generated/proto/db/proto/db/db.proto') -Value 'syntax = "proto3";'
+    Set-Content -LiteralPath (Join-Path $goBuildFixture 'generated/proto/login/proto/login/login.proto') -Value 'syntax = "proto3";'
+
+    $runner = Join-Path $goBuildFixture 'run-go-build.ps1'
+    @'
+param([string]$Root)
+$ErrorActionPreference = 'Stop'
+$env:PATH = (Join-Path $Root 'stub-goctl') + [IO.Path]::PathSeparator + $env:PATH
+$env:PROTOGEN_TEST_RECORD = Join-Path $Root 'goctl-record.txt'
+$env:PROTOGEN_TEST_EXIT = '19'
+$beforePath = $env:PATH
+Set-Location -LiteralPath $Root
+$beforeCwd = $PWD.Path
+$failed = $false
+$errMsg = ''
+try {
+    & (Join-Path $Root 'go/build.ps1')
+} catch {
+    $failed = $true
+    $errMsg = $_.Exception.Message
+}
+@{ Failed = $failed; Error = $errMsg; PathRestored = ($env:PATH -eq $beforePath); CwdRestored = ($PWD.Path -eq $beforeCwd) } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Root 'go-build-result.json')
+'@ | Set-Content -LiteralPath $runner -Encoding utf8
+
+    & $pwshPath -NoProfile -NonInteractive -File $runner -Root $goBuildFixture 2>&1 | Out-Null
+    $res = Get-Content -LiteralPath (Join-Path $goBuildFixture 'go-build-result.json') -Raw | ConvertFrom-Json
+    Assert-True $res.Failed 'goctl 返回 19 时 go/build.ps1 必须报错，不能吞掉非零退出码'
+    Assert-Match $res.Error '19' '报错信息必须带出 goctl 退出码'
+    Assert-True $res.PathRestored 'go/build.ps1 finally 必须恢复 PATH'
+    Assert-True $res.CwdRestored 'go/build.ps1 finally 必须恢复调用者工作目录'
 }
 Write-Host "证据目录：$fixture"
 exit (Complete-TestRun -SuiteName 'proto-gen-run 退出码与 finally 恢复')

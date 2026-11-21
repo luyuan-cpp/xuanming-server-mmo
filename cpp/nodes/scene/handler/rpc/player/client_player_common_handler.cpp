@@ -2,6 +2,9 @@
 #include "client_player_common_handler.h"
 
 ///<<< BEGIN WRITING YOUR CODE
+#include "engine/core/time/system/time.h"
+#include "services/scene/player/system/player_rename.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 ///<<< END WRITING YOUR CODE
 
 void SceneClientPlayerCommonHandler::SendTipToClient(entt::entity player,const ::TipInfoMessage* request,
@@ -32,7 +35,17 @@ void SceneClientPlayerCommonHandler::RenamePlayer(entt::entity player,const ::Re
 	::RenamePlayerResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
+	if (request == nullptr || response == nullptr)
+	{
+		return;
+	}
+	const uint32_t tipId = PlayerRenameSystem::RequestRename(player, request->name(), TimeSystem::NowMillisecondsUTC());
+	if (tipId != kSuccess)
+	{
+		response->mutable_error_message()->set_id(tipId);
+	}
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneClientPlayerCommonHandler::NotifyPlayerRenamed(entt::entity player,const ::PlayerRenamedNotify* request,
@@ -40,4 +53,5 @@ void SceneClientPlayerCommonHandler::NotifyPlayerRenamed(entt::entity player,con
 {
 ///<<< BEGIN WRITING YOUR CODE
 ///<<< END WRITING YOUR CODE
+
 }

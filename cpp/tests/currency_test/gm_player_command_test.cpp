@@ -7,7 +7,7 @@ namespace
 {
 using Request = scene_node::GmExecutePlayerCommandRequest;
 using Response = scene_node::GmExecutePlayerCommandResponse;
-using Result = gate_security::GmAuthResult;
+using Result = gm_security::GmAuthResult;
 constexpr char kTestSecret[] = "0123456789abcdef0123456789abcdef";
 constexpr int64_t kNow = 1700000000;
 
@@ -31,16 +31,16 @@ void Sign(Request& request, std::string nonce = {})
 {
     if (nonce.empty()) nonce = std::to_string(request.command_id());
     const auto time = std::to_string(request.issued_at_ms() / 1000);
-    const auto canonical = gate_security::BuildGmCanonicalString(gm_player_command::kMethod,
+    const auto canonical = gm_security::BuildGmCanonicalString(gm_player_command::kMethod,
         std::to_string(request.target_node_id()), request.operator_(), time, nonce,
         "gm-player-command-v1\n" + gm_player_command::Digest(request));
     request.set_auth(request.operator_() + "|" + time + "|" + nonce + "|" +
-        gate_security::HmacSha256Hex(kTestSecret, canonical));
+        token_security::HmacSha256Hex(kTestSecret, canonical));
 }
 
 Result Verify(const Request& request, int64_t now = kNow)
 {
-    gate_security::GmNonceCache nonces;
+    gm_security::GmNonceCache nonces;
     return gm_player_command::Verify(request, 7, kTestSecret, now, 300, nonces).result;
 }
 }
@@ -104,7 +104,7 @@ TEST(GmPlayerCommand, MissingSecretReplayAndExpiredDraftFailClosed)
 {
     auto request = Example();
     Sign(request);
-    gate_security::GmNonceCache nonces;
+    gm_security::GmNonceCache nonces;
     EXPECT_EQ(Result::kSecretNotConfigured, gm_player_command::Verify(request, 7, "", kNow, 300, nonces).result);
     EXPECT_EQ(Result::kSecretNotConfigured, gm_player_command::Verify(request, 7, "short-key", kNow, 300, nonces).result);
     EXPECT_EQ(Result::kOk, gm_player_command::Verify(request, 7, kTestSecret, kNow, 300, nonces).result);
@@ -134,6 +134,43 @@ TEST(GmPlayerCommand, SameCommandWithNewAuthReturnsPriorResultAndConflictsAreRej
     EXPECT_EQ(gm_player_command::CommandCache::Admission::kConflict, cache.Begin(request, replay));
     request.set_command_id(request.command_id() + 1);
     EXPECT_EQ(gm_player_command::CommandCache::Admission::kFull, cache.Begin(request, replay));
+}
+
+TEST(GmPlayerCommand, CommandCacheReclaimsExpiredEntriesWithoutEvictingActiveWindow)
+{
+    gm_player_command::CommandCache cache(2);
+    // 故意乱序插入：先插入较晚草稿，再插入较早草稿，验证按过期时间精确淘汰而非 FIFO。
+    auto newer = Example();
+    newer.set_command_id(101);
+    newer.set_issued_at_ms(static_cast<uint64_t>(kNow + 50) * 1000ULL);
+    Sign(newer);
+
+    auto older = Example();
+    older.set_command_id(102);
+    older.set_issued_at_ms(static_cast<uint64_t>(kNow) * 1000ULL);
+    Sign(older);
+
+    Response response;
+    EXPECT_EQ(gm_player_command::CommandCache::Admission::kNew, cache.Begin(newer, response, kNow + 50, 300));
+    cache.Complete(newer, response);
+    EXPECT_EQ(gm_player_command::CommandCache::Admission::kNew, cache.Begin(older, response, kNow + 50, 300));
+    cache.Complete(older, response);
+
+    // 窗口边界（kNow + 300 + 300 = kNow + 600）：两条记录仍受保护，不允许提前淘汰。
+    auto third = Example();
+    third.set_command_id(103);
+    third.set_issued_at_ms(static_cast<uint64_t>(kNow + 600) * 1000ULL);
+    Sign(third);
+    EXPECT_EQ(gm_player_command::CommandCache::Admission::kFull, cache.Begin(third, response, kNow + 600, 300));
+    EXPECT_EQ(2u, cache.Size());
+
+    // 越过较早草稿的窗口（kNow + 601）：older 被安全回收，newer 仍保留，新命令正常放行。
+    third.set_issued_at_ms(static_cast<uint64_t>(kNow + 601) * 1000ULL);
+    Sign(third);
+    EXPECT_EQ(gm_player_command::CommandCache::Admission::kNew, cache.Begin(third, response, kNow + 601, 300));
+    EXPECT_EQ(2u, cache.Size());
+    Response replay;
+    EXPECT_EQ(gm_player_command::CommandCache::Admission::kReplay, cache.Begin(newer, replay, kNow + 601, 300));
 }
 
 TEST(GmPlayerCommand, InvalidFieldsAndControlCharactersAreRejectedOrSanitized)

@@ -1,5 +1,8 @@
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "google/protobuf/util/json_util.h"
-#include "core/utils/file/file2string.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/mysterymerchantgoods_table.h"
@@ -7,20 +10,39 @@
 std::string GetConfigDir();
 bool UseProtoBinaryTables();
 
-void MysteryMerchantGoodsTableManager::Load() {
-    auto snap = std::make_unique<Snapshot>();
+bool MysteryMerchantGoodsTableManager::ParseSnapshotFromDir(
+    const std::string& configDir,
+    const bool useBinary,
+    std::shared_ptr<const Snapshot>& out,
+    std::string& err) {
+    std::string prefix = configDir;
+    if (!prefix.empty() && prefix.back() != '/' && prefix.back() != '\\') {
+        prefix.push_back('/');
+    }
+    const std::string path = prefix + (useBinary ? "mysterymerchantgoods.pb" : "mysterymerchantgoods.json");
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        err = "failed to open MysteryMerchantGoods table file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (input.bad()) {
+        err = "failed to read MysteryMerchantGoods table file: " + path;
+        return false;
+    }
+    const std::string contents = buffer.str();
 
-    if (UseProtoBinaryTables()) {
-        const std::string path = GetConfigDir() + "mysterymerchantgoods.pb";
-        const auto contents = File2String(path);
+    auto snap = std::make_shared<Snapshot>();
+    if (useBinary) {
         if (!snap->data.ParseFromString(contents)) {
-            LOG_FATAL << "MysteryMerchantGoods binary parse failed: " << path;
+            err = "MysteryMerchantGoods binary parse failed: " + path;
+            return false;
         }
     } else {
-        const std::string path = GetConfigDir() + "mysterymerchantgoods.json";
-        const auto contents = File2String(path);
-        if (const auto result = google::protobuf::util::JsonStringToMessage(contents.data(), &snap->data); !result.ok()) {
-            LOG_FATAL << "MysteryMerchantGoods" << result.message().data();
+        if (const auto result = google::protobuf::util::JsonStringToMessage(contents, &snap->data); !result.ok()) {
+            err = std::string("MysteryMerchantGoods json parse failed: ") + std::string(result.message());
+            return false;
         }
     }
 
@@ -30,7 +52,17 @@ void MysteryMerchantGoodsTableManager::Load() {
         snap->itemIdIndex[row_data.item_id()].push_back(&row_data);
     }
 
-    snapshot = std::move(snap);
+    out = std::move(snap);
+    return true;
+}
+
+void MysteryMerchantGoodsTableManager::Load() {
+    std::shared_ptr<const Snapshot> snap;
+    std::string err;
+    if (!ParseSnapshotFromDir(GetConfigDir(), UseProtoBinaryTables(), snap, err)) {
+        LOG_FATAL << err;
+    }
+    InstallSnapshot(std::move(snap));
 }
 
 std::pair<const MysteryMerchantGoodsTable*, uint32_t> MysteryMerchantGoodsTableManager::FindById(const uint32_t tableId) {

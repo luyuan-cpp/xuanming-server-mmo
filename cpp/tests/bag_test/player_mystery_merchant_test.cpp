@@ -42,10 +42,12 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/scene_info.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/mystery_merchant_rules.h"
 #include "services/scene/player/system/player_mystery_merchant.h"
@@ -480,6 +482,7 @@ protected:
 		const auto entity = tlsEcs.actorRegistry.create();
 		players.push_back(entity);
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, Guid{guid});
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		auto &bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(entity);
 		for (auto &bag : bags.bags)
 		{
@@ -855,6 +858,14 @@ TEST_F(PlayerMysteryMerchantTest, RejectsWhileFrozenOrInBattle)
 	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	ExpectRejectedWithoutSideEffects(kMysteryMerchantFrozen, player, Request(stackGoods, 1, 60));
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+	tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+	ExpectRejectedWithoutSideEffects(kMysteryMerchantFrozen, player, Request(stackGoods, 1, 60));
+	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+
+	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+	ExpectRejectedWithoutSideEffects(kMysteryMerchantFrozen, player, Request(stackGoods, 1, 60));
+	tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
 
 	auto &inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
 	inBattle.set_battle_id(4242);

@@ -1,5 +1,8 @@
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "google/protobuf/util/json_util.h"
-#include "core/utils/file/file2string.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/testmultikey_table.h"
@@ -7,20 +10,39 @@
 std::string GetConfigDir();
 bool UseProtoBinaryTables();
 
-void TestMultiKeyTableManager::Load() {
-    auto snap = std::make_unique<Snapshot>();
+bool TestMultiKeyTableManager::ParseSnapshotFromDir(
+    const std::string& configDir,
+    const bool useBinary,
+    std::shared_ptr<const Snapshot>& out,
+    std::string& err) {
+    std::string prefix = configDir;
+    if (!prefix.empty() && prefix.back() != '/' && prefix.back() != '\\') {
+        prefix.push_back('/');
+    }
+    const std::string path = prefix + (useBinary ? "testmultikey.pb" : "testmultikey.json");
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        err = "failed to open TestMultiKey table file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (input.bad()) {
+        err = "failed to read TestMultiKey table file: " + path;
+        return false;
+    }
+    const std::string contents = buffer.str();
 
-    if (UseProtoBinaryTables()) {
-        const std::string path = GetConfigDir() + "testmultikey.pb";
-        const auto contents = File2String(path);
+    auto snap = std::make_shared<Snapshot>();
+    if (useBinary) {
         if (!snap->data.ParseFromString(contents)) {
-            LOG_FATAL << "TestMultiKey binary parse failed: " << path;
+            err = "TestMultiKey binary parse failed: " + path;
+            return false;
         }
     } else {
-        const std::string path = GetConfigDir() + "testmultikey.json";
-        const auto contents = File2String(path);
-        if (const auto result = google::protobuf::util::JsonStringToMessage(contents.data(), &snap->data); !result.ok()) {
-            LOG_FATAL << "TestMultiKey" << result.message().data();
+        if (const auto result = google::protobuf::util::JsonStringToMessage(contents, &snap->data); !result.ok()) {
+            err = std::string("TestMultiKey json parse failed: ") + std::string(result.message());
+            return false;
         }
     }
 
@@ -43,7 +65,17 @@ void TestMultiKeyTableManager::Load() {
         snap->testRefIndex[row_data.test_ref()].push_back(&row_data);
     }
 
-    snapshot = std::move(snap);
+    out = std::move(snap);
+    return true;
+}
+
+void TestMultiKeyTableManager::Load() {
+    std::shared_ptr<const Snapshot> snap;
+    std::string err;
+    if (!ParseSnapshotFromDir(GetConfigDir(), UseProtoBinaryTables(), snap, err)) {
+        LOG_FATAL << err;
+    }
+    InstallSnapshot(std::move(snap));
 }
 
 std::pair<const TestMultiKeyTable*, uint32_t> TestMultiKeyTableManager::FindByStringKey(const std::string& key) const {

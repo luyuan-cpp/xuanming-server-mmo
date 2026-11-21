@@ -34,6 +34,8 @@ namespace MmorpgClient.Table
         private static readonly JsonParser s_jsonParser =
             new JsonParser(JsonParser.Settings.Default.WithIgnoreUnknownFields(true));
 
+        private static readonly ActorActionCombatStateTable[] s_emptyRows = new ActorActionCombatStateTable[0];
+
         [ThreadStatic]
         private static Random s_random;
 
@@ -64,13 +66,14 @@ namespace MmorpgClient.Table
         {
             public readonly ActorActionCombatStateTableData Container;
             public readonly RepeatedField<ActorActionCombatStateTable> Rows;
-            public readonly Dictionary<uint, ActorActionCombatStateTable> KvData;
+            // 主键可重复：一个 id 对应多行。
+            public readonly Dictionary<uint, IReadOnlyList<ActorActionCombatStateTable>> KvData;
 
             public Snapshot(ActorActionCombatStateTableData container, int capacity)
             {
                 Container = container;
                 Rows = container.Data;
-                KvData = new Dictionary<uint, ActorActionCombatStateTable>(capacity);
+                KvData = new Dictionary<uint, IReadOnlyList<ActorActionCombatStateTable>>(capacity);
             }
         }
 
@@ -116,10 +119,11 @@ namespace MmorpgClient.Table
             for (int i = 0; i < rows.Count; i++)
             {
                 ActorActionCombatStateTable row = rows[i];
-                snap.KvData[row.Id] = row;
+                Index(snap.KvData, row.Id, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
+            Freeze(snap.KvData);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -140,24 +144,20 @@ namespace MmorpgClient.Table
             get { return _snapshot.Container; }
         }
 
-        /// <summary>按主键取一行，没有则返回 null。</summary>
-        /// <remarks>热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。</remarks>
-        public ActorActionCombatStateTable FindById(uint id)
+        /// <summary>返回该 id 命中的**全部**行（表内顺序）。</summary>
+        /// <remarks>
+        /// 这张表的主键声明了 (cfg_multi)，单值语义不成立，因此**不生成 FindById** ——
+        /// 把可重复主键当单值用会在编译期断，而不是悄悄只看第一行。
+        /// 热更契约：返回的对象属于当前快照，只许当场用，调用方**只存 id**。
+        /// </remarks>
+        public IReadOnlyList<ActorActionCombatStateTable> FindAllById(uint id)
         {
             Snapshot snap = _snapshot;
-            ActorActionCombatStateTable row;
-            return snap.KvData.TryGetValue(id, out row) ? row : null;
+            return Bucket(snap.KvData, id);
         }
 
-        /// <summary>按主键取一行，命中返回 true。</summary>
-        public bool TryFindById(uint id, out ActorActionCombatStateTable row)
-        {
-            Snapshot snap = _snapshot;
-            return snap.KvData.TryGetValue(id, out row);
-        }
-
-        /// <summary>主键 -> 行。</summary>
-        public IReadOnlyDictionary<uint, ActorActionCombatStateTable> KvData
+        /// <summary>主键 -> 该 id 的全部行。</summary>
+        public IReadOnlyDictionary<uint, IReadOnlyList<ActorActionCombatStateTable>> KvData
         {
             get { return _snapshot.KvData; }
         }
@@ -167,12 +167,13 @@ namespace MmorpgClient.Table
         public bool Exists(uint id)
         {
             Snapshot snap = _snapshot;
-            return snap.KvData.ContainsKey(id);
+            IReadOnlyList<ActorActionCombatStateTable> bucket;
+            return snap.KvData.TryGetValue(id, out bucket) && bucket.Count > 0;
         }
 
         // ---- Count ----
 
-        /// <summary>总行数。</summary>
+        /// <summary>总行数。主键可重复，按行数算而不是按 key 数。</summary>
         public int Count()
         {
             Snapshot snap = _snapshot;
@@ -181,17 +182,17 @@ namespace MmorpgClient.Table
 
         // ---- FindByIds (IN) ----
 
-        /// <summary>Look up many ids at once.</summary>
+        /// <summary>Look up many ids at once. 主键可重复，合并全部命中行。</summary>
         public List<ActorActionCombatStateTable> FindByIds(IReadOnlyList<uint> ids)
         {
             Snapshot snap = _snapshot;
             List<ActorActionCombatStateTable> result = new List<ActorActionCombatStateTable>(ids.Count);
             for (int i = 0; i < ids.Count; i++)
             {
-                ActorActionCombatStateTable row;
-                if (snap.KvData.TryGetValue(ids[i], out row))
+                IReadOnlyList<ActorActionCombatStateTable> bucket;
+                if (snap.KvData.TryGetValue(ids[i], out bucket))
                 {
-                    result.Add(row);
+                    result.AddRange(bucket);
                 }
             }
             return result;
@@ -243,6 +244,30 @@ namespace MmorpgClient.Table
         }
 
         // ---- internals ----
+
+        private static void Index<TKey>(Dictionary<TKey, IReadOnlyList<ActorActionCombatStateTable>> map, TKey key, ActorActionCombatStateTable row)
+        {
+            // 建索引期间桶是 List(要 Add);Rebuild 末尾 Freeze() 会把它换成数组。
+            // 这个向下转换只在 Freeze 之前成立,而 Index 只在 Rebuild 的循环里调用。
+            IReadOnlyList<ActorActionCombatStateTable> existing;
+            List<ActorActionCombatStateTable> bucket;
+            if (map.TryGetValue(key, out existing))
+            {
+                bucket = (List<ActorActionCombatStateTable>)existing;
+            }
+            else
+            {
+                bucket = new List<ActorActionCombatStateTable>();
+                map[key] = bucket;
+            }
+            bucket.Add(row);
+        }
+
+        private static IReadOnlyList<ActorActionCombatStateTable> Bucket<TKey>(Dictionary<TKey, IReadOnlyList<ActorActionCombatStateTable>> map, TKey key)
+        {
+            IReadOnlyList<ActorActionCombatStateTable> bucket;
+            return map.TryGetValue(key, out bucket) ? bucket : s_emptyRows;
+        }
 
         /// <summary>
         /// 把索引里的桶从可变 List 冻成数组。**必须在 Rebuild 的最后调用**。

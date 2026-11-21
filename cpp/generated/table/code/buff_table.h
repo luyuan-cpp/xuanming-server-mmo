@@ -4,28 +4,50 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include "table_expression.h"
 #include "table_log.h"
 #include "table/proto/buff_table.pb.h"
 
+// 不可变表快照:独立命名以便 table_loader.h 仅用前向声明组合 TableSet,
+// 不向所有节点入口扇出 50+ 表头文件(docs/design/config-table-hot-reload.md §8.2)。
+struct BuffTableSnapshot {
+    using IdMapType = std::unordered_map<uint32_t, const BuffTable*>;
+
+    BuffTableData data;
+    IdMapType idMap;
+    mutable ExcelExpression<double> healthRegenerationExpr;
+    mutable ExcelExpression<double> bonusDamageExpr;
+    std::unordered_multimap<double, const BuffTable*> intervalEffectIndex;
+    std::unordered_multimap<uint32_t, const BuffTable*> subBuffIndex;
+    std::unordered_multimap<uint32_t, const BuffTable*> targetSubBuffIndex;
+    const BuffTable* FindRowById(uint32_t tableId) const {
+        const auto it = idMap.find(tableId);
+        return it != idMap.end() ? it->second : nullptr;
+    }
+    double EvaluateHealthRegeneration(uint32_t tableId, const std::vector<double>& params = {}) const {
+        const auto* row = FindRowById(tableId);
+        if (row == nullptr) {
+            return double();
+        }
+        return healthRegenerationExpr.Evaluate(row->health_regeneration(), params);
+    }
+    double EvaluateBonusDamage(uint32_t tableId, const std::vector<double>& params = {}) const {
+        const auto* row = FindRowById(tableId);
+        if (row == nullptr) {
+            return double();
+        }
+        return bonusDamageExpr.Evaluate(row->bonus_damage(), params);
+    }
+};
+
 class BuffTableManager {
 public:
-    using IdMapType = std::unordered_map<uint32_t, const BuffTable*>;
+    using Snapshot = BuffTableSnapshot;
+    using IdMapType = Snapshot::IdMapType;
     using LoadSuccessCallback = std::function<void()>;
-
-    // Internal snapshot holding all parsed data and indices.
-    // Load() builds a new snapshot and swaps it in, replacing the old one.
-    struct Snapshot {
-        BuffTableData data;
-        IdMapType idMap;
-        ExcelExpression<double> healthRegenerationExpr;
-        ExcelExpression<double> bonusDamageExpr;
-        std::unordered_multimap<double, const BuffTable*> intervalEffectIndex;
-        std::unordered_multimap<uint32_t, const BuffTable*> subBuffIndex;
-        std::unordered_multimap<uint32_t, const BuffTable*> targetSubBuffIndex;
-    };
 
     static BuffTableManager& Instance() {
         static BuffTableManager instance;
@@ -33,6 +55,19 @@ public:
     }
 
     const Snapshot& GetSnapshot() const { return *snapshot; }
+    std::shared_ptr<const Snapshot> CurrentSnapshot() const { return snapshot; }
+
+    // 两阶段解析:只读目录构建新快照,失败返回 false 与英文原因,不触碰现役快照也不 LOG_FATAL。
+    static bool ParseSnapshotFromDir(const std::string& configDir,
+                                     bool useBinary,
+                                     std::shared_ptr<const Snapshot>& out,
+                                     std::string& err);
+
+    void InstallSnapshot(std::shared_ptr<const Snapshot> next) {
+        if (next) {
+            snapshot = std::move(next);
+        }
+    }
 
     const BuffTableData& FindAll() const { return snapshot->data; }
 
@@ -141,7 +176,7 @@ public:
 
 private:
     LoadSuccessCallback loadSuccessCallback;
-    std::unique_ptr<Snapshot> snapshot = std::make_unique<Snapshot>();
+    std::shared_ptr<const Snapshot> snapshot = std::make_shared<const Snapshot>();
 };
 
 inline const BuffTableData& FindAllBuffTable() {

@@ -22,19 +22,17 @@ public static partial class ActoractionstateTableReflection {
   static ActoractionstateTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChxhY3RvcmFjdGlvbnN0YXRlX3RhYmxlLnByb3RvIj4KFUFjdG9yQWN0aW9u",
-          "U3RhdGVzdGF0ZRISCgpzdGF0ZV9tb2RlGAEgASgNEhEKCXN0YXRlX3RpcBgC",
-          "IAEoDSJKChVBY3RvckFjdGlvblN0YXRlVGFibGUSCgoCaWQYASABKA0SJQoF",
-          "c3RhdGUYAiADKAsyFi5BY3RvckFjdGlvblN0YXRlc3RhdGUiQQoZQWN0b3JB",
-          "Y3Rpb25TdGF0ZVRhYmxlRGF0YRIkCgRkYXRhGAEgAygLMhYuQWN0b3JBY3Rp",
-          "b25TdGF0ZVRhYmxlQkcKDmNvbS5nYW1lLnRhYmxlQh9BY3RvckFjdGlvblN0",
-          "YXRlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJv",
-          "dG8z"));
+          "ChxhY3RvcmFjdGlvbnN0YXRlX3RhYmxlLnByb3RvIlwKFUFjdG9yQWN0aW9u",
+          "U3RhdGVUYWJsZRIKCgJpZBgBIAEoDRIQCghzdGF0ZV9pZBgDIAEoDRISCgpz",
+          "dGF0ZV9tb2RlGAQgASgNEhEKCXN0YXRlX3RpcBgFIAEoDSJBChlBY3RvckFj",
+          "dGlvblN0YXRlVGFibGVEYXRhEiQKBGRhdGEYASADKAsyFi5BY3RvckFjdGlv",
+          "blN0YXRlVGFibGVCRwoOY29tLmdhbWUudGFibGVCH0FjdG9yQWN0aW9uU3Rh",
+          "dGVUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90",
+          "bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::ActorActionStatestate), global::ActorActionStatestate.Parser, new[]{ "StateMode", "StateTip" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::ActorActionStateTable), global::ActorActionStateTable.Parser, new[]{ "Id", "State" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::ActorActionStateTable), global::ActorActionStateTable.Parser, new[]{ "Id", "StateId", "StateMode", "StateTip" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::ActorActionStateTableData), global::ActorActionStateTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -43,16 +41,16 @@ public static partial class ActoractionstateTableReflection {
 }
 #region Messages
 [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStatestate>
+public sealed partial class ActorActionStateTable : pb::IMessage<ActorActionStateTable>
 #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
     , pb::IBufferMessage
 #endif
 {
-  private static readonly pb::MessageParser<ActorActionStatestate> _parser = new pb::MessageParser<ActorActionStatestate>(() => new ActorActionStatestate());
+  private static readonly pb::MessageParser<ActorActionStateTable> _parser = new pb::MessageParser<ActorActionStateTable>(() => new ActorActionStateTable());
   private pb::UnknownFieldSet _unknownFields;
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public static pb::MessageParser<ActorActionStatestate> Parser { get { return _parser; } }
+  public static pb::MessageParser<ActorActionStateTable> Parser { get { return _parser; } }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -68,7 +66,7 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStatestate() {
+  public ActorActionStateTable() {
     OnConstruction();
   }
 
@@ -76,7 +74,9 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStatestate(ActorActionStatestate other) : this() {
+  public ActorActionStateTable(ActorActionStateTable other) : this() {
+    id_ = other.id_;
+    stateId_ = other.stateId_;
     stateMode_ = other.stateMode_;
     stateTip_ = other.stateTip_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
@@ -84,12 +84,36 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStatestate Clone() {
-    return new ActorActionStatestate(this);
+  public ActorActionStateTable Clone() {
+    return new ActorActionStateTable(this);
+  }
+
+  /// <summary>Field number for the "id" field.</summary>
+  public const int IdFieldNumber = 1;
+  private uint id_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint Id {
+    get { return id_; }
+    set {
+      id_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "state_id" field.</summary>
+  public const int StateIdFieldNumber = 3;
+  private uint stateId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StateId {
+    get { return stateId_; }
+    set {
+      stateId_ = value;
+    }
   }
 
   /// <summary>Field number for the "state_mode" field.</summary>
-  public const int StateModeFieldNumber = 1;
+  public const int StateModeFieldNumber = 4;
   private uint stateMode_;
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -101,7 +125,7 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   }
 
   /// <summary>Field number for the "state_tip" field.</summary>
-  public const int StateTipFieldNumber = 2;
+  public const int StateTipFieldNumber = 5;
   private uint stateTip_;
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -115,18 +139,20 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
-    return Equals(other as ActorActionStatestate);
+    return Equals(other as ActorActionStateTable);
   }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public bool Equals(ActorActionStatestate other) {
+  public bool Equals(ActorActionStateTable other) {
     if (ReferenceEquals(other, null)) {
       return false;
     }
     if (ReferenceEquals(other, this)) {
       return true;
     }
+    if (Id != other.Id) return false;
+    if (StateId != other.StateId) return false;
     if (StateMode != other.StateMode) return false;
     if (StateTip != other.StateTip) return false;
     return Equals(_unknownFields, other._unknownFields);
@@ -136,6 +162,8 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override int GetHashCode() {
     int hash = 1;
+    if (Id != 0) hash ^= Id.GetHashCode();
+    if (StateId != 0) hash ^= StateId.GetHashCode();
     if (StateMode != 0) hash ^= StateMode.GetHashCode();
     if (StateTip != 0) hash ^= StateTip.GetHashCode();
     if (_unknownFields != null) {
@@ -156,12 +184,20 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
     output.WriteRawMessage(this);
   #else
-    if (StateMode != 0) {
+    if (Id != 0) {
       output.WriteRawTag(8);
+      output.WriteUInt32(Id);
+    }
+    if (StateId != 0) {
+      output.WriteRawTag(24);
+      output.WriteUInt32(StateId);
+    }
+    if (StateMode != 0) {
+      output.WriteRawTag(32);
       output.WriteUInt32(StateMode);
     }
     if (StateTip != 0) {
-      output.WriteRawTag(16);
+      output.WriteRawTag(40);
       output.WriteUInt32(StateTip);
     }
     if (_unknownFields != null) {
@@ -174,12 +210,20 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-    if (StateMode != 0) {
+    if (Id != 0) {
       output.WriteRawTag(8);
+      output.WriteUInt32(Id);
+    }
+    if (StateId != 0) {
+      output.WriteRawTag(24);
+      output.WriteUInt32(StateId);
+    }
+    if (StateMode != 0) {
+      output.WriteRawTag(32);
       output.WriteUInt32(StateMode);
     }
     if (StateTip != 0) {
-      output.WriteRawTag(16);
+      output.WriteRawTag(40);
       output.WriteUInt32(StateTip);
     }
     if (_unknownFields != null) {
@@ -192,6 +236,12 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public int CalculateSize() {
     int size = 0;
+    if (Id != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
+    }
+    if (StateId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(StateId);
+    }
     if (StateMode != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(StateMode);
     }
@@ -206,9 +256,15 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public void MergeFrom(ActorActionStatestate other) {
+  public void MergeFrom(ActorActionStateTable other) {
     if (other == null) {
       return;
+    }
+    if (other.Id != 0) {
+      Id = other.Id;
+    }
+    if (other.StateId != 0) {
+      StateId = other.StateId;
     }
     if (other.StateMode != 0) {
       StateMode = other.StateMode;
@@ -236,235 +292,19 @@ public sealed partial class ActorActionStatestate : pb::IMessage<ActorActionStat
           _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
           break;
         case 8: {
-          StateMode = input.ReadUInt32();
-          break;
-        }
-        case 16: {
-          StateTip = input.ReadUInt32();
-          break;
-        }
-      }
-    }
-  #endif
-  }
-
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-    uint tag;
-    while ((tag = input.ReadTag()) != 0) {
-    if ((tag & 7) == 4) {
-      // Abort on any end group tag.
-      return;
-    }
-    switch(tag) {
-        default:
-          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-          break;
-        case 8: {
-          StateMode = input.ReadUInt32();
-          break;
-        }
-        case 16: {
-          StateTip = input.ReadUInt32();
-          break;
-        }
-      }
-    }
-  }
-  #endif
-
-}
-
-[global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-public sealed partial class ActorActionStateTable : pb::IMessage<ActorActionStateTable>
-#if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    , pb::IBufferMessage
-#endif
-{
-  private static readonly pb::MessageParser<ActorActionStateTable> _parser = new pb::MessageParser<ActorActionStateTable>(() => new ActorActionStateTable());
-  private pb::UnknownFieldSet _unknownFields;
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public static pb::MessageParser<ActorActionStateTable> Parser { get { return _parser; } }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public static pbr::MessageDescriptor Descriptor {
-    get { return global::ActoractionstateTableReflection.Descriptor.MessageTypes[1]; }
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  pbr::MessageDescriptor pb::IMessage.Descriptor {
-    get { return Descriptor; }
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStateTable() {
-    OnConstruction();
-  }
-
-  partial void OnConstruction();
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStateTable(ActorActionStateTable other) : this() {
-    id_ = other.id_;
-    state_ = other.state_.Clone();
-    _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public ActorActionStateTable Clone() {
-    return new ActorActionStateTable(this);
-  }
-
-  /// <summary>Field number for the "id" field.</summary>
-  public const int IdFieldNumber = 1;
-  private uint id_;
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public uint Id {
-    get { return id_; }
-    set {
-      id_ = value;
-    }
-  }
-
-  /// <summary>Field number for the "state" field.</summary>
-  public const int StateFieldNumber = 2;
-  private static readonly pb::FieldCodec<global::ActorActionStatestate> _repeated_state_codec
-      = pb::FieldCodec.ForMessage(18, global::ActorActionStatestate.Parser);
-  private readonly pbc::RepeatedField<global::ActorActionStatestate> state_ = new pbc::RepeatedField<global::ActorActionStatestate>();
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public pbc::RepeatedField<global::ActorActionStatestate> State {
-    get { return state_; }
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public override bool Equals(object other) {
-    return Equals(other as ActorActionStateTable);
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public bool Equals(ActorActionStateTable other) {
-    if (ReferenceEquals(other, null)) {
-      return false;
-    }
-    if (ReferenceEquals(other, this)) {
-      return true;
-    }
-    if (Id != other.Id) return false;
-    if(!state_.Equals(other.state_)) return false;
-    return Equals(_unknownFields, other._unknownFields);
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public override int GetHashCode() {
-    int hash = 1;
-    if (Id != 0) hash ^= Id.GetHashCode();
-    hash ^= state_.GetHashCode();
-    if (_unknownFields != null) {
-      hash ^= _unknownFields.GetHashCode();
-    }
-    return hash;
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public override string ToString() {
-    return pb::JsonFormatter.ToDiagnosticString(this);
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public void WriteTo(pb::CodedOutputStream output) {
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    output.WriteRawMessage(this);
-  #else
-    if (Id != 0) {
-      output.WriteRawTag(8);
-      output.WriteUInt32(Id);
-    }
-    state_.WriteTo(output, _repeated_state_codec);
-    if (_unknownFields != null) {
-      _unknownFields.WriteTo(output);
-    }
-  #endif
-  }
-
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-    if (Id != 0) {
-      output.WriteRawTag(8);
-      output.WriteUInt32(Id);
-    }
-    state_.WriteTo(ref output, _repeated_state_codec);
-    if (_unknownFields != null) {
-      _unknownFields.WriteTo(ref output);
-    }
-  }
-  #endif
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public int CalculateSize() {
-    int size = 0;
-    if (Id != 0) {
-      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
-    }
-    size += state_.CalculateSize(_repeated_state_codec);
-    if (_unknownFields != null) {
-      size += _unknownFields.CalculateSize();
-    }
-    return size;
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public void MergeFrom(ActorActionStateTable other) {
-    if (other == null) {
-      return;
-    }
-    if (other.Id != 0) {
-      Id = other.Id;
-    }
-    state_.Add(other.state_);
-    _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-  }
-
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public void MergeFrom(pb::CodedInputStream input) {
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    input.ReadRawMessage(this);
-  #else
-    uint tag;
-    while ((tag = input.ReadTag()) != 0) {
-    if ((tag & 7) == 4) {
-      // Abort on any end group tag.
-      return;
-    }
-    switch(tag) {
-        default:
-          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-          break;
-        case 8: {
           Id = input.ReadUInt32();
           break;
         }
-        case 18: {
-          state_.AddEntriesFrom(input, _repeated_state_codec);
+        case 24: {
+          StateId = input.ReadUInt32();
+          break;
+        }
+        case 32: {
+          StateMode = input.ReadUInt32();
+          break;
+        }
+        case 40: {
+          StateTip = input.ReadUInt32();
           break;
         }
       }
@@ -490,8 +330,16 @@ public sealed partial class ActorActionStateTable : pb::IMessage<ActorActionStat
           Id = input.ReadUInt32();
           break;
         }
-        case 18: {
-          state_.AddEntriesFrom(ref input, _repeated_state_codec);
+        case 24: {
+          StateId = input.ReadUInt32();
+          break;
+        }
+        case 32: {
+          StateMode = input.ReadUInt32();
+          break;
+        }
+        case 40: {
+          StateTip = input.ReadUInt32();
           break;
         }
       }
@@ -516,7 +364,7 @@ public sealed partial class ActorActionStateTableData : pb::IMessage<ActorAction
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public static pbr::MessageDescriptor Descriptor {
-    get { return global::ActoractionstateTableReflection.Descriptor.MessageTypes[2]; }
+    get { return global::ActoractionstateTableReflection.Descriptor.MessageTypes[1]; }
   }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

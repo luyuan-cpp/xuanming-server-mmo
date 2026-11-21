@@ -98,7 +98,8 @@ func TestEconomyFlowReplayCannotChangeExpectedGuild(t *testing.T) {
 // economyFlowDropTables:本服务全部表 + schemamigrate 台账,逆锁序。新增表时同步追加
 // (resetEconomyFlowSchema 按 len(data.Tables())+1 守数量,漏加即红)。
 var economyFlowDropTables = []string{
-	"guild_client_request",                          // 客户端幂等键去重记录:全序末尾 R,逆锁序排最前
+	"guild_name_hold",                               // 帮会改名旧名保护表:全序末尾,逆锁序排最前
+	"guild_client_request",                          // 客户端幂等键去重记录 R
 	"guild_trial_reward_owed", "guild_trial_battle", // B6b 同道历练两表 W、T
 	"guild_activity_progress", // B6a 活动进度 P
 	"guild_daily_counter", "guild_asset_op", "guild_player_op_seq",

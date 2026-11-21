@@ -17,6 +17,7 @@
 #include "services/scene/player/system/player_activity.h"
 #include "services/scene/player/system/player_level_rules.h"
 #include "services/scene/player/system/player_lifecycle.h"
+#include "services/scene/player/system/player_mutability.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
@@ -32,8 +33,8 @@ uint32_t CheckPlayer(entt::entity player, uint32_t scope) {
     if (scope != MissionListComp::kPlayerMission) return kInvalidParameter;
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
     if (guid == nullptr || guid->value == 0 || guid->value == kInvalidGuid) return kInvalidParameter;
-    if (PlayerLifecycleSystem::IsPlayerFrozen(player)) return kInvalidParameter;
     if (tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player) == nullptr) return kServiceUnavailable;
+    if (!player_mutability::IsPlayerMutable(player)) return kInvalidParameter;
     return kSuccess;
 }
 
@@ -222,7 +223,7 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
 }
 
 void PlayerMissionSystem::OnCondition(entt::entity player, const ConditionEvent& fact) {
-    if (!tlsEcs.actorRegistry.valid(player) || PlayerLifecycleSystem::IsPlayerFrozen(player)) return;
+    if (!tlsEcs.actorRegistry.valid(player) || !player_mutability::IsPlayerMutable(player)) return;
     auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
     if (container == nullptr) {
         LOG_ERROR << "Mission condition progress failed: missing persistent mission component entity=" << entt::to_integral(player);

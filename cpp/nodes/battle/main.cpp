@@ -287,7 +287,53 @@ namespace
         // 这里只做就绪校验:空表说明数据目录配置有问题,尽早在日志里暴露。
         struct TableLoadHandler
         {
+            static std::shared_ptr<const turnbattle::BattleRewardConfig> &ProcessBattleRewards()
+            {
+                static std::shared_ptr<const turnbattle::BattleRewardConfig> rewards;
+                return rewards;
+            }
+
             static void OnLoaded()
+            {
+                // 奖励配置独立于配置表包(docs/design/config-table-hot-reload.md §16 第 3 条):
+                // 只在启动边界读一次文件,之后随每次热更的 TableSet 复用并校验物品引用。
+                std::filesystem::path rewardPath = "etc/battle_rewards.json";
+                if (const char *overridePath = std::getenv("BATTLE_REWARD_CONFIG_PATH"); overridePath && *overridePath)
+                {
+                    rewardPath = overridePath;
+                }
+                auto bootProvider = std::make_shared<turnbattle::TableBattleDataProvider>();
+                if (!bootProvider->LoadBattleRewards(rewardPath.string()))
+                {
+                    LOG_FATAL << "Battle reward config rejected: " << rewardPath.string();
+                }
+                ProcessBattleRewards() = bootProvider->SharedRewards();
+            }
+
+            static bool Validate(std::string &err)
+            {
+                const auto skillRows = SkillTableManager::Instance().FindAll().data_size();
+                const auto buffRows = BuffTableManager::Instance().FindAll().data_size();
+                const auto dungeonRows = DungeonTableManager::Instance().FindAll().data_size();
+                const auto monsterRows = MonsterTableManager::Instance().FindAll().data_size();
+                if (skillRows == 0 || buffRows == 0 || dungeonRows == 0 || monsterRows == 0)
+                {
+                    err = "battle critical combat tables (Skill/Buff/Dungeon/Monster) must not be empty";
+                    return false;
+                }
+                if (const auto &rewards = ProcessBattleRewards())
+                {
+                    TableSet staged;
+                    staged.itemTable = ItemTableManager::Instance().CurrentSnapshot();
+                    if (!turnbattle::TableBattleDataProvider::ValidateRewardsAgainst(*rewards, staged, err))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            static void OnCommitted(const std::shared_ptr<const TableSet> &tableSet)
             {
                 const auto skillRows = SkillTableManager::Instance().FindAll().data_size();
                 const auto buffRows = BuffTableManager::Instance().FindAll().data_size();
@@ -297,7 +343,7 @@ namespace
                 const auto monsterRows = MonsterTableManager::Instance().FindAll().data_size();
                 const auto itemRows = ItemTableManager::Instance().FindAll().data_size();
 
-                LOG_INFO << "battle combat tables loaded: skill=" << skillRows
+                LOG_INFO << "battle combat tables active: skill=" << skillRows
                          << " buff=" << buffRows
                          << " cooldown=" << cooldownRows
                          << " skill_permission=" << permissionRows
@@ -305,31 +351,21 @@ namespace
                          << " monster=" << monsterRows
                          << " item=" << itemRows;
 
-                // Item 空表只影响"战斗内用药",不影响开局,单独告警不混进致命项
                 if (itemRows == 0)
                 {
                     LOG_WARN << "battle Item table is empty:all battle items unavailable(ITEM actions will be rejected)";
                 }
-
                 if (skillRows == 0 || buffRows == 0 || dungeonRows == 0 || monsterRows == 0)
                 {
                     LOG_ERROR << "battle critical combat tables are empty;turn engine cannot create battles;check table data directory";
                 }
 
-                // 战斗配表指纹:表加载完成后算一次并缓存,CreateBattle 与 match/scene 带来的
-                // 指纹比对(设计文档 cross-zone-matchmaking.md §10);启动日志里打出来便于跨节点排障
-                LOG_INFO << "battle combat table fingerprint: table_fingerprint="
-                         << turnbattle::BattleTableFingerprint::Refresh();
+                const auto &fp = turnbattle::BattleTableFingerprint::Refresh();
+                LOG_INFO << "battle combat table fingerprint: table_fingerprint=" << fp;
 
-                // 奖励独立于人数/怪物表；只在启动边界读文件，建房时不做磁盘 I/O。
-                std::filesystem::path rewardPath = "etc/battle_rewards.json";
-                if (const char* overridePath = std::getenv("BATTLE_REWARD_CONFIG_PATH"); overridePath && *overridePath)
-                    rewardPath = overridePath;
-                auto provider = std::make_shared<turnbattle::TableBattleDataProvider>();
-                if (!provider->LoadBattleRewards(rewardPath.string())) {
-                    LOG_FATAL << "Battle reward config rejected: " << rewardPath.string();
-                }
-                BattleRoomManager::Instance().SetDataProvider(std::move(provider));
+                auto provider = std::make_shared<turnbattle::TableBattleDataProvider>(
+                    tableSet, ProcessBattleRewards());
+                BattleRoomManager::Instance().RegisterTableProvider(fp, std::move(provider), true);
             }
         };
 
@@ -365,6 +401,10 @@ namespace
 
 int main(int argc, char *argv[])
 {
+    if (const auto exitCode = table_bundle::RunValidateTablesCli(argc, argv, &BattleNodeHooks::TableLoadHandler::Validate))
+    {
+        return *exitCode;
+    }
     // 检查旧的 NODE_ETCD_TRANSPORT 环境变量(etcd 只剩 muduo_h2 传输;设成 grpc 会打 WARN),须在 Node 构造前调用。
     etcd_transport::InstallFromEnv();
     return node::entry::RunSimpleNodeMainWithOwnedContext<BattleHandler, BattleRuntimeContext, BattleNodeHooks>(

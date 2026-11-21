@@ -810,7 +810,7 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 				slots <- struct{}{}
 				after = row.PlayerId
 				original := row
-				s.LaunchRelayTask("match.global_spectator_operation", func() {
+				if !s.LaunchRelayTask("match.global_spectator_operation", func() {
 					defer func() { <-slots }()
 					work, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
@@ -824,7 +824,10 @@ func StartGlobalSpectatorRecovery(ctx context.Context, s *svc.ServiceContext) {
 						}
 						operationWarningMu.Unlock()
 					}
-				})
+				}) {
+					<-slots
+					break
+				}
 			}
 		}
 	})

@@ -1,8 +1,9 @@
 #include "aoi.h"
 #include "actor/actor_net_id.h"
 
-#include <map>
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 #include "hexagons_grid.h"
 #include "spatial/comp/grid_comp.h"
@@ -290,6 +291,9 @@ bool AoiSystem::UpdateGridMembership(const entt::entity entity, const SceneEntit
     const auto previousGridId = GridSystem::GetGridId(*previousHexPtr);
     if (auto previousGrid = gridList.find(previousGridId); previousGrid != gridList.end()) {
         previousGrid->second.entities.erase(entity);
+        if (previousGrid->second.entities.empty()) {
+            gridList.erase(previousGrid);
+        }
     }
     gridList[currentGridId].entities.insert(entity);
 
@@ -378,60 +382,99 @@ void AoiSystem::RefreshTargetVisibility(entt::entity target) {
 void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt::entity departed) {
     if (changes.Empty()) return;
 
-    // 1) 净变化:同一对按发生顺序来回翻转,次数为偶数时客户端状态与批前相同,不发消息。
-    struct NetChange {
-        uint32_t flips = 0;
-        bool shown = false;
+    // 1) 净变化:按 (watcher, target, 原始序号) 平铺排序合并,避免为每次视野变化构造多棵红黑树。
+    //    同一对来回翻转次数为偶数时客户端状态与批前相同,不发消息;奇数次取最后一次状态。
+    struct IndexedChange {
+        entt::entity watcher;
+        entt::entity target;
+        std::size_t order;
+        bool shown;
     };
-    std::map<std::pair<entt::entity, entt::entity>, NetChange> net;
-    for (const auto& change : changes.changes) {
-        auto& state = net[{change.watcher, change.target}];
-        ++state.flips;
-        state.shown = change.shown;
+    std::vector<IndexedChange> sorted;
+    sorted.reserve(changes.changes.size());
+    for (std::size_t i = 0; i < changes.changes.size(); ++i) {
+        const auto& change = changes.changes[i];
+        sorted.push_back({change.watcher, change.target, i, change.shown});
     }
+    std::sort(sorted.begin(), sorted.end(), [](const IndexedChange& a, const IndexedChange& b) {
+        if (a.watcher != b.watcher) return a.watcher < b.watcher;
+        if (a.target != b.target) return a.target < b.target;
+        return a.order < b.order;
+    });
 
-    // 2) 按观察者分组;离场者的移除单独汇总。
+    // 2) 按观察者分组(已按 watcher/target 有序);离场者的移除单独汇总。
     struct WatcherDelta {
+        entt::entity watcher;
         EntityVector created;
         EntityVector destroyed;
     };
-    std::map<entt::entity, WatcherDelta> byWatcher;
+    std::vector<WatcherDelta> byWatcher;
     EntityUnorderedSet departedObservers;
-    for (const auto& [pair, state] : net) {
-        if (state.flips % 2 == 0) continue;
-        const auto& [watcher, target] = pair;
-        if (state.shown) {
-            byWatcher[watcher].created.push_back(target);
-        } else if (target == departed) {
-            departedObservers.insert(watcher);
-        } else {
-            byWatcher[watcher].destroyed.push_back(target);
+    for (std::size_t i = 0; i < sorted.size();) {
+        std::size_t j = i + 1;
+        while (j < sorted.size() && sorted[j].watcher == sorted[i].watcher && sorted[j].target == sorted[i].target) {
+            ++j;
         }
+        if (((j - i) & 1u) != 0u) {
+            const entt::entity watcher = sorted[i].watcher;
+            const entt::entity target = sorted[i].target;
+            const bool shown = sorted[j - 1].shown;
+            if (!shown && target == departed) {
+                departedObservers.insert(watcher);
+            } else {
+                if (byWatcher.empty() || byWatcher.back().watcher != watcher) {
+                    byWatcher.push_back({watcher, {}, {}});
+                }
+                if (shown) {
+                    byWatcher.back().created.push_back(target);
+                } else {
+                    byWatcher.back().destroyed.push_back(target);
+                }
+            }
+        }
+        i = j;
     }
+
+    // 复用排序+分桶逻辑:按目标聚合同类单实体广播,避免每个目标单独建树节点。
+    using TargetWatcherPair = std::pair<entt::entity, entt::entity>;
+    auto broadcastGroupedByTarget = [](std::vector<TargetWatcherPair>& pairs, const auto& sendGroup) {
+        if (pairs.empty()) return;
+        std::sort(pairs.begin(), pairs.end());
+        EntityUnorderedSet watchers;
+        for (std::size_t i = 0; i < pairs.size();) {
+            const entt::entity target = pairs[i].first;
+            watchers.clear();
+            while (i < pairs.size() && pairs[i].first == target) {
+                watchers.insert(pairs[i].second);
+                ++i;
+            }
+            sendGroup(target, watchers);
+        }
+    };
 
     // 3) 先移除后创建。只涉及一个目标的观察者按目标合并:各观察者收到同一个单实体消息,只组包一次,
     //    发送入口同步序列化并按 Gate 合并收件人;涉及多个目标的观察者收一条列表消息。
-    std::map<entt::entity, EntityUnorderedSet> destroyByTarget;
-    std::map<entt::entity, EntityUnorderedSet> createByTarget;
+    std::vector<TargetWatcherPair> destroyByTarget;
+    std::vector<TargetWatcherPair> createByTarget;
     static thread_local ActorListDestroyS2C destroyMsg;
     static thread_local ActorListCreateS2C createMsg;
-    for (const auto& [watcher, delta] : byWatcher) {
+    for (const auto& delta : byWatcher) {
         if (delta.destroyed.size() == 1) {
-            destroyByTarget[delta.destroyed.front()].insert(watcher);
+            destroyByTarget.emplace_back(delta.destroyed.front(), delta.watcher);
         } else if (!delta.destroyed.empty()) {
             destroyMsg.Clear();
             for (const auto target : delta.destroyed) AppendActorDestroy(destroyMsg, target);
             if (!destroyMsg.entity().empty()) {
-                SendToPlayerClient(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, watcher);
+                SendToPlayerClient(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, delta.watcher);
             }
         }
     }
-    for (const auto& [target, watchers] : destroyByTarget) {
+    broadcastGroupedByTarget(destroyByTarget, [](entt::entity target, const EntityUnorderedSet& watchers) {
         destroyMsg.Clear();
         if (AppendActorDestroy(destroyMsg, target)) {
             BroadcastToPlayerClients(SceneSceneClientPlayerNotifyActorListDestroyMessageId, destroyMsg, watchers);
         }
-    }
+    });
     if (!departedObservers.empty()) {
         const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, departed);
         if (netId != 0) {
@@ -444,36 +487,36 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
         }
     }
 
-    for (const auto& [watcher, delta] : byWatcher) {
+    for (const auto& delta : byWatcher) {
         if (delta.created.size() == 1) {
-            createByTarget[delta.created.front()].insert(watcher);
+            createByTarget.emplace_back(delta.created.front(), delta.watcher);
         } else if (!delta.created.empty()) {
             createMsg.Clear();
             for (const auto target : delta.created) AppendActorCreate(createMsg, target);
             if (!createMsg.actor_list().empty()) {
-                SendToPlayerClient(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, watcher);
+                SendToPlayerClient(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, delta.watcher);
             }
         }
     }
-    for (const auto& [target, watchers] : createByTarget) {
+    broadcastGroupedByTarget(createByTarget, [](entt::entity target, const EntityUnorderedSet& watchers) {
         createMsg.Clear();
         if (AppendActorCreate(createMsg, target)) {
             BroadcastToPlayerClients(SceneSceneClientPlayerNotifyActorListCreateMessageId, createMsg, watchers);
         }
-    }
+    });
 
     // 4) 新看见的目标正在走:创建之后补它此刻的移动状态。一个目标发 ActorMoveS2C,几个目标合成一条 ActorMoveListS2C,
     //    分组方式同创建。移动广播只发给当时已经在看的人,不补的话后来者要等它的下一次广播才看到它在走
     //    (客户端移动中约 250 ms 上报一次),这之前它停在创建时的位置。站着的目标不用补:创建消息已带位置和朝向。
     //    "正在走"按 actor_motion::IsAdvancing 判(服务器在推进他的位置),不只看速度非零。
     //    只发给有客户端的观察者,与移动广播同一口径。必须排在创建之后:客户端丢弃未知实体的移动。
-    std::map<entt::entity, EntityUnorderedSet> moveByTarget;
+    std::vector<TargetWatcherPair> moveByTarget;
     EntityVector advancing;
     uint64_t serverTimeMs = 0;
     static thread_local ActorMoveListS2C moveListMsg;
     static thread_local ActorMoveS2C moveMsg;
-    for (const auto& [watcher, delta] : byWatcher) {
-        if (delta.created.empty() || !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(watcher)) continue;
+    for (const auto& delta : byWatcher) {
+        if (delta.created.empty() || !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(delta.watcher)) continue;
         advancing.clear();
         for (const auto target : delta.created) {
             if (actor_motion::IsAdvancing(tlsEcs.actorRegistry, target)) advancing.push_back(target);
@@ -481,7 +524,7 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
         if (advancing.empty()) continue;
         if (serverTimeMs == 0) serverTimeMs = TimeSystem::NowMilliseconds();
         if (advancing.size() == 1) {
-            moveByTarget[advancing.front()].insert(watcher);
+            moveByTarget.emplace_back(advancing.front(), delta.watcher);
             continue;
         }
         moveListMsg.Clear();
@@ -491,14 +534,14 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
             }
         }
         if (!moveListMsg.moves().empty()) {
-            SendToPlayerClient(SceneMovementClientPlayerNotifyActorMoveListMessageId, moveListMsg, watcher);
+            SendToPlayerClient(SceneMovementClientPlayerNotifyActorMoveListMessageId, moveListMsg, delta.watcher);
         }
     }
-    for (const auto& [target, watchers] : moveByTarget) {
+    broadcastGroupedByTarget(moveByTarget, [serverTimeMs](entt::entity target, const EntityUnorderedSet& watchers) {
         if (BuildActorMove(target, serverTimeMs, moveMsg)) {
             BroadcastToPlayerClients(SceneMovementClientPlayerNotifyActorMoveMessageId, moveMsg, watchers);
         }
-    }
+    });
 }
 
 void AoiSystem::OnLeaveScene(entt::entity entity) {

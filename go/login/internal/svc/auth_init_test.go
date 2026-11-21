@@ -133,3 +133,22 @@ func TestPasswordAuthDSNFromConfigReadsEnvironmentWithoutLoggingIt(t *testing.T)
 		t.Fatal("DSN environment value was not returned verbatim")
 	}
 }
+
+func TestInitAuthProvidersRejectsUnimplementedNetEase(t *testing.T) {
+	previous := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = previous })
+
+	config.AppConfig = config.Config{
+		AuthProviders: config.AuthConfig{
+			NetEase: &config.NeteaseAuthConf{AppKey: "k", AppSecret: "s"},
+		},
+	}
+	defer func() {
+		if recovered := recover(); recovered == nil {
+			t.Fatal("InitAuthProviders accepted unimplemented NetEase provider")
+		} else if !strings.Contains(fmt.Sprint(recovered), "netease auth provider is not implemented") {
+			t.Fatalf("panic = %v, want unimplemented NetEase rejection", recovered)
+		}
+	}()
+	InitAuthProviders()
+}

@@ -80,6 +80,8 @@ bool ReadRedisClusterSection(const YAML::Node &root, const char *key, const std:
 bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseConfig)
 {
 	YAML::Node root = YAML::LoadFile(filename);
+	// 同一个对象重复加载(如同一测试进程里的多组用例都调 FindAndLoadTestConfig)时不能累加 repeated 字段。
+	baseConfig.Clear();
 
 	// Parse Etcd config
 	if (root["Etcd"]["Hosts"])

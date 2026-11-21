@@ -13,18 +13,8 @@
 #include <string>
 #include <unordered_map>
 
-// GM 面调用方鉴权。与 Gate.GmGracefulShutdown 共用同一份实现 —— 信封格式、
-// canonical 串、时间窗与 nonce 去重的完整定义都在这个头里,两侧必须逐字节一致,
-// 所以绝不能在这里另写一份。
-//
-// ⚠️ 跨节点相对包含是**临时形态**:这个头当初放在 cpp/nodes/gate/ 下是因为只有
-// gate 一个使用者,现在 scene 成了第二个,它的正确归宿是 cpp/libs/engine/core/
-// (gate 与 scene 的 include 目录都已经包含该路径)。没有在本次一并搬迁,是因为
-// 搬迁要连带改 gate 的三处 include、gate.vcxproj / core.vcxproj 的 ClInclude、
-// 那份刻意脱离引擎独立编译的 gate_security_test.cpp 的构建命令,以及 SECURITY.md
-// 的路径引用 —— 九个文件的重构挂在一个安全修复上,而本仓 Claude 不执行编译
-// (CLAUDE.md §10.1),验证不了。搬迁另开一件事做。
-#include "../../../gate/gate_security.h"
+// GM 面调用方鉴权：与 Gate.GmGracefulShutdown 共用引擎核心层唯一实现。
+#include "security/gm_security.h"
 
 namespace
 {
@@ -78,9 +68,9 @@ void SceneSceneHandler::GmGracefulShutdown(::google::protobuf::RpcController* co
 	// 签名绑本节点 node_id:nonce 去重表是进程内的,不绑就意味着抓到一条合法停机
 	// 请求后可以在时间窗内挨个重放给全区每一个 scene —— 一次抓包换全服停机。
 	const std::string selfNodeId = std::to_string(gNode->GetNodeId());
-	const auto gmAuth = gate_security::VerifyGmRequestFromEnv(
+	const auto gmAuth = gm_security::VerifyGmRequestFromEnv(
 		"Scene.GmGracefulShutdown", selfNodeId, request->operator_(), request->reason());
-	if (gmAuth.result != gate_security::GmAuthResult::kOk)
+	if (gmAuth.result != gm_security::GmAuthResult::kOk)
 	{
 		// 拒绝也要留痕:这是入侵检测的唯一信号源。operator / reason 都是攻击者
 		// 可控输入(不含任何秘密),照原样打有助于事后比对来源 —— 但必须截断,
@@ -88,7 +78,7 @@ void SceneSceneHandler::GmGracefulShutdown(::google::protobuf::RpcController* co
 		// 而这条路径连鉴权都还没过。substr 的 count 超长会自动截到 size,不会抛。
 		constexpr size_t kMaxLoggedFieldLength = 128;
 		LOG_ERROR << "GM graceful shutdown REJECTED, reason="
-				  << gate_security::GmAuthResultName(gmAuth.result)
+				  << gm_security::GmAuthResultName(gmAuth.result)
 				  << " raw_operator=" << request->operator_().substr(0, kMaxLoggedFieldLength)
 				  << " request_reason=" << request->reason().substr(0, kMaxLoggedFieldLength);
 		// 被拒以 RPC_ERROR(HANDLER_FAILED) 回给调用方(kRemoteFailed),与「鉴权通过但没有可关的对象」区分开;
@@ -140,12 +130,12 @@ void SceneSceneHandler::GmDescribeEntity(::google::protobuf::RpcController* cont
     constexpr std::size_t kMaxValueLength = 4 * 1024;
     constexpr std::size_t kMaxDescriptionLength = 64 * 1024;
     const std::string selfNodeId = std::to_string(gNode->GetNodeId());
-    const auto gmAuth = gate_security::VerifyGmRequestFromEnv(
+    const auto gmAuth = gm_security::VerifyGmRequestFromEnv(
         "Scene.GmDescribeEntity", selfNodeId, request->operator_(), request->reason());
-    if (gmAuth.result != gate_security::GmAuthResult::kOk)
+    if (gmAuth.result != gm_security::GmAuthResult::kOk)
     {
         LOG_ERROR << "GM describe entity REJECTED, reason="
-                  << gate_security::GmAuthResultName(gmAuth.result)
+                  << gm_security::GmAuthResultName(gmAuth.result)
                   << " raw_operator=" << request->operator_().substr(0, kMaxLoggedFieldLength)
                   << " request_reason=" << request->reason().substr(0, kMaxLoggedFieldLength);
         controller->SetFailed("GM describe entity rejected");

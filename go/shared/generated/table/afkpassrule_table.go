@@ -45,25 +45,40 @@ func NewAfkPassRuleTableManager() *AfkPassRuleTableManager {
 }
 
 func (m *AfkPassRuleTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *AfkPassRuleTableManager) swapSnapshot(snap *afkpassruleSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *AfkPassRuleTableManager) loadSnapshot(configDir string, useBinary bool) (*afkpassruleSnapshot, error) {
     var container pb.AfkPassRuleTableData
 
     if useBinary {
         path := filepath.Join(configDir, "afkpassrule.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "afkpassrule.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -76,8 +91,7 @@ func (m *AfkPassRuleTableManager) Load(configDir string, useBinary bool) error {
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *AfkPassRuleTableManager) FindAll() []*pb.AfkPassRuleTable {

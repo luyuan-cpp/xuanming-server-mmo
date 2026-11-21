@@ -160,7 +160,7 @@ int32  design_note    = 9002 [(cfg_owner) = "designer"];
 - 每个战斗房间开局时绑定当时的编译快照，与 Java"每局绑定开局配表快照"对齐，为将来整批热更铺路。
 - 战斗相关的新表一律**追加到** `BattleTableFingerprint` 的末尾（不能插中间），Java 按同样顺序追加；每张新表都会改变指纹，scene / match / battle 必须同批发布。
 - **指纹默认只告警，不拦截**：match `TableFingerprintMode` 默认 `warn`（`config.go` 与 `match_service.yaml`），battle 默认 `FingerprintMode::Warn`（`battle_room_manager.cpp`）。"新表进指纹"在当前配置下保证不了表版本一致——必须先排计划切到 `enforce`（§10 第 1 步）。
-- v1 不做热更。热更作为独立决策，前提三条：整批编译成功后才原子替换；每局绑定开局快照；启动日志打出 `manifest.json` 的 version / digest（现在只有 Java 消费 manifest）。
+- v1 不做热更。热更作为独立决策，前提三条：整批编译成功后才原子替换；每局绑定开局快照；启动日志打出 `manifest.json` 的 version / digest（现在只有 Java 消费 manifest）。（**2026-11-20 更新**：三条前提与整批原子热更已全部落码，见 [配置表热更设计](config-table-hot-reload.md)。）
 
 ### 3.7 灰度与止血
 

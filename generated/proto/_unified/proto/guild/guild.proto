@@ -42,6 +42,7 @@ message GuildInfo {
   // pending_application_count 只对本帮长老 / 帮主非 0:待审数量是管理侧信息,
   // 对普通成员与外人一律回 0,不把帮会内部状态泄给任意查询者。
   uint32 pending_application_count  = 15;
+  uint64 renamed_ms                 = 16;  // 上一次帮会改名时刻 Unix 毫秒;0 = 未改过名
 }
 
 // ── Request/Response ────────────────────────────────────────────────
@@ -111,6 +112,18 @@ message SetAnnouncementRequest {
 message SetAnnouncementResponse {
   TipInfoMessage error_message = 1;
   GuildInfo guild = 2;  // 成功时为提交前事务内读到的权威快照(含新公告)
+}
+
+// 帮会改名(docs/design/rename-and-content-safety.md §5):仅帮主可发起,扣帮会资金,旧名进入保护期。
+message RenameGuildRequest {
+  uint64 guild_id = 1;
+  string name     = 2;
+}
+
+message RenameGuildResponse {
+  TipInfoMessage error_message    = 1;
+  GuildInfo guild                 = 2;  // 成功时为事务内权威快照(含新帮名与扣后资金)
+  uint64 next_rename_time         = 3;  // 最早可再次改名的时刻 Unix 秒(成功或冷却中时填写)
 }
 
 // ── 成员管理(B2)────────────────────────────────────────────────
@@ -225,6 +238,7 @@ enum GuildChangeKind {
   GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED = 11;
   GUILD_CHANGE_KIND_ACTIVITY_CHANGED     = 12;  // B6
   GUILD_CHANGE_KIND_DELIVERY_DONE        = 13;  // B5
+  GUILD_CHANGE_KIND_RENAMED              = 14;  // 帮会改名
 }
 
 message GuildChangedS2C {
@@ -573,6 +587,7 @@ service GuildService {
   rpc LeaveGuild (LeaveGuildRequest) returns (LeaveGuildResponse);
   rpc DisbandGuild (DisbandGuildRequest) returns (DisbandGuildResponse);
   rpc SetAnnouncement (SetAnnouncementRequest) returns (SetAnnouncementResponse);
+  rpc RenameGuild (RenameGuildRequest) returns (RenameGuildResponse);
 
   // 成员管理(B2)
   rpc SetGuildMemberRole (SetGuildMemberRoleRequest) returns (SetGuildMemberRoleResponse);

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -26,6 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class CommerceStore {
     private static final Logger LOG = LoggerFactory.getLogger(CommerceStore.class);
     static final long MAX_AMOUNT_MINOR = 9_000_000_000_000_000L;
+    /** 支付窗口到期后再留 60 秒宽限期才由后台取消,减少与末尾秒到账回调的竞争(迟到付款仍走 CANCELLED_LATE 自动退款)。 */
+    static final long EXPIRY_GRACE_MS = 60_000L;
     /** 已付过的订单状态(待交付、已交付、退款中、已退款、人工、扣回中、已扣回):再来的付款不再绑定订单。 */
     private static final Set<Integer> PAID_STATES = Set.of(1, 2, 5, 6, 7, 8, 9);
     private final JdbcTemplate jdbc;
@@ -100,7 +103,7 @@ public class CommerceStore {
                 if(jdbc.update("INSERT INTO commerce_order_grant(order_sn,item_config_id,count_per_unit,currency_type,currency_amount,title) "
                     + "SELECT ?,item_config_id,count_per_unit,currency_type,currency_amount,title FROM commerce_sku_grant WHERE sku_id=? AND CHAR_LENGTH(TRIM(title))>0 AND ("
                     + "(item_config_id>0 AND count_per_unit>0 AND count_per_unit*?<=4096 AND currency_type=0 AND currency_amount=0) OR "
-                    + "(item_config_id=0 AND count_per_unit=0 AND currency_type>=0 AND currency_amount>0 AND CAST(currency_amount AS DECIMAL(30,0))*?<=?))",
+                    + "(item_config_id=0 AND count_per_unit=0 AND currency_type IN (0,1,2) AND currency_amount>0 AND CAST(currency_amount AS DECIMAL(30,0))*?<=?))",
                     orderId,in.skuId(),in.quantity(),in.quantity(),DeliveryStore.MAX_CURRENCY_GRANT)!=1)throw new CommerceException(409,"SKU没有合法游戏交付映射或单次数量越界");
                 return view(Objects.requireNonNull(byId(orderId, false)));
             }));
@@ -173,8 +176,9 @@ public class CommerceStore {
         }
         RmbConsignmentStore.account(input.account());
         long after = input.afterOrderId().isEmpty() ? 0 : consignmentOwned(new RmbConsignmentApi.OrderQuery(input.account(), input.afterOrderId()), false).model().getId();
-        return jdbc.query("SELECT o.* FROM oms_order o JOIN commerce_consignment_order c ON c.order_sn=o.order_sn "
-            + "WHERE c.buyer_account=? AND o.id>? ORDER BY o.id LIMIT ?", (row, index) -> view(stored(row)),
+        return jdbc.query("SELECT o.*,COALESCE(pr.revision,0) AS payment_revision FROM oms_order o JOIN commerce_consignment_order c ON c.order_sn=o.order_sn "
+            + "LEFT JOIN commerce_payment_receipt pr ON pr.order_sn=o.order_sn "
+            + "WHERE c.buyer_account=? AND o.id>? ORDER BY o.id LIMIT ?", (row, index) -> view(stored(row, row.getInt("payment_revision"))),
             input.account().getBytes(StandardCharsets.UTF_8), after, input.limit());
     }
     private Stored consignmentOwned(RmbConsignmentApi.OrderQuery input, boolean lock) {
@@ -197,9 +201,10 @@ public class CommerceStore {
         HmacAuthentication.requirePlayer(buyer);if(page==null||page.limit()<1||page.limit()>100||page.afterOrderId()==null)throw new CommerceException(400,"订单分页非法");
         CommerceIdentity.account(page.buyerAccount()); CommerceIdentity.revision(page.buyerOwnerRevision());
         long after=0;if(!page.afterOrderId().isEmpty()){after=officialOwned(new CommerceApi.OwnedOrder(page.afterOrderId(),page.buyerAccount(),page.buyerOwnerRevision()),buyer,false).model().getId();}
-        return jdbc.query("SELECT o.* FROM oms_order o JOIN commerce_official_owner p ON p.order_sn=o.order_sn "
+        return jdbc.query("SELECT o.*,COALESCE(pr.revision,0) AS payment_revision FROM oms_order o JOIN commerce_official_owner p ON p.order_sn=o.order_sn "
+            + "LEFT JOIN commerce_payment_receipt pr ON pr.order_sn=o.order_sn "
             + "WHERE o.buyer_id=? AND p.buyer_account=? AND p.buyer_owner_revision=? AND o.sku_id<>0 AND o.id>? ORDER BY o.id LIMIT ?",
-            (row,n)->view(stored(row)),buyer,page.buyerAccount().getBytes(StandardCharsets.UTF_8),ascii(page.buyerOwnerRevision()),after,page.limit());
+            (row,n)->view(stored(row, row.getInt("payment_revision"))),buyer,page.buyerAccount().getBytes(StandardCharsets.UTF_8),ascii(page.buyerOwnerRevision()),after,page.limit());
     }
 
     public CommerceApi.Order cancel(String buyer, String orderId) {
@@ -230,6 +235,47 @@ public class CommerceStore {
             int changed = jdbc.update("UPDATE oms_order SET status=4 WHERE order_sn=? AND status=0", orderId);
             if (changed != 1) { throw new CommerceException(409, "订单状态冲突"); }
             order.model().setStatus(4); return view(order);
+    }
+
+    /** 定时取消超过支付窗口 + 宽限期的未支付订单，释放库存/寄售预占与未支付配额(多副本安全)。 */
+    @Scheduled(fixedDelay = 15_000, initialDelay = 15_000)
+    void runExpireOverdueOrders() {
+        try {
+            expireOverdueOrders();
+        } catch (RuntimeException failed) {
+            LOG.warn("scheduled unpaid order expiration failed: type={}", failed.getClass().getSimpleName());
+        }
+    }
+
+    public int expireOverdueOrders() {
+        long cutoff = clock.millis() - EXPIRY_GRACE_MS;
+        List<String> overdue = jdbc.queryForList(
+            "SELECT order_sn FROM oms_order WHERE status=0 AND payment_deadline_ms<=? ORDER BY payment_deadline_ms LIMIT 50",
+            String.class, cutoff);
+        int expired = 0;
+        for (String orderId : overdue) {
+            try {
+                Boolean cancelled = tx.execute(status -> {
+                    Stored order = byId(orderId, true);
+                    if (order == null || order.model().getStatus() != 0 || order.deadline() > cutoff) {
+                        return Boolean.FALSE;
+                    }
+                    cancelOrder(order);
+                    return Boolean.TRUE;
+                });
+                if (Boolean.TRUE.equals(cancelled)) {
+                    expired++;
+                }
+            } catch (CommerceException raced) {
+                // 已被并发付款或由其它副本取消,跳过即可。
+            } catch (RuntimeException failed) {
+                LOG.warn("overdue unpaid order cancel failed: order={} type={}", orderId, failed.getClass().getSimpleName());
+            }
+        }
+        if (expired > 0) {
+            LOG.info("expired overdue unpaid orders: count={}", expired);
+        }
+        return expired;
     }
 
     /**
@@ -408,11 +454,20 @@ public class CommerceStore {
     }
 
     private Stored byRequest(String buyer, String requestId) {
-        List<Stored> rows = jdbc.query("SELECT * FROM oms_order WHERE buyer_id=? AND request_id=?", (rs, row) -> stored(rs), buyer, ascii(requestId));
+        List<Stored> rows = jdbc.query("SELECT o.*,COALESCE(pr.revision,0) AS payment_revision FROM oms_order o "
+            + "LEFT JOIN commerce_payment_receipt pr ON pr.order_sn=o.order_sn WHERE o.buyer_id=? AND o.request_id=?",
+            (rs, row) -> stored(rs, rs.getInt("payment_revision")), buyer, ascii(requestId));
         return rows.isEmpty() ? null : rows.get(0);
     }
     private Stored byId(String id, boolean lock) {
-        List<Stored> rows = jdbc.query("SELECT * FROM oms_order WHERE order_sn=?" + (lock ? " FOR UPDATE" : ""), (rs, row) -> stored(rs), id);
+        if (lock) {
+            // 加锁路径保持单表按唯一键锁 oms_order，避免 JOIN 改变锁序。
+            List<Stored> rows = jdbc.query("SELECT * FROM oms_order WHERE order_sn=? FOR UPDATE", (rs, row) -> stored(rs, -1), id);
+            return rows.isEmpty() ? null : rows.get(0);
+        }
+        List<Stored> rows = jdbc.query("SELECT o.*,COALESCE(pr.revision,0) AS payment_revision FROM oms_order o "
+            + "LEFT JOIN commerce_payment_receipt pr ON pr.order_sn=o.order_sn WHERE o.order_sn=?",
+            (rs, row) -> stored(rs, rs.getInt("payment_revision")), id);
         return rows.isEmpty() ? null : rows.get(0);
     }
     private Stored owned(Stored order, String buyer) {
@@ -446,7 +501,18 @@ public class CommerceStore {
         return rows.getFirst();
     }
     private CommerceApi.Order view(Stored value) {
-        return new CommerceApi.Order(value.model().getOrderSn(), value.buyer(), value.skuId(), value.quantity(), value.model().getPayAmount().longValueExact(), value.currency(), stateName(value.model().getStatus()), value.deadline());
+        int revision = value.paymentRevision();
+        if (revision < 0) {
+            int status = value.model().getStatus();
+            if (status == 0 || status == 4) {
+                revision = 0;
+            } else {
+                var rows = jdbc.queryForList("SELECT revision FROM commerce_payment_receipt WHERE order_sn=?",
+                    Integer.class, value.model().getOrderSn());
+                revision = rows.isEmpty() ? 0 : rows.getFirst();
+            }
+        }
+        return new CommerceApi.Order(value.model().getOrderSn(), value.buyer(), value.skuId(), value.quantity(), value.model().getPayAmount().longValueExact(), value.currency(), stateName(value.model().getStatus()), value.deadline(), revision);
     }
 
     /**
@@ -464,12 +530,12 @@ public class CommerceStore {
         value.setSkuCode(rs.getString("sku_code")); value.setStock(rs.getInt("stock")); value.setLockStock(rs.getInt("lock_stock")); value.setPrice(BigDecimal.valueOf(rs.getLong("price_minor")));
         return new Sku(value, rs.getString("currency"), rs.getInt("published") == 1);
     }
-    private Stored stored(ResultSet rs) throws SQLException {
+    private Stored stored(ResultSet rs, int paymentRevision) throws SQLException {
         OmsOrder value = new OmsOrder(); value.setId(rs.getLong("id")); value.setOrderSn(rs.getString("order_sn"));
         value.setPayAmount(BigDecimal.valueOf(rs.getLong("pay_amount"))); value.setStatus(rs.getInt("status")); value.setCreateTime(new Date(rs.getLong("create_time_ms")));
-        return new Stored(value, rs.getString("buyer_id"), rs.getLong("sku_id"), rs.getInt("quantity"), rs.getString("currency"), rs.getLong("payment_deadline_ms"));
+        return new Stored(value, rs.getString("buyer_id"), rs.getLong("sku_id"), rs.getInt("quantity"), rs.getString("currency"), rs.getLong("payment_deadline_ms"), paymentRevision);
     }
     private record Sku(PmsSkuStock model, String currency, boolean published) {}
-    private record Stored(OmsOrder model, String buyer, long skuId, int quantity, String currency, long deadline) {}
+    private record Stored(OmsOrder model, String buyer, long skuId, int quantity, String currency, long deadline, int paymentRevision) {}
     private static byte[] ascii(String value) { return value.getBytes(StandardCharsets.US_ASCII); }
 }

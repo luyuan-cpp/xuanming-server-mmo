@@ -477,6 +477,22 @@ extern const ::google::protobuf::internal::ClassDataFull ListMyGuildApplications
 #else
 extern const ListMyGuildApplicationsResponseGlobalsTypeInternal ListMyGuildApplicationsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RenameGuildRequest;
+struct RenameGuildRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RenameGuildRequestGlobalsTypeInternal RenameGuildRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RenameGuildRequest_class_data_;
+#else
+extern const RenameGuildRequestGlobalsTypeInternal RenameGuildRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RenameGuildResponse;
+struct RenameGuildResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RenameGuildResponseGlobalsTypeInternal RenameGuildResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RenameGuildResponse_class_data_;
+#else
+extern const RenameGuildResponseGlobalsTypeInternal RenameGuildResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RespondGuildTrialInviteRequest;
 struct RespondGuildTrialInviteRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -642,6 +658,7 @@ enum GuildChangeKind : int {
   GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED = 11,
   GUILD_CHANGE_KIND_ACTIVITY_CHANGED = 12,
   GUILD_CHANGE_KIND_DELIVERY_DONE = 13,
+  GUILD_CHANGE_KIND_RENAMED = 14,
   GuildChangeKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GuildChangeKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -652,11 +669,11 @@ extern const uint32_t GuildChangeKind_internal_data_[];
 inline constexpr GuildChangeKind GuildChangeKind_MIN =
     static_cast<GuildChangeKind>(0);
 inline constexpr GuildChangeKind GuildChangeKind_MAX =
-    static_cast<GuildChangeKind>(13);
+    static_cast<GuildChangeKind>(14);
 [[nodiscard]] inline bool GuildChangeKind_IsValid(int value) {
-  return 0 <= value && value <= 13;
+  return 0 <= value && value <= 14;
 }
-inline constexpr int GuildChangeKind_ARRAYSIZE = 13 + 1;
+inline constexpr int GuildChangeKind_ARRAYSIZE = 14 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GuildChangeKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GuildChangeKind) {
@@ -671,7 +688,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GuildChangeKind_Name(GuildChangeKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GuildChangeKind_descriptor, 0, 13>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GuildChangeKind_descriptor, 0, 14>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GuildChangeKind_Parse(
@@ -915,7 +932,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeGuildRequest final : public 
   [[nodiscard]] static const UpgradeGuildRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeGuildRequest>(&UpgradeGuildRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 41;
+  static constexpr int kIndexInFileMessages = 43;
   friend void swap(UpgradeGuildRequest& a, UpgradeGuildRequest& b) { a.Swap(&b); }
   inline void Swap(UpgradeGuildRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1116,7 +1133,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreRequest final : pub
   [[nodiscard]] static const UpdateGuildScoreRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateGuildScoreRequest>(&UpdateGuildScoreRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 61;
+  static constexpr int kIndexInFileMessages = 63;
   friend void swap(UpdateGuildScoreRequest& a, UpdateGuildScoreRequest& b) { a.Swap(&b); }
   inline void Swap(UpdateGuildScoreRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1341,7 +1358,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferGuildLeaderRequest final : 
   [[nodiscard]] static const TransferGuildLeaderRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TransferGuildLeaderRequest>(&TransferGuildLeaderRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(TransferGuildLeaderRequest& a, TransferGuildLeaderRequest& b) { a.Swap(&b); }
   inline void Swap(TransferGuildLeaderRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1554,7 +1571,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartGuildTrialRequest final : publ
   [[nodiscard]] static const StartGuildTrialRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartGuildTrialRequest>(&StartGuildTrialRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 56;
+  static constexpr int kIndexInFileMessages = 58;
   friend void swap(StartGuildTrialRequest& a, StartGuildTrialRequest& b) { a.Swap(&b); }
   inline void Swap(StartGuildTrialRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1778,7 +1795,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetGuildMemberRoleRequest final : p
   [[nodiscard]] static const SetGuildMemberRoleRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetGuildMemberRoleRequest>(&SetGuildMemberRoleRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(SetGuildMemberRoleRequest& a, SetGuildMemberRoleRequest& b) { a.Swap(&b); }
   inline void Swap(SetGuildMemberRoleRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2221,7 +2238,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReviewGuildApplicationRequest final
   [[nodiscard]] static const ReviewGuildApplicationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReviewGuildApplicationRequest>(&ReviewGuildApplicationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(ReviewGuildApplicationRequest& a, ReviewGuildApplicationRequest& b) { a.Swap(&b); }
   inline void Swap(ReviewGuildApplicationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2434,7 +2451,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondGuildTrialInviteRequest fina
   [[nodiscard]] static const RespondGuildTrialInviteRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RespondGuildTrialInviteRequest>(&RespondGuildTrialInviteRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 58;
+  static constexpr int kIndexInFileMessages = 60;
   friend void swap(RespondGuildTrialInviteRequest& a, RespondGuildTrialInviteRequest& b) { a.Swap(&b); }
   inline void Swap(RespondGuildTrialInviteRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2591,6 +2608,224 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondGuildTrialInviteRequest fina
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RenameGuildRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.RenameGuildRequest) */ {
+ public:
+  inline RenameGuildRequest() : RenameGuildRequest(nullptr) {}
+  ~RenameGuildRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RenameGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RenameGuildRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RenameGuildRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RenameGuildRequest(const RenameGuildRequest& from) : RenameGuildRequest(nullptr, from) {}
+  inline RenameGuildRequest(RenameGuildRequest&& from) noexcept : RenameGuildRequest(nullptr, ::std::move(from)) {}
+  inline RenameGuildRequest& operator=(const RenameGuildRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RenameGuildRequest& operator=(RenameGuildRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RenameGuildRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RenameGuildRequest>(&RenameGuildRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 14;
+  friend void swap(RenameGuildRequest& a, RenameGuildRequest& b) { a.Swap(&b); }
+  inline void Swap(RenameGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RenameGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RenameGuildRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RenameGuildRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RenameGuildRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RenameGuildRequest& from) { RenameGuildRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RenameGuildRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.RenameGuildRequest"; }
+
+  explicit RenameGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RenameGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RenameGuildRequest& from);
+  RenameGuildRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RenameGuildRequest&& from) noexcept
+      : RenameGuildRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kGuildIdFieldNumber = 1,
+  };
+  // string name = 2;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 guild_id = 1;
+  void clear_guild_id() ;
+  [[nodiscard]] ::uint64_t guild_id() const;
+  void set_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_guild_id() const;
+  void _internal_set_guild_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.RenameGuildRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 39,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RenameGuildRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t guild_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyGuildApplicationsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:guildpb.ListMyGuildApplicationsRequest) */ {
  public:
@@ -2646,7 +2881,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyGuildApplicationsRequest fina
   [[nodiscard]] static const ListMyGuildApplicationsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMyGuildApplicationsRequest>(&ListMyGuildApplicationsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(ListMyGuildApplicationsRequest& a, ListMyGuildApplicationsRequest& b) { a.Swap(&b); }
   inline void Swap(ListMyGuildApplicationsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2784,7 +3019,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListGuildApplicationsRequest final 
   [[nodiscard]] static const ListGuildApplicationsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListGuildApplicationsRequest>(&ListGuildApplicationsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(ListGuildApplicationsRequest& a, ListGuildApplicationsRequest& b) { a.Swap(&b); }
   inline void Swap(ListGuildApplicationsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2923,7 +3158,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LightGuildLanternRequest final : pu
   [[nodiscard]] static const LightGuildLanternRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LightGuildLanternRequest>(&LightGuildLanternRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 52;
+  static constexpr int kIndexInFileMessages = 54;
   friend void swap(LightGuildLanternRequest& a, LightGuildLanternRequest& b) { a.Swap(&b); }
   inline void Swap(LightGuildLanternRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3325,7 +3560,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickGuildMemberRequest final : publ
   [[nodiscard]] static const KickGuildMemberRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<KickGuildMemberRequest>(&KickGuildMemberRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(KickGuildMemberRequest& a, KickGuildMemberRequest& b) { a.Swap(&b); }
   inline void Swap(KickGuildMemberRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3538,7 +3773,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildTrialLobbyView final : public 
   [[nodiscard]] static const GuildTrialLobbyView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildTrialLobbyView>(&GuildTrialLobbyView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 48;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(GuildTrialLobbyView& a, GuildTrialLobbyView& b) { a.Swap(&b); }
   inline void Swap(GuildTrialLobbyView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3874,7 +4109,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildShopOrderView final : public :
   [[nodiscard]] static const GuildShopOrderView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildShopOrderView>(&GuildShopOrderView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(GuildShopOrderView& a, GuildShopOrderView& b) { a.Swap(&b); }
   inline void Swap(GuildShopOrderView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4147,7 +4382,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildShopGoodsView final : public :
   [[nodiscard]] static const GuildShopGoodsView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildShopGoodsView>(&GuildShopGoodsView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(GuildShopGoodsView& a, GuildShopGoodsView& b) { a.Swap(&b); }
   inline void Swap(GuildShopGoodsView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4485,7 +4720,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRewardItem final : public ::go
   [[nodiscard]] static const GuildRewardItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildRewardItem>(&GuildRewardItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 47;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(GuildRewardItem& a, GuildRewardItem& b) { a.Swap(&b); }
   inline void Swap(GuildRewardItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4698,7 +4933,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRankEntry final : public ::goo
   [[nodiscard]] static const GuildRankEntry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildRankEntry>(&GuildRankEntry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 60;
+  static constexpr int kIndexInFileMessages = 62;
   friend void swap(GuildRankEntry& a, GuildRankEntry& b) { a.Swap(&b); }
   inline void Swap(GuildRankEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5283,7 +5518,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildDonationView final : public ::
   [[nodiscard]] static const GuildDonationView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildDonationView>(&GuildDonationView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(GuildDonationView& a, GuildDonationView& b) { a.Swap(&b); }
   inline void Swap(GuildDonationView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5580,7 +5815,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildDonateOptionView final : publi
   [[nodiscard]] static const GuildDonateOptionView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildDonateOptionView>(&GuildDonateOptionView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(GuildDonateOptionView& a, GuildDonateOptionView& b) { a.Swap(&b); }
   inline void Swap(GuildDonateOptionView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5894,7 +6129,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildChangedS2C final : public ::go
   [[nodiscard]] static const GuildChangedS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildChangedS2C>(&GuildChangedS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(GuildChangedS2C& a, GuildChangedS2C& b) { a.Swap(&b); }
   inline void Swap(GuildChangedS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6131,7 +6366,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildApplicationView final : public
   [[nodiscard]] static const GuildApplicationView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildApplicationView>(&GuildApplicationView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(GuildApplicationView& a, GuildApplicationView& b) { a.Swap(&b); }
   inline void Swap(GuildApplicationView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6438,7 +6673,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildApplicantView final : public :
   [[nodiscard]] static const GuildApplicantView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildApplicantView>(&GuildApplicantView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(GuildApplicantView& a, GuildApplicantView& b) { a.Swap(&b); }
   inline void Swap(GuildApplicantView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6892,7 +7127,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildShopRequest final : public 
   [[nodiscard]] static const GetGuildShopRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildShopRequest>(&GetGuildShopRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 43;
+  static constexpr int kIndexInFileMessages = 45;
   friend void swap(GetGuildShopRequest& a, GetGuildShopRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildShopRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7232,7 +7467,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankRequest final : public 
   [[nodiscard]] static const GetGuildRankRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankRequest>(&GetGuildRankRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 63;
+  static constexpr int kIndexInFileMessages = 65;
   friend void swap(GetGuildRankRequest& a, GetGuildRankRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7445,7 +7680,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
   [[nodiscard]] static const GetGuildRankByGuildRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankByGuildRequest>(&GetGuildRankByGuildRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 65;
+  static constexpr int kIndexInFileMessages = 67;
   friend void swap(GetGuildRankByGuildRequest& a, GetGuildRankByGuildRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankByGuildRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7645,7 +7880,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildDonateOptionsRequest final 
   [[nodiscard]] static const GetGuildDonateOptionsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildDonateOptionsRequest>(&GetGuildDonateOptionsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(GetGuildDonateOptionsRequest& a, GetGuildDonateOptionsRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildDonateOptionsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7783,7 +8018,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildActivitiesRequest final : p
   [[nodiscard]] static const GetGuildActivitiesRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildActivitiesRequest>(&GetGuildActivitiesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 50;
+  static constexpr int kIndexInFileMessages = 52;
   friend void swap(GetGuildActivitiesRequest& a, GetGuildActivitiesRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildActivitiesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7922,7 +8157,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildRequest final : public
   [[nodiscard]] static const DonateToGuildRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DonateToGuildRequest>(&DonateToGuildRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 41;
   friend void swap(DonateToGuildRequest& a, DonateToGuildRequest& b) { a.Swap(&b); }
   inline void Swap(DonateToGuildRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8554,7 +8789,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimGuildReunionRequest final : pu
   [[nodiscard]] static const ClaimGuildReunionRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimGuildReunionRequest>(&ClaimGuildReunionRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 54;
+  static constexpr int kIndexInFileMessages = 56;
   friend void swap(ClaimGuildReunionRequest& a, ClaimGuildReunionRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimGuildReunionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8755,7 +8990,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelGuildApplicationRequest final
   [[nodiscard]] static const CancelGuildApplicationRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelGuildApplicationRequest>(&CancelGuildApplicationRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(CancelGuildApplicationRequest& a, CancelGuildApplicationRequest& b) { a.Swap(&b); }
   inline void Swap(CancelGuildApplicationRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8956,7 +9191,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyGuildShopGoodsRequest final : pu
   [[nodiscard]] static const BuyGuildShopGoodsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyGuildShopGoodsRequest>(&BuyGuildShopGoodsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 45;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(BuyGuildShopGoodsRequest& a, BuyGuildShopGoodsRequest& b) { a.Swap(&b); }
   inline void Swap(BuyGuildShopGoodsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9193,7 +9428,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinGuildRequest final : publi
   [[nodiscard]] static const ApplyJoinGuildRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyJoinGuildRequest>(&ApplyJoinGuildRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(ApplyJoinGuildRequest& a, ApplyJoinGuildRequest& b) { a.Swap(&b); }
   inline void Swap(ApplyJoinGuildRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9394,7 +9629,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreResponse final : pu
   [[nodiscard]] static const UpdateGuildScoreResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateGuildScoreResponse>(&UpdateGuildScoreResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 62;
+  static constexpr int kIndexInFileMessages = 64;
   friend void swap(UpdateGuildScoreResponse& a, UpdateGuildScoreResponse& b) { a.Swap(&b); }
   inline void Swap(UpdateGuildScoreResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9601,7 +9836,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListMyGuildApplicationsResponse fin
   [[nodiscard]] static const ListMyGuildApplicationsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListMyGuildApplicationsResponse>(&ListMyGuildApplicationsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(ListMyGuildApplicationsResponse& a, ListMyGuildApplicationsResponse& b) { a.Swap(&b); }
   inline void Swap(ListMyGuildApplicationsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9831,7 +10066,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListGuildApplicationsResponse final
   [[nodiscard]] static const ListGuildApplicationsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListGuildApplicationsResponse>(&ListGuildApplicationsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(ListGuildApplicationsResponse& a, ListGuildApplicationsResponse& b) { a.Swap(&b); }
   inline void Swap(ListGuildApplicationsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10375,6 +10610,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
     kUpgradeCostFundsFieldNumber = 13,
     kOfficerCountFieldNumber = 12,
     kPendingApplicationCountFieldNumber = 15,
+    kRenamedMsFieldNumber = 16,
   };
   // repeated .guildpb.GuildMember members = 8;
   [[nodiscard]] int members_size()
@@ -10552,12 +10788,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
   void _internal_set_pending_application_count(::uint32_t value);
 
   public:
+  // uint64 renamed_ms = 16;
+  void clear_renamed_ms() ;
+  [[nodiscard]] ::uint64_t renamed_ms() const;
+  void set_renamed_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_renamed_ms() const;
+  void _internal_set_renamed_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:guildpb.GuildInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          1, 61,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          1, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -10600,6 +10846,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
     ::uint64_t upgrade_cost_funds_;
     ::uint32_t officer_count_;
     ::uint32_t pending_application_count_;
+    ::uint64_t renamed_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10663,7 +10910,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildActivityView final : public ::
   [[nodiscard]] static const GuildActivityView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildActivityView>(&GuildActivityView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 49;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(GuildActivityView& a, GuildActivityView& b) { a.Swap(&b); }
   inline void Swap(GuildActivityView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11234,7 +11481,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildShopResponse final : public
   [[nodiscard]] static const GetGuildShopResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildShopResponse>(&GetGuildShopResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 44;
+  static constexpr int kIndexInFileMessages = 46;
   friend void swap(GetGuildShopResponse& a, GetGuildShopResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildShopResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11546,7 +11793,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankResponse final : public
   [[nodiscard]] static const GetGuildRankResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankResponse>(&GetGuildRankResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 64;
+  static constexpr int kIndexInFileMessages = 66;
   friend void swap(GetGuildRankResponse& a, GetGuildRankResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11812,7 +12059,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildResponse final :
   [[nodiscard]] static const GetGuildRankByGuildResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankByGuildResponse>(&GetGuildRankByGuildResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 66;
+  static constexpr int kIndexInFileMessages = 68;
   friend void swap(GetGuildRankByGuildResponse& a, GetGuildRankByGuildResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankByGuildResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12037,7 +12284,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildDonateOptionsResponse final
   [[nodiscard]] static const GetGuildDonateOptionsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildDonateOptionsResponse>(&GetGuildDonateOptionsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(GetGuildDonateOptionsResponse& a, GetGuildDonateOptionsResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildDonateOptionsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12556,7 +12803,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelGuildApplicationResponse fina
   [[nodiscard]] static const CancelGuildApplicationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelGuildApplicationResponse>(&CancelGuildApplicationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(CancelGuildApplicationResponse& a, CancelGuildApplicationResponse& b) { a.Swap(&b); }
   inline void Swap(CancelGuildApplicationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12763,7 +13010,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyGuildShopGoodsResponse final : p
   [[nodiscard]] static const BuyGuildShopGoodsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyGuildShopGoodsResponse>(&BuyGuildShopGoodsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 46;
+  static constexpr int kIndexInFileMessages = 48;
   friend void swap(BuyGuildShopGoodsResponse& a, BuyGuildShopGoodsResponse& b) { a.Swap(&b); }
   inline void Swap(BuyGuildShopGoodsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13000,7 +13247,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinGuildResponse final : publ
   [[nodiscard]] static const ApplyJoinGuildResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyJoinGuildResponse>(&ApplyJoinGuildResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(ApplyJoinGuildResponse& a, ApplyJoinGuildResponse& b) { a.Swap(&b); }
   inline void Swap(ApplyJoinGuildResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13207,7 +13454,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeGuildResponse final : public
   [[nodiscard]] static const UpgradeGuildResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeGuildResponse>(&UpgradeGuildResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 42;
+  static constexpr int kIndexInFileMessages = 44;
   friend void swap(UpgradeGuildResponse& a, UpgradeGuildResponse& b) { a.Swap(&b); }
   inline void Swap(UpgradeGuildResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13432,7 +13679,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferGuildLeaderResponse final :
   [[nodiscard]] static const TransferGuildLeaderResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TransferGuildLeaderResponse>(&TransferGuildLeaderResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(TransferGuildLeaderResponse& a, TransferGuildLeaderResponse& b) { a.Swap(&b); }
   inline void Swap(TransferGuildLeaderResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13657,7 +13904,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartGuildTrialResponse final : pub
   [[nodiscard]] static const StartGuildTrialResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartGuildTrialResponse>(&StartGuildTrialResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 57;
+  static constexpr int kIndexInFileMessages = 59;
   friend void swap(StartGuildTrialResponse& a, StartGuildTrialResponse& b) { a.Swap(&b); }
   inline void Swap(StartGuildTrialResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13882,7 +14129,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetGuildMemberRoleResponse final : 
   [[nodiscard]] static const SetGuildMemberRoleResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetGuildMemberRoleResponse>(&SetGuildMemberRoleResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SetGuildMemberRoleResponse& a, SetGuildMemberRoleResponse& b) { a.Swap(&b); }
   inline void Swap(SetGuildMemberRoleResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14332,7 +14579,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReviewGuildApplicationResponse fina
   [[nodiscard]] static const ReviewGuildApplicationResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReviewGuildApplicationResponse>(&ReviewGuildApplicationResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(ReviewGuildApplicationResponse& a, ReviewGuildApplicationResponse& b) { a.Swap(&b); }
   inline void Swap(ReviewGuildApplicationResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14557,7 +14804,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondGuildTrialInviteResponse fin
   [[nodiscard]] static const RespondGuildTrialInviteResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RespondGuildTrialInviteResponse>(&RespondGuildTrialInviteResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 59;
+  static constexpr int kIndexInFileMessages = 61;
   friend void swap(RespondGuildTrialInviteResponse& a, RespondGuildTrialInviteResponse& b) { a.Swap(&b); }
   inline void Swap(RespondGuildTrialInviteResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14726,6 +14973,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondGuildTrialInviteResponse fin
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RenameGuildResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.RenameGuildResponse) */ {
+ public:
+  inline RenameGuildResponse() : RenameGuildResponse(nullptr) {}
+  ~RenameGuildResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RenameGuildResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RenameGuildResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RenameGuildResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RenameGuildResponse(const RenameGuildResponse& from) : RenameGuildResponse(nullptr, from) {}
+  inline RenameGuildResponse(RenameGuildResponse&& from) noexcept : RenameGuildResponse(nullptr, ::std::move(from)) {}
+  inline RenameGuildResponse& operator=(const RenameGuildResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RenameGuildResponse& operator=(RenameGuildResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RenameGuildResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RenameGuildResponse>(&RenameGuildResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(RenameGuildResponse& a, RenameGuildResponse& b) { a.Swap(&b); }
+  inline void Swap(RenameGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RenameGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RenameGuildResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RenameGuildResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RenameGuildResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RenameGuildResponse& from) { RenameGuildResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RenameGuildResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.RenameGuildResponse"; }
+
+  explicit RenameGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RenameGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RenameGuildResponse& from);
+  RenameGuildResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RenameGuildResponse&& from) noexcept
+      : RenameGuildResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kGuildFieldNumber = 2,
+    kNextRenameTimeFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildInfo guild = 2;
+  [[nodiscard]] bool has_guild()
+      const;
+  void clear_guild() ;
+  [[nodiscard]] const ::guildpb::GuildInfo& guild() const;
+  [[nodiscard]] ::guildpb::GuildInfo* PROTOBUF_NULLABLE release_guild();
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL mutable_guild();
+  void set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildInfo* PROTOBUF_NULLABLE unsafe_arena_release_guild();
+
+  private:
+  const ::guildpb::GuildInfo& _internal_guild() const;
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL _internal_mutable_guild();
+
+  public:
+  // uint64 next_rename_time = 3;
+  void clear_next_rename_time() ;
+  [[nodiscard]] ::uint64_t next_rename_time() const;
+  void set_next_rename_time(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_rename_time() const;
+  void _internal_set_next_rename_time(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.RenameGuildResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RenameGuildResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
+    ::uint64_t next_rename_time_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LightGuildLanternResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.LightGuildLanternResponse) */ {
  public:
@@ -14782,7 +15266,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LightGuildLanternResponse final : p
   [[nodiscard]] static const LightGuildLanternResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LightGuildLanternResponse>(&LightGuildLanternResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 53;
+  static constexpr int kIndexInFileMessages = 55;
   friend void swap(LightGuildLanternResponse& a, LightGuildLanternResponse& b) { a.Swap(&b); }
   inline void Swap(LightGuildLanternResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15007,7 +15491,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickGuildMemberResponse final : pub
   [[nodiscard]] static const KickGuildMemberResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<KickGuildMemberResponse>(&KickGuildMemberResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(KickGuildMemberResponse& a, KickGuildMemberResponse& b) { a.Swap(&b); }
   inline void Swap(KickGuildMemberResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15682,7 +16166,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildActivitiesResponse final : 
   [[nodiscard]] static const GetGuildActivitiesResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildActivitiesResponse>(&GetGuildActivitiesResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 51;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(GetGuildActivitiesResponse& a, GetGuildActivitiesResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildActivitiesResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15912,7 +16396,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildResponse final : publi
   [[nodiscard]] static const DonateToGuildResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DonateToGuildResponse>(&DonateToGuildResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(DonateToGuildResponse& a, DonateToGuildResponse& b) { a.Swap(&b); }
   inline void Swap(DonateToGuildResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16380,7 +16864,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimGuildReunionResponse final : p
   [[nodiscard]] static const ClaimGuildReunionResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimGuildReunionResponse>(&ClaimGuildReunionResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 55;
+  static constexpr int kIndexInFileMessages = 57;
   friend void swap(ClaimGuildReunionResponse& a, ClaimGuildReunionResponse& b) { a.Swap(&b); }
   inline void Swap(ClaimGuildReunionResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17309,6 +17793,30 @@ inline ::uint32_t GuildInfo::_internal_pending_application_count() const {
 inline void GuildInfo::_internal_set_pending_application_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pending_application_count_ = value;
+}
+
+// uint64 renamed_ms = 16;
+inline void GuildInfo::clear_renamed_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renamed_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t GuildInfo::renamed_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildInfo.renamed_ms)
+  return _internal_renamed_ms();
+}
+inline void GuildInfo::set_renamed_ms(::uint64_t value) {
+  _internal_set_renamed_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildInfo.renamed_ms)
+}
+inline ::uint64_t GuildInfo::_internal_renamed_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.renamed_ms_;
+}
+inline void GuildInfo::_internal_set_renamed_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renamed_ms_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -18555,6 +19063,317 @@ inline void SetAnnouncementResponse::set_allocated_guild(::guildpb::GuildInfo* P
 
   _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
   // @@protoc_insertion_point(field_set_allocated:guildpb.SetAnnouncementResponse.guild)
+}
+
+// -------------------------------------------------------------------
+
+// RenameGuildRequest
+
+// uint64 guild_id = 1;
+inline void RenameGuildRequest::clear_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t RenameGuildRequest::guild_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.RenameGuildRequest.guild_id)
+  return _internal_guild_id();
+}
+inline void RenameGuildRequest::set_guild_id(::uint64_t value) {
+  _internal_set_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.RenameGuildRequest.guild_id)
+}
+inline ::uint64_t RenameGuildRequest::_internal_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guild_id_;
+}
+inline void RenameGuildRequest::_internal_set_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guild_id_ = value;
+}
+
+// string name = 2;
+inline void RenameGuildRequest::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& RenameGuildRequest::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.RenameGuildRequest.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RenameGuildRequest::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.RenameGuildRequest.name)
+}
+inline ::std::string* PROTOBUF_NONNULL RenameGuildRequest::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:guildpb.RenameGuildRequest.name)
+  return _s;
+}
+inline const ::std::string& RenameGuildRequest::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void RenameGuildRequest::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RenameGuildRequest::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RenameGuildRequest::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.RenameGuildRequest.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RenameGuildRequest::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.RenameGuildRequest.name)
+}
+
+// -------------------------------------------------------------------
+
+// RenameGuildResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RenameGuildResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RenameGuildResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RenameGuildResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.RenameGuildResponse.error_message)
+  return _internal_error_message();
+}
+inline void RenameGuildResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.RenameGuildResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RenameGuildResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RenameGuildResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.RenameGuildResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RenameGuildResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RenameGuildResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.RenameGuildResponse.error_message)
+  return _msg;
+}
+inline void RenameGuildResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.RenameGuildResponse.error_message)
+}
+
+// .guildpb.GuildInfo guild = 2;
+inline bool RenameGuildResponse::has_guild() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_ != nullptr);
+  return value;
+}
+inline void RenameGuildResponse::clear_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ != nullptr) _impl_.guild_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildInfo& RenameGuildResponse::_internal_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildInfo* p = _impl_.guild_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildInfo>(&::guildpb::GuildInfo_globals_);
+}
+inline const ::guildpb::GuildInfo& RenameGuildResponse::guild() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.RenameGuildResponse.guild)
+  return _internal_guild();
+}
+inline void RenameGuildResponse::unsafe_arena_set_allocated_guild(
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.RenameGuildResponse.guild)
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE RenameGuildResponse::release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* released = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE RenameGuildResponse::unsafe_arena_release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.RenameGuildResponse.guild)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* temp = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL RenameGuildResponse::_internal_mutable_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildInfo>(GetArena());
+    _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(p);
+  }
+  return _impl_.guild_;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL RenameGuildResponse::mutable_guild()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* _msg = _internal_mutable_guild();
+  // @@protoc_insertion_point(field_mutable:guildpb.RenameGuildResponse.guild)
+  return _msg;
+}
+inline void RenameGuildResponse::set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.RenameGuildResponse.guild)
+}
+
+// uint64 next_rename_time = 3;
+inline void RenameGuildResponse::clear_next_rename_time() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_rename_time_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t RenameGuildResponse::next_rename_time() const {
+  // @@protoc_insertion_point(field_get:guildpb.RenameGuildResponse.next_rename_time)
+  return _internal_next_rename_time();
+}
+inline void RenameGuildResponse::set_next_rename_time(::uint64_t value) {
+  _internal_set_next_rename_time(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.RenameGuildResponse.next_rename_time)
+}
+inline ::uint64_t RenameGuildResponse::_internal_next_rename_time() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_rename_time_;
+}
+inline void RenameGuildResponse::_internal_set_next_rename_time(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_rename_time_ = value;
 }
 
 // -------------------------------------------------------------------

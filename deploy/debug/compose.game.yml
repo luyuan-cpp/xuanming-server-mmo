@@ -674,9 +674,14 @@ services:
       ZONE_ID: "1"
       SCENE_NODE_TYPE: "0"
       SCENE_RUN_MODE: dev
+      MMORPG_GM_PLAYER_COMMAND_SECRET: ${MMORPG_GM_PLAYER_COMMAND_SECRET:?Load the private GM Scene configuration}
+      MMORPG_ASSET_OP_SECRET_MAIL: ${MMORPG_ASSET_OP_SECRET_MAIL:?Load the private GM Scene configuration}
       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
       MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
+    labels:
+      com.xuanming.gm.scene-promotion: ${GM_SCENE_PROMOTION_SHA256:?Stage and approve the GM Scene promotion}
+    ports: ["127.0.0.1:2355:50001"]
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/base_deploy_config.yaml:/app/bin/etc/base_deploy_config.yaml:ro
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/game_config.yaml:/app/bin/etc/game_config.yaml:ro

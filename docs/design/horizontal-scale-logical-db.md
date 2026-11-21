@@ -444,7 +444,7 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 
 | 按玩家 | 按账号 | 按名字 | 只在第 0 片 | 每片一份 |
 |---|---|---|---|---|
-| `account_role`、`account_role_admission`、`account_role_trade`、`account_role_trade_holder`、`account_role_transfer_receipt`、`account_role_removal`、`player_route`、`player_name_owner` | `account_directory`、`account_role_ref` | `player_name` | `zone_merged_into` | `route_meta`、写者闸门表、`db_move_sentinel`、`directory_shard` |
+| `account_role`、`account_role_admission`、`account_role_trade`、`account_role_trade_holder`、`account_role_transfer_receipt`、`account_role_removal`、`account_role_rename`、`player_route`、`player_name_owner` | `account_directory`、`account_role_ref`、`account_deletion_receipt` | `player_name` | `zone_merged_into` | `route_meta`、写者闸门表、`db_move_sentinel`、`directory_shard` |
 
 过户收据跟玩家走,请求里都有 `player_id`。listing、tx_id 的主键只在一片内唯一:两个玩家用同一个 listing 不再互相挡,它们都由发号器发,本来就不会撞。
 
@@ -742,6 +742,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 | FX2 | 一轮独立评审的修复:判陈旧先读 listing 后读真相,过户第 3 步失败回 `Unavailable`,写 ref 的两个窗口,建角确定失败 `ErrNotCommitted`,`claim_seq`,展示读跳过坏落点,排空证明按状态码判 | 已写完,未编译,待 Codex 验证 |
 | FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Codex 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
+| B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Codex 验证 |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

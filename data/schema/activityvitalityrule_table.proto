@@ -5,6 +5,7 @@ message ActivityVitalityRuleTable {
   option (cfg_sheet) = "ActivityVitalityRule";
   option (cfg_source_file) = "ActivityVitalityRule.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload) = true;
   uint32 id = 1;
   bool enabled = 2;
   uint64 configuration_revision = 3;

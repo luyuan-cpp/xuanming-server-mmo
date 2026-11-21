@@ -83,6 +83,27 @@ func ValidateEconomyTables() error {
 	})
 }
 
+// ValidateEconomyTablesIn 在候选 TableSet 上执行与启动期完全一致的帮会管理 + 经济表校验,不触碰全局单例。
+func ValidateEconomyTablesIn(ts *table.TableSet) error {
+	if ts == nil || ts.GuildRule == nil || ts.GuildLevel == nil || ts.GuildDonate == nil || ts.GuildShop == nil || ts.Item == nil {
+		return fmt.Errorf("guild tables: TableSet missing required guild/item managers")
+	}
+	rule, _ := ts.GuildRule.FindById(guildRuleRowID)
+	return validateEconomyTables(economyTables{
+		rule:    rule,
+		levels:  ts.GuildLevel.FindAll(),
+		donates: ts.GuildDonate.FindAll(),
+		shops:   ts.GuildShop.FindAll(),
+		itemMaxStack: func(itemID uint32) (uint32, bool) {
+			row, ok := ts.Item.FindById(itemID)
+			if !ok {
+				return 0, false
+			}
+			return row.GetMaxStackSize(), true
+		},
+	})
+}
+
 // validateEconomyTables 是纯函数。错误文案一律带表名、行 id、字段名与实际值,
 // 策划看到启动日志要能直接定位到格子。
 func validateEconomyTables(t economyTables) error {

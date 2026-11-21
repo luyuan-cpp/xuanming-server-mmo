@@ -68,6 +68,11 @@ const (
 	GuildError_kGuildTrialInviteCooldown         GuildError = 14040
 	GuildError_kGuildTrialServiceBusy            GuildError = 14041
 	GuildError_kGuildTrialBattleAborted          GuildError = 14042
+	GuildError_kGuildNameSensitive               GuildError = 14043
+	GuildError_kGuildAnnouncementSensitive       GuildError = 14044
+	GuildError_kGuildTextCheckUnavailable        GuildError = 14045
+	GuildError_kGuildRenameCooldown              GuildError = 14046
+	GuildError_kGuildRenameSameName              GuildError = 14047
 )
 
 // Enum value maps for GuildError.
@@ -117,6 +122,11 @@ var (
 		14040: "kGuildTrialInviteCooldown",
 		14041: "kGuildTrialServiceBusy",
 		14042: "kGuildTrialBattleAborted",
+		14043: "kGuildNameSensitive",
+		14044: "kGuildAnnouncementSensitive",
+		14045: "kGuildTextCheckUnavailable",
+		14046: "kGuildRenameCooldown",
+		14047: "kGuildRenameSameName",
 	}
 	GuildError_value = map[string]int32{
 		"kGuild_errorOK":                    0,
@@ -163,6 +173,11 @@ var (
 		"kGuildTrialInviteCooldown":         14040,
 		"kGuildTrialServiceBusy":            14041,
 		"kGuildTrialBattleAborted":          14042,
+		"kGuildNameSensitive":               14043,
+		"kGuildAnnouncementSensitive":       14044,
+		"kGuildTextCheckUnavailable":        14045,
+		"kGuildRenameCooldown":              14046,
+		"kGuildRenameSameName":              14047,
 	}
 )
 
@@ -197,7 +212,8 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\xcb\t\n" +
+	"\x15guild_error_tip.proto*\xde\n" +
+	"\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -243,7 +259,12 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x19kGuildTrialInviteDeclined\x10\xd7m\x12\x1e\n" +
 	"\x19kGuildTrialInviteCooldown\x10\xd8m\x12\x1b\n" +
 	"\x16kGuildTrialServiceBusy\x10\xd9m\x12\x1d\n" +
-	"\x18kGuildTrialBattleAborted\x10\xdamB$\n" +
+	"\x18kGuildTrialBattleAborted\x10\xdam\x12\x18\n" +
+	"\x13kGuildNameSensitive\x10\xdbm\x12 \n" +
+	"\x1bkGuildAnnouncementSensitive\x10\xdcm\x12\x1f\n" +
+	"\x1akGuildTextCheckUnavailable\x10\xddm\x12\x19\n" +
+	"\x14kGuildRenameCooldown\x10\xdem\x12\x19\n" +
+	"\x14kGuildRenameSameName\x10\xdfmB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

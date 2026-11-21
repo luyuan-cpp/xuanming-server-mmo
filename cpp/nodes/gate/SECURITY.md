@@ -126,7 +126,7 @@ echo "reason=${REASON}"
 ### scene 节点用同一套机制,但 method 名不同
 
 `Scene.GmGracefulShutdown`(`cpp/nodes/scene/handler/rpc/scene_admin_handler.cpp`)
-走的是同一份 `gate_security.h`、同一个 `GATE_GM_ADMIN_SECRET`、同一套信封与时间
+走的是引擎核心层同一份 `cpp/libs/engine/core/security/gm_security.h`（`gate_security.h` 通过 `using` 别名再导出）、同一个 `GATE_GM_ADMIN_SECRET`、同一套信封与时间
 窗。**唯一的差别是 canonical 串第一行的 method 名**:
 
 ```

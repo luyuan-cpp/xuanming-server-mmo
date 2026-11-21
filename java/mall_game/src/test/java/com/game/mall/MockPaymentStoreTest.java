@@ -308,7 +308,7 @@ class MockPaymentStoreTest {
             f.jdbc.execute("DROP TABLE commerce_mock_transaction");
             f.jdbc.execute("DROP TABLE commerce_refund_intent");
             f.jdbc.execute("CREATE TABLE commerce_refund_intent(channel VARBINARY(32) NOT NULL,transaction_id VARBINARY(128) NOT NULL,"
-                + "order_sn VARCHAR(36) NOT NULL,source VARCHAR(24) NOT NULL,status VARCHAR(24) NOT NULL,PRIMARY KEY(channel,transaction_id))");
+                + "order_sn VARCHAR(36) NOT NULL,source VARCHAR(24) NOT NULL,status VARCHAR(24) NOT NULL,close_reason VARCHAR(64) NULL,PRIMARY KEY(channel,transaction_id))");
             assertThrows(Exception.class, () -> SchemaVerifier.verify(f.jdbc, f.source));
             f.migrate("db/migration/V4__mock_payment.sql");
             SchemaVerifier.verify(f.jdbc, f.source);

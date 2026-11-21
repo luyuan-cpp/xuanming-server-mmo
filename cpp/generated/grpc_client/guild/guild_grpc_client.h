@@ -55,6 +55,14 @@ void SendGuildServiceSetAnnouncement(entt::registry& registry, entt::entity node
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendGuildServiceSetAnnouncementErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region GuildServiceRenameGuild
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceRenameGuildGrpcPath = "/guildpb.GuildService/RenameGuild";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceRenameGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RenameGuildRequest& request, GrpcDone<::guildpb::RenameGuildResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceRenameGuildErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region GuildServiceSetGuildMemberRole
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kGuildServiceSetGuildMemberRoleGrpcPath = "/guildpb.GuildService/SetGuildMemberRole";

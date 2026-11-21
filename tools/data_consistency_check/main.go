@@ -107,29 +107,36 @@ type runConfig struct {
 	guildSchema string
 }
 
+func envOrDefault(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return fallback
+}
+
 func main() {
-	mysqlDSN := flag.String("mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local",
-		"MySQL DSN (its default database holds the user/account tables; guild lives in -guild-schema on the same instance, friend in -friend-mysql-dsn)")
+	mysqlDSN := flag.String("mysql-dsn", envOrDefault("MMORPG_CONSISTENCY_MYSQL_DSN", "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local"),
+		"MySQL DSN (or MMORPG_CONSISTENCY_MYSQL_DSN; its default database holds the user/account tables; guild lives in -guild-schema on the same instance, friend in -friend-mysql-dsn)")
 	guildSchema := flag.String("guild-schema", "mmorpg_guild",
 		"Guild database on the same MySQL instance (go/guild forces its DSN database to be mmorpg_guild; override only for isolated tests)")
 	// friend 自 2026-09-18 起住独占库 mmorpg_friend(D-14),不在 -mysql-dsn 那个库里。
 	// 缺省值只换库名、其余与 -mysql-dsn 的缺省逐字一致;置空 = 显式声明「本环境没有 friend」,
 	// 此时 friend 那条检查报 warn「NOT CHECKED」,不会伪装成通过。
-	friendDSN := flag.String("friend-mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg_friend?charset=utf8mb4&parseTime=true&loc=Local",
-		"MySQL DSN for the friend-only database (go/friend forces MySQL.DBName=mmorpg_friend). Empty = skip the friend check and report it as NOT CHECKED")
+	friendDSN := flag.String("friend-mysql-dsn", envOrDefault("MMORPG_CONSISTENCY_FRIEND_DSN", "root:@tcp(127.0.0.1:3306)/mmorpg_friend?charset=utf8mb4&parseTime=true&loc=Local"),
+		"MySQL DSN for the friend-only database (or MMORPG_CONSISTENCY_FRIEND_DSN; go/friend forces MySQL.DBName=mmorpg_friend). Empty = skip the friend check and report it as NOT CHECKED")
 	// mail 住独占库 mmorpg_mail(D-14,go/mail 的 config.Validate 断言 DBName == mmorpg_mail)。缺省值与 friend 同形,只换库名;
 	// 置空 = 显式声明「本环境没有 mail」,mail 那条检查报 warn「NOT CHECKED」。
-	mailDSN := flag.String("mail-mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg_mail?charset=utf8mb4&parseTime=true&loc=Local",
-		"SQL DSN for the current M2/M3 mail-only database (same target as mail DSNEnv). Empty = skip the mail check and report it as NOT CHECKED")
+	mailDSN := flag.String("mail-mysql-dsn", envOrDefault("MMORPG_CONSISTENCY_MAIL_DSN", "root:@tcp(127.0.0.1:3306)/mmorpg_mail?charset=utf8mb4&parseTime=true&loc=Local"),
+		"SQL DSN for the current M2/M3 mail-only database (or MMORPG_CONSISTENCY_MAIL_DSN; same target as mail DSNEnv). Empty = skip the mail check and report it as NOT CHECKED")
 	redisAddr := flag.String("redis-addr", "127.0.0.1:6379",
 		"Redis holding guild_rank:zone:* keys: one address, or with -redis-cluster a comma-separated list of cluster seed nodes")
 	redisCluster := flag.Bool("redis-cluster", false,
 		"The guild Redis is a Redis Cluster: the rank check scans every master (each master only holds part of the keys)")
-	redisPwd := flag.String("redis-password", "", "Redis password")
+	redisPwd := flag.String("redis-password", envOrDefault("MMORPG_CONSISTENCY_REDIS_PASSWORD", ""), "Redis password (or MMORPG_CONSISTENCY_REDIS_PASSWORD)")
 	redisDB := flag.Int("redis-db", 0, "Redis DB number (single instance only; a Redis Cluster only has DB 0)")
 	// 映射的真源是目录的 player_route(dev 基名是 testdb,K8s 是 mmorpg_global):live zones / 玩家数 / 好友端是否有归属都按它查。
-	routeDSN := flag.String("route-db-dsn", "",
-		"Directory database DSN, required. Its database name is the directory base name (SnapshotMySQL.DBName); the player_route source of truth lives on <base> or <base>_00..")
+	routeDSN := flag.String("route-db-dsn", envOrDefault("MMORPG_CONSISTENCY_ROUTE_DSN", ""),
+		"Directory database DSN (or MMORPG_CONSISTENCY_ROUTE_DSN), required. Its database name is the directory base name (SnapshotMySQL.DBName); the player_route source of truth lives on <base> or <base>_00..")
 	routeLogicalShards := flag.Int("route-logical-shards", 1, "Directory shard count (Directory.LogicalShards), a divisor of 64")
 
 	// Live zones is a CSV the operator passes in (or we infer from the route table).
@@ -424,11 +431,6 @@ func guildCheckFailed(r CheckResult, why string) CheckResult {
 // 没有路由行的目录不在此检查范围；缺少显式全局句柄时报告未检查。
 func checkPlayerHomeZoneVsAccount(ctx context.Context, cfg runConfig) CheckResult {
 	r := CheckResult{Name: "player→account linkage"}
-	if _, err := cfg.routes.CountPlayers(ctx); err != nil {
-		r.Severity = "fail"
-		r.SampleNotes = fmt.Sprintf("CHECK FAILED (player count unknown): %v", err)
-		return r
-	}
 	if len(cfg.accountDBs) == 0 {
 		r.Severity = "warn"
 		r.SampleNotes = "NOT CHECKED: -route-db-dsn must point at the directory holding player_route/account_role"
@@ -480,12 +482,25 @@ func checkFriendOrphans(ctx context.Context, cfg runConfig) CheckResult {
 			"(表由 go/schemamigrate 建:friend -f etc/friend.yaml -migrate)", err)
 		return r
 	}
-	// Sample 1000 random rows — full scan can lock-thrash large tables.
-	// Statistical bound: if 1000-row sample has 0 orphans, p95 says
-	// real orphan rate is < 0.3%, which is below the noise floor of
-	// "old friends since deleted accounts."
+	// 按 player_id 主键范围随机选起点做索引范围扫描，避免 ORDER BY RAND() 触发大表全表扫描+临时排序。
+	var minPID, maxPID sql.NullInt64
+	if err := cfg.friendDB.QueryRowContext(ctx,
+		"SELECT MIN(player_id), MAX(player_id) FROM friend").Scan(&minPID, &maxPID); err != nil {
+		r.Severity = "warn"
+		r.SampleNotes = fmt.Sprintf("sample range query failed: %v", err)
+		return r
+	}
+	if !minPID.Valid || !maxPID.Valid {
+		r.Severity = "info"
+		r.SampleNotes = "no rows sampled"
+		return r
+	}
+	startPID := uint64(minPID.Int64)
+	if span := uint64(maxPID.Int64 - minPID.Int64); span > 0 {
+		startPID += uint64(time.Now().UnixNano()) % (span + 1)
+	}
 	rows, err := cfg.friendDB.QueryContext(ctx,
-		"SELECT player_id, friend_player_id FROM friend ORDER BY RAND() LIMIT 1000")
+		"SELECT player_id, friend_player_id FROM friend WHERE player_id >= ? ORDER BY player_id LIMIT 1000", startPID)
 	if err != nil {
 		r.Severity = "warn"
 		r.SampleNotes = fmt.Sprintf("sample query failed: %v", err)

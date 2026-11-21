@@ -329,7 +329,7 @@ func TestWechatAnswersMustCarryAValidSignature(t *testing.T) {
 		})
 	}
 	for name, header := range map[string]http.Header{
-		"signed now":                  good,
+		"signed now":                      good,
 		"signed exactly five minutes ago": wechatAnswerHeader(t, platform, []byte(body), testNow.Add(-wechatClockSkew)),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -375,15 +375,15 @@ func TestWechatQueryMapsTradeStates(t *testing.T) {
 
 	paid := wechatTransactionJSON("SUCCESS")
 	for name, body := range map[string]string{
-		"an unknown trade_state":      wechatTransactionJSON("FROZEN"),
-		"another order":               strings.Replace(paid, testOutTradeNo, "ffffffffffffffffffffffffffffffff", 1),
-		"another merchant":            strings.Replace(paid, wxMchID, "1900000002", 1),
-		"another app":                 strings.Replace(paid, wxAppID, "wx0000000000000002", 1),
-		"a payment without an id":     strings.Replace(paid, wxTransactionID, "", 1),
-		"a payment of nothing":        strings.Replace(paid, `"total":600`, `"total":0`, 1),
+		"an unknown trade_state":        wechatTransactionJSON("FROZEN"),
+		"another order":                 strings.Replace(paid, testOutTradeNo, "ffffffffffffffffffffffffffffffff", 1),
+		"another merchant":              strings.Replace(paid, wxMchID, "1900000002", 1),
+		"another app":                   strings.Replace(paid, wxAppID, "wx0000000000000002", 1),
+		"a payment without an id":       strings.Replace(paid, wxTransactionID, "", 1),
+		"a payment of nothing":          strings.Replace(paid, `"total":600`, `"total":0`, 1),
 		"a payment in another currency": strings.Replace(paid, `"currency":"CNY"`, `"currency":"USD"`, 1),
-		"an unreadable success_time":  strings.Replace(paid, "2026-11-20T19:59:30+08:00", "2026-11-20 19:59:30", 1),
-		"something that is not JSON":  `<html>ok</html>`,
+		"an unreadable success_time":    strings.Replace(paid, "2026-11-20T19:59:30+08:00", "2026-11-20 19:59:30", 1),
+		"something that is not JSON":    `<html>ok</html>`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			f, _ := startWechat(t, always(wechatAnswer{status: http.StatusOK, body: body}))
@@ -411,7 +411,7 @@ func TestWechatQueryMapsTradeStates(t *testing.T) {
 	}
 }
 
-// 关单:订单不存在、已经关闭都算关好了(Channel.Close 的约定);已付与别的失败报 CallError,调用方关单后总会再查一次。
+// 关单:订单不存在、已经关闭、已付(ORDERPAID,调用方关单后紧接着会查单记账)都算无需重试;其余失败报 CallError。
 func TestWechatCloseTreatsMissingAndClosedOrdersAsDone(t *testing.T) {
 	wantCall := "POST /v3/pay/transactions/out-trade-no/" + testOutTradeNo + `/close {"mchid":"` + wxMchID + `"}`
 	for name, c := range map[string]struct {
@@ -421,7 +421,7 @@ func TestWechatCloseTreatsMissingAndClosedOrdersAsDone(t *testing.T) {
 		"closed now":     {wechatAnswer{status: http.StatusNoContent}, true},
 		"never ordered":  {wechatAnswer{status: http.StatusNotFound, body: `{"code":"ORDER_NOT_EXIST","message":"x"}`}, true},
 		"already closed": {wechatAnswer{status: http.StatusBadRequest, body: `{"code":"ORDER_CLOSED","message":"x"}`}, true},
-		"already paid":   {wechatAnswer{status: http.StatusBadRequest, body: `{"code":"ORDERPAID","message":"x"}`}, false},
+		"already paid":   {wechatAnswer{status: http.StatusBadRequest, body: `{"code":"ORDERPAID","message":"x"}`}, true},
 		"server error":   {wechatAnswer{status: http.StatusInternalServerError, body: `{"code":"SYSTEM_ERROR","message":"x"}`}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -459,19 +459,19 @@ func TestWechatRefundReusesAnExistingRefundAndMapsOutcomes(t *testing.T) {
 		want             RefundResult // State 为 0 表示期望报错
 		callOp           string       // 期望的 CallError.Op;want.State 为 0 而它为空表示期望别的错误
 	}{
-		"already refunded":            {queried: found("SUCCESS"), want: RefundResult{State: RefundSucceeded, RefundID: wxRefundID, At: wxRefundedAt}},
-		"still processing":            {queried: found("PROCESSING"), want: RefundResult{State: RefundProcessing, Detail: "PROCESSING"}},
-		"stuck on the user's account": {queried: found("ABNORMAL"), want: RefundResult{State: RefundFailed, Detail: "ABNORMAL"}},
-		"closed":                      {queried: found("CLOSED"), want: RefundResult{State: RefundFailed, Detail: "CLOSED"}},
-		"accepted":                    {queried: notFound, created: found("PROCESSING"), want: RefundResult{State: RefundProcessing, Detail: "PROCESSING"}},
-		"done at once":                {queried: notFound, created: found("SUCCESS"), want: RefundResult{State: RefundSucceeded, RefundID: wxRefundID, At: wxRefundedAt}},
-		"merchant balance too low":    {queried: notFound, created: rejected(http.StatusForbidden, "NOT_ENOUGH"), want: RefundResult{State: RefundProcessing, Detail: "NOT_ENOUGH"}},
-		"rejected":                    {queried: notFound, created: rejected(http.StatusBadRequest, "INVALID_REQUEST"), want: RefundResult{State: RefundFailed, Detail: "INVALID_REQUEST"}},
-		"system error":                {queried: notFound, created: rejected(http.StatusInternalServerError, "SYSTEM_ERROR"), callOp: "refund"},
-		"rate limited":                {queried: notFound, created: rejected(http.StatusTooManyRequests, "FREQUENCY_LIMITED"), callOp: "refund"},
-		"signature rejected":          {queried: notFound, created: rejected(http.StatusUnauthorized, "SIGN_ERROR"), callOp: "refund"},
-		"refund query fails":          {queried: rejected(http.StatusInternalServerError, "SYSTEM_ERROR"), callOp: "refund_query"},
-		"a refund of another amount":  {queried: wechatAnswer{status: http.StatusOK, body: strings.Replace(wechatRefundJSON("SUCCESS"), `"refund":600`, `"refund":500`, 1)}},
+		"already refunded":             {queried: found("SUCCESS"), want: RefundResult{State: RefundSucceeded, RefundID: wxRefundID, At: wxRefundedAt}},
+		"still processing":             {queried: found("PROCESSING"), want: RefundResult{State: RefundProcessing, Detail: "PROCESSING"}},
+		"stuck on the user's account":  {queried: found("ABNORMAL"), want: RefundResult{State: RefundFailed, Detail: "ABNORMAL"}},
+		"closed":                       {queried: found("CLOSED"), want: RefundResult{State: RefundFailed, Detail: "CLOSED"}},
+		"accepted":                     {queried: notFound, created: found("PROCESSING"), want: RefundResult{State: RefundProcessing, Detail: "PROCESSING"}},
+		"done at once":                 {queried: notFound, created: found("SUCCESS"), want: RefundResult{State: RefundSucceeded, RefundID: wxRefundID, At: wxRefundedAt}},
+		"merchant balance too low":     {queried: notFound, created: rejected(http.StatusForbidden, "NOT_ENOUGH"), want: RefundResult{State: RefundProcessing, Detail: "NOT_ENOUGH"}},
+		"rejected":                     {queried: notFound, created: rejected(http.StatusBadRequest, "INVALID_REQUEST"), want: RefundResult{State: RefundFailed, Detail: "INVALID_REQUEST"}},
+		"system error":                 {queried: notFound, created: rejected(http.StatusInternalServerError, "SYSTEM_ERROR"), callOp: "refund"},
+		"rate limited":                 {queried: notFound, created: rejected(http.StatusTooManyRequests, "FREQUENCY_LIMITED"), callOp: "refund"},
+		"signature rejected":           {queried: notFound, created: rejected(http.StatusUnauthorized, "SIGN_ERROR"), callOp: "refund"},
+		"refund query fails":           {queried: rejected(http.StatusInternalServerError, "SYSTEM_ERROR"), callOp: "refund_query"},
+		"a refund of another amount":   {queried: wechatAnswer{status: http.StatusOK, body: strings.Replace(wechatRefundJSON("SUCCESS"), `"refund":600`, `"refund":500`, 1)}},
 		"an answer for another refund": {queried: wechatAnswer{status: http.StatusOK, body: strings.Replace(wechatRefundJSON("SUCCESS"), wxOutRefundNo, "rf-other", 1)}},
 		"an unknown refund status":     {queried: found("FROZEN")},
 		"a payment that is not CNY":    {queried: notFound, currency: "USD", want: RefundResult{State: RefundFailed, Detail: "CURRENCY"}},
@@ -639,7 +639,7 @@ func TestWechatRefundNotificationBecomesARevocation(t *testing.T) {
 		t.Fatalf("refund that did not succeed: notification = %+v, %v; want nothing to do", note, err)
 	}
 	for name, resource := range map[string]string{
-		"a refund of another merchant":       strings.Replace(refunded, wxMchID, "1900000002", 1),
+		"a refund of another merchant":      strings.Replace(refunded, wxMchID, "1900000002", 1),
 		"a refund without the payment's id": strings.Replace(refunded, wxTransactionID, "", 1),
 	} {
 		request, body := f.notification(t, "REFUND.SUCCESS", resource)

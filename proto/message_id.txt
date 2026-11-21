@@ -431,3 +431,10 @@
 430=SceneAfkPassClientPlayerGetAfkPass
 431=SceneAfkPassClientPlayerBuyAfkPass
 432=SceneAfkPassClientPlayerGmSetAfkPass
+433=ClientPlayerChatReportChat
+434=ClientPlayerChatRetractWorldChat
+435=ClientPlayerChatNotifyWorldChatRetracted
+436=ContentGuardCheckPlatformText
+437=DataServiceUpsertAccountChannelIdentity
+438=DataServiceGetPlayerChannelIdentity
+439=GuildServiceRenameGuild

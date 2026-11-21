@@ -34,6 +34,7 @@ const (
 	TextScene_TEXT_SCENE_CHAT_TEAM          TextScene = 6 // 队伍频道
 	TextScene_TEXT_SCENE_CHAT_PRIVATE       TextScene = 7 // 私聊
 	TextScene_TEXT_SCENE_PRIVATE_LABEL      TextScene = 8 // 只有填写者自己看得到的文字(属性方案名):只走本地词库,不送平台接口
+	TextScene_TEXT_SCENE_TRADE_TITLE        TextScene = 9 // 聚宝斋人民币寄售标题,全服可见
 )
 
 // Enum value maps for TextScene.
@@ -48,6 +49,7 @@ var (
 		6: "TEXT_SCENE_CHAT_TEAM",
 		7: "TEXT_SCENE_CHAT_PRIVATE",
 		8: "TEXT_SCENE_PRIVATE_LABEL",
+		9: "TEXT_SCENE_TRADE_TITLE",
 	}
 	TextScene_value = map[string]int32{
 		"TEXT_SCENE_UNSPECIFIED":        0,
@@ -59,6 +61,7 @@ var (
 		"TEXT_SCENE_CHAT_TEAM":          6,
 		"TEXT_SCENE_CHAT_PRIVATE":       7,
 		"TEXT_SCENE_PRIVATE_LABEL":      8,
+		"TEXT_SCENE_TRADE_TITLE":        9,
 	}
 )
 
@@ -205,10 +208,14 @@ func (TextCategory) EnumDescriptor() ([]byte, []int) {
 }
 
 type CheckTextRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Scene         TextScene              `protobuf:"varint,1,opt,name=scene,proto3,enum=content_guard.TextScene" json:"scene,omitempty"`
-	Text          string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`                          // 原文;超过服务配置的 MaxTextBytes 回 InvalidArgument
-	PlayerId      uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 填写者。本地词库不用它;平台接口按它查渠道身份。没有填写者(系统文本)填 0
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Scene    TextScene              `protobuf:"varint,1,opt,name=scene,proto3,enum=content_guard.TextScene" json:"scene,omitempty"`
+	Text     string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`                          // 原文;超过服务配置的 MaxTextBytes 回 InvalidArgument
+	PlayerId uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 填写者。本地词库不用它;平台接口按它查渠道身份。没有填写者(系统文本)填 0
+	Account  string                 `protobuf:"bytes,4,opt,name=account,proto3" json:"account,omitempty"`                    // 可选:填写者的渠道账号(如 wx_<openid> / dy_<openid>),调用方已有时直传以省一次目录回查
+	// async_platform: 为真时(如世界频道),本地词库通过后平台接口只在短超时内等待;
+	// 超时未返回则先放行并置 pending_platform_review=true,调用方在后台调 CheckPlatformText 复检,违规再撤回。
+	AsyncPlatform bool `protobuf:"varint,5,opt,name=async_platform,json=asyncPlatform,proto3" json:"async_platform,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,14 +271,29 @@ func (x *CheckTextRequest) GetPlayerId() uint64 {
 	return 0
 }
 
+func (x *CheckTextRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *CheckTextRequest) GetAsyncPlatform() bool {
+	if x != nil {
+		return x.AsyncPlatform
+	}
+	return false
+}
+
 type CheckTextResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Verdict        TextVerdict            `protobuf:"varint,1,opt,name=verdict,proto3,enum=content_guard.TextVerdict" json:"verdict,omitempty"`
-	MaskedText     string                 `protobuf:"bytes,2,opt,name=masked_text,json=maskedText,proto3" json:"masked_text,omitempty"`              // 仅 MASKED 时有值:原文里命中的那一段换成 *,一个字符一个 *,其余原样
-	Category       TextCategory           `protobuf:"varint,3,opt,name=category,proto3,enum=content_guard.TextCategory" json:"category,omitempty"`   // 决定这次结局的类别;PASS 时为 0
-	LexiconVersion uint64                 `protobuf:"varint,4,opt,name=lexicon_version,json=lexiconVersion,proto3" json:"lexicon_version,omitempty"` // 判定用的词库版本,排障用;0 = 只有内置词
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Verdict               TextVerdict            `protobuf:"varint,1,opt,name=verdict,proto3,enum=content_guard.TextVerdict" json:"verdict,omitempty"`
+	MaskedText            string                 `protobuf:"bytes,2,opt,name=masked_text,json=maskedText,proto3" json:"masked_text,omitempty"`              // 仅 MASKED 时有值:原文里命中的那一段换成 *,一个字符一个 *,其余原样
+	Category              TextCategory           `protobuf:"varint,3,opt,name=category,proto3,enum=content_guard.TextCategory" json:"category,omitempty"`   // 决定这次结局的类别;PASS 时为 0
+	LexiconVersion        uint64                 `protobuf:"varint,4,opt,name=lexicon_version,json=lexiconVersion,proto3" json:"lexicon_version,omitempty"` // 判定用的词库版本,排障用;0 = 只有内置词
+	PendingPlatformReview bool                   `protobuf:"varint,5,opt,name=pending_platform_review,json=pendingPlatformReview,proto3" json:"pending_platform_review,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *CheckTextResponse) Reset() {
@@ -332,21 +354,31 @@ func (x *CheckTextResponse) GetLexiconVersion() uint64 {
 	return 0
 }
 
+func (x *CheckTextResponse) GetPendingPlatformReview() bool {
+	if x != nil {
+		return x.PendingPlatformReview
+	}
+	return false
+}
+
 var File_proto_content_guard_content_guard_proto protoreflect.FileDescriptor
 
 const file_proto_content_guard_content_guard_proto_rawDesc = "" +
 	"\n" +
-	"'proto/content_guard/content_guard.proto\x12\rcontent_guard\"s\n" +
+	"'proto/content_guard/content_guard.proto\x12\rcontent_guard\"\xb4\x01\n" +
 	"\x10CheckTextRequest\x12.\n" +
 	"\x05scene\x18\x01 \x01(\x0e2\x18.content_guard.TextSceneR\x05scene\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x1b\n" +
-	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\"\xcc\x01\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\x12\x18\n" +
+	"\aaccount\x18\x04 \x01(\tR\aaccount\x12%\n" +
+	"\x0easync_platform\x18\x05 \x01(\bR\rasyncPlatform\"\x84\x02\n" +
 	"\x11CheckTextResponse\x124\n" +
 	"\averdict\x18\x01 \x01(\x0e2\x1a.content_guard.TextVerdictR\averdict\x12\x1f\n" +
 	"\vmasked_text\x18\x02 \x01(\tR\n" +
 	"maskedText\x127\n" +
 	"\bcategory\x18\x03 \x01(\x0e2\x1b.content_guard.TextCategoryR\bcategory\x12'\n" +
-	"\x0flexicon_version\x18\x04 \x01(\x04R\x0elexiconVersion*\x88\x02\n" +
+	"\x0flexicon_version\x18\x04 \x01(\x04R\x0elexiconVersion\x126\n" +
+	"\x17pending_platform_review\x18\x05 \x01(\bR\x15pendingPlatformReview*\xa4\x02\n" +
 	"\tTextScene\x12\x1a\n" +
 	"\x16TEXT_SCENE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14TEXT_SCENE_ROLE_NAME\x10\x01\x12\x19\n" +
@@ -356,7 +388,8 @@ const file_proto_content_guard_content_guard_proto_rawDesc = "" +
 	"\x15TEXT_SCENE_CHAT_WORLD\x10\x05\x12\x18\n" +
 	"\x14TEXT_SCENE_CHAT_TEAM\x10\x06\x12\x1b\n" +
 	"\x17TEXT_SCENE_CHAT_PRIVATE\x10\a\x12\x1c\n" +
-	"\x18TEXT_SCENE_PRIVATE_LABEL\x10\b*t\n" +
+	"\x18TEXT_SCENE_PRIVATE_LABEL\x10\b\x12\x1a\n" +
+	"\x16TEXT_SCENE_TRADE_TITLE\x10\t*t\n" +
 	"\vTextVerdict\x12\x1c\n" +
 	"\x18TEXT_VERDICT_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11TEXT_VERDICT_PASS\x10\x01\x12\x17\n" +
@@ -369,9 +402,10 @@ const file_proto_content_guard_content_guard_proto_rawDesc = "" +
 	"\x13TEXT_CATEGORY_ABUSE\x10\x03\x12\x14\n" +
 	"\x10TEXT_CATEGORY_AD\x10\x04\x12\x1f\n" +
 	"\x1bTEXT_CATEGORY_IMPERSONATION\x10\x05\x12\x17\n" +
-	"\x13TEXT_CATEGORY_OTHER\x10\x062`\n" +
+	"\x13TEXT_CATEGORY_OTHER\x10\x062\xba\x01\n" +
 	"\fContentGuard\x12P\n" +
-	"\tCheckText\x12\x1f.content_guard.CheckTextRequest\x1a .content_guard.CheckTextResponse\"\x00B\x18Z\x13proto/content_guard\x80\x01\x00b\x06proto3"
+	"\tCheckText\x12\x1f.content_guard.CheckTextRequest\x1a .content_guard.CheckTextResponse\"\x00\x12X\n" +
+	"\x11CheckPlatformText\x12\x1f.content_guard.CheckTextRequest\x1a .content_guard.CheckTextResponse\"\x00B\x18Z\x13proto/content_guard\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_content_guard_content_guard_proto_rawDescOnce sync.Once
@@ -399,9 +433,11 @@ var file_proto_content_guard_content_guard_proto_depIdxs = []int32{
 	1, // 1: content_guard.CheckTextResponse.verdict:type_name -> content_guard.TextVerdict
 	2, // 2: content_guard.CheckTextResponse.category:type_name -> content_guard.TextCategory
 	3, // 3: content_guard.ContentGuard.CheckText:input_type -> content_guard.CheckTextRequest
-	4, // 4: content_guard.ContentGuard.CheckText:output_type -> content_guard.CheckTextResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
+	3, // 4: content_guard.ContentGuard.CheckPlatformText:input_type -> content_guard.CheckTextRequest
+	4, // 5: content_guard.ContentGuard.CheckText:output_type -> content_guard.CheckTextResponse
+	4, // 6: content_guard.ContentGuard.CheckPlatformText:output_type -> content_guard.CheckTextResponse
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name

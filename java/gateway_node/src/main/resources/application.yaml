@@ -89,7 +89,6 @@ gate:
     queue-retry-jitter-ms: 2000
     # 区桶空时 IP 桶扣多少(千分之一令牌,0~1000):100 = 0.1 个。0 = 全额退还(不守提示的单个 IP 可以无限速刷区桶)。
     queue-retry-ip-cost-milli: 100
-    queue-timeout-ms: 300000
     # Per-zone overrides example (commented):
     # zone-overrides:
     #   1: { rps: 2000, burst: 5000 }
@@ -153,11 +152,6 @@ gateway:
     - 1
     - 2
     - 3
-
-# CDN
-cdn:
-  base-url: "https://cdn.example.com"
-  sign-ttl-seconds: 3600
 
 # 客户端热更检查(POST /api/hotfix-check)。按客户端上报的 platform 配发布线,没配的平台回「不用更新」。
 # 配错(版本号不是数字段、min-version 高于 latest-version、缺 patch-url)拒绝启动。低于 min-version 的客户端强制更新。

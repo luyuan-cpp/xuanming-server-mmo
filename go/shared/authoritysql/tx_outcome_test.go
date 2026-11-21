@@ -2,6 +2,7 @@ package authoritysql
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -328,4 +329,65 @@ func TestIsRetryableTxError(t *testing.T) {
 			t.Errorf("%s: IsRetryableTxError(%v) = %v, want %v", tc.name, tc.err, got, tc.want)
 		}
 	}
+}
+
+// Catalog.transaction 在 guardedConn 已经就地回滚(1205/1213/9007 或提交前传输中止)后再次调用 tx.Rollback() 时，
+// 不得把 tx.failure 误升成 ErrOutcomeUnknown，以便冷启动并发注册可安全整事务重试；执行过非 DML 后仍须保留 ErrOutcomeUnknown。
+func TestCatalogTransactionPreservesRollbackDeterminacy(t *testing.T) {
+	openCatalog := func(w *writerFakeWire) (*Catalog, func()) {
+		t.Helper()
+		inner := &writerFakeConnector{wire: w}
+		connector, err := newGuardedConnector(inner, &writerFakeGate{wire: w}, writerFakeSession{wire: w}, mysqlStatementPolicy{}, Schema("schema_test@%"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		db := sql.OpenDB(connector)
+		// writerFakeRows 對 SELECT CURRENT_USER() 回 "1"
+		return &Catalog{db: db, config: CatalogConfig{Principal: "1"}}, func() { _ = db.Close() }
+	}
+
+	for _, tc := range []struct {
+		name      string
+		execErr   error
+		wantRetry bool
+	}{
+		{"lock wait timeout 1205", &mysql.MySQLError{Number: mysqlErrLockWaitTimeout, Message: "Lock wait timeout exceeded"}, true},
+		{"deadlock 1213", &mysql.MySQLError{Number: mysqlErrDeadlock, Message: "Deadlock found"}, true},
+		{"tidb write conflict 9007", &mysql.MySQLError{Number: tidbErrWriteConflict, Message: "Write conflict"}, true},
+		{"transport abort before commit", transportFailure(), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &writerFakeWire{}
+			cat, cleanup := openCatalog(w)
+			defer cleanup()
+			err := cat.transaction(context.Background(), func(tx *sql.Tx) error {
+				w.execErr = tc.execErr
+				_, execErr := tx.ExecContext(context.Background(), "UPDATE t SET n=n+1")
+				return execErr
+			})
+			if errors.Is(err, ErrOutcomeUnknown) {
+				t.Fatalf("deterministic rollback failure converted to ErrOutcomeUnknown: %v", err)
+			}
+			if got := IsRetryableTxError(err); got != tc.wantRetry {
+				t.Fatalf("IsRetryableTxError(%v) = %v, want %v", err, got, tc.wantRetry)
+			}
+		})
+	}
+
+	t.Run("non-DML followed by transport abort stays ErrOutcomeUnknown", func(t *testing.T) {
+		w := &writerFakeWire{}
+		cat, cleanup := openCatalog(w)
+		defer cleanup()
+		err := cat.transaction(context.Background(), func(tx *sql.Tx) error {
+			if _, alterErr := tx.ExecContext(context.Background(), "ALTER TABLE t ADD COLUMN m INT"); alterErr != nil {
+				return alterErr
+			}
+			w.execErr = transportFailure()
+			_, execErr := tx.ExecContext(context.Background(), "UPDATE t SET n=n+1")
+			return execErr
+		})
+		if !errors.Is(err, ErrOutcomeUnknown) || IsRetryableTxError(err) {
+			t.Fatalf("transport failure after non-DML = %v, want ErrOutcomeUnknown and non-retryable", err)
+		}
+	})
 }

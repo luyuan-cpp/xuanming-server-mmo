@@ -258,12 +258,12 @@ func (l *AssignGateLogic) reconnectingPlayer(account string, zoneID uint32) (uin
 	if err != nil {
 		return 0, false
 	}
-	liveGate := func(playerID uint64) string {
+	liveSession := func(playerID uint64) (string, uint32) {
 		session, err := sessionmanager.GetSession(l.ctx, l.svcCtx.PlayerLocatorClient, playerID)
 		if err != nil || session == nil {
-			return ""
+			return "", 0
 		}
-		return session.GateID
+		return session.GateID, session.GateZoneID
 	}
 	zoneGates := func() map[string]struct{} {
 		candidates, err := l.svcCtx.QueueCapacityProvider().CandidatesForZone(l.ctx, zoneID)
@@ -276,27 +276,23 @@ func (l *AssignGateLogic) reconnectingPlayer(account string, zoneID uint32) (uin
 		}
 		return ids
 	}
-	return findReconnectingPlayer(roles.GetPlayers(), zoneID, liveGate, zoneGates)
+	return findReconnectingPlayer(roles.GetPlayers(), zoneID, liveSession, zoneGates)
 }
 
-// findReconnectingPlayer 在账号的角色里找一个已经占着本区一条 gate 连接的:它有在线会话(liveGate 返回会话所在 gate 的
-// 节点号,没有会话返回空串),并且这个会话不在别的区。
+// findReconnectingPlayer 在账号的角色里找一个已经占着本区一条 gate 连接的:它有在线会话(liveSession 返回
+// 会话所在 gate 节点号与 gate_zone_id,没有会话返回空串),并且这个会话就在本区。
 //
 // 账号的每个角色都要看(2026-11-20 起;此前只看第一个角色,多角色账号用别的角色在线时重连会被排队)。
 //
-// 会话里没有区号,login 也只看得见本区的 gate,所以「会话在不在本区」这样判:
-//   - 角色的建角区就是本区:算本区。它的 gate 可能已经掉线、不在本区现在的 gate 列表里,这正是最需要免排队的重连。
-//   - 角色的建角区不是本区(别的区的角色,或合服并进来的角色):只有它的会话正连在本区现有的 gate 上才算本区。
-//     否则一个账号把角色挂在空闲的区里在线,就能拿它免掉爆满的区的排队。
-//
-// 残余:合服并进来的角色,原来连着的 gate 又恰好掉线(不在本区现在的列表里)时,这一条判不出它在本区,重连要排队。
-// 要判准得让会话记下 gate 所在的区,或让 login 读合服映射;见 docs/design/login-queue-2026-05.md §14。
-//
-// zoneGates 只在遇到建角区不是本区的在线角色时才调用(一次 gate 目录读),返回本区现有 gate 的节点号集合。
+// 「会话在不在本区」分两档判定:
+//   - 会话带 gate_zone_id(非 0):以 gate_zone_id 为权威,等于本区即免排队、不等即不免,不读 gate 列表。
+//     合服并入角色即使原 gate 掉线也能免排队;本区角色跨区到别的区在线也不会误免本区排队。
+//   - 旧版会话(gate_zone_id == 0):兼容兜底 —— 建角区是本区直接算;建角区不是本区时,仅当其会话正连在
+//     本区现有 gate 上才算(惰性读一次 zoneGates)。
 func findReconnectingPlayer(
 	roles []*base.AccountSimplePlayer,
 	zoneID uint32,
-	liveGate func(playerID uint64) string,
+	liveSession func(playerID uint64) (gateID string, gateZoneID uint32),
 	zoneGates func() map[string]struct{},
 ) (uint64, bool) {
 	var gates map[string]struct{}
@@ -306,8 +302,14 @@ func findReconnectingPlayer(
 		if playerID == 0 {
 			continue
 		}
-		gateID := liveGate(playerID)
+		gateID, gateZoneID := liveSession(playerID)
 		if gateID == "" {
+			continue
+		}
+		if gateZoneID != 0 {
+			if gateZoneID == zoneID {
+				return playerID, true
+			}
 			continue
 		}
 		if role.GetZoneId() == zoneID {

@@ -62,6 +62,10 @@ class PaymentRevisionStoreTest {
             assertEquals(409, assertThrows(CommerceException.class, () -> delivery.reversalReceipt(
                 new DeliveryApi.ReversalReceipt(order.orderId(), 1, "123", "MANUAL", PROOF_B))).status(), "同一修订号换结论");
             assertEquals("REVERSED", state(f, order));
+            assertEquals(1, f.store.get("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")).paymentRevision(), "订单视图返回最新付款修订号");
+            assertEquals(1, f.store.paymentOrderView(order.orderId()).paymentRevision());
+            // 扣回回执重放不比较 proof(设计 §8.2.5)。
+            assertDoesNotThrow(() -> delivery.reversalReceipt(new DeliveryApi.ReversalReceipt(order.orderId(), 1, "123", "REVERSED", PROOF_A)));
             assertTrue(delivery.reversals(new DeliveryApi.Poll(20, "")).entries().isEmpty());
             assertEquals(new CommerceApi.RevisionOutcome(1, "REVOKED", "REVERSED"),
                 store.record(new CommerceApi.Revision(order.orderId(), "test", "revoke-pay-001", 1, "REVOKED")));
@@ -193,6 +197,43 @@ class PaymentRevisionStoreTest {
             f.jdbc.update("UPDATE commerce_sku_grant SET currency_amount=? WHERE sku_id=1", DeliveryStore.MAX_CURRENCY_GRANT);
             assertEquals(409, assertThrows(CommerceException.class, () -> f.store.create("1",
                 new CommerceApi.CreateOrder("currency-order-002", 1, 2, "测试账号", "1"))).status(), "乘上数量越过单笔上限");
+        }
+    }
+
+    @Test void 寄售付款撤销_未交付阻断发货_已交付冻结卖家未提现收入() {
+        try (var f = new CommerceFixture()) {
+            var rules = new RmbConsignmentProperties();
+            rules.setNoticeMs(0); rules.setSaleMs(60_000); rules.setCoolingMs(10_000);
+            var clock = Clock.fixed(Instant.ofEpochMilli(1_760_000_000_000L), ZoneOffset.UTC);
+            var rmb = new RmbConsignmentStore(f.jdbc, f.manager, clock, rules, (RmbConsignmentStore.PayoutEvidenceVerifier) null);
+            var orders = new CommerceStore(f.jdbc, f.manager, clock, f.props, rmb);
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props, rmb, clock);
+            var rev = revisions(f);
+
+            // 场景 1: 寄售单尚未交付时付款被撤销 -> 交付待办作废,trade 拉不到也回执不了,订单转 MANUAL。
+            rmb.register(new RmbConsignmentApi.Escrow("101", "1001", "卖家甲", 1, "ITEMS", null, "90001", PROOF_A, 1000, "托管神兵"));
+            var o1 = orders.createConsignment(new RmbConsignmentApi.Buy("101", "2001", "买家乙", "cons-rev-buy-001", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o1.orderId(), "test", "cons-rev-pay-001", 1000, "CNY"));
+            assertEquals(1, rmb.deliveries(new DeliveryApi.Poll(20, "")).entries().size());
+            var out1 = rev.record(new CommerceApi.Revision(o1.orderId(), "test", "cons-rev-pay-001", 1, "REVOKED"));
+            assertEquals(new CommerceApi.RevisionOutcome(1, "REVOKED", "MANUAL"), out1);
+            assertTrue(rmb.deliveries(new DeliveryApi.Poll(20, "")).entries().isEmpty(), "已撤销寄售单不得继续派发给 trade");
+            assertEquals("REVOKED", f.jdbc.queryForObject("SELECT status FROM commerce_delivery_intent WHERE order_sn=?", String.class, o1.orderId()));
+            assertEquals(409, assertThrows(CommerceException.class, () -> delivery.receipt(
+                new DeliveryApi.Receipt(o1.orderId(), "5001", "DELIVERED", PROOF_B))).status(), "在途交付回执必须被拒绝");
+
+            // 场景 2: 寄售单已交付后付款被撤销 -> 冻结冷却期内卖家未提现收入(available_ms=Long.MAX_VALUE),阻止提现。
+            rmb.register(new RmbConsignmentApi.Escrow("102", "1001", "卖家甲", 1, "ITEMS", null, "90002", PROOF_B, 2000, "托管法宝"));
+            var o2 = orders.createConsignment(new RmbConsignmentApi.Buy("102", "2002", "买家丙", "cons-rev-buy-002", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o2.orderId(), "test", "cons-rev-pay-002", 2000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(o2.orderId(), "5002", "DELIVERED", PROOF_B));
+            var out2 = rev.record(new CommerceApi.Revision(o2.orderId(), "test", "cons-rev-pay-002", 1, "REVOKED"));
+            assertEquals(new CommerceApi.RevisionOutcome(1, "REVOKED", "MANUAL"), out2);
+            assertEquals(Long.MAX_VALUE, f.jdbc.queryForObject("SELECT available_ms FROM commerce_seller_income WHERE order_sn=?", Long.class, o2.orderId()));
+            var afterCooling = new RmbConsignmentStore(f.jdbc, f.manager,
+                Clock.fixed(Instant.ofEpochMilli(1_760_000_050_000L), ZoneOffset.UTC), rules, (RmbConsignmentStore.PayoutEvidenceVerifier) null);
+            assertEquals(409, assertThrows(CommerceException.class, () -> afterCooling.withdraw(
+                new RmbConsignmentApi.Withdraw("卖家甲", "cons-rev-wd-001", 100))).status(), "被冻结的争议收入冷却期后也不可提现");
         }
     }
 }

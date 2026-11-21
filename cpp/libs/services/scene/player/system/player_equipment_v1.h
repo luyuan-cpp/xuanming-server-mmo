@@ -28,4 +28,6 @@ public:
     using PersistFn = bool (*)(entt::entity);
     // 单测以同一存盘接缝安装确定性替身，nullptr恢复正式存盘。
     static void SetPersistForTest(PersistFn fn);
+    // 单测原地 const_cast 修改内存表行时显式失效规则缓存；正式热更由快照版本自动失效。
+    static void InvalidateRulesCacheForTest();
 };

@@ -208,6 +208,188 @@ void SendClientPlayerChatPullChatHistoryErased(entt::registry& registry, entt::e
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::chatpb::PullChatHistoryResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region ClientPlayerChatReportChat
+namespace {
+void QueueLocalClientPlayerChatReportChatFailure(GrpcDone<::chatpb::ReportChatResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatReportChatGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerChatReportChatCall(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::ReportChatRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::chatpb::ReportChatResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.ReportChat requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerChatReportChatGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerChatReportChatFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerChatReportChatFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::chatpb::ReportChatResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerChat.ReportChat response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerChatReportChat(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::ReportChatRequest& request,
+                                            GrpcDone<::chatpb::ReportChatResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerChatReportChatCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerChatReportChatErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.ReportChat requires a done callback";
+    }
+    if (message.GetDescriptor() != ::chatpb::ReportChatRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerChat.ReportChat: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatReportChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::chatpb::ReportChatRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerChat.ReportChat: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatReportChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerChatReportChatCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::chatpb::ReportChatResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerChatRetractWorldChat
+namespace {
+void QueueLocalClientPlayerChatRetractWorldChatFailure(GrpcDone<::chatpb::RetractWorldChatResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatRetractWorldChatGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerChatRetractWorldChatCall(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::RetractWorldChatRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::chatpb::RetractWorldChatResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.RetractWorldChat requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerChatRetractWorldChatGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerChatRetractWorldChatFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerChatRetractWorldChatFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::chatpb::RetractWorldChatResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerChat.RetractWorldChat response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerChatRetractWorldChat(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::RetractWorldChatRequest& request,
+                                            GrpcDone<::chatpb::RetractWorldChatResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerChatRetractWorldChatCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerChatRetractWorldChatErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.RetractWorldChat requires a done callback";
+    }
+    if (message.GetDescriptor() != ::chatpb::RetractWorldChatRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerChat.RetractWorldChat: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatRetractWorldChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::chatpb::RetractWorldChatRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerChat.RetractWorldChat: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatRetractWorldChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerChatRetractWorldChatCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::chatpb::RetractWorldChatResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region ClientPlayerChatNotifyWorldChat
 namespace {
 void QueueLocalClientPlayerChatNotifyWorldChatFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
@@ -296,6 +478,97 @@ void SendClientPlayerChatNotifyWorldChatErased(entt::registry& registry, entt::e
         return;
     }
     StartClientPlayerChatNotifyWorldChatCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerChatNotifyWorldChatRetracted
+namespace {
+void QueueLocalClientPlayerChatNotifyWorldChatRetractedFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatRetractedGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerChatNotifyWorldChatRetractedCall(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::ChatRetractedNotify& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::Empty> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.NotifyWorldChatRetracted requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerChatNotifyWorldChatRetractedGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerChatNotifyWorldChatRetractedFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerChatNotifyWorldChatRetractedFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::Empty reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerChat.NotifyWorldChatRetracted response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerChatNotifyWorldChatRetracted(entt::registry& registry, entt::entity nodeEntity, const ::chatpb::ChatRetractedNotify& request,
+                                            GrpcDone<::Empty> done, const GrpcCallOptions& options) {
+    StartClientPlayerChatNotifyWorldChatRetractedCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerChatNotifyWorldChatRetractedErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerChat.NotifyWorldChatRetracted requires a done callback";
+    }
+    if (message.GetDescriptor() != ::chatpb::ChatRetractedNotify::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerChat.NotifyWorldChatRetracted: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatRetractedGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::chatpb::ChatRetractedNotify*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerChat.NotifyWorldChatRetracted: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatRetractedGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerChatNotifyWorldChatRetractedCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
 }
 #pragma endregion

@@ -53,9 +53,50 @@ policy_hash BINARY(32) NOT NULL,
 PRIMARY KEY(id)
 ) ENGINE=InnoDB`
 
+var worldRetractionDDL = `CREATE TABLE IF NOT EXISTS chat_world_retraction (
+sender_player_id BIGINT UNSIGNED NOT NULL,
+accepted_ms BIGINT UNSIGNED NOT NULL,
+retracted_ms BIGINT UNSIGNED NOT NULL,
+reason VARBINARY(128) NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(sender_player_id,accepted_ms),
+KEY idx_chat_retract_ms(accepted_ms,sender_player_id)
+) ENGINE=InnoDB ` + retentionAttributes
+
+var reportDDL = `CREATE TABLE IF NOT EXISTS chat_report (
+reporter_player_id BIGINT UNSIGNED NOT NULL,
+channel TINYINT UNSIGNED NOT NULL,
+target_sender_player_id BIGINT UNSIGNED NOT NULL,
+send_time_ms BIGINT UNSIGNED NOT NULL,
+reason INT UNSIGNED NOT NULL,
+detail VARBINARY(255) NOT NULL,
+reported_ms BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(reporter_player_id,channel,target_sender_player_id,send_time_ms),
+KEY idx_chat_report_target(target_sender_player_id,send_time_ms)
+) ENGINE=InnoDB ` + retentionAttributes
+
+var repeatEventDDL = `CREATE TABLE IF NOT EXISTS chat_repeat_event (
+content_hash BINARY(32) NOT NULL,
+accepted_ms BIGINT UNSIGNED NOT NULL,
+sender_player_id BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(content_hash,accepted_ms,sender_player_id)
+) ENGINE=InnoDB ` + retentionAttributes
+
+var privateDailyTargetDDL = `CREATE TABLE IF NOT EXISTS chat_private_daily_target (
+sender_player_id BIGINT UNSIGNED NOT NULL,
+day_ymd INT UNSIGNED NOT NULL,
+target_player_id BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(sender_player_id,day_ymd,target_player_id)
+) ENGINE=InnoDB ` + retentionAttributes
+
+const chatTablesInClause = "('chat_send_authority','chat_policy','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target')"
+
 // Migrate只供显式-migrate入口；普通启动不修表，不把历史结构不明降级成Redis。
 func Migrate(ctx context.Context, db *sql.DB) error {
-	for _, ddl := range []string{sendDDL, policyDDL} {
+	for _, ddl := range []string{sendDDL, policyDDL, worldRetractionDDL, reportDDL, repeatEventDDL, privateDailyTargetDDL} {
 		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			return err
 		}
@@ -78,6 +119,10 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 	for _, query := range []string{
 		"SELECT player_id,request_id,owner_account,owner_revision,request_digest,request_payload,message_payload,stream_key,state,accepted_ms,result_tip,accepted_at FROM chat_send_authority LIMIT 0",
 		"SELECT id,policy_hash FROM chat_policy LIMIT 0",
+		"SELECT sender_player_id,accepted_ms,retracted_ms,reason,accepted_at FROM chat_world_retraction LIMIT 0",
+		"SELECT reporter_player_id,channel,target_sender_player_id,send_time_ms,reason,detail,reported_ms,accepted_at FROM chat_report LIMIT 0",
+		"SELECT content_hash,accepted_ms,sender_player_id,accepted_at FROM chat_repeat_event LIMIT 0",
+		"SELECT sender_player_id,day_ymd,target_player_id,accepted_at FROM chat_private_daily_target LIMIT 0",
 	} {
 		rows, err := db.QueryContext(ctx, query)
 		if err != nil {
@@ -87,7 +132,7 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
-	rows, err := db.QueryContext(ctx, "SELECT table_name,index_name,column_name,non_unique,sub_part FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name IN ('chat_send_authority','chat_policy') ORDER BY table_name,index_name,seq_in_index")
+	rows, err := db.QueryContext(ctx, "SELECT table_name,index_name,column_name,non_unique,sub_part FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name IN "+chatTablesInClause+" ORDER BY table_name,index_name,seq_in_index")
 	if err != nil {
 		return err
 	}
@@ -109,24 +154,30 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	for name, expected := range map[string]string{
-		"chat_send_authority/PRIMARY":         "player_id,request_id",
-		"chat_send_authority/idx_chat_stream": "stream_key,state,accepted_ms,player_id,request_id",
-		"chat_send_authority/idx_chat_rate":   "player_id,state,accepted_ms",
-		"chat_policy/PRIMARY":                 "id",
+		"chat_send_authority/PRIMARY":               "player_id,request_id",
+		"chat_send_authority/idx_chat_stream":       "stream_key,state,accepted_ms,player_id,request_id",
+		"chat_send_authority/idx_chat_rate":         "player_id,state,accepted_ms",
+		"chat_policy/PRIMARY":                       "id",
+		"chat_world_retraction/PRIMARY":             "sender_player_id,accepted_ms",
+		"chat_world_retraction/idx_chat_retract_ms": "accepted_ms,sender_player_id",
+		"chat_report/PRIMARY":                       "reporter_player_id,channel,target_sender_player_id,send_time_ms",
+		"chat_report/idx_chat_report_target":        "target_sender_player_id,send_time_ms",
+		"chat_repeat_event/PRIMARY":                 "content_hash,accepted_ms,sender_player_id",
+		"chat_private_daily_target/PRIMARY":         "sender_player_id,day_ymd,target_player_id",
 	} {
 		if strings.Join(indexes[name], ",") != expected {
 			return errors.New("聊天权威SQL必要索引不符，须显式迁移")
 		}
 	}
 	var nullable int
-	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('chat_send_authority','chat_policy') AND is_nullable<>'NO'").Scan(&nullable); err != nil {
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN "+chatTablesInClause+" AND is_nullable<>'NO'").Scan(&nullable); err != nil {
 		return err
 	}
 	if nullable != 0 {
 		return errors.New("聊天权威SQL列不可为NULL")
 	}
 	// PK必须按原字节区分大小写；修订与时间必须保全uint64，不能等首次写入才发现窄化。
-	columns, err := db.QueryContext(ctx, "SELECT table_name,column_name,data_type,column_type,character_maximum_length FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN ('chat_send_authority','chat_policy')")
+	columns, err := db.QueryContext(ctx, "SELECT table_name,column_name,data_type,column_type,character_maximum_length FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name IN "+chatTablesInClause)
 	if err != nil {
 		return err
 	}
@@ -154,7 +205,12 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	for name, expected := range map[string]string{
-		"chat_send_authority/player_id": "bigint unsigned", "chat_send_authority/request_id": "varbinary/64", "chat_send_authority/owner_account": "varbinary/191", "chat_send_authority/owner_revision": "bigint unsigned", "chat_send_authority/request_digest": "binary/32", "chat_send_authority/request_payload": "mediumblob", "chat_send_authority/message_payload": "mediumblob", "chat_send_authority/stream_key": "varbinary/191", "chat_send_authority/state": "tinyint unsigned", "chat_send_authority/accepted_ms": "bigint unsigned", "chat_send_authority/result_tip": "int unsigned", "chat_send_authority/accepted_at": "datetime(3)", "chat_policy/id": "tinyint unsigned", "chat_policy/policy_hash": "binary/32",
+		"chat_send_authority/player_id": "bigint unsigned", "chat_send_authority/request_id": "varbinary/64", "chat_send_authority/owner_account": "varbinary/191", "chat_send_authority/owner_revision": "bigint unsigned", "chat_send_authority/request_digest": "binary/32", "chat_send_authority/request_payload": "mediumblob", "chat_send_authority/message_payload": "mediumblob", "chat_send_authority/stream_key": "varbinary/191", "chat_send_authority/state": "tinyint unsigned", "chat_send_authority/accepted_ms": "bigint unsigned", "chat_send_authority/result_tip": "int unsigned", "chat_send_authority/accepted_at": "datetime(3)",
+		"chat_policy/id": "tinyint unsigned", "chat_policy/policy_hash": "binary/32",
+		"chat_world_retraction/sender_player_id": "bigint unsigned", "chat_world_retraction/accepted_ms": "bigint unsigned", "chat_world_retraction/retracted_ms": "bigint unsigned", "chat_world_retraction/reason": "varbinary/128", "chat_world_retraction/accepted_at": "datetime(3)",
+		"chat_report/reporter_player_id": "bigint unsigned", "chat_report/channel": "tinyint unsigned", "chat_report/target_sender_player_id": "bigint unsigned", "chat_report/send_time_ms": "bigint unsigned", "chat_report/reason": "int unsigned", "chat_report/detail": "varbinary/255", "chat_report/reported_ms": "bigint unsigned", "chat_report/accepted_at": "datetime(3)",
+		"chat_repeat_event/content_hash": "binary/32", "chat_repeat_event/accepted_ms": "bigint unsigned", "chat_repeat_event/sender_player_id": "bigint unsigned", "chat_repeat_event/accepted_at": "datetime(3)",
+		"chat_private_daily_target/sender_player_id": "bigint unsigned", "chat_private_daily_target/day_ymd": "int unsigned", "chat_private_daily_target/target_player_id": "bigint unsigned", "chat_private_daily_target/accepted_at": "datetime(3)",
 	} {
 		if shapes[name] != expected {
 			return errors.New("聊天权威SQL字段类型不符，须显式审阅迁移")

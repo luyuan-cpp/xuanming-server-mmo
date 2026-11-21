@@ -13,13 +13,14 @@ import (
 	"time"
 
 	dspb "proto/data_service"
+	"shared/dsclient"
 	"shared/etcdwatch"
 	"shared/gatepick"
-	"shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
 	"shared/snowflake"
 	"shared/snowflakealloc"
+	"shared/tablebundle"
 
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -78,6 +79,8 @@ type ServiceContext struct {
 	stopOnce            sync.Once
 	// kafkaDeliveryFailures 统计 writer Completion 给出的终态失败。
 	kafkaDeliveryFailures atomic.Uint64
+	// TableBundle 负责 scene_manager 配表启动校验与运行期两阶段热更。
+	TableBundle *tablebundle.Manager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -110,7 +113,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("failed to create etcd client: " + err.Error())
 	}
 
-	table.LoadTables(c.TableDir, c.UseBinary)
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:   "scene_manager",
+		ImageTableDir: c.TableDir,
+		UseBinary:     c.UseBinary,
+	})
+	if err != nil {
+		panic("failed to load config tables: " + err.Error())
+	}
 
 	// 通过 shared/snowflakealloc 申领一个独立于 NodeInfo.NodeId 的 Snowflake 槽位。
 	// 关键点:
@@ -167,7 +177,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 裸 snowflake.NewNode 只有"不在构造秒发号"的点排除,顶不住时钟偏斜接管。
 		SceneIDGen:  hd.NewNode(),
 		snowflakeHd: hd,
+		TableBundle: tableMgr,
 	}
+	tableMgr.Start()
 	sc.ownerEpochMintRedis = mustStartOwnerEpochMinter(c)
 	sc.OwnerEpochMint = sc.ownerEpochMintRedis
 	kafkaWriteTimeout := c.EffectiveKafkaWriteTimeout()
@@ -251,7 +263,7 @@ func newHomeZoneClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
 			"the gate zone for every player (only acceptable for single-zone dev)")
 		return nil
 	}
-	conn := zrpc.MustNewClient(c)
+	conn := zrpc.MustNewClient(dsclient.Conf(c))
 	return dspb.NewDataServiceClient(conn.Conn())
 }
 
@@ -292,6 +304,7 @@ func (sc *ServiceContext) SnowflakeLost() <-chan struct{} {
 // 正常 defer 与失租强退路径可以安全共用。
 func (sc *ServiceContext) Stop() {
 	sc.stopOnce.Do(func() {
+		sc.TableBundle.Stop()
 		if sc.Kafka != nil {
 			if err := sc.Kafka.Close(); err != nil {
 				logx.Errorf("[scene_manager] Kafka writer close/flush failed: %v", err)

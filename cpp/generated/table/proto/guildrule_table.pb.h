@@ -238,6 +238,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
     kActivityJoinMinHoursFieldNumber = 8,
     kTrialInviteTtlSecondsFieldNumber = 9,
     kTrialInviteCooldownSecondsFieldNumber = 10,
+    kRenameCooldownSecondsFieldNumber = 11,
+    kNameHoldSecondsFieldNumber = 12,
+    kRenameCostFundsFieldNumber = 13,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -339,11 +342,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
   void _internal_set_trial_invite_cooldown_seconds(::uint32_t value);
 
   public:
+  // uint32 rename_cooldown_seconds = 11;
+  void clear_rename_cooldown_seconds() ;
+  [[nodiscard]] ::uint32_t rename_cooldown_seconds() const;
+  void set_rename_cooldown_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rename_cooldown_seconds() const;
+  void _internal_set_rename_cooldown_seconds(::uint32_t value);
+
+  public:
+  // uint32 name_hold_seconds = 12;
+  void clear_name_hold_seconds() ;
+  [[nodiscard]] ::uint32_t name_hold_seconds() const;
+  void set_name_hold_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_name_hold_seconds() const;
+  void _internal_set_name_hold_seconds(::uint32_t value);
+
+  public:
+  // uint64 rename_cost_funds = 13;
+  void clear_rename_cost_funds() ;
+  [[nodiscard]] ::uint64_t rename_cost_funds() const;
+  void set_rename_cost_funds(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rename_cost_funds() const;
+  void _internal_set_rename_cost_funds(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:GuildRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -382,6 +415,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRuleTable final : public ::goo
     ::uint32_t activity_join_min_hours_;
     ::uint32_t trial_invite_ttl_seconds_;
     ::uint32_t trial_invite_cooldown_seconds_;
+    ::uint32_t rename_cooldown_seconds_;
+    ::uint32_t name_hold_seconds_;
+    ::uint64_t rename_cost_funds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -854,6 +890,78 @@ inline ::uint32_t GuildRuleTable::_internal_trial_invite_cooldown_seconds() cons
 inline void GuildRuleTable::_internal_set_trial_invite_cooldown_seconds(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_invite_cooldown_seconds_ = value;
+}
+
+// uint32 rename_cooldown_seconds = 11;
+inline void GuildRuleTable::clear_rename_cooldown_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cooldown_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t GuildRuleTable::rename_cooldown_seconds() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.rename_cooldown_seconds)
+  return _internal_rename_cooldown_seconds();
+}
+inline void GuildRuleTable::set_rename_cooldown_seconds(::uint32_t value) {
+  _internal_set_rename_cooldown_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.rename_cooldown_seconds)
+}
+inline ::uint32_t GuildRuleTable::_internal_rename_cooldown_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rename_cooldown_seconds_;
+}
+inline void GuildRuleTable::_internal_set_rename_cooldown_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cooldown_seconds_ = value;
+}
+
+// uint32 name_hold_seconds = 12;
+inline void GuildRuleTable::clear_name_hold_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_hold_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t GuildRuleTable::name_hold_seconds() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.name_hold_seconds)
+  return _internal_name_hold_seconds();
+}
+inline void GuildRuleTable::set_name_hold_seconds(::uint32_t value) {
+  _internal_set_name_hold_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.name_hold_seconds)
+}
+inline ::uint32_t GuildRuleTable::_internal_name_hold_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_hold_seconds_;
+}
+inline void GuildRuleTable::_internal_set_name_hold_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_hold_seconds_ = value;
+}
+
+// uint64 rename_cost_funds = 13;
+inline void GuildRuleTable::clear_rename_cost_funds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cost_funds_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t GuildRuleTable::rename_cost_funds() const {
+  // @@protoc_insertion_point(field_get:GuildRuleTable.rename_cost_funds)
+  return _internal_rename_cost_funds();
+}
+inline void GuildRuleTable::set_rename_cost_funds(::uint64_t value) {
+  _internal_set_rename_cost_funds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:GuildRuleTable.rename_cost_funds)
+}
+inline ::uint64_t GuildRuleTable::_internal_rename_cost_funds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rename_cost_funds_;
+}
+inline void GuildRuleTable::_internal_set_rename_cost_funds(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cost_funds_ = value;
 }
 
 // -------------------------------------------------------------------

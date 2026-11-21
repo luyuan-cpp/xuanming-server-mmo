@@ -49,11 +49,11 @@ constexpr CheckTextResponse::ParseTableT_ CheckTextResponse::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -63,10 +63,7 @@ constexpr CheckTextResponse::ParseTableT_ CheckTextResponse::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::content_guard::CheckTextResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 lexicon_version = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckTextResponse, _impl_.lexicon_version_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.lexicon_version_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .content_guard.TextVerdict verdict = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckTextResponse, _impl_.verdict_), 1>(),
        {8, 1, 0,
@@ -79,6 +76,16 @@ constexpr CheckTextResponse::ParseTableT_ CheckTextResponse::InternalGeneratePar
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckTextResponse, _impl_.category_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.category_)}},
+      // uint64 lexicon_version = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckTextResponse, _impl_.lexicon_version_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.lexicon_version_)}},
+      // bool pending_platform_review = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CheckTextResponse, _impl_.pending_platform_review_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.pending_platform_review_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -90,6 +97,8 @@ constexpr CheckTextResponse::ParseTableT_ CheckTextResponse::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.category_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint64 lexicon_version = 4;
       {PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.lexicon_version_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool pending_platform_review = 5;
+      {PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.pending_platform_review_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -110,7 +119,8 @@ inline constexpr CheckTextResponse::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         verdict_{static_cast< ::content_guard::TextVerdict >(0)},
         category_{static_cast< ::content_guard::TextCategory >(0)},
-        lexicon_version_{::uint64_t{0u}} {}
+        lexicon_version_{::uint64_t{0u}},
+        pending_platform_review_{false} {}
 
 template <typename>
 constexpr CheckTextResponse::CheckTextResponse(::_pbi::ConstantInitialized,
@@ -216,11 +226,11 @@ constexpr CheckTextRequest::ParseTableT_ CheckTextRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -232,32 +242,47 @@ constexpr CheckTextRequest::ParseTableT_ CheckTextRequest::InternalGenerateParse
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // .content_guard.TextScene scene = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckTextRequest, _impl_.scene_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CheckTextRequest, _impl_.scene_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.scene_)}},
       // string text = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.text_)}},
       // uint64 player_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckTextRequest, _impl_.player_id_), 1>(),
-       {24, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CheckTextRequest, _impl_.player_id_), 2>(),
+       {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.player_id_)}},
+      // string account = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.account_)}},
+      // bool async_platform = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CheckTextRequest, _impl_.async_platform_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.async_platform_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // .content_guard.TextScene scene = 1;
-      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.scene_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.scene_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string text = 2;
       {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.text_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 player_id = 3;
-      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string account = 4;
+      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.account_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool async_platform = 5;
+      {PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.async_platform_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
-      "\36\0\4\0\0\0\0\0"
+      "\36\0\4\0\7\0\0\0"
       "content_guard.CheckTextRequest"
       "text"
+      "account"
     }},
   };
 }
@@ -270,8 +295,12 @@ inline constexpr CheckTextRequest::Impl_::Impl_(
         text_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
-        scene_{static_cast< ::content_guard::TextScene >(0)} {}
+        scene_{static_cast< ::content_guard::TextScene >(0)},
+        async_platform_{false} {}
 
 template <typename>
 constexpr CheckTextRequest::CheckTextRequest(::_pbi::ConstantInitialized,
@@ -375,30 +404,36 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_.scene_),
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_.text_),
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_.player_id_),
-        2,
+        PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextRequest, _impl_.async_platform_),
+        3,
         0,
+        2,
         1,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_.verdict_),
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_.masked_text_),
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_.category_),
         PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_.lexicon_version_),
+        PROTOBUF_FIELD_OFFSET(::content_guard::CheckTextResponse, _impl_.pending_platform_review_),
         1,
         0,
         2,
         3,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::content_guard::CheckTextRequest)},
-        {9, sizeof(::content_guard::CheckTextResponse)},
+        {13, sizeof(::content_guard::CheckTextResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -408,37 +443,42 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\'proto/content_guard/content_guard.prot"
-    "o\022\rcontent_guard\"\\\n\020CheckTextRequest\022\'\n\005"
-    "scene\030\001 \001(\0162\030.content_guard.TextScene\022\014\n"
-    "\004text\030\002 \001(\t\022\021\n\tplayer_id\030\003 \001(\004\"\235\001\n\021Check"
-    "TextResponse\022+\n\007verdict\030\001 \001(\0162\032.content_"
-    "guard.TextVerdict\022\023\n\013masked_text\030\002 \001(\t\022-"
-    "\n\010category\030\003 \001(\0162\033.content_guard.TextCat"
-    "egory\022\027\n\017lexicon_version\030\004 \001(\004*\210\002\n\tTextS"
-    "cene\022\032\n\026TEXT_SCENE_UNSPECIFIED\020\000\022\030\n\024TEXT"
-    "_SCENE_ROLE_NAME\020\001\022\031\n\025TEXT_SCENE_GUILD_N"
-    "AME\020\002\022\027\n\023TEXT_SCENE_PET_NAME\020\003\022!\n\035TEXT_S"
-    "CENE_GUILD_ANNOUNCEMENT\020\004\022\031\n\025TEXT_SCENE_"
-    "CHAT_WORLD\020\005\022\030\n\024TEXT_SCENE_CHAT_TEAM\020\006\022\033"
-    "\n\027TEXT_SCENE_CHAT_PRIVATE\020\007\022\034\n\030TEXT_SCEN"
-    "E_PRIVATE_LABEL\020\010*t\n\013TextVerdict\022\034\n\030TEXT"
-    "_VERDICT_UNSPECIFIED\020\000\022\025\n\021TEXT_VERDICT_P"
-    "ASS\020\001\022\027\n\023TEXT_VERDICT_MASKED\020\002\022\027\n\023TEXT_V"
-    "ERDICT_REJECT\020\003*\312\001\n\014TextCategory\022\035\n\031TEXT"
-    "_CATEGORY_UNSPECIFIED\020\000\022\032\n\026TEXT_CATEGORY"
-    "_POLITICS\020\001\022\026\n\022TEXT_CATEGORY_PORN\020\002\022\027\n\023T"
-    "EXT_CATEGORY_ABUSE\020\003\022\024\n\020TEXT_CATEGORY_AD"
-    "\020\004\022\037\n\033TEXT_CATEGORY_IMPERSONATION\020\005\022\027\n\023T"
-    "EXT_CATEGORY_OTHER\020\0062`\n\014ContentGuard\022P\n\t"
-    "CheckText\022\037.content_guard.CheckTextReque"
-    "st\032 .content_guard.CheckTextResponse\"\000B "
-    "Z\033content_guard/content_guard\200\001\000b\006proto3"
+    "o\022\rcontent_guard\"\205\001\n\020CheckTextRequest\022\'\n"
+    "\005scene\030\001 \001(\0162\030.content_guard.TextScene\022\014"
+    "\n\004text\030\002 \001(\t\022\021\n\tplayer_id\030\003 \001(\004\022\017\n\007accou"
+    "nt\030\004 \001(\t\022\026\n\016async_platform\030\005 \001(\010\"\276\001\n\021Che"
+    "ckTextResponse\022+\n\007verdict\030\001 \001(\0162\032.conten"
+    "t_guard.TextVerdict\022\023\n\013masked_text\030\002 \001(\t"
+    "\022-\n\010category\030\003 \001(\0162\033.content_guard.TextC"
+    "ategory\022\027\n\017lexicon_version\030\004 \001(\004\022\037\n\027pend"
+    "ing_platform_review\030\005 \001(\010*\244\002\n\tTextScene\022"
+    "\032\n\026TEXT_SCENE_UNSPECIFIED\020\000\022\030\n\024TEXT_SCEN"
+    "E_ROLE_NAME\020\001\022\031\n\025TEXT_SCENE_GUILD_NAME\020\002"
+    "\022\027\n\023TEXT_SCENE_PET_NAME\020\003\022!\n\035TEXT_SCENE_"
+    "GUILD_ANNOUNCEMENT\020\004\022\031\n\025TEXT_SCENE_CHAT_"
+    "WORLD\020\005\022\030\n\024TEXT_SCENE_CHAT_TEAM\020\006\022\033\n\027TEX"
+    "T_SCENE_CHAT_PRIVATE\020\007\022\034\n\030TEXT_SCENE_PRI"
+    "VATE_LABEL\020\010\022\032\n\026TEXT_SCENE_TRADE_TITLE\020\t"
+    "*t\n\013TextVerdict\022\034\n\030TEXT_VERDICT_UNSPECIF"
+    "IED\020\000\022\025\n\021TEXT_VERDICT_PASS\020\001\022\027\n\023TEXT_VER"
+    "DICT_MASKED\020\002\022\027\n\023TEXT_VERDICT_REJECT\020\003*\312"
+    "\001\n\014TextCategory\022\035\n\031TEXT_CATEGORY_UNSPECI"
+    "FIED\020\000\022\032\n\026TEXT_CATEGORY_POLITICS\020\001\022\026\n\022TE"
+    "XT_CATEGORY_PORN\020\002\022\027\n\023TEXT_CATEGORY_ABUS"
+    "E\020\003\022\024\n\020TEXT_CATEGORY_AD\020\004\022\037\n\033TEXT_CATEGO"
+    "RY_IMPERSONATION\020\005\022\027\n\023TEXT_CATEGORY_OTHE"
+    "R\020\0062\272\001\n\014ContentGuard\022P\n\tCheckText\022\037.cont"
+    "ent_guard.CheckTextRequest\032 .content_gua"
+    "rd.CheckTextResponse\"\000\022X\n\021CheckPlatformT"
+    "ext\022\037.content_guard.CheckTextRequest\032 .c"
+    "ontent_guard.CheckTextResponse\"\000B Z\033cont"
+    "ent_guard/content_guard\200\001\000b\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto = {
     false,
     false,
-    1040,
+    1234,
     descriptor_table_protodef_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto,
     "proto/content_guard/content_guard.proto",
     &descriptor_table_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto_once,
@@ -458,7 +498,7 @@ TextScene_descriptor() {
   return file_level_enum_descriptors_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t TextScene_internal_data_[] = {
-    589824u, 0u, };
+    655360u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TextVerdict_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fcontent_5fguard_2fcontent_5fguard_2eproto);
@@ -490,7 +530,8 @@ PROTOBUF_NDEBUG_INLINE CheckTextRequest::Impl_::Impl_(
     [[maybe_unused]] const ::content_guard::CheckTextRequest& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        text_(arena, from.text_) {}
+        text_(arena, from.text_),
+        account_(arena, from.account_) {}
 
 CheckTextRequest::CheckTextRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -510,9 +551,9 @@ CheckTextRequest::CheckTextRequest(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, scene_) -
+           offsetof(Impl_, async_platform_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::scene_));
+               sizeof(Impl_::async_platform_));
 
   // @@protoc_insertion_point(copy_constructor:content_guard.CheckTextRequest)
 }
@@ -520,16 +561,17 @@ PROTOBUF_NDEBUG_INLINE CheckTextRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        text_(arena) {}
+        text_(arena),
+        account_(arena) {}
 
 inline void CheckTextRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, scene_) -
+           offsetof(Impl_, async_platform_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::scene_));
+               sizeof(Impl_::async_platform_));
 }
 CheckTextRequest::~CheckTextRequest() {
   // @@protoc_insertion_point(destructor:content_guard.CheckTextRequest)
@@ -543,6 +585,7 @@ inline void CheckTextRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.text_.Destroy();
+  this_._impl_.account_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -580,13 +623,18 @@ PROTOBUF_NOINLINE void CheckTextRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.text_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.text_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.scene_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.scene_));
+        reinterpret_cast<char*>(&_impl_.async_platform_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.async_platform_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -612,7 +660,7 @@ PROTOBUF_NOINLINE void CheckTextRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .content_guard.TextScene scene = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_scene() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -631,11 +679,30 @@ PROTOBUF_NOINLINE void CheckTextRequest::Clear() {
   }
 
   // uint64 player_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           3, this_._internal_player_id(), target);
+    }
+  }
+
+  // string account = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "content_guard.CheckTextRequest.account");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // bool async_platform = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_async_platform() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_async_platform(), target);
     }
   }
 
@@ -664,7 +731,7 @@ PROTOBUF_NOINLINE void CheckTextRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string text = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_text().empty()) {
@@ -672,18 +739,31 @@ PROTOBUF_NOINLINE void CheckTextRequest::Clear() {
                                         this_._internal_text());
       }
     }
-    // uint64 player_id = 3;
+    // string account = 4;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // uint64 player_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // .content_guard.TextScene scene = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_scene() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_scene());
+      }
+    }
+    // bool async_platform = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_async_platform() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -704,7 +784,7 @@ void CheckTextRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_text().empty()) {
         _this->_internal_set_text(from._internal_text());
@@ -715,13 +795,27 @@ void CheckTextRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_scene() != 0) {
         _this->_impl_.scene_ = from._impl_.scene_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_async_platform() != 0) {
+        _this->_impl_.async_platform_ = from._impl_.async_platform_;
       }
     }
   }
@@ -745,9 +839,10 @@ void CheckTextRequest::InternalSwap(CheckTextRequest* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.text_, &other->_impl_.text_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.scene_)
-      + sizeof(CheckTextRequest::_impl_.scene_)
+      PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.async_platform_)
+      + sizeof(CheckTextRequest::_impl_.async_platform_)
       - PROTOBUF_FIELD_OFFSET(CheckTextRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -793,9 +888,9 @@ CheckTextResponse::CheckTextResponse(
                offsetof(Impl_, verdict_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, verdict_),
-           offsetof(Impl_, lexicon_version_) -
+           offsetof(Impl_, pending_platform_review_) -
                offsetof(Impl_, verdict_) +
-               sizeof(Impl_::lexicon_version_));
+               sizeof(Impl_::pending_platform_review_));
 
   // @@protoc_insertion_point(copy_constructor:content_guard.CheckTextResponse)
 }
@@ -810,9 +905,9 @@ inline void CheckTextResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, verdict_),
            0,
-           offsetof(Impl_, lexicon_version_) -
+           offsetof(Impl_, pending_platform_review_) -
                offsetof(Impl_, verdict_) +
-               sizeof(Impl_::lexicon_version_));
+               sizeof(Impl_::pending_platform_review_));
 }
 CheckTextResponse::~CheckTextResponse() {
   // @@protoc_insertion_point(destructor:content_guard.CheckTextResponse)
@@ -866,10 +961,10 @@ PROTOBUF_NOINLINE void CheckTextResponse::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.masked_text_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.verdict_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.lexicon_version_) -
-        reinterpret_cast<char*>(&_impl_.verdict_)) + sizeof(_impl_.lexicon_version_));
+        reinterpret_cast<char*>(&_impl_.pending_platform_review_) -
+        reinterpret_cast<char*>(&_impl_.verdict_)) + sizeof(_impl_.pending_platform_review_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -931,6 +1026,15 @@ PROTOBUF_NOINLINE void CheckTextResponse::Clear() {
     }
   }
 
+  // bool pending_platform_review = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_pending_platform_review() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_pending_platform_review(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -956,7 +1060,7 @@ PROTOBUF_NOINLINE void CheckTextResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string masked_text = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_masked_text().empty()) {
@@ -985,6 +1089,12 @@ PROTOBUF_NOINLINE void CheckTextResponse::Clear() {
             this_._internal_lexicon_version());
       }
     }
+    // bool pending_platform_review = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_pending_platform_review() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1003,7 +1113,7 @@ void CheckTextResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_masked_text().empty()) {
         _this->_internal_set_masked_text(from._internal_masked_text());
@@ -1028,6 +1138,11 @@ void CheckTextResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.lexicon_version_ = from._impl_.lexicon_version_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_pending_platform_review() != 0) {
+        _this->_impl_.pending_platform_review_ = from._impl_.pending_platform_review_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1050,8 +1165,8 @@ void CheckTextResponse::InternalSwap(CheckTextResponse* PROTOBUF_RESTRICT PROTOB
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.masked_text_, &other->_impl_.masked_text_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.lexicon_version_)
-      + sizeof(CheckTextResponse::_impl_.lexicon_version_)
+      PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.pending_platform_review_)
+      + sizeof(CheckTextResponse::_impl_.pending_platform_review_)
       - PROTOBUF_FIELD_OFFSET(CheckTextResponse, _impl_.verdict_)>(
           reinterpret_cast<char*>(&_impl_.verdict_),
           reinterpret_cast<char*>(&other->_impl_.verdict_));

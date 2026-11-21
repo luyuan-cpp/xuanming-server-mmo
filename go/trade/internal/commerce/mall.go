@@ -145,6 +145,7 @@ type MallOrder struct {
 	Currency           string `json:"currency"`
 	State              string `json:"state"`
 	Deadline           uint64 `json:"paymentDeadlineMs"`
+	PaymentRevision    uint32 `json:"paymentRevision"`
 }
 
 var mallOrderID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -165,7 +166,12 @@ func NewMall(base, gateway, delivery string, e *Engine) (*Mall, error) {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" && u.Path != "/" || len(gateway) < 32 || len(delivery) < 32 || gateway == delivery {
 		return nil, errors.New("商城地址或独立调用密钥配置非法")
 	}
-	return &Mall{Base: strings.TrimRight(base, "/"), GatewaySecret: gateway, DeliverySecret: delivery, HTTP: &http.Client{Timeout: 2500 * time.Millisecond, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, Engine: e}, nil
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 64
+	transport.MaxIdleConnsPerHost = 32
+	transport.IdleConnTimeout = 90 * time.Second
+	return &Mall{Base: strings.TrimRight(base, "/"), GatewaySecret: gateway, DeliverySecret: delivery,
+		HTTP: &http.Client{Timeout: 2500 * time.Millisecond, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, Engine: e}, nil
 }
 
 // commerceSignature 是商城 X-Commerce-Signature 的 v1 算法：正文 SHA-256 小写 hex，与其余七项按 \n 拼成规范串，
@@ -322,12 +328,26 @@ func (m *Mall) Order(ctx context.Context, player uint64, id string, cancel bool)
 }
 func mallAnswer(o MallOrder) (*tradepb.CommerceOrderResponse, error) {
 	states := map[string]tradepb.CommerceOrderState{"AWAITING_PAYMENT": 2, "DELIVERY_PENDING": 4, "DELIVERED": 5, "CANCELLED": 7, "REFUND_PENDING": 8, "REFUNDED": 9, "MANUAL": 10, "REVERSING": 12, "REVERSED": 13}
+	// 版本号按 (paymentRevision << 4) | stateRank 单调递增:同一修订号内按生命周期排秩,修订号每次渠道翻转加 1,
+	// 避免 REVERSING(12)->DELIVERED(5) / MANUAL(10) 或 REVERSED(13)->REVERSING(12) 时客户端缓存因版本号倒退被冻结。
+	ranks := map[string]uint64{
+		"AWAITING_PAYMENT": 1,
+		"DELIVERY_PENDING": 2,
+		"CANCELLED":        3,
+		"REVERSING":        3,
+		"REFUND_PENDING":   4,
+		"DELIVERED":        5,
+		"REVERSED":         5,
+		"REFUNDED":         5,
+		"MANUAL":           6,
+	}
 	state, known := states[o.State]
 	buyer, err := strconv.ParseUint(o.BuyerID, 10, 64)
 	if !known || err != nil || buyer == 0 || !mallOrderID.MatchString(o.OrderID) {
 		return nil, errors.New("商城订单应答无效")
 	}
-	return &tradepb.CommerceOrderResponse{Order: &tradepb.CommerceOrderView{OrderId: o.OrderID, Kind: 1, State: state, Version: uint64(state), BuyerPlayerId: buyer, Amount: o.Amount, Currency: o.Currency, RelatedId: strconv.FormatUint(o.SKU, 10)}, ServerNowMs: uint64(time.Now().UnixMilli())}, nil
+	version := (uint64(o.PaymentRevision) << 4) | ranks[o.State]
+	return &tradepb.CommerceOrderResponse{Order: &tradepb.CommerceOrderView{OrderId: o.OrderID, Kind: 1, State: state, Version: version, BuyerPlayerId: buyer, Amount: o.Amount, Currency: o.Currency, RelatedId: strconv.FormatUint(o.SKU, 10)}, ServerNowMs: uint64(time.Now().UnixMilli())}, nil
 }
 
 // officialBundle 把意图里的发放物转成资产包:物品或货币二选一,两种都有、都没有或越界都拒绝。

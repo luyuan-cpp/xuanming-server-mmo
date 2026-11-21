@@ -235,6 +235,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoleNameRuleTable final : public ::
     kMaxCharsFieldNumber = 3,
     kGeneratedSuffixLenFieldNumber = 5,
     kMaxGenerateAttemptsFieldNumber = 6,
+    kRenameCooldownSecondsFieldNumber = 8,
+    kOldNameHoldSecondsFieldNumber = 9,
+    kRenameItemIdFieldNumber = 10,
+    kRenameItemCountFieldNumber = 11,
   };
   // string generated_prefix = 4;
   void clear_generated_prefix() ;
@@ -316,12 +320,52 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoleNameRuleTable final : public ::
   void _internal_set_max_generate_attempts(::uint32_t value);
 
   public:
+  // uint32 rename_cooldown_seconds = 8;
+  void clear_rename_cooldown_seconds() ;
+  [[nodiscard]] ::uint32_t rename_cooldown_seconds() const;
+  void set_rename_cooldown_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rename_cooldown_seconds() const;
+  void _internal_set_rename_cooldown_seconds(::uint32_t value);
+
+  public:
+  // uint32 old_name_hold_seconds = 9;
+  void clear_old_name_hold_seconds() ;
+  [[nodiscard]] ::uint32_t old_name_hold_seconds() const;
+  void set_old_name_hold_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_old_name_hold_seconds() const;
+  void _internal_set_old_name_hold_seconds(::uint32_t value);
+
+  public:
+  // uint32 rename_item_id = 10;
+  void clear_rename_item_id() ;
+  [[nodiscard]] ::uint32_t rename_item_id() const;
+  void set_rename_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rename_item_id() const;
+  void _internal_set_rename_item_id(::uint32_t value);
+
+  public:
+  // uint32 rename_item_count = 11;
+  void clear_rename_item_count() ;
+  [[nodiscard]] ::uint32_t rename_item_count() const;
+  void set_rename_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rename_item_count() const;
+  void _internal_set_rename_item_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RoleNameRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 46,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          0, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -356,6 +400,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoleNameRuleTable final : public ::
     ::uint32_t max_chars_;
     ::uint32_t generated_suffix_len_;
     ::uint32_t max_generate_attempts_;
+    ::uint32_t rename_cooldown_seconds_;
+    ::uint32_t old_name_hold_seconds_;
+    ::uint32_t rename_item_id_;
+    ::uint32_t rename_item_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -836,6 +884,102 @@ inline void RoleNameRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULLAB
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:RoleNameRuleTable.desc)
+}
+
+// uint32 rename_cooldown_seconds = 8;
+inline void RoleNameRuleTable::clear_rename_cooldown_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cooldown_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t RoleNameRuleTable::rename_cooldown_seconds() const {
+  // @@protoc_insertion_point(field_get:RoleNameRuleTable.rename_cooldown_seconds)
+  return _internal_rename_cooldown_seconds();
+}
+inline void RoleNameRuleTable::set_rename_cooldown_seconds(::uint32_t value) {
+  _internal_set_rename_cooldown_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:RoleNameRuleTable.rename_cooldown_seconds)
+}
+inline ::uint32_t RoleNameRuleTable::_internal_rename_cooldown_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rename_cooldown_seconds_;
+}
+inline void RoleNameRuleTable::_internal_set_rename_cooldown_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_cooldown_seconds_ = value;
+}
+
+// uint32 old_name_hold_seconds = 9;
+inline void RoleNameRuleTable::clear_old_name_hold_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.old_name_hold_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t RoleNameRuleTable::old_name_hold_seconds() const {
+  // @@protoc_insertion_point(field_get:RoleNameRuleTable.old_name_hold_seconds)
+  return _internal_old_name_hold_seconds();
+}
+inline void RoleNameRuleTable::set_old_name_hold_seconds(::uint32_t value) {
+  _internal_set_old_name_hold_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:RoleNameRuleTable.old_name_hold_seconds)
+}
+inline ::uint32_t RoleNameRuleTable::_internal_old_name_hold_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.old_name_hold_seconds_;
+}
+inline void RoleNameRuleTable::_internal_set_old_name_hold_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.old_name_hold_seconds_ = value;
+}
+
+// uint32 rename_item_id = 10;
+inline void RoleNameRuleTable::clear_rename_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t RoleNameRuleTable::rename_item_id() const {
+  // @@protoc_insertion_point(field_get:RoleNameRuleTable.rename_item_id)
+  return _internal_rename_item_id();
+}
+inline void RoleNameRuleTable::set_rename_item_id(::uint32_t value) {
+  _internal_set_rename_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:RoleNameRuleTable.rename_item_id)
+}
+inline ::uint32_t RoleNameRuleTable::_internal_rename_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rename_item_id_;
+}
+inline void RoleNameRuleTable::_internal_set_rename_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_item_id_ = value;
+}
+
+// uint32 rename_item_count = 11;
+inline void RoleNameRuleTable::clear_rename_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t RoleNameRuleTable::rename_item_count() const {
+  // @@protoc_insertion_point(field_get:RoleNameRuleTable.rename_item_count)
+  return _internal_rename_item_count();
+}
+inline void RoleNameRuleTable::set_rename_item_count(::uint32_t value) {
+  _internal_set_rename_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:RoleNameRuleTable.rename_item_count)
+}
+inline ::uint32_t RoleNameRuleTable::_internal_rename_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rename_item_count_;
+}
+inline void RoleNameRuleTable::_internal_set_rename_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rename_item_count_ = value;
 }
 
 // -------------------------------------------------------------------

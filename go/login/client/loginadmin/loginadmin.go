@@ -14,9 +14,14 @@ import (
 )
 
 type (
+	AccountDeletionBlocker            = login.AccountDeletionBlocker
+	AccountDeletionRequest            = login.AccountDeletionRequest
+	AccountDeletionResponse           = login.AccountDeletionResponse
 	AccountSimplePlayerWrapper        = login.AccountSimplePlayerWrapper
+	AntiAddictionStatus               = login.AntiAddictionStatus
 	AssignGateRequest                 = login.AssignGateRequest
 	AssignGateResponse                = login.AssignGateResponse
+	CancelAccountDeletionRequest      = login.CancelAccountDeletionRequest
 	CreatePlayerRequest               = login.CreatePlayerRequest
 	CreatePlayerResponse              = login.CreatePlayerResponse
 	EnterGameRequest                  = login.EnterGameRequest
@@ -38,6 +43,11 @@ type (
 	RemovePlayersFromAccountsResponse = login.RemovePlayersFromAccountsResponse
 	RenewSessionRequest               = login.RenewSessionRequest
 	RenewSessionResponse              = login.RenewSessionResponse
+	ResetAccountRealNameRequest       = login.ResetAccountRealNameRequest
+	ResetAccountRealNameResponse      = login.ResetAccountRealNameResponse
+	ScheduleAccountDeletionRequest    = login.ScheduleAccountDeletionRequest
+	SubmitRealNameRequest             = login.SubmitRealNameRequest
+	SubmitRealNameResponse            = login.SubmitRealNameResponse
 	TestResponse                      = login.TestResponse
 	ZoneRoleCountRequest              = login.ZoneRoleCountRequest
 	ZoneRoleCountResponse             = login.ZoneRoleCountResponse
@@ -45,6 +55,8 @@ type (
 	LoginAdmin interface {
 		// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
 		RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error)
+		ScheduleAccountDeletion(ctx context.Context, in *ScheduleAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
+		ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error)
 	}
 
 	defaultLoginAdmin struct {
@@ -62,4 +74,14 @@ func NewLoginAdmin(cli zrpc.Client) LoginAdmin {
 func (m *defaultLoginAdmin) RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error) {
 	client := login.NewLoginAdminClient(m.cli.Conn())
 	return client.RemovePlayersFromAccounts(ctx, in, opts...)
+}
+
+func (m *defaultLoginAdmin) ScheduleAccountDeletion(ctx context.Context, in *ScheduleAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
+	client := login.NewLoginAdminClient(m.cli.Conn())
+	return client.ScheduleAccountDeletion(ctx, in, opts...)
+}
+
+func (m *defaultLoginAdmin) ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error) {
+	client := login.NewLoginAdminClient(m.cli.Conn())
+	return client.ResetAccountRealName(ctx, in, opts...)
 }

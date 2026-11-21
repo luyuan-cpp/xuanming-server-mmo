@@ -28,6 +28,8 @@ const (
 	DataService_SetAccountRealName_FullMethodName            = "/data_service.DataService/SetAccountRealName"
 	DataService_GetAccountRealName_FullMethodName            = "/data_service.DataService/GetAccountRealName"
 	DataService_ResetAccountRealName_FullMethodName          = "/data_service.DataService/ResetAccountRealName"
+	DataService_UpsertAccountChannelIdentity_FullMethodName  = "/data_service.DataService/UpsertAccountChannelIdentity"
+	DataService_GetPlayerChannelIdentity_FullMethodName      = "/data_service.DataService/GetPlayerChannelIdentity"
 	DataService_BeginAccountRoleTrade_FullMethodName         = "/data_service.DataService/BeginAccountRoleTrade"
 	DataService_ConfirmAccountRoleTradeFreeze_FullMethodName = "/data_service.DataService/ConfirmAccountRoleTradeFreeze"
 	DataService_CancelAccountRoleTrade_FullMethodName        = "/data_service.DataService/CancelAccountRoleTrade"
@@ -88,6 +90,9 @@ type DataServiceClient interface {
 	GetAccountRealName(ctx context.Context, in *GetAccountRealNameRequest, opts ...grpc.CallOption) (*GetAccountRealNameResponse, error)
 	// 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
 	ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error)
+	// 第三方登录渠道身份(docs/design/rename-and-content-safety.md §6.5):login 登录成功后登记(签名鉴权),content_guard 按角色读。
+	UpsertAccountChannelIdentity(ctx context.Context, in *UpsertAccountChannelIdentityRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetPlayerChannelIdentity(ctx context.Context, in *GetPlayerChannelIdentityRequest, opts ...grpc.CallOption) (*GetPlayerChannelIdentityResponse, error)
 	// 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
 	BeginAccountRoleTrade(ctx context.Context, in *BeginAccountRoleTradeRequest, opts ...grpc.CallOption) (*AccountRoleTradeReceipt, error)
 	// 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -271,6 +276,26 @@ func (c *dataServiceClient) ResetAccountRealName(ctx context.Context, in *ResetA
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResetAccountRealNameResponse)
 	err := c.cc.Invoke(ctx, DataService_ResetAccountRealName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) UpsertAccountChannelIdentity(ctx context.Context, in *UpsertAccountChannelIdentityRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, DataService_UpsertAccountChannelIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) GetPlayerChannelIdentity(ctx context.Context, in *GetPlayerChannelIdentityRequest, opts ...grpc.CallOption) (*GetPlayerChannelIdentityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlayerChannelIdentityResponse)
+	err := c.cc.Invoke(ctx, DataService_GetPlayerChannelIdentity_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -677,6 +702,9 @@ type DataServiceServer interface {
 	GetAccountRealName(context.Context, *GetAccountRealNameRequest) (*GetAccountRealNameResponse, error)
 	// 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
 	ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error)
+	// 第三方登录渠道身份(docs/design/rename-and-content-safety.md §6.5):login 登录成功后登记(签名鉴权),content_guard 按角色读。
+	UpsertAccountChannelIdentity(context.Context, *UpsertAccountChannelIdentityRequest) (*emptypb.Empty, error)
+	GetPlayerChannelIdentity(context.Context, *GetPlayerChannelIdentityRequest) (*GetPlayerChannelIdentityResponse, error)
 	// 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
 	BeginAccountRoleTrade(context.Context, *BeginAccountRoleTradeRequest) (*AccountRoleTradeReceipt, error)
 	// 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -809,6 +837,12 @@ func (UnimplementedDataServiceServer) GetAccountRealName(context.Context, *GetAc
 }
 func (UnimplementedDataServiceServer) ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResetAccountRealName not implemented")
+}
+func (UnimplementedDataServiceServer) UpsertAccountChannelIdentity(context.Context, *UpsertAccountChannelIdentityRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertAccountChannelIdentity not implemented")
+}
+func (UnimplementedDataServiceServer) GetPlayerChannelIdentity(context.Context, *GetPlayerChannelIdentityRequest) (*GetPlayerChannelIdentityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlayerChannelIdentity not implemented")
 }
 func (UnimplementedDataServiceServer) BeginAccountRoleTrade(context.Context, *BeginAccountRoleTradeRequest) (*AccountRoleTradeReceipt, error) {
 	return nil, status.Error(codes.Unimplemented, "method BeginAccountRoleTrade not implemented")
@@ -1085,6 +1119,42 @@ func _DataService_ResetAccountRealName_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataServiceServer).ResetAccountRealName(ctx, req.(*ResetAccountRealNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_UpsertAccountChannelIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertAccountChannelIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).UpsertAccountChannelIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_UpsertAccountChannelIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).UpsertAccountChannelIdentity(ctx, req.(*UpsertAccountChannelIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_GetPlayerChannelIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlayerChannelIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).GetPlayerChannelIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_GetPlayerChannelIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).GetPlayerChannelIdentity(ctx, req.(*GetPlayerChannelIdentityRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1811,6 +1881,14 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResetAccountRealName",
 			Handler:    _DataService_ResetAccountRealName_Handler,
+		},
+		{
+			MethodName: "UpsertAccountChannelIdentity",
+			Handler:    _DataService_UpsertAccountChannelIdentity_Handler,
+		},
+		{
+			MethodName: "GetPlayerChannelIdentity",
+			Handler:    _DataService_GetPlayerChannelIdentity_Handler,
 		},
 		{
 			MethodName: "BeginAccountRoleTrade",

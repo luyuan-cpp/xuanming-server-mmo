@@ -112,28 +112,14 @@ public:
     // 结果可能在会话内变化(这笔欠款被删除后变 false;AddCurrency 不会把它还清删除),调用方不能把一次 true 当成"本会话一直做不了"。
     static bool DebtCarriesUnknownFields(entt::entity player, CurrencyType type);
 
-    // ── 免除 / 调整 / 冻结欠款:今天没有任何生产入口(2026-11-12 复核)──
-    // GM 的 SceneRollbackClientPlayer.GmWaiveDebt / GmAdjustDebt / GmFreezeDebt 早已删除(proto/message_id.txt 106 / 113 / 109 记为 reserved),
-    // 收件箱的 GM 处置域只有挂欠款(GmSanctionInboxExecutor::AttachCurrencyDebt,它在调 AttachDebt 之前先判 DebtCarriesUnknownFields),
-    // 下面三个函数只有单测调用。**接任何生产入口(GM 指令、收件箱新类型)之前,必须先补与 AddCurrency 同类的守卫**:
-    // DebtCarriesUnknownFields 为真时不改、不删这笔欠款,打 metric=persist_version_skew 的 WARN(where 取入口名)并计数,
-    // 调用方按版本错位处理、不记终态 —— 否则免除会整条删掉新字段、调整与冻结会按旧口径改写它
-    // (docs/design/mixed-version-persist-field-protection.md §4.4 欠款合并一行)。
-
-    // Write off all remaining debt for the given currency type.
-    static uint64_t WaiveDebt(entt::entity player, CurrencyType type,
-                              const std::string &gmOperator = {},
-                              const std::string &reason = {});
-
+    // ── 调整欠款:当前无生产入口(GmWaiveDebt/GmAdjustDebt/GmFreezeDebt 均已退役,仅单测覆盖)──
+    // 接任何生产入口前必须先判 DebtCarriesUnknownFields,命中回版本错位并打 metric=persist_version_skew WARN
+    // (docs/design/mixed-version-persist-field-protection.md §4.4)。
     // Adjust the owed amount by `delta` (positive = increase, negative = decrease).
     // Clamps so that owed never goes below paid.
     static void AdjustDebt(entt::entity player, CurrencyType type, int64_t delta,
                            const std::string &gmOperator = {},
                            const std::string &reason = {});
-
-    // Freeze or unfreeze auto-deduction for a currency type's debt.
-    static void FreezeDebt(entt::entity player, CurrencyType type, bool freeze,
-                           const std::string &gmOperator = {});
 
     // Return all active debts for the player (for GM query).
     static std::vector<CurrencyDebtEntry> QueryDebts(entt::entity player);

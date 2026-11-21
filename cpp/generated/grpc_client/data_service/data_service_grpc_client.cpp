@@ -754,6 +754,188 @@ void SendDataServiceResetAccountRealNameErased(entt::registry& registry, entt::e
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::ResetAccountRealNameResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region DataServiceUpsertAccountChannelIdentity
+namespace {
+void QueueLocalDataServiceUpsertAccountChannelIdentityFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceUpsertAccountChannelIdentityGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceUpsertAccountChannelIdentityCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::UpsertAccountChannelIdentityRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::google::protobuf::Empty> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.UpsertAccountChannelIdentity requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceUpsertAccountChannelIdentityGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceUpsertAccountChannelIdentityFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceUpsertAccountChannelIdentityFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::google::protobuf::Empty reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.UpsertAccountChannelIdentity response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceUpsertAccountChannelIdentity(entt::registry& registry, entt::entity nodeEntity, const ::data_service::UpsertAccountChannelIdentityRequest& request,
+                                            GrpcDone<::google::protobuf::Empty> done, const GrpcCallOptions& options) {
+    StartDataServiceUpsertAccountChannelIdentityCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceUpsertAccountChannelIdentityErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.UpsertAccountChannelIdentity requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::UpsertAccountChannelIdentityRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.UpsertAccountChannelIdentity: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceUpsertAccountChannelIdentityGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::UpsertAccountChannelIdentityRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.UpsertAccountChannelIdentity: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceUpsertAccountChannelIdentityGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceUpsertAccountChannelIdentityCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::google::protobuf::Empty* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceGetPlayerChannelIdentity
+namespace {
+void QueueLocalDataServiceGetPlayerChannelIdentityFailure(GrpcDone<::data_service::GetPlayerChannelIdentityResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerChannelIdentityGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceGetPlayerChannelIdentityCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerChannelIdentityRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::GetPlayerChannelIdentityResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetPlayerChannelIdentity requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceGetPlayerChannelIdentityGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceGetPlayerChannelIdentityFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceGetPlayerChannelIdentityFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::GetPlayerChannelIdentityResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.GetPlayerChannelIdentity response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceGetPlayerChannelIdentity(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerChannelIdentityRequest& request,
+                                            GrpcDone<::data_service::GetPlayerChannelIdentityResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceGetPlayerChannelIdentityCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceGetPlayerChannelIdentityErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetPlayerChannelIdentity requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::GetPlayerChannelIdentityRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.GetPlayerChannelIdentity: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerChannelIdentityGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerChannelIdentityRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.GetPlayerChannelIdentity: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerChannelIdentityGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceGetPlayerChannelIdentityCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::GetPlayerChannelIdentityResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region DataServiceBeginAccountRoleTrade
 namespace {
 void QueueLocalDataServiceBeginAccountRoleTradeFailure(GrpcDone<::data_service::AccountRoleTradeReceipt> done, uint32_t code, std::string message) {

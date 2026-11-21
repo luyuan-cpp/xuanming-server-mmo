@@ -393,10 +393,11 @@ namespace
         const auto onBroadcast = [budget, overBudget](const std::string &topic, const BroadcastToAllEvent &event)
         {
             const uint32_t messageId = event.message_content().message_id();
-            if (messageId != ClientPlayerChatNotifyWorldChatMessageId)
+            if (messageId != ClientPlayerChatNotifyWorldChatMessageId &&
+                messageId != ClientPlayerChatNotifyWorldChatRetractedMessageId)
             {
                 LOG_ERROR << "Chat world broadcast dropped: message_id=" << messageId
-                          << " is not the world chat push, topic=" << topic;
+                          << " is not a world chat push, topic=" << topic;
                 return;
             }
             if (!budget->TryTake(std::chrono::steady_clock::now()))
@@ -449,6 +450,10 @@ namespace
 
 int main(int argc, char *argv[])
 {
+	if (const auto exitCode = table_bundle::RunValidateTablesCli(argc, argv, nullptr))
+	{
+		return *exitCode;
+	}
 	// 会话身份签名私钥在起任何线程之前装好(docs/design/gate-online-identity.md §10.1);
 	// 种子缺失、格式不对或与验证方公钥列表不配对都拒绝启动。
 	if (const auto signerError = caller_auth::InitProcessSigner(std::getenv(caller_auth::kSigningKeyEnv),

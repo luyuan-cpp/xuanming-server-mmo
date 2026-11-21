@@ -182,12 +182,10 @@ SceneManagerRpc:
 # 角色列表与进游戏缺名时回源(BatchGetPlayerName,失败只是名字显示为空)。
 # NonBlock: true —— 号段与归属查询都是弱依赖(设计稿 §6.5):data_service 没起时 login
 # 照常起服,领段失败即拒绝建角。
-# Middlewares.Breaker: true —— 归属查询串在**每次登录**的角色列表上。最难受的不是
-# data_service 干净地下线(那样 etcd 掉键、连接直接被摘掉),而是它**死了但键还在**:
-# 进程僵住 / 机器失联时,etcd 租约到期前那个 endpoint 仍在候选池里,go-zero 照样往它
-# 派请求,于是每一次 Login 都白等满 RoleListLookupTimeout 才回退到建角 zone ——
-# 全服登录延迟凭空抬高一个超时,一直抬到 etcd 把键摘掉为止。熔断器让失败到达阈值后
-# 直接快速失败(homezone 按「不可用→保留存量 zone」处理),半开探测恢复后自动回来。
+# Middlewares.Breaker: false —— data_service 按逻辑库隔离(account_directory / player_route / player_name /
+# id_issuer 等),不能开 zrpc 按方法粒度的客户端熔断(docs/design/data-service-breaker-per-logical-db.md):
+# 否则单个逻辑库异常时会把同一方法上的所有逻辑库一并熔断。按逻辑库的快速失败由 data_service 服务端
+# 在建连闸口承担;代码入口亦通过 shared/dsclient.Conf 强制关闭客户端熔断。
 DataServiceRpc:
   Etcd:
     Hosts:
@@ -196,7 +194,7 @@ DataServiceRpc:
   Timeout: 3000
   NonBlock: true
   Middlewares:
-    Breaker: true
+    Breaker: false
 
 # 内容安全(go/content_guard;docs/design/rename-and-content-safety.md §6.6):建角时玩家自己起的名字先送它判定,
 # 命中屏蔽词回 kRoleNameSensitive,它不可达回 kRoleNameCheckUnavailable(可重试),不放行没检过的名字。

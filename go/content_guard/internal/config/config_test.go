@@ -37,15 +37,17 @@ func TestShippedConfigIsValid(t *testing.T) {
 
 func TestValidateRejections(t *testing.T) {
 	cases := map[string]func(*Config){
-		"no etcd hosts":            func(c *Config) { c.Etcd.Hosts = nil },
-		"zone zero":                func(c *Config) { c.ZoneId = 0 },
-		"lease zero":               func(c *Config) { c.LeaseTTL = 0 },
-		"text limit too small":     func(c *Config) { c.MaxTextBytes = 63 },
-		"text limit too large":     func(c *Config) { c.MaxTextBytes = 64*1024 + 1 },
-		"prefix without slash":     func(c *Config) { c.LexiconPrefix = "/mmorpg/content_guard/lexicon" },
-		"pro without lexicon":      func(c *Config) { c.Mode = service.ProMode },
-		"pre without lexicon":      func(c *Config) { c.Mode = service.PreMode },
-		"stat content not ignored": func(c *Config) { c.Middlewares.StatConf.IgnoreContentMethods = nil },
+		"no etcd hosts":             func(c *Config) { c.Etcd.Hosts = nil },
+		"zone zero":                 func(c *Config) { c.ZoneId = 0 },
+		"lease zero":                func(c *Config) { c.LeaseTTL = 0 },
+		"text limit too small":      func(c *Config) { c.MaxTextBytes = 63 },
+		"text limit too large":      func(c *Config) { c.MaxTextBytes = 64*1024 + 1 },
+		"prefix without slash":      func(c *Config) { c.LexiconPrefix = "/mmorpg/content_guard/lexicon" },
+		"pro without lexicon":       func(c *Config) { c.Mode = service.ProMode },
+		"pre without lexicon":       func(c *Config) { c.Mode = service.PreMode },
+		"stat content not ignored":  func(c *Config) { c.Middlewares.StatConf.IgnoreContentMethods = nil },
+		"platform method unignored": func(c *Config) { c.Middlewares.StatConf.IgnoreContentMethods = []string{CheckTextFullMethod} },
+		"invalid async timeout":     func(c *Config) { c.Platform.AsyncTimeoutMs = 10001 },
 	}
 	for name, mutate := range cases {
 		c := loadShipped(t)

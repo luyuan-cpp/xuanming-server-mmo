@@ -306,6 +306,8 @@ func changeKindLabel(kind pb.GuildChangeKind) string {
 		return "activity_changed"
 	case pb.GuildChangeKind_GUILD_CHANGE_KIND_DELIVERY_DONE:
 		return "delivery_done"
+	case pb.GuildChangeKind_GUILD_CHANGE_KIND_RENAMED:
+		return "renamed"
 	default:
 		return "other"
 	}

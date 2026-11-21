@@ -140,6 +140,8 @@ private:
         TimerTaskComp handshakeTimer;
         // 建连时刻(单调时钟):握手耗时直方图从这里算。
         std::chrono::steady_clock::time_point openedAt;
+        // 本端主动 shutdown() 进入半关闭的时刻(单调时钟):超过宽限期仍未退出时允许承压淘汰强关。
+        std::optional<std::chrono::steady_clock::time_point> halfClosedAt;
         // 应用层心跳的存活状态(闸 6)。握手成功的应答发出时开始跟踪,只在跟踪中刷新「上一帧」时刻。
         client_liveness::ClientLiveness liveness;
         // 空闲检查:每条跟踪中的连接恰好一个定时器。到期时距上一帧不足阈值就按「上一帧 + 阈值」重新武装,
@@ -161,7 +163,7 @@ private:
     bool AdmitConnection(const muduo::net::InetAddress &peer, battle_connection_admission::SteadyTime now);
     // 承压时淘汰一条未认证直连给新连接让位:先移出池(这一刻起不再算在池里),再 forceClose;会话或连接已不在时什么都不做。
     void EvictUnauthenticated(uint64_t connId, battle_connection_admission::SteadyTime now);
-    // 池里最老的一条还连着的直连;没有返回空。正在关闭的(shutdown 后等延迟强关的那 100ms)跳过:淘汰它腾不出位置。
+    // 池里最老的一条可淘汰直连;没有返回空。仍在短宽限期内的半关闭连接跳过,超时未关闭的半关闭连接允许强关腾位。
     std::optional<uint64_t> OldestConnectedUnauthenticated() const;
     // 未认证的直连数(指标与判定同一个数):既没完成票据握手、也没出示有效的网络探测授权(授权由 match 签发,OnProbeStart 验过签)。
     size_t UnauthenticatedConnectionCount() const { return unauthenticated_.size(); }

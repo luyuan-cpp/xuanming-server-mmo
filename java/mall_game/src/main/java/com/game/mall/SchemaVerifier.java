@@ -123,11 +123,14 @@ final class SchemaVerifier {
             if (indexes(connection, "commerce_mock_transaction", false).values().stream().noneMatch(cols -> cols.size() >= 3 && cols.subList(0, 3).equals(List.of("kind", "applied", "order_sn")))) {
                 throw new IllegalStateException("mock交易缺可恢复扫描索引");
             }
-            if (indexes(connection, "commerce_refund_intent", false).values().stream().noneMatch(cols -> cols.size() >= 2 && cols.subList(0, 2).equals(List.of("status", "order_sn")))) {
+            if (indexes(connection, "commerce_refund_intent", false).values().stream().noneMatch(cols -> cols.size() >= 4 && cols.subList(0, 4).equals(List.of("status", "order_sn", "channel", "transaction_id")))) {
                 throw new IllegalStateException("商城退款待办缺可恢复扫描索引");
             }
             if (indexes(connection, "oms_order", false).values().stream().noneMatch(cols -> cols.size() >= 2 && cols.subList(0, 2).equals(List.of("buyer_id", "status")))) {
                 throw new IllegalStateException("商城未支付订单计数缺买家状态索引");
+            }
+            if (indexes(connection, "oms_order", false).values().stream().noneMatch(cols -> cols.size() >= 2 && cols.subList(0, 2).equals(List.of("status", "payment_deadline_ms")))) {
+                throw new IllegalStateException("商城未支付订单过期清理缺状态期限索引");
             }
             if (indexes(connection, "commerce_request_nonce", false).values().stream().noneMatch(cols -> !cols.isEmpty() && cols.get(0).equals("expires_ms"))) {
                 throw new IllegalStateException("商城 nonce 缺过期清理索引");

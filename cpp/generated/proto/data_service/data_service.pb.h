@@ -451,6 +451,22 @@ extern const ::google::protobuf::internal::ClassDataFull GetPlayerAssetOpLedgerR
 #else
 extern const GetPlayerAssetOpLedgerResponseGlobalsTypeInternal GetPlayerAssetOpLedgerResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerChannelIdentityRequest;
+struct GetPlayerChannelIdentityRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerChannelIdentityRequestGlobalsTypeInternal GetPlayerChannelIdentityRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerChannelIdentityRequest_class_data_;
+#else
+extern const GetPlayerChannelIdentityRequestGlobalsTypeInternal GetPlayerChannelIdentityRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPlayerChannelIdentityResponse;
+struct GetPlayerChannelIdentityResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPlayerChannelIdentityResponseGlobalsTypeInternal GetPlayerChannelIdentityResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPlayerChannelIdentityResponse_class_data_;
+#else
+extern const GetPlayerChannelIdentityResponseGlobalsTypeInternal GetPlayerChannelIdentityResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetPlayerHomeZoneRequest;
 struct GetPlayerHomeZoneRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -818,6 +834,14 @@ extern TransferAccountRoleRequestGlobalsTypeInternal TransferAccountRoleRequest_
 extern const ::google::protobuf::internal::ClassDataFull TransferAccountRoleRequest_class_data_;
 #else
 extern const TransferAccountRoleRequestGlobalsTypeInternal TransferAccountRoleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpsertAccountChannelIdentityRequest;
+struct UpsertAccountChannelIdentityRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpsertAccountChannelIdentityRequestGlobalsTypeInternal UpsertAccountChannelIdentityRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpsertAccountChannelIdentityRequest_class_data_;
+#else
+extern const UpsertAccountChannelIdentityRequestGlobalsTypeInternal UpsertAccountChannelIdentityRequest_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class VerifyRoleAdmissionRequest;
 struct VerifyRoleAdmissionRequestGlobalsTypeInternal;
@@ -7349,6 +7373,495 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerHomeZoneRequest final : pu
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerChannelIdentityResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.GetPlayerChannelIdentityResponse) */ {
+ public:
+  inline GetPlayerChannelIdentityResponse() : GetPlayerChannelIdentityResponse(nullptr) {}
+  ~GetPlayerChannelIdentityResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerChannelIdentityResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerChannelIdentityResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerChannelIdentityResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerChannelIdentityResponse(const GetPlayerChannelIdentityResponse& from) : GetPlayerChannelIdentityResponse(nullptr, from) {}
+  inline GetPlayerChannelIdentityResponse(GetPlayerChannelIdentityResponse&& from) noexcept : GetPlayerChannelIdentityResponse(nullptr, ::std::move(from)) {}
+  inline GetPlayerChannelIdentityResponse& operator=(const GetPlayerChannelIdentityResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerChannelIdentityResponse& operator=(GetPlayerChannelIdentityResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerChannelIdentityResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerChannelIdentityResponse>(&GetPlayerChannelIdentityResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 96;
+  friend void swap(GetPlayerChannelIdentityResponse& a, GetPlayerChannelIdentityResponse& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerChannelIdentityResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerChannelIdentityResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerChannelIdentityResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlayerChannelIdentityResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlayerChannelIdentityResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlayerChannelIdentityResponse& from) { GetPlayerChannelIdentityResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlayerChannelIdentityResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.GetPlayerChannelIdentityResponse"; }
+
+  explicit GetPlayerChannelIdentityResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerChannelIdentityResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerChannelIdentityResponse& from);
+  GetPlayerChannelIdentityResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerChannelIdentityResponse&& from) noexcept
+      : GetPlayerChannelIdentityResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAccountFieldNumber = 2,
+    kChannelFieldNumber = 3,
+    kOpenIdFieldNumber = 4,
+    kFoundFieldNumber = 1,
+    kRetryFieldNumber = 7,
+    kPlayerLevelFieldNumber = 6,
+    kAccountCreatedMsFieldNumber = 5,
+  };
+  // string account = 2;
+  void clear_account() ;
+  [[nodiscard]] const ::std::string& account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account();
+  void set_allocated_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
+
+  public:
+  // string channel = 3;
+  void clear_channel() ;
+  [[nodiscard]] const ::std::string& channel() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_channel(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_channel();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_channel();
+  void set_allocated_channel(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_channel() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_channel(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_channel();
+
+  public:
+  // string open_id = 4;
+  void clear_open_id() ;
+  [[nodiscard]] const ::std::string& open_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_open_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_open_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_open_id();
+  void set_allocated_open_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_open_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_open_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_open_id();
+
+  public:
+  // bool found = 1;
+  void clear_found() ;
+  [[nodiscard]] bool found() const;
+  void set_found(bool value);
+
+  private:
+  bool _internal_found() const;
+  void _internal_set_found(bool value);
+
+  public:
+  // bool retry = 7;
+  void clear_retry() ;
+  [[nodiscard]] bool retry() const;
+  void set_retry(bool value);
+
+  private:
+  bool _internal_retry() const;
+  void _internal_set_retry(bool value);
+
+  public:
+  // uint32 player_level = 6;
+  void clear_player_level() ;
+  [[nodiscard]] ::uint32_t player_level() const;
+  void set_player_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_player_level() const;
+  void _internal_set_player_level(::uint32_t value);
+
+  public:
+  // uint64 account_created_ms = 5;
+  void clear_account_created_ms() ;
+  [[nodiscard]] ::uint64_t account_created_ms() const;
+  void set_account_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_account_created_ms() const;
+  void _internal_set_account_created_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.GetPlayerChannelIdentityResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 75,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlayerChannelIdentityResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr account_;
+    ::google::protobuf::internal::ArenaStringPtr channel_;
+    ::google::protobuf::internal::ArenaStringPtr open_id_;
+    bool found_;
+    bool retry_;
+    ::uint32_t player_level_;
+    ::uint64_t account_created_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerChannelIdentityRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.GetPlayerChannelIdentityRequest) */ {
+ public:
+  inline GetPlayerChannelIdentityRequest() : GetPlayerChannelIdentityRequest(nullptr) {}
+  ~GetPlayerChannelIdentityRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPlayerChannelIdentityRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPlayerChannelIdentityRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPlayerChannelIdentityRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPlayerChannelIdentityRequest(const GetPlayerChannelIdentityRequest& from) : GetPlayerChannelIdentityRequest(nullptr, from) {}
+  inline GetPlayerChannelIdentityRequest(GetPlayerChannelIdentityRequest&& from) noexcept : GetPlayerChannelIdentityRequest(nullptr, ::std::move(from)) {}
+  inline GetPlayerChannelIdentityRequest& operator=(const GetPlayerChannelIdentityRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPlayerChannelIdentityRequest& operator=(GetPlayerChannelIdentityRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPlayerChannelIdentityRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerChannelIdentityRequest>(&GetPlayerChannelIdentityRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 95;
+  friend void swap(GetPlayerChannelIdentityRequest& a, GetPlayerChannelIdentityRequest& b) { a.Swap(&b); }
+  inline void Swap(GetPlayerChannelIdentityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPlayerChannelIdentityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPlayerChannelIdentityRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPlayerChannelIdentityRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPlayerChannelIdentityRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPlayerChannelIdentityRequest& from) { GetPlayerChannelIdentityRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPlayerChannelIdentityRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.GetPlayerChannelIdentityRequest"; }
+
+  explicit GetPlayerChannelIdentityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPlayerChannelIdentityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerChannelIdentityRequest& from);
+  GetPlayerChannelIdentityRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPlayerChannelIdentityRequest&& from) noexcept
+      : GetPlayerChannelIdentityRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+  };
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.GetPlayerChannelIdentityRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPlayerChannelIdentityRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerAssetOpLedgerRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:data_service.GetPlayerAssetOpLedgerRequest) */ {
  public:
@@ -11997,6 +12510,264 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyRoleAdmissionRequest final : 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::common::base::RoleAdmissionIdentity* PROTOBUF_NULLABLE admission_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpsertAccountChannelIdentityRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.UpsertAccountChannelIdentityRequest) */ {
+ public:
+  inline UpsertAccountChannelIdentityRequest() : UpsertAccountChannelIdentityRequest(nullptr) {}
+  ~UpsertAccountChannelIdentityRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpsertAccountChannelIdentityRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpsertAccountChannelIdentityRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpsertAccountChannelIdentityRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpsertAccountChannelIdentityRequest(const UpsertAccountChannelIdentityRequest& from) : UpsertAccountChannelIdentityRequest(nullptr, from) {}
+  inline UpsertAccountChannelIdentityRequest(UpsertAccountChannelIdentityRequest&& from) noexcept : UpsertAccountChannelIdentityRequest(nullptr, ::std::move(from)) {}
+  inline UpsertAccountChannelIdentityRequest& operator=(const UpsertAccountChannelIdentityRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpsertAccountChannelIdentityRequest& operator=(UpsertAccountChannelIdentityRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpsertAccountChannelIdentityRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpsertAccountChannelIdentityRequest>(&UpsertAccountChannelIdentityRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 94;
+  friend void swap(UpsertAccountChannelIdentityRequest& a, UpsertAccountChannelIdentityRequest& b) { a.Swap(&b); }
+  inline void Swap(UpsertAccountChannelIdentityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpsertAccountChannelIdentityRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpsertAccountChannelIdentityRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpsertAccountChannelIdentityRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpsertAccountChannelIdentityRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpsertAccountChannelIdentityRequest& from) { UpsertAccountChannelIdentityRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpsertAccountChannelIdentityRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.UpsertAccountChannelIdentityRequest"; }
+
+  explicit UpsertAccountChannelIdentityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpsertAccountChannelIdentityRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpsertAccountChannelIdentityRequest& from);
+  UpsertAccountChannelIdentityRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpsertAccountChannelIdentityRequest&& from) noexcept
+      : UpsertAccountChannelIdentityRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAccountFieldNumber = 2,
+    kChannelFieldNumber = 3,
+    kOpenIdFieldNumber = 4,
+    kAuthFieldNumber = 1,
+  };
+  // string account = 2;
+  void clear_account() ;
+  [[nodiscard]] const ::std::string& account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account();
+  void set_allocated_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
+
+  public:
+  // string channel = 3;
+  void clear_channel() ;
+  [[nodiscard]] const ::std::string& channel() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_channel(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_channel();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_channel();
+  void set_allocated_channel(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_channel() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_channel(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_channel();
+
+  public:
+  // string open_id = 4;
+  void clear_open_id() ;
+  [[nodiscard]] const ::std::string& open_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_open_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_open_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_open_id();
+  void set_allocated_open_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_open_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_open_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_open_id();
+
+  public:
+  // .common.base.ServiceCallAuth auth = 1;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.UpsertAccountChannelIdentityRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 78,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpsertAccountChannelIdentityRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr account_;
+    ::google::protobuf::internal::ArenaStringPtr channel_;
+    ::google::protobuf::internal::ArenaStringPtr open_id_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -36607,6 +37378,615 @@ inline void GetPlayerItemGainBlockResponse::set_allocated_block(::PlayerItemGain
 
   _impl_.block_ = reinterpret_cast<::PlayerItemGainBlockComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:data_service.GetPlayerItemGainBlockResponse.block)
+}
+
+// -------------------------------------------------------------------
+
+// UpsertAccountChannelIdentityRequest
+
+// .common.base.ServiceCallAuth auth = 1;
+inline bool UpsertAccountChannelIdentityRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& UpsertAccountChannelIdentityRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& UpsertAccountChannelIdentityRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpsertAccountChannelIdentityRequest.auth)
+  return _internal_auth();
+}
+inline void UpsertAccountChannelIdentityRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:data_service.UpsertAccountChannelIdentityRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE UpsertAccountChannelIdentityRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE UpsertAccountChannelIdentityRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpsertAccountChannelIdentityRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:data_service.UpsertAccountChannelIdentityRequest.auth)
+  return _msg;
+}
+inline void UpsertAccountChannelIdentityRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpsertAccountChannelIdentityRequest.auth)
+}
+
+// string account = 2;
+inline void UpsertAccountChannelIdentityRequest::clear_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpsertAccountChannelIdentityRequest.account)
+  return _internal_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void UpsertAccountChannelIdentityRequest::set_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.UpsertAccountChannelIdentityRequest.account)
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::mutable_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_account();
+  // @@protoc_insertion_point(field_mutable:data_service.UpsertAccountChannelIdentityRequest.account)
+  return _s;
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::_internal_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_.Get();
+}
+inline void UpsertAccountChannelIdentityRequest::_internal_set_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::_internal_mutable_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE UpsertAccountChannelIdentityRequest::release_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpsertAccountChannelIdentityRequest.account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void UpsertAccountChannelIdentityRequest::set_allocated_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_.IsDefault()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpsertAccountChannelIdentityRequest.account)
+}
+
+// string channel = 3;
+inline void UpsertAccountChannelIdentityRequest::clear_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::channel() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpsertAccountChannelIdentityRequest.channel)
+  return _internal_channel();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void UpsertAccountChannelIdentityRequest::set_channel(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.channel_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.UpsertAccountChannelIdentityRequest.channel)
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::mutable_channel()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_channel();
+  // @@protoc_insertion_point(field_mutable:data_service.UpsertAccountChannelIdentityRequest.channel)
+  return _s;
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::_internal_channel() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_.Get();
+}
+inline void UpsertAccountChannelIdentityRequest::_internal_set_channel(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::_internal_mutable_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.channel_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE UpsertAccountChannelIdentityRequest::release_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpsertAccountChannelIdentityRequest.channel)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.channel_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.channel_.Set("", GetArena());
+  }
+  return released;
+}
+inline void UpsertAccountChannelIdentityRequest::set_allocated_channel(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.channel_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.channel_.IsDefault()) {
+    _impl_.channel_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpsertAccountChannelIdentityRequest.channel)
+}
+
+// string open_id = 4;
+inline void UpsertAccountChannelIdentityRequest::clear_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::open_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpsertAccountChannelIdentityRequest.open_id)
+  return _internal_open_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void UpsertAccountChannelIdentityRequest::set_open_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.open_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.UpsertAccountChannelIdentityRequest.open_id)
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::mutable_open_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_open_id();
+  // @@protoc_insertion_point(field_mutable:data_service.UpsertAccountChannelIdentityRequest.open_id)
+  return _s;
+}
+inline const ::std::string& UpsertAccountChannelIdentityRequest::_internal_open_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.open_id_.Get();
+}
+inline void UpsertAccountChannelIdentityRequest::_internal_set_open_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL UpsertAccountChannelIdentityRequest::_internal_mutable_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.open_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE UpsertAccountChannelIdentityRequest::release_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpsertAccountChannelIdentityRequest.open_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.open_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.open_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void UpsertAccountChannelIdentityRequest::set_allocated_open_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.open_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.open_id_.IsDefault()) {
+    _impl_.open_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpsertAccountChannelIdentityRequest.open_id)
+}
+
+// -------------------------------------------------------------------
+
+// GetPlayerChannelIdentityRequest
+
+// uint64 player_id = 1;
+inline void GetPlayerChannelIdentityRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetPlayerChannelIdentityRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityRequest.player_id)
+  return _internal_player_id();
+}
+inline void GetPlayerChannelIdentityRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityRequest.player_id)
+}
+inline ::uint64_t GetPlayerChannelIdentityRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GetPlayerChannelIdentityRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetPlayerChannelIdentityResponse
+
+// bool found = 1;
+inline void GetPlayerChannelIdentityResponse::clear_found() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool GetPlayerChannelIdentityResponse::found() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.found)
+  return _internal_found();
+}
+inline void GetPlayerChannelIdentityResponse::set_found(bool value) {
+  _internal_set_found(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.found)
+}
+inline bool GetPlayerChannelIdentityResponse::_internal_found() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.found_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_found(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = value;
+}
+
+// string account = 2;
+inline void GetPlayerChannelIdentityResponse::clear_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.account)
+  return _internal_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetPlayerChannelIdentityResponse::set_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.account)
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::mutable_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_account();
+  // @@protoc_insertion_point(field_mutable:data_service.GetPlayerChannelIdentityResponse.account)
+  return _s;
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::_internal_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_.Get();
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::_internal_mutable_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetPlayerChannelIdentityResponse::release_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.GetPlayerChannelIdentityResponse.account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetPlayerChannelIdentityResponse::set_allocated_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_.IsDefault()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.GetPlayerChannelIdentityResponse.account)
+}
+
+// string channel = 3;
+inline void GetPlayerChannelIdentityResponse::clear_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::channel() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.channel)
+  return _internal_channel();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetPlayerChannelIdentityResponse::set_channel(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.channel_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.channel)
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::mutable_channel()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_channel();
+  // @@protoc_insertion_point(field_mutable:data_service.GetPlayerChannelIdentityResponse.channel)
+  return _s;
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::_internal_channel() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_.Get();
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_channel(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::_internal_mutable_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.channel_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetPlayerChannelIdentityResponse::release_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.GetPlayerChannelIdentityResponse.channel)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.channel_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.channel_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetPlayerChannelIdentityResponse::set_allocated_channel(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.channel_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.channel_.IsDefault()) {
+    _impl_.channel_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.GetPlayerChannelIdentityResponse.channel)
+}
+
+// string open_id = 4;
+inline void GetPlayerChannelIdentityResponse::clear_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::open_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.open_id)
+  return _internal_open_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetPlayerChannelIdentityResponse::set_open_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.open_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.open_id)
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::mutable_open_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_open_id();
+  // @@protoc_insertion_point(field_mutable:data_service.GetPlayerChannelIdentityResponse.open_id)
+  return _s;
+}
+inline const ::std::string& GetPlayerChannelIdentityResponse::_internal_open_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.open_id_.Get();
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_open_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetPlayerChannelIdentityResponse::_internal_mutable_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.open_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetPlayerChannelIdentityResponse::release_open_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.GetPlayerChannelIdentityResponse.open_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.open_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.open_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetPlayerChannelIdentityResponse::set_allocated_open_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.open_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.open_id_.IsDefault()) {
+    _impl_.open_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.GetPlayerChannelIdentityResponse.open_id)
+}
+
+// uint64 account_created_ms = 5;
+inline void GetPlayerChannelIdentityResponse::clear_account_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GetPlayerChannelIdentityResponse::account_created_ms() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.account_created_ms)
+  return _internal_account_created_ms();
+}
+inline void GetPlayerChannelIdentityResponse::set_account_created_ms(::uint64_t value) {
+  _internal_set_account_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.account_created_ms)
+}
+inline ::uint64_t GetPlayerChannelIdentityResponse::_internal_account_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_created_ms_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_account_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_created_ms_ = value;
+}
+
+// uint32 player_level = 6;
+inline void GetPlayerChannelIdentityResponse::clear_player_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::player_level() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.player_level)
+  return _internal_player_level();
+}
+inline void GetPlayerChannelIdentityResponse::set_player_level(::uint32_t value) {
+  _internal_set_player_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.player_level)
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::_internal_player_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_level_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_player_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_level_ = value;
+}
+
+// bool retry = 7;
+inline void GetPlayerChannelIdentityResponse::clear_retry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool GetPlayerChannelIdentityResponse::retry() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.retry)
+  return _internal_retry();
+}
+inline void GetPlayerChannelIdentityResponse::set_retry(bool value) {
+  _internal_set_retry(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.retry)
+}
+inline bool GetPlayerChannelIdentityResponse::_internal_retry() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retry_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_retry(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_ = value;
 }
 
 #ifdef __GNUC__

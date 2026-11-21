@@ -45,6 +45,7 @@ var messageHandlers = map[uint32]handlerFunc{
 	game.ClientPlayerChatSendChatMessageId: unmarshalAndCall(ClientPlayerChatSendChatHandler),
 	game.ClientPlayerChatPullChatHistoryMessageId: unmarshalAndCall(ClientPlayerChatPullChatHistoryHandler),
 	game.ClientPlayerChatNotifyWorldChatMessageId: unmarshalAndCall(ClientPlayerChatNotifyWorldChatHandler),
+	game.ClientPlayerChatNotifyWorldChatRetractedMessageId: unmarshalAndCall(ClientPlayerChatNotifyWorldChatRetractedHandler),
 	game.ClientPlayerFriendAddFriendMessageId: unmarshalAndCall(ClientPlayerFriendAddFriendHandler),
 	game.ClientPlayerFriendAcceptFriendMessageId: unmarshalAndCall(ClientPlayerFriendAcceptFriendHandler),
 	game.ClientPlayerFriendRejectFriendMessageId: unmarshalAndCall(ClientPlayerFriendRejectFriendHandler),

@@ -812,6 +812,15 @@ func TestAbandonOnlyTouchesDebitStream(t *testing.T) {
 	if n := len(s.recordedCalls()); n != 0 {
 		t.Errorf("流越界必须在碰库之前拒绝,录到 %d 条: %+v", n, callSQLs(s.recordedCalls()))
 	}
+
+	// 即使在 TRADE_DEBIT 流上,付款撤销扣回(TX_PAYMENT_REVERSAL)也不允许自动放弃。
+	s = &recovScript{affected: 1, rowsFor: lockRowsFor(true)}
+	repo = s.repo(t)
+	reversal := assetop.Op{OpID: 13, LeaseToken: 23, Stream: assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT, TxType: nonAbandonableTxType}
+	err = repo.Abandon(context.Background(), reversal, 3_000)
+	if err == nil || errors.Is(err, assetop.ErrLeaseLost) || len(s.recordedCalls()) != 0 {
+		t.Errorf("TX_PAYMENT_REVERSAL 不得自动放弃且碰库前拒绝: err=%v calls=%d", err, len(s.recordedCalls()))
+	}
 }
 
 // TestReleaseLeaseReportsLeaseLost:归还租约落空(行已被接管或已终结)必须回 ErrLeaseLost,成功回 nil。
@@ -865,14 +874,15 @@ func TestListAbandonCandidatesArgs(t *testing.T) {
 	if len(calls) != 1 || strings.Contains(calls[0].sql, "FOR UPDATE") {
 		t.Fatalf("候选读必须是一条非锁读,录到 %+v", calls)
 	}
-	// 实参顺序:PENDING, stream(TRADE_DEBIT), createdBefore, afterOpID, limit。
+	// 实参顺序:PENDING, stream(TRADE_DEBIT), tx_type(<> TX_PAYMENT_REVERSAL), createdBefore, afterOpID, limit。
 	args := calls[0].args
-	if len(args) != 5 {
-		t.Fatalf("候选读实参数 = %d, want 5", len(args))
+	if len(args) != 6 {
+		t.Fatalf("候选读实参数 = %d, want 6", len(args))
 	}
 	if argInt(t, args[0]) != uint64(PendingStatus()) ||
 		argInt(t, args[1]) != uint64(assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT) ||
-		argInt(t, args[2]) != 100 || argInt(t, args[3]) != 7 || argInt(t, args[4]) != 2 {
+		argInt(t, args[2]) != uint64(nonAbandonableTxType) ||
+		argInt(t, args[3]) != 100 || argInt(t, args[4]) != 7 || argInt(t, args[5]) != 2 {
 		t.Errorf("候选读实参 = %v, want (PENDING, TRADE_DEBIT, 100, 7, 2)", args)
 	}
 }

@@ -14,9 +14,14 @@ import (
 )
 
 type (
+	AccountDeletionBlocker            = login.AccountDeletionBlocker
+	AccountDeletionRequest            = login.AccountDeletionRequest
+	AccountDeletionResponse           = login.AccountDeletionResponse
 	AccountSimplePlayerWrapper        = login.AccountSimplePlayerWrapper
+	AntiAddictionStatus               = login.AntiAddictionStatus
 	AssignGateRequest                 = login.AssignGateRequest
 	AssignGateResponse                = login.AssignGateResponse
+	CancelAccountDeletionRequest      = login.CancelAccountDeletionRequest
 	CreatePlayerRequest               = login.CreatePlayerRequest
 	CreatePlayerResponse              = login.CreatePlayerResponse
 	EnterGameRequest                  = login.EnterGameRequest
@@ -38,6 +43,11 @@ type (
 	RemovePlayersFromAccountsResponse = login.RemovePlayersFromAccountsResponse
 	RenewSessionRequest               = login.RenewSessionRequest
 	RenewSessionResponse              = login.RenewSessionResponse
+	ResetAccountRealNameRequest       = login.ResetAccountRealNameRequest
+	ResetAccountRealNameResponse      = login.ResetAccountRealNameResponse
+	ScheduleAccountDeletionRequest    = login.ScheduleAccountDeletionRequest
+	SubmitRealNameRequest             = login.SubmitRealNameRequest
+	SubmitRealNameResponse            = login.SubmitRealNameResponse
 	TestResponse                      = login.TestResponse
 	ZoneRoleCountRequest              = login.ZoneRoleCountRequest
 	ZoneRoleCountResponse             = login.ZoneRoleCountResponse
@@ -48,6 +58,11 @@ type (
 		QueryQueueStatus(ctx context.Context, in *QueryQueueStatusRequest, opts ...grpc.CallOption) (*QueryQueueStatusResponse, error)
 		// 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
 		GetZoneRoleCount(ctx context.Context, in *ZoneRoleCountRequest, opts ...grpc.CallOption) (*ZoneRoleCountResponse, error)
+		// 实名提交,网关 POST /api/real-name 调;凭 access token 鉴权(docs/design/real-name-anti-addiction.md §5.2)。
+		SubmitRealName(ctx context.Context, in *SubmitRealNameRequest, opts ...grpc.CallOption) (*SubmitRealNameResponse, error)
+		// 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
+		RequestAccountDeletion(ctx context.Context, in *AccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
+		CancelAccountDeletion(ctx context.Context, in *CancelAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
 	}
 
 	defaultLoginPreGate struct {
@@ -76,4 +91,21 @@ func (m *defaultLoginPreGate) QueryQueueStatus(ctx context.Context, in *QueryQue
 func (m *defaultLoginPreGate) GetZoneRoleCount(ctx context.Context, in *ZoneRoleCountRequest, opts ...grpc.CallOption) (*ZoneRoleCountResponse, error) {
 	client := login.NewLoginPreGateClient(m.cli.Conn())
 	return client.GetZoneRoleCount(ctx, in, opts...)
+}
+
+// 实名提交,网关 POST /api/real-name 调;凭 access token 鉴权(docs/design/real-name-anti-addiction.md §5.2)。
+func (m *defaultLoginPreGate) SubmitRealName(ctx context.Context, in *SubmitRealNameRequest, opts ...grpc.CallOption) (*SubmitRealNameResponse, error) {
+	client := login.NewLoginPreGateClient(m.cli.Conn())
+	return client.SubmitRealName(ctx, in, opts...)
+}
+
+// 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
+func (m *defaultLoginPreGate) RequestAccountDeletion(ctx context.Context, in *AccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
+	client := login.NewLoginPreGateClient(m.cli.Conn())
+	return client.RequestAccountDeletion(ctx, in, opts...)
+}
+
+func (m *defaultLoginPreGate) CancelAccountDeletion(ctx context.Context, in *CancelAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
+	client := login.NewLoginPreGateClient(m.cli.Conn())
+	return client.CancelAccountDeletion(ctx, in, opts...)
 }

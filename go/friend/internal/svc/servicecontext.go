@@ -25,6 +25,7 @@ import (
 	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/dsclient"
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
@@ -237,7 +238,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 func newDirectoryDataService(c config.Config) (dspb.DataServiceClient, *grpc.ClientConn) {
 	rpcConf := zrpc.RpcClientConf{Etcd: c.Etcd, Timeout: 1500, NonBlock: true}
 	rpcConf.Etcd.Key = "dataservice.rpc"
-	conn := zrpc.MustNewClient(rpcConf).Conn()
+	conn := zrpc.MustNewClient(dsclient.Conf(rpcConf)).Conn()
 	return dspb.NewDataServiceClient(conn), conn
 }
 

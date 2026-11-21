@@ -85,6 +85,12 @@ type AccountRealNameStore interface {
 	RealNameOfPlayer(ctx context.Context, player uint64) (string, bool, error)
 }
 
+// ChannelIdentityStore 是第三方渠道身份与玩家画像的读写接缝(docs/design/rename-and-content-safety.md §6.5 / §7)。
+type ChannelIdentityStore interface {
+	UpsertChannelIdentity(ctx context.Context, account, channel, openID string) error
+	ChannelIdentityOfPlayer(ctx context.Context, player uint64) (*dspb.GetPlayerChannelIdentityResponse, error)
+}
+
 // AccountDeletionStore 是账号注销在目录上的动作与读(docs/design/account-deletion.md §4、§5.1)。*store.AccountDirectoryStore 满足它。
 // 读目录列表连同注销状态走 AccountDirectory(store 的 ReadWithLifecycle),不在这里。
 type AccountDeletionStore interface {

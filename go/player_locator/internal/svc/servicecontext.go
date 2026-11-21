@@ -12,7 +12,6 @@ import (
 	"player_locator/internal/config"
 	smpb "proto/scene_manager"
 	"shared/clusterredis"
-	"shared/generated/table"
 	"shared/kafkacmd"
 	"shared/playerredis"
 )
@@ -36,8 +35,6 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	table.LoadTables(c.TableDir, false)
-
 	if err := c.ControlRedis.ValidateSection(); err != nil {
 		panic(fmt.Errorf("ControlRedis: %w", err))
 	}

@@ -120,6 +120,7 @@ set(SOURCE_FILES
     player/system/team_follow_system.cpp
     player/system/afk_hosting.cpp
     player/system/afk_pass.cpp
+    player/system/player_rename.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp
     player/system/player_support_effects.cpp

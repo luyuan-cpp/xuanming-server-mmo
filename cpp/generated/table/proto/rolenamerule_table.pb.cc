@@ -48,11 +48,11 @@ constexpr RoleNameRuleTable::ParseTableT_ RoleNameRuleTable::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -91,6 +91,26 @@ constexpr RoleNameRuleTable::ParseTableT_ RoleNameRuleTable::InternalGeneratePar
       {::_pbi::TcParser::FastUS1,
        {58, 1, 0,
         PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.desc_)}},
+      // uint32 rename_cooldown_seconds = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RoleNameRuleTable, _impl_.rename_cooldown_seconds_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_cooldown_seconds_)}},
+      // uint32 old_name_hold_seconds = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RoleNameRuleTable, _impl_.old_name_hold_seconds_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.old_name_hold_seconds_)}},
+      // uint32 rename_item_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RoleNameRuleTable, _impl_.rename_item_id_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_item_id_)}},
+      // uint32 rename_item_count = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RoleNameRuleTable, _impl_.rename_item_count_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_item_count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -108,10 +128,18 @@ constexpr RoleNameRuleTable::ParseTableT_ RoleNameRuleTable::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.max_generate_attempts_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 7;
       {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.desc_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 rename_cooldown_seconds = 8;
+      {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_cooldown_seconds_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 old_name_hold_seconds = 9;
+      {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.old_name_hold_seconds_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rename_item_id = 10;
+      {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_item_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rename_item_count = 11;
+      {PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_item_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\21\0\0\0\20\0\0\4"
+      "\21\0\0\0\20\0\0\4\0\0\0\0\0\0\0\0"
       "RoleNameRuleTable"
       "generated_prefix"
       "desc"
@@ -134,7 +162,11 @@ inline constexpr RoleNameRuleTable::Impl_::Impl_(
         min_chars_{0u},
         max_chars_{0u},
         generated_suffix_len_{0u},
-        max_generate_attempts_{0u} {}
+        max_generate_attempts_{0u},
+        rename_cooldown_seconds_{0u},
+        old_name_hold_seconds_{0u},
+        rename_item_id_{0u},
+        rename_item_count_{0u} {}
 
 template <typename>
 constexpr RoleNameRuleTable::RoleNameRuleTable(::_pbi::ConstantInitialized,
@@ -388,7 +420,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_._has_bits_),
-        10, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.min_chars_),
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.max_chars_),
@@ -396,6 +428,10 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.generated_suffix_len_),
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.max_generate_attempts_),
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.rename_cooldown_seconds_),
+        PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.old_name_hold_seconds_),
+        PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.rename_item_id_),
+        PROTOBUF_FIELD_OFFSET(::RoleNameRuleTable, _impl_.rename_item_count_),
         2,
         3,
         4,
@@ -403,6 +439,10 @@ const ::uint32_t
         5,
         6,
         1,
+        7,
+        8,
+        9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RoleNameRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -413,7 +453,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::RoleNameRuleTable)},
-        {17, sizeof(::RoleNameRuleTableData)},
+        {25, sizeof(::RoleNameRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -422,21 +462,24 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_rolenamerule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\030rolenamerule_table.proto\"\252\001\n\021RoleNameR"
+    "\n\030rolenamerule_table.proto\"\235\002\n\021RoleNameR"
     "uleTable\022\n\n\002id\030\001 \001(\r\022\021\n\tmin_chars\030\002 \001(\r\022"
     "\021\n\tmax_chars\030\003 \001(\r\022\030\n\020generated_prefix\030\004"
     " \001(\t\022\034\n\024generated_suffix_len\030\005 \001(\r\022\035\n\025ma"
-    "x_generate_attempts\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\""
-    "9\n\025RoleNameRuleTableData\022 \n\004data\030\001 \003(\0132\022"
-    ".RoleNameRuleTableBC\n\016com.game.tableB\033Ro"
-    "leNameRuleTableOuterClassP\001Z\022generated/p"
-    "b/tableb\006proto3"
+    "x_generate_attempts\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\022"
+    "\037\n\027rename_cooldown_seconds\030\010 \001(\r\022\035\n\025old_"
+    "name_hold_seconds\030\t \001(\r\022\026\n\016rename_item_i"
+    "d\030\n \001(\r\022\031\n\021rename_item_count\030\013 \001(\r\"9\n\025Ro"
+    "leNameRuleTableData\022 \n\004data\030\001 \003(\0132\022.Role"
+    "NameRuleTableBC\n\016com.game.tableB\033RoleNam"
+    "eRuleTableOuterClassP\001Z\022generated/pb/tab"
+    "leb\006proto3"
 };
 static ::absl::once_flag descriptor_table_rolenamerule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_rolenamerule_5ftable_2eproto = {
     false,
     false,
-    335,
+    450,
     descriptor_table_protodef_rolenamerule_5ftable_2eproto,
     "rolenamerule_table.proto",
     &descriptor_table_rolenamerule_5ftable_2eproto_once,
@@ -487,9 +530,9 @@ RoleNameRuleTable::RoleNameRuleTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, max_generate_attempts_) -
+           offsetof(Impl_, rename_item_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::max_generate_attempts_));
+               sizeof(Impl_::rename_item_count_));
 
   // @@protoc_insertion_point(copy_constructor:RoleNameRuleTable)
 }
@@ -505,9 +548,9 @@ inline void RoleNameRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, max_generate_attempts_) -
+           offsetof(Impl_, rename_item_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::max_generate_attempts_));
+               sizeof(Impl_::rename_item_count_));
 }
 RoleNameRuleTable::~RoleNameRuleTable() {
   // @@protoc_insertion_point(destructor:RoleNameRuleTable)
@@ -567,10 +610,15 @@ PROTOBUF_NOINLINE void RoleNameRuleTable::Clear() {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.max_generate_attempts_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.max_generate_attempts_));
+        reinterpret_cast<char*>(&_impl_.rename_cooldown_seconds_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.rename_cooldown_seconds_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.old_name_hold_seconds_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.rename_item_count_) -
+        reinterpret_cast<char*>(&_impl_.old_name_hold_seconds_)) + sizeof(_impl_.rename_item_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -660,6 +708,42 @@ PROTOBUF_NOINLINE void RoleNameRuleTable::Clear() {
     }
   }
 
+  // uint32 rename_cooldown_seconds = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_rename_cooldown_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_rename_cooldown_seconds(), target);
+    }
+  }
+
+  // uint32 old_name_hold_seconds = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_old_name_hold_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_old_name_hold_seconds(), target);
+    }
+  }
+
+  // uint32 rename_item_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_rename_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_rename_item_id(), target);
+    }
+  }
+
+  // uint32 rename_item_count = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_rename_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_rename_item_count(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -685,7 +769,7 @@ PROTOBUF_NOINLINE void RoleNameRuleTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string generated_prefix = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_generated_prefix().empty()) {
@@ -735,6 +819,36 @@ PROTOBUF_NOINLINE void RoleNameRuleTable::Clear() {
             this_._internal_max_generate_attempts());
       }
     }
+    // uint32 rename_cooldown_seconds = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_rename_cooldown_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rename_cooldown_seconds());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    // uint32 old_name_hold_seconds = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_old_name_hold_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_old_name_hold_seconds());
+      }
+    }
+    // uint32 rename_item_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_rename_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rename_item_id());
+      }
+    }
+    // uint32 rename_item_count = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_rename_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rename_item_count());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -753,7 +867,7 @@ void RoleNameRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_generated_prefix().empty()) {
         _this->_internal_set_generated_prefix(from._internal_generated_prefix());
@@ -797,6 +911,28 @@ void RoleNameRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.max_generate_attempts_ = from._impl_.max_generate_attempts_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_rename_cooldown_seconds() != 0) {
+        _this->_impl_.rename_cooldown_seconds_ = from._impl_.rename_cooldown_seconds_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_old_name_hold_seconds() != 0) {
+        _this->_impl_.old_name_hold_seconds_ = from._impl_.old_name_hold_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_rename_item_id() != 0) {
+        _this->_impl_.rename_item_id_ = from._impl_.rename_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_rename_item_count() != 0) {
+        _this->_impl_.rename_item_count_ = from._impl_.rename_item_count_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -820,8 +956,8 @@ void RoleNameRuleTable::InternalSwap(RoleNameRuleTable* PROTOBUF_RESTRICT PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.generated_prefix_, &other->_impl_.generated_prefix_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.max_generate_attempts_)
-      + sizeof(RoleNameRuleTable::_impl_.max_generate_attempts_)
+      PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.rename_item_count_)
+      + sizeof(RoleNameRuleTable::_impl_.rename_item_count_)
       - PROTOBUF_FIELD_OFFSET(RoleNameRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

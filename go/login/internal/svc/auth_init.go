@@ -123,11 +123,8 @@ func InitAuthProviders() (cleanup func()) {
 	}
 
 	if cfg.NetEase != nil {
-		auth.Register("netease", &auth.NeteaseProvider{
-			AppKey:    cfg.NetEase.AppKey,
-			AppSecret: cfg.NetEase.AppSecret,
-		})
-		logx.Info("Auth provider registered: netease")
+		// NeteaseProvider 尚未实现;配置里误开时启动期直接拒绝,不静默挂不可用桩也不读取明文凭据。
+		panic("invalid AuthProviders.NetEase configuration: netease auth provider is not implemented")
 	}
 
 	// 小游戏渠道(微信 wx.login、抖音 tt.login),与上面 App 形态的 wechat 是不同的 auth_type。

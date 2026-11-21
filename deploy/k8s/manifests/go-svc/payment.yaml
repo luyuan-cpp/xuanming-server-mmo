@@ -13,7 +13,7 @@
 #   - 真实渠道的密钥由运维预置在 Secret payment-channel-secrets(键名 = 配置里各 *Env 指的变量名),下面 envFrom 整体注入。
 #     没开要它的渠道时这个 Secret 可以不存在,所以引用是 optional;开了渠道而它不在、缺键,部署脚本在任何写操作之前拒绝,
 #     进程启动时也会对缺失的变量拒启并点名。脚本不读它的值,没有指纹:改了之后要 kubectl rollout restart statefulset/payment。
-#   - 按玩家查实名的账号目录调用密钥在运维预置的 Secret domain-service-secrets(键 account-directory-payment,与每个 zone 的 data-service 同值),
+#   - 按玩家查实名的账号目录调用密钥在部署维护的 Secret domain-service-secrets(键 account-directory-payment,全集群同值,由 k8s_deploy.ps1 自动补齐),
 #     下面 secretKeyRef 注入,不是 optional:缺键时 Pod 卡在 CreateContainerConfigError。
 #
 # 库 mmorpg_payment 只登记在 deploy/mysql-init/00_init_zone_dbs.sql;表由同目录 payment-migrate.yaml 建。
@@ -68,7 +68,7 @@ spec:
         prometheus.io/port: "9280"
         prometheus.io/path: /metrics
     spec:
-      terminationGracePeriodSeconds: 35
+      terminationGracePeriodSeconds: 45
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -137,6 +137,10 @@ spec:
             - {name: grpc, containerPort: 51200}
             - {name: metrics, containerPort: 9280}
             - {name: notify, containerPort: 18130}
+          startupProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 3
+            failureThreshold: 30
           readinessProbe:
             httpGet: {path: /healthz, port: metrics}
             initialDelaySeconds: 5

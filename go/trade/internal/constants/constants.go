@@ -37,6 +37,12 @@ const (
 
 	// ErrFeatureDisabled:P1 未开放的功能(竞价分区 AUCTION)。
 	ErrFeatureDisabled = uint32(table.TradeError_kTradeFeatureDisabled)
+
+	// ErrTitleSensitive:人民币寄售标题命中内容安全敏感词(不打码放行,必须修改)。
+	ErrTitleSensitive = uint32(table.TradeError_kTradeTitleSensitive)
+
+	// ErrTextCheckUnavailable:内容安全服务不可达或超时,未检过的寄售标题不放行,可稍后重试(fault 码)。
+	ErrTextCheckUnavailable = uint32(table.TradeError_kTradeTextCheckUnavailable)
 )
 
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。

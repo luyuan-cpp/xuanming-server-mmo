@@ -179,8 +179,8 @@ G1b(2026-10-12)之后每个 zone 各有一个 leader,**不同 zone 各打印一�
 ```
 **排查**(2026-11-20 起的判定见设计稿 §8):
 - 看 `login_queue_assign_total{outcome="reconnect"}` 有没有在涨。完全不涨 = 豁免整条没走到:请求带 `access_token` 了吗(账号只从它解出,匿名分配不豁免)?账号角色目录读得到吗?
-- 账号的每个角色都会查 `player_locator.GetSession()`,有一个 GateID 非空、且在本区的就豁免。手动查这个账号各角色的 PlayerSession。
-- 别的区建的角色(含合服并进来的)只有会话正连在本区现有的 gate 上才豁免:它原来连的 gate 掉线后重连会被排队,这是已登记的残余(设计稿 §8)。
+- 账号的每个角色都会查 `player_locator.GetSession()`,有一个 GateID 非空、且在本区的就豁免。手动查这个账号各角色的 PlayerSession(重点核对 `gate_zone_id` 是否等于本区;仅旧版未写 `gate_zone_id` 即为 0 时才回退到建角区 + 本区现存 gate 列表)。
+- 合服并进来的角色现由 `PlayerSession.gate_zone_id` 权威标识所在区,原 gate 掉线后仍可免排队;本区角色跨区到别的区在线(`gate_zone_id != 本区`)不会误免本区排队。
 - 豁免的人会在 `admitted:zset:{q:<z>}` 里留一枚 `reconnect:<player_id>` 占位 20s;一台 gate 掉线后这类占位大量出现属正常,它们替重连的人占着名额。
 
 ### 模式 6:Redis QPS 打爆

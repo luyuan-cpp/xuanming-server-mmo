@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     k8s_deploy.ps1 的部署生成器契约测试。
@@ -1250,6 +1250,9 @@ $deadlineBudgetFixtureFiles = @(
     'go/player_inbox/etc/player_inbox.yaml'
     # 第七个目标(玩家存盘):门禁同样读 go/db 的服务 yaml。
     'go/db/etc/db.yaml'
+    # 第八、九个目标(邮件、内容安全):门禁同样读 mail / content_guard 的服务 yaml。
+    'go/mail/etc/mail.yaml'
+    'go/content_guard/etc/content_guard.yaml'
 )
 
 Test-Case "负向:DataService deadline 退回修复前的 2500 时部署门禁必须 throw 并只点名该项(夹具是临时目录里的配置副本,不碰仓库)" {
@@ -1900,7 +1903,7 @@ Test-Case 'C++ Redis 口令契约:scene 认的变量名 == config.cpp 读的环�
 Test-Case 'Sync-RedisAuthSecret:口令非空 → Apply-InjectedSecret 建 redis-auth(键 password,不回显值);空串 → 删残留;未解析 → throw,不当成「没口令」去删' {
     # 被抽出的函数按动态作用域找命令:这里的两个替身只记调用,不起 kubectl。
     $calls = [System.Collections.Generic.List[string]]::new()
-    function Invoke-Kubectl { param([string[]]$Args, [switch]$AllowFailure) $calls.Add('kubectl ' + ($Args -join ' ')) }
+    function Invoke-Kubectl { [CmdletBinding()] param([string[]]$Args, [switch]$AllowFailure) $calls.Add('kubectl ' + ($Args -join ' ')) }
     function Apply-InjectedSecret {
         param([string]$Namespace, [string]$Name, [string]$Key, [string]$Value, [string]$AppLabel)
         $calls.Add("secret ns=$Namespace name=$Name key=$Key app=$AppLabel value-length=$($Value.Length)")
@@ -5525,6 +5528,7 @@ Test-Case 'match 不再发评分快照:ConfigMap 没有 RatingSnapshot* 键,Pod 
 }
 
 Test-Case 'Redis 连接总账:match 行没有缺省池的前提 —— match ConfigMap 恒写 MatchRedis,指向 redis-match-cluster 的每个 Pod,Type cluster' {
+    $RepoRoot = Get-RepoRoot
     # go/match 的 NewRedisHandles 在 MatchRedis.Host 为空时静默回落到 Redis 段(核心库),多一个 go-zero 缺省池(10 × GOMAXPROCS)。
     # 总账 match 行记 DefaultPools = 0 只在这一段恒写时成立;这一段没了或指错地方,这里先变红,逼着同改总账那一行。
     Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
@@ -5687,6 +5691,9 @@ Test-Case 'chat ConfigMap:带世界频道推送的 Kafka brokers,WorldHistoryCac
     Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldHistoryCacheMs: {0}\s*$" -f [regex]::Escape($cacheMs)) -Because '世界频道快照时长与服务 yaml 同一个值'
     $cooldownMs = Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'WorldChannelCooldownMs'
     Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldChannelCooldownMs: {0}\s*$" -f [regex]::Escape($cooldownMs)) -Because '世界频道发言间隔与服务 yaml 同一个值,K8s 上不能悄悄退回 Go 侧 default'
+    $worldMinLevel = Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'WorldMinLevel'
+    Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldMinLevel: {0}\s*$" -f [regex]::Escape($worldMinLevel)) -Because '世界频道等级门槛与服务 yaml 同一个值'
+    Assert-Match -Text $chatConfig -Pattern '(?m)^      - /chatpb\.ClientPlayerChat/ReportChat\s*$' -Because '举报附言同样不得进 Stat 日志'
     # chat 不连 Redis(2026-11-11 删掉了两个从不发命令的句柄):段写回来就等于给它恢复一条没记账的连接路径。
     Assert-NotMatch -Text $chatConfig -Pattern '(?m)^\s*(?:Redis|ChatRedis):\s*$' -Because 'chat 不连 Redis,ConfigMap 不写 Redis / ChatRedis 段'
 }
@@ -5749,6 +5756,7 @@ Test-Case 'match ConfigMap 的 Spectate 段:RelayEnabled 按单 Kafka 集群写 
     Assert-True -Condition ($null -ne $cm) -Because 'infra-up 产物里应当有 go-svc-match-config'
     $flat = ConvertTo-UnprefixedScalars -Scalars (ConvertTo-FlatManifest -Block $cm).Scalars -Prefix 'data.match_service.yaml.'
     Assert-Equal -Expected 'true' -Actual ([string]$flat['Spectate.RelayEnabled']) -Because 'K8s 是单 Kafka 集群形态(Q6)'
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'BattleReport.Enabled') -Actual ([string]$flat['BattleReport.Enabled']) -Because 'BattleReport.Enabled 必须从服务 yaml 镜像进 ConfigMap,保证回滚开关可生效'
     foreach ($key in @('Spectate.BroadcastMaxConcurrent', 'Spectate.BroadcastAutoGateThreshold', 'Spectate.TicketTTLSeconds')) {
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath $key) -Actual ([string]$flat[$key]) -Because "ConfigMap 的 $key 必须等于服务 yaml(生成器不得自带常数)"
     }
@@ -6640,6 +6648,7 @@ Test-Case 'content-guard:目录、镜像名、清单端口对得上;dev 档 Conf
     Assert-Match -Text $embedded -Pattern '(?m)^ListenOn: 0\.0\.0\.0:50250\s*$' -Because '端口与目录、清单、服务 yaml 一致'
     Assert-Match -Text $embedded -Pattern '(?m)^MetricsListenAddr: ":9290"\s*$' -Because '指标口与清单的 metrics 端口、就绪探针一致'
     Assert-Match -Text $embedded -Pattern '(?m)^      - /content_guard\.ContentGuard/CheckText\s*$' -Because 'Stat 内容屏蔽必带:缺了服务拒启,带错了玩家的聊天原文会进日志'
+    Assert-Match -Text $embedded -Pattern '(?m)^      - /content_guard\.ContentGuard/CheckPlatformText\s*$' -Because '异步平台复检接口同样携带原文,必须加入 IgnoreContentMethods'
 
     $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
     Assert-Equal -Expected '9290,50250' -Actual ((Get-ManifestContainerPorts -ManifestContent $manifest | Sort-Object) -join ',') -Because '清单声明的端口 = gRPC 口 + 指标口'
@@ -6651,13 +6660,14 @@ Test-Case 'content-guard:目录、镜像名、清单端口对得上;dev 档 Conf
     Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardRequireLexicon\s*=\s*'true'\s*$" -Because '非 dev 档必须要求词库:只凭内置的几个词对外判定等于没有屏蔽字'
 }
 
-Test-Case '内容安全调用端:login / guild / chat 的 ConfigMap 都带 ContentGuard 段,发现键等于服务端注册的键;本机的 Optional 不上集群' {
+Test-Case '内容安全调用端:login / guild / chat / trade 的 ConfigMap 都带 ContentGuard 段,发现键等于服务端注册的键;本机的 Optional 不上集群' {
     Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
     $serverKey = Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Etcd.Key'
     foreach ($case in @(
             @{ Output = $devOut;               ConfigMap = 'go-svc-login-config'; File = 'login.yaml'; Source = 'go/login/etc/login.yaml' }
             @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-guild-config'; File = 'guild.yaml'; Source = 'go/guild/etc/guild.yaml' }
             @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-chat-config';  File = 'chat.yaml';  Source = 'go/chat/etc/chat.yaml' }
+            @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-trade-config'; File = 'trade.yaml'; Source = 'go/trade/etc/trade.yaml' }
         )) {
         $block = Select-ManifestByName -Output $case.Output -Name $case.ConfigMap
         Assert-True -Condition ($null -ne $block) -Because "DryRun 产物里应当有 $($case.ConfigMap)"
@@ -6679,12 +6689,12 @@ Test-Case '内容安全调用端:login / guild / chat 的 ConfigMap 都带 Conte
 }
 
 Test-Case 'content-guard 的 gRPC 口准入(infra namespace):只放行收玩家文字的服务,开放端口覆盖清单声明的其它端口' {
-    # login(建角名)、guild(帮会名与公告)、chat(聊天)、scene(角色改名、宠物名)。它没有调用方签名,来源只靠这张名单限制。
+    # login(建角名)、guild(帮会名与公告)、chat(聊天)、trade(人民币寄售标题)、scene(角色改名、宠物名)。它没有调用方签名,来源只靠这张名单限制。
     $policy = Select-ManifestByName -Output $assetInfraRun.Output -Name 'content-guard-grpc-allowlist'
     Assert-True -Condition ($null -ne $policy) -Because '打开时 infra 里要有 content-guard-grpc-allowlist'
     $shape = Get-GrpcAllowListShape -Block $policy
     Assert-Equal -Expected 'content-guard' -Actual ($shape.TargetApps -join ',') -Because '它不提供金丝雀副本,策略只选中它自己'
-    Assert-Equal -Expected 'login,guild,chat,scene,scene-world,scene-instance,guild-canary,chat-canary' -Actual ($shape.AllowedApps -join ',') -Because 'content-guard 的 gRPC 调用方名单;增删要同时改这里。客户端经路由服到不了它,名单里没有 client-rpc-router'
+    Assert-Equal -Expected 'login,guild,chat,trade,scene,scene-world,scene-instance,guild-canary,chat-canary,trade-canary' -Actual ($shape.AllowedApps -join ',') -Because 'content-guard 的 gRPC 调用方名单;增删要同时改这里。客户端经路由服到不了它,名单里没有 client-rpc-router'
     Assert-Equal -Expected 50250 -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
     $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
     $declared = @(Get-ManifestContainerPorts -ManifestContent $manifest | Where-Object { $_ -ne 50250 })

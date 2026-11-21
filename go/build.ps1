@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Regenerate go-zero wrappers (goctl) for db/login and fix imports for
     the shared proto module (go/proto/).
@@ -16,35 +16,55 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 Set-StrictMode -Version Latest
 
 $goRoot = $PSScriptRoot
+$repoRoot = Split-Path -Parent $goRoot
 
 Push-Location $goRoot
 try {
     # ----------------------------------------------------------------
-    # 1. goctl: db  (server + client wrappers)
+    # 1. goctl: db & login (server + client wrappers)
     # ----------------------------------------------------------------
     if (-not $SkipGoctl) {
-        Write-Host '>>> [goctl] db' -ForegroundColor Cyan
-        Push-Location db
-        goctl rpc protoc `
-            ../../generated/proto/db/proto/db/db.proto `
-            --proto_path=../../generated/proto/db `
-            --proto_path=../../third_party/protobuf/src/ `
-            --go_out=./proto/ --go-grpc_out=./proto/ `
-            --zrpc_out=./ -m
-        Pop-Location
+        if ($null -eq (Get-Command goctl -ErrorAction SilentlyContinue)) {
+            throw 'goctl was not found on PATH; cannot regenerate db/login go-zero wrappers. Install goctl (go install github.com/zeromicro/go-zero/tools/goctl@latest) and re-run go/build.ps1.'
+        }
 
-        Write-Host '>>> [goctl] login' -ForegroundColor Cyan
-        Push-Location login
-        goctl rpc protoc `
-            ../../generated/proto/login/proto/login/login.proto `
-            --proto_path=../../generated/proto/login `
-            --proto_path=../../third_party/protobuf/src/ `
-            --go_out=./proto/ --go-grpc_out=./proto/ `
-            --zrpc_out=./ -m
-        Pop-Location
+        $previousPath = $env:PATH
+        $pinnedProtocDir = Join-Path $repoRoot 'third_party\protobuf\install_vs2026_dbg\bin'
+        if (Test-Path -LiteralPath (Join-Path $pinnedProtocDir 'protoc.exe') -PathType Leaf) {
+            $env:PATH = $pinnedProtocDir + [System.IO.Path]::PathSeparator + $env:PATH
+        }
+
+        try {
+            foreach ($svc in @('db', 'login')) {
+                $stagedProto = Join-Path $repoRoot "generated\proto\$svc\proto\$svc\$svc.proto"
+                if (-not (Test-Path -LiteralPath $stagedProto -PathType Leaf)) {
+                    throw "Staged proto for goctl ($svc) was not found: $stagedProto. Run proto-gen-run first."
+                }
+                Write-Host ">>> [goctl] $svc" -ForegroundColor Cyan
+                Push-Location $svc
+                try {
+                    & goctl rpc protoc `
+                        "../../generated/proto/$svc/proto/$svc/$svc.proto" `
+                        "--proto_path=../../generated/proto/$svc" `
+                        --proto_path=../../third_party/protobuf/src/ `
+                        --go_out=./proto/ --go-grpc_out=./proto/ `
+                        --zrpc_out=./ -m
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "goctl rpc protoc ($svc) failed with exit code $LASTEXITCODE"
+                    }
+                }
+                finally {
+                    Pop-Location
+                }
+            }
+        }
+        finally {
+            $env:PATH = $previousPath
+        }
     }
 
     # ----------------------------------------------------------------

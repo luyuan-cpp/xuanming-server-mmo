@@ -11,6 +11,7 @@
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/comp/player_persist_carry_comp.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "modules/id_segment/guid_segment_registry.h"
@@ -2579,6 +2580,7 @@ protected:
         ASSERT_FALSE(AttributePoolTableManager::Instance().GetByOwnerType(PetSystem::kPoolOwnerPet).empty());
         petTableId = rows.data(0).id();
         player = tlsEcs.actorRegistry.create();
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
         // 发放依赖已加载的主人等级;号段用例必须越过这条前置条件再验证发号结果。
         tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(1);
@@ -2678,6 +2680,7 @@ protected:
             maxPets = ruleRows.Get(0).max_pets();
 
         player = tlsEcs.actorRegistry.create();
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
     }
 

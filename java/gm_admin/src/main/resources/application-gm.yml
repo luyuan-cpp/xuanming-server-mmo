@@ -49,4 +49,5 @@ gm:
     mail-target: ${GM_MAIL_TARGET:}
     mail-admin-secret: ${GM_MAIL_ADMIN_SECRET:}
     scene-targets-json: '${GM_SCENE_TARGETS_JSON:{}}'
+    scene-etcd-url: ${GM_SCENE_ETCD_URL:}
     scene-admin-secret: ${GM_SCENE_ADMIN_SECRET:}

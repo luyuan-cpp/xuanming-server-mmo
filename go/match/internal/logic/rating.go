@@ -179,7 +179,7 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 	if !isRatedMode(mode) {
 		return finish(ratingOutcomeIgnored), nil
 	}
-	roundLimit := svcCtx.Catalog.RoundLimit(event.GetBattleConfigId())
+	roundLimit := svcCtx.ActiveCatalog().RoundLimit(event.GetBattleConfigId())
 	scoreA, roundCap, rated := ratedScoreA(event, roundLimit)
 	if !rated {
 		logx.Infof("[rating] Battle result does not affect rating battle=%d mode=%s outcome=%s", battleId, modeName, event.GetOutcome())

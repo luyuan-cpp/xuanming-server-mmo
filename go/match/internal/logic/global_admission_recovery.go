@@ -86,7 +86,7 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 				slots <- struct{}{}
 				after = authority.DirectCursor{Kind: record.Kind, Owner: record.OwnerId, High: record.RequestHigh, Low: record.RequestLow}
 				original := record
-				s.LaunchRelayTask("match.direct.admission.operation", func() {
+				if !s.LaunchRelayTask("match.direct.admission.operation", func() {
 					defer func() { <-slots }()
 					call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
@@ -99,7 +99,10 @@ func startGlobalDirectAdmissionRecovery(ctx context.Context, s *svc.ServiceConte
 					if f != nil && f.State < 4 {
 						launchGlobalFormation(s, f)
 					}
-				})
+				}) {
+					<-slots
+					break
+				}
 			}
 		}
 	})
@@ -179,7 +182,7 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 				slots <- struct{}{}
 				after = authority.JoinCursor{Player: record.PlayerId, High: record.RequestHigh, Low: record.RequestLow}
 				original := record
-				s.LaunchRelayTask("match.join.admission.operation", func() {
+				if !s.LaunchRelayTask("match.join.admission.operation", func() {
 					defer func() { <-slots }()
 					call, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 					defer cancel()
@@ -187,7 +190,10 @@ func startGlobalJoinAdmissionRecovery(ctx context.Context, s *svc.ServiceContext
 						s.HoldRelay(err)
 						warnOperation("solo queue original exit still unconfirmed")
 					}
-				})
+				}) {
+					<-slots
+					break
+				}
 			}
 		}
 	})

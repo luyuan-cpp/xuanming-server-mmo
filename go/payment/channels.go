@@ -15,6 +15,7 @@ import (
 	dspb "proto/data_service"
 	paymentpb "proto/payment"
 	"shared/accountdirectory"
+	"shared/dsclient"
 )
 
 // buildChannels 按配置装配开启的渠道。密钥只从配置点名的环境变量读;缺了、太短、带首尾空白都拒启,报错只点变量名。
@@ -231,20 +232,22 @@ func testPolicy(t config.TestConf) core.TestPolicy {
 }
 
 // realNameClient 在 Compliance.MinorSpendingGate=realname 时连 data_service 读买家的实名,none 时回 nil(不接实名)。
-// 缺密钥拒启;不在启动时读一次:data_service 可能还没起来,建意图时读不到回「支付服务繁忙」,玩家稍后重试。
-func realNameClient(c config.Config) (core.RealNames, error) {
+// 缺密钥拒启;返回底层 gRPC 连接的关闭函数,供停机或启动中途失败时释放。
+func realNameClient(c config.Config) (core.RealNames, func(), error) {
 	if c.Payment.Compliance.MinorSpendingGate != config.MinorSpendingGateRealName {
-		return nil, nil
+		return nil, func() {}, nil
 	}
-	client, err := zrpc.NewClient(c.DataServiceRpc)
+	client, err := zrpc.NewClient(dsclient.Conf(c.DataServiceRpc))
 	if err != nil {
-		return nil, fmt.Errorf("connect data_service: %w", err)
+		return nil, nil, fmt.Errorf("connect data_service: %w", err)
 	}
+	closeConn := func() { _ = client.Conn().Close() }
 	names, err := accountdirectory.NewRealNameClient(dspb.NewDataServiceClient(client.Conn()), os.Getenv(accountdirectory.PaymentSecretEnv))
 	if err != nil {
-		return nil, fmt.Errorf("real-name client (%s): %w", accountdirectory.PaymentSecretEnv, err)
+		closeConn()
+		return nil, nil, fmt.Errorf("real-name client (%s): %w", accountdirectory.PaymentSecretEnv, err)
 	}
-	return names, nil
+	return names, closeConn, nil
 }
 
 func serviceOptions(c config.Config, realNames core.RealNames) core.Options {

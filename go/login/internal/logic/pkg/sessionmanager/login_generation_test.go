@@ -212,6 +212,29 @@ func TestLoginGeneration_SessionMirrorRoundTrip(t *testing.T) {
 	}
 }
 
+// 镜像结构与 proto 之间的 gate_zone_id 映射:NewOnlineSession 覆盖旧记录的区号、toProto 带出、fromProto 读回。
+func TestGateZoneID_SessionMirrorRoundTrip(t *testing.T) {
+	existing := &PlayerSession{PlayerID: mintPlayerID, SessionVersion: 2, GateZoneID: 5}
+
+	session := NewOnlineSession(existing, OnlineSessionInput{
+		PlayerID:   mintPlayerID,
+		SessionID:  11,
+		GateZoneID: 7,
+		Now:        mintNow,
+	})
+	if session.GateZoneID != 7 {
+		t.Fatalf("NewOnlineSession GateZoneID = %d, want input 7 (not existing 5)", session.GateZoneID)
+	}
+
+	pb := toProto(session)
+	if pb.GetGateZoneId() != 7 {
+		t.Fatalf("toProto gate_zone_id = %d, want 7", pb.GetGateZoneId())
+	}
+	if back := fromProto(pb); back.GateZoneID != 7 {
+		t.Fatalf("fromProto GateZoneID = %d, want 7", back.GateZoneID)
+	}
+}
+
 // 脚本应答的解析:解析失败、0、不大于会话记录代次(双精度丢位等)都必须当失败,不得带着继续。
 func TestParseMintedLoginGeneration(t *testing.T) {
 	cases := []struct {

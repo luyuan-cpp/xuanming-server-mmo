@@ -5,6 +5,10 @@ CREATE ROLE IF NOT EXISTS 'mmorpg_chat_runtime';
 
 GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_send_authority` TO 'mmorpg_chat_runtime';
 GRANT SELECT, INSERT, UPDATE ON `mmorpg_chat`.`chat_policy` TO 'mmorpg_chat_runtime';
+GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_world_retraction` TO 'mmorpg_chat_runtime';
+GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_report` TO 'mmorpg_chat_runtime';
+GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_repeat_event` TO 'mmorpg_chat_runtime';
+GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_private_daily_target` TO 'mmorpg_chat_runtime';
 
 -- 表级GRANT必须在-migrate创建正式两表之后执行；信息架构按已授权对象可见。
 -- runtime不碰全局库：身份校验走目录 RPC(GetRoleFenceState)，结果带TTL缓存；验收须用该账号跑真实发送，不能用管理员账号替代。

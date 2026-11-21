@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <google/protobuf/util/message_differencer.h>
 #include "engine/core/type_define/player_guid_comp.h"
+#include <array>
 #include <functional>
 #include <limits>
 #include <map>
@@ -42,6 +43,7 @@
 #include "modules/condition/condition_type.h"
 #include "modules/mission/mission_events.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/player_mission.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
@@ -156,6 +158,7 @@ protected:
         ASSERT_TRUE(ArmItemSegment(700000, 800000));
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{454545});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{454545});
         ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
@@ -412,8 +415,14 @@ protected:
     void SetUp() override {
         ActorActionStateTableManager::Instance().Load();
         // 前置:「释放技能」这一行必须在表里,否则查表先失败,下面的用例就验不到组件这一步。
-        ASSERT_NE(nullptr, ActorActionStateTableManager::Instance().FindByIdSilent(kActorActionUseSkill).first)
+        ASSERT_TRUE(ActorActionStateTableManager::Instance().Exists(kActorActionUseSkill))
             << "ActorActionState row " << kActorActionUseSkill << " is missing: run the data table exporter first";
+    }
+
+    void TearDown() override {
+        ActorActionStateSystem::ResetRulesToTable();
+        ActorActionStateSystem::ClearAllExitHooks();
+        ActorEntityFixture::TearDown();
     }
 };
 
@@ -473,6 +482,56 @@ TEST_F(ActorActionStateTest, InvalidSuccessStateIsRejectedBeforeAnyStateChange) 
     EXPECT_EQ(1u, tlsEcs.actorRegistry.get<ActorStateComp>(actor).state_list().size());
 }
 
+TEST_F(ActorActionStateTest, InterruptPathFiresExitHooksOnceAndRejectsBeforeSideEffects) {
+    constexpr uint32_t kBlockedTip = 2048;
+    const std::array<combat_ai::StateRule, 3> rules{{
+        {kActorActionUseSkill, kActorStateTeamFollow, combat_ai::StateMode::kInterrupt, 0},
+        {kActorActionUseSkill, kActorStateMounted, combat_ai::StateMode::kBlock, kBlockedTip},
+        {kActorActionUseSkill, kActorStateCombat, combat_ai::StateMode::kAllow, 0},
+    }};
+    ASSERT_EQ(0u, ActorActionStateSystem::LoadRules(rules));
+
+    const auto actor = NewEntity();
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateTeamFollow));
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateMounted));
+
+    int hookCalls = 0;
+    ActorActionStateSystem::ExitReason observedReason = ActorActionStateSystem::ExitReason::kRemoved;
+    ActorActionStateSystem::RegisterExitHook(
+        kActorStateTeamFollow,
+        [&](entt::entity e, ActorActionStateSystem::ExitReason reason) {
+            ++hookCalls;
+            observedReason = reason;
+            // 状态已先摘除,钩子内查 HasState 为 false 且重入 RemoveState 不得二次触发钩子。
+            EXPECT_FALSE(ActorActionStateSystem::HasState(e, kActorStateTeamFollow));
+            EXPECT_EQ(kSuccess, ActorActionStateSystem::RemoveState(e, kActorStateTeamFollow));
+        });
+
+    // 1) 同时存在互斥(Mounted)与打断(TeamFollow):互斥先拦截,不得提前打断跟随。
+    EXPECT_EQ(kBlockedTip, ActorActionStateSystem::TryPerformAction(actor, kActorActionUseSkill, kActorStateCombat));
+    EXPECT_EQ(0, hookCalls);
+    EXPECT_TRUE(ActorActionStateSystem::HasState(actor, kActorStateTeamFollow));
+    EXPECT_FALSE(ActorActionStateSystem::HasState(actor, kActorStateCombat));
+
+    // 2) 非法入态在打断之前拒绝,跟随原样保留。
+    EXPECT_EQ(kSuccess, ActorActionStateSystem::RemoveState(actor, kActorStateMounted));
+    EXPECT_EQ(kInvalidParameter,
+              ActorActionStateSystem::TryPerformAction(actor, kActorActionUseSkill, kActorStateActorStateMax));
+    EXPECT_EQ(0, hookCalls);
+    EXPECT_TRUE(ActorActionStateSystem::HasState(actor, kActorStateTeamFollow));
+
+    // 3) 校验全通过:打断 TeamFollow 并触发一次 kInterrupted 钩子,随后激活 Combat。
+    EXPECT_EQ(kSuccess, ActorActionStateSystem::TryPerformAction(actor, kActorActionUseSkill, kActorStateCombat));
+    EXPECT_EQ(1, hookCalls);
+    EXPECT_EQ(ActorActionStateSystem::ExitReason::kInterrupted, observedReason);
+    EXPECT_FALSE(ActorActionStateSystem::HasState(actor, kActorStateTeamFollow));
+    EXPECT_TRUE(ActorActionStateSystem::HasState(actor, kActorStateCombat));
+
+    // 4) 对已不存在的状态重复 RemoveState 幂等成功,不得再次触发钩子。
+    EXPECT_EQ(kSuccess, ActorActionStateSystem::RemoveState(actor, kActorStateTeamFollow));
+    EXPECT_EQ(1, hookCalls);
+}
+
 // ── 宝宝组件(F074):PlayerPetComp 由加载链路挂上,PetSystem 所有入口只取不建 ─────────
 
 class PetComponentOwnershipTest : public ActorEntityFixture {
@@ -490,6 +549,7 @@ protected:
         // 没走加载链路的玩家:身份在,宝宝组件不在。
         player = NewEntity();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{565656});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
     }
 
     entt::entity player{entt::null};

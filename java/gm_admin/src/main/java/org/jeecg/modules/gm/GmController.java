@@ -3,12 +3,14 @@ package org.jeecg.modules.gm;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Set;
 import org.apache.shiro.SecurityUtils;
@@ -51,7 +53,9 @@ public class GmController {
                 !("https".equals(this.gateway.getScheme()) || ("http".equals(this.gateway.getScheme()) && loopback))) {
             throw new IllegalArgumentException("GM gateway requires HTTPS or loopback HTTP");
         }
-        this.mailEnabled = !mailTarget.isBlank() && mailSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8).length >= 32;
+        String trimmedSecret = mailSecret == null ? "" : mailSecret.strip();
+        this.mailEnabled = mailTarget != null && !mailTarget.isBlank()
+                && trimmedSecret.getBytes(StandardCharsets.UTF_8).length >= 32;
     }
 
     @GetMapping("/overview")
@@ -59,6 +63,8 @@ public class GmController {
         Subject subject = authenticated();
         if (PERMISSIONS.stream().noneMatch(subject::isPermitted)) throw new AuthorizationException();
         ObjectNode result = json.createObjectNode().put("mailEnabled", mailEnabled);
+        ArrayNode currencies = game.currencyTypes();
+        result.set("currencies", currencies != null ? currencies : json.createArrayNode());
         result.putArray("zones");
         if (subject.isPermitted("gm:zone:read")) {
             try {
@@ -106,8 +112,10 @@ public class GmController {
         boolean hasItem = input.hasNonNull("itemConfigId");
         if (hasCurrency) {
             String amount = text(input, "currencyAmount", 1, 19);
-            decimal(amount, BigInteger.valueOf(Long.MAX_VALUE), "银两数量");
-            attachments.putArray("currencies").addObject().put("currencyType", integer(input, "currencyType", 0, 0)).put("amount", amount);
+            decimal(amount, BigInteger.valueOf(Long.MAX_VALUE), "货币数量");
+            int currencyType = input.hasNonNull("currencyType") ? integer(input, "currencyType", 0, Integer.MAX_VALUE) : 0;
+            if (!game.supportsCurrency(currencyType)) bad("未知币种");
+            attachments.putArray("currencies").addObject().put("currencyType", currencyType).put("amount", amount);
         }
         if (hasItem) attachments.putArray("items").addObject().put("configId", integer(input, "itemConfigId", 1, Integer.MAX_VALUE))
                 .put("count", integer(input, "itemCount", 1, 4096));
@@ -125,7 +133,21 @@ public class GmController {
     }
 
     @GetMapping("/mail/commands")
-    public String commands() { require("gm:audit:read"); return ok(journal.list()); }
+    public String commands(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String playerId,
+            @RequestParam(required = false) String status) {
+        require("gm:audit:read");
+        return ok(journal.list(page, pageSize, playerId, status));
+    }
+
+    @GetMapping("/mail/commands/{id}/audit")
+    public String commandAudit(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.auditHistory(id, "MAIL"));
+    }
 
     private Subject authenticated() {
         Subject subject = SecurityUtils.getSubject();
@@ -136,15 +158,16 @@ public class GmController {
 
     private String require(String permission) {
         Subject subject = authenticated(); subject.checkPermission(permission);
-        // LoginUser 属于上游，不复制其类型；读取其稳定的 username Bean 属性。
+        // LoginUser 属于上游，不复制其类型；读取其稳定的 username Bean 属性，并与 GmPlayerCommandController 保持同一安全口径。
         Object username = new BeanWrapperImpl(subject.getPrincipal()).getPropertyValue("username");
-        if (!(username instanceof String name) || name.isBlank() || name.length() > 100)
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "管理员身份无效");
+        if (!(username instanceof String name) || name.isBlank() || name.getBytes(StandardCharsets.UTF_8).length > 64
+                || name.contains("|") || name.codePoints().anyMatch(Character::isISOControl))
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "管理员身份无效或名称过长");
         return name;
     }
 
     private ObjectNode parse(String body) {
-        if (body == null || body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) bad("请求体过大");
+        if (body == null || body.getBytes(StandardCharsets.UTF_8).length > 16384) bad("请求体过大");
         try (JsonParser parser = json.getFactory().createParser(body)) {
             parser.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
             JsonNode node = json.readTree(parser);

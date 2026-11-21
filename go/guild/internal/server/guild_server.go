@@ -44,6 +44,10 @@ func (s *GuildServer) SetAnnouncement(ctx context.Context, req *pb.SetAnnounceme
 	return s.logic.SetAnnouncement(ctx, req)
 }
 
+func (s *GuildServer) RenameGuild(ctx context.Context, req *pb.RenameGuildRequest) (*pb.RenameGuildResponse, error) {
+	return s.logic.RenameGuild(ctx, req)
+}
+
 // ── 成员管理(B2)────────────────────────────────────────────────
 
 func (s *GuildServer) SetGuildMemberRole(ctx context.Context, req *pb.SetGuildMemberRoleRequest) (*pb.SetGuildMemberRoleResponse, error) {

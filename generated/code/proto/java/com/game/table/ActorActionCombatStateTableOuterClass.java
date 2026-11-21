@@ -27,11 +27,6 @@ public final class ActorActionCombatStateTableOuterClass extends com.google.prot
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_ActorActionCombatStatestate_descriptor;
-  static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_ActorActionCombatStatestate_fieldAccessorTable;
-  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_ActorActionCombatStateTable_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -50,34 +45,27 @@ public final class ActorActionCombatStateTableOuterClass extends com.google.prot
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\"actoractioncombatstate_table.proto\"D\n\033" +
-      "ActorActionCombatStatestate\022\022\n\nstate_mod" +
-      "e\030\001 \001(\r\022\021\n\tstate_tip\030\002 \001(\r\"V\n\033ActorActio" +
-      "nCombatStateTable\022\n\n\002id\030\001 \001(\r\022+\n\005state\030\002" +
-      " \003(\0132\034.ActorActionCombatStatestate\"M\n\037Ac" +
-      "torActionCombatStateTableData\022*\n\004data\030\001 " +
-      "\003(\0132\034.ActorActionCombatStateTableBM\n\016com" +
-      ".game.tableB%ActorActionCombatStateTable" +
-      "OuterClassP\001Z\022generated/pb/tableb\006proto3"
+      "\n\"actoractioncombatstate_table.proto\"b\n\033" +
+      "ActorActionCombatStateTable\022\n\n\002id\030\001 \001(\r\022" +
+      "\020\n\010state_id\030\003 \001(\r\022\022\n\nstate_mode\030\004 \001(\r\022\021\n" +
+      "\tstate_tip\030\005 \001(\r\"M\n\037ActorActionCombatSta" +
+      "teTableData\022*\n\004data\030\001 \003(\0132\034.ActorActionC" +
+      "ombatStateTableBM\n\016com.game.tableB%Actor" +
+      "ActionCombatStateTableOuterClassP\001Z\022gene" +
+      "rated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         });
-    internal_static_ActorActionCombatStatestate_descriptor =
-      getDescriptor().getMessageType(0);
-    internal_static_ActorActionCombatStatestate_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_ActorActionCombatStatestate_descriptor,
-        new java.lang.String[] { "StateMode", "StateTip", });
     internal_static_ActorActionCombatStateTable_descriptor =
-      getDescriptor().getMessageType(1);
+      getDescriptor().getMessageType(0);
     internal_static_ActorActionCombatStateTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ActorActionCombatStateTable_descriptor,
-        new java.lang.String[] { "Id", "State", });
+        new java.lang.String[] { "Id", "StateId", "StateMode", "StateTip", });
     internal_static_ActorActionCombatStateTableData_descriptor =
-      getDescriptor().getMessageType(2);
+      getDescriptor().getMessageType(1);
     internal_static_ActorActionCombatStateTableData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ActorActionCombatStateTableData_descriptor,

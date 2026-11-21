@@ -18,6 +18,10 @@ public class HmacAuthentication extends OncePerRequestFilter {
     static final String ROLE = HmacAuthentication.class.getName() + ".role";
     static final long WINDOW_MS = 120_000;
     private static final int MAX_BODY_BYTES = 16_384;
+    // K8s 探针分组只读进程内可用态(livenessState / readinessState),不碰库;复合 /actuator/health 仍须 HMAC 认证。
+    private static final Set<String> HEALTH_PROBE_PATHS = Set.of(
+        "/actuator/health/readiness",
+        "/actuator/health/liveness");
     private static final Map<String,String> INTERNAL_ROLES = Map.ofEntries(
         Map.entry("/internal/payments", "payment"),
         Map.entry("/internal/payments/order-view", "payment"),
@@ -68,6 +72,10 @@ public class HmacAuthentication extends OncePerRequestFilter {
             }
             // 容器已剥离 context 和 DispatcherServlet 前缀；签名仍绑定上面的完整原始 URI。
             String route = request.getPathInfo() == null ? request.getServletPath() : request.getPathInfo();
+            if ("GET".equals(request.getMethod()) && body.length == 0 && route != null && HEALTH_PROBE_PATHS.contains(route)) {
+                chain.doFilter(request, response);
+                return;
+            }
             String role = route == null ? "gateway" : INTERNAL_ROLES.getOrDefault(route, "gateway");
             if (route != null && route.startsWith("/internal/") && role.equals("gateway")) { throw new CommerceException(404, "接口不存在"); }
             String subject = single(request, "X-Commerce-Subject");

@@ -13,9 +13,11 @@
 #include "modules/mission/comp/mission_comp.h"
 #include "modules/mission/system/mission.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
 #include "modules/mission/mission_events.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/bag_marshal.h"
 #include "services/scene/player/system/mission_marshal.h"
 #include "services/scene/player/system/player_level_rules.h"
@@ -85,6 +87,7 @@ protected:
         ASSERT_TRUE(ArmMissionTestItemSegment());
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{424242});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{424242});
         ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
@@ -126,6 +129,7 @@ protected:
         tlsEcs.actorRegistry.destroy(player);
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{424242});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{424242});
         ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));
@@ -205,6 +209,14 @@ TEST_F(PlayerMissionSystemTest, BlockedRewardAndFrozenPlayerPreserveClaimAndBag)
     EXPECT_TRUE(Missions().IsClaimable(12));
     EXPECT_EQ(0u, ItemCount());
     tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+    EXPECT_NE(kSuccess, PlayerMissionSystem::ClaimReward(player, 0, 12));
+    EXPECT_NE(kSuccess, PlayerMissionSystem::Accept(player, 0, 4, 1000));
+    tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    EXPECT_NE(kSuccess, PlayerMissionSystem::ClaimReward(player, 0, 12));
+    EXPECT_NE(kSuccess, PlayerMissionSystem::Accept(player, 0, 4, 1000));
+    tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
     EXPECT_EQ(kSuccess, PlayerMissionSystem::ClaimReward(player, 0, 12));
     EXPECT_EQ(4u, ItemCount());
     EXPECT_FALSE(Missions().IsClaimable(12));

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.util.JsonFormat;
+import com.sun.net.httpserver.HttpServer;
 import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
@@ -14,6 +15,8 @@ import io.grpc.stub.ServerCalls;
 import io.grpc.stub.StreamObserver;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,11 +39,15 @@ class GamePlayerAdminTest {
             """;
     private boolean dropLookup;
     private Server server;
+    private Server secondServer;
+    private HttpServer etcd;
     private GameServices services;
 
     @AfterEach
     void close() throws InterruptedException {
         if (services != null) services.close();
+        if (etcd != null) etcd.stop(0);
+        if (secondServer != null) secondServer.shutdownNow().awaitTermination(3, TimeUnit.SECONDS);
         if (server != null) server.shutdownNow().awaitTermination(3, TimeUnit.SECONDS);
     }
 
@@ -256,5 +263,87 @@ class GamePlayerAdminTest {
         assertThrows(GameServices.CallFailure.class, () -> services.sendPlayerCommand(frozen("pet.grant", "{\"petTableId\":101}")));
         assertThrows(IllegalArgumentException.class, () -> new GameServices(PROTO, JSON, "", "", "", "", true,
                 5000, "{\"7\":\"example.com:443\"}", KEY));
+        assertThrows(IllegalArgumentException.class, () -> new GameServices(PROTO, JSON, "", target, "", "", true,
+                5000, "{}", "http://etcd.example.com:2379", KEY, 0));
+    }
+
+    private static String b64(String text) {
+        return Base64.getEncoder().encodeToString(text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String startEtcd(AtomicReference<String> bodyRef) throws Exception {
+        etcd = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+        etcd.createContext("/v3/kv/range", exchange -> {
+            byte[] payload = bodyRef.get().getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, payload.length);
+            try (var out = exchange.getResponseBody()) { out.write(payload); }
+        });
+        etcd.start();
+        return "http://127.0.0.1:" + etcd.getAddress().getPort();
+    }
+
+    @Test
+    void dynamicEtcdDiscoveryResolvesRotatesAndRejectsAmbiguousOrUnsafeTargets() throws Exception {
+        String firstTarget = start(this::success);
+        int firstPort = server.getPort();
+        var secondWrites = new AtomicInteger();
+        ServerServiceDefinition secondAdmin = ServerServiceDefinition.builder("scene_node.SceneNodeGrpc")
+                .addMethod(PROTO.method(GamePlayerAdmin.EXECUTE), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    secondWrites.incrementAndGet();
+                    success(request, observer);
+                })).build();
+        secondServer = NettyServerBuilder.forAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+                .addService(secondAdmin).build().start();
+        int secondPort = secondServer.getPort();
+
+        // 包含 /allocated/ 占位键、缺 grpcEndpoint 的节点、以及正常注册的 node 7。
+        String initialBody = "{\"kvs\":["
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/allocated/node_type/3/node_id/7") + "\",\"value\":\"" + b64("uuid-placeholder") + "\"},"
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/8") + "\",\"value\":\"" + b64("{\"nodeId\":8,\"endpoint\":{\"ip\":\"127.0.0.1\",\"port\":9000}}") + "\"},"
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7") + "\",\"value\":\"" + b64("{\"nodeId\":7,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + firstPort + "}}") + "\"}"
+                + "]}";
+        var etcdBody = new AtomicReference<>(initialBody);
+        String etcdUrl = startEtcd(etcdBody);
+
+        services = new GameServices(PROTO, JSON, "", firstTarget, "", "", true, 5000, "{}", etcdUrl, KEY, 0);
+        assertTrue(services.playerCommandsEnabled());
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":50}")).path("executed").asBoolean());
+        assertEquals(1, writes.get());
+        assertEquals(0, secondWrites.get());
+
+        // 场景节点重建并换端口后，自动切换通道到新实例。
+        etcdBody.set("{\"kvs\":[{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7") + "\",\"value\":\""
+                + b64("{\"nodeId\":7,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + secondPort + "}}") + "\"}]}");
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":51}")).path("executed").asBoolean());
+        assertEquals(1, writes.get());
+        assertEquals(1, secondWrites.get());
+
+        // 同 nodeId 出现两个不同地址（脑裂注册）必须 fail-closed，拒绝执行。
+        etcdBody.set("{\"kvs\":["
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7-a") + "\",\"value\":\"" + b64("{\"nodeId\":7,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + firstPort + "}}") + "\"},"
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7-b") + "\",\"value\":\"" + b64("{\"nodeId\":7,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + secondPort + "}}") + "\"}"
+                + "]}");
+        GameServices.CallFailure ambiguous = assertThrows(GameServices.CallFailure.class,
+                () -> services.sendPlayerCommand(frozen("player.level", "{\"level\":52}")));
+        assertEquals("SCENE_AMBIGUOUS", ambiguous.getCode());
+        assertFalse(ambiguous.isOutcomeUnknown());
+
+        // 明文模式下 etcd 返回非回环远端地址必须被安全策略拒绝。
+        etcdBody.set("{\"kvs\":[{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7") + "\",\"value\":\""
+                + b64("{\"nodeId\":7,\"grpcEndpoint\":{\"ip\":\"10.0.0.9\",\"port\":50001}}") + "\"}]}");
+        GameServices.CallFailure unsafe = assertThrows(GameServices.CallFailure.class,
+                () -> services.sendPlayerCommand(frozen("player.level", "{\"level\":53}")));
+        assertEquals("SCENE_TARGET_INVALID", unsafe.getCode());
+        assertFalse(unsafe.isOutcomeUnknown());
+        assertEquals(1, writes.get());
+        assertEquals(1, secondWrites.get());
+
+        // 静态映射优先于 etcd：即便 etcd 处于不安全/分叉状态，静态映射的节点仍可安全命中。
+        services.close();
+        services = new GameServices(PROTO, JSON, "", firstTarget, "", "", true, 5000,
+                "{\"7\":\"" + firstTarget + "\"}", etcdUrl, KEY, 0);
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":54}")).path("executed").asBoolean());
+        assertEquals(2, writes.get());
     }
 }

@@ -35,12 +35,17 @@ bool LoadTestPolicy(ActivityVitalityRuleTable& rule, std::vector<ActivityVitalit
     rule = testRule; rewards = testRewards; return policyAvailable;
 }
 bool DeferredPersist(entt::entity) { ++persistCalls; return true; }
-void RecordPersisted(entt::entity player, uint64_t playerId = 434343) {
-    PlayerAllData snapshot;
-    auto* db = snapshot.mutable_player_database_data();
+void RecordPersisted(entt::entity player, uint64_t playerId = 434343, uint64_t ownerEpoch = 0, uint64_t saveSeq = 1) {
+    auto snapshot = std::make_shared<PlayerAllData>();
+    snapshot->set_last_save_seq(saveSeq);
+    auto* db = snapshot->mutable_player_database_data();
     db->set_player_id(playerId);
     mission_marshal::Marshal(player, *db->mutable_mission_component());
-    tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(snapshot);
+    const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+    const uint64_t effectiveEpoch = ownerEpoch != 0 ? ownerEpoch : (owner != nullptr ? owner->epoch : 0);
+    auto& comp = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player);
+    if (effectiveEpoch != 0 && saveSeq != 0) comp.RememberCommit(snapshot, effectiveEpoch, saveSeq);
+    comp.Replace(*snapshot);
 }
 bool ArmActivitySegment(uint64_t lo = 100000, uint64_t hi = 200000) {
     auto& client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
@@ -146,6 +151,8 @@ TEST_F(PlayerActivitySystemTest, ClaimWaitsForExactPersistedIdentityAndReplayNev
     EXPECT_EQ(4u, Count()); EXPECT_EQ(1, persistCalls);
     ASSERT_EQ(kSuccess, Claim()); EXPECT_TRUE(response.replayed()); EXPECT_FALSE(response.durable()); EXPECT_EQ(4u, Count());
     RecordPersisted(player, 999); ASSERT_EQ(kSuccess, Claim()); EXPECT_FALSE(response.durable());
+    RecordPersisted(player, 434343, /*ownerEpoch=*/0, /*saveSeq=*/0); ASSERT_EQ(kSuccess, Claim()); EXPECT_FALSE(response.durable());
+    RecordPersisted(player, 434343, /*ownerEpoch=*/8, /*saveSeq=*/1); ASSERT_EQ(kSuccess, Claim()); EXPECT_FALSE(response.durable());
     RecordPersisted(player); ASSERT_EQ(kSuccess, Claim()); EXPECT_TRUE(response.durable()); EXPECT_EQ(4u, Count());
     auto& persisted = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player);
     persisted.snapshot->mutable_player_database_data()->mutable_mission_component()->mutable_scopes(0)

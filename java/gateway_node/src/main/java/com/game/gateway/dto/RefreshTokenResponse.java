@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * <ul>
  *   <li>0    — success, new access/refresh token pair issued</li>
  *   <li>401  — refresh token invalid/expired (client must redo OAuth)</li>
+ *   <li>429  — IP rate limit exceeded (client backs off and retries later)</li>
  *   <li>500  — backend unavailable, or a login in-band tip that Tip.xlsx marks as fault (retry later)</li>
  * </ul>
  */
@@ -18,6 +19,7 @@ public class RefreshTokenResponse {
 
     public static final int CODE_OK             = 0;
     public static final int CODE_AUTH_REJECTED  = 401;
+    public static final int CODE_RATE_LIMITED   = 429;
     public static final int CODE_INTERNAL       = 500;
 
     private int code;

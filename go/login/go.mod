@@ -14,8 +14,8 @@ require (
 	github.com/zeromicro/go-zero v1.9.2
 	go.etcd.io/etcd/api/v3 v3.6.5
 	go.etcd.io/etcd/client/v3 v3.6.5
+	go.opentelemetry.io/otel/trace v1.39.0
 	golang.org/x/crypto v0.46.0
-	golang.org/x/net v0.48.0
 	golang.org/x/term v0.38.0
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
@@ -60,6 +60,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -88,12 +89,12 @@ require (
 	go.opentelemetry.io/otel/exporters/zipkin v1.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.39.0 // indirect
-	go.opentelemetry.io/otel/trace v1.39.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect

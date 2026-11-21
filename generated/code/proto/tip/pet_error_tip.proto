@@ -43,4 +43,6 @@ enum pet_error {
 
   kPetIdGenerateFailed = 26016;
 
+  kPetNameSensitive = 26017;
+
 };

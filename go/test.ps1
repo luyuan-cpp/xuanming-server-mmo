@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Run the green L1 unit-test subset for the go side. Designed to be cheap
     enough to run on every CI build.
@@ -68,6 +68,7 @@ $L1Suites = @(
     @{
         Dir      = Join-Path $GoRoot 'shared'
         Packages = @(
+            './combatai/...'
             './placement/...'
             './kafkautil/...'
             './dbplacement/...'

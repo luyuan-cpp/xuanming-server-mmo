@@ -27,7 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>这笔付款有退款待办(订单取消后迟到、交付被拒、重复付款、金额币种不符):撤销 = 渠道已把钱退给用户,待办
  *       PENDING / MANUAL → REVOKED,不用再退;订单本身那笔的订单 5 / 7 → 6。撤回撤销 = 钱又回到商户,已 REVOKED 的待办
  *       转 MANUAL(原因 REVOCATION_REVERSED),由人决定再退一次;订单本身那笔的订单 6 → 7。已退成(REFUNDED)的只留档。</li>
- *   <li>寄售订单(sku 0)绑定的付款:卖家的收入已入账、物品已转给买家,扣不回来;只留档并记错误日志,由人工处理。</li>
+ *   <li>寄售订单(sku 0)绑定的付款:撤销时若尚未交付(DELIVERY_PENDING)立即作废交付待办阻止发货并转人工(MANUAL);
+ *       若已交付(DELIVERED)冻结卖家未提现冷却期收入(available_ms=Long.MAX_VALUE)并转人工(MANUAL),避免争议资金被提走。</li>
  *   <li>官方订单绑定的付款(已建交付待办):写扣回待办(一张订单一行,最新修订号,PENDING),订单转 8 扣回中;
  *       trade 把发放收敛到最新修订号之后回执(DeliveryStore.reversalReceipt)。没有扣回待办且新事实仍是付款(中间的
  *       撤销与撤回商城没看见)时发放不用变,只记修订号。</li>
@@ -102,9 +103,7 @@ public class PaymentRevisionStore {
             } else if (boundOrder == null) {
                 throw new CommerceException(503, "异常付款缺退款待办");
             } else if (skuId == 0) {
-                next = orderStatus;
-                afterCommit(() -> LOG.error("consignment payment changed by the channel, manual handling needed: order={} channel={} revision={} fact={}",
-                    in.orderId(), in.channel(), in.revision(), in.fact()));
+                next = consignmentEffect(in, revoked, orderStatus);
             } else {
                 next = reversalEffect(in, revoked, orderStatus);
             }
@@ -146,6 +145,50 @@ public class PaymentRevisionStore {
         if (jdbc.update("UPDATE oms_order SET status=? WHERE order_sn=? AND status=?", nextOrder, in.orderId(), expectedOrder) != 1)
             throw new CommerceException(503, "订单本身的退款待办与订单状态不一致");
         return nextOrder;
+    }
+
+    /**
+     * 寄售订单绑定的付款被渠道翻转时的止损处理:
+     * <ul>
+     *   <li>撤销且尚未交付(1 DELIVERY_PENDING):作废交付待办(PENDING→REVOKED),寄售单与订单转 MANUAL,阻止 trade 把卖家托管资产发给撤款买家。</li>
+     *   <li>撤销且已交付(2 DELIVERED):冻结冷却期内未提现的卖家收入(available_ms=Long.MAX_VALUE),寄售单与订单转 MANUAL,防止争议资金被提走。</li>
+     *   <li>其余情况(已 MANUAL 或撤回撤销):保持现态并打错误日志交人工复核后再解冻或放行。</li>
+     * </ul>
+     * 锁序:已持 oms_order 行锁 → commerce_delivery_intent / commerce_seller_guard → commerce_seller_income,与交付与提现同序不成环。
+     */
+    private int consignmentEffect(CommerceApi.Revision in, boolean revoked, int orderStatus) {
+        if (revoked && orderStatus == 1) {
+            var intents = jdbc.queryForList("SELECT status FROM commerce_delivery_intent WHERE order_sn=? FOR UPDATE", in.orderId());
+            if (!intents.isEmpty() && "PENDING".equals(intents.getFirst().get("status"))) {
+                jdbc.update("UPDATE commerce_delivery_intent SET status='REVOKED' WHERE order_sn=? AND status='PENDING'", in.orderId());
+            }
+            jdbc.update("UPDATE commerce_consignment SET state='MANUAL' WHERE current_order_sn=?", in.orderId());
+            if (jdbc.update("UPDATE oms_order SET status=7 WHERE order_sn=? AND status=1", in.orderId()) != 1)
+                throw new CommerceException(503, "寄售订单状态冲突");
+            afterCommit(() -> LOG.error("consignment payment revoked before delivery, delivery halted for manual handling: order={} channel={} revision={}",
+                in.orderId(), in.channel(), in.revision()));
+            return 7;
+        }
+        if (revoked && orderStatus == 2) {
+            var incomes = jdbc.query("SELECT account FROM commerce_seller_income WHERE order_sn=?",
+                (row, n) -> row.getBytes(1), in.orderId());
+            if (!incomes.isEmpty()) {
+                byte[] sellerAccount = incomes.getFirst();
+                jdbc.update("INSERT INTO commerce_seller_guard(account) VALUES(?) ON DUPLICATE KEY UPDATE account=account", sellerAccount);
+                jdbc.queryForObject("SELECT account FROM commerce_seller_guard WHERE account=? FOR UPDATE", byte[].class, sellerAccount);
+                jdbc.update("UPDATE commerce_seller_income SET available_ms=? WHERE order_sn=? AND paid_fen+reserved_fen<net_fen",
+                    Long.MAX_VALUE, in.orderId());
+            }
+            jdbc.update("UPDATE commerce_consignment SET state='MANUAL' WHERE current_order_sn=?", in.orderId());
+            if (jdbc.update("UPDATE oms_order SET status=7 WHERE order_sn=? AND status=2", in.orderId()) != 1)
+                throw new CommerceException(503, "寄售订单状态冲突");
+            afterCommit(() -> LOG.error("consignment payment revoked after delivery, unpaid seller income frozen for manual handling: order={} channel={} revision={}",
+                in.orderId(), in.channel(), in.revision()));
+            return 7;
+        }
+        afterCommit(() -> LOG.error("consignment payment changed by the channel, manual handling needed: order={} channel={} revision={} fact={}",
+            in.orderId(), in.channel(), in.revision(), in.fact()));
+        return orderStatus;
     }
 
     /** 官方订单绑定的付款:写扣回待办,订单转 8 扣回中,返回订单的新状态。 */

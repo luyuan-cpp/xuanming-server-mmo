@@ -26,14 +26,14 @@ public class ActorActionCombatStateTableManager {
      */
     private static class Snapshot {
         final ActorActionCombatStateTableData data;
-        final Map<Integer, ActorActionCombatStateTable> kvData;
+        final Map<Integer, List<ActorActionCombatStateTable>> kvData;
 
 
 
 
 
         Snapshot(ActorActionCombatStateTableData data,
-                 Map<Integer, ActorActionCombatStateTable> kvData) {
+                 Map<Integer, List<ActorActionCombatStateTable>> kvData) {
             this.data = data;
             this.kvData = kvData;
         }
@@ -59,10 +59,10 @@ public class ActorActionCombatStateTableManager {
         }
         ActorActionCombatStateTableData data = builder.build();
 
-        Map<Integer, ActorActionCombatStateTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<ActorActionCombatStateTable>> kvData = new HashMap<>(data.getDataCount());
 
         for (ActorActionCombatStateTable row : data.getDataList()) {
-            kvData.put(row.getId(), row);
+            kvData.computeIfAbsent(row.getId(), k -> new ArrayList<>()).add(row);
         }
 
         this.snapshot = new Snapshot(data, kvData);
@@ -72,12 +72,17 @@ public class ActorActionCombatStateTableManager {
         return snapshot.data;
     }
 
-    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
-    public ActorActionCombatStateTable findById(int id) {
-        return snapshot.kvData.get(id);
+    /**
+     * 返回该 id 命中的全部行。这张表的主键声明了 (cfg_multi)，单值语义不成立，
+     * 因此不提供 findById —— 把可重复主键当单值用会在编译期断，而不是悄悄只看第一行。
+     *
+     * <p>热更契约：返回的对象属于当前快照，只许当场用，调用方**只存 id**。
+     */
+    public List<ActorActionCombatStateTable> findAllById(int id) {
+        return snapshot.kvData.getOrDefault(id, Collections.emptyList());
     }
 
-    public Map<Integer, ActorActionCombatStateTable> getKvData() {
+    public Map<Integer, List<ActorActionCombatStateTable>> getKvData() {
         return Collections.unmodifiableMap(snapshot.kvData);
     }
 
@@ -101,7 +106,7 @@ public class ActorActionCombatStateTableManager {
     // ---- Count ----
 
     public int count() {
-        return snapshot.kvData.size();
+        return snapshot.data.getDataCount();
     }
 
 
@@ -114,8 +119,7 @@ public class ActorActionCombatStateTableManager {
         Snapshot snap = this.snapshot;
         List<ActorActionCombatStateTable> result = new ArrayList<>(ids.size());
         for (int id : ids) {
-            ActorActionCombatStateTable row = snap.kvData.get(id);
-            if (row != null) { result.add(row); }
+            result.addAll(snap.kvData.getOrDefault(id, Collections.emptyList()));
         }
         return result;
     }

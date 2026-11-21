@@ -34,6 +34,12 @@
 #include "scene_planned_drain.h"
 #include "world/scene_planned_drain_rules.h"
 #include "modules/id_segment/guid_segment_registry.h"
+#include "actor/action_state/constants/actor_state.h"
+#include "actor/action_state/system/actor_action_state.h"
+#include "combat/skill/system/skill.h"
+#include "combat_state/system/combat_state.h"
+#include "player/system/team_follow_system.h"
+#include "player/system/player_rename.h"
 
 #include <chrono>
 #include <limits>
@@ -87,17 +93,46 @@ namespace
             static void OnLoaded()
             {
                 ConfigSystem::OnConfigLoadSuccessful();
-                // 战斗配表指纹:表加载完成后算一次并缓存(PrepareBattle 每次备战直接读缓存),
-                // 也让指纹出现在启动日志里便于跨 zone 比对排障
+                // 装备掷属性的挂点(docs/design/equipment-attributes.md §4.3):只安装一次,早于第一笔入包流量。
+                PlayerEquipSystem::InstallItemInitializer();
+                ActorActionStateSystem::RegisterExitHook(
+                    kActorStateTeamFollow,
+                    [](entt::entity actor, ActorActionStateSystem::ExitReason /*reason*/)
+                    {
+                        TeamFollowSystem::Detach(actor, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
+                    });
+                ActorActionStateSystem::RegisterExitHook(
+                    kActorStateCombat,
+                    [](entt::entity actor, ActorActionStateSystem::ExitReason reason)
+                    {
+                        if (reason == ActorActionStateSystem::ExitReason::kInterrupted)
+                        {
+                            SkillSystem::InterruptActiveCast(actor);
+                        }
+                    });
+            }
+
+            static bool Validate(std::string &err)
+            {
+                // 神秘商人三表与改名表在暂存作用域内校验;角色改名表校验失败直接拒绝热更。
+                PlayerMysteryMerchantSystem::ValidateTables();
+                if (!PlayerRenameSystem::ValidateTables())
+                {
+                    err = "scene RoleNameRule table validation failed";
+                    return false;
+                }
+                return true;
+            }
+
+            static void OnCommitted(const std::shared_ptr<const TableSet> & /*set*/)
+            {
+                // 每次整批表提交(启动与热更)后刷新战斗配表指纹与行为/异常互斥位图矩阵。
                 LOG_INFO << "scene combat table fingerprint: table_fingerprint="
                          << turnbattle::BattleTableFingerprint::Refresh();
-                // 装备掷属性的挂点 + 装备表校验(docs/design/equipment-attributes.md §4.3)。
-                // 放在配表加载完成回调里:此时表已就绪,而 Node 还在构造、没有监听任何端口,
-                // 一定早于第一笔入包流量(玩家加载 / 掉落 / 邮件 / GM 发物)。漏装的后果是新装备
-                // 永远没有随机属性,且没有任何报错。
-                PlayerEquipSystem::InstallItemInitializer();
-                // 神秘商人用到的三张表(规则 / 商品 / 站位)核一遍,问题打进启动日志;不阻断启动。
                 PlayerMysteryMerchantSystem::ValidateTables();
+                PlayerRenameSystem::ValidateTables();
+                ActorActionStateSystem::RefreshCompiledTable();
+                CombatStateSystem::RefreshCompiledTable();
             }
         };
         using KafkaCommandType = contracts::kafka::SceneCommand;
@@ -111,6 +146,10 @@ namespace
 
 int main(int argc, char *argv[])
 {
+    if (const auto exitCode = table_bundle::RunValidateTablesCli(argc, argv, &SceneNodeHooks::TableLoadHandler::Validate))
+    {
+        return *exitCode;
+    }
     // 检查旧的 NODE_ETCD_TRANSPORT 环境变量(etcd 只剩 muduo_h2 传输;设成 grpc 会打 WARN),须在 Node 构造前调用。
     etcd_transport::InstallFromEnv();
     return node::entry::RunNodeMain([](EventLoop &loop)

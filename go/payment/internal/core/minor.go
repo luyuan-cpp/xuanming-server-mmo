@@ -135,30 +135,6 @@ func (s *Service) spendLimit(age uint32, at time.Time) data.SpendLimit {
 		MonthStartMs: uint64(month.UnixMilli()), DayStartMs: uint64(day.UnixMilli())}
 }
 
-// recheckLatePayment 复核未成年人意图关闭(额度已释放)之后才到的钱:在额度行锁下重新核对,超限的不发货、转人工(充值设计 §12「其它入账」)。
-// 同一笔已经记过的不再复核,以记下的结论为准。同一笔的两次报告同时到、且这期间额度恰好变了,可能一次判超限一次放行:
-// 以先写进库的那次为准,最坏是多占了额度,不会多发货。
-func (s *Service) recheckLatePayment(ctx context.Context, rec *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord, now time.Time, orphan func(string)) error {
-	if _, err := s.store.Txn(ctx, rec.Channel, rec.TxnHi, rec.TxnLo); err == nil {
-		return nil
-	} else if !errors.Is(err, data.ErrNotFound) {
-		return err
-	}
-	nowMs := uint64(now.UnixMilli())
-	paidMs := max(nowMs, intent.CreatedMs)
-	admitted, err := s.store.ReviveMinorIntent(ctx, intent, s.spendLimit(intent.MinorAge, time.UnixMilli(int64(paidMs))), paidMs, nowMs, false)
-	if err != nil {
-		return err
-	}
-	if admitted {
-		countMinorGate("late_payment_admitted")
-		return nil
-	}
-	countMinorGate("late_payment_over_limit")
-	orphan("minor spending limit reached by a payment that arrived after its intent closed")
-	return nil
-}
-
 // recountMinor 把一笔照样要发货的钱重新计入未成年人已关闭的意图(App Store 撤回退款;记账的第二步没做完、意图已到期关闭):
 // 在额度行锁下转 PAID。超限也照样计入(钱在商户手里,商城照常收敛),记合规日志与指标等人工(充值设计 §12「退款与撤回」)。
 func (s *Service) recountMinor(ctx context.Context, intent *paymentpb.PaymentIntentRecord, nowMs uint64) error {
@@ -188,12 +164,13 @@ func (s *Service) applyFlip(ctx context.Context, hi, lo uint64, state uint32, no
 	return s.store.SetIntentState(ctx, hi, lo, state, nowMs)
 }
 
-// drivesIntent 报告这笔付款的翻转该不该改意图状态:只有订单绑定的那笔才算——已绑定、还没报给商城,或商城为它本身建了
-// 退款(取消后才到账)。重复付款、金额币种不符这些异常付款,以及拒收、转人工的,翻转不影响订单那一笔,
-// 不能拿它关掉意图、释放未成年人的额度。
+// drivesIntent 报告这笔付款的翻转该不该改意图状态:只有商城确认归属订单的那笔才算——已绑定(MallBound),
+// 或商城为它本身建了退款(取消后才到账、交付被拒)。
+// 尚在 MallPending 的付款可能是重复付款或金额不符的异常付款,不能在商城定性前提前释放订单意图的未成年人额度;
+// 若它在首次投递商城前已被撤销,pushOne 拿到商城定性后会补做一次释放。
 func drivesIntent(txn *paymentpb.PaymentTxnRecord) bool {
 	switch txn.MallState {
-	case data.MallPending, data.MallBound:
+	case data.MallBound:
 		return true
 	case data.MallRefundQueued:
 		return mall.RefundsOrdersOwnPayment(txn.MallRefundReason)

@@ -36,26 +36,41 @@ public class GateTokenSecretGuard {
             "local-dev");
 
     private final GateProperties gate;
+    private final String adminApiKey;
     private final String runMode;
 
     public GateTokenSecretGuard(GateProperties gate, Environment environment) {
         this.gate = gate;
+        this.adminApiKey = readPropertyAllowingUnresolvedPlaceholder(environment, "admin.api-key");
         // 与 AuthorityDatabaseConfiguration 读同一个键、同一个缺省值。
         this.runMode = environment.getProperty("mmorpg.run-mode", "prod");
+    }
+
+    private static String readPropertyAllowingUnresolvedPlaceholder(Environment environment, String key) {
+        try {
+            return environment.getProperty(key);
+        } catch (IllegalArgumentException unresolved) {
+            return "${unresolved:" + key + "}";
+        }
     }
 
     /** 不合格时:生产档 throw(拒启),dev / test 只告警。报错与日志只说问题,不带密钥值。 */
     @PostConstruct
     void validate() {
-        String problem = problemOf(gate.getTokenSecret());
+        checkSecret("gate.token-secret", gate.getTokenSecret());
+        checkSecret("admin.api-key", adminApiKey);
+    }
+
+    private void checkSecret(String keyName, String value) {
+        String problem = problemOf(value);
         if (problem == null) {
             return;
         }
         if (isRelaxedRunMode(runMode)) {
-            log.warn("gate.token-secret {} (mmorpg.run-mode={}); allowed only for local dev / test, production refuses to start", problem, runMode);
+            log.warn("{} {} (mmorpg.run-mode={}); allowed only for local dev / test, production refuses to start", keyName, problem, runMode);
             return;
         }
-        throw new IllegalStateException("gate.token-secret " + problem + " (mmorpg.run-mode=" + runMode + "); refusing to start");
+        throw new IllegalStateException(keyName + " " + problem + " (mmorpg.run-mode=" + runMode + "); refusing to start");
     }
 
     /** 密钥的问题描述(不含值);合格返回 null。 */

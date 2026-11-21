@@ -19,7 +19,8 @@ import (
 // Load() builds a new snapshot and swaps it in, replacing the old one.
 type actoractioncombatstateSnapshot struct {
     data   []*pb.ActorActionCombatStateTable
-    kvData map[uint32]*pb.ActorActionCombatStateTable
+    // 主键可重复:一个 id 对应多行
+    kvData map[uint32][]*pb.ActorActionCombatStateTable
 }
 
 type ActorActionCombatStateTableManager struct {
@@ -39,45 +40,59 @@ var ActorActionCombatStateTableManagerInstance = NewActorActionCombatStateTableM
 func NewActorActionCombatStateTableManager() *ActorActionCombatStateTableManager {
     m := &ActorActionCombatStateTableManager{}
     m.snap.Store(&actoractioncombatstateSnapshot{
-        kvData: make(map[uint32]*pb.ActorActionCombatStateTable),
+        kvData: make(map[uint32][]*pb.ActorActionCombatStateTable),
     })
     return m
 }
 
 func (m *ActorActionCombatStateTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *ActorActionCombatStateTableManager) swapSnapshot(snap *actoractioncombatstateSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *ActorActionCombatStateTableManager) loadSnapshot(configDir string, useBinary bool) (*actoractioncombatstateSnapshot, error) {
     var container pb.ActorActionCombatStateTableData
 
     if useBinary {
         path := filepath.Join(configDir, "actoractioncombatstate.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "actoractioncombatstate.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
     snap := &actoractioncombatstateSnapshot{
-        kvData: make(map[uint32]*pb.ActorActionCombatStateTable, len(container.Data)),
+        kvData: make(map[uint32][]*pb.ActorActionCombatStateTable, len(container.Data)),
     }
 
     for _, row := range container.Data {
-        snap.kvData[row.Id] = row
+        snap.kvData[row.Id] = append(snap.kvData[row.Id], row)
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *ActorActionCombatStateTableManager) FindAll() []*pb.ActorActionCombatStateTable {
@@ -85,10 +100,12 @@ func (m *ActorActionCombatStateTableManager) FindAll() []*pb.ActorActionCombatSt
     return snap.data
 }
 
-func (m *ActorActionCombatStateTableManager) FindById(id uint32) (*pb.ActorActionCombatStateTable, bool) {
+// FindAllById 返回该 id 命中的**全部**行(表内顺序)。
+// 这张表的主键声明了 (cfg_multi),所以不生成 FindById —— 把可重复主键当单值用
+// 会在编译期断，而不是悄悄只看第一行。
+func (m *ActorActionCombatStateTableManager) FindAllById(id uint32) []*pb.ActorActionCombatStateTable {
     snap := m.snap.Load()
-    row, ok := snap.kvData[id]
-    return row, ok
+    return snap.kvData[id]
 }
 
 
@@ -97,8 +114,7 @@ func (m *ActorActionCombatStateTableManager) FindById(id uint32) (*pb.ActorActio
 
 func (m *ActorActionCombatStateTableManager) Exists(id uint32) bool {
     snap := m.snap.Load()
-    _, ok := snap.kvData[id]
-    return ok
+    return len(snap.kvData[id]) > 0
 }
 
 
@@ -118,9 +134,7 @@ func (m *ActorActionCombatStateTableManager) FindByIds(ids []uint32) []*pb.Actor
     snap := m.snap.Load()
     result := make([]*pb.ActorActionCombatStateTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := snap.kvData[id]; ok {
-            result = append(result, row)
-        }
+        result = append(result, snap.kvData[id]...)
     }
     return result
 }

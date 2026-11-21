@@ -33,8 +33,11 @@ public class DatabaseConfiguration {
 
     HikariConfig poolConfig(DataSourceProperties source, CommerceProperties props) {
         HikariConfig config = new HikariConfig();
+        config.setPoolName("mall");
         config.setJdbcUrl(source.getUrl()); config.setUsername(source.getUsername()); config.setPassword(source.getPassword());
-        config.setMaximumPoolSize(16); config.setConnectionTimeout(3000); config.setValidationTimeout(2000);
+        config.setMinimumIdle(4); config.setMaximumPoolSize(16);
+        config.setIdleTimeout(300_000); config.setMaxLifetime(900_000); config.setKeepaliveTime(60_000);
+        config.setConnectionTimeout(3000); config.setValidationTimeout(2000);
         if (source.getUrl() != null && source.getUrl().startsWith("jdbc:mysql:")) {
             config.addDataSourceProperty("connectTimeout", "3000"); config.addDataSourceProperty("socketTimeout", "6000");
         }
@@ -54,6 +57,7 @@ public class DatabaseConfiguration {
         var credentials=new java.util.Properties();credentials.putAll(config.getDataSourceProperties());
         credentials.setProperty("user",source.getUsername());credentials.setProperty("password",source.getPassword());
         String init=config.getConnectionInitSql();
+        config.setJdbcUrl(null); config.setUsername(null); config.setPassword(null);
         config.setDataSource(new com.game.authority.AuthorityDataSource(source.getUrl(),credentials,
                 boot,props.isRequireTidb(),init==null?java.util.List.of():java.util.List.of(init)));
         config.setConnectionInitSql(null);

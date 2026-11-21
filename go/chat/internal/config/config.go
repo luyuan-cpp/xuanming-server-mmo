@@ -78,6 +78,19 @@ type Config struct {
 	// (docs/design/chat-world-channel-fanout.md §5)。被间隔挡下的请求回 kRateLimitExceeded,不落库、不占 request_id。
 	WorldChannelCooldownMs int `json:",default=5000"`
 
+	// WorldMinLevel:世界频道发言的最低角色等级,0 = 不限制等级(测试默认 0,prod/staging/chat.yaml 显式配置)。
+	WorldMinLevel int `json:",default=0"`
+	// DuplicateSpamWindowMs:跨副本重复内容防刷屏时间窗(毫秒),0 = 关闭。
+	DuplicateSpamWindowMs int `json:",default=0"`
+	// DuplicateSpamMaxSenders:同一时间窗内允许发送同一归一化文本的不同发送者上限,超出拒绝。
+	DuplicateSpamMaxSenders int `json:",default=0"`
+	// DuplicateSpamMaxPerSender:同一时间窗内同一发送者重复发送同一归一化文本的次数上限,超出拒绝。
+	DuplicateSpamMaxPerSender int `json:",default=0"`
+	// NewAccountAgeHours:新账号私聊限制的账号年龄阈值(小时),0 = 关闭新账号私聊人数限制。
+	NewAccountAgeHours int `json:",default=0"`
+	// NewAccountDailyPrivateLimit:新账号每日可发起私聊的不同目标玩家人数上限,0 = 不限。
+	NewAccountDailyPrivateLimit int `json:",default=0"`
+
 	// HistoryMaxEntries:每个SQL频道窗口最多可见的最近条数。
 	HistoryMaxEntries int `json:",default=200"`
 
@@ -150,6 +163,18 @@ func (c *Config) Validate() error {
 	}
 	if c.WorldChannelCooldownMs < 0 || c.WorldChannelCooldownMs > constants.MaxWorldChannelCooldownMs {
 		return fmt.Errorf("WorldChannelCooldownMs (%d) must be within [0, %d]", c.WorldChannelCooldownMs, constants.MaxWorldChannelCooldownMs)
+	}
+	if c.WorldMinLevel < 0 || c.WorldMinLevel > 1000 {
+		return fmt.Errorf("WorldMinLevel (%d) must be within [0, 1000]", c.WorldMinLevel)
+	}
+	if c.DuplicateSpamWindowMs < 0 || c.DuplicateSpamWindowMs > 600000 {
+		return fmt.Errorf("DuplicateSpamWindowMs (%d) must be within [0, 600000]", c.DuplicateSpamWindowMs)
+	}
+	if c.DuplicateSpamMaxSenders < 0 || c.DuplicateSpamMaxSenders > 100 || c.DuplicateSpamMaxPerSender < 0 || c.DuplicateSpamMaxPerSender > 100 {
+		return errors.New("DuplicateSpamMaxSenders and DuplicateSpamMaxPerSender must be within [0, 100]")
+	}
+	if c.NewAccountAgeHours < 0 || c.NewAccountAgeHours > 720 || c.NewAccountDailyPrivateLimit < 0 || c.NewAccountDailyPrivateLimit > 1000 {
+		return errors.New("NewAccountAgeHours must be in [0, 720] and NewAccountDailyPrivateLimit in [0, 1000]")
 	}
 	if c.HistoryTTLSeconds > constants.MaxHistoryTTLSeconds {
 		return fmt.Errorf("HistoryTTLSeconds (%d) must not exceed %d: chat originals are deleted by the database after %d days, and messages still inside the visible window must not be deleted",

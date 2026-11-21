@@ -22,14 +22,17 @@ import (
 	"content_guard/internal/engine"
 	"content_guard/internal/lexstore"
 	"content_guard/internal/metrics"
+	"content_guard/internal/platform"
 	"content_guard/internal/server"
 	"content_guard/internal/wordlist"
 
 	base "proto/common/base"
 	cgpb "proto/content_guard"
+	dspb "proto/data_service"
 
 	"shared/buildinfo"
 	"shared/clockcheck"
+	"shared/dsclient"
 	"shared/etcdwatch"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -91,7 +94,30 @@ func main() {
 	defer etcdCli.Close()
 
 	eng := engine.New()
-	handler := server.New(eng, c.RequireLexicon, c.MaxTextBytes)
+	var lookup platform.IdentityLookup
+	if c.HasDataServiceRpc() {
+		dsCli := zrpc.MustNewClient(dsclient.Conf(c.DataServiceRpc))
+		dsRPC := dspb.NewDataServiceClient(dsCli.Conn())
+		lookup = platform.IdentityLookupFunc(func(callCtx context.Context, playerID uint64) (platform.Identity, error) {
+			resp, rpcErr := dsRPC.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID})
+			if rpcErr != nil {
+				return platform.Identity{}, rpcErr
+			}
+			if !resp.GetFound() {
+				return platform.Identity{}, nil
+			}
+			return platform.Identity{
+				Channel: resp.GetChannel(),
+				OpenID:  resp.GetOpenId(),
+				Account: resp.GetAccount(),
+			}, nil
+		})
+	}
+	reviewer, err := buildPlatformRouter(c.Platform, lookup)
+	if err != nil {
+		panic("content_guard platform reviewer: " + err.Error())
+	}
+	handler := server.New(eng, c.RequireLexicon, c.MaxTextBytes, server.WithReviewer(reviewer))
 	metrics.Start(c.MetricsListenAddr, handler.Ready)
 	publishLexiconMetrics(eng.Current())
 
@@ -253,4 +279,34 @@ func advertisedHost(listenHost string) string {
 		return ip
 	}
 	return "127.0.0.1"
+}
+
+// buildPlatformRouter 根据可选 Platform 配置组装外部平台审核路由器;未配置任何渠道时返回 nil(仅运行本地词库层)。
+func buildPlatformRouter(cfg config.PlatformConfig, lookup platform.IdentityLookup) (platform.Reviewer, error) {
+	var adapters []platform.Adapter
+	if cfg.WeChat.AppID != "" {
+		secret := strings.TrimSpace(os.Getenv(cfg.WeChat.AppSecretEnv))
+		if secret == "" {
+			return nil, fmt.Errorf("missing environment variable %s for Platform.WeChat", cfg.WeChat.AppSecretEnv)
+		}
+		adapters = append(adapters, platform.NewWeChatAdapter(cfg.WeChat.AppID, secret, cfg.WeChat.BaseURL, nil))
+	}
+	if cfg.Douyin.AppID != "" {
+		secret := strings.TrimSpace(os.Getenv(cfg.Douyin.AppSecretEnv))
+		if secret == "" {
+			return nil, fmt.Errorf("missing environment variable %s for Platform.Douyin", cfg.Douyin.AppSecretEnv)
+		}
+		adapters = append(adapters, platform.NewDouyinAdapter(cfg.Douyin.AppID, secret, cfg.Douyin.BaseURL, nil))
+	}
+	if len(adapters) == 0 {
+		return nil, nil
+	}
+	return platform.NewRouter(platform.RouterOptions{
+		Lookup:        lookup,
+		SyncTimeout:   time.Duration(cfg.SyncTimeoutMs) * time.Millisecond,
+		WorldTimeout:  time.Duration(cfg.WorldTimeoutMs) * time.Millisecond,
+		AsyncTimeout:  time.Duration(cfg.AsyncTimeoutMs) * time.Millisecond,
+		LookupTimeout: time.Duration(cfg.LookupTimeoutMs) * time.Millisecond,
+		Adapters:      adapters,
+	}), nil
 }

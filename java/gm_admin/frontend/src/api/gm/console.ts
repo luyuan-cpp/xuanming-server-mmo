@@ -2,10 +2,16 @@ import { defHttp } from '/@/utils/http/axios';
 
 export type GmCommandStatus = 'DRAFT' | 'SENDING' | 'DELIVERED' | 'REJECTED' | 'UNKNOWN';
 
+export interface GmCurrencyOption {
+  id: number;
+  label: string;
+}
+
 export interface GmOverview {
   zones: Record<string, unknown>[];
   zonesAvailable?: boolean;
   mailEnabled: boolean;
+  currencies?: GmCurrencyOption[];
 }
 
 export interface GmPlayer {
@@ -45,10 +51,34 @@ export interface GmCommand {
 export interface GmCommandPage {
   records: GmCommand[];
   total: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface GmCommandQuery {
+  page?: number;
+  pageSize?: number;
+  playerId?: string;
+  status?: string;
+}
+
+export interface GmAuditEntry {
+  id: string;
+  operator: string;
+  event: string;
+  attempt: number;
+  result: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 const requestOptions = { errorMessageMode: 'none', successMessageMode: 'none' } as const;
 const MAX_INT64 = '9223372036854775807';
+
+export function currencyLabel(label: string): string {
+  return (
+    ({ GOLD: '银两', DIAMOND: '灵石', BIND_DIAMOND: '绑定灵石' } as Record<string, string>)[label.replace(/^CURRENCY_TYPE_/, '')] || label
+  );
+}
 
 // 玩家永久 ID 和货币不经过 Number，避免超过 2^53 后被浏览器舍入。
 export function normalizePlayerId(value: unknown): string {
@@ -72,7 +102,11 @@ function textField(value: unknown, label: string, max: number, required = true):
   return text;
 }
 
-export function buildMailDraft(values: Record<string, unknown>, clientRequestId: string): GmMailDraft {
+export function buildMailDraft(
+  values: Record<string, unknown>,
+  clientRequestId: string,
+  currencies?: GmCurrencyOption[]
+): GmMailDraft {
   const draft: GmMailDraft = {
     clientRequestId,
     playerId: normalizePlayerId(values.playerId),
@@ -87,8 +121,17 @@ export function buildMailDraft(values: Record<string, unknown>, clientRequestId:
   }
   const amount = typeof values.currencyAmount === 'string' ? values.currencyAmount.trim() : '';
   if (amount) {
-    draft.currencyType = 0;
-    draft.currencyAmount = positiveDecimal(amount, '银两数量', MAX_INT64);
+    const currencyType = values.currencyType === undefined || values.currencyType === null ? 0 : values.currencyType;
+    if (
+      typeof currencyType !== 'number' ||
+      !Number.isSafeInteger(currencyType) ||
+      currencyType < 0 ||
+      (currencies?.length && !currencies.some((currency) => currency.id === currencyType))
+    ) {
+      throw new Error('请选择服务端提供的有效币种。');
+    }
+    draft.currencyType = currencyType;
+    draft.currencyAmount = positiveDecimal(amount, '货币数量', MAX_INT64);
   }
   const configId = typeof values.itemConfigId === 'string' ? values.itemConfigId.trim() : '';
   const itemCount = typeof values.itemCount === 'string' ? values.itemCount.trim() : '';
@@ -96,7 +139,7 @@ export function buildMailDraft(values: Record<string, unknown>, clientRequestId:
     draft.itemConfigId = Number(positiveDecimal(configId, '物品配置 ID', '2147483647'));
     draft.itemCount = Number(positiveDecimal(itemCount, '物品数量', '4096'));
   }
-  if (!amount && !configId) throw new Error('至少填写银两或物品中的一种附件。');
+  if (!amount && !configId) throw new Error('至少填写货币或物品中的一种附件。');
   return draft;
 }
 
@@ -108,6 +151,28 @@ export function newClientRequestId(): string {
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function buildAuditQueryParams(query?: GmCommandQuery): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    page: query?.page ?? 1,
+    pageSize: query?.pageSize ?? 50,
+  };
+  const playerId = query?.playerId?.trim();
+  if (playerId) params.playerId = normalizePlayerId(playerId);
+  const status = query?.status?.trim();
+  if (status) params.status = status;
+  return params;
+}
+
+export function checkedAuditEntries(payload: { records?: GmAuditEntry[] } | undefined): GmAuditEntry[] {
+  if (!payload || !Array.isArray(payload.records)) throw new Error('审计轨迹响应无效。');
+  return payload.records.map((entry) => {
+    if (!entry || typeof entry.id !== 'string' || typeof entry.event !== 'string' || typeof entry.operator !== 'string') {
+      throw new Error('审计轨迹条目格式无效。');
+    }
+    return entry;
+  });
 }
 
 function checkedCommand(command: GmCommand): GmCommand {
@@ -146,7 +211,19 @@ export async function sendGmMail(commandId: string): Promise<GmCommand> {
   return checkedCommand(await defHttp.post<GmCommand>({ url: `/gm/mail/commands/${encodeURIComponent(commandId)}/send` }, requestOptions));
 }
 
-export async function getGmCommands(): Promise<GmCommandPage> {
-  const result = await defHttp.get<GmCommandPage>({ url: '/gm/mail/commands' }, requestOptions);
+export async function getGmCommands(query?: GmCommandQuery): Promise<GmCommandPage> {
+  const result = await defHttp.get<GmCommandPage>(
+    { url: '/gm/mail/commands', params: buildAuditQueryParams(query) },
+    requestOptions
+  );
+  if (!result || !Array.isArray(result.records)) throw new Error('邮件审计响应无效。');
   return { ...result, records: result.records.map(checkedCommand) };
+}
+
+export async function getGmCommandAudit(commandId: string): Promise<GmAuditEntry[]> {
+  const result = await defHttp.get<{ commandId: string; records: GmAuditEntry[] }>(
+    { url: `/gm/mail/commands/${encodeURIComponent(commandId)}/audit` },
+    requestOptions
+  );
+  return checkedAuditEntries(result);
 }

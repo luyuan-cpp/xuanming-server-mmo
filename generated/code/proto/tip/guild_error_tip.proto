@@ -95,4 +95,14 @@ enum guild_error {
 
   kGuildTrialBattleAborted = 14042;
 
+  kGuildNameSensitive = 14043;
+
+  kGuildAnnouncementSensitive = 14044;
+
+  kGuildTextCheckUnavailable = 14045;
+
+  kGuildRenameCooldown = 14046;
+
+  kGuildRenameSameName = 14047;
+
 };

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -266,12 +267,8 @@ type FriendRepo struct {
 	// 放在 repo 上而不是每次调用传:缓存里存的是**已经截断过**的列表,
 	// 逐调用传值会让"缓存里那份按谁的上限截的"取决于谁先回填,排查时无从下手。
 	listReadHardLimit uint32
-	// cacheLoadMu 是**按 cacheKey 分组**的回填合并锁(cacheKey -> *sync.Mutex),
-	// 不是 x/sync 的 singleflight —— 语义等价于"同一个 key 只打一次 MySQL",
-	// 但不引入新依赖(go.mod 不在本批清单里)。
-	// 千万别退回成一把进程级 sync.Mutex:那会把全进程所有玩家、两条最高频读路径的回填
-	// 串行成一条队列,缓存冷时每个请求都要排在一次完整 MySQL 往返后面。
-	cacheLoadMu sync.Map
+	// cacheLoadMu 是固定 256 桶条带锁，避免单把全局锁串行全服，同时不随历史玩家数无界增长内存。
+	cacheLoadMu [256]sync.Mutex
 	// recommend 是好友推荐两条查询按方言渲染好的 SQL 主体(recommend_sql.go),构造后只读。
 	recommend     recommendStatements
 	nextRequestID func(context.Context) (uint64, error)
@@ -1250,8 +1247,9 @@ func isMySQLDeadlock(err error) bool {
 // generation + Lua CAS 的竞态防护与这把锁正交,一行都不用动。
 // 锁条目不回收:key 的基数上界是在线玩家数 × 2,远小于会成为问题的量级(KISS)。
 func (r *FriendRepo) cacheKeyMutex(cacheKey string) *sync.Mutex {
-	mu, _ := r.cacheLoadMu.LoadOrStore(cacheKey, &sync.Mutex{})
-	return mu.(*sync.Mutex)
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(cacheKey))
+	return &r.cacheLoadMu[h.Sum32()&255]
 }
 
 // loadVersionedFriendCache 阻止经典 cache-aside 竞态:reader miss 后读到旧

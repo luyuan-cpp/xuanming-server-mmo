@@ -176,3 +176,26 @@ func TestEnterGame_SessionIncarnationReachesTheSessionRecord(t *testing.T) {
 		}
 	})
 }
+
+// 写会话记录的两条路都要带本 login 所在区号(docs/design/login-queue-2026-05.md §8 / §14):
+// 首登 / 顶号走 SetSession,短线重连走 Reconnect。AssignGate 重连免排队直接以 gate_zone_id 判定是否在本区。
+func TestEnterGame_GateZoneIDReachesTheSessionRecord(t *testing.T) {
+	const ownZone = uint32(7)
+	t.Run("set session", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		config.AppConfig.Node.ZoneId = ownZone
+		h.runEnterGame(t)
+		if got := h.locator.lastSetSession.Load().GetSession().GetGateZoneId(); got != ownZone {
+			t.Fatalf("SetSession gate_zone_id = %d, want login zone %d", got, ownZone)
+		}
+	})
+	t.Run("reconnect", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		config.AppConfig.Node.ZoneId = ownZone
+		h.locator.existing = wiringRecord(sessionmanager.StateDisconnecting)
+		h.runEnterGame(t)
+		if got := h.locator.lastReconnect.Load().GetGateZoneId(); got != ownZone {
+			t.Fatalf("ReconnectRequest.gate_zone_id = %d, want login zone %d", got, ownZone)
+		}
+	})
+}

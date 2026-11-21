@@ -262,9 +262,7 @@ func TestOwnsControlZoneSkipsForeignMembership(t *testing.T) {
 	mr.SAdd(nodeMembersKey(testZoneId, "10"), "42")
 	require.NoError(t, removeScenePlayer(sc, 42, 903, 0))
 	assert.False(t, mr.Exists(instanceMembersKey(testZoneId, 903)), "本 zone 的场景成员照常摘")
-	ok, err = mr.SIsMember(nodeMembersKey(testZoneId, "10"), "42")
-	require.NoError(t, err)
-	assert.False(t, ok, "本 zone 的节点成员照常摘")
+	assert.False(t, mr.Exists(nodeMembersKey(testZoneId, "10")), "本 zone 的节点成员照常摘")
 	// 读属主出错时回错误,由上游重试,不当成「不在本 zone」静默跳过。
 	mr.SetError("ERR injected")
 	require.Error(t, removeScenePlayer(sc, 42, 904, 0))

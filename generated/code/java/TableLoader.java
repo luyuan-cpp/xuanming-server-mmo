@@ -1,6 +1,7 @@
 
 package com.game.table;
 
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -8,6 +9,28 @@ import java.util.concurrent.CountDownLatch;
  * DO NOT EDIT — regenerate from Excel via Data Table Exporter.
  */
 public class TableLoader {
+
+    public static final String SCHEMA_DIGEST = "de4be939691ab0e3";
+
+    private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
+            "ActivitySchedule",
+            "ActivityVitalityReward",
+            "ActivityVitalityRule",
+            "Buff",
+            "Cooldown",
+            "GuildDonate",
+            "GuildShop",
+            "MessageLimiter",
+            "Monster",
+            "MysteryMerchantGoods",
+            "MysteryMerchantRule",
+            "Skill",
+            "SkillPermission"
+    );
+
+    public static boolean isHotReloadable(String tableName) {
+        return tableName != null && HOT_RELOADABLE_TABLES.contains(tableName);
+    }
 
     private static Runnable loadSuccessCallback;
 

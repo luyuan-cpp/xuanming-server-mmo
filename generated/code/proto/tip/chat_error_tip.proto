@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum chat_error {
+  kChat_errorOK = 0;
+
+  kChatContentRejected = 18000;
+
+  kChatContentCheckUnavailable = 18001;
+
+  kChatLevelTooLow = 18002;
+
+  kChatDuplicateSpam = 18003;
+
+  kChatPrivateTargetLimit = 18004;
+
+  kChatContactRejected = 18005;
+
+  kChatMessageNotFound = 18006;
+
+};

@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 [CmdletBinding()]
 param(
     [ValidateSet('library','render-schema-role','render-roles','render-repair-role','close-publication','activate-runtime','close-source','close-relay','retire-source-writers','retire-relay-writers','open-source','stop-and-collect','seed-redis-nonce','collect-redis','collect-kafka','manual-baseline','manual-sampling-request','normal-tool','verify-and-advance')]
@@ -547,6 +547,8 @@ function ConvertTo-AuthorityRepairRoleSql {
         account_directory='SELECT,INSERT,UPDATE'         # 补 ref 时锁目录行,没有就建(INSERT … ON DUPLICATE KEY UPDATE);打开时的形状守卫
         account_role='SELECT,INSERT'                     # 证明孤儿角色永远不会提交时插墓碑;不给 UPDATE / DELETE:墓碑不可改、不可删
         account_role_removal='SELECT'                    # 打开目录时的形状守卫
+        account_role_rename='SELECT'                     # 打开目录时的形状守卫
+        account_deletion_receipt='SELECT'                # 打开目录时的形状守卫
         account_role_ref='SELECT,INSERT,UPDATE'          # 补 ACTIVE ref(与建角第 4 步同一条 upsert)
         player_route='SELECT'                            # 落点、路由行锁读
         player_name='SELECT,INSERT,UPDATE,DELETE'        # 补登记与绑定、释放预留态与墓碑名下的名字

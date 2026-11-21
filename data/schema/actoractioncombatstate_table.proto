@@ -3,23 +3,29 @@ syntax = "proto3";
 // ActorActionCombatState 表的权威 schema。源表 data/ActorActionCombatState.xlsx。
 //
 // 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
-// 字段号是从 generated/code/proto/actoractioncombatstate_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+// 规范化规则表:与 ActorActionState 采用同一套显式规则行与互斥模式编码(0=互斥, 1=允许, 2=打断),
+// 彻底消除旧版两张表 0/1 语义相反与定长槽位错位的问题。
+// 字段号 2("state") 为旧定长槽位结构,按规则 reserved 不复用。
 
 package mmorpg.cfgtable.v1;
 
 import "cfg_options.proto";
-
-message ActorActionCombatStatestate {
-  uint32 state_mode = 1;
-  uint32 state_tip = 2;
-}
 
 message ActorActionCombatStateTable {
   option (cfg_sheet)       = "ActorActionCombatState";
   option (cfg_source_file) = "ActorActionCombatState.xlsx";
   option (cfg_primary_key) = "id";
 
-  uint32 id = 1;
+  reserved 2;
+  reserved "state";
+
+  // 动作 ID(eActorAction: 0=UseSkill, 1=JoinFollow, 2=MountActor, 3=UnmountActor)
+  uint32 id = 1 [(cfg_multi) = true];
   int32 constants_name = 9001 [(cfg_owner) = "constants_name"];
-  repeated ActorActionCombatStatestate state = 2 [(cfg_slots) = 3];
+  // 战斗异常状态 ID(eActorCombatState: 0=None, 1=Silence)
+  uint32 state_id = 3;
+  // 互斥模式(与 ActorActionState 统一): 0=互斥拒绝, 1=允许, 2=打断
+  uint32 state_mode = 4;
+  // 互斥拒绝时返回给客户端的 tip 错误码(state_mode=0 时生效;非互斥行填 kSuccess=1000)
+  uint32 state_tip = 5 [(cfg_tip_ref) = true];
 }

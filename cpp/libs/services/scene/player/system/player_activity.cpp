@@ -12,6 +12,7 @@
 #include "modules/mission/comp/mission_comp.h"
 #include "muduo/base/Logging.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
+#include "player/comp/player_ownership_comp.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "proto/common/component/battle_comp.pb.h"
@@ -174,9 +175,11 @@ void PrunePastClaims(PlayerActivityLedger& ledger, uint32_t ruleId, uint64_t per
 }
 
 bool Durable(entt::entity player, const PlayerActivityClaimRecord& claim) {
+    const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
     const auto* persisted = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
-    if (!player_mutability::HasFencedOwnership(player) || persisted == nullptr || !persisted->HasSnapshot() || guid == nullptr ||
+    if (!player_mutability::HasFencedOwnership(player) || owner == nullptr || persisted == nullptr ||
+        !persisted->IsCommittedForOwner(owner->epoch) || guid == nullptr ||
         persisted->snapshot->player_database_data().player_id() != guid->value) return false;
     for (const auto& scope : persisted->snapshot->player_database_data().mission_component().scopes()) {
         if (scope.scope() != MissionListComp::kPlayerMission) continue;

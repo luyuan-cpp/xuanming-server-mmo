@@ -234,8 +234,12 @@ type PlayerSession struct {
 	// SetDisconnecting 的请求与本记录的代次都非 0 且不等时,判为同一 gate 进程里同号旧连接迟到的断线,忽略;
 	// 0 = 旧版 login 写入,不校验(docs/design/gate-online-identity.md §10.4「断线通知」)。不从旧记录继承。
 	SessionIncarnation uint64 `protobuf:"varint,15,opt,name=session_incarnation,json=sessionIncarnation,proto3" json:"session_incarnation,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 写下本记录的那条 gate 连接所在的区号(发起 SetSession / Reconnect 的 login 进程 Node.ZoneId)。
+	// AssignGate 重连免排队直接按它判「会话是否在本区」(合服角色掉 gate 仍可精确免排队,跨区访客不再误免,
+	// docs/design/login-queue-2026-05.md §8)。0 = 旧版 login 写入,不从旧记录继承。
+	GateZoneId    uint32 `protobuf:"varint,16,opt,name=gate_zone_id,json=gateZoneId,proto3" json:"gate_zone_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerSession) Reset() {
@@ -369,6 +373,13 @@ func (x *PlayerSession) GetLoginGeneration() uint64 {
 func (x *PlayerSession) GetSessionIncarnation() uint64 {
 	if x != nil {
 		return x.SessionIncarnation
+	}
+	return 0
+}
+
+func (x *PlayerSession) GetGateZoneId() uint32 {
+	if x != nil {
+		return x.GateZoneId
 	}
 	return 0
 }
@@ -682,8 +693,10 @@ type ReconnectRequest struct {
 	LoginGeneration uint64 `protobuf:"varint,9,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
 	// 发起重连的那条 gate 连接的会话代次,原样写进会话记录(PlayerSession.session_incarnation);0 = 旧版 login,如实写 0。
 	SessionIncarnation uint64 `protobuf:"varint,10,opt,name=session_incarnation,json=sessionIncarnation,proto3" json:"session_incarnation,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 发起重连的那条 gate 连接所在的区号(login 的 Node.ZoneId),原样写进会话记录(PlayerSession.gate_zone_id);0 = 旧版 login,如实写 0。
+	GateZoneId    uint32 `protobuf:"varint,11,opt,name=gate_zone_id,json=gateZoneId,proto3" json:"gate_zone_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReconnectRequest) Reset() {
@@ -782,6 +795,13 @@ func (x *ReconnectRequest) GetLoginGeneration() uint64 {
 func (x *ReconnectRequest) GetSessionIncarnation() uint64 {
 	if x != nil {
 		return x.SessionIncarnation
+	}
+	return 0
+}
+
+func (x *ReconnectRequest) GetGateZoneId() uint32 {
+	if x != nil {
+		return x.GateZoneId
 	}
 	return 0
 }
@@ -945,7 +965,7 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"\x05token\x18\x06 \x01(\tR\x05token\x12\x0e\n" +
 	"\x02ts\x18\a \x01(\x03R\x02ts\"\x1c\n" +
 	"\bPlayerId\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\x03R\x03uid\"\xad\x04\n" +
+	"\x03uid\x18\x01 \x01(\x03R\x03uid\"\xcf\x04\n" +
 	"\rPlayerSession\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -964,7 +984,9 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"request_id\x18\f \x01(\tR\trequestId\x12\x18\n" +
 	"\aaccount\x18\r \x01(\tR\aaccount\x12)\n" +
 	"\x10login_generation\x18\x0e \x01(\x04R\x0floginGeneration\x12/\n" +
-	"\x13session_incarnation\x18\x0f \x01(\x04R\x12sessionIncarnation\"K\n" +
+	"\x13session_incarnation\x18\x0f \x01(\x04R\x12sessionIncarnation\x12 \n" +
+	"\fgate_zone_id\x18\x10 \x01(\rR\n" +
+	"gateZoneId\"K\n" +
 	"\x11SetSessionRequest\x126\n" +
 	"\asession\x18\x01 \x01(\v2\x1c.playerlocator.PlayerSessionR\asession\"0\n" +
 	"\x11GetSessionRequest\x12\x1b\n" +
@@ -983,7 +1005,7 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"session_id\x18\x02 \x01(\rR\tsessionId\x12*\n" +
 	"\x11lease_ttl_seconds\x18\x03 \x01(\rR\x0fleaseTtlSeconds\x12(\n" +
 	"\x10gate_instance_id\x18\x04 \x01(\tR\x0egateInstanceId\x12/\n" +
-	"\x13session_incarnation\x18\x05 \x01(\x04R\x12sessionIncarnation\"\xf0\x02\n" +
+	"\x13session_incarnation\x18\x05 \x01(\x04R\x12sessionIncarnation\"\x92\x03\n" +
 	"\x10ReconnectRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x0enew_session_id\x18\x02 \x01(\rR\fnewSessionId\x12\x17\n" +
@@ -996,7 +1018,9 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"\aaccount\x18\b \x01(\tR\aaccount\x12)\n" +
 	"\x10login_generation\x18\t \x01(\x04R\x0floginGeneration\x12/\n" +
 	"\x13session_incarnation\x18\n" +
-	" \x01(\x04R\x12sessionIncarnation\"\x8a\x01\n" +
+	" \x01(\x04R\x12sessionIncarnation\x12 \n" +
+	"\fgate_zone_id\x18\v \x01(\rR\n" +
+	"gateZoneId\"\x8a\x01\n" +
 	"\x11ReconnectResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x126\n" +
 	"\asession\x18\x02 \x01(\v2\x1c.playerlocator.PlayerSessionR\asession\x12#\n" +

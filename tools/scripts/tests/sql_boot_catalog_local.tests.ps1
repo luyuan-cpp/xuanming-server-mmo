@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     本机写者启动目录生成器(lib/sql_boot_catalog_local.ps1)的合同回归。
@@ -40,9 +40,9 @@ function Get-FixtureTableRows {
     $business = [ordered]@{
         mmorpg = @('zone_config', 'zone_whitelist', 'announcement')
         mmorpg_global_ledger = @('transaction_log', 'player_snapshot', 'rollback_audit_log')
-        mmorpg_chat = @('chat_send_authority', 'chat_policy')
+        mmorpg_chat = @('chat_send_authority', 'chat_policy', 'chat_world_retraction', 'chat_report', 'chat_repeat_event', 'chat_private_daily_target')
         mmorpg_friend = @('friend', 'friend_request', 'role_fence', 'schema_migrations')
-        mmorpg_guild = @('guild', 'guild_member', 'guild_asset_op', 'guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot', 'schema_migrations')
+        mmorpg_guild = @('guild', 'guild_member', 'guild_name_hold', 'guild_asset_op', 'guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot', 'schema_migrations')
         mmorpg_mail = @('mail_message', 'mail_asset_op', 'schema_migrations')
         mmorpg_match = @('match_authority_ticket', 'match_battle_completion', 'team_launch', 'team_launch_role', 'schema_migrations')
         mmorpg_player_inbox = @('player_inbox_item', 'schema_migrations')
@@ -763,7 +763,7 @@ try {
         Assert-NotMatch $safe ":pw@|short|$('a' * 64)" '三种形状都抹掉'
     }
 
-    Test-Case '双区一次生成:完整 22 个条目都过正式闸门,只有一次账号清理,两区共用本地域的存档库且显式给编号' {
+    Test-Case '双区一次生成:完整 24 个条目都过正式闸门,只有一次账号清理,两区共用本地域的存档库且显式给编号' {
         Reset-Fixture
         $repo = New-FixtureRepo
         try {
@@ -771,8 +771,8 @@ try {
             $catalog = Read-MaintenanceJson -Path $summary.catalog
             $writers = @(Get-LocalSqlBootWriterServices | Where-Object { $_ -cne 'gateway' })
             $expected = @(foreach ($zone in @(990017, 990018)) { foreach ($service in $writers) { "z${zone}_$service" } })
-            Assert-Equal 22 $expected.Count '夹具前提'
-            Assert-Equal (($expected | Sort-Object) -join ',') ((@($catalog.Keys) | Sort-Object) -join ',') '恰好 22 个 Go 写者,不含网关和不碰 SQL 的服务'
+            Assert-Equal 24 $expected.Count '夹具前提'
+            Assert-Equal (($expected | Sort-Object) -join ',') ((@($catalog.Keys) | Sort-Object) -join ',') '恰好 24 个 Go 写者,不含网关和不碰 SQL 的服务'
             $env:MMORPG_SQL_BOOT_CATALOG = $summary.catalog
             foreach ($key in @($catalog.Keys)) {
                 $selected = ''
@@ -784,7 +784,7 @@ try {
             $planFiles = @($plans | ForEach-Object { $_.Arguments[[array]::IndexOf($_.Arguments, '-InstancePlanOutput') + 1] } | Select-Object -Unique)
             Assert-Equal 2 $planFiles.Count '各区输出文件不同'
             Assert-Equal 1 @($script:SqlScripts | Where-Object { $_ -match "CREATE USER IF NOT EXISTS 'lw_" }).Count '账号清理和建账号只有一次'
-            Assert-Equal 22 @(Get-RegisterCalls).Count '每实例注册一次'
+            Assert-Equal 24 @(Get-RegisterCalls).Count '每实例注册一次'
             $private = Get-LocalSqlBootRoot -RepoRoot $repo
             Assert-Equal 1 @(Get-ChildItem -LiteralPath (Join-Path $private 'boots') -Directory).Count '只有一个 boot'
             Assert-Equal $false (Test-Path -LiteralPath (Join-Path $private 'catalog.candidate.json')) '候选文件转正后不留'

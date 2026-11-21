@@ -13,7 +13,6 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "macros/error_return.h"
 #include "modifier_buff_impl.h"
-#include "motion_modifier_impl.h"
 #include "combat/buff/comp/buff_comp.h"
 #include "combat/buff/constants/buff.h"
 #include "core/utils/utility/utility.h"
@@ -495,7 +494,6 @@ void BuffSystem::OnBuffStart(entt::entity parent, BuffEntry& buff, const BuffTab
 
     BuffImplSystem::OnBuffStart(parent, buff, buffTable);
     ModifierBuffImplSystem::OnBuffStart(parent, buff, buffTable);
-    MotionModifierBuffImplSystem::OnBuffStart(parent, buff, buffTable);
 }
 
 void BuffSystem::OnBuffRefresh(entt::entity parent, uint32_t buffTableId, uint64_t caster, BuffEntry& buffComp)
@@ -521,7 +519,6 @@ void BuffSystem::OnBuffRemove(const entt::entity parent, BuffEntry& buffComp, co
     }
 
     ModifierBuffImplSystem::OnBuffRemove(parent, buffComp, buffTable);
-    MotionModifierBuffImplSystem::OnBuffRemove(parent, buffComp, buffTable);
 }
 
 void BuffSystem::OnBuffDestroy(entt::entity parent, const uint64_t buffId, const BuffTable* buffTable)
@@ -554,31 +551,21 @@ void BuffSystem::OnIntervalThink(entt::entity parent, uint64_t buffId, uint64_t 
     const auto buffTableId = buffIt->second.buffPb.buff_table_id();
     LookupBuffOrReturnVoid(buffTableId);
 
-    // 三路回调之间不能端着 buffIt / BuffEntry& 一路传下去,每一路之前都按 id 重查:
-    // BuffImplSystem 会顺着 TickCombatIdleBuff -> AddSubBuffs -> AddOrUpdateBuff 往同一张
-    // buffList 里 emplace 子 buff(unordered_map 扩容,迭代器失效),子 buff 的
-    // DispelBuffsOnAwake -> OnBuffExpire 还可能把这条 buff 自己 erase 掉(引用悬空)。
-    // 与 UpdatePeriodicBuff 每轮重查同理;buff 在前一路里没了,后面几路就不再回调。
-    using IntervalThinkHandler = void (*)(entt::entity, BuffEntry&, const BuffTable*, uint64_t);
-    constexpr IntervalThinkHandler kIntervalThinkHandlers[] = {
-        &BuffImplSystem::OnIntervalThink,
-        [](entt::entity actor, BuffEntry& buff, const BuffTable* row, uint64_t) {
-            ModifierBuffImplSystem::OnIntervalThink(actor, buff, row);
-        },
-        [](entt::entity actor, BuffEntry& buff, const BuffTable* row, uint64_t) {
-            MotionModifierBuffImplSystem::OnIntervalThink(actor, buff, row);
-        },
-    };
-    for (const auto handler : kIntervalThinkHandlers) {
+    // 复用已查到的迭代器直接派发主逻辑,省去每跳热路径上的冗余哈希查找。
+    BuffImplSystem::OnIntervalThink(parent, buffIt->second, buffRow, nowMilliseconds);
+
+    // 仅失血回血类 buff 需要走 ModifierBuffImplSystem;主回调可能触发子 buff 扩容或驱散自身,
+    // 故按 id 重查后再回调,避免持有失效迭代器/悬空引用。
+    if (buffRow->buff_type() == kBuffTypeHealthRegenerationBasedOnLostHealth) {
         auto *liveBuffList = tlsEcs.actorRegistry.try_get<BuffListComp>(parent);
         if (liveBuffList == nullptr) {
             return;
         }
         const auto liveIt = liveBuffList->find(buffId);
         if (liveIt == liveBuffList->end()) {
-            return;  // 前一路回调里被驱散 / 移除,后面什么都不能再碰
+            return;
         }
-        handler(parent, liveIt->second, buffRow, nowMilliseconds);
+        ModifierBuffImplSystem::OnIntervalThink(parent, liveIt->second, buffRow);
     }
 }
 void BuffSystem::OnBeforeGiveDamage(const entt::entity casterEntity, const entt::entity targetEntity, DamageEventComp& damageEvent)
@@ -623,7 +610,6 @@ void BuffSystem::OnKill(entt::entity parent)
 void BuffSystem::OnSkillHit(const entt::entity casterEntity, const entt::entity targetEntity) {
     BuffImplSystem::OnSkillHit(casterEntity, targetEntity, SteadyNowMilliseconds());
     ModifierBuffImplSystem::OnSkillHit(casterEntity, targetEntity);
-    MotionModifierBuffImplSystem::OnSkillHit(casterEntity, targetEntity);
 }
 
 bool BuffSystem::AddSubBuffs(entt::entity parent,

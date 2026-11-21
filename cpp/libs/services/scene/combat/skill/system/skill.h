@@ -55,6 +55,9 @@ public:
     // Send skill-interrupted message
     static void SendSkillInterruptedMessage(entt::entity casterEntity, uint32_t skillTableId);
 
+	// 供状态互斥退出钩子(例如 kActorStateCombat 被打断)调用:中止当前在途的前摇/引导/后摇并回收上下文。
+	static void InterruptActiveCast(entt::entity casterEntity);
+
 	static void TriggerSkillEffect(entt::entity casterEntity, uint64_t skillId);
 
 	static bool HandleSkillSpell(const entt::entity casterEntity, const uint64_t skillId);

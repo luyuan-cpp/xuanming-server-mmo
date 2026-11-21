@@ -12,7 +12,9 @@ from pathlib import Path
 
 from conftest import Field, TableSpec, build_tables
 from core.generators.json_gen import generate_json
+from core.generators.config_gen import generate_config_classes
 from core.manifest import MANIFEST_FILENAME, MANIFEST_SCHEMA_VERSION, generate_manifest
+from core.schema import compute_schema_digest
 
 
 def _specs() -> list[TableSpec]:
@@ -146,3 +148,89 @@ def test_json_overwrites_stale_rows_when_table_becomes_empty(cfg):
 
     payload = json.loads((cfg.json_dir / "permission.json").read_text(encoding="utf-8"))
     assert payload == {"data": []}
+
+
+def test_manifest_v2_includes_schema_digest_and_table_flags(cfg):
+    tables = build_tables(cfg, _specs())
+    tables[0].hot_reload = True
+    tables[1].ids_permanent = True
+    generate_json(cfg, tables)
+    generate_manifest(cfg, tables)
+
+    manifest = _read_manifest(cfg)
+    assert manifest["schema_version"] == 2
+    digest = manifest["schema_digest"]
+    assert len(digest) == 16
+    assert digest == compute_schema_digest(tables)
+
+    by_name = {t["name"]: t for t in manifest["tables"]}
+    assert by_name["Reward"]["hot_reload"] is True
+    assert by_name["Reward"]["ids_permanent"] is False
+    assert by_name["Mission"]["hot_reload"] is False
+    assert by_name["Mission"]["ids_permanent"] is True
+
+
+def test_schema_digest_ignores_non_layout_metadata_and_client_columns(cfg):
+    base_tables = build_tables(cfg, _specs())
+    base_digest = compute_schema_digest(base_tables)
+
+    # 改 hot_reload、ids_permanent、列注释、索引选项、纯客户端列都不应改变 schema_digest。
+    mutated = build_tables(cfg, [
+        TableSpec(
+            name="Reward",
+            fields=[
+                Field(name="id", options="key", comment="changed comment"),
+                Field(name="item_id", options="idx"),
+                Field(name="client_tip", data_type="string", owner="client"),
+            ],
+            rows=[[1, 101, "x"]],
+        ),
+        TableSpec(
+            name="Mission",
+            fields=[Field(name="id", options="key"), Field(name="reward_id")],
+            rows=[[1, 1]],
+        ),
+    ])
+    mutated[0].hot_reload = True
+    mutated[0].ids_permanent = True
+    assert compute_schema_digest(mutated) == base_digest
+
+    # 改服务端字段类型必须改变 schema_digest。
+    changed_type = build_tables(cfg, [
+        TableSpec(
+            name="Reward",
+            fields=[Field(name="id", options="key"), Field(name="item_id", data_type="uint64")],
+            rows=[[1, 101]],
+        ),
+        TableSpec(
+            name="Mission",
+            fields=[Field(name="id", options="key"), Field(name="reward_id")],
+            rows=[[1, 1]],
+        ),
+    ])
+    assert compute_schema_digest(changed_type) != base_digest
+
+
+def test_generated_loaders_embed_schema_digest_and_hot_reload_list(cfg):
+    tables = build_tables(cfg, _specs())
+    tables[0].hot_reload = True
+    cfg.cpp.enabled = True
+    cfg.go.enabled = True
+    cfg.java.enabled = True
+    generate_config_classes(cfg, tables)
+
+    digest = compute_schema_digest(tables)
+    cpp_h = (cfg.cpp.code_dir / "table_loader.h").read_text(encoding="utf-8")
+    cpp_c = (cfg.cpp.code_dir / "table_loader.cpp").read_text(encoding="utf-8")
+    go_loader = (cfg.go.code_dir / "table_loader.go").read_text(encoding="utf-8")
+    java_loader = (cfg.java.code_dir / "TableLoader.java").read_text(encoding="utf-8")
+
+    assert digest in cpp_h
+    assert "struct TableSet" in cpp_h
+    assert "ScopedTableSetOverride" in cpp_h
+    assert '"Reward"' in cpp_c and "IsTableHotReloadable" in cpp_c
+    assert f'SchemaDigest = "{digest}"' in go_loader
+    assert "func Prepare(" in go_loader and "func Commit(" in go_loader
+    assert "func ReloadTables(" not in go_loader
+    assert f'SCHEMA_DIGEST = "{digest}"' in java_loader
+    assert '"Reward"' in java_loader

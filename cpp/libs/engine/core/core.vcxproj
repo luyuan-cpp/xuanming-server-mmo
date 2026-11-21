@@ -194,6 +194,7 @@
     <ClCompile Include="node\system\etcd\etcd_manager.cpp" />
     <ClCompile Include="node\system\etcd\etcd_service.cpp" />
     <ClCompile Include="node\system\etcd\kill_switch_etcd_sync.cpp" />
+    <ClCompile Include="table_bundle\table_bundle_manager.cpp" />
     <ClCompile Include="node\system\etcd\etcd_transport.cpp" />
     <ClCompile Include="node\system\etcd\muduo_etcd_transport.cpp" />
     <ClCompile Include="node\system\node\node.cpp" />
@@ -211,86 +212,6 @@
     <ClCompile Include="utils\encode\base64.cpp" />
     <ClCompile Include="utils\encode\sha256.cpp" />
     <ClCompile Include="utils\file\file2string.cpp">
-      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
-      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
-      <SupportJustMyCode>false</SupportJustMyCode>
-      <AssemblerOutput>NoListing</AssemblerOutput>
-      <AssemblerListingLocation>../../../../build/cpp/intermediate/lib/core/</AssemblerListingLocation>
-      <UndefineAllPreprocessorDefinitions>false</UndefineAllPreprocessorDefinitions>
-      <BrowseInformation>false</BrowseInformation>
-      <BrowseInformationFile>../../../../build/cpp/intermediate/lib/core/</BrowseInformationFile>
-      <CompileAs>Default</CompileAs>
-      <ConformanceMode>true</ConformanceMode>
-      <DiagnosticsFormat>Column</DiagnosticsFormat>
-      <DisableLanguageExtensions>false</DisableLanguageExtensions>
-      <ErrorReporting>Prompt</ErrorReporting>
-      <ExpandAttributedSource>false</ExpandAttributedSource>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <EnableASAN>false</EnableASAN>
-      <EnableFuzzer>false</EnableFuzzer>
-      <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
-      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
-      <EnableVectorLength>NotSet</EnableVectorLength>
-      <FloatingPointModel>Precise</FloatingPointModel>
-      <ForceConformanceInForLoopScope>true</ForceConformanceInForLoopScope>
-      <GenerateModuleDependencies>false</GenerateModuleDependencies>
-      <GenerateSourceDependencies>false</GenerateSourceDependencies>
-      <GenerateXMLDocumentationFiles>false</GenerateXMLDocumentationFiles>
-      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
-      <IntrinsicFunctions>false</IntrinsicFunctions>
-      <IgnoreStandardIncludePath>false</IgnoreStandardIncludePath>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdclatest</LanguageStandard_C>
-      <MinimalRebuild>false</MinimalRebuild>
-      <ModuleDependenciesFile>../../../../build/cpp/intermediate/lib/core/</ModuleDependenciesFile>
-      <ModuleOutputFile>../../../../build/cpp/intermediate/lib/core/</ModuleOutputFile>
-      <OmitDefaultLibName>false</OmitDefaultLibName>
-      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
-      <WholeProgramOptimization>false</WholeProgramOptimization>
-      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
-      <CallingConvention>Cdecl</CallingConvention>
-      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
-      <PrecompiledHeaderOutputFile>../../../../build/cpp/intermediate/lib/core/common.pch</PrecompiledHeaderOutputFile>
-      <PreprocessToFile>false</PreprocessToFile>
-      <PreprocessKeepComments>false</PreprocessKeepComments>
-      <PreprocessSuppressLineNumbers>false</PreprocessSuppressLineNumbers>
-      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-      <ScanSourceForModuleDependencies>false</ScanSourceForModuleDependencies>
-      <ShowIncludes>false</ShowIncludes>
-      <SourceDependenciesFile>../../../../build/cpp/intermediate/lib/core/</SourceDependenciesFile>
-      <SuppressStartupBanner>true</SuppressStartupBanner>
-      <BufferSecurityCheck>true</BufferSecurityCheck>
-      <SmallerTypeCheck>false</SmallerTypeCheck>
-      <SpectreMitigation>false</SpectreMitigation>
-      <StructMemberAlignment>Default</StructMemberAlignment>
-      <TrackerLogDirectory>../../../../build/cpp/intermediate/lib/core/common.tlog\</TrackerLogDirectory>
-      <TranslateIncludes>false</TranslateIncludes>
-      <MinimalRebuildFromTracking>true</MinimalRebuildFromTracking>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
-      <UseFullPaths>true</UseFullPaths>
-      <WarningLevel>Level3</WarningLevel>
-      <XMLDocumentationFileName>../../../../build/cpp/intermediate/lib/core/</XMLDocumentationFileName>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <IntelJCCErratum>false</IntelJCCErratum>
-      <BuildStlModules>false</BuildStlModules>
-      <TreatAngleIncludeAsExternal>false</TreatAngleIncludeAsExternal>
-      <ExternalWarningLevel>InheritWarningLevel</ExternalWarningLevel>
-      <TreatExternalTemplatesAsInternal>true</TreatExternalTemplatesAsInternal>
-      <DisableAnalyzeExternal>false</DisableAnalyzeExternal>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;_WIN32_WINNT=0x0A00</PreprocessorDefinitions>
-      <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../../../third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/redis/deps/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/lua/;../../../../third_party/;../../../../third_party/zlib/;../../../../third_party/spdlog/include/;../../../generated/;../../../../third_party/protobuf/src/;../../../../third_party/abseil-cpp/;../../../../third_party/yaml-cpp/include/;../../../../third_party/xxhash/;../../../../third_party/librdkafka/src-cpp/;./;</AdditionalIncludeDirectories>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
-      <AdditionalOptions>/bigobj /utf-8 </AdditionalOptions>
-      <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
-      <LibCompiled>true</LibCompiled>
-    </ClCompile>
-    <ClCompile Include="utils\log\spdlog_file.cpp">
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
@@ -428,6 +349,7 @@
     <ClInclude Include="node\system\etcd\etcd_manager.h" />
     <ClInclude Include="node\system\etcd\etcd_service.h" />
     <ClInclude Include="node\system\etcd\kill_switch_etcd_sync.h" />
+    <ClInclude Include="table_bundle\table_bundle_manager.h" />
     <ClInclude Include="node\system\etcd\etcd_transport.h" />
     <ClInclude Include="node\system\etcd\muduo_etcd_transport.h" />
     <ClInclude Include="node\system\etcd\etcd_endpoint.h" />
@@ -479,7 +401,6 @@
     <ClInclude Include="utils\file\file2string.h" />
     <ClInclude Include="utils\id\node_id_generator.h" />
     <ClInclude Include="utils\id\snow_flake.h" />
-    <ClInclude Include="utils\log\spdlog_file.h" />
     <ClInclude Include="utils\debug\stacktrace_system.h" />
     <ClInclude Include="utils\proto\message_util.h" />
     <ClInclude Include="utils\proto\proto_field_checker.h" />

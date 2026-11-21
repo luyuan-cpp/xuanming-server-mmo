@@ -28,6 +28,7 @@ class DungeonTableData;
 class MonsterTableData;
 class ItemTableData;
 class PetTableData;
+struct TableSet;
 
 namespace turnbattle
 {
@@ -52,6 +53,9 @@ namespace turnbattle
 									   const DungeonTableData& dungeon,
 									   const MonsterTableData& monster,
 									   const ItemTableData& item, const PetTableData& pet);
+
+		// 从一套不可变 TableSet 计算八张战斗表指纹(热更后每套表绑定各自指纹)。
+		static std::string ComputeFromTableSet(const TableSet& tableSet);
 
 		// 进程内缓存值:首次调用时 Compute() 并缓存。调用时机必须晚于表加载完成
 		// (scene/battle 的 TableLoadHandler::OnLoaded 里主动 Refresh 一次即可保证)。

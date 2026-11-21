@@ -514,7 +514,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     只在被指定时透传。**本项合入后第一次 `infra-up` 必须带它**,见「Redis 连接上限与总账」。
   - `-ResyncDomainServiceSecrets`(switch,2026-11-20):`domain-service-secrets` 里 zone 工作负载引用的 16 把内部调用密钥由部署维护
     (托管键表 `$script:ManagedDomainServiceSecrets`):缺的自动补齐,全集群每把一个值。不给时,任何 namespace 的值与 infra 不同、不足 32 字节、
-    两把同值,都在任何写操作之前拒绝;给了就统一成一个值(不可用的重新生成),并重启读这些键的 Pod(选低峰)。`dev_tools.ps1` 只在被指定时透传,
+    两把同值,都在任何写操作之前拒绝;给了就统一成一个值(不可用的重新生成),并对读这些键的 StatefulSet / Deployment 触发滚动重启
+    (`kubectl rollout restart`,Agones `scene` Fleet 不直接删 Pod、告警提示 `k8s_scene_roll.ps1 -Restart`;选低峰)。`dev_tools.ps1` 只在被指定时透传,
     `k8s-image-*` / `k8s-release-*` 不透传、给了就拒绝。规则与换值步骤见 `docs/ops/k8s-open-server-runbook.md` §1。
   - **模式参数不粘滞**:每次部署按本次取值生成,漏传就落回默认 `podip` / `deployment`;以 external 运行的环境每次重跑都要照传同一组值
     (漏传时由上一条的集群现状核对在写操作之前拒绝)。
@@ -1450,7 +1451,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 - **先后**:配置模板与闸门表 Job 在第一步(基础设施阶段,`Apply-MallPrepare`)。进程在第二步、排在全局 Go 服务之后起(`Apply-MallWorkload`):它出问题不挡住别的全局服务。
   全新集群上第二步要等第一个 zone 的 data-service 就绪,和全局 Go 服务同一条规则(「全局服务的部署顺序」)。
 - **工作负载**:`manifests/java-svc/mall.yaml` = Service `mall`(ClusterIP,18120)+ 写者 StatefulSet(2 副本)+ PDB `mall-pdb`。形状照 gateway:写者的 init 容器、控制卷与标签由脚本注入。
-  探针是 TCP:jar 里没有可供探针访问的 HTTP 路径。没有指标端点,所以不写抓取注解。
+  探针与 Prometheus 指标走独立管理口 `18121`(`java-svc-mall-config` 写 `management.server.port: 18121` 与 `exposure.include: health,prometheus`,脚本向 Pod 模板注入 `prometheus.io/*` 注解,Service 不暴露 `18121`;做法同 gateway,避免业务线程池或共享库抖动把两副本同时判死)。jar 内默认 `application.yaml` 仍保持单端口只暴露 `health`(`HmacAuthentication` 仅放行 readiness / liveness 无正文 GET)。
 - **库与档位**:`mmorpg_mall` 与其余逻辑库在同一个全球权威 SQL 入口上(`-GlobalAuthorityTiDBHost`)。规则在 `Resolve-MallSqlMode`:
   - `-DatabaseBackend tidb`:核对 TiDB;运行模式 dev 档是 `dev`,其余是 `prod`。
   - `-DatabaseBackend mysql` 且 dev 档:运行模式 `dev`,不核对 TiDB。

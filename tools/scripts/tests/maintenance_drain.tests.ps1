@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 # 纯合同夹具；不运行进程/SQL/Redis，不将虚构qualification文件当真实I3资格。
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
@@ -101,7 +101,7 @@ try {
         $sql=ConvertTo-AuthorityRepairRoleSql -Plan $plan
         $grants=@($sql -split "`r?`n" | Where-Object { $_ -match '^GRANT ' })
         $body=$grants -join "`n"
-        Assert-Equal -Expected 20 -Actual $grants.Count -Because '两个目录片各 9 张表、一个存档库 2 张表'
+        Assert-Equal -Expected 24 -Actual $grants.Count -Because '两个目录片各 11 张表、一个存档库 2 张表'
         foreach($schema in @('dir_fixture_00','dir_fixture_01','store_fixture_1')){
             Assert-Match -Text $body -Pattern ([regex]::Escape("GRANT SELECT ON ``$schema``.``route_meta`` TO 'repair_fixture'@'%';")) -Because "每个要写的库都要能锁读闸门行:$schema"
         }

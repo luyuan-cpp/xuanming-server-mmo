@@ -29,6 +29,8 @@ func tipCodes() map[string]tipCode {
 		"ErrHomeZoneUnknown":      {ErrHomeZoneUnknown, "trade", false},
 		"ErrFavoriteLimitReached": {ErrFavoriteLimitReached, "trade", false},
 		"ErrFeatureDisabled":      {ErrFeatureDisabled, "trade", false},
+		"ErrTitleSensitive":       {ErrTitleSensitive, "trade", false},
+		"ErrTextCheckUnavailable": {ErrTextCheckUnavailable, "trade", true},
 	}
 }
 

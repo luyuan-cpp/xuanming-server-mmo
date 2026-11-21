@@ -58,6 +58,7 @@ import (
 	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/dsclient"
 )
 
 const (
@@ -308,7 +309,7 @@ func openLedger(rpc zrpc.RpcClientConf) (*assetop.DataServiceLedger, func(), err
 	if len(rpc.Endpoints) == 0 && rpc.Target == "" && rpc.Etcd.Key == "" {
 		return nil, nil, errors.New("DataServiceRpc is not configured: the committed asset ledger cannot be read, refusing to run (transaction_log is not evidence)")
 	}
-	client, err := zrpc.NewClient(rpc)
+	client, err := zrpc.NewClient(dsclient.Conf(rpc))
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect data_service for the committed asset ledger: %w", err)
 	}

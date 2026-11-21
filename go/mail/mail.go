@@ -48,6 +48,7 @@ import (
 	"shared/scenenode"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
+	"shared/tablebundle"
 	"shared/workshard"
 )
 
@@ -106,11 +107,13 @@ func main() {
 	file := flag.String("f", "etc/mail.yaml", "配置文件")
 	migrate := flag.Bool("migrate", false, "仅按proto迁移领域库")
 	version := flag.Bool("version", false, "打印版本")
+	validateTablesDir := flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析)后退出")
 	flag.Parse()
 	fmt.Println(buildinfo.StartupLine("mail"))
 	if *version {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("mail", *validateTablesDir, false, nil)
 	clockcheck.MustPass("mail")
 	var c config
 	conf.MustLoad(*file, &c)
@@ -273,9 +276,16 @@ func run(c config, migrate bool) (runErr error) {
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("invalid PlayerRedis config: %w", err)
 	}
-	if err = tables.ItemTableManagerInstance.Load(c.TableDir, false); err != nil {
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:   "mail",
+		ImageTableDir: c.TableDir,
+		UseBinary:     false,
+	})
+	if err != nil {
 		return err
 	}
+	tableMgr.Start()
+	defer tableMgr.Stop()
 	ids, err := domainhost.OpenIDs(ctx, c.DataServiceRpc, "mail", "mail_asset_op")
 	if err != nil {
 		return err

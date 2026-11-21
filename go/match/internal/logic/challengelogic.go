@@ -57,7 +57,7 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 	}
 	// 入口白名单(PlayMode 表,docs/design/global-match-hierarchical-pools.md §7):切磋只能用表里开放的
 	// 模板,客户端任填的 battle_config_id 一律拒绝。
-	if !l.svcCtx.Catalog.Open(matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, in.BattleConfigId) {
+	if !l.svcCtx.ActiveCatalog().Open(matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, in.BattleConfigId) {
 		metrics.ObserveChallenge("invite", "template_not_open")
 		return &matchpb.ChallengePlayerResponse{
 			ErrorMessage: tipErr(constants.ErrModeNotOpen, "该切磋玩法暂未开放"),

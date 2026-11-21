@@ -111,6 +111,16 @@ TEST(BaseDeployConfigEnvOverride, TokenSecretsWithoutEnvKeepYaml)
 	EXPECT_TRUE(withEmptyEnv.spectate_token_secret() == withoutEnv.spectate_token_secret());
 }
 
+TEST(BaseDeployConfigEnvOverride, ReadBaseDeployConfigTwiceDoesNotAccumulateRepeatedFields)
+{
+	BaseDeployConfig cfg;
+	ASSERT_TRUE(readBaseDeployConfig("etc/base_deploy_config.yaml", cfg));
+	const int firstPrefixes = cfg.service_discovery_prefixes_size();
+	ASSERT_TRUE(readBaseDeployConfig("etc/base_deploy_config.yaml", cfg));
+	EXPECT_EQ(cfg.etcd_hosts_size(), 1);
+	EXPECT_EQ(cfg.service_discovery_prefixes_size(), firstPrefixes);
+}
+
 // ---------------------------------------------------------------------------
 // 验证各配置表能正常加载并遍历
 // ---------------------------------------------------------------------------

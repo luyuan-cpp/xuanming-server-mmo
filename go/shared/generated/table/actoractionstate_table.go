@@ -19,7 +19,8 @@ import (
 // Load() builds a new snapshot and swaps it in, replacing the old one.
 type actoractionstateSnapshot struct {
     data   []*pb.ActorActionStateTable
-    kvData map[uint32]*pb.ActorActionStateTable
+    // 主键可重复:一个 id 对应多行
+    kvData map[uint32][]*pb.ActorActionStateTable
 }
 
 type ActorActionStateTableManager struct {
@@ -39,45 +40,59 @@ var ActorActionStateTableManagerInstance = NewActorActionStateTableManager()
 func NewActorActionStateTableManager() *ActorActionStateTableManager {
     m := &ActorActionStateTableManager{}
     m.snap.Store(&actoractionstateSnapshot{
-        kvData: make(map[uint32]*pb.ActorActionStateTable),
+        kvData: make(map[uint32][]*pb.ActorActionStateTable),
     })
     return m
 }
 
 func (m *ActorActionStateTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *ActorActionStateTableManager) swapSnapshot(snap *actoractionstateSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *ActorActionStateTableManager) loadSnapshot(configDir string, useBinary bool) (*actoractionstateSnapshot, error) {
     var container pb.ActorActionStateTableData
 
     if useBinary {
         path := filepath.Join(configDir, "actoractionstate.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "actoractionstate.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
     snap := &actoractionstateSnapshot{
-        kvData: make(map[uint32]*pb.ActorActionStateTable, len(container.Data)),
+        kvData: make(map[uint32][]*pb.ActorActionStateTable, len(container.Data)),
     }
 
     for _, row := range container.Data {
-        snap.kvData[row.Id] = row
+        snap.kvData[row.Id] = append(snap.kvData[row.Id], row)
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *ActorActionStateTableManager) FindAll() []*pb.ActorActionStateTable {
@@ -85,10 +100,12 @@ func (m *ActorActionStateTableManager) FindAll() []*pb.ActorActionStateTable {
     return snap.data
 }
 
-func (m *ActorActionStateTableManager) FindById(id uint32) (*pb.ActorActionStateTable, bool) {
+// FindAllById 返回该 id 命中的**全部**行(表内顺序)。
+// 这张表的主键声明了 (cfg_multi),所以不生成 FindById —— 把可重复主键当单值用
+// 会在编译期断，而不是悄悄只看第一行。
+func (m *ActorActionStateTableManager) FindAllById(id uint32) []*pb.ActorActionStateTable {
     snap := m.snap.Load()
-    row, ok := snap.kvData[id]
-    return row, ok
+    return snap.kvData[id]
 }
 
 
@@ -97,8 +114,7 @@ func (m *ActorActionStateTableManager) FindById(id uint32) (*pb.ActorActionState
 
 func (m *ActorActionStateTableManager) Exists(id uint32) bool {
     snap := m.snap.Load()
-    _, ok := snap.kvData[id]
-    return ok
+    return len(snap.kvData[id]) > 0
 }
 
 
@@ -118,9 +134,7 @@ func (m *ActorActionStateTableManager) FindByIds(ids []uint32) []*pb.ActorAction
     snap := m.snap.Load()
     result := make([]*pb.ActorActionStateTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := snap.kvData[id]; ok {
-            result = append(result, row)
-        }
+        result = append(result, snap.kvData[id]...)
     }
     return result
 }

@@ -337,15 +337,12 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 	}
 
 	turns := bot.player.GetTurnCount()
-	// 就绪补拉应答、回合结果与终局包都必须从直连到达(D68/D69)
 	directTurns := int(direct.turnResults.Load())
 	zap.L().Info("[cross-zone] direct-connect delivery",
 		zap.String("side", side), zap.String("counts", direct.summary()))
-	if directTurns < 1 || direct.battleEnds.Load() < 1 || direct.stateReplies.Load() < 1 {
+	if err := direct.verifyFighterDelivery(); err != nil {
 		return crossZoneFighterResult{step: stepPrefix + "-direct-delivery",
-			err: fmt.Errorf("direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends>=1",
-				direct.summary()),
-			battleId: battleId, outcome: outcome, turns: turns}
+			err: err, battleId: battleId, outcome: outcome, turns: turns}
 	}
 	zap.L().Info("[cross-zone] battle finished",
 		zap.String("side", side), zap.Uint64("battle_id", battleId),

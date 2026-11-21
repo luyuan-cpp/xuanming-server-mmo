@@ -103,6 +103,7 @@ enum TextScene : int {
   TEXT_SCENE_CHAT_TEAM = 6,
   TEXT_SCENE_CHAT_PRIVATE = 7,
   TEXT_SCENE_PRIVATE_LABEL = 8,
+  TEXT_SCENE_TRADE_TITLE = 9,
   TextScene_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   TextScene_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -113,11 +114,11 @@ extern const uint32_t TextScene_internal_data_[];
 inline constexpr TextScene TextScene_MIN =
     static_cast<TextScene>(0);
 inline constexpr TextScene TextScene_MAX =
-    static_cast<TextScene>(8);
+    static_cast<TextScene>(9);
 [[nodiscard]] inline bool TextScene_IsValid(int value) {
-  return 0 <= value && value <= 8;
+  return 0 <= value && value <= 9;
 }
-inline constexpr int TextScene_ARRAYSIZE = 8 + 1;
+inline constexpr int TextScene_ARRAYSIZE = 9 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TextScene_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TextScene) {
@@ -132,7 +133,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& TextScene_Name(TextScene value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<TextScene_descriptor, 0, 8>(
+  return ::google::protobuf::internal::NameOfDenseEnum<TextScene_descriptor, 0, 9>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool TextScene_Parse(
@@ -387,6 +388,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextResponse final : public ::
     kVerdictFieldNumber = 1,
     kCategoryFieldNumber = 3,
     kLexiconVersionFieldNumber = 4,
+    kPendingPlatformReviewFieldNumber = 5,
   };
   // string masked_text = 2;
   void clear_masked_text() ;
@@ -433,11 +435,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextResponse final : public ::
   void _internal_set_lexicon_version(::uint64_t value);
 
   public:
+  // bool pending_platform_review = 5;
+  void clear_pending_platform_review() ;
+  [[nodiscard]] bool pending_platform_review() const;
+  void set_pending_platform_review(bool value);
+
+  private:
+  bool _internal_pending_platform_review() const;
+  void _internal_set_pending_platform_review(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:content_guard.CheckTextResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 51,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -470,6 +482,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextResponse final : public ::
     int verdict_;
     int category_;
     ::uint64_t lexicon_version_;
+    bool pending_platform_review_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -626,8 +639,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextRequest final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kTextFieldNumber = 2,
+    kAccountFieldNumber = 4,
     kPlayerIdFieldNumber = 3,
     kSceneFieldNumber = 1,
+    kAsyncPlatformFieldNumber = 5,
   };
   // string text = 2;
   void clear_text() ;
@@ -642,6 +657,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextRequest final : public ::g
   const ::std::string& _internal_text() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_text(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_text();
+
+  public:
+  // string account = 4;
+  void clear_account() ;
+  [[nodiscard]] const ::std::string& account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account();
+  void set_allocated_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
 
   public:
   // uint64 player_id = 3;
@@ -664,12 +694,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextRequest final : public ::g
   void _internal_set_scene(::content_guard::TextScene value);
 
   public:
+  // bool async_platform = 5;
+  void clear_async_platform() ;
+  [[nodiscard]] bool async_platform() const;
+  void set_async_platform(bool value);
+
+  private:
+  bool _internal_async_platform() const;
+  void _internal_set_async_platform(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:content_guard.CheckTextRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
-                          0, 43,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 50,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -698,8 +738,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextRequest final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr text_;
+    ::google::protobuf::internal::ArenaStringPtr account_;
     ::uint64_t player_id_;
     int scene_;
+    bool async_platform_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -726,7 +768,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckTextRequest final : public ::g
 inline void CheckTextRequest::clear_scene() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::content_guard::TextScene CheckTextRequest::scene() const {
   // @@protoc_insertion_point(field_get:content_guard.CheckTextRequest.scene)
@@ -734,7 +776,7 @@ inline ::content_guard::TextScene CheckTextRequest::scene() const {
 }
 inline void CheckTextRequest::set_scene(::content_guard::TextScene value) {
   _internal_set_scene(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:content_guard.CheckTextRequest.scene)
 }
 inline ::content_guard::TextScene CheckTextRequest::_internal_scene() const {
@@ -814,7 +856,7 @@ inline void CheckTextRequest::set_allocated_text(::std::string* PROTOBUF_NULLABL
 inline void CheckTextRequest::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t CheckTextRequest::player_id() const {
   // @@protoc_insertion_point(field_get:content_guard.CheckTextRequest.player_id)
@@ -822,7 +864,7 @@ inline ::uint64_t CheckTextRequest::player_id() const {
 }
 inline void CheckTextRequest::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:content_guard.CheckTextRequest.player_id)
 }
 inline ::uint64_t CheckTextRequest::_internal_player_id() const {
@@ -832,6 +874,94 @@ inline ::uint64_t CheckTextRequest::_internal_player_id() const {
 inline void CheckTextRequest::_internal_set_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = value;
+}
+
+// string account = 4;
+inline void CheckTextRequest::clear_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& CheckTextRequest::account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:content_guard.CheckTextRequest.account)
+  return _internal_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CheckTextRequest::set_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:content_guard.CheckTextRequest.account)
+}
+inline ::std::string* PROTOBUF_NONNULL CheckTextRequest::mutable_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_account();
+  // @@protoc_insertion_point(field_mutable:content_guard.CheckTextRequest.account)
+  return _s;
+}
+inline const ::std::string& CheckTextRequest::_internal_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_.Get();
+}
+inline void CheckTextRequest::_internal_set_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CheckTextRequest::_internal_mutable_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CheckTextRequest::release_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:content_guard.CheckTextRequest.account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CheckTextRequest::set_allocated_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_.IsDefault()) {
+    _impl_.account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:content_guard.CheckTextRequest.account)
+}
+
+// bool async_platform = 5;
+inline void CheckTextRequest::clear_async_platform() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.async_platform_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool CheckTextRequest::async_platform() const {
+  // @@protoc_insertion_point(field_get:content_guard.CheckTextRequest.async_platform)
+  return _internal_async_platform();
+}
+inline void CheckTextRequest::set_async_platform(bool value) {
+  _internal_set_async_platform(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:content_guard.CheckTextRequest.async_platform)
+}
+inline bool CheckTextRequest::_internal_async_platform() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.async_platform_;
+}
+inline void CheckTextRequest::_internal_set_async_platform(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.async_platform_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -972,6 +1102,30 @@ inline ::uint64_t CheckTextResponse::_internal_lexicon_version() const {
 inline void CheckTextResponse::_internal_set_lexicon_version(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lexicon_version_ = value;
+}
+
+// bool pending_platform_review = 5;
+inline void CheckTextResponse::clear_pending_platform_review() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_platform_review_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool CheckTextResponse::pending_platform_review() const {
+  // @@protoc_insertion_point(field_get:content_guard.CheckTextResponse.pending_platform_review)
+  return _internal_pending_platform_review();
+}
+inline void CheckTextResponse::set_pending_platform_review(bool value) {
+  _internal_set_pending_platform_review(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:content_guard.CheckTextResponse.pending_platform_review)
+}
+inline bool CheckTextResponse::_internal_pending_platform_review() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_platform_review_;
+}
+inline void CheckTextResponse::_internal_set_pending_platform_review(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_platform_review_ = value;
 }
 
 #ifdef __GNUC__

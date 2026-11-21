@@ -83,6 +83,12 @@ type PendingRefund struct {
 	Reason        string `json:"reason"`
 }
 
+// PendingRefundPage 是 /internal/refunds/poll 的一页应答(带续扫游标,避免 100 条以上饿死)。
+type PendingRefundPage struct {
+	Entries    []PendingRefund `json:"entries"`
+	NextCursor string          `json:"nextCursor"`
+}
+
 // RefundsOrdersOwnPayment 报告退款原因退的是不是订单绑定的那笔付款(CommerceApi.RefundReason.refundsOrdersOwnPayment:
 // 取消后才到账、交付被拒)。其余原因(重复付款、金额或币种不符)退的是没有绑定订单的异常付款,订单不因它变化。
 func RefundsOrdersOwnPayment(reason string) bool {
@@ -123,8 +129,12 @@ func New(base, subject, secret string, timeout time.Duration) (*Client, error) {
 	if timeout <= 0 {
 		timeout = 2500 * time.Millisecond
 	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 64
+	transport.MaxIdleConnsPerHost = 32
+	transport.IdleConnTimeout = 90 * time.Second
 	return &Client{base: strings.TrimRight(base, "/"), subject: subject, secret: secret, now: time.Now,
-		http: &http.Client{Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+		http: &http.Client{Timeout: timeout, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
 // Signature 是商城 v1 签名。path 是商城看到的原始 URI,body 是实际发出的字节(GET / 无正文时为空)。
@@ -230,11 +240,15 @@ func (c *Client) RecordPayment(ctx context.Context, payment Payment) (Outcome, e
 	return outcome, nil
 }
 
-// PendingRefunds 列出商城待退款的付款(至多 100 条,商城未做游标)。
-func (c *Client) PendingRefunds(ctx context.Context) ([]PendingRefund, error) {
-	var out []PendingRefund
-	if err := c.call(ctx, "/internal/refunds/poll", nil, &out); err != nil {
-		return nil, err
+// PendingRefunds 按游标分页列出商城待退款的付款(每页至多 100 条;cursor 为空表示从头扫)。
+func (c *Client) PendingRefunds(ctx context.Context, cursor string) (PendingRefundPage, error) {
+	var input any
+	if cursor != "" {
+		input = map[string]string{"cursor": cursor}
+	}
+	var out PendingRefundPage
+	if err := c.call(ctx, "/internal/refunds/poll", input, &out); err != nil {
+		return PendingRefundPage{}, err
 	}
 	return out, nil
 }

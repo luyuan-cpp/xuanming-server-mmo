@@ -238,8 +238,9 @@ using player_mutability::IsPlayerMutable;
 // 某 seq 的结局出现在这份快照的账本里 = durable。不另建"已持久化水位",不存在两份真相。
 bool IsAssetOpDurable(entt::entity player, const AssetOpRequest& request, bool expectApplied)
 {
+	const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
 	const auto* snapshotComp = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-	if (snapshotComp == nullptr || !snapshotComp->HasSnapshot())
+	if (owner == nullptr || snapshotComp == nullptr || !snapshotComp->IsCommittedForOwner(owner->epoch))
 	{
 		return false;
 	}
@@ -445,7 +446,7 @@ std::optional<ConfigUnknownToThisVersion> FindConfigUnknownToThisVersion(const :
 	return std::nullopt;
 }
 
-bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
+bool ValidateDebitBundle(const ::AssetBundle& bundle, bool allowAnyItemByConfig, std::string& why)
 {
 	if (HasUnsupportedP2Fields(bundle))
 	{
@@ -470,6 +471,7 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 	{
 		if (item.config_id() == 0 || item.count() == 0 || item.count() > 4096 || !configs.insert(item.config_id()).second)
 		{ why = "quantity debit requires distinct non-zero configurations with a count in [1, 4096]"; return false; }
+		if (allowAnyItemByConfig) continue; // 付款撤销扣回(TX_PAYMENT_REVERSAL)与官方发放同口径:按配置号与数量扣,允许非堆叠与装备
 		// 本节点表里查不到的配置由第 8b 步按版本错位处理(FindConfigUnknownToThisVersion)。
 		const auto* row = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
 		if (row == nullptr) continue;
@@ -656,6 +658,18 @@ void ApplyCurrencyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp
 // 先物品后货币:只有物品会"暂时失败"(背包满),先做它就不会留下半截。
 // 一旦已有改动后又失败,记 kAppliedPartial 并回 APPLIED + partial=true,
 // **不再**把部分发放记成完整成功(AGENTS §11.3:错误不得伪装成功)。
+std::vector<Bag*> RecallBagOrder(PlayerBagsComp& bags);
+bool HasUncountableUnits(const Bag& bag, uint32_t configId);
+bool IsRecallableInstance(const ItemComp& item, uint32_t configId);
+
+struct ReversalItemStep
+{
+	std::size_t orderIndex = 0; // RecallBagOrder 下标,不存裸指针成员
+	uint32_t configId = 0;
+	uint32_t stackCount = 0;
+	std::vector<Guid> guids;
+};
+
 void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
 	int64_t nowMs, ::AssetOpResponse& response)
 {
@@ -667,6 +681,7 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	}
 	auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
 	const auto txType = static_cast<TransactionType>(request.tx_type());
+	const bool isPaymentReversal = txType == TX_PAYMENT_REVERSAL;
 	ItemCountMap quantities;
 	for (const auto& item : bundle.items()) quantities[item.config_id()] = item.count();
 	std::vector<Guid> guids(bundle.item_uuids().begin(), bundle.item_uuids().end());
@@ -685,37 +700,101 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	// 战斗道具预留(docs/design/battle-item-reservation.md):要扣的物品还押在一局未结算的战斗里。这是会自己消失的条件
 	// (结算或作废之后释放),与版本错位同一处理:记下来,等确定性校验都跑完再回 RETRY、不记账;记成终态会让对侧白白退款或中止。
 	bool quantityHeld = false;
+	std::vector<ReversalItemStep> reversalSteps;
 	if (!quantities.empty() || !guids.empty())
 	{
 		if (bags == nullptr) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere); return; }
-		auto& bag = bags->bags[kInventory];
-		switch (BagService::CheckRemovable(player, bag, quantities))
+		if (isPaymentReversal && !quantities.empty() && guids.empty())
 		{
-		case BagService::RemovalVerdict::kEnough:
-			break;
-		case BagService::RemovalVerdict::kHeld:
-			quantityHeld = true;
-			break;
-		case BagService::RemovalVerdict::kVersionSkew:
-			quantityVersionSkew = true;
-			break;
-		case BagService::RemovalVerdict::kInsufficient:
-		case BagService::RemovalVerdict::kCount:
-			RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
-			return;
+			// 付款撤销扣回按 RecallBagOrder 跨全包(背包 → 仓库 → 临时格 → 动态包 → 装备栏)核查与扣回,
+			// 防止玩家把刚充值的物品/装备存进仓库或穿上身以逃避拒付扣回;数量不足时确定性拒绝(转人工),不透支。
+			const auto order = RecallBagOrder(*bags);
+			for (const auto& [configId, needed] : quantities)
+			{
+				uint64_t countable = 0;
+				bool uncountable = false;
+				bool held = false;
+				for (const auto* bag : order)
+				{
+					countable += BagService::RemovableCount(player, *bag, configId);
+					uncountable = uncountable || HasUncountableUnits(*bag, configId);
+					held = held || BagService::HeldCount(player, *bag, configId) > 0;
+				}
+				if (countable < needed)
+				{
+					if (uncountable) { quantityVersionSkew = true; continue; }
+					if (held) { quantityHeld = true; continue; }
+					RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+					return;
+				}
+				const auto* row = ItemTableManager::Instance().FindByIdSilent(configId).first;
+				const bool stackable = row != nullptr && row->max_stack_size() > 1 && row->equip_kind() == 0;
+				uint64_t remaining = needed;
+				for (std::size_t idx = 0; idx < order.size() && remaining > 0; ++idx)
+				{
+					const uint64_t avail = BagService::RemovableCount(player, *order[idx], configId);
+					const uint64_t want = std::min<uint64_t>(avail, remaining);
+					if (want == 0) continue;
+					if (stackable)
+					{
+						reversalSteps.push_back(ReversalItemStep{idx, configId, static_cast<uint32_t>(want), {}});
+						remaining -= want;
+						continue;
+					}
+					std::vector<Guid> candidates;
+					order[idx]->ForEachItem([&](Guid g, const ItemComp& item)
+					{
+						if (IsRecallableInstance(item, configId)) candidates.push_back(g);
+					});
+					std::sort(candidates.begin(), candidates.end());
+					if (candidates.size() > want) candidates.resize(static_cast<std::size_t>(want));
+					if (candidates.empty()) continue;
+					if (BagService::CheckRemovableInstances(player, *order[idx], candidates) == BagService::RemovalVerdict::kHeld)
+					{
+						quantityHeld = true;
+						break;
+					}
+					remaining -= candidates.size();
+					reversalSteps.push_back(ReversalItemStep{idx, configId, 0, std::move(candidates)});
+				}
+				if (remaining > 0 && !quantityHeld)
+				{
+					RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+					return;
+				}
+			}
 		}
-		if (!guids.empty() && bag.ReserveForBatchRemove(guids) != kSuccess)
-		{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
-		if (!guids.empty() && BagService::CheckRemovableInstances(player, bag, guids) == BagService::RemovalVerdict::kHeld)
-			quantityHeld = true;
-		for (auto guid : guids)
+		else
 		{
-			const auto* item = bag.GetItemCompByGuid(guid);
-			if (item == nullptr || item->ByteSizeLong() > kInstanceBytesLimit)
+			auto& bag = bags->bags[kInventory];
+			switch (BagService::CheckRemovable(player, bag, quantities))
+			{
+			case BagService::RemovalVerdict::kEnough:
+				break;
+			case BagService::RemovalVerdict::kHeld:
+				quantityHeld = true;
+				break;
+			case BagService::RemovalVerdict::kVersionSkew:
+				quantityVersionSkew = true;
+				break;
+			case BagService::RemovalVerdict::kInsufficient:
+			case BagService::RemovalVerdict::kCount:
+				RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+				return;
+			}
+			if (!guids.empty() && bag.ReserveForBatchRemove(guids) != kSuccess)
 			{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
-			auto* transfer = snapshot.add_items();
-			transfer->set_item_uuid(guid); transfer->set_config_id(item->config_id()); transfer->set_stack_size(item->size());
-			transfer->set_instance_proto(item->SerializeAsString());
+			if (!guids.empty() && BagService::CheckRemovableInstances(player, bag, guids) == BagService::RemovalVerdict::kHeld)
+				quantityHeld = true;
+			for (auto guid : guids)
+			{
+				const auto* item = bag.GetItemCompByGuid(guid);
+				if (item == nullptr || item->ByteSizeLong() > kInstanceBytesLimit)
+				{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
+				auto* transfer = snapshot.add_items();
+				transfer->set_item_uuid(guid); transfer->set_config_id(item->config_id()); transfer->set_stack_size(item->size());
+				transfer->set_instance_proto(item->SerializeAsString());
+			}
 		}
 	}
 	if (bundle.pet_id() != 0)
@@ -753,8 +832,32 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	if (!HasReceiptRoom(ledgerComp, request, snapshot)) { Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetBagFull); return; }
 	// 所有可预知失败均在副作用前复核。提交阶段若内部不变量损坏，记 partial 阻止对侧入账。
 	bool mutated = false;
+	bool wornRemoved = false;
 	uint32_t error = kSuccess;
-	if (!quantities.empty())
+	if (!reversalSteps.empty())
+	{
+		const auto order = RecallBagOrder(*bags);
+		for (const auto& step : reversalSteps)
+		{
+			Bag& targetBag = *order[step.orderIndex];
+			if (step.stackCount > 0)
+			{
+				error = BagService::RemoveItemsExact(player, targetBag, ItemCountMap{{step.configId, step.stackCount}}, txType, request.correlation_id());
+				if (error != kSuccess) break;
+				mutated = true;
+				wornRemoved = wornRemoved || &targetBag == &bags->bags[kEquipment];
+			}
+			else if (!step.guids.empty())
+			{
+				bool removed = false;
+				error = BagService::RemoveItemsByGuid(player, targetBag, step.guids, txType, request.correlation_id(), nullptr, &removed);
+				mutated = mutated || removed;
+				wornRemoved = wornRemoved || (removed && &targetBag == &bags->bags[kEquipment]);
+				if (error != kSuccess) break;
+			}
+		}
+	}
+	else if (!quantities.empty())
 	{
 		error = BagService::RemoveItemsExact(player, bags->bags[kInventory], quantities, txType, request.correlation_id());
 		mutated = error == kSuccess;
@@ -777,6 +880,11 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 			static_cast<int64_t>(currency.amount()), txType, request.correlation_id());
 		if (error != kSuccess) break;
 		mutated = true;
+	}
+	if (wornRemoved)
+	{
+		PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
+		PlayerAttributeSystem::PushPanel(player);
 	}
 	if (error != kSuccess && !mutated) { Answer(response, ASSET_OP_OUTCOME_RETRY, error); return; }
 	const bool partial = error != kSuccess;
@@ -1538,7 +1646,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	{ RejectAndRecord(player, *ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 	std::string why;
 	const bool bundleOk = isRecall ? ValidateRecallBundle(request.bundle(), why)
-		: (rpc == AssetOpRpc::kDebit) ? ValidateDebitBundle(request.bundle(), why)
+		: (rpc == AssetOpRpc::kDebit) ? ValidateDebitBundle(request.bundle(), static_cast<TransactionType>(request.tx_type()) == TX_PAYMENT_REVERSAL, why)
 									  : ValidateCreditBundle(request.bundle(), why);
 	if (!bundleOk)
 	{
@@ -1677,8 +1785,9 @@ void PlayerAssetOpSystem::AckReceipt(const ::AssetOpRequest& request, ::AssetOpR
 			if (changed || last == nullptr || nowMs - last->lastRequestMs >= kAssetOpResaveMinIntervalMs)
 				RequestAssetOpPersist(player, nowMs);
 			Answer(response, ASSET_OP_OUTCOME_APPLIED, 0);
+			const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
 			const auto* persisted = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-			if (persisted != nullptr && persisted->HasSnapshot())
+			if (owner != nullptr && persisted != nullptr && persisted->IsCommittedForOwner(owner->epoch))
 			{
 				const auto* saved = FindAssetOpStream(persisted->snapshot->player_database_data().asset_op_ledger(), request.stream());
 				const auto* savedReceipt = saved == nullptr ? nullptr : FindReceipt(*saved, request.seq());

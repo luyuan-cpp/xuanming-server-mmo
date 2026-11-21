@@ -127,6 +127,31 @@ class GmInstallationTest {
         }
     }
 
+    @Test void indexMigrationCreatesAuditAndQueryIndexesIdempotently() throws Exception {
+        start();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=5", Integer.class));
+        for (String index : List.of("idx_gm_command_type_created", "idx_gm_command_type_player_created", "idx_gm_command_type_status_created")) {
+            assertTrue(hasIndex("gm_command", index), "Missing index: " + index);
+        }
+        assertTrue(hasIndex("gm_command_audit", "idx_gm_command_audit_command"));
+        // 删除版本 5 标记后重跑仍幂等，不会因索引已存在而报错。
+        db.update("DELETE FROM gm_install WHERE version=5");
+        start();
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=5", Integer.class));
+    }
+
+    private boolean hasIndex(String table, String indexName) {
+        return Boolean.TRUE.equals(db.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) connection -> {
+            try (var indexes = connection.getMetaData().getIndexInfo(connection.getCatalog(), null, table, false, false)) {
+                while (indexes.next()) {
+                    String name = indexes.getString("INDEX_NAME");
+                    if (name != null && name.equalsIgnoreCase(indexName)) return true;
+                }
+                return false;
+            }
+        }));
+    }
+
     private void start() throws Exception { installation.run(new DefaultApplicationArguments(new String[0])); }
     private void request(String path, int expectedStatus) throws Exception {
         mvc.perform(get(path).servletPath(path)).andExpect(status().is(expectedStatus));

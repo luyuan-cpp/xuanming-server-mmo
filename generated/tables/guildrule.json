@@ -8,6 +8,9 @@
    "id": 1,
    "max_pending_applications_per_guild": 50,
    "max_pending_applications_per_player": 3,
+   "name_hold_seconds": 604800,
+   "rename_cooldown_seconds": 604800,
+   "rename_cost_funds": 1000,
    "reunion_min_online_members": 3,
    "trial_invite_cooldown_seconds": 10,
    "trial_invite_ttl_seconds": 30

@@ -102,3 +102,14 @@ spec:
           annotations:
             summary: "{{ $labels.channel }} 有退款退不了,已转人工"
             description: "渠道没有开发者退款接口(苹果)或明确拒绝了退款。商城的退款待办已标成 MANUAL,要在渠道后台手工处理后登记。"
+
+        - alert: PaymentFinalizeStalled
+          expr: |
+            max(payment_finalize_oldest_pending_seconds) > 86400
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "有商店付款超过 24 小时未完成确认(consume/acknowledge)"
+            description: >-
+              Google Play 超过 72 小时未确认的购买会被平台自动退款。查支付服务调商店接口的错误日志、通道凭据与配额,确认付款是否卡在重试。

@@ -22,7 +22,7 @@ public static partial class GuildruleTableReflection {
   static GuildruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChVndWlsZHJ1bGVfdGFibGUucHJvdG8i6AIKDkd1aWxkUnVsZVRhYmxlEgoK",
+          "ChVndWlsZHJ1bGVfdGFibGUucHJvdG8ivwMKDkd1aWxkUnVsZVRhYmxlEgoK",
           "AmlkGAEgASgNEiAKGGFwcGxpY2F0aW9uX2V4cGlyZV9ob3VycxgCIAEoDRIr",
           "CiNtYXhfcGVuZGluZ19hcHBsaWNhdGlvbnNfcGVyX3BsYXllchgDIAEoDRIq",
           "CiJtYXhfcGVuZGluZ19hcHBsaWNhdGlvbnNfcGVyX2d1aWxkGAQgASgNEiEK",
@@ -30,14 +30,16 @@ public static partial class GuildruleTableReflection {
           "cmV0cnlfYmFzZV9tcxgGIAEoDRIiChpyZXVuaW9uX21pbl9vbmxpbmVfbWVt",
           "YmVycxgHIAEoDRIfChdhY3Rpdml0eV9qb2luX21pbl9ob3VycxgIIAEoDRIg",
           "Chh0cmlhbF9pbnZpdGVfdHRsX3NlY29uZHMYCSABKA0SJQoddHJpYWxfaW52",
-          "aXRlX2Nvb2xkb3duX3NlY29uZHMYCiABKA0iMwoSR3VpbGRSdWxlVGFibGVE",
-          "YXRhEh0KBGRhdGEYASADKAsyDy5HdWlsZFJ1bGVUYWJsZUJACg5jb20uZ2Ft",
-          "ZS50YWJsZUIYR3VpbGRSdWxlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRl",
-          "ZC9wYi90YWJsZWIGcHJvdG8z"));
+          "aXRlX2Nvb2xkb3duX3NlY29uZHMYCiABKA0SHwoXcmVuYW1lX2Nvb2xkb3du",
+          "X3NlY29uZHMYCyABKA0SGQoRbmFtZV9ob2xkX3NlY29uZHMYDCABKA0SGQoR",
+          "cmVuYW1lX2Nvc3RfZnVuZHMYDSABKAQiMwoSR3VpbGRSdWxlVGFibGVEYXRh",
+          "Eh0KBGRhdGEYASADKAsyDy5HdWlsZFJ1bGVUYWJsZUJACg5jb20uZ2FtZS50",
+          "YWJsZUIYR3VpbGRSdWxlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9w",
+          "Yi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::GuildRuleTable), global::GuildRuleTable.Parser, new[]{ "Id", "ApplicationExpireHours", "MaxPendingApplicationsPerPlayer", "MaxPendingApplicationsPerGuild", "AssetOpDeadlineSeconds", "AssetOpRetryBaseMs", "ReunionMinOnlineMembers", "ActivityJoinMinHours", "TrialInviteTtlSeconds", "TrialInviteCooldownSeconds" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::GuildRuleTable), global::GuildRuleTable.Parser, new[]{ "Id", "ApplicationExpireHours", "MaxPendingApplicationsPerPlayer", "MaxPendingApplicationsPerGuild", "AssetOpDeadlineSeconds", "AssetOpRetryBaseMs", "ReunionMinOnlineMembers", "ActivityJoinMinHours", "TrialInviteTtlSeconds", "TrialInviteCooldownSeconds", "RenameCooldownSeconds", "NameHoldSeconds", "RenameCostFunds" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::GuildRuleTableData), global::GuildRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -90,6 +92,9 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     activityJoinMinHours_ = other.activityJoinMinHours_;
     trialInviteTtlSeconds_ = other.trialInviteTtlSeconds_;
     trialInviteCooldownSeconds_ = other.trialInviteCooldownSeconds_;
+    renameCooldownSeconds_ = other.renameCooldownSeconds_;
+    nameHoldSeconds_ = other.nameHoldSeconds_;
+    renameCostFunds_ = other.renameCostFunds_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -219,6 +224,42 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     }
   }
 
+  /// <summary>Field number for the "rename_cooldown_seconds" field.</summary>
+  public const int RenameCooldownSecondsFieldNumber = 11;
+  private uint renameCooldownSeconds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RenameCooldownSeconds {
+    get { return renameCooldownSeconds_; }
+    set {
+      renameCooldownSeconds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "name_hold_seconds" field.</summary>
+  public const int NameHoldSecondsFieldNumber = 12;
+  private uint nameHoldSeconds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint NameHoldSeconds {
+    get { return nameHoldSeconds_; }
+    set {
+      nameHoldSeconds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "rename_cost_funds" field.</summary>
+  public const int RenameCostFundsFieldNumber = 13;
+  private ulong renameCostFunds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong RenameCostFunds {
+    get { return renameCostFunds_; }
+    set {
+      renameCostFunds_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -244,6 +285,9 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     if (ActivityJoinMinHours != other.ActivityJoinMinHours) return false;
     if (TrialInviteTtlSeconds != other.TrialInviteTtlSeconds) return false;
     if (TrialInviteCooldownSeconds != other.TrialInviteCooldownSeconds) return false;
+    if (RenameCooldownSeconds != other.RenameCooldownSeconds) return false;
+    if (NameHoldSeconds != other.NameHoldSeconds) return false;
+    if (RenameCostFunds != other.RenameCostFunds) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -261,6 +305,9 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     if (ActivityJoinMinHours != 0) hash ^= ActivityJoinMinHours.GetHashCode();
     if (TrialInviteTtlSeconds != 0) hash ^= TrialInviteTtlSeconds.GetHashCode();
     if (TrialInviteCooldownSeconds != 0) hash ^= TrialInviteCooldownSeconds.GetHashCode();
+    if (RenameCooldownSeconds != 0) hash ^= RenameCooldownSeconds.GetHashCode();
+    if (NameHoldSeconds != 0) hash ^= NameHoldSeconds.GetHashCode();
+    if (RenameCostFunds != 0UL) hash ^= RenameCostFunds.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -319,6 +366,18 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
       output.WriteRawTag(80);
       output.WriteUInt32(TrialInviteCooldownSeconds);
     }
+    if (RenameCooldownSeconds != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(RenameCooldownSeconds);
+    }
+    if (NameHoldSeconds != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(NameHoldSeconds);
+    }
+    if (RenameCostFunds != 0UL) {
+      output.WriteRawTag(104);
+      output.WriteUInt64(RenameCostFunds);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -369,6 +428,18 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
       output.WriteRawTag(80);
       output.WriteUInt32(TrialInviteCooldownSeconds);
     }
+    if (RenameCooldownSeconds != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(RenameCooldownSeconds);
+    }
+    if (NameHoldSeconds != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(NameHoldSeconds);
+    }
+    if (RenameCostFunds != 0UL) {
+      output.WriteRawTag(104);
+      output.WriteUInt64(RenameCostFunds);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -408,6 +479,15 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     }
     if (TrialInviteCooldownSeconds != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TrialInviteCooldownSeconds);
+    }
+    if (RenameCooldownSeconds != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(RenameCooldownSeconds);
+    }
+    if (NameHoldSeconds != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NameHoldSeconds);
+    }
+    if (RenameCostFunds != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(RenameCostFunds);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -450,6 +530,15 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
     }
     if (other.TrialInviteCooldownSeconds != 0) {
       TrialInviteCooldownSeconds = other.TrialInviteCooldownSeconds;
+    }
+    if (other.RenameCooldownSeconds != 0) {
+      RenameCooldownSeconds = other.RenameCooldownSeconds;
+    }
+    if (other.NameHoldSeconds != 0) {
+      NameHoldSeconds = other.NameHoldSeconds;
+    }
+    if (other.RenameCostFunds != 0UL) {
+      RenameCostFunds = other.RenameCostFunds;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -510,6 +599,18 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
           TrialInviteCooldownSeconds = input.ReadUInt32();
           break;
         }
+        case 88: {
+          RenameCooldownSeconds = input.ReadUInt32();
+          break;
+        }
+        case 96: {
+          NameHoldSeconds = input.ReadUInt32();
+          break;
+        }
+        case 104: {
+          RenameCostFunds = input.ReadUInt64();
+          break;
+        }
       }
     }
   #endif
@@ -567,6 +668,18 @@ public sealed partial class GuildRuleTable : pb::IMessage<GuildRuleTable>
         }
         case 80: {
           TrialInviteCooldownSeconds = input.ReadUInt32();
+          break;
+        }
+        case 88: {
+          RenameCooldownSeconds = input.ReadUInt32();
+          break;
+        }
+        case 96: {
+          NameHoldSeconds = input.ReadUInt32();
+          break;
+        }
+        case 104: {
+          RenameCostFunds = input.ReadUInt64();
           break;
         }
       }

@@ -41,12 +41,26 @@ func (s *Store) ConfigureMatchCatalog(c *catalog.Catalog, schedule scope.Schedul
 	if err := schedule.Validate(); err != nil {
 		return err
 	}
-	s.catalog, s.schedule = c, schedule
+	s.catalog.Store(c)
+	s.schedule = schedule
 	return nil
 }
 
+// SwapCatalog 在配置表两阶段热更提交时原子替换模板目录。
+func (s *Store) SwapCatalog(c *catalog.Catalog) {
+	if s == nil || c == nil {
+		return
+	}
+	s.catalog.Store(c)
+}
+
 // Catalog 返回装配的模板目录（可能为 nil，见 ConfigureMatchCatalog）。
-func (s *Store) Catalog() *catalog.Catalog { return s.catalog }
+func (s *Store) Catalog() *catalog.Catalog {
+	if s == nil {
+		return nil
+	}
+	return s.catalog.Load()
+}
 
 // Schedule 返回逐级放宽阈值。
 func (s *Store) Schedule() scope.Schedule { return s.schedule }
@@ -54,7 +68,7 @@ func (s *Store) Schedule() scope.Schedule { return s.schedule }
 // battleDeadlineMs 是成局期限：提交时刻 + 备战预算（一代工作租约）+ 模板战斗时长。
 // 模板没有时长时与旧的固定 300 秒一致（catalog.DefaultBattleSeconds + 120 秒）。
 func (s *Store) battleDeadlineMs(nowMs uint64, configID uint32) uint64 {
-	return nowMs + WorkLeaseMs + uint64(s.catalog.BattleSeconds(configID))*1000
+	return nowMs + WorkLeaseMs + uint64(s.Catalog().BattleSeconds(configID))*1000
 }
 
 // queueUnits 把一组票按"不可拆单位"分组：同一 team_id 的整队是一个单位，单排票各自一个单位。
@@ -91,7 +105,7 @@ func (s *Store) admitScope(group []*pb.MatchAuthorityTicketRecord, nowMs uint64)
 	members := make([][]scope.Member, len(units))
 	for i, unit := range units {
 		for _, ticket := range unit {
-			members[i] = append(members[i], scope.Member{Node: s.catalog.ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
+			members[i] = append(members[i], scope.Member{Node: s.Catalog().ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
 		}
 	}
 	return scope.Admit(s.schedule, members, nowMs)

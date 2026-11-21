@@ -1,4 +1,4 @@
-# 本机开发跨进程证明。只注入调用进程需要的键；部署环境必须由Secret提供，不调用本文件。
+﻿# 本机开发跨进程证明。只注入调用进程需要的键；部署环境必须由Secret提供，不调用本文件。
 function Get-AccountDirectoryDevSecretAllNames {
     # 末尾是玩家存盘接口的调用密钥:scene 签名、go/db 验签,两端同值。
     @('LOGIN','TRADE','SCENE','SCENE_MANAGER','PAYMENT' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) + 'MMORPG_PLAYER_STORE_SECRET_SCENE'
@@ -47,7 +47,6 @@ function Initialize-AccountDirectoryDevSecrets {
         # 父shell可能已带login/trade/scene能力；SM子进程只得到独立Lookup键，finally按Backup还原父环境。
         foreach ($name in $all) { if ($name -notin $needed) { [Environment]::SetEnvironmentVariable($name,$null,'Process') } }
     }
-    if (@($needed | Where-Object { ([string][Environment]::GetEnvironmentVariable($_,'Process')).Trim().Length -lt 32 }).Count -eq 0) { return }
     $path = Join-Path $RepoRoot 'run/secrets/account-directory-dev.env'
     $mutex = [Threading.Mutex]::new($false,'Global\mmorpg-account-directory-dev-secret')
     $held = $false

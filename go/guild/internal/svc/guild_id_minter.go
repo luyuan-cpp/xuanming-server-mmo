@@ -9,6 +9,7 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 
 	dspb "proto/data_service"
+	"shared/dsclient"
 	"shared/idsegment"
 )
 
@@ -26,7 +27,7 @@ func (s *ServiceContext) initDataServiceClient() {
 	if !hasRpcTarget(s.Config.DataServiceRpc) {
 		return
 	}
-	conn := zrpc.MustNewClient(s.Config.DataServiceRpc)
+	conn := zrpc.MustNewClient(dsclient.Conf(s.Config.DataServiceRpc))
 	s.DataServiceClient = dspb.NewDataServiceClient(conn.Conn())
 }
 

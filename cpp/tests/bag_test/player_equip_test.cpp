@@ -64,6 +64,7 @@
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/equip_attribute_rules.h"
 #include "services/scene/player/system/player_equip.h"
@@ -859,6 +860,7 @@ protected:
 		const auto entity = tlsEcs.actorRegistry.create();
 		players.push_back(entity);
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, Guid{guid});
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		auto &bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(entity);
 		for (auto &bag : bags.bags)
 		{
@@ -1336,6 +1338,7 @@ TEST_F(PlayerEquipTest, GmGrantItemRejectsInvalidArgumentsAndBlockedStates)
 	// 还没加载出背包的玩家。
 	const auto bagless = tlsEcs.actorRegistry.create();
 	players.push_back(bagless);
+	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(bagless).epoch = 1;
 	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::GmGrantItem(bagless, kWeaponL80, 1));
 	EXPECT_EQ(nullptr, tlsEcs.actorRegistry.try_get<PlayerBagsComp>(bagless));
 }
@@ -1579,6 +1582,17 @@ TEST_F(PlayerEquipTest, EquipAndUnequipAreRefusedWhileFrozenOrInBattle)
 	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Equip(player, kGuidA));
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 
+	// 交接在途与退出在途同样不可写,优先级高于战斗状态。
+	tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Equip(player, kGuidA));
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Unequip(player, kGuidB));
+	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+
+	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Equip(player, kGuidA));
+	EXPECT_EQ(kEquipFrozen, PlayerEquipSystem::Unequip(player, kGuidB));
+	tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
+
 	// 战斗在途:快照已出,换装会让局内数值与面板分叉。
 	EXPECT_EQ(kEquipInBattle, PlayerEquipSystem::Equip(player, kGuidA));
 	EXPECT_EQ(kEquipInBattle, PlayerEquipSystem::Unequip(player, kGuidB));
@@ -1637,6 +1651,7 @@ TEST_F(PlayerEquipTest, WriteEntriesRejectInvalidEntitiesAndPlayersWithoutBags)
 
 	const auto bagless = tlsEcs.actorRegistry.create();
 	players.push_back(bagless);
+	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(bagless).epoch = 1;
 	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Equip(bagless, kGuidA));
 	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Unequip(bagless, kGuidA));
 	EXPECT_EQ(nullptr, tlsEcs.actorRegistry.try_get<PlayerBagsComp>(bagless))
@@ -1870,6 +1885,7 @@ TEST_F(PlayerEquipTest, CollectBonusIsEmptyWithoutBagsOrWornEquipment)
 
 	const auto bagless = tlsEcs.actorRegistry.create();
 	players.push_back(bagless);
+	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(bagless).epoch = 1;
 	dirty.allPrimaryPoints = 5;
 	PlayerEquipSystem::CollectBonus(bagless, dirty);
 	ExpectSameBonus(empty, dirty);
@@ -3092,6 +3108,7 @@ TEST_F(PlayerEquipTest, ForgeEntriesRejectInvalidEntitiesAndPlayersWithoutBags)
 
 	const auto bagless = tlsEcs.actorRegistry.create();
 	players.push_back(bagless);
+	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(bagless).epoch = 1;
 	EXPECT_EQ(kEquipInternalError, PlayerEquipSystem::Enhance(bagless, kGuidA, /*expectedLevel=*/0, outcome));
 	EXPECT_EQ(kEquipInternalError,
 			  PlayerEquipSystem::InlayGem(bagless, kGuidA, kWeaponAttackSocket, kAttackGem));
@@ -4700,8 +4717,8 @@ TEST_F(PlayerEquipTest, GmGrantItemHandlerFollowsTheSceneRunMode)
 	const auto *method = BagMethod("GmGrantItem");
 	ASSERT_NE(nullptr, method) << kProtoGenFirst;
 	PlayerEquipSystem::InstallItemInitializer();
-	const bool gmAllowed = gate_security::ClassifyGmClientMessage(scene_gm_guard::CurrentSceneRunMode()) ==
-						   gate_security::GmClientMessageVerdict::kAllow;
+	const bool gmAllowed = gm_security::ClassifyGmClientMessage(scene_gm_guard::CurrentSceneRunMode()) ==
+						   gm_security::GmClientMessageVerdict::kAllow;
 
 	GmGrantItemRequest request;
 	request.set_config_id(kWeaponL80);

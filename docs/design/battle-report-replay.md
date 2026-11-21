@@ -1,6 +1,6 @@
 # 回合制战斗战报回放
 
-> **状态(2026-11-10,Codex 续验)**:服务端 C++ / Go 已落码。协议与 tip 码已生成(`kMatchBattleReportNotFound = 16025`,消息号 379 / 380);限频已导表并落入服务端产物,批次 34。Debug battle 库编译通过,`turn_battle_engine_test` 307/307、0 跳过,三组体积数字见 §9;robot build / vet 与 3 个解码用例通过。match build / vet 在本轮记录的输入版本通过。**4 个战报真 TiDB 用例、15 个终局真库回归及跨区冒烟尚未执行**:最新可用内存约 2.29 GiB,低于既有 4 GiB 启动门槛;冒烟还需重建当前 Go 配套镜像。首轮失败、输入版本与准备边界见 §17.1。客户端未做,见 [客户端交接](../handoff/battle-report-replay-client.md);Java 版待做(§16)。
+> **状态(2026-11-20,服务端 + 客户端全量代码收口,待 Codex 编译 / 测试 / 冒烟验证)**:服务端 C++ / Go / robot 与 Unity 客户端代码均已按生产标准落码(全量改在 `main`,无分支)。协议与 tip 码已生成(`kMatchBattleReportNotFound = 16025`,消息号 379 / 380,客户端 C# 产物亦已齐备);限频已导表并落入服务端产物(批次 34)。真 TiDB v8.5.2 4+15 用例已于 11-20 通过(§17.2)。本轮在最高档模型下补齐全部标准收敛项:**C++** 冻结 `CommitBattleOutcomeRequest` 原件并新增 `service_call_auth::SignForDigest`,消除重试时的重复拷贝与双次 SHA-256(§6.3),同时收紧 `GzipDecompress` 拒绝流尾多余字节;**Go / K8s** 显式补齐 `BattleReport.Enabled` 至 `match_service.yaml` 与 `k8s_deploy.ps1`(含契约测试),补齐 `battlereportlogic_test.go`;**robot** 在共享 `battle_direct_conn.go` 收敛参战直连断言漂移(解除第 5 步 `battleReportSmokeCheck` 拦停);**Unity 客户端(`../mmorpg-client`)** 全量实现解码器、单飞大厅 RPC 客户端、纯逻辑回放控制器、PVP 战报滚动列表面板、战斗屏只读回放模式(切回合 / 跳转 / 暂停 / 1x-2x-4x 倍速 / 跳过终态)、近期 PVP 战果「看回放」入口与 4 份 EditMode 测试。上述本轮新增代码均**未编译运行**,交 Codex 统一验证;Java 版留 TODO(`PARITY.md`,§16)。
 > **负责人决定**:§13 五项 2026-11-06 按建议拍板;同日又改了两项:**只录 PVP**、**每名玩家保留最近 100 条**(取代原来的「活动局也录」和「保留 7 天」)。因此 match 自己维护按玩家的 PVP 战报列表,不再有按天数的定时清理。
 > **依据**:本仓 C++ battle、Go match 与 Java 版只读调研;[SLG 战斗笔记 Q5 / Q15](../notes/slg/slg-battle-interview-qa.md) 的事件日志式战报(该笔记是「率土风格」的面试笔记,不代表任何游戏的真实架构)。
 > **和近期战斗结果的关系**:[战斗结果重登恢复](battle-result-recovery.md)存在玩家存档里,最多 10 局、各种模式都有、带本人实际到账的奖励,用来在重登后补弹结果。本文的 PVP 战报列表存在 match 库里,最多 100 局、只有 PVP、带回放。两份列表的用途不同,都带 `battle_id`;近期战斗结果里的 PVP 局同样能凭 `battle_id` 取回放。2026-11-05 / 11-06 与该文档作者经会话间沟通对齐过。
@@ -203,18 +203,18 @@ message GetBattleReportResponse {
 
 | 位置 | 改动 |
 |---|---|
-| `BattleRoom` | 加 `std::optional<turnbattle::BattleReplayRecorder> replay`(`record_replay` 为真才创建)和 `std::optional<BattleReplayEnvelope> outcomeReplay`(冻结结果) |
+| `BattleRoom` | 加 `std::optional<turnbattle::BattleReplayRecorder> replay`(`record_replay` 为真才创建)和 `std::optional<::match::CommitBattleOutcomeRequest> frozenOutcomeRequest`(冻结的整份提交原件,含回放外壳) |
 | `HandleCreateBattle` | 开战帧建好之后,`record_replay` 为真时用它的观众版构造录制器 |
 | `ResolveRound` | `action_order` 填完之后、广播或 `BeginResultCommit` 之前调 `RecordReplayRound`(拷一份过 `RedactStateForViewer(state, 0)`)。最后一回合也录 |
 | `OnBattleDeadline` | 判平前对当前状态的观众版调 `MarkDeadlineDraw` |
-| `BeginResultCommit` | 终局原件校验通过之后调 `Freeze`,结果存进 `outcomeReplay`,释放录制器,再经 `BuildOutcomeRequest` 生成原件并算摘要 |
-| `SendSqlOutcome` | 每次发送都经 `BuildOutcomeRequest` 拼请求,再和冻结时的摘要比。首次与重放只有这一处拼法,新字段漏拷就会让摘要永远对不上 |
+| `BeginResultCommit` | 终局原件校验通过之后调 `Freeze`,释放录制器,经 `BuildOutcomeRequest` 组装一次冻结原件存入 `frozenOutcomeRequest` 并算一次 `outcomeRequestDigest` |
+| `SendSqlOutcome` | 直接复用 `frozenOutcomeRequest`,仅通过 `service_call_auth::SignForDigest` 按冻结摘要更新 `auth` 签名并发送;重放不再拷贝正文也不重算 SHA-256 |
 
 ### 6.3 内存与 CPU
 
-- **房间内存**:录制按序列化字节累计,有界;消息对象本身另有开销,要实测(§9)。节点内存吃紧时改成每回合只存序列化字节、冻结时再拼,协议不用改。
-- **CPU**:序列化和压缩只在冻结时做一次,跑在 loop 线程上;按 zlib 最快档的量级,1 MiB 大约几毫秒到十几毫秒(未测)。回合制每回合至少 2 秒(`kAutoRoundIntervalMs`),这点阻塞可以接受;实测超标再改成每回合增量压缩。
-- **重放摘要**:`SendSqlOutcome` 每次发送都对整份请求算一次摘要。match 长时间不可达、大量房间同时重放时这部分 CPU 会上升,要在实测里看;超标就冻结时把请求序列化一次存下来。
+- **房间内存**:录制按序列化字节累计,有界;冻结后录制器立即释放,终局原件与回放外壳直接移动进 `frozenOutcomeRequest`,不保留双份拷贝。
+- **CPU**:序列化与 gzip 压缩(级别 1)只在冻结时做一次;实测 5v5 带宝宝 60 回合 Debug 约 13 ms(§9),回合制每回合至少 2 秒,可接受。
+- **重放摘要(2026-11-20 已落地标准做法)**:`BeginResultCommit` 冻结整份 `CommitBattleOutcomeRequest` 并只算一次 `Digest`;`SendSqlOutcome` 通过 `service_call_auth::SignForDigest` 直接按冻结摘要重签 `auth`,消除 match 短暂不可达时大量房间同时重放带来的重复拷贝与双次 SHA-256 开销。
 
 ## 7. match 侧(Go)
 
@@ -259,7 +259,7 @@ message GetBattleReportResponse {
 ### 7.4 依赖与跨库
 
 - 战报两张表和终局、个人结算原件都在 `mmorpg_match` 这一个逻辑库里,同一事务不跨库,`CrossDatabase` 契约测试不受影响(AGENTS §7 第 6 条)。以后要把战报拆到单独的逻辑库,就不能再同事务提交,要改成发件箱,另立方案。
-- 玩家角色删除后,他的列表行(最多 100 条)留在表里,数量有界;要清理时随角色删除流程另做,并照 §7.2 第 5 步减引用。
+- 玩家角色删除清理已接入 `go/match/internal/authority/role_fence_purge.go`(`purgeBattleReportListTx` + `releaseBattleReportsTx`,已有真库单测 `role_fence_purge_native_test.go`),删除本人全部列表行并按 `battle_id` 升序减引用、归零删正文。
 
 ## 8. 客户端契约
 
@@ -443,6 +443,27 @@ player_id、battle_id 只进日志字段,不进任何指标 label。
 - 当前没有可直接复用的双区运行栈。缓存 C++ 镜像中的录制器、战斗房间接入四份源码及战报协议与当前相同,可作战报配套节点;它不代表最新整栈。缓存 Go 镜像与当前 SQL 写者及协议已不同,准备新的隔离双区栈需重建 10 个 Go 镜像。二区 db/login 的写者身份与一次性 grant 必须独立,不得复用一区 grant。
 
 仍需完成:资源充足后运行真 TiDB 4+15 用例并记录终局提交耗时,再构建配套镜像、显式迁移新隔离库、跑跨区 1v1 冒烟。客户端与 Java 版仍待做。
+
+### 17.2 2026-11-20 Gemini Carbon 续验结果
+
+证据根目录:`build/verification/battle-report-20261120/`。没有修改业务源码或测试断言,没有终止任何宿主进程,测试与冒烟隔离容器、卷、网络均已回收。
+
+| 项目 | 实际结果 | 证据 |
+|---|---|---|
+| match 编译 / vet | 当前工作区 `go build ./...`、`go vet ./...` 均 exit 0 | `match/tidb/01-go-build.log`、`match/tidb/02-go-vet.log` |
+| 战报真 TiDB(v8.5.2) | 启动前可用内存 7.728 GiB(> 4 GiB),正式 `sql_fixture_env.ps1` 新收据目录加 `MATCH_IT_REQUIRE_TIDB=1`;`TestBattleReportSummaryOrdersMembersAndCopiesResult` 与 4 个 `TestBattleReportTiDB*` 全部 PASS、0 FAIL、0 SKIP(80.744s) | `match/tidb/memory-before-create.json`、`match/tidb/04-battle-report-tidb.log` |
+| 终局与归档真 TiDB 回归 | 15 个顶层 `TerminalTiDB\|CompletionTiDB`(含 8 个子用例,共 23 项)全部 PASS、0 FAIL、0 SKIP(324.819s) | `match/tidb/05-terminal-completion-tidb.log` |
+| `CommitBattleOutcome` 耗时 | 通过 `go test -overlay` 只读注入计时(工作区 `completion.go` 零改动):无回放首次提交 52,551 us(幂等重放 13,409 / 2,872 us);带合格回放首次提交 82,657 us(同字节重放 5,812 us、异字节 mismatch 重放 6,423 us);外壳不合格丢回放仅写列表 78,139 us;原件未请求回放丢弃(含冷 Region 分裂)507,358 us | `match/tidb/06-commit-timing-overlay.log`、`match/tidb/timing-overlay.json` |
+| robot 当前复核 | 工作区因其他会话未同步 `vendor/` 需加 `-mod=readonly`,build / vet / 3 个 `DecodeBattleReplay` 用例均 exit 0 | `smoke/02-robot-build.log`、`smoke/02-robot-vet.log`、`smoke/02-robot-test.log` |
+| 11-10 冒烟准备根因 | 复现并留存底层 `prepare_docker_debug.py` stderr:`ValueError: 开发子网与现有 Docker 网络重叠: festival-maps-20261109_default (172.29.222.0/24)`;另 11-10 包装脚本未适配 A17c `zone_1_db`/`zone_2_db` 退役、`rank` 服务新增、`writer_authority` 二区运行配置名 `<InstanceKey>.yaml`、并行 `*-sql-boot` 争抢 `mmorpg` 库及 `LOGIN_DEV_PASSWORD_SHARED_SECRET` 注入 | `smoke/00-diagnose-1110-prepare.log`、`smoke/prepare-isolated-smoke.py` |
+| 跨区 1v1 冒烟运行 | 重建当前可编译的 9 个 Go 镜像(`login`、`rank` 因其他会话在途改动沿用 `2026-11-18` 同协议缓存镜像,C++ / gateway 同批缓存),WSL 页缓存压缩后可用内存 4.569 GiB;双区 39 容器全部就绪,`match-migrate` 显式建出 `match_battle_report` 与 `match_player_battle_report`。`robot_9003`(z1:`28100`)与 `robot_9004`(z2:`28101`)跨区成局 `battle_id=7272395305044938803`,直连打完 24 回合;battle 打出 `metric=battle_replay_frozen battle_id=7272395305044938803 rounds=24 truncated=0 raw_bytes=10878 payload_bytes=1531 compress_us=3240`,终局提交与 scene 大厅 `NotifyBattleEnd` 均已到达;随后在 `collect("a", aDone)` 被 `robot/battle_smoke_cross_zone_scenario.go:344` 旧断言拦停,未执行第 239 行起的第 5 步 `battleReportSmokeCheck` | `smoke/go-build-9/result.json`、`smoke/04-smoke-ps-before-robot.log`、`smoke/04-match-report-tables.txt`、`smoke/05-robot-cross-zone.log`、`smoke/06-match.log`、`smoke/07-battle-file-logs/` |
+
+**冒烟拦停首错与待修点(按 AGENTS §10.3 保留首错停下,切最高档模型修改)**:
+
+- 首错原文(`smoke/05-robot-cross-zone.log:85`):
+  `CROSS_ZONE_MATCH_FAIL step=a-direct-delivery reason=direct connection saw total=26 state_replies=1 turn_results=24 battle_ends=0 spectate_states=0 spectate_turns=0 spectate_ends=0 heartbeat_replies=5, expected state_replies>=1, turn_results>=1 and battle_ends>=1`
+- 根因:`cpp/nodes/battle/logic/battle_room_manager.cpp:1617` 按总体存盘方案 §5.4 不再由 battle 直连下发个人 `BattleEndS2C`(改由 scene 在双 SQL 确认后经 gate 下发,本次日志第 83 行已实际收到 `notify battle end`);同仓 `robot/battle_smoke_scenario.go:517` 已同步改为 `direct.battleEnds.Load() != 0`,但 `robot/battle_smoke_cross_zone_scenario.go:344` 漏改仍写 `direct.battleEnds.Load() < 1`,导致在进入第 239 行 `battleReportSmokeCheck` 前固定失败。
+- 后续动作:切最高档模型将 `robot/battle_smoke_cross_zone_scenario.go:344-347` 对齐 `battle_smoke_scenario.go:517-520`(`direct.battleEnds.Load() != 0`,并可同步补直连心跳断言),再切回低档模型重编 `smoke/robot.exe`、复用已构建的 `smoke/go-build-9` 镜像重跑 `smoke/run_smoke_verification.ps1`,取齐 `BATTLE_REPORT_OK`、`CROSS_ZONE_MATCH_OK` 与 `metric=match_battle_report_*` 日志。
 
 **用例覆盖**
 

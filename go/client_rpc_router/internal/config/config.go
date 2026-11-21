@@ -45,6 +45,33 @@ type Config struct {
 	// 端口分工:9101=login / 9150=scene_manager / 9160=db / 9170=guild / 9180=friend /
 	// 9190=player_locator;路由服开启时用 9200(设计文档写的 9180 与 friend 撞,待修正)。
 	MetricsListenAddr string `json:",optional"`
+
+	// BreakerFailureThreshold / BreakerOpenDurationMs:按目标实例(endpoint)隔离的三态熔断参数。
+	// 单个后端实例连续拨号/转发失败达到阈值后摘除一段时间,自动把流量切向同组健康实例;
+	// 全组实例都熔断时直接快速回 1003,不等 5s 超时。0 按默认值(5 次 / 10 秒)。
+	BreakerFailureThreshold int   `json:",default=5"`
+	BreakerOpenDurationMs   int64 `json:",default=10000"`
+}
+
+const (
+	DefaultBreakerFailureThreshold = 5
+	DefaultBreakerOpenDuration     = 10 * time.Second
+)
+
+// EffectiveBreakerThreshold 返回生效的熔断连续失败阈值(0 按默认值)。
+func (c *Config) EffectiveBreakerThreshold() int {
+	if c.BreakerFailureThreshold <= 0 {
+		return DefaultBreakerFailureThreshold
+	}
+	return c.BreakerFailureThreshold
+}
+
+// EffectiveBreakerOpenDuration 返回生效的熔断打开时长(0 按默认值)。
+func (c *Config) EffectiveBreakerOpenDuration() time.Duration {
+	if c.BreakerOpenDurationMs <= 0 {
+		return DefaultBreakerOpenDuration
+	}
+	return time.Duration(c.BreakerOpenDurationMs) * time.Millisecond
 }
 
 // DefaultZoneScopedNodeTypes 是 ZoneScopedNodeTypes 留空时的默认值:
@@ -96,6 +123,12 @@ func (c *Config) Validate() error {
 	}
 	if c.GlobalTargetSubsetSize < 0 || c.GlobalTargetSubsetSize == 1 {
 		return fmt.Errorf("GlobalTargetSubsetSize (%d) must be 0 (no subsetting) or at least 2: with a single target per router, every forward of that type fails while that one instance restarts", c.GlobalTargetSubsetSize)
+	}
+	if c.BreakerFailureThreshold < 0 {
+		return fmt.Errorf("BreakerFailureThreshold (%d) 不能为负数", c.BreakerFailureThreshold)
+	}
+	if c.BreakerOpenDurationMs < 0 {
+		return fmt.Errorf("BreakerOpenDurationMs (%d) 不能为负数", c.BreakerOpenDurationMs)
 	}
 	if err := c.validateStatContentSuppressed(); err != nil {
 		return err

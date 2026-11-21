@@ -1,5 +1,11 @@
 import { defHttp } from '/@/utils/http/axios';
-import { normalizePlayerId } from './console';
+import {
+  buildAuditQueryParams,
+  checkedAuditEntries,
+  normalizePlayerId,
+  type GmAuditEntry,
+  type GmCommandQuery,
+} from './console';
 
 export const PLAYER_OPERATIONS = [
   { code: 'currency.add', label: '增加货币', permission: 'gm:currency:add' },
@@ -134,8 +140,20 @@ export async function preparePlayerCommand(draft: PlayerCommandDraft): Promise<P
 export async function sendPlayerCommand(id: string): Promise<PlayerCommand> {
   return checkedPlayerCommand(await defHttp.post<PlayerCommand>({ url: `/gm/player-commands/${encodeURIComponent(id)}/send` }, options));
 }
-export async function getPlayerCommands(): Promise<{ records: PlayerCommand[]; total: number }> {
-  const page = await defHttp.get<{ records: PlayerCommand[]; total: number }>({ url: '/gm/player-commands' }, options);
+export async function getPlayerCommands(
+  query?: GmCommandQuery
+): Promise<{ records: PlayerCommand[]; total: number; page?: number; pageSize?: number }> {
+  const page = await defHttp.get<{ records: PlayerCommand[]; total: number; page?: number; pageSize?: number }>(
+    { url: '/gm/player-commands', params: buildAuditQueryParams(query) },
+    options
+  );
   if (!page || !Array.isArray(page.records)) throw new Error('玩家 GM 审计响应无效。');
   return { ...page, records: page.records.map(checkedPlayerCommand) };
+}
+export async function getPlayerCommandAudit(id: string): Promise<GmAuditEntry[]> {
+  const result = await defHttp.get<{ commandId: string; records: GmAuditEntry[] }>(
+    { url: `/gm/player-commands/${encodeURIComponent(id)}/audit` },
+    options
+  );
+  return checkedAuditEntries(result);
 }

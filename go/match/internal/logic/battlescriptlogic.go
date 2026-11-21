@@ -77,8 +77,8 @@ func (l *BattleScriptLogic) ListBattleScripts(_ *matchpb.ListBattleScriptsReques
 		MaxScriptBytes: maxPlayerBattleScriptBytes,
 		Loadout:        loadoutEntriesOf(loadout),
 	}
-	if l.svcCtx.BattleScripts != nil {
-		for _, script := range l.svcCtx.BattleScripts.OfficialScripts() {
+	if scripts := l.svcCtx.ActiveBattleScripts(); scripts != nil {
+		for _, script := range scripts.OfficialScripts() {
 			resp.OfficialScripts = append(resp.OfficialScripts, proto.Clone(script).(*battlepb.BattleScript))
 		}
 	}
@@ -259,10 +259,11 @@ func (l *BattleScriptLogic) loadoutChoice(player uint64, entry *matchpb.BattleSc
 }
 
 func (l *BattleScriptLogic) officialScript(id uint32) (*battlepb.BattleScript, bool) {
-	if l.svcCtx.BattleScripts == nil {
+	scripts := l.svcCtx.ActiveBattleScripts()
+	if scripts == nil {
 		return nil, false
 	}
-	return l.svcCtx.BattleScripts.Official(id)
+	return scripts.Official(id)
 }
 
 func scriptViewOf(record *matchpb.MatchBattleScriptRecord) (*matchpb.PlayerBattleScriptView, error) {

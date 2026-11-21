@@ -45,15 +45,18 @@ public final class RoleNameRuleTableOuterClass extends com.google.protobuf.Gener
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\030rolenamerule_table.proto\"\252\001\n\021RoleNameR" +
+      "\n\030rolenamerule_table.proto\"\235\002\n\021RoleNameR" +
       "uleTable\022\n\n\002id\030\001 \001(\r\022\021\n\tmin_chars\030\002 \001(\r\022" +
       "\021\n\tmax_chars\030\003 \001(\r\022\030\n\020generated_prefix\030\004" +
       " \001(\t\022\034\n\024generated_suffix_len\030\005 \001(\r\022\035\n\025ma" +
-      "x_generate_attempts\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\"" +
-      "9\n\025RoleNameRuleTableData\022 \n\004data\030\001 \003(\0132\022" +
-      ".RoleNameRuleTableBC\n\016com.game.tableB\033Ro" +
-      "leNameRuleTableOuterClassP\001Z\022generated/p" +
-      "b/tableb\006proto3"
+      "x_generate_attempts\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\022" +
+      "\037\n\027rename_cooldown_seconds\030\010 \001(\r\022\035\n\025old_" +
+      "name_hold_seconds\030\t \001(\r\022\026\n\016rename_item_i" +
+      "d\030\n \001(\r\022\031\n\021rename_item_count\030\013 \001(\r\"9\n\025Ro" +
+      "leNameRuleTableData\022 \n\004data\030\001 \003(\0132\022.Role" +
+      "NameRuleTableBC\n\016com.game.tableB\033RoleNam" +
+      "eRuleTableOuterClassP\001Z\022generated/pb/tab" +
+      "leb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -64,7 +67,7 @@ public final class RoleNameRuleTableOuterClass extends com.google.protobuf.Gener
     internal_static_RoleNameRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_RoleNameRuleTable_descriptor,
-        new java.lang.String[] { "Id", "MinChars", "MaxChars", "GeneratedPrefix", "GeneratedSuffixLen", "MaxGenerateAttempts", "Desc", });
+        new java.lang.String[] { "Id", "MinChars", "MaxChars", "GeneratedPrefix", "GeneratedSuffixLen", "MaxGenerateAttempts", "Desc", "RenameCooldownSeconds", "OldNameHoldSeconds", "RenameItemId", "RenameItemCount", });
     internal_static_RoleNameRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_RoleNameRuleTableData_fieldAccessorTable = new

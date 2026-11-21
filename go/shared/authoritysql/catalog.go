@@ -97,10 +97,24 @@ func (c *Catalog) transaction(ctx context.Context, call func(*sql.Tx) error) err
 	}
 	defer tx.Rollback()
 	abort := func(cause error) error {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+		rollbackErr := tx.Rollback()
+		if rollbackErr == nil {
+			return cause
+		}
+		if errors.Is(cause, ErrOutcomeUnknown) || errors.Is(rollbackErr, ErrOutcomeUnknown) {
 			return unknown("catalog回滚未确认", errors.Join(cause, rollbackErr))
 		}
-		return cause
+		// guardedConn.failLocked 可能在语句报错时就已经把物理事务回滚掉、并把该原因记进 tx.failure；
+		// 此时 tx.Rollback() 会把同一原因(或 errGuardTxDone / sql.ErrTxDone)交回来，事务已确定回滚，不能升成结局未知。
+		if errors.Is(cause, rollbackErr) || errors.Is(rollbackErr, cause) ||
+			errors.Is(rollbackErr, errGuardTxDone) || errors.Is(rollbackErr, sql.ErrTxDone) {
+			return cause
+		}
+		// R6：纯 DML 且 COMMIT 尚未发出时若回滚失败，连接已被隔离，确定未提交。
+		if errors.Is(rollbackErr, ErrTxAbortedBeforeCommit) {
+			return errors.Join(cause, ErrTxAbortedBeforeCommit)
+		}
+		return unknown("catalog回滚未确认", errors.Join(cause, rollbackErr))
 	}
 	var principal string
 	if err = tx.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {

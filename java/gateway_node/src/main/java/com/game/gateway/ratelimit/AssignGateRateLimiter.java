@@ -129,6 +129,23 @@ public class AssignGateRateLimiter {
     }
 
     /**
+     * 仅判共享 IP 令牌桶(用于 {@code /api/refresh-token} 这类无区号、不走账号冷却的轻接口)。
+     * 跳过开服波次、区桶与账号冷却:在游戏内或排队中续期不受波次和冷却阻拦,同时挡住单 IP 刷接口。
+     * 限流关闭或 Redis 熔断时按放行处理(与 {@link #check} 共享 fail-open 熔断器与决策计数)。
+     */
+    public RateLimitDecision checkIpOnly(String clientIp) {
+        if (!props.isEnabled() || store == null) {
+            return RateLimitDecision.pass();
+        }
+        String ip = (clientIp == null || clientIp.isBlank()) ? "?" : clientIp;
+        Admission admission = admit(0, ip, monotonicMs.getAsLong());
+        if (admission.kind() == Admission.Kind.IP_EMPTY) {
+            return count(Outcome.IP_DENY, RateLimitDecision.deny("IP_RATE_LIMIT"));
+        }
+        return count(Outcome.PASS, RateLimitDecision.pass());
+    }
+
+    /**
      * @param zoneId        目标区;0 = 任选一区,不判区桶(选定的区在下游照样受容量约束)
      * @param clientIp      客户端 IP({@link ClientIpResolver} 的结果);null / 空白按占位值 "?" 处理
      * @param account       未经认证的账号标识;null / 空白 = 不判冷却

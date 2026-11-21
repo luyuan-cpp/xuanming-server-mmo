@@ -72,8 +72,16 @@ func TestResolveAuthProvidersAcceptsIdTokenProvidersWithoutSecrets(t *testing.T)
 		if got != (AuthProviderSecrets{}) {
 			t.Fatalf("relaxed=%v: 身份令牌渠道不应解析出任何密钥: %+v", relaxed, got)
 		}
-		if len(warnings) != 0 {
-			t.Fatalf("relaxed=%v: 合规配置不应有告警: %v", relaxed, warnings)
+		// Apple 未配撤销私钥时会发出 1 条提示告警(TestAppleRevokeKeyAllOrNone 单独覆盖);不应有其他告警。
+		if len(warnings) != 1 || !strings.Contains(warnings[0], "not revoked on account deletion") {
+			t.Fatalf("relaxed=%v: 仅应有 Apple 未配撤销私钥的告警, got %v", relaxed, warnings)
+		}
+	}
+	// 仅配 Google 时不应产生任何告警。
+	for _, relaxed := range []bool{false, true} {
+		got, warnings, err := resolveAuthProviders(AuthConfig{Google: &IdTokenAuthConf{ClientId: testGoogleClientId}}, relaxed, envLookup(nil))
+		if err != nil || got != (AuthProviderSecrets{}) || len(warnings) != 0 {
+			t.Fatalf("relaxed=%v: 仅配 Google 应无密钥且无告警: got=%+v warnings=%v err=%v", relaxed, got, warnings, err)
 		}
 	}
 }

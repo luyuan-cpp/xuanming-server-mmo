@@ -13,6 +13,7 @@ message MessageLimiterTable {
   option (cfg_sheet)       = "MessageLimiter";
   option (cfg_source_file) = "MessageLimiter.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   uint32 max_requests = 2;

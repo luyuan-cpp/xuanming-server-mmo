@@ -238,7 +238,16 @@ public:
     // kInvalidGuid 哨兵 —— 排障时等于没有。现在由 bag_marshal 在装配
     // PlayerBagsComp 时调用(玩家 guid 就挂在实体上,与 TransactionLogSystem::
     // ResolvePlayerId 取的是同一个 Guid 组件)。
-    void SetPlayerGuid(Guid guid) { playerGuid = guid; }
+    void SetPlayerGuid(Guid guid)
+    {
+        if (playerGuid != guid)
+        {
+            playerGuid = guid;
+            ++mutationVersion_;
+        }
+    }
+    // 每次状态变更单调递增的版本号:供 BagService 事务提交前做 O(1) 同源校验,替代整包序列化指纹。
+    [[nodiscard]] uint64_t MutationVersion() const { return mutationVersion_; }
     std::size_t OccupiedGridCount() const { return store_.Size(); }
     // Number of grid slots recorded in the position map. Invariant: equals
     // OccupiedGridCount() — every held item owns exactly one grid slot.
@@ -653,4 +662,5 @@ private:
     std::unique_ptr<IAdmissionPolicy> admission_{std::make_unique<AcceptAll>()};
     uint32_t profileId_{kBagProfileUnspecified};
     Guid playerGuid{kInvalidGuid};
+    uint64_t mutationVersion_{0};
 };

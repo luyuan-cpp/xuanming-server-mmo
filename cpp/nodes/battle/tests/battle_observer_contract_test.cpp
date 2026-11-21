@@ -105,6 +105,12 @@ public:
     }
     // 终局重放泵的一拍(生产由 sqlOutcomeTimer_ 每秒一拍)。
     static void PumpSqlOutcomes() { BattleRoomManager::Instance().PumpSqlOutcomes(); }
+    // 跳过重放退避等待,让房间立即可在下一拍重发。
+    static void MakeOutcomeDue(const uint64_t battleId) {
+        if (auto* room = BattleRoomManager::Instance().FindRoom(battleId); room != nullptr) {
+            room->nextOutcomeAttempt = {};
+        }
+    }
     // 整场期限到期(生产由 battleTimer 触发):强制判平,开始提交终局。
     static void ForceDeadline(const uint64_t battleId) { BattleRoomManager::Instance().OnBattleDeadline(battleId); }
     // 把每拍上限改小(生产恒为 kSqlOutcomeSendsPerPump),不用造几十间房就能测上限;EraseAllRooms 复位。
@@ -2297,6 +2303,37 @@ TEST_F(BattleObserverContract, ReplayDeadlineDrawRecordsFinalState) {
     EXPECT_EQ(2, replay.final_state().actors_size());
     EXPECT_EQ(0u, replay.final_state().action_deadline_ms());
     for (const auto& actor : replay.final_state().actors()) EXPECT_FALSE(actor.has_support_effects());
+}
+
+// 终局原件(含战报回放)只冻结一次:失败重放按冻结摘要重签,正文与回放逐字节一致且两次签名都通过验签(§6.3)。
+TEST_F(BattleObserverContract, ReplayOutcomeRetriesReuseFrozenBodyAndPassVerify) {
+    RouteOutcomesToFake();
+    outcomeRoute_.ready = true;
+    auto creation = OriginalCreation();
+    creation.set_record_replay(true);
+    for (auto& player : *creation.mutable_players()) {
+        player.set_max_health(1);
+        player.mutable_base_attributes()->set_health(1);
+    }
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+    ASSERT_NO_FATAL_FAILURE(DriveOneRound(battleId_));
+    ASSERT_EQ(1u, outcomeRoute_.sent.size());
+
+    ASSERT_NO_FATAL_FAILURE(FailOutcome(0));
+    BattleRoomManagerTestAccess::MakeOutcomeDue(battleId_);
+    BattleRoomManagerTestAccess::PumpSqlOutcomes();
+    ASSERT_EQ(2u, outcomeRoute_.sent.size());
+
+    const auto& first = outcomeRoute_.sent[0].request;
+    const auto& second = outcomeRoute_.sent[1].request;
+    EXPECT_EQ(first.raw_result_payload(), second.raw_result_payload());
+    EXPECT_EQ(first.replay().SerializeAsString(), second.replay().SerializeAsString());
+    EXPECT_EQ(service_call_auth::Digest(first), service_call_auth::Digest(second));
+    const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+    EXPECT_TRUE(service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome", first, first.auth(), "battle", kOutcomeSecret, nowMs));
+    EXPECT_TRUE(service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome", second, second.auth(), "battle", kOutcomeSecret, nowMs));
 }
 } // namespace
 

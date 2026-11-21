@@ -26,6 +26,7 @@
 #include "constants/battle_effect_constants.h"
 #include "data/battle_data_provider.h"
 #include "system/class_skill_rules.h"
+#include "system/dungeon_monster_ai.h"
 
 namespace turnbattle {
 
@@ -96,6 +97,12 @@ public:
     // 开局时被忽略的战斗剧本及原因(英文,每条一句;CreateBattleRequest.team_scripts 里不合法的条目)。
     // 引擎不打日志,由节点在 Initialize 成功后逐条记 ERROR;被忽略的队出手照旧,对局照常进行
     const std::vector<std::string>& ScriptRejections() const { return scriptRejections; }
+
+    // 副本怪物智能决策配置(key = monster_table_id, 0 为缺省兜底配置;须在 Initialize 前设置)。
+    // 不设置时不启用,保持存量无 AI 对局的逐字节确定性回放完全不变。
+    void SetMonsterAiProfiles(std::map<uint32_t, DungeonMonsterAiProfile> profiles);
+    // 只读查询指定怪物当前的 Boss HFSM 阶段(未绑定 AI 时返回 std::nullopt)。
+    std::optional<BossPhaseId> MonsterAiPhaseOf(uint64_t actorId) const;
 
     // 回合制可施放的技能类型**黑名单**:拒绝 Passive(被动) / Toggle(开关) /
     // Channel(持续施法,引擎已删相位概念);skill_type 为空或只含其它位号一律放行
@@ -492,6 +499,12 @@ private:
     std::shared_ptr<const BattleScript> teamScripts[2];
     std::map<uint64_t, uint32_t> scriptRoleOf;            // actor_id → 认领的 role_id(有序容器保确定性)
     std::vector<std::string> scriptRejections;            // 开局被忽略的剧本及原因(见 ScriptRejections)
+    // 副本怪物 HFSM + 行为树 + 整数效用 AI(有序容器保确定性,不消耗 RNG)
+    std::map<uint32_t, DungeonMonsterAiProfile> monsterAiProfiles;
+    std::map<uint64_t, DungeonMonsterAiController> monsterAiControllers;
+
+    void BindDungeonMonsterAis();
+    void FillDungeonMonsterAiActions();
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始

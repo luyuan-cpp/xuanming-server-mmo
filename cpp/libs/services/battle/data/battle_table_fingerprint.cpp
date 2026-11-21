@@ -16,6 +16,7 @@
 #include "table/code/monster_table.h"
 #include "table/code/item_table.h"
 #include "table/code/pet_table.h"
+#include "table/code/table_loader.h"
 
 #include "table/proto/skill_table.pb.h"
 #include "table/proto/buff_table.pb.h"
@@ -86,6 +87,28 @@ namespace turnbattle
 		AppendTableSection(buffer, "pet", pet);
 
 		return Sha256::HashToHex(buffer).substr(0, kHexLength);
+	}
+
+	std::string BattleTableFingerprint::ComputeFromTableSet(const TableSet& tableSet)
+	{
+		static const SkillTableData kEmptySkill;
+		static const BuffTableData kEmptyBuff;
+		static const CooldownTableData kEmptyCooldown;
+		static const SkillPermissionTableData kEmptyPermission;
+		static const DungeonTableData kEmptyDungeon;
+		static const MonsterTableData kEmptyMonster;
+		static const ItemTableData kEmptyItem;
+		static const PetTableData kEmptyPet;
+
+		return ComputeFrom(
+			tableSet.skillTable ? tableSet.skillTable->data : kEmptySkill,
+			tableSet.buffTable ? tableSet.buffTable->data : kEmptyBuff,
+			tableSet.cooldownTable ? tableSet.cooldownTable->data : kEmptyCooldown,
+			tableSet.skillPermissionTable ? tableSet.skillPermissionTable->data : kEmptyPermission,
+			tableSet.dungeonTable ? tableSet.dungeonTable->data : kEmptyDungeon,
+			tableSet.monsterTable ? tableSet.monsterTable->data : kEmptyMonster,
+			tableSet.itemTable ? tableSet.itemTable->data : kEmptyItem,
+			tableSet.petTable ? tableSet.petTable->data : kEmptyPet);
 	}
 
 	std::string BattleTableFingerprint::Compute()

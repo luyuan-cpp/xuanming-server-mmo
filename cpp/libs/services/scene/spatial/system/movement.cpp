@@ -180,8 +180,8 @@ bool MovementSystem::TeleportWithinScene(const entt::entity entity, const Vector
 	auto& settle = tlsEcs.actorRegistry.emplace_or_replace<TeleportSettleComp>(entity);
 	const auto* sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(entity);
 	settle.scene = sceneComp != nullptr ? sceneComp->sceneEntity : entt::null;
-	settle.targetX = location.x();
-	settle.targetY = location.y();
+	settle.targetX = acceptedLocation.x();
+	settle.targetY = acceptedLocation.y();
 	settle.expireAtMs = SteadyNowMs() + kTeleportSettleTimeoutMs;
 
 	const auto netId = actor_net_id::Of(tlsEcs.actorRegistry, entity);

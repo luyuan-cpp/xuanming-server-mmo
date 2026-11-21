@@ -36,6 +36,7 @@ import (
 	"shared/releasetrack"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
+	"shared/tablebundle"
 )
 
 type config struct {
@@ -69,11 +70,13 @@ func main() {
 	file := flag.String("f", "etc/rank.yaml", "配置文件")
 	migrate := flag.Bool("migrate", false, "仅按proto迁移领域库")
 	version := flag.Bool("version", false, "打印版本")
+	validateTablesDir := flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析)后退出")
 	flag.Parse()
 	fmt.Println(buildinfo.StartupLine("rank"))
 	if *version {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("rank", *validateTablesDir, false, nil)
 	clockcheck.MustPass("rank")
 	var c config
 	conf.MustLoad(*file, &c)
@@ -206,9 +209,16 @@ func run(c config, migrate bool) (runErr error) {
 	if len(strings.TrimSpace(mailSecret)) < 32 {
 		return errors.New("排行榜邮件密钥未注入")
 	}
-	if err = tables.ItemTableManagerInstance.Load(c.TableDir, false); err != nil {
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:   "rank",
+		ImageTableDir: c.TableDir,
+		UseBinary:     false,
+	})
+	if err != nil {
 		return err
 	}
+	tableMgr.Start()
+	defer tableMgr.Stop()
 	ids, err := domainhost.OpenIDs(ctx, c.DataServiceRpc, "rank_board", "rank_settlement", "rank_reward")
 	if err != nil {
 		return err

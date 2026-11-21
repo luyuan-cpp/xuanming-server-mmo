@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "persist-schema-seal", "persist-schema-verify", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "git-stats", "ai-plan", "ai-verify")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "persist-schema-seal", "persist-schema-verify", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "tables-reload-local", "table-bundle", "git-stats", "ai-plan", "ai-verify")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -387,7 +387,18 @@
     # -ConnectionAdmissionEnv(k8s-infra-up / k8s-zone-up / k8s-all-up)与 k8s_image.ps1(k8s-release-*)。名单、取值与覆盖范围见
     # k8s_deploy.ps1 同名参数注释,校验在下游(k8s_image.ps1 在构建镜像之前就校验)。留空 = 不透传。不粘滞,同 -NodeOpenFileLimitMode。
     # 追加在末尾,理由同上。
-    [string[]]$ConnectionAdmissionEnv = @()
+    [string[]]$ConnectionAdmissionEnv = @(),
+    # ── 配置表热更(docs/design/config-table-hot-reload.md §6.4、§7)──
+    # tables-reload-local 的本地表包根目录(留空依次取 $env:MMORPG_TABLE_BUNDLE_ROOT 与 run/table_bundles);
+    # table-bundle 子命令透传参数;以及 k8s_deploy.ps1 的六个 table-sync sidecar 参数(追加在末尾,不改变位置参数顺序)。
+    [string]$TableBundleRoot = "",
+    [string[]]$TableBundleArgs = @(),
+    [string]$TableSyncImage = "",
+    [string]$TableSyncS3Endpoint = "",
+    [string]$TableSyncS3Bucket = "",
+    [string]$TableSyncS3Region = "",
+    [string]$TableSyncS3SecretName = "",
+    [switch]$TableSyncDevFixture
 )
 
 $ErrorActionPreference = "Stop"
@@ -657,6 +668,37 @@ function Invoke-ProtoGenPostHooks {
             }
         }
     }
+    Invoke-ProtoGenGoctlPostHook
+}
+
+# db / login 使用 goctl 生成服务端和客户端包装(internal/server/*/*server.go、client/*/*.go),
+# protogen 只负责把 proto 暂存到 generated/proto/{db,login}/,不会更新包装层。
+# 漏跑 go/build.ps1 时新增 RPC 能编译通过,但运行期全部由内嵌 Unimplemented 桩回 codes.Unimplemented。
+# 与 $ProtoGenPostHooks 同口径:只在暂存 proto 存在时执行(隔离夹具/裁剪配置跳过),存在则 fail-closed。
+function Invoke-ProtoGenGoctlPostHook {
+    $markers = @(
+        (Join-Path $RepoRoot 'generated\proto\db\proto\db\db.proto'),
+        (Join-Path $RepoRoot 'generated\proto\login\proto\login\login.proto')
+    )
+    $hasAnyMarker = $false
+    foreach ($marker in $markers) {
+        if (Test-Path -LiteralPath $marker -PathType Leaf) {
+            $hasAnyMarker = $true
+            break
+        }
+    }
+    if (-not $hasAnyMarker) { return }
+
+    $buildScript = Join-Path $RepoRoot 'go\build.ps1'
+    if (-not (Test-Path -LiteralPath $buildScript -PathType Leaf)) {
+        throw "goctl 包装生成脚本不存在:$buildScript(proto 已生成,但 db/login 的 goctl 包装未刷新)"
+    }
+    Write-Host "[proto-gen post-hook] goctl: go/build.ps1"
+    $global:LASTEXITCODE = 0
+    & $buildScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "goctl 包装生成钩子 (go/build.ps1) 失败(退出码 $LASTEXITCODE);proto 已生成但 db/login 包装未刷新,修好后重跑:pwsh -File go/build.ps1"
+    }
 }
 
 function Invoke-Tree {
@@ -921,6 +963,13 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $args.LoginNppaLoginoutUrl = $LoginNppaLoginoutUrl }
     # 托管内部密钥的修复开关,同一口径:只在被指定时传。
     if ($ResyncDomainServiceSecrets) { $args.ResyncDomainServiceSecrets = $true }
+    # 配置表热更分发 sidecar(table-sync)参数:非空/指定时透传给 k8s_deploy.ps1。
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncImage)) { $args.TableSyncImage = $TableSyncImage }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Endpoint)) { $args.TableSyncS3Endpoint = $TableSyncS3Endpoint }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Bucket)) { $args.TableSyncS3Bucket = $TableSyncS3Bucket }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Region)) { $args.TableSyncS3Region = $TableSyncS3Region }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3SecretName)) { $args.TableSyncS3SecretName = $TableSyncS3SecretName }
+    if ($TableSyncDevFixture) { $args.TableSyncDevFixture = $true }
     if ($ConfirmLoginAuthProviderChange) { $args.ConfirmLoginAuthProviderChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
@@ -1117,6 +1166,12 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaQueryUrl)) { $notForwarded += '-LoginNppaQueryUrl' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $notForwarded += '-LoginNppaLoginoutUrl' }
     if ($ResyncDomainServiceSecrets) { $notForwarded += '-ResyncDomainServiceSecrets' }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncImage)) { $notForwarded += '-TableSyncImage' }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Endpoint)) { $notForwarded += '-TableSyncS3Endpoint' }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Bucket)) { $notForwarded += '-TableSyncS3Bucket' }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3Region)) { $notForwarded += '-TableSyncS3Region' }
+    if (-not [string]::IsNullOrWhiteSpace($TableSyncS3SecretName)) { $notForwarded += '-TableSyncS3SecretName' }
+    if ($TableSyncDevFixture) { $notForwarded += '-TableSyncDevFixture' }
     if ($ConfirmLoginAuthProviderChange) { $notForwarded += '-ConfirmLoginAuthProviderChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1783,6 +1838,82 @@ switch ($Command) {
                 -WindowStyle Normal | Out-Null
             Write-Host "[zone $z] robot launched (window title: $title)" -ForegroundColor Green
         }
+    }
+    "tables-reload-local" {
+        # 本机改表即时热更(设计 §7):把刚导出的 generated/tables 拷成 bundles/<content_digest>/ 并原子改写 POINTER.json,
+        # 无需 etcd 或对象存储,本机开启了 MMORPG_TABLE_BUNDLE_ROOT 的 C++/Go 节点将在 2 秒内切换。
+        $srcDir = if ([System.IO.Path]::IsPathRooted($TableSource)) { $TableSource } else { Join-Path $RepoRoot $TableSource }
+        $manifestPath = Join-Path $srcDir "manifest.json"
+        if (-not (Test-Path $manifestPath)) {
+            throw "tables-reload-local: manifest.json not found at $manifestPath (export tables first)."
+        }
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ([int]$manifest.schema_version -lt 2 -or [string]::IsNullOrWhiteSpace($manifest.schema_digest) -or [string]::IsNullOrWhiteSpace($manifest.content_digest)) {
+            throw "tables-reload-local: manifest.json must be schema_version >= 2 with schema_digest and content_digest."
+        }
+        $bundleRoot = if (-not [string]::IsNullOrWhiteSpace($TableBundleRoot)) {
+            $TableBundleRoot
+        } elseif (-not [string]::IsNullOrWhiteSpace($env:MMORPG_TABLE_BUNDLE_ROOT)) {
+            $env:MMORPG_TABLE_BUNDLE_ROOT
+        } else {
+            Join-Path $RepoRoot "run\table_bundles"
+        }
+        $bundlesDir = Join-Path $bundleRoot "bundles"
+        New-Item -ItemType Directory -Path $bundlesDir -Force | Out-Null
+        $targetDir = Join-Path $bundlesDir $manifest.content_digest
+        if (-not (Test-Path $targetDir)) {
+            $stageDir = Join-Path $bundlesDir (".stage-$PID-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
+            New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
+            try {
+                Copy-Item -Path (Join-Path $srcDir "*") -Destination $stageDir -Recurse -Force
+                Move-Item -Path $stageDir -Destination $targetDir -Force
+            } catch {
+                if (Test-Path $stageDir) { Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue }
+                throw
+            }
+        }
+        $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $pointerPath = Join-Path $bundleRoot "POINTER.json"
+        $lines = [ordered]@{}
+        if (Test-Path $pointerPath) {
+            try {
+                $existingDoc = Get-Content -LiteralPath $pointerPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($null -ne $existingDoc.lines) {
+                    foreach ($prop in $existingDoc.lines.PSObject.Properties) { $lines[$prop.Name] = $prop.Value }
+                }
+            } catch {
+                Write-Warning "Existing POINTER.json could not be parsed; replacing with fresh document."
+            }
+        }
+        $lines[[string]$manifest.schema_digest] = [ordered]@{
+            next = [ordered]@{
+                content_digest = [string]$manifest.content_digest
+                version        = [uint64]$manifest.version
+                immediate      = $true
+            }
+            updated_at_ms = $nowMs
+            updated_by    = "local-dev"
+            reason        = "tables-reload-local"
+        }
+        $doc = [ordered]@{
+            track = "stable"
+            lines = $lines
+        }
+        $json = ConvertTo-Json -InputObject $doc -Depth 8
+        $tmpPointer = Join-Path $bundleRoot (".POINTER.json.tmp.$PID")
+        [System.IO.File]::WriteAllText($tmpPointer, $json, [System.Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $tmpPointer -Destination $pointerPath -Force
+        Write-Host "[tables-reload-local] published schema_digest=$($manifest.schema_digest) content_digest=$($manifest.content_digest.Substring(0, 12)) version=$($manifest.version) root=$bundleRoot" -ForegroundColor Green
+    }
+    "table-bundle" {
+        $toolDir = Join-Path $RepoRoot "go\table_sync"
+        if (-not (Test-Path $toolDir)) { throw "go/table_sync directory not found: $toolDir" }
+        Push-Location $toolDir
+        try {
+            $global:LASTEXITCODE = 0
+            & go run ./cmd/table-bundle @TableBundleArgs
+            if ($LASTEXITCODE -ne 0) { throw "table-bundle exited with code $LASTEXITCODE" }
+        } finally { Pop-Location }
     }
     "git-stats" { Invoke-GitStats }
     default { throw "Unsupported command: $Command" }

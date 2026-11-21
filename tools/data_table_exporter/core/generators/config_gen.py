@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader, Template, Template, Template, 
 
 from core.config_loader import ExporterConfig
 from core.file_utils import ensure_dirs, write_file
-from core.schema import TableSchema
+from core.schema import TableSchema, compute_schema_digest
 from core import type_mapping
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -85,10 +85,22 @@ def _gen_all_cpp(tables: list[TableSchema], env: Environment, cfg: ExporterConfi
 
     # table_loader aggregator
     names: list[str] = sorted(t.name for t in tables)
+    hot_reload_names: list[str] = sorted(t.name for t in tables if t.hot_reload)
+    schema_digest: str = compute_schema_digest(tables)
     ah_tpl: Template = env.get_template("cpp_table_loader.h.j2")
     ac_tpl: Template = env.get_template("cpp_table_loader.cpp.j2")
-    write_file(cfg.cpp.code_dir / "table_loader.h", ah_tpl.render())
-    write_file(cfg.cpp.code_dir / "table_loader.cpp", ac_tpl.render(sheetnames=names))
+    write_file(cfg.cpp.code_dir / "table_loader.h", ah_tpl.render(
+        sheetnames=names,
+        hot_reload_names=hot_reload_names,
+        schema_digest=schema_digest,
+        to_camel_case=type_mapping.to_camel_case,
+    ))
+    write_file(cfg.cpp.code_dir / "table_loader.cpp", ac_tpl.render(
+        sheetnames=names,
+        hot_reload_names=hot_reload_names,
+        schema_digest=schema_digest,
+        to_camel_case=type_mapping.to_camel_case,
+    ))
 
 
 def _cpp_ctx(table: TableSchema) -> dict:
@@ -133,8 +145,14 @@ def _gen_all_go(tables: list[TableSchema], env: Environment, cfg: ExporterConfig
         logger.info("Generated Go config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
+    hot_reload_names: list[str] = sorted(t.name for t in tables if t.hot_reload)
+    schema_digest: str = compute_schema_digest(tables)
     all_tpl: Template = env.get_template("go_table_loader.go.j2")
-    write_file(cfg.go.code_dir / "table_loader.go", all_tpl.render(sheetnames=names))
+    write_file(cfg.go.code_dir / "table_loader.go", all_tpl.render(
+        sheetnames=names,
+        hot_reload_names=hot_reload_names,
+        schema_digest=schema_digest,
+    ))
 
 
 def _go_ctx(table: TableSchema, cfg: ExporterConfig) -> dict:
@@ -176,9 +194,14 @@ def _gen_all_java(tables: list[TableSchema], env: Environment, cfg: ExporterConf
         logger.info("Generated Java config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
+    hot_reload_names: list[str] = sorted(t.name for t in tables if t.hot_reload)
+    schema_digest: str = compute_schema_digest(tables)
     all_tpl: Template = env.get_template("java_table_loader.java.j2")
     write_file(cfg.java.code_dir / "TableLoader.java", all_tpl.render(
-        sheetnames=names, package=cfg.java.package
+        sheetnames=names,
+        hot_reload_names=hot_reload_names,
+        schema_digest=schema_digest,
+        package=cfg.java.package,
     ))
 
 

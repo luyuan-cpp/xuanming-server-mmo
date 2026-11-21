@@ -369,8 +369,9 @@ function Select-ManifestByName {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
+    $metadataNamePattern = '(?m)^metadata:[ \t]*\n(?:[ ]+[^\n]+\n)*?[ ]{2,4}name:[ ]*' + [regex]::Escape($Name) + '[ \t]*$'
     foreach ($block in (Get-ManifestBlocks -Output $Output)) {
-        if ($block -match "(?m)^\s*name:\s*$([regex]::Escape($Name))\s*$") {
+        if ($block -cmatch $metadataNamePattern) {
             return $block
         }
     }

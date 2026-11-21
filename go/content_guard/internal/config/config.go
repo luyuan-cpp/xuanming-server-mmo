@@ -12,9 +12,12 @@ import (
 	"content_guard/internal/lexstore"
 )
 
-// CheckTextFullMethod 是 CheckText 的 gRPC 方法全名,Stat 内容屏蔽校验用。
-// server 包的测试核对它与生成的常量相同。
-const CheckTextFullMethod = "/content_guard.ContentGuard/CheckText"
+// CheckTextFullMethod / CheckPlatformTextFullMethod 是带玩家正文请求体的 gRPC 方法全名,Stat 内容屏蔽校验用。
+// server 包的测试核对它们与生成的常量相同。
+const (
+	CheckTextFullMethod         = "/content_guard.ContentGuard/CheckText"
+	CheckPlatformTextFullMethod = "/content_guard.ContentGuard/CheckPlatformText"
+)
 
 const (
 	minTextBytes = 64
@@ -46,6 +49,36 @@ type Config struct {
 
 	// MaxTextBytes:单次送检文字的字节上限,超过回 InvalidArgument。聊天正文上限是 512 字节,公告更长,缺省给 4096。
 	MaxTextBytes int `json:",default=4096"`
+
+	// Platform:可选外部平台内容安全审核配置(微信 msgSecCheck / 抖音 antidirt;docs/design/rename-and-content-safety.md §6.5)。
+	// 未配置 AppID 时仅运行本地词库层;密钥通过 AppSecretEnv 从环境变量读取,不进配置文件。
+	Platform PlatformConfig `json:",optional"`
+
+	// DataServiceRpc:可选目录服务 RPC 客户端,用于在仅传入 player_id 时查询玩家渠道与 openid。
+	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+}
+
+// MiniGamePlatformConf 是微信/抖音小游戏内容安全接口配置。
+type MiniGamePlatformConf struct {
+	AppID        string `json:",optional"`
+	AppSecretEnv string `json:",optional"`
+	BaseURL      string `json:",optional"`
+}
+
+// PlatformConfig 控制外部平台审核的接入与超时策略。
+type PlatformConfig struct {
+	WeChat          MiniGamePlatformConf `json:",optional"`
+	Douyin          MiniGamePlatformConf `json:",optional"`
+	SyncTimeoutMs   int                  `json:",default=1500"`
+	WorldTimeoutMs  int                  `json:",default=250"`
+	AsyncTimeoutMs  int                  `json:",default=2500"`
+	LookupTimeoutMs int                  `json:",default=150"`
+}
+
+// HasDataServiceRpc 报告是否配置了目录服务连接目标。
+func (c *Config) HasDataServiceRpc() bool {
+	return len(c.DataServiceRpc.Endpoints) > 0 || c.DataServiceRpc.Target != "" ||
+		(len(c.DataServiceRpc.Etcd.Hosts) > 0 && c.DataServiceRpc.Etcd.Key != "")
 }
 
 // EffectiveLexiconPrefix 返回实际使用的词库前缀。
@@ -77,19 +110,58 @@ func (c *Config) Validate() error {
 	if (c.Mode == service.PreMode || c.Mode == service.ProMode) && !c.RequireLexicon {
 		return fmt.Errorf("RequireLexicon must be true when Mode is %q", c.Mode)
 	}
+	if err := c.validatePlatform(); err != nil {
+		return err
+	}
 	return c.validateStatContentSuppressed()
 }
 
-// validateStatContentSuppressed 确认 CheckText 的请求内容不会被 go-zero 的 Stat 拦截器打进日志:
-// 请求里是玩家的聊天原文和名字,不该进日志,量也太大。要么整体关掉 Stat,要么把 CheckText 列进 IgnoreContentMethods。
+func (c *Config) validatePlatform() error {
+	for _, entry := range []struct {
+		name string
+		conf MiniGamePlatformConf
+	}{
+		{"Platform.WeChat", c.Platform.WeChat},
+		{"Platform.Douyin", c.Platform.Douyin},
+	} {
+		if entry.conf.AppID == "" && entry.conf.AppSecretEnv == "" {
+			continue
+		}
+		if entry.conf.AppID == "" || strings.Contains(entry.conf.AppID, "${") {
+			return fmt.Errorf("%s.AppID must be set and not contain unexpanded placeholders", entry.name)
+		}
+		if entry.conf.AppSecretEnv == "" || strings.Contains(entry.conf.AppSecretEnv, "${") {
+			return fmt.Errorf("%s.AppSecretEnv must be an environment variable name", entry.name)
+		}
+	}
+	if c.Platform.SyncTimeoutMs < 0 || c.Platform.SyncTimeoutMs > 5000 {
+		return fmt.Errorf("Platform.SyncTimeoutMs (%d) must be within [0, 5000]", c.Platform.SyncTimeoutMs)
+	}
+	if c.Platform.WorldTimeoutMs < 0 || c.Platform.WorldTimeoutMs > 2000 {
+		return fmt.Errorf("Platform.WorldTimeoutMs (%d) must be within [0, 2000]", c.Platform.WorldTimeoutMs)
+	}
+	if c.Platform.AsyncTimeoutMs < 0 || c.Platform.AsyncTimeoutMs > 10000 {
+		return fmt.Errorf("Platform.AsyncTimeoutMs (%d) must be within [0, 10000]", c.Platform.AsyncTimeoutMs)
+	}
+	if c.Platform.LookupTimeoutMs < 0 || c.Platform.LookupTimeoutMs > 2000 {
+		return fmt.Errorf("Platform.LookupTimeoutMs (%d) must be within [0, 2000]", c.Platform.LookupTimeoutMs)
+	}
+	return nil
+}
+
+// validateStatContentSuppressed 确认带原文请求体的 RPC 不会被 go-zero 的 Stat 拦截器打进日志。
 func (c *Config) validateStatContentSuppressed() error {
 	if !c.Middlewares.Stat {
 		return nil
 	}
+	ignored := make(map[string]bool, len(c.Middlewares.StatConf.IgnoreContentMethods))
 	for _, method := range c.Middlewares.StatConf.IgnoreContentMethods {
-		if method == CheckTextFullMethod {
-			return nil
+		ignored[method] = true
+	}
+	for _, req := range []string{CheckTextFullMethod, CheckPlatformTextFullMethod} {
+		if !ignored[req] {
+			return fmt.Errorf("Middlewares.StatConf.IgnoreContentMethods must contain %q (otherwise go-zero logs player text), or set Middlewares.Stat=false", req)
 		}
 	}
-	return fmt.Errorf("Middlewares.StatConf.IgnoreContentMethods must contain %q (otherwise go-zero logs player text), or set Middlewares.Stat=false", CheckTextFullMethod)
+	return nil
 }

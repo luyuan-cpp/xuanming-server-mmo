@@ -204,6 +204,7 @@ TEST(BattleReplayGzip, RoundTripsAndRejectsOversizedOrCorruptInput)
     auto corrupt = *compressed;
     corrupt[corrupt.size() - 1] = static_cast<char>(corrupt[corrupt.size() - 1] ^ 0x5a); // 改坏 gzip 尾部的长度校验
     EXPECT_FALSE(turnbattle::GzipDecompress(corrupt, raw.size()).has_value()) << "尾部校验不符";
+    EXPECT_FALSE(turnbattle::GzipDecompress(*compressed + "x", raw.size()).has_value()) << "gzip 流尾后不得夹带多余字节";
 
     const auto empty = turnbattle::GzipCompress(std::string{}, turnbattle::kBattleReplayGzipLevel);
     ASSERT_TRUE(empty.has_value());

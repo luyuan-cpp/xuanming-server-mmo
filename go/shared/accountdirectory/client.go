@@ -47,6 +47,23 @@ type Directory interface {
 	Remove(context.Context, string, []*dspb.AccountRoleVersion) error
 }
 
+// ChannelIdentityUpdater 由支持记录第三方渠道 openid 的目录客户端实现(login 在渠道登录成功后上报)。
+type ChannelIdentityUpdater interface {
+	UpsertChannelIdentity(ctx context.Context, account, channel, openID string) error
+}
+
+// UpsertChannelIdentity 把本次渠道登录拿到的 channel + open_id 登记到账号分片。
+func (c *Client) UpsertChannelIdentity(ctx context.Context, account, channel, openID string) error {
+	in := &dspb.UpsertAccountChannelIdentityRequest{Account: account, Channel: channel, OpenId: openID}
+	call, cancel, err := c.prepare(ctx, "UpsertAccountChannelIdentity", in)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+	_, err = c.rpc.UpsertAccountChannelIdentity(call, in)
+	return classify(err)
+}
+
 // InitialCommitCreator 只在本次 SQL 严格新建成功时返回可缓存的持久初始原件。
 // 旧 Directory 的调用面保留；不支持此能力的实现不获得种子优化，必须走 SQL 核验。
 type InitialCommitCreator interface {

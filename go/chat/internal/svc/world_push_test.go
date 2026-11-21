@@ -35,6 +35,10 @@ func (failingPusher) PushWorld(context.Context, *chatpb.ChatMessage) error {
 	return errors.New("kafka unavailable")
 }
 
+func (failingPusher) PushWorldRetract(context.Context, *chatpb.ChatRetractedNotify) error {
+	return errors.New("kafka unavailable")
+}
+
 func worldMessage() *chatpb.ChatMessage {
 	return &chatpb.ChatMessage{SenderPlayerId: 123, Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "大家好", SendTimeMs: 99}
 }
@@ -71,6 +75,7 @@ func TestNewWorldPublisherUsesWorldTopicAndPushMessageID(t *testing.T) {
 	t.Cleanup(func() { _ = w.Close() })
 	require.Equal(t, kafkacmd.ChatWorldBroadcastTopic(), p.topic, "topic 名与 gate 消费的同出一处契约")
 	require.EqualValues(t, game.ClientPlayerChatNotifyWorldChatMessageId, p.messageID)
+	require.EqualValues(t, game.ClientPlayerChatNotifyWorldChatRetractedMessageId, p.retractMessageID)
 	require.IsType(t, &kafkago.Hash{}, w.Balancer, "按 key 哈希选分区,不按显式分区")
 	require.Equal(t, kafkago.RequireOne, w.RequiredAcks)
 	require.False(t, w.Async, "同步写:返回 nil 才代表 broker 收到")
@@ -98,4 +103,32 @@ func TestPublishWorldSwallowsErrorsAndCountsThem(t *testing.T) {
 	sc.PublishWorld(context.Background(), worldMessage())
 	require.Equal(t, before+1, testutil.ToFloat64(worldPushTotal.WithLabelValues(pushOutcomeError)),
 		"推送失败只计数、记日志,不往外抛:发送已经提交")
+	sc.PublishWorldRetract(context.Background(), &chatpb.ChatRetractedNotify{
+		Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
+		SenderPlayerId: 123,
+		SendTimeMs:     99,
+		Reason:         "platform_async_reject",
+	})
+	require.Equal(t, before+2, testutil.ToFloat64(worldPushTotal.WithLabelValues(pushOutcomeError)),
+		"撤回推送失败同样只计数、记日志,不往外抛")
+}
+
+func TestWorldPublisherWritesRetractBroadcast(t *testing.T) {
+	w := &fakeKafkaWriter{}
+	p := &worldPublisher{writer: w, topic: "chat-world-bcast_g7", messageID: 1, retractMessageID: 9090}
+	notify := &chatpb.ChatRetractedNotify{
+		Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
+		SenderPlayerId: 321,
+		SendTimeMs:     888,
+		Reason:         "ad",
+	}
+	require.NoError(t, p.PushWorldRetract(context.Background(), notify))
+	require.Len(t, w.messages, 1)
+	require.Equal(t, "321", string(w.messages[0].Key))
+	event := &kafkapb.BroadcastToAllEvent{}
+	require.NoError(t, proto.Unmarshal(w.messages[0].Value, event))
+	require.EqualValues(t, 9090, event.GetMessageContent().GetMessageId())
+	decoded := &chatpb.ChatRetractedNotify{}
+	require.NoError(t, proto.Unmarshal(event.GetMessageContent().GetSerializedMessage(), decoded))
+	require.True(t, proto.Equal(notify, decoded))
 }

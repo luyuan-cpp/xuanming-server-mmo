@@ -1,8 +1,8 @@
 # data_service 的熔断:服务端从按方法改成按逻辑库,调用方关掉按方法的客户端熔断
 
-> **状态(2026-11-20,Claude)**:第一步(核实 + 设计)完成;**代码未动**。预计改动 32 个文件,按 `AGENTS.md` §10.2 要负责人对这一批明确同意后才落码,清单在 §6。
+> **状态(2026-11-20,Antigravity)**:已获负责人授权并**已按 §6 落码,未编译、未运行**(AGENTS.md §10.3),验证命令见 `docs/PROGRESS.md` 2026-11-20 条目。
 > **来源**:2026-11-20 在 go/db 上确认并修掉同一类问题(`docs/design/db-task-store-unavailable-deferral.md` 文首「2026-11-20 补」),当时记下 data_service 另开任务。
-> **证据口径**:全部是静态阅读——go-zero v1.10.0 源码(模块缓存 `github.com/zeromicro/go-zero@v1.10.0`)与本仓代码。没有编译、没有运行、没有压测。
+> **证据口径**:设计与实现基于静态阅读——go-zero v1.10.0 源码与本仓代码,已做 `gofmt` 与英文日志静态检查;编译、单测交 Codex。
 > **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service 与 go-zero),不加 PARITY 行。
 
 ## 0. 结论

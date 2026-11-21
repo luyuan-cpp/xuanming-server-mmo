@@ -21,6 +21,7 @@ Middlewares:
   StatConf:
     IgnoreContentMethods:
       - /content_guard.ContentGuard/CheckText
+      - /content_guard.ContentGuard/CheckPlatformText
 
 # etcd 注册路径用的 zone id。本服务全服一份,zone 只影响自己的注册路径。
 ZoneId: 1
@@ -40,6 +41,15 @@ RequireLexicon: false
 
 # 单次送检文字的字节上限。
 MaxTextBytes: 4096
+
+# 按 player_id 查渠道与 openid 的目录服务连接(NonBlock:不挡本服务启动,仅在启用外部平台审核时使用)。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 500
+  NonBlock: true
 
 # 链路追踪(docs/design/distributed-tracing.md §10.3):写法与其它 Go 服务相同,本机 Alloy 没起时导出器在后台重连,不影响业务。
 Telemetry:

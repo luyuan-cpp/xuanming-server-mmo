@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS oms_order (
   create_time_ms BIGINT NOT NULL,
   payment_deadline_ms BIGINT NOT NULL,
   payment_time_ms BIGINT NULL,
-  UNIQUE (order_sn), UNIQUE (buyer_id, request_id), INDEX idx_commerce_buyer_status (buyer_id,status),
+  UNIQUE (order_sn), UNIQUE (buyer_id, request_id), INDEX idx_commerce_buyer_status (buyer_id,status), INDEX idx_commerce_status_deadline (status,payment_deadline_ms),
   CHECK (quantity > 0), CHECK (pay_amount > 0)
 );
 CREATE TABLE IF NOT EXISTS oms_order_item (
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS commerce_request_nonce (
 -- 发放物二选一:物品(item_config_id × count_per_unit)或货币(currency_type × currency_amount,如充值灵石包);下单时冻结进 commerce_order_grant。
 -- 货币种类 0 是银两(CurrencyType 枚举),有没有货币发放看 currency_amount 是否大于 0。
 CREATE TABLE IF NOT EXISTS commerce_sku_grant (sku_id BIGINT PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,currency_type INT NOT NULL DEFAULT 0,currency_amount BIGINT NOT NULL DEFAULT 0,title VARCHAR(128) NOT NULL,
-  CHECK ((item_config_id>0 AND count_per_unit>0 AND count_per_unit<=4096 AND currency_type=0 AND currency_amount=0) OR (item_config_id=0 AND count_per_unit=0 AND currency_type>=0 AND currency_amount>0 AND currency_amount<=9000000000000000)));
+  CHECK ((item_config_id>0 AND count_per_unit>0 AND count_per_unit<=4096 AND currency_type=0 AND currency_amount=0) OR (item_config_id=0 AND count_per_unit=0 AND currency_type IN (0,1,2) AND currency_amount>0 AND currency_amount<=9000000000000000)));
 CREATE TABLE IF NOT EXISTS commerce_order_grant (order_sn VARCHAR(36) PRIMARY KEY,item_config_id INT NOT NULL,count_per_unit INT NOT NULL,currency_type INT NOT NULL DEFAULT 0,currency_amount BIGINT NOT NULL DEFAULT 0,title VARCHAR(128) NOT NULL);
 CREATE TABLE IF NOT EXISTS commerce_delivery_receipt (order_sn VARCHAR(36) PRIMARY KEY,trade_order_id VARCHAR(20) NOT NULL,state VARCHAR(24) NOT NULL,proof VARCHAR(64) NOT NULL);
 -- 退款待办与退款回执按被退的那笔付款 (channel, transaction_id) 识别(2026-11-05 起；之前按 order_sn，一单只能退一笔)：
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS commerce_refund_intent (
   status VARCHAR(24) NOT NULL,
   close_reason VARCHAR(64) NULL,
   PRIMARY KEY (channel, transaction_id),
-  INDEX idx_commerce_refund_pending (status, order_sn),
+  INDEX idx_commerce_refund_pending (status, order_sn, channel, transaction_id),
   CHECK (source IN ('CANCELLED_LATE','DELIVERY_REJECTED','DUPLICATE_PAYMENT','AMOUNT_MISMATCH','CURRENCY_MISMATCH')),
   -- MANUAL:渠道退不了(没有开发者退款接口,或渠道明确退款失败),或渠道撤销之后又撤回了撤销(钱又回到商户),转人工,
   -- 不再列在待退款里;原因在 close_reason。REVOKED:渠道自己把这笔钱退给了用户(用户侧退款、作废),不用再退。

@@ -129,8 +129,8 @@ schema 在 `data/schema/mysterymerchant{rule,goods,spot}_table.proto`。
 `item_count` 不得超过该物品的堆叠上限(两侧都校验:scene_manager 的配表校验不过、整拍不调度;scene 节点不下发也不卖)。
 初始的 12 行都满足(药品类堆叠上限 999,装备类每份 1 个)。
 
-`weight = 0` 同时是**立即停售**的手段:scene 节点在下发与结算时都会再认一次这一列,把某一行改成 0 并热更 scene 的表,
-正在卖的这一轮里它马上从货架上消失、买不了(scene_manager 的表只在启动时加载,它要到重启后才不再把这一行排上架)。
+`weight = 0` 同时是**立即停售**的手段:scene 节点在下发与结算时都会再认一次这一列,把某一行改成 0 并热更表包(`MysteryMerchantRule` / `MysteryMerchantGoods` 均已标 `(cfg_hot_reload) = true`),
+正在卖的这一轮里它马上从货架上消失、买不了;scene_manager 热更后下一轮也不再把这一行排上架。
 
 初始数据:回血丹 / 回蓝丹 / 培元丹 / 回灵散(各限购 5)、精炼石 / 修行秘录残页 / 灵兽口粮(限购 3)、
 玄铁护符 / 藏经阁手札 / 青锋剑 / 青纱袍 / 寒铁剑(限购 1)。展示名与帮会商店卖同一物品时的叫法一致。
@@ -188,8 +188,8 @@ schema 在 `data/schema/mysterymerchant{rule,goods,spot}_table.proto`。
   分线目录里的地图号与它所在的键对不上(两侧契约被破坏)→ 本拍报 `error`,不拿错位的数据选线。
 - **配表校验**(每拍,不过就不调度):间隔 / 停留 / 货架大小 / 权重的范围;商品的价格、限购、货币、物品存在、
   `item_count ≤ 堆叠上限`;站位所在的地图必须是本 zone 的世界地图(`worldConfIds()`),否则那条线永远选不到却不报错。
-- **配表生效时机**:scene_manager 只在启动时加载配置表,改表要重启它;scene 节点的表可以热更。
-  两边版本不一致的那段时间由 scene 节点按自己的表再核一遍(§5.2 的「商品可售」)。
+- **配表生效时机**:scene 与 scene_manager 均接入表包热更(`MysteryMerchantRule`、`MysteryMerchantGoods` 已标 `(cfg_hot_reload) = true`,见 `docs/design/config-table-hot-reload.md`)。
+  切换瞬间两边版本不一致的毫秒级窗口由 scene 节点按自己的表再核一遍(§5.2 的「商品可售」)。
 - 时间与随机数都是显式参数(`now`、`merchantRand`),单测注入。
 
 ### 4.1 配置(`MysteryMerchant` 块,整块可缺省 = 启用)

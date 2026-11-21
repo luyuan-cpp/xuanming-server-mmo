@@ -9,6 +9,4 @@ class ActorStateAttributeSyncSystem
 {
 public:
     static void Update(double delta);
-
-    static void SyncAttributes(entt::entity entity, const EntityVector& receivingObservers, uint32_t syncFrequency);
 };

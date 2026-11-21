@@ -83,20 +83,39 @@ public class GmPlayerCommandController {
 
     @PostMapping("/{id}/send")
     public String send(@PathVariable String id) {
-        authenticated(); decimal(id, "命令 ID");
+        Subject subject = authenticated();
+        // 先检查是否持有任意玩家 GM 权限，避免无权限登录用户借命令 ID 探测草稿是否存在。
+        if (OPERATIONS.stream().noneMatch(op -> subject.isPermitted(op.permission))) {
+            throw new AuthorizationException();
+        }
+        decimal(id, "命令 ID");
         ObjectNode command = journal.get(id);
         if (!command.path("commandType").asText().equals("PLAYER")) bad("命令类型不符");
         String actor = require(operation(command.path("operation").asText()).permission);
         configured();
         if (command.path("status").asText().equals("DRAFT")) {
             long age = System.currentTimeMillis() - command.path("request").path("issuedAtMs").asLong();
-            if (age < 0 || age > 300_000) throw new ResponseStatusException(HttpStatus.CONFLICT, "草稿已过期，请重新创建并核对");
+            if (age < 0 || age > GmCommandJournal.PLAYER_DRAFT_TTL_MS) throw new ResponseStatusException(HttpStatus.CONFLICT, "草稿已过期，请重新创建并核对");
         }
         return ok(journal.sendPlayerCommand(id, actor, game::sendPlayerCommand));
     }
 
     @GetMapping
-    public String list() { require("gm:audit:read"); return ok(journal.listPlayerCommands()); }
+    public String list(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String playerId,
+            @RequestParam(required = false) String status) {
+        require("gm:audit:read");
+        return ok(journal.listPlayerCommands(page, pageSize, playerId, status));
+    }
+
+    @GetMapping("/{id}/audit")
+    public String audit(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, "命令 ID");
+        return ok(journal.auditHistory(id, "PLAYER"));
+    }
 
     private ObjectNode arguments(String code, ObjectNode args) {
         ObjectNode result = json.createObjectNode();

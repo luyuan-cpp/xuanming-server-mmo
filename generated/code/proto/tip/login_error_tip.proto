@@ -109,4 +109,18 @@ enum login_error {
 
   kLoginMinorPlayTimeOver = 2049;
 
+  kRoleNameCheckUnavailable = 2050;
+
+  kRoleRenameCooldown = 2051;
+
+  kRoleRenameNoCard = 2052;
+
+  kRoleRenameInProgress = 2053;
+
+  kRoleRenameFrozen = 2054;
+
+  kRoleRenameSameName = 2055;
+
+  kRoleRenameExpired = 2056;
+
 };

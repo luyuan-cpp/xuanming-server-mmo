@@ -69,7 +69,7 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
 		// 人数上限来自 PlayMode 表(模板目录编译时已按 Dungeon.max_team_size 与引擎上限 5 收口);
 		// 没有开放的 PVE_TEAM 行即 0(未开放组队)。
-		limit := min(l.svcCtx.Catalog.MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize)
+		limit := min(l.svcCtx.ActiveCatalog().MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize)
 		if limit == 0 {
 			metrics.ObserveJoinQueue(modeName, "no_team_size")
 			return &matchpb.JoinQueueResponse{
@@ -99,7 +99,7 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 			sideSize = 1
 		}
 		// 每侧人数上限来自 PlayMode 表(不超过引擎每队上限 5);模板没有开放 PVP_TEAM 即 0,一律拒绝。
-		if limit := min(l.svcCtx.Catalog.MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize); sideSize > limit {
+		if limit := min(l.svcCtx.ActiveCatalog().MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize); sideSize > limit {
 			metrics.ObserveJoinQueue(modeName, "team_size_over_limit")
 			return &matchpb.JoinQueueResponse{ErrorCode: constants.ErrModeNotOpen,
 				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该模板不支持这个每方人数")}, nil
@@ -115,7 +115,7 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 	}
 	// 入口白名单(PlayMode 表,docs/design/global-match-hierarchical-pools.md §7):(模式, 怪物战斗模板)
 	// 不在表里或已关闭一律拒绝,堵住客户端任填 battle_config_id 自建私有池。
-	if !l.svcCtx.Catalog.Open(in.Mode, in.BattleConfigId) {
+	if !l.svcCtx.ActiveCatalog().Open(in.Mode, in.BattleConfigId) {
 		metrics.ObserveJoinQueue(modeName, "template_not_open")
 		return &matchpb.JoinQueueResponse{
 			ErrorCode:    constants.ErrModeNotOpen,

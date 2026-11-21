@@ -28,6 +28,7 @@ message SkillTable {
   option (cfg_sheet)       = "Skill";
   option (cfg_source_file) = "Skill.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   // enum eSkillType : uint32_t {

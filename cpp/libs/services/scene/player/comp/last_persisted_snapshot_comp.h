@@ -79,6 +79,13 @@ struct PlayerLastPersistedSnapshotComp
     // True iff a snapshot has been recorded (first save completed).
     bool HasSnapshot() const { return snapshot != nullptr; }
 
+    // 仅当快照已由当前所有权代次(currentOwnerEpoch != 0)真实提交落盘(committed_save_seq != 0)时返回真。
+    bool IsCommittedForOwner(uint64_t currentOwnerEpoch) const
+    {
+        return snapshot != nullptr && currentOwnerEpoch != 0 &&
+               committed_owner_epoch == currentOwnerEpoch && committed_save_seq != 0;
+    }
+
 private:
     std::weak_ptr<const PlayerAllData> committed_source_;
     uint64_t source_owner_epoch_{0};

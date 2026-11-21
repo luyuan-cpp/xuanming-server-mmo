@@ -558,6 +558,14 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 		return;
 	}
 
+	// 导航缺失等前置校验必须排在 PlacementFence 之前,避免被拒的建场景请求污染放置代次。
+	if (NavQuerySystem::RequiresNavigation(request->config_id()) &&
+		SceneNavManager::Instance().Get(request->config_id()) == nullptr)
+	{
+		LOG_ERROR << "CreateScene rejected: required navigation unavailable, config_id=" << request->config_id();
+		return;
+	}
+
 	// 放置代次(docs/design/world-channel-placement-generation.md),与 gRPC 入口同一判定:本节点已按 >= 这个代次拆过
 	// 这个场景时,这是一次晚到的旧建场景,不建、不复用,回空应答。判在参数与许可的拒收之后(放行就等于建成或
 	// 复用)、去重之前(过期的建场景不走 ReuseExistingScene)。
@@ -567,13 +575,6 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 		LOG_WARN << "CreateScene: scene_id=" << request->scene_id()
 				 << " placement_generation=" << request->placement_generation()
 				 << " is stale (destroyed through " << fence.Find(request->scene_id())->destroyedThrough << "), rejected";
-		return;
-	}
-
-	if (NavQuerySystem::RequiresNavigation(request->config_id()) &&
-		SceneNavManager::Instance().Get(request->config_id()) == nullptr)
-	{
-		LOG_ERROR << "CreateScene rejected: required navigation unavailable, config_id=" << request->config_id();
 		return;
 	}
 

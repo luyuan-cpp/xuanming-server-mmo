@@ -372,8 +372,17 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
 
 uint64_t CurrencySystem::GetBalance(entt::entity player, CurrencyType type)
 {
-    const uint64_t *balance = ResolveCurrencyField(player, type);
-    return balance ? *balance : 0;
+    if (!IsKnownCurrencyType(type))
+    {
+        return 0;
+    }
+    const auto *balances = tlsEcs.actorRegistry.try_get<CurrencyComp>(player);
+    if (balances == nullptr)
+    {
+        return 0;
+    }
+    const auto index = static_cast<int>(type);
+    return index < balances->values_size() ? balances->values(index) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -529,38 +538,6 @@ bool CurrencySystem::CreditOverflows(entt::entity player, CurrencyType type, uin
 }
 
 // ---------------------------------------------------------------------------
-// WaiveDebt — write off remaining debt
-// ---------------------------------------------------------------------------
-
-uint64_t CurrencySystem::WaiveDebt(entt::entity player, CurrencyType type,
-                                   const std::string &gmOperator,
-                                   const std::string &reason)
-{
-    auto *comp = tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(player);
-    if (comp == nullptr)
-    {
-        return 0;
-    }
-
-    auto it = comp->debts.find(static_cast<uint32_t>(type));
-    if (it == comp->debts.end())
-    {
-        return 0;
-    }
-
-    const uint64_t waived = it->second.Remaining();
-    comp->debts.erase(it);
-    comp->dirty = true;
-
-    LOG_INFO << "CurrencySystem: debt waived, amount=" << waived
-             << " CurrencyType=" << static_cast<uint32_t>(type)
-             << " operator=" << gmOperator
-             << " reason=" << reason
-             << " entity=" << entt::to_integral(player);
-    return waived;
-}
-
-// ---------------------------------------------------------------------------
 // AdjustDebt — increase or decrease the owed amount
 // ---------------------------------------------------------------------------
 
@@ -648,38 +625,6 @@ void CurrencySystem::AdjustDebt(entt::entity player, CurrencyType type, int64_t 
              << " paid=" << debt.paid
              << " delta=" << delta
              << " CurrencyType=" << static_cast<uint32_t>(type)
-             << " entity=" << entt::to_integral(player);
-}
-
-// ---------------------------------------------------------------------------
-// FreezeDebt — pause/resume auto-deduction
-// ---------------------------------------------------------------------------
-
-void CurrencySystem::FreezeDebt(entt::entity player, CurrencyType type, bool freeze,
-                                const std::string &gmOperator)
-{
-    auto *comp = tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(player);
-    if (comp == nullptr)
-    {
-        return;
-    }
-
-    auto it = comp->debts.find(static_cast<uint32_t>(type));
-    if (it == comp->debts.end())
-    {
-        return;
-    }
-
-    it->second.frozen = freeze;
-    if (!gmOperator.empty())
-    {
-        it->second.gmOperator = gmOperator;
-    }
-    comp->dirty = true;
-
-    LOG_INFO << "CurrencySystem: debt " << (freeze ? "frozen" : "unfrozen")
-             << " CurrencyType=" << static_cast<uint32_t>(type)
-             << " operator=" << gmOperator
              << " entity=" << entt::to_integral(player);
 }
 

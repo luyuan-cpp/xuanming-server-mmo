@@ -17,6 +17,7 @@ import (
 	base "proto/common/base"
 	loginproto "proto/login"
 
+	"shared/circuitbreaker"
 	"shared/etcdwatch"
 	"shared/killswitch"
 	"shared/releasetrack"
@@ -58,6 +59,10 @@ type ServiceContext struct {
 	// 会话收尾 LeaveGame / Disconnect(gate 合成的断线通知也经 Forward)受保护。Build 时建好,规则为空即全放行;
 	// 生产入口再 Start(连 etcd)并在注册后 AddInstance。
 	KillSwitch *killswitch.Switch
+
+	// Breakers 按目标实例(endpoint)隔离的三态熔断器集合:单台后端挂死或持续超时后自动摘除,
+	// 切流向同组其它健康实例;节点下线时由 watcher onRemove 清理,避免内存随扩缩容增长。
+	Breakers *circuitbreaker.EndpointSet
 
 	// 以下由 subsetMu 保护。selfUUID 在注册成功后由 SetSubsetIdentity 设置,为空时全服池目标在全部实例里挑;
 	// subsetRank / subsetPeers 是上一次下发给目标 watcher 的名次,没变就不重建索引、不打日志。
@@ -108,13 +113,18 @@ func Build(c config.Config, dial func(endpoint string) (*grpc.ClientConn, error)
 		dial = discovery.DialEndpoint
 	}
 
+	breakers := circuitbreaker.NewEndpointSet(c.EffectiveBreakerThreshold(), c.EffectiveBreakerOpenDuration(), nil)
+
 	targets := make(map[base.ENodeType]*discovery.NodeWatcher)
 	for _, nodeType := range TargetNodeTypes(game.RouteTable) {
 		// 前缀与 noderegistry.rpcPrefix 同一写法:<枚举名>.rpc/,gate 与各 Go 服务都按它注册。
 		name := base.ENodeType_name[int32(nodeType)]
 		targets[nodeType] = discovery.NewNodeWatcher(name, name+".rpc/",
 			metrics.SetTargets,
-			func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
+			func(entry discovery.NodeEntry) {
+				discovery.RemoveEndpointConn(entry.Endpoint)
+				breakers.Remove(entry.Endpoint)
+			})
 	}
 
 	selfName := base.ENodeType_name[int32(base.ENodeType_ClientRpcRouterNodeService)]
@@ -124,6 +134,7 @@ func Build(c config.Config, dial func(endpoint string) (*grpc.ClientConn, error)
 		Targets:        targets,
 		Dial:           dial,
 		ForwardTimeout: c.ForwardTimeout(),
+		Breakers:       breakers,
 		KillSwitch: killswitch.New(killswitch.Config{
 			NodeTypes: []string{selfName},
 			Protected: []string{

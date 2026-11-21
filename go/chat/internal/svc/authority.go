@@ -3,6 +3,7 @@ package svc
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 	"shared/authoritysql"
 	"shared/contentguard"
 	"shared/dbplacement"
+	"shared/dsclient"
 	"shared/rolefence"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -22,19 +24,35 @@ import (
 // RoleFenceCaller 是聊天读角色护栏权威状态时的调用方身份,密钥在 rolefence.SecretEnv(RoleFenceCaller)。
 const RoleFenceCaller = "chat"
 
-// openDirectory 建 data_service 客户端和角色权威状态读取。NonBlock:data_service 晚起时聊天照常起服,校验读不到按故障回。
-// 调用方密钥缺失拒启:校验过不了,聊天发不出去,不如在启动时暴露。
-func openDirectory(c config.Config) (*grpc.ClientConn, rolefence.StateReader, error) {
-	client, err := zrpc.NewClient(c.DataServiceRpc)
+// openDirectory 建 data_service 客户端、角色权威状态读取和账号档案读取。NonBlock:data_service 晚起时聊天照常起服。
+func openDirectory(c config.Config) (*grpc.ClientConn, rolefence.StateReader, authority.ProfileReader, error) {
+	client, err := zrpc.NewClient(dsclient.Conf(c.DataServiceRpc))
 	if err != nil {
-		return nil, nil, fmt.Errorf("聊天目录客户端装配失败: %w", err)
+		return nil, nil, nil, fmt.Errorf("聊天目录客户端装配失败: %w", err)
 	}
-	states, err := rolefence.NewDirectoryReader(dspb.NewDataServiceClient(client.Conn()), RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
+	dsClient := dspb.NewDataServiceClient(client.Conn())
+	states, err := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
 	if err != nil {
 		_ = client.Conn().Close()
-		return nil, nil, fmt.Errorf("聊天调用方密钥 %s 不可用: %w", rolefence.SecretEnv(RoleFenceCaller), err)
+		return nil, nil, nil, fmt.Errorf("聊天调用方密钥 %s 不可用: %w", rolefence.SecretEnv(RoleFenceCaller), err)
 	}
-	return client.Conn(), states, nil
+	profiles := authority.ProfileReaderFunc(func(callCtx context.Context, playerID uint64) (authority.PlayerProfile, error) {
+		resp, rpcErr := dsClient.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID})
+		if rpcErr != nil {
+			return authority.PlayerProfile{}, rpcErr
+		}
+		if resp.GetRetry() {
+			return authority.PlayerProfile{}, errors.New("directory profile lookup signaled retry")
+		}
+		if !resp.GetFound() {
+			return authority.PlayerProfile{}, nil
+		}
+		return authority.PlayerProfile{
+			Level:            resp.GetPlayerLevel(),
+			AccountCreatedMs: resp.GetAccountCreatedMs(),
+		}, nil
+	})
+	return client.Conn(), states, profiles, nil
 }
 
 func OpenAuthority(ctx context.Context, c config.Config, migrate bool) (*sql.DB, *authority.Store, error) {
@@ -61,49 +79,72 @@ func OpenAuthority(ctx context.Context, c config.Config, migrate bool) (*sql.DB,
 }
 
 // OpenAuthorityWithPermission 由进程显式传同一已消费 boot，避免 SQL 与排空身份分裂。迁移不校验身份,states 传 nil。
-func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate bool, permission authoritysql.Permission, states rolefence.StateReader) (*sql.DB, *authority.Store, error) {
+func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate bool, permission authoritysql.Permission, states rolefence.StateReader, opts ...authority.Option) (*sql.DB, *authority.Store, error) {
+	db, store, _, err := openAuthorityWithGuard(ctx, c, migrate, permission, states, opts...)
+	return db, store, err
+}
+
+func openAuthorityWithGuard(ctx context.Context, c config.Config, migrate bool, permission authoritysql.Permission, states rolefence.StateReader, extraOpts ...authority.Option) (*sql.DB, *authority.Store, *contentguard.Client, error) {
 	backend, err := authoritysql.ParseBackend(c.Backend)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var db *sql.DB
 	if migrate {
 		// 搬库期间(state=MOVING)拒绝 DDL;库搬走之后连当前集群。
 		options, placementErr := dbplacement.ForMigration(ctx, c.DbPlacement, authority.DatabaseName)
 		if placementErr != nil {
-			return nil, nil, placementErr
+			return nil, nil, nil, placementErr
 		}
 		db, err = authoritysql.OpenForMigration(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, backend, permission, options...)
 	} else {
 		placement, placementErr := dbplacement.Start(ctx, c.DbPlacement)
 		if placementErr != nil {
-			return nil, nil, placementErr
+			return nil, nil, nil, placementErr
 		}
 		db, err = authoritysql.Open(ctx, os.Getenv(c.DSNEnv), authority.DatabaseName, backend, c.MaxOpenConns, permission, placement.OpenOptions()...)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if migrate {
 		if err = authority.Migrate(ctx, db); err != nil {
 			db.Close()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return db, nil, nil
+		return db, nil, nil, nil
 	}
 	// 正文送检(docs/design/rename-and-content-safety.md §6.6):没配目标又不是本机的 Optional 时拒启。
 	guard, err := contentguard.New("chat", c.ContentGuard)
 	if err != nil {
 		db.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs, WorldChannelCooldownMs: c.WorldChannelCooldownMs}, authority.WithContentGuard(guard))
+	opts := append([]authority.Option{authority.WithContentGuard(guard)}, extraOpts...)
+	rules := authority.Rules{
+		MaxContentBytes:             c.MaxContentBytes,
+		RateLimitPerSecond:          c.RateLimitPerSecond,
+		HistoryMaxEntries:           c.HistoryMaxEntries,
+		HistoryTTLSeconds:           c.HistoryTTLSeconds,
+		HistoryDefaultLimit:         c.HistoryDefaultLimit,
+		HistoryMaxLimit:             c.HistoryMaxLimit,
+		ActorVerifyTTLSeconds:       c.ActorVerifyTTLSeconds,
+		WorldHistoryCacheMs:         c.WorldHistoryCacheMs,
+		WorldChannelCooldownMs:      c.WorldChannelCooldownMs,
+		WorldMinLevel:               c.WorldMinLevel,
+		DuplicateSpamWindowMs:       c.DuplicateSpamWindowMs,
+		DuplicateSpamMaxSenders:     c.DuplicateSpamMaxSenders,
+		DuplicateSpamMaxPerSender:   c.DuplicateSpamMaxPerSender,
+		NewAccountAgeHours:          c.NewAccountAgeHours,
+		NewAccountDailyPrivateLimit: c.NewAccountDailyPrivateLimit,
+	}
+	store, err := authority.New(ctx, db, states, backend, rules, opts...)
 	if err != nil {
 		db.Close()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	reportRetention(ctx, db, backend)
-	return db, store, nil
+	return db, store, guard, nil
 }
 
 // reportRetention 在 TiDB 档核对原件表的保留期属性(authority/schema.go 的 TTL),不在或没开就打一行 ERROR,不拒启:

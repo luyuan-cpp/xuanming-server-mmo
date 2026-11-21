@@ -29,11 +29,12 @@ namespace item_hold
 	{
 		kUnspecified, // 0:只会出现在坏数据里,Add 拒绝
 		kBattle,      // 1:回合制战斗,hold_id = battle_id,由 PlayerBattleSystem 建立与释放
+		kRename,      // 2:角色改名,hold_id = item 段号,由 PlayerRenameSystem 建立与释放
 
 		kCount
 	};
 
-	inline constexpr const char* kItemHoldKindNames[] = {"unspecified", "battle"};
+	inline constexpr const char* kItemHoldKindNames[] = {"unspecified", "battle", "rename"};
 	static_assert(std::size(kItemHoldKindNames) == static_cast<std::size_t>(ItemHoldKind::kCount),
 				  "kItemHoldKindNames 与 ItemHoldKind 逐项对应");
 

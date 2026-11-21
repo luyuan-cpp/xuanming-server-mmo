@@ -86,7 +86,7 @@ HTTP JSON 使用 snake_case，字段以 [LoginResponse](../../java/gateway_node/
 | `code=404` 或 `503 zone_*` | 区服不存在、维护、关闭或未开放；属于业务终态，不能当作状态查询网络失败重入。 |
 
 原稿的 `wait_estimate_sec`、`token/deadline` 示例不再作为当前字段契约。
-`queue-timeout-ms` 虽仍在属性与 YAML 中，但没有运行时消费方；DTO 中的 101 常量不代表已实现“五分钟硬封顶”。
+原未消费的死键 `queue-timeout-ms` 已于 2026-11-20 从 `RateLimitProperties` 与 `application.yaml` 清理（`release_preflight.ps1` 改为校验 `queue-retry-min-ms` 下限）；DTO 中的 101 常量不代表已实现“五分钟硬封顶”。
 当前 QueueEntryTTL 是空闲 TTL，持续查询会续期；排队 token 有独立的 24 小时绝对寿命，详见排队设计。
 
 ## 四、开服波次
@@ -126,9 +126,9 @@ Ingress / LB 后必须准确配置 trusted-proxies，否则玩家可能全部落
 
 [LoginController](../../java/gateway_node/src/main/java/com/game/gateway/controller/LoginController.java)
 与 [AssignGateController](../../java/gateway_node/src/main/java/com/game/gateway/controller/AssignGateController.java)
-调用限流器；[QueueStatusController](../../java/gateway_node/src/main/java/com/game/gateway/controller/QueueStatusController.java)
-直接进入 service 的区服准入与 login 查询，不经此限流器。`/api/refresh-token` 也未接入，
-其保护需求应独立设计，不能以“低频”代替保证。
+调用完整限流器（波次 + IP 桶 + 区桶 + 账号冷却）；[RefreshTokenController](../../java/gateway_node/src/main/java/com/game/gateway/controller/RefreshTokenController.java)
+自 2026-11-20 起接入 `AssignGateRateLimiter.checkIpOnly`（仅过共享 IP 桶与 fail-open 熔断，跳过波次、区桶与账号冷却，超限时回 HTTP 200 `code=429` `IP_RATE_LIMIT`，不阻拦正常局内或排队中续期）；[QueueStatusController](../../java/gateway_node/src/main/java/com/game/gateway/controller/QueueStatusController.java)
+直接进入 service 的区服准入与 login 查询，不经此限流器。
 
 ## 六、可观测性
 
@@ -173,7 +173,7 @@ Gateway 的 ratelimit 重试不创建同等状态。正常持票查询必须遵�
 | K8s Gateway 按档位启用、配置指纹 | 已有部署实现。 |
 | login 真排队 | 已有实现；K8s 合入门禁仍关闭，不能由旧矩阵推断可启用。 |
 | 专项指标、真实故障放行行为、阈值与尖峰容量 | 按对应验收记录判断；本文静态核对不补充运行通过结论。 |
-| 独立客户端、独立 Java 版 | Unity 按 §11.5 持票与无票规则全部落码（2026-11-19 ~ 20），未编译、未联网冒烟（§11.5 末段）；独立 Java 版 queue-status 回包与本仓一致，排队提示的下限与随机量待做（§二）。 |
+| 独立客户端、独立 Java 版 | Unity 按 §11.5 持票与无票规则全部落码（2026-11-19 ~ 20，含 `LoginQueueFlowTests` 全状态机与 `GameClientReconnectTests` 限流提示重连 EditMode 单测），未编译、未运行（§11.5 末段）；独立 Java 版 queue-status 回包与本仓一致，排队提示的下限/随机量、`/api/refresh-token` IP 限流与 `gate_zone_id` 重连对账均登记在 `PARITY.md` 待做。 |
 
 ## 十一、K8s 按发布档位开启（G4b）
 
@@ -210,7 +210,7 @@ login 仍先受门禁限制，不能据此声称下次部署会自动开启排�
 | 3 | login 排队先受合入门禁约束 | 当前所有档位关闭，尚未执行开排队的整体发布。 |
 | 4 | 排队用的区容量只认 `zone_config.capacity`(缺省 45000/zone，2026-11-10 起；原脚本常量 5000/zone 已删) | 未按各 zone 的实测峰值定标，不能当成承载保证；压测出基线后经 `/admin/zones` 按区调。 |
 | 5 | 限流／排队配置在启动时读取 | 仅修改 ConfigMap 不会让运行中进程重读；改值要关注对应 Pod 是否实际滚动。 |
-| 6 | Redis 口令及将来启用的 QueueToken 仍存在 ConfigMap 明文字段 | 本次未改变注入机制；Redis 口令已有 YAML 特殊字符拒绝检查，QueueToken 的占位判定及原样嵌入 YAML 仍须按部署安全待办核对。 |
+| 6 | QueueToken 已迁移至 K8s Secret（`login-queue-token` + `Env: MMORPG_LOGIN_QUEUE_TOKEN_SECRET`，2026-11-20 核对 `k8s_deploy.ps1`）；Redis 口令及占位判定由脚本入口前置校验 | 仍须按部署安全待办核对全链路 Secret 轮换策略。 |
 | 7 | Gateway 限流指纹覆盖 rate-limit 配置块（含 trusted-proxies）与 Redis 口令；login 排队指纹覆盖 Queue 块与 QueueToken | 两种指纹仅在各自功能开启时写入，关闭时移除也触发模板变化。login 此指纹不含 Redis 口令。单步排队密钥轮换会让在排 token 失效、重新入队，不能当作保排位轮换。 |
 
 关闭功能时的指纹移除会改变 Pod 模板，但实际完成取决于滚动就绪，不能称“秒级止血已验收”。
@@ -247,13 +247,14 @@ J1 已做（2026-11-05，随令牌桶 Lua 一起）：先判 IP 再判 zone，zo
 [回归测试源码](../../robot/http_assign_gate_test.go)覆盖相关分支；本次未运行。2026-11-20 按新第 6 条改：重入自身网络 / HTTP 失败时合成一个 code=500 交回状态机，与重入回 500 一样保票退避（未运行）。
 预算检查覆盖重试阶段的等待、恢复重入与 410 重调；首个 assign-gate 仍会执行，不保证已过期 ctx 零请求。
 robot 无票分支保留两处有意差异：100 不加抖动（服务端的随机量照样把它打散），429 直接交外层（压测把 429 当失败，§11.7 R2）。410 换票时连续失败数清零（2026-11-20 起，与 Unity 一致）。
-Unity 客户端按上面 7 条持票（`GameClient.EnterZone` 第 2 步；2026-11-19 落码、11-20 补齐，未编译、未联网冒烟）：
-- 等待：两处排队等待（/api/login 与 assign-gate / queue-status）都按 max(retry_after_ms, 下限) 再加 [0, 20%] 抖动，抖动按不超过 30s 的基础间隔算（`GameClient.QueueRetryDelayMs`）；下限平时 2s，查询连续失败时按第 2 条退避（`QueueBackoffFloorMs`）。
+Unity 客户端按上面 7 条持票（`GameClient.EnterZone` 第 2 步；2026-11-19 落码、11-20 补齐与收口，未编译、未运行）：
+- 等待：两处排队等待（/api/login 与 assign-gate / queue-status）都按 max(retry_after_ms, 下限) 再加 [0, 20%] 抖动，抖动按不超过 30s 的基础间隔算（`GameClient.QueueRetryDelayMs`）；下限平时 2s，查询连续失败时按第 2 条退避（`QueueBackoffFloorMs`）。等待协程 `WaitQueueMs` 使用单调时钟并随 `_pipelineGen` 与总预算截止时刻立即退出，不再在取消或超预算后干等。
 - 恢复：查询失败带原 token 立即恢复重入一次，重入回 100 / 429 / 500 或自身网络 / HTTP 失败都保票回到查询（第 6 条）。
-- 预算：第 1、2 步共用总预算 24 小时，与排队令牌的绝对寿命一致。access token 只有 2 小时，剩不到 10 分钟时排队循环先经 `/api/refresh-token` 换新；失败（网络 / 500）隔 60 秒再试，refresh 令牌被拒（401）按登录失效结束。
+- 预算：第 1、2 步共用总预算 24 小时，与排队令牌的绝对寿命一致。access token 只有 2 小时，剩不到 10 分钟时排队循环先经 `/api/refresh-token` 换新；失败（网络 / 429 / 500）隔 60 秒再试，refresh 令牌被拒（401）按登录失效结束，续期返回后再复核一次总预算不超期发下一请求。
 - 无票 429：/api/login 与 assign-gate 都按 30、60、120 秒加抖动重试，一次进区合计最多 3 次（`RateLimitedBackoffMs`）。
-- `GatewayHttpClient` 的所有 POST 接口只读 HTTP 200 的正文，非 200 一律算 HTTP 失败（Spring 缺省错误页没有 code，以前会被读成 0「成功 / 放行」）。
+- `GatewayHttpClient` 的所有 POST 接口只读 HTTP 200 的正文，非 200 一律算 HTTP 失败（Spring 缺省错误页没有 code，以前会被读成 0「成功 / 放行」；`req.error` 为空串时同样回落 `"HTTP " + req.responseCode`）。
 - 断线重连（`GameClient.Reconnect.cs`）把 100 ratelimit 当暂时结论，在 20 秒期限内按 max(重连退避, retry_after 加下限与抖动) 重调；真排队的 100 仍交回选服。
+- 自动化单测：`Assets/Tests/EditMode/Net/LoginQueueFlowTests.cs` 经真实 `GatewayHttpClient` + 回环假网关覆盖第 2~7 条、无票 429、410 换票、续期（含 429 / 401）、非 200 错误页及 `WaitQueueMs` 取消；`GameClientReconnectTests.cs` 补齐 `100 ratelimit` 预算内重连与 `100 login` 终态回归。
 - 与 robot 的差异：无票 100 加下限与抖动；无票 429 退避重试。无票的 410 两边都直接报错，不立即重调。
 已发出的 HTTP 请求按自身 perCallTimeout 完成，不随排队 ctx 立即取消，截止后收到 code=0 仍按放行处理。
 独立 Java 版的 `/api/queue-status` 与本仓网关回包一致（2026-11-19 核对：HTTP 恒 200，code 为 0 / 100 / 410 / 500 / 404 / 503，Java 另有请求体错误的 400），Unity 这套持票逻辑两版通用。

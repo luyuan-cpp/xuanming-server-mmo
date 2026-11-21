@@ -45,6 +45,7 @@ var worldPushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 // WorldPusher 是世界频道推送的接缝:生产是下面的 Kafka 实现,业务层用例注入替身。
 type WorldPusher interface {
 	PushWorld(ctx context.Context, message *chatpb.ChatMessage) error
+	PushWorldRetract(ctx context.Context, notify *chatpb.ChatRetractedNotify) error
 }
 
 // worldMessageWriter 是推送写 Kafka 的接缝:生产是 *kafkago.Writer,用例换成替身。
@@ -52,11 +53,12 @@ type worldMessageWriter interface {
 	WriteMessages(ctx context.Context, msgs ...kafkago.Message) error
 }
 
-// worldPublisher 把一条世界频道显示原件包成全服广播写进 Kafka。
+// worldPublisher 把世界频道显示原件与撤回通知包成全服广播写进 Kafka。
 type worldPublisher struct {
-	writer    worldMessageWriter
-	topic     string
-	messageID uint32
+	writer           worldMessageWriter
+	topic            string
+	messageID        uint32
+	retractMessageID uint32
 }
 
 var _ WorldPusher = (*worldPublisher)(nil)
@@ -78,18 +80,21 @@ func newWorldPublisher(c config.Config) (*worldPublisher, *kafkago.Writer) {
 		Async:        false,
 		WriteTimeout: worldPushTimeout,
 	}
-	return &worldPublisher{writer: writer, topic: kafkacmd.ChatWorldBroadcastTopic(), messageID: uint32(game.ClientPlayerChatNotifyWorldChatMessageId)}, writer
+	return &worldPublisher{
+		writer:           writer,
+		topic:            kafkacmd.ChatWorldBroadcastTopic(),
+		messageID:        uint32(game.ClientPlayerChatNotifyWorldChatMessageId),
+		retractMessageID: uint32(game.ClientPlayerChatNotifyWorldChatRetractedMessageId),
+	}, writer
 }
 
-// PushWorld 组 BroadcastToAllEvent 并同步写一条。载荷不是 GateCommand 信封:这个 topic 只承载「推给本机全部已绑定会话」
-// 一种动作,gate 只接这一种事件、只认世界频道推送这一个消息号,踢人、重定向之类的命令进不来。
-func (p *worldPublisher) PushWorld(ctx context.Context, message *chatpb.ChatMessage) error {
-	body, err := proto.Marshal(message)
+func (p *worldPublisher) writeBroadcast(ctx context.Context, messageID uint32, senderPlayerID uint64, payloadMsg proto.Message) error {
+	body, err := proto.Marshal(payloadMsg)
 	if err != nil {
-		return fmt.Errorf("marshal ChatMessage: %w", err)
+		return fmt.Errorf("marshal world broadcast payload: %w", err)
 	}
 	event, err := proto.Marshal(&kafkapb.BroadcastToAllEvent{MessageContent: &basepb.MessageContent{
-		MessageId:         p.messageID,
+		MessageId:         messageID,
 		SerializedMessage: body,
 	}})
 	if err != nil {
@@ -97,11 +102,21 @@ func (p *worldPublisher) PushWorld(ctx context.Context, message *chatpb.ChatMess
 	}
 	return p.writer.WriteMessages(ctx, kafkago.Message{
 		Topic: p.topic,
-		Key:   []byte(strconv.FormatUint(message.SenderPlayerId, 10)),
+		Key:   []byte(strconv.FormatUint(senderPlayerID, 10)),
 		Value: event,
 		// 发言请求的 trace 写进消息头,各 gate 广播时接上同一条 trace(docs/design/distributed-tracing.md §6.2)。
 		Headers: kafkagotrace.Headers(ctx),
 	})
+}
+
+// PushWorld 组 BroadcastToAllEvent 并同步写一条。
+func (p *worldPublisher) PushWorld(ctx context.Context, message *chatpb.ChatMessage) error {
+	return p.writeBroadcast(ctx, p.messageID, message.SenderPlayerId, message)
+}
+
+// PushWorldRetract 通过同一个 chat-world-bcast topic 向全服在线客户端广播撤回通知。
+func (p *worldPublisher) PushWorldRetract(ctx context.Context, notify *chatpb.ChatRetractedNotify) error {
+	return p.writeBroadcast(ctx, p.retractMessageID, notify.SenderPlayerId, notify)
 }
 
 // PublishWorld 在世界频道消息首次提交成功之后调用。没配 Kafka(WorldPush 为 nil)时什么都不做;
@@ -117,6 +132,22 @@ func (sc *ServiceContext) PublishWorld(ctx context.Context, message *chatpb.Chat
 		// player_id 只进日志,不进指标 label(AGENTS.md §9)。
 		logx.WithContext(ctx).Errorf("[chat] World channel push failed; the message is committed and stays in history, sender=%d: %v",
 			message.SenderPlayerId, err)
+		return
+	}
+	worldPushTotal.WithLabelValues(pushOutcomeOK).Inc()
+}
+
+// PublishWorldRetract 广播世界频道消息撤回通知给全服在线玩家。
+func (sc *ServiceContext) PublishWorldRetract(ctx context.Context, notify *chatpb.ChatRetractedNotify) {
+	if sc.WorldPush == nil || notify == nil || notify.SenderPlayerId == 0 || notify.SendTimeMs <= 0 {
+		return
+	}
+	pushCtx, cancel := context.WithTimeout(ctx, worldPushTimeout)
+	defer cancel()
+	if err := sc.WorldPush.PushWorldRetract(pushCtx, notify); err != nil {
+		worldPushTotal.WithLabelValues(pushOutcomeError).Inc()
+		logx.WithContext(ctx).Errorf("[chat] World channel retract push failed, sender=%d send_time_ms=%d: %v",
+			notify.SenderPlayerId, notify.SendTimeMs, err)
 		return
 	}
 	worldPushTotal.WithLabelValues(pushOutcomeOK).Inc()

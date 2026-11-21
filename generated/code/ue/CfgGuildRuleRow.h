@@ -94,4 +94,16 @@ struct FCfgGuildRuleRow : public FTableRowBase
 	/** 同一发起人两次成功建历练房间的最小间隔(秒,B6b 读取),0-600 防止反复建房刷邀请推送骚扰帮会成员 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
 	int32 trial_invite_cooldown_seconds = 0;
+
+	/** 两次帮会改名之间的冷却秒数(默认 604800 = 7 天;0 = 无冷却) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int32 rename_cooldown_seconds = 0;
+
+	/** 帮会改名后旧名保护期秒数,期内他帮不可占用、本帮可改回(默认 604800 = 7 天) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int32 name_hold_seconds = 0;
+
+	/** 帮会改名消耗帮会资金(0 = 免费,默认 1000) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildRule")
+	int64 rename_cost_funds = 0;
 };

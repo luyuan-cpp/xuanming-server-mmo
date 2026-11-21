@@ -63,11 +63,12 @@ func choiceOfRecord(row *matchpb.MatchBattleScriptLoadoutRecord) battlescript.Ch
 // teams 与 f.Members 同下标(gatherTeamAssignment 的输出);PVE 的怪物方是 1 队。
 // 原件随后整份落库,恢复重放用的就是这一份:剧本只在成局第一次 gather 时解析一次。
 func resolveTeamScripts(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRecord, teams []uint32) []*battlepb.BattleTeamScript {
-	if svcCtx == nil || svcCtx.BattleScripts == nil {
+	scripts := svcCtx.ActiveBattleScripts()
+	if svcCtx == nil || scripts == nil {
 		return nil
 	}
 	// 评分局只开官方剧本(battle-script.md §5.2):玩家剧本用于 PVE 与非评分局
-	resolver := &battlescript.Resolver{Catalog: svcCtx.BattleScripts, Tables: battlescript.TableLookup{},
+	resolver := &battlescript.Resolver{Catalog: scripts, Tables: battlescript.TableLookup{},
 		OfficialOnly: isRatedMode(matchpb.MatchMode(f.Mode))}
 	if svcCtx.Authority != nil {
 		resolver.Players = storePlayerScripts{store: svcCtx.Authority}

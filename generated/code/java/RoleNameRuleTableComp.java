@@ -59,4 +59,28 @@ public final class RoleNameRuleTableComp {
         }
     }
 
+    public record Rename_cooldown_seconds(int value) {
+        public static Rename_cooldown_seconds from(RoleNameRuleTable row) {
+            return new Rename_cooldown_seconds(row.getRenameCooldownSeconds());
+        }
+    }
+
+    public record Old_name_hold_seconds(int value) {
+        public static Old_name_hold_seconds from(RoleNameRuleTable row) {
+            return new Old_name_hold_seconds(row.getOldNameHoldSeconds());
+        }
+    }
+
+    public record Rename_item_id(int value) {
+        public static Rename_item_id from(RoleNameRuleTable row) {
+            return new Rename_item_id(row.getRenameItemId());
+        }
+    }
+
+    public record Rename_item_count(int value) {
+        public static Rename_item_count from(RoleNameRuleTable row) {
+            return new Rename_item_count(row.getRenameItemCount());
+        }
+    }
+
 }

@@ -251,6 +251,11 @@ func tipCodes() map[string]uint32 {
 
 		"ErrContentRejected":         constants.ErrContentRejected,
 		"ErrContentCheckUnavailable": constants.ErrContentCheckUnavailable,
+		"ErrLevelTooLow":             constants.ErrLevelTooLow,
+		"ErrDuplicateSpam":           constants.ErrDuplicateSpam,
+		"ErrPrivateTargetLimit":      constants.ErrPrivateTargetLimit,
+		"ErrContactRejected":         constants.ErrContactRejected,
+		"ErrMessageNotFound":         constants.ErrMessageNotFound,
 	}
 }
 

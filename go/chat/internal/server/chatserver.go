@@ -32,3 +32,13 @@ func (s *ChatServer) SendChat(ctx context.Context, in *chatpb.SendChatRequest) (
 func (s *ChatServer) PullChatHistory(ctx context.Context, in *chatpb.PullChatHistoryRequest) (*chatpb.PullChatHistoryResponse, error) {
 	return logic.NewChatLogic(ctx, s.svcCtx).PullChatHistory(in)
 }
+
+// ReportChat 玩家举报聊天消息,核验消息存在后写入举报审计表。
+func (s *ChatServer) ReportChat(ctx context.Context, in *chatpb.ReportChatRequest) (*chatpb.ReportChatResponse, error) {
+	return logic.NewChatLogic(ctx, s.svcCtx).ReportChat(in)
+}
+
+// RetractWorldChat 撤回一条已提交的世界频道消息并广播在线玩家移除(CLIENT_RPC_SERVER_ONLY)。
+func (s *ChatServer) RetractWorldChat(ctx context.Context, in *chatpb.RetractWorldChatRequest) (*chatpb.RetractWorldChatResponse, error) {
+	return logic.NewChatLogic(ctx, s.svcCtx).RetractWorldChat(in)
+}

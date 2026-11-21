@@ -442,4 +442,9 @@ public:
 	static uint32_t RetrieveFromTemporary(
 		entt::entity playerEntity,
 		const std::vector<Guid> &guids);
+
+private:
+	// 为同步整笔交易复制候选 store/layout 与借用准入策略;供 ConsumeInventoryAndGrant /
+	// CheckInventoryExchangeSpace / ExchangeInventoryExact 共用。
+	static bool CloneBagForTransaction(const Bag &source, Bag &candidate);
 };

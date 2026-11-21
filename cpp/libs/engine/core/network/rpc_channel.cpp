@@ -87,50 +87,20 @@ size_t LogIfMessageTooLarge(const GameRpcMessage &rpcMessage)
 
     const auto msgId = rpcMessage.message_id();
     const char *methodName = "(unknown)";
-    std::string decodedBody;
-
-    if (msgId < gRpcMethodRegistry.size())
+    if (msgId < gRpcMethodRegistry.size() && gRpcMethodRegistry[msgId].methodName)
     {
-        const auto &meta = gRpcMethodRegistry[msgId];
-
-        if (meta.methodName)
-            methodName = meta.methodName;
-
-        const bool isRequest = !rpcMessage.request().empty();
-        const auto &body = isRequest ? rpcMessage.request() : rpcMessage.response();
-        const auto *proto = isRequest ? meta.requestProto.get() : meta.responseProto.get();
-
-        if (proto && !body.empty())
-        {
-            std::unique_ptr<::google::protobuf::Message> decoded(proto->New());
-            if (decoded->ParsePartialFromArray(body.data(), static_cast<int32_t>(body.size())))
-                decodedBody = decoded->ShortDebugString();
-        }
+        methodName = gRpcMethodRegistry[msgId].methodName;
     }
 
-    if (gDumpOversizedRpc && !decodedBody.empty())
+    static uint64_t oversizedWarnCount = 0;
+    if ((oversizedWarnCount++ & 0xFF) == 0)
     {
-        FILE *f = fopen("logs/oversized_rpc.log", "a");
-        if (f)
-        {
-            std::time_t now = std::time(nullptr);
-            char timeBuf[32];
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-            fprintf(f, "[%s] method: %s, msg_id: %u, size: %zu, body(%zu): ",
-                    timeBuf, methodName, msgId, messageSize, decodedBody.size());
-            fwrite(decodedBody.data(), 1, decodedBody.size(), f);
-            fputc('\n', f);
-            fclose(f);
-        }
+        LOG_WARN << "RPC message size exceeds threshold (" << kMaxMessageByteSize << " bytes, sampled)"
+                 << ", method: " << methodName
+                 << ", message ID: " << msgId
+                 << ", size: " << messageSize
+                 << ", total: " << oversizedWarnCount;
     }
-
-    // muduo log: short summary only (safe within 4000-byte buffer).
-    // WARN, not ERROR -- a few KB is informational, not a fault. Real anomalies
-    // are in the tens of KB and stand out either way.
-    LOG_WARN << "RPC message size exceeds threshold (" << kMaxMessageByteSize << " bytes)"
-             << ", method: " << methodName
-             << ", message ID: " << msgId
-             << ", size: " << messageSize;
 
     return messageSize;
 }
@@ -180,14 +150,6 @@ void RecordOutcome(const RpcStatus &status)
     }
 }
 } // namespace
-
-// Temporary debug switch: set to true at runtime to dump all oversized RPC bodies to file.
-// Usage: set gDumpOversizedRpc = true in debugger, or call EnableOversizedRpcDump(true).
-// Default OFF -- enter-scene AOI batches and similar legitimately-large traffic
-// would otherwise fill the dump file under load.
-bool gDumpOversizedRpc = false;
-
-void EnableOversizedRpcDump(bool enable) { gDumpOversizedRpc = enable; }
 
 bool IsDispatchableMessageId(uint32_t messageId)
 {

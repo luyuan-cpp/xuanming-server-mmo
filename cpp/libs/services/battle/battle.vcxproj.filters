@@ -45,6 +45,9 @@
     <ClInclude Include="system\battle_script.h">
       <Filter>system</Filter>
     </ClInclude>
+    <ClInclude Include="system\dungeon_monster_ai.h">
+      <Filter>system</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="data\battle_table_fingerprint.cpp">
@@ -62,6 +65,9 @@
       <Filter>system</Filter>
     </ClCompile>
     <ClCompile Include="system\battle_script.cpp">
+      <Filter>system</Filter>
+    </ClCompile>
+    <ClCompile Include="system\dungeon_monster_ai.cpp">
       <Filter>system</Filter>
     </ClCompile>
   </ItemGroup>

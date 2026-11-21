@@ -34,11 +34,24 @@ import (
 // 报给商城的交易号是 purchaseToken 的 SHA-256:orderId 带点号,不合商城的字符集,测试购买还可能没有 orderId。
 
 const (
-	googleAPIBase  = "https://androidpublisher.googleapis.com"
-	googleTokenURL = "https://oauth2.googleapis.com/token"
-	googleCertsURL = "https://www.googleapis.com/oauth2/v3/certs"
-	googleScope    = "https://www.googleapis.com/auth/androidpublisher"
+	googleAPIBase         = "https://androidpublisher.googleapis.com"
+	googleTokenURL        = "https://oauth2.googleapis.com/token"
+	googleCertsURL        = "https://www.googleapis.com/oauth2/v3/certs"
+	googleScope           = "https://www.googleapis.com/auth/androidpublisher"
+	googleCertsMinRefetch = time.Minute
 )
+
+type googleCertsFetch struct {
+	done chan struct{}
+	keys map[string]*rsa.PublicKey
+	err  error
+}
+
+type googleTokenFetch struct {
+	done  chan struct{}
+	token string
+	err   error
+}
 
 type GoogleConfig struct {
 	PackageName                 string
@@ -54,13 +67,16 @@ type GoogleConfig struct {
 type Google struct {
 	cfg GoogleConfig
 
-	tokenMu     sync.Mutex
-	accessToken string
-	tokenExpiry time.Time
+	tokenMu       sync.Mutex
+	accessToken   string
+	tokenExpiry   time.Time
+	tokenInflight *googleTokenFetch
 
-	certsMu     sync.Mutex
-	certs       map[string]*rsa.PublicKey
-	certsExpiry time.Time
+	certsMu        sync.Mutex
+	certs          map[string]*rsa.PublicKey
+	certsExpiry    time.Time
+	certsFetchedAt time.Time
+	certsInflight  *googleCertsFetch
 }
 
 func NewGoogle(cfg GoogleConfig) (*Google, error) {
@@ -124,69 +140,125 @@ func (g *Google) Query(context.Context, QueryRequest) (QueryResult, error) {
 func (g *Google) Close(context.Context, string) error { return nil }
 
 // token 是 androidpublisher 的访问令牌,过期前 5 分钟换新。
+// 锁不跨外网 HTTP,同批并发未命中合并为一次拉取,等待方仍响应自身 ctx.Done(),避免单次慢请求阻塞全副本 RPC。
 func (g *Google) token(ctx context.Context) (string, error) {
-	g.tokenMu.Lock()
-	defer g.tokenMu.Unlock()
 	now := g.cfg.Now()
+	g.tokenMu.Lock()
 	if g.accessToken != "" && now.Before(g.tokenExpiry.Add(-5*time.Minute)) {
-		return g.accessToken, nil
+		tok := g.accessToken
+		g.tokenMu.Unlock()
+		return tok, nil
 	}
+	if inflight := g.tokenInflight; inflight != nil {
+		g.tokenMu.Unlock()
+		select {
+		case <-inflight.done:
+			return inflight.token, inflight.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	inflight := &googleTokenFetch{done: make(chan struct{})}
+	g.tokenInflight = inflight
+	g.tokenMu.Unlock()
+
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	tok, expiry, err := g.fetchToken(fetchCtx)
+	cancel()
+
+	g.tokenMu.Lock()
+	g.tokenInflight = nil
+	if err == nil {
+		g.accessToken, g.tokenExpiry = tok, expiry
+	}
+	inflight.token, inflight.err = tok, err
+	close(inflight.done)
+	g.tokenMu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return tok, nil
+}
+
+func (g *Google) invalidateToken(bad string) {
+	g.tokenMu.Lock()
+	if g.accessToken == bad {
+		g.accessToken = ""
+		g.tokenExpiry = time.Time{}
+	}
+	g.tokenMu.Unlock()
+}
+
+func (g *Google) fetchToken(ctx context.Context) (string, time.Time, error) {
+	now := g.cfg.Now()
 	assertion, err := jwtSign(map[string]string{"alg": "RS256", "typ": "JWT"},
 		map[string]any{"iss": g.cfg.ClientEmail, "scope": googleScope, "aud": g.cfg.TokenURL, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix()},
 		signRS256(g.cfg.PrivateKey))
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	form := url.Values{"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"}, "assertion": {assertion}}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, g.cfg.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	response, err := send(g.cfg.HTTP, request)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	defer response.Body.Close()
 	raw, err := readBody(response)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return "", &CallError{Channel: NameGoogle, Op: "token", Status: response.StatusCode}
+		return "", time.Time{}, &CallError{Channel: NameGoogle, Op: "token", Status: response.StatusCode}
 	}
 	var out struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int64  `json:"expires_in"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil || out.AccessToken == "" || out.ExpiresIn <= 0 {
-		return "", errors.New("payment channel: google token answer is not usable")
+		return "", time.Time{}, errors.New("payment channel: google token answer is not usable")
 	}
-	g.accessToken, g.tokenExpiry = out.AccessToken, now.Add(time.Duration(out.ExpiresIn)*time.Second)
-	return g.accessToken, nil
+	return out.AccessToken, now.Add(time.Duration(out.ExpiresIn) * time.Second), nil
 }
 
 func (g *Google) api(ctx context.Context, method, path string, body []byte) (int, []byte, error) {
-	token, err := g.token(ctx)
-	if err != nil {
-		return 0, nil, err
+	for attempt := 0; attempt < 2; attempt++ {
+		token, err := g.token(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		request, err := http.NewRequestWithContext(ctx, method, g.cfg.APIBase+"/androidpublisher/v3/applications/"+url.PathEscape(g.cfg.PackageName)+path, bytes.NewReader(body))
+		if err != nil {
+			return 0, nil, err
+		}
+		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set("Accept", "application/json")
+		if body != nil {
+			request.Header.Set("Content-Type", "application/json")
+		}
+		response, err := send(g.cfg.HTTP, request)
+		if err != nil {
+			return 0, nil, err
+		}
+		raw, err := readBody(response)
+		_ = response.Body.Close()
+		if err != nil {
+			return 0, nil, err
+		}
+		if response.StatusCode == http.StatusUnauthorized && attempt == 0 {
+			g.invalidateToken(token)
+			continue
+		}
+		return response.StatusCode, raw, nil
 	}
-	request, err := http.NewRequestWithContext(ctx, method, g.cfg.APIBase+"/androidpublisher/v3/applications/"+url.PathEscape(g.cfg.PackageName)+path, bytes.NewReader(body))
-	if err != nil {
-		return 0, nil, err
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Accept", "application/json")
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	response, err := send(g.cfg.HTTP, request)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer response.Body.Close()
-	raw, err := readBody(response)
-	return response.StatusCode, raw, err
+	return 0, nil, errors.New("payment channel: google api retry exhausted")
 }
 
 // googlePurchase 是 ProductPurchaseV2 里本服务用到的字段。
@@ -368,17 +440,66 @@ func (g *Google) verifyPushToken(ctx context.Context, authorization string) erro
 }
 
 // errGoogleCerts:取不到 Google 的 OIDC 验签公钥(传输失败、非 200、读不懂)。这是「验不了」而不是「验不过」,
-// ParseNotification 原样报出去,不算成 ErrBadSignature。
-var errGoogleCerts = errors.New("payment channel: google OIDC certificates are unavailable")
+// 包装 ErrTempUnavailable,回调入口按 retry 记账并让 Pub/Sub 重投,不算成 ErrBadSignature。
+var errGoogleCerts = fmt.Errorf("%w: google OIDC certificates are unavailable", ErrTempUnavailable)
 
-// certKey 取 Google 的 OIDC 签名公钥。缓存一小时;遇到不认识的 kid 立即重拉一次(Google 会轮换密钥)。
+// certKey 取 Google 的 OIDC 签名公钥。缓存一小时；锁不跨外网 HTTP，同批并发未命中合并为一次拉取；
+// 距上次成功拉取未满 googleCertsMinRefetch（1 分钟）遇到未知 kid 直接回 nil，防止未认证随机 kid 触发 JWKS 刷新 DoS。
 // 重拉之后仍然没有这个 kid 的回 nil(不算错):令牌不是 Google 现在的密钥签的。
 func (g *Google) certKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+	now := g.cfg.Now()
 	g.certsMu.Lock()
-	defer g.certsMu.Unlock()
-	if key, ok := g.certs[kid]; ok && g.cfg.Now().Before(g.certsExpiry) {
-		return key, nil
+	if now.Before(g.certsExpiry) {
+		if key, ok := g.certs[kid]; ok {
+			g.certsMu.Unlock()
+			return key, nil
+		}
+		if !g.certsFetchedAt.IsZero() && now.Sub(g.certsFetchedAt) < googleCertsMinRefetch {
+			g.certsMu.Unlock()
+			return nil, nil
+		}
 	}
+	if inflight := g.certsInflight; inflight != nil {
+		g.certsMu.Unlock()
+		select {
+		case <-inflight.done:
+			if inflight.err != nil {
+				return nil, inflight.err
+			}
+			return inflight.keys[kid], nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	inflight := &googleCertsFetch{done: make(chan struct{})}
+	g.certsInflight = inflight
+	g.certsMu.Unlock()
+
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	keys, err := g.fetchCerts(fetchCtx)
+	cancel()
+	g.certsMu.Lock()
+	g.certsInflight = nil
+	if err == nil {
+		fetchedAt := g.cfg.Now()
+		g.certs = keys
+		g.certsFetchedAt = fetchedAt
+		g.certsExpiry = fetchedAt.Add(time.Hour)
+	}
+	inflight.keys, inflight.err = keys, err
+	close(inflight.done)
+	g.certsMu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return keys[kid], nil
+}
+
+func (g *Google) fetchCerts(ctx context.Context) (map[string]*rsa.PublicKey, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, g.cfg.CertsURL, nil)
 	if err != nil {
 		return nil, err
@@ -423,8 +544,10 @@ func (g *Google) certKey(ctx context.Context, kid string) (*rsa.PublicKey, error
 		}
 		keys[k.Kid] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: exponent}
 	}
-	g.certs, g.certsExpiry = keys, g.cfg.Now().Add(time.Hour)
-	return keys[kid], nil
+	if len(keys) == 0 {
+		return nil, errors.New("payment channel: google certs contain no usable RSA keys")
+	}
+	return keys, nil
 }
 
 // googleNotification 是 DeveloperNotification 里本服务用到的部分。
@@ -484,6 +607,7 @@ func (g *Google) ParseNotification(r *http.Request, body []byte) (Notification, 
 }
 
 // PollHistory 拉作废交易列表补漏(Google 的作废列表最早只到 30 天前)。
+// 单窗超过 50 页时与 App Store 一样窗口减半再拉,保证游标总能向前推进。
 func (g *Google) PollHistory(ctx context.Context, since time.Time) ([]Notification, time.Time, error) {
 	now := g.cfg.Now()
 	floor := now.Add(-29 * 24 * time.Hour)
@@ -494,20 +618,36 @@ func (g *Google) PollHistory(ctx context.Context, since time.Time) ([]Notificati
 	if !until.After(since) {
 		return nil, since, nil
 	}
+	for {
+		out, complete, err := g.voidedWindow(ctx, since, until)
+		if err != nil {
+			return out, since, err
+		}
+		if complete {
+			return out, until, nil
+		}
+		until = since.Add(until.Sub(since) / 2)
+		if until.Sub(since) < time.Second {
+			return nil, since, errors.New("payment channel: google voided purchases have too many pages within one second")
+		}
+	}
+}
+
+func (g *Google) voidedWindow(ctx context.Context, since, until time.Time) ([]Notification, bool, error) {
 	var out []Notification
 	pageToken := ""
 	for page := 0; page < 50; page++ {
 		query := url.Values{"startTime": {strconv.FormatInt(since.UnixMilli(), 10)}, "endTime": {strconv.FormatInt(until.UnixMilli(), 10)},
-			"maxResults": {"1000"}, "type": {"0"}}
+			"maxResults": {"1000"}, "type": {"0"}, "includeQuantityBasedPartialRefund": {"true"}}
 		if pageToken != "" {
 			query = url.Values{"token": {pageToken}, "maxResults": {"1000"}}
 		}
 		status, raw, err := g.api(ctx, http.MethodGet, "/purchases/voidedpurchases?"+query.Encode(), nil)
 		if err != nil {
-			return out, since, err
+			return out, false, err
 		}
 		if status != http.StatusOK {
-			return out, since, &CallError{Channel: NameGoogle, Op: "voided_purchases", Status: status}
+			return out, false, &CallError{Channel: NameGoogle, Op: "voided_purchases", Status: status}
 		}
 		var list struct {
 			VoidedPurchases []struct {
@@ -519,7 +659,7 @@ func (g *Google) PollHistory(ctx context.Context, since time.Time) ([]Notificati
 			} `json:"tokenPagination"`
 		}
 		if err := json.Unmarshal(raw, &list); err != nil {
-			return out, since, errors.New("payment channel: google voided purchases answer is not readable")
+			return out, false, errors.New("payment channel: google voided purchases answer is not readable")
 		}
 		for _, voided := range list.VoidedPurchases {
 			at := until
@@ -529,11 +669,11 @@ func (g *Google) PollHistory(ctx context.Context, since time.Time) ([]Notificati
 			out = append(out, Notification{Revocations: []Revocation{{TransactionID: GoogleTransactionID(voided.PurchaseToken), Revoked: true, ObservedAt: at, Detail: "VOIDED"}}})
 		}
 		if list.TokenPagination.NextPageToken == "" {
-			return out, until, nil
+			return out, true, nil
 		}
 		pageToken = list.TokenPagination.NextPageToken
 	}
-	return out, since, errors.New("payment channel: google voided purchases have too many pages; will retry")
+	return nil, false, nil
 }
 
 // WriteAck:Pub/Sub 推送收到 2xx 才算确认,其余按退避重投。

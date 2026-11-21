@@ -1,6 +1,7 @@
 package tracing
 
 import (
+	"context"
 	"net/http"
 
 	ztrace "github.com/zeromicro/go-zero/core/trace"
@@ -33,4 +34,17 @@ func DoHTTP(client *http.Client, request *http.Request) (*http.Response, error) 
 		span.SetStatus(codes.Error, http.StatusText(response.StatusCode))
 	}
 	return response, err
+}
+
+// StartRootSpan 为公网回调入口开一条新的根 server span(不信任公网调用方自带的 traceparent,同网关 distributed-tracing.md §3.4)。
+// 调用方结束时调用返回的 finish(err),让 logx.WithContext(ctx) 与下游调用共享同一条 trace。
+func StartRootSpan(ctx context.Context, name string) (context.Context, func(error)) {
+	ctx, span := otel.Tracer(ztrace.TraceName).Start(trace.ContextWithSpanContext(ctx, trace.SpanContext{}), name,
+		trace.WithSpanKind(trace.SpanKindServer))
+	return ctx, func(err error) {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}
 }

@@ -75,6 +75,13 @@ const (
 	LoginError_kLoginRealNameServiceUnavailable          LoginError = 2047
 	LoginError_kLoginMinorNotInPlayTime                  LoginError = 2048
 	LoginError_kLoginMinorPlayTimeOver                   LoginError = 2049
+	LoginError_kRoleNameCheckUnavailable                 LoginError = 2050
+	LoginError_kRoleRenameCooldown                       LoginError = 2051
+	LoginError_kRoleRenameNoCard                         LoginError = 2052
+	LoginError_kRoleRenameInProgress                     LoginError = 2053
+	LoginError_kRoleRenameFrozen                         LoginError = 2054
+	LoginError_kRoleRenameSameName                       LoginError = 2055
+	LoginError_kRoleRenameExpired                        LoginError = 2056
 )
 
 // Enum value maps for LoginError.
@@ -131,6 +138,13 @@ var (
 		2047: "kLoginRealNameServiceUnavailable",
 		2048: "kLoginMinorNotInPlayTime",
 		2049: "kLoginMinorPlayTimeOver",
+		2050: "kRoleNameCheckUnavailable",
+		2051: "kRoleRenameCooldown",
+		2052: "kRoleRenameNoCard",
+		2053: "kRoleRenameInProgress",
+		2054: "kRoleRenameFrozen",
+		2055: "kRoleRenameSameName",
+		2056: "kRoleRenameExpired",
 	}
 	LoginError_value = map[string]int32{
 		"kLogin_errorOK":                            0,
@@ -184,6 +198,13 @@ var (
 		"kLoginRealNameServiceUnavailable":          2047,
 		"kLoginMinorNotInPlayTime":                  2048,
 		"kLoginMinorPlayTimeOver":                   2049,
+		"kRoleNameCheckUnavailable":                 2050,
+		"kRoleRenameCooldown":                       2051,
+		"kRoleRenameNoCard":                         2052,
+		"kRoleRenameInProgress":                     2053,
+		"kRoleRenameFrozen":                         2054,
+		"kRoleRenameSameName":                       2055,
+		"kRoleRenameExpired":                        2056,
 	}
 )
 
@@ -218,7 +239,7 @@ var File_login_error_tip_proto protoreflect.FileDescriptor
 
 const file_login_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15login_error_tip.proto*\xfa\v\n" +
+	"\x15login_error_tip.proto*\xb3\r\n" +
 	"\vlogin_error\x12\x12\n" +
 	"\x0ekLogin_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kLoginAccountNotFound\x10\xd0\x0f\x12\x1c\n" +
@@ -270,7 +291,14 @@ const file_login_error_tip_proto_rawDesc = "" +
 	"\x1akLoginRealNameAlreadyBound\x10\xfe\x0f\x12%\n" +
 	" kLoginRealNameServiceUnavailable\x10\xff\x0f\x12\x1d\n" +
 	"\x18kLoginMinorNotInPlayTime\x10\x80\x10\x12\x1c\n" +
-	"\x17kLoginMinorPlayTimeOver\x10\x81\x10B$\n" +
+	"\x17kLoginMinorPlayTimeOver\x10\x81\x10\x12\x1e\n" +
+	"\x19kRoleNameCheckUnavailable\x10\x82\x10\x12\x18\n" +
+	"\x13kRoleRenameCooldown\x10\x83\x10\x12\x16\n" +
+	"\x11kRoleRenameNoCard\x10\x84\x10\x12\x1a\n" +
+	"\x15kRoleRenameInProgress\x10\x85\x10\x12\x16\n" +
+	"\x11kRoleRenameFrozen\x10\x86\x10\x12\x18\n" +
+	"\x13kRoleRenameSameName\x10\x87\x10\x12\x17\n" +
+	"\x12kRoleRenameExpired\x10\x88\x10B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

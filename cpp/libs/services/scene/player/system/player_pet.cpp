@@ -29,6 +29,7 @@
 #include "player/system/player_tip.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_mutability.h"
 #include "player/system/player_skill.h"
 #include "services/battle/system/class_skill_rules.h"
 
@@ -296,13 +297,16 @@ uint32_t MapAllocError(AllocError err) {
 	return kInvalidParameter;
 }
 
-// 写操作统一前置:实体有效 / 未跨 zone 冻结 / 不在战斗(与角色属性同口径)
+// 写操作统一前置:实体有效 / 玩家处于可写状态(未冻结、未交接、未退出且受 owner_epoch 围栏保护) / 不在战斗。
 uint32_t CheckWritable(entt::entity player) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return kEntityIsNull;
 	}
-	if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player)) {
-		LOG_WARN << "[PlayerPet] Rejected: cross-zone freeze in progress player_id=" << tlsEcs.GetPlayerId(player);
+	if (const auto mutability = player_mutability::ClassifyPlayerMutability(player);
+		mutability != player_mutability::PlayerMutability::kMutable) {
+		LOG_WARN << "[PlayerPet] Rejected: player not mutable reason="
+				 << player_mutability::PlayerMutabilityName(mutability)
+				 << " player_id=" << tlsEcs.GetPlayerId(player);
 		return kInvalidParameter;
 	}
 	if (PlayerBattleSystem::IsInBattle(player)) {
@@ -666,7 +670,7 @@ uint32_t PetSystem::BuildSkillBook(entt::entity player, uint64_t petId, ListSkil
 	}
 	std::sort(rows.begin(), rows.end(), [](const auto* a, const auto* b) { return a->id() < b->id(); });
 	const auto busy = PlayerBattleSystem::IsInBattle(player) ||
-		tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp>(player) ? kSkillUpgradeBusy :
+		!player_mutability::IsPlayerMutable(player) ? kSkillUpgradeBusy :
 		*ownerLevel < level ? kPetOwnerLevelNotEnough : 0u;
 	for (const auto* row : rows) {
 		PlayerSkillSystem::FillCatalogEntry(*row, StoredSkillRank(*pet, *species, row->id()), level,
@@ -699,7 +703,7 @@ void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& req
 	// 与人物修习共用错误语义：未知 ID 与当前主体没有学习资格分别报告。
 	if (!PlayerSkillSystem::IsFreeSkillFor(*row, 2)) { finish(kSkillNotInClass); return; }
 	if (PlayerBattleSystem::IsInBattle(player) ||
-		tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp>(player)) { finish(kSkillUpgradeBusy); return; }
+		!player_mutability::IsPlayerMutable(player)) { finish(kSkillUpgradeBusy); return; }
 	const auto level = PetEffectiveLevel(*pet, species);
 	if (*ownerLevel < level) { finish(kPetOwnerLevelNotEnough); return; }
 	const auto rank = StoredSkillRank(*pet, *species, row->id());

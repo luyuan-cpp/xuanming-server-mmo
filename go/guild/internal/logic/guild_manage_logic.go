@@ -140,6 +140,18 @@ func validateGuildTables(rule *tablepb.GuildRuleTable, levels []*tablepb.GuildLe
 		return fmt.Errorf("GuildRule[%d].max_pending_applications_per_guild=%d 越界,应在 [%d,%d]",
 			guildRuleRowID, v, minPendingPerGuild, maxPendingPerGuild)
 	}
+	if v := rule.GetRenameCooldownSeconds(); v > maxGuildRenameDurationSeconds {
+		return fmt.Errorf("GuildRule[%d].rename_cooldown_seconds=%d 越界,应在 [0,%d]",
+			guildRuleRowID, v, maxGuildRenameDurationSeconds)
+	}
+	if v := rule.GetNameHoldSeconds(); v > maxGuildRenameDurationSeconds {
+		return fmt.Errorf("GuildRule[%d].name_hold_seconds=%d 越界,应在 [0,%d]",
+			guildRuleRowID, v, maxGuildRenameDurationSeconds)
+	}
+	if v := rule.GetRenameCostFunds(); v > maxGuildRenameCostFunds {
+		return fmt.Errorf("GuildRule[%d].rename_cost_funds=%d 越界,应在 [0,%d]",
+			guildRuleRowID, v, maxGuildRenameCostFunds)
+	}
 
 	if len(levels) == 0 {
 		return errors.New("GuildLevel 表为空:建帮要读第 1 级的 max_members")

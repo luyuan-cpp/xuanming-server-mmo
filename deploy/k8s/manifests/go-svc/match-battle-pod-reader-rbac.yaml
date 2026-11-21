@@ -8,7 +8,7 @@
 # 所有档位都 apply:match.yaml 的 Pod 模板写死了 serviceAccountName: match,ServiceAccount 必须存在。
 # k8s_deploy.ps1 在 match 的 StatefulSet 之前把本文件 apply 进基础设施命名空间(Apply-OneGoSvc),match 的金丝雀副本共用这个身份。
 #
-# 刻意只给 pods 的 list、只在本命名空间(Role 而不是 ClusterRole):battle 与 match 同在基础设施命名空间,match 没有理由能看到
+# 刻意只给 pods 的 list、只在本命名空间(命名空间级 Role,不给集群级权限):battle 与 match 同在基础设施命名空间,match 没有理由能看到
 # 别的命名空间,也不需要 get / watch / 任何写权限。ServiceAccount 用专用的 match,不用命名空间的 default,免得把权限挂到整个命名空间。
 # Pod 模板不能关 automountServiceAccountToken:令牌就是查 Pod 的凭据。
 #

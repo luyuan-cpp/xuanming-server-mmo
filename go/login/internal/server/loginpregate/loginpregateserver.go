@@ -39,3 +39,20 @@ func (s *LoginPreGateServer) GetZoneRoleCount(ctx context.Context, in *login.Zon
 	l := loginpregatelogic.NewGetZoneRoleCountLogic(ctx, s.svcCtx)
 	return l.GetZoneRoleCount(in)
 }
+
+// 实名提交,网关 POST /api/real-name 调;凭 access token 鉴权(docs/design/real-name-anti-addiction.md §5.2)。
+func (s *LoginPreGateServer) SubmitRealName(ctx context.Context, in *login.SubmitRealNameRequest) (*login.SubmitRealNameResponse, error) {
+	l := loginpregatelogic.NewSubmitRealNameLogic(ctx, s.svcCtx)
+	return l.SubmitRealName(in)
+}
+
+// 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
+func (s *LoginPreGateServer) RequestAccountDeletion(ctx context.Context, in *login.AccountDeletionRequest) (*login.AccountDeletionResponse, error) {
+	l := loginpregatelogic.NewRequestAccountDeletionLogic(ctx, s.svcCtx)
+	return l.RequestAccountDeletion(in)
+}
+
+func (s *LoginPreGateServer) CancelAccountDeletion(ctx context.Context, in *login.CancelAccountDeletionRequest) (*login.AccountDeletionResponse, error) {
+	l := loginpregatelogic.NewCancelAccountDeletionLogic(ctx, s.svcCtx)
+	return l.CancelAccountDeletion(in)
+}

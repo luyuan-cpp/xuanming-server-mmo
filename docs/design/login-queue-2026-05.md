@@ -579,7 +579,7 @@ queue_token = base64url( JSON{kind:"queue", q:queueId, z:zoneId, e:expireTs} | "
   - **伪造防御不变。** 令牌离开 Redis 里的条目就没用,实际可用期 = min(24h, 条目存活),所以延长令牌过期不扩大被截获令牌的危害面。
   - **zone 来自令牌。** `Poll` 用验签得到的令牌里的 zone 定位队列键,并与 meta 的 `zone_id` 对账,不符回 EXPIRED(`meta_gone`)。
   - **要同步的地方。** 改 `queueTokenMaxAge` 时,要同步改 `ValidateTTLs` 的上界与本节。
-  - **密钥轮换的第 ③ 步要多等(2026-10-18 补注)。** 令牌只在入队时签一次,排队期间不换签。此前第 ③ 步(摘掉旧密钥)在第 ② 步(提升新密钥开始签)全量生效后等一个 `QueueEntryTTL` 即可;现在持续轮询的人能拿着旧密钥签的令牌排到 24h,第 ③ 步须在第 ② 步全量生效后至少等 `queueTokenMaxAge`(24h)。要提前,须确认各 zone 队首的入队时刻(`ZRANGE queue:{q:<z>} 0 0 WITHSCORES`,分数 = 入队毫秒)都晚于第 ② 步全量生效时刻,且已过一个 `AdmitTTL`(已放行、未取走放行槽的人也持旧令牌)。否则在排玩家会按 `bad_signature` 回 EXPIRED(410)、丢掉排位,指标上记在 zone=unknown 下,与伪造流量混在一起。K8s 档位是单步轮换(只写 `Value`),本来就会让在排玩家重新入队(`open-server-rate-limit-design.md` §11.3 第 7 条),不受此条影响。`config/secrets.go` 包注释、`login.yaml` 的 Secrets 段与 `ParseAndVerifyQueueTokenMulti` 注释里的轮换说明尚未同步这一句,登记为后续项。
+  - **密钥轮换的第 ③ 步要多等(2026-10-18 补注)。** 令牌只在入队时签一次,排队期间不换签。此前第 ③ 步(摘掉旧密钥)在第 ② 步(提升新密钥开始签)全量生效后等一个 `QueueEntryTTL` 即可;现在持续轮询的人能拿着旧密钥签的令牌排到 24h,第 ③ 步须在第 ② 步全量生效后至少等 `queueTokenMaxAge`(24h)。要提前,须确认各 zone 队首的入队时刻(`ZRANGE queue:{q:<z>} 0 0 WITHSCORES`,分数 = 入队毫秒)都晚于第 ② 步全量生效时刻,且已过一个 `AdmitTTL`(已放行、未取走放行槽的人也持旧令牌)。否则在排玩家会按 `bad_signature` 回 EXPIRED(410)、丢掉排位,指标上记在 zone=unknown 下,与伪造流量混在一起。K8s 档位是单步轮换(只写 `Value`),本来就会让在排玩家重新入队(`open-server-rate-limit-design.md` §11.3 第 7 条),不受此条影响。`config/secrets.go` 包注释、`login.yaml` 的 Secrets 段与 `ParseAndVerifyQueueTokenMulti` 注释均已同步该 24h 说明(2026-11-20 核对)。
 
 ---
 
@@ -644,7 +644,7 @@ if lock.IsLocked() {
 
 > **(2026-10-18 更正,上段 `queue:{q:S}` 的过期时长;原文保留;未编译、未测试)** 队列键、meta 与 token 索引现在是空闲 TTL:排队中的查询会把它们续到 1.25×`QueueEntryTTL`,入队对队列键只增不减。所以「在最后一次入队后 `QueueEntryTTL`(1h)内过期」改读:在最后一次入队或排队中查询之后,至多约 1.25×`QueueEntryTTL` 内过期(§15 的 10-18 补注)。其余键的时长不变。
 
-**停机空窗(未核实,既有行为)**:SIGTERM 路径能否走到 `Dispatcher.Stop()` 主动释放锁尚未核实(login 与 scene_manager 的注释说法冲突)。最坏情况是锁按 TTL 过期,滚动升级时该 zone 最长约 40s(TTL + 备机重试周期 TTL/3)没有 leader,期间不放行、不丢人。修复前(全服锁)也是这样,不是 G1b 引入的回归。
+**停机空窗(2026-11-20 核实)**:优雅 SIGTERM 下,`go/login/login.go` 的 `defer ctx.Stop()` 在 `shutdownbudget.ApplyWithBackgroundDrain` 预算内调用 `QueueDispatcher.Stop()` 主动取消任期并经 `leadOneTerm` 的 `defer` 释放 leader 锁,同 zone 备机按 `campaignRetry`(1s)快速接管。仅强杀(SIGKILL / 宕机)才走锁 TTL 过期窗口,最长约 `DispatcherLockTTL` + 备机重试周期没有 leader,期间不放行、不丢人。
 
 ---
 
@@ -660,17 +660,16 @@ if lock.IsLocked() {
 
 读角色目录或会话失败时当成新登录去排队,只会少免、不会错免。
 
-**怎样算「在本区」。** 会话里没有区号,login 也只看得见本区的 gate,所以这样判:
+**怎样算「在本区」(2026-11-20 补齐 `PlayerSession.gate_zone_id`)。** `EnterGameLogic` 在 `SetSession` 与 `Reconnect` 时把本 login 所在区(`config.AppConfig.Node.ZoneId`)写入 `PlayerSession.gate_zone_id`(proto `player_locator.proto` 字段 16、`ReconnectRequest` 字段 11),`findReconnectingPlayer` 分两档判定:
 
-- 角色的建角区就是本区:有在线会话就算。它的 gate 可能已经掉线、不在本区现在的 gate 列表里,这正是最需要免排队的重连。
-- 角色的建角区不是本区(别的区的角色,或合服并进来的角色):只有它的会话正连在本区现有的 gate 上才算。
+- **会话带 `gate_zone_id`(非 0)**:以 `gate_zone_id` 为权威——等于本区即免排队,不等即不免,不再读本区 gate 列表。合服并进来的角色即使原 gate 掉线也能免排队;本区建角但跨区到别的区在线的角色也不会误免本区排队。
+- **旧版会话(`gate_zone_id == 0`,升级窗口兼容兜底)**:建角区是本区直接算;建角区不是本区时,仅当其会话正连在本区现有的 gate 上才算(惰性读一次 `zoneGates`)。
 
-**为什么改。** 此前只看角色列表的第一项,也不看区:
+**为什么改。** 此前只看角色列表的第一项且会话不记 `gate_zone_id`:
 
 - 多角色账号用别的角色在线时,重连被当成新登录去排队(原「已知妥协」)。
-- 一个账号把角色挂在空闲的区里在线,就能拿它免掉爆满的区的排队。
-
-**残余。** 合服并进来的角色,原来连着的 gate 又恰好掉线时,判不出它在本区,重连要排队。要判准得让会话记下 gate 所在的区(player_locator 的会话加一个字段),或让 login 读合服映射(`shared/placement` 的 `MergedZoneCache`);两种都要给 login 加一条新的依赖,本次没做,登记在 §14 第 1 条。
+- 一个账号把角色挂在空闲的区里在线,就能拿它免掉爆满的区的排队;本区角色跨区到别的区在线时也会误免本区排队。
+- 合服并进来的角色原 gate 掉线后会被误排队。现已全部闭环。
 
 ---
 
@@ -823,7 +822,7 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 
 ## 14. 已知不足 / 后续工作
 
-1. **多角色账号重连**:2026-11-20 已修,重连判定看账号的全部角色并且只认本区(§8)。剩一个窄的残余:合服并进来的角色、原来连着的 gate 又恰好掉线时判不出它在本区,重连要排队;修法与代价见 §8「残余」。
+1. **多角色账号与合服/跨区重连**:2026-11-20 已全部闭环。重连判定遍历账号全部角色,并在 `PlayerSession` 持久化 `gate_zone_id`(由 `EnterGameLogic` 在 `SetSession` / `Reconnect` 写入本区号,§8),合服角色原 gate 掉线与本区角色跨区在线均能准确判定;旧版 `gate_zone_id == 0` 会话保留兼容兜底。
 2. **Prometheus 接入**:已做(§11「Prometheus 指标」)。2026-11-20 加 `login_queue_assign_total{zone,outcome}`,按结果数排队开着时的 AssignGate(`fast_path` / `reconnect` / `enqueued` / `rejoined` / `queue_full`)。
 3. **进场景排队**:不做(2026-11-20 定案)。它是另一个功能:限制的是进某个场景的人数,不是进区的人数;现在没有需要它的玩法。到有这种玩法时单独设计,不预留。
 4. **Queue token 转移**:2026-11-20 已修。一个账号在一个 zone 只有一个条目,换设备、丢令牌之后不带令牌重新调 AssignGate,拿回的是原来的位置(§5 决策树第 7 步)。

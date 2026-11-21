@@ -144,6 +144,7 @@ protected:
         AttributePoolTableManager::Instance().Load();
         AttributeRuleTableManager::Instance().Load();
         AttributeAllocRatioTableManager::Instance().Load();
+        PlayerEquipmentV1System::InvalidateRulesCacheForTest();
     }
 
     void CreatePlayer() {
@@ -623,6 +624,7 @@ TEST_F(PlayerEquipmentCraftTest, AttributeSemanticHotReloadInvalidatesConfirmati
     // 显示名和数值不变，只把双伤害语义改成物伤；确认必须受原始配置摘要保护。
     attribute->set_effect(3);
     attribute->set_effect_param(3);
+    PlayerEquipmentV1System::InvalidateRulesCacheForTest();
     GetEquipmentCraftRulesResponse after;
     ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, after));
     EXPECT_NE(before.rules_fingerprint(), after.rules_fingerprint());
@@ -630,6 +632,30 @@ TEST_F(PlayerEquipmentCraftTest, AttributeSemanticHotReloadInvalidatesConfirmati
     after.clear_rules_fingerprint();
     EXPECT_EQ(before.SerializeAsString(), after.SerializeAsString());
     ASSERT_NO_FATAL_FAILURE(RejectUnchanged(request));
+}
+
+TEST_F(PlayerEquipmentCraftTest, RulesCacheHitAndInvalidatesOnTableSnapshotReload) {
+    GetEquipmentCraftRulesResponse first;
+    ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, first));
+    GetEquipmentCraftRulesResponse second;
+    ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, second));
+    EXPECT_EQ(first.rules_fingerprint(), second.rules_fingerprint());
+
+    auto* attribute = const_cast<EquipAttributeTable*>(
+        EquipAttributeTableManager::Instance().FindByIdSilent(1).first);
+    ASSERT_NE(nullptr, attribute);
+    attribute->set_effect(3);
+    attribute->set_effect_param(3);
+    PlayerEquipmentV1System::InvalidateRulesCacheForTest();
+    GetEquipmentCraftRulesResponse mutated;
+    ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, mutated));
+    ASSERT_NE(first.rules_fingerprint(), mutated.rules_fingerprint());
+
+    // 真实表热更会替换快照对象；不调用 InvalidateRulesCacheForTest 也必须自动重建规则与指纹。
+    EquipAttributeTableManager::Instance().Load();
+    GetEquipmentCraftRulesResponse reloaded;
+    ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, reloaded));
+    EXPECT_EQ(first.rules_fingerprint(), reloaded.rules_fingerprint());
 }
 
 TEST_F(PlayerEquipmentCraftTest, InvalidArtifactLimitsRejectRulesPreviewAndCommitWithoutSpending) {
@@ -663,6 +689,7 @@ TEST_F(PlayerEquipmentCraftTest, InvalidArtifactLimitsRejectRulesPreviewAndCommi
         ASSERT_NO_FATAL_FAILURE(MakeRequest(choice, request));
         const auto before = Assets();
         (artifact->*invalid.setValue)(0);
+        PlayerEquipmentV1System::InvalidateRulesCacheForTest();
         GetEquipmentCraftRulesResponse rejectedRules;
         EXPECT_EQ(kInvalidTableData, PlayerEquipmentV1System::GetRules(player, rejectedRules));
         EXPECT_TRUE(rejectedRules.recipes().empty());
@@ -673,6 +700,7 @@ TEST_F(PlayerEquipmentCraftTest, InvalidArtifactLimitsRejectRulesPreviewAndCommi
         ASSERT_NO_FATAL_FAILURE(RejectUnchanged(request));
         // 配置恢复后，同一公开查询与预览重新可用，失败没有留下业务水位。
         *artifact = original;
+        PlayerEquipmentV1System::InvalidateRulesCacheForTest();
         GetEquipmentCraftRulesResponse restoredRules;
         ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, restoredRules));
         EXPECT_EQ(originalRules.rules_fingerprint(), restoredRules.rules_fingerprint());

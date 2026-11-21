@@ -207,6 +207,26 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildTrialBattleAborted = 14042;</code>
      */
     kGuildTrialBattleAborted(14042),
+    /**
+     * <code>kGuildNameSensitive = 14043;</code>
+     */
+    kGuildNameSensitive(14043),
+    /**
+     * <code>kGuildAnnouncementSensitive = 14044;</code>
+     */
+    kGuildAnnouncementSensitive(14044),
+    /**
+     * <code>kGuildTextCheckUnavailable = 14045;</code>
+     */
+    kGuildTextCheckUnavailable(14045),
+    /**
+     * <code>kGuildRenameCooldown = 14046;</code>
+     */
+    kGuildRenameCooldown(14046),
+    /**
+     * <code>kGuildRenameSameName = 14047;</code>
+     */
+    kGuildRenameSameName(14047),
     UNRECOGNIZED(-1),
     ;
 
@@ -395,6 +415,26 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildTrialBattleAborted = 14042;</code>
      */
     public static final int kGuildTrialBattleAborted_VALUE = 14042;
+    /**
+     * <code>kGuildNameSensitive = 14043;</code>
+     */
+    public static final int kGuildNameSensitive_VALUE = 14043;
+    /**
+     * <code>kGuildAnnouncementSensitive = 14044;</code>
+     */
+    public static final int kGuildAnnouncementSensitive_VALUE = 14044;
+    /**
+     * <code>kGuildTextCheckUnavailable = 14045;</code>
+     */
+    public static final int kGuildTextCheckUnavailable_VALUE = 14045;
+    /**
+     * <code>kGuildRenameCooldown = 14046;</code>
+     */
+    public static final int kGuildRenameCooldown_VALUE = 14046;
+    /**
+     * <code>kGuildRenameSameName = 14047;</code>
+     */
+    public static final int kGuildRenameSameName_VALUE = 14047;
 
 
     public final int getNumber() {
@@ -465,6 +505,11 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14040: return kGuildTrialInviteCooldown;
         case 14041: return kGuildTrialServiceBusy;
         case 14042: return kGuildTrialBattleAborted;
+        case 14043: return kGuildNameSensitive;
+        case 14044: return kGuildAnnouncementSensitive;
+        case 14045: return kGuildTextCheckUnavailable;
+        case 14046: return kGuildRenameCooldown;
+        case 14047: return kGuildRenameSameName;
         default: return null;
       }
     }
@@ -530,7 +575,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\313\t\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\336\n\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -561,8 +606,12 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "xpired\020\326m\022\036\n\031kGuildTrialInviteDeclined\020\327" +
       "m\022\036\n\031kGuildTrialInviteCooldown\020\330m\022\033\n\026kGu" +
       "ildTrialServiceBusy\020\331m\022\035\n\030kGuildTrialBat" +
-      "tleAborted\020\332mB$\n\016com.game.tableZ\022generat" +
-      "ed/pb/tableb\006proto3"
+      "tleAborted\020\332m\022\030\n\023kGuildNameSensitive\020\333m\022" +
+      " \n\033kGuildAnnouncementSensitive\020\334m\022\037\n\032kGu" +
+      "ildTextCheckUnavailable\020\335m\022\031\n\024kGuildRena" +
+      "meCooldown\020\336m\022\031\n\024kGuildRenameSameName\020\337m" +
+      "B$\n\016com.game.tableZ\022generated/pb/tableb\006" +
+      "proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

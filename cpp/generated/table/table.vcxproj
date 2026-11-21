@@ -212,6 +212,7 @@
     <ClInclude Include="proto\tip\mystery_merchant_error_tip.pb.h" />
     <ClInclude Include="proto\tip\payment_error_tip.pb.h" />
     <ClInclude Include="proto\tip\afk_pass_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
     <ClInclude Include="proto\tip\entity_error_tip.pb.h" />
@@ -365,6 +366,7 @@
     <ClCompile Include="proto\tip\mystery_merchant_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\payment_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\afk_pass_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\entity_error_tip.pb.cc" />

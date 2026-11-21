@@ -12,6 +12,7 @@ public:
 	{
 
 	}
+	virtual ~PlayerService() = default;
 
     // 玩家请求拒绝码的唯一写入规则:handler 直接写 response->mutable_error_message(),
     // 参数也在同处 add_parameters;成功不创建该字段。不得使用进程级或 TLS tip 暂存。

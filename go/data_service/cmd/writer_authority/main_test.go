@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"go.etcd.io/etcd/api/v3/etcdserverpb"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	"google.golang.org/grpc"
@@ -346,6 +347,7 @@ type fakeSlotCatalog struct {
 	receipts           map[string]*dbpb.SqlWriterLifecycleReceipt
 	registers          int
 	retired            [][]byte // 被换代退休的 writer_key
+	registerErrs       []error  // 依次前置注入给 Register 的瞬时错误
 }
 
 func (c *fakeSlotCatalog) LatestBoot(context.Context, []byte) (*dbpb.SqlWriterRegistry, error) {
@@ -373,6 +375,11 @@ func (c *fakeSlotCatalog) RegistrationReady(_ context.Context, request *dbpb.Sql
 
 func (c *fakeSlotCatalog) Register(_ context.Context, request *dbpb.SqlWriterLifecycleReceipt_Request) (*dbpb.SqlWriterLifecycleReceipt, error) {
 	c.registers++
+	if len(c.registerErrs) > 0 {
+		err := c.registerErrs[0]
+		c.registerErrs = c.registerErrs[1:]
+		return nil, err
+	}
 	if receipt, landed := c.receipts[string(request.RequestId)]; landed {
 		return receipt, nil
 	}
@@ -466,6 +473,7 @@ func (h *slotHarness) pod(pod string) slotRegistration {
 		},
 		now:    func() time.Time { return time.UnixMilli(1_700_000_000_000) },
 		random: rand.Reader,
+		sleep:  func(ctx context.Context, _ time.Duration) error { return ctx.Err() },
 	}
 }
 
@@ -907,4 +915,55 @@ func TestPublicationControlRejectsMixedMutationFlagsBeforeEnvironmentOrSQL(t *te
 			t.Fatal("拒绝publication与生命周期写入混参")
 		}
 	}
+}
+
+// 冷启动多个 *-sql-boot 同时锁 route_meta 时，1205/1213/9007/提交前中止必须用同一代请求安全重试并成功；
+// ErrWriterFrozen / ErrOutcomeUnknown 不得在 registerOne 里吞掉重试。
+func TestSlotRegistrationRetriesTransientContentionWithoutLosingIdentity(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db")
+	cat := h.catalogs["zone_1_db"]
+	cat.registerErrs = []error{
+		&mysql.MySQLError{Number: 1205, Message: "Lock wait timeout exceeded"},
+		&mysql.MySQLError{Number: 1213, Message: "Deadlock found"},
+		&mysql.MySQLError{Number: 9007, Message: "Write conflict"},
+		authoritysql.ErrTxAbortedBeforeCommit,
+	}
+	set, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil {
+		t.Fatalf("expected transient contention to recover via retry: %v", err)
+	}
+	if cat.registers != 5 || len(cat.receipts) != 1 || len(set.Grants) != 1 || boot.Requests[0].Writer.BootSeq != 1 {
+		t.Fatalf("unexpected retry outcome registers=%d receipts=%d grants=%d", cat.registers, len(cat.receipts), len(set.Grants))
+	}
+
+	t.Run("stops immediately on frozen or unknown", func(t *testing.T) {
+		for _, fatalErr := range []error{authoritysql.ErrWriterFrozen, authoritysql.ErrOutcomeUnknown} {
+			h := newSlotHarness(t, "zone_1_db")
+			cat := h.catalogs["zone_1_db"]
+			cat.registerErrs = []error{fatalErr}
+			_, _, err := h.pod("pod-b").register(context.Background(), h.template)
+			if !errors.Is(err, fatalErr) || cat.registers != 1 {
+				t.Fatalf("expected immediate failure %v on attempt 1, got err=%v attempts=%d", fatalErr, err, cat.registers)
+			}
+		}
+	})
+
+	t.Run("respects context cancellation during retry", func(t *testing.T) {
+		h := newSlotHarness(t, "zone_1_db")
+		cat := h.catalogs["zone_1_db"]
+		cat.registerErrs = []error{
+			&mysql.MySQLError{Number: 1205, Message: "Lock wait timeout exceeded"},
+			&mysql.MySQLError{Number: 1205, Message: "Lock wait timeout exceeded"},
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		reg := h.pod("pod-c")
+		reg.sleep = func(context.Context, time.Duration) error {
+			cancel()
+			return context.Canceled
+		}
+		_, _, err := reg.register(ctx, h.template)
+		if !errors.Is(err, context.Canceled) || cat.registers != 1 {
+			t.Fatalf("expected cancellation after first attempt, got err=%v attempts=%d", err, cat.registers)
+		}
+	})
 }

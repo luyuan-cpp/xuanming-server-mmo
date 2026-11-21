@@ -57,14 +57,21 @@ type WechatMinigameConfig struct {
 	Now            func() time.Time
 }
 
+type wechatMiniTokenFetch struct {
+	done  chan struct{}
+	token string
+	err   error
+}
+
 type WechatMinigame struct {
 	cfg     WechatMinigameConfig
 	sealKey []byte // 会话密钥落库前的加密密钥,由 AppSecret 派生
 	aesKey  []byte // 消息推送解密密钥;明文模式为空
 
-	tokenMu     sync.Mutex
-	accessToken string
-	tokenExpiry time.Time
+	tokenMu       sync.Mutex
+	accessToken   string
+	tokenExpiry   time.Time
+	tokenInflight *wechatMiniTokenFetch
 }
 
 func NewWechatMinigame(cfg WechatMinigameConfig) (*WechatMinigame, error) {
@@ -244,30 +251,77 @@ func (w *WechatMinigame) unseal(sealed string) (string, error) {
 }
 
 // token 是接口调用凭据(稳定版:多副本同时取拿到的是同一个,不会互相挤掉),过期前 5 分钟换新。
+// 锁不跨外网 HTTP,同批并发未命中合并为一次拉取,等待方仍响应自身 ctx.Done()。
 func (w *WechatMinigame) token(ctx context.Context) (string, error) {
-	w.tokenMu.Lock()
-	defer w.tokenMu.Unlock()
 	now := w.cfg.Now()
+	w.tokenMu.Lock()
 	if w.accessToken != "" && now.Before(w.tokenExpiry.Add(-5*time.Minute)) {
-		return w.accessToken, nil
+		tok := w.accessToken
+		w.tokenMu.Unlock()
+		return tok, nil
 	}
-	body, err := json.Marshal(map[string]string{"grant_type": "client_credential", "appid": w.cfg.AppID, "secret": w.cfg.AppSecret})
+	if inflight := w.tokenInflight; inflight != nil {
+		w.tokenMu.Unlock()
+		select {
+		case <-inflight.done:
+			return inflight.token, inflight.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	inflight := &wechatMiniTokenFetch{done: make(chan struct{})}
+	w.tokenInflight = inflight
+	w.tokenMu.Unlock()
+
+	fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	tok, expiry, err := w.fetchToken(fetchCtx)
+	cancel()
+
+	w.tokenMu.Lock()
+	w.tokenInflight = nil
+	if err == nil {
+		w.accessToken, w.tokenExpiry = tok, expiry
+	}
+	inflight.token, inflight.err = tok, err
+	close(inflight.done)
+	w.tokenMu.Unlock()
 	if err != nil {
 		return "", err
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	return tok, nil
+}
+
+func (w *WechatMinigame) invalidateToken(bad string) {
+	w.tokenMu.Lock()
+	if w.accessToken == bad {
+		w.accessToken = ""
+		w.tokenExpiry = time.Time{}
+	}
+	w.tokenMu.Unlock()
+}
+
+func (w *WechatMinigame) fetchToken(ctx context.Context) (string, time.Time, error) {
+	now := w.cfg.Now()
+	body, err := json.Marshal(map[string]string{"grant_type": "client_credential", "appid": w.cfg.AppID, "secret": w.cfg.AppSecret})
+	if err != nil {
+		return "", time.Time{}, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.cfg.APIBase+"/cgi-bin/stable_token", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	response, err := send(w.cfg.HTTP, request)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	defer response.Body.Close()
 	raw, err := readBody(response)
 	if err != nil {
-		return "", err
+		return "", time.Time{}, err
 	}
 	var out struct {
 		AccessToken string `json:"access_token"`
@@ -275,13 +329,13 @@ func (w *WechatMinigame) token(ctx context.Context) (string, error) {
 		ErrCode     int    `json:"errcode"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil || out.ErrCode != 0 || out.AccessToken == "" || out.ExpiresIn <= 0 {
-		return "", &CallError{Channel: NameWechatMinigame, Op: "stable_token", Status: response.StatusCode, Code: strconv.Itoa(out.ErrCode)}
+		return "", time.Time{}, &CallError{Channel: NameWechatMinigame, Op: "stable_token", Status: response.StatusCode, Code: strconv.Itoa(out.ErrCode)}
 	}
-	w.accessToken, w.tokenExpiry = out.AccessToken, now.Add(time.Duration(out.ExpiresIn)*time.Second)
-	return w.accessToken, nil
+	return out.AccessToken, now.Add(time.Duration(out.ExpiresIn) * time.Second), nil
 }
 
-// Query 查道具直购订单。要建意图时存下的 openid 与会话密钥;会话密钥过期(90016)时查不了,只能等发货推送。
+// Query 查道具直购订单。要建意图时存下的 openid 与会话密钥;会话密钥过期(90016)时返回 ErrQueryUnsupported,
+// 让后台在到期宽限点关闭意图(释放未成年人在途额度),不再空转 24 小时;access_token 失效(40001/42001)时清缓存重试一次。
 func (w *WechatMinigame) Query(ctx context.Context, req QueryRequest) (QueryResult, error) {
 	if req.PayerID == "" || req.Ref.Value == "" {
 		return QueryResult{}, ErrQueryUnsupported
@@ -295,54 +349,63 @@ func (w *WechatMinigame) Query(ctx context.Context, req QueryRequest) (QueryResu
 	if err != nil {
 		return QueryResult{}, err
 	}
-	token, err := w.token(ctx)
-	if err != nil {
-		return QueryResult{}, err
-	}
 	const uri = "/wxa/game/queryorderinfo"
-	query := url.Values{"access_token": {token}, "signature": {hmacHex([]byte(sessionKey), string(body))}, "sig_method": {"hmac_sha256"},
-		"pay_sig": {hmacHex([]byte(w.cfg.AppKey), uri+"&"+string(body))}}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.cfg.APIBase+uri+"?"+query.Encode(), bytes.NewReader(body))
-	if err != nil {
-		return QueryResult{}, err
+	for attempt := 0; attempt < 2; attempt++ {
+		token, err := w.token(ctx)
+		if err != nil {
+			return QueryResult{}, err
+		}
+		query := url.Values{"access_token": {token}, "signature": {hmacHex([]byte(sessionKey), string(body))}, "sig_method": {"hmac_sha256"},
+			"pay_sig": {hmacHex([]byte(w.cfg.AppKey), uri+"&"+string(body))}}
+		request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.cfg.APIBase+uri+"?"+query.Encode(), bytes.NewReader(body))
+		if err != nil {
+			return QueryResult{}, err
+		}
+		request.Header.Set("Content-Type", "application/json")
+		response, err := send(w.cfg.HTTP, request)
+		if err != nil {
+			return QueryResult{}, err
+		}
+		raw, err := readBody(response)
+		_ = response.Body.Close()
+		if err != nil {
+			return QueryResult{}, err
+		}
+		var out struct {
+			ErrCode       int    `json:"errcode"`
+			PayState      int    `json:"pay_state"`
+			PayFinishTime int64  `json:"pay_finish_time"`
+			OutTradeNo    string `json:"out_trade_no"`
+			TransactionID string `json:"transaction_id"`
+			ProductID     string `json:"product_id"`
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return QueryResult{}, errors.New("payment channel: wechat_minigame query answer is not readable")
+		}
+		if (out.ErrCode == 40001 || out.ErrCode == 42001) && attempt == 0 {
+			w.invalidateToken(token)
+			continue
+		}
+		switch {
+		case out.ErrCode == 90016:
+			return QueryResult{}, ErrQueryUnsupported
+		case out.ErrCode == 90019:
+			return QueryResult{State: TradeNotPaid}, nil
+		case out.ErrCode != 0:
+			return QueryResult{}, &CallError{Channel: NameWechatMinigame, Op: "query", Status: response.StatusCode, Code: strconv.Itoa(out.ErrCode)}
+		case out.PayState != 2:
+			return QueryResult{State: TradeNotPaid}, nil
+		case out.OutTradeNo != req.OutTradeNo || req.AmountMinor == 0:
+			return QueryResult{}, errors.New("payment channel: wechat_minigame query answer belongs to another order")
+		}
+		paidAt := w.cfg.Now()
+		if out.PayFinishTime > 0 {
+			paidAt = time.Unix(out.PayFinishTime, 0)
+		}
+		return QueryResult{State: TradePaid, Payment: &Payment{TransactionID: req.OutTradeNo, OutTradeNo: req.OutTradeNo, AmountMinor: req.AmountMinor,
+			Currency: "CNY", PaidAt: paidAt, ProductID: out.ProductID, ChannelOrderID: out.TransactionID, Test: w.cfg.Env == 1}}, nil
 	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := send(w.cfg.HTTP, request)
-	if err != nil {
-		return QueryResult{}, err
-	}
-	defer response.Body.Close()
-	raw, err := readBody(response)
-	if err != nil {
-		return QueryResult{}, err
-	}
-	var out struct {
-		ErrCode       int    `json:"errcode"`
-		PayState      int    `json:"pay_state"`
-		PayFinishTime int64  `json:"pay_finish_time"`
-		OutTradeNo    string `json:"out_trade_no"`
-		TransactionID string `json:"transaction_id"`
-		ProductID     string `json:"product_id"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return QueryResult{}, errors.New("payment channel: wechat_minigame query answer is not readable")
-	}
-	switch {
-	case out.ErrCode == 90019:
-		return QueryResult{State: TradeNotPaid}, nil
-	case out.ErrCode != 0:
-		return QueryResult{}, &CallError{Channel: NameWechatMinigame, Op: "query", Status: response.StatusCode, Code: strconv.Itoa(out.ErrCode)}
-	case out.PayState != 2:
-		return QueryResult{State: TradeNotPaid}, nil
-	case out.OutTradeNo != req.OutTradeNo || req.AmountMinor == 0:
-		return QueryResult{}, errors.New("payment channel: wechat_minigame query answer belongs to another order")
-	}
-	paidAt := w.cfg.Now()
-	if out.PayFinishTime > 0 {
-		paidAt = time.Unix(out.PayFinishTime, 0)
-	}
-	return QueryResult{State: TradePaid, Payment: &Payment{TransactionID: req.OutTradeNo, OutTradeNo: req.OutTradeNo, AmountMinor: req.AmountMinor,
-		Currency: "CNY", PaidAt: paidAt, ProductID: out.ProductID, ChannelOrderID: out.TransactionID, Test: w.cfg.Env == 1}}, nil
+	return QueryResult{}, errors.New("payment channel: wechat_minigame query retry exhausted")
 }
 
 // sortedSHA1 是微信消息推送的 URL 签名:参数按字典序排序后拼接,取 SHA-1 的十六进制。
@@ -389,6 +452,11 @@ func (w *WechatMinigame) decrypt(encrypted string) ([]byte, error) {
 	pad := int(plain[len(plain)-1])
 	if pad < 1 || pad > 32 || pad > len(plain) {
 		return nil, errors.New("payment channel: wechat_minigame encrypted push has bad padding")
+	}
+	for _, b := range plain[len(plain)-pad:] {
+		if int(b) != pad {
+			return nil, errors.New("payment channel: wechat_minigame encrypted push has bad padding")
+		}
 	}
 	plain = plain[:len(plain)-pad]
 	if len(plain) < 20 {
@@ -454,7 +522,7 @@ func (w *WechatMinigame) ParseNotification(r *http.Request, body []byte) (Notifi
 		if err := json.Unmarshal([]byte(push.MiniGame.Payload), &refund); err != nil || refund.OutTradeNo == "" || refund.Env != w.cfg.Env {
 			return Notification{}, ErrBadSignature
 		}
-		return Notification{Revocations: []Revocation{{TransactionID: refund.OutTradeNo, Revoked: true, ObservedAt: w.cfg.Now(),
+		return Notification{Revocations: []Revocation{{TransactionID: refund.OutTradeNo, OutTradeNo: refund.OutTradeNo, Revoked: true, ObservedAt: w.cfg.Now(),
 			Detail: "REFUND_SOURCE_" + strconv.Itoa(refund.RefundSource)}}}, nil
 	}
 	var goods struct {

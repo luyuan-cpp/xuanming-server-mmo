@@ -1,0 +1,73 @@
+# 配置表热更与表包分发运维手册
+
+> **设计依据**：[docs/design/config-table-hot-reload.md](../design/config-table-hot-reload.md)
+> **告警规则**：[deploy/k8s/table-bundle-alerts.yaml](../../deploy/k8s/table-bundle-alerts.yaml)
+
+## 1. 架构与日常发布流程
+
+表包按内容摘要不可变存放在对象存储（`tables/<schema_digest>/<content_digest>.tar.gz` + `.sha256`），etcd 只存轨道指针（`/mmorpg/tables/pointer/<track>/<schema_digest>`）和带 30 秒租约的 Pod 回报（`/mmorpg/tables/status/<track>/<pod>`）。
+
+标准发布顺序：
+
+1. **导表并提交**：在仓库运行导表（`dev.bat gen`），确认 `generated/tables/manifest.json` 的 `schema_version == 2` 且 `schema_digest` 与线上二进制一致。
+2. **打包与上传**（带对象存储写凭据的发布机）：
+   ```powershell
+   pwsh -File tools/scripts/dev_tools.ps1 -Command table-bundle -TableBundleArgs @("pack", "-dir", "generated/tables", "-out", "run/table_bundles/out")
+   pwsh -File tools/scripts/dev_tools.ps1 -Command table-bundle -TableBundleArgs @("upload", "-dir", "generated/tables", "-s3-endpoint", "<endpoint>", "-s3-bucket", "mmorpg-tables")
+   ```
+   对象存储同名键已存在且 `.sha256` 相同时跳过，不同则拒绝覆盖。
+3. **二进制预检**（设计 §5.4 第 2 道，用与线上同一版本的各服务二进制跑 `--validate-tables`）：
+   ```powershell
+   pwsh -File tools/scripts/dev_tools.ps1 -Command table-bundle -TableBundleArgs @("verify", "-dir", "generated/tables", "-bins", "scene,gate,battle,match,guild,login,scene_manager,mail,rank")
+   ```
+4. **先发 canary、再发 stable**：
+   ```powershell
+   # 发到 canary 轨道(缺省 65 秒后全服统一切换;到点前任一 Pod rejected 自动撤回 next)
+   pwsh -File tools/scripts/dev_tools.ps1 -Command table-bundle -TableBundleArgs @(
+     "publish", "-admin-url", "https://<gateway>", "-admin-key", "<key>",
+     "-track", "canary", "-schema-digest", "<16hex>", "-content-digest", "<64hex>",
+     "-bundle-sha256", "<64hex>", "-version", "<ver>", "-reason", "balance update"
+   )
+   # 观察指标与 GET /admin/tables 正常后,发到 stable 轨道
+   pwsh -File tools/scripts/dev_tools.ps1 -Command table-bundle -TableBundleArgs @(
+     "publish", "-admin-url", "https://<gateway>", "-admin-key", "<key>",
+     "-track", "stable", "-schema-digest", "<16hex>", "-content-digest", "<64hex>",
+     "-bundle-sha256", "<64hex>", "-version", "<ver>", "-reason", "balance update"
+   )
+   ```
+5. **定时生效**（例如活动表凌晨五点生效）：给 `publish` 加 `-activate-at "2026-12-01T05:00:00+08:00"`。
+
+## 2. 本机无 etcd / 无 S3 即时热更（策划与开发）
+
+给本机启动的 C++ / Go 节点设置 `MMORPG_TABLE_BUNDLE_ROOT=run/table_bundles`（可选 `MMORPG_TABLE_STATUS_ROOT=run/table_status`），改表并导表后执行：
+
+```powershell
+pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
+```
+
+节点在 2 秒内自动校验并切换。
+
+## 3. 集群部署接线
+
+`k8s_deploy.ps1` / `dev_tools.ps1` 传 `-TableSyncS3Endpoint`（生产/预发，使用运维预置的只读 Secret `table-sync-s3`）或 `-TableSyncDevFixture`（仅 `dev`，复用 SeaweedFS 夹具建 `mmorpg-tables` 桶）：
+
+- 挂载 `table-sync` 原生 sidecar 的工作负载：
+  - C++：`gate`、`scene`（Deployment 与 Agones Fleet）、`battle`（Deployment、HostPort、Agones Fleet 与金丝雀池）；
+  - Go：`guild`、`login`、`mail`、`match`、`rank`、`scene-manager`。
+- 不挂 sidecar 的服务：`player-locator`、`trade`、`payment`、`chat`、`friend`、`data-service`、`db`、`client-rpc-router`、`player-inbox`、`content-guard`。
+
+## 4. 撤销、回滚与清理旧 schema 线
+
+- **到点前撤销**：`table-bundle cancel -track <track> -schema-digest <16hex>`（调用 `DELETE /admin/tables/next`）。
+- **到点后回滚**：`table-bundle rollback -track <track> -schema-digest <16hex> -target-digest <old64> -target-sha256 <oldsha> -target-version <oldver> -current-dir <cur> -target-dir <old>`。
+  - 若新包曾新增 `(cfg_ids_permanent)` 表（如 `Item`、`Pet`）的行且已产出资产，回滚会让这些 ID 消失导致资产停在 RETRY。工具默认拦截并提示向前修；确需强制回滚才加 `-force`。
+- **删掉废弃的 schema 线**：旧版本全部下线后，执行 `table-bundle delete-line -track <track> -schema-digest <old16>`。只要仍有在线 Pod 回报该线，管理接口返回 `409 Conflict` 拒绝删除。
+
+## 5. 告警处置
+
+| 告警 | 严重度 | 处置 |
+|---|---|---|
+| `TableBundleRejected` | critical | 调 `GET /admin/tables` 看 `rejected_pods` 的原因。未到 `activate_at` 立即 `cancel`；已过生效点立即查明是数据问题还是个别 Pod 异常，按需 `rollback` 或向前发新包 |
+| `TableBundleNotConverged` | warning | 调 `GET /admin/tables` 找出滞后 Pod；查该 Pod `table-sync` 容器日志（是否 S3 拉取/校验失败）与业务日志（是否 `needs_restart`） |
+| `TableSyncStale` | warning | 检查 `table-sync` 到 `etcd.<infra>:2379` 的连通性与 etcd 集群健康；期间业务容器继续用本地旧表，不影响在线玩家 |
+| `TableBundleNeedsRestart` | info | 变更触及未标 `(cfg_hot_reload) = true` 的结构表，按常规发布手册滚动重启对应工作负载即可生效 |

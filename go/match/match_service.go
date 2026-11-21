@@ -47,6 +47,7 @@ import (
 	"shared/serverbase"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
+	"shared/tablebundle"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/discov"
@@ -63,6 +64,7 @@ import (
 var configFile = flag.String("f", "etc/match_service.yaml", "the config file")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+var validateTablesDir = flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析 + match 模板/剧本校验)后退出")
 
 // 显式迁移先于服务装配，只由独立DDL账号运行；常驻形态始终只读核对schema。
 var migrateOnly = flag.Bool("migrate", false, "仅迁移匹配与组队SQL表后退出（0成功/1失败/3锁忙/4人工处理）")
@@ -96,6 +98,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("match", *validateTablesDir, false, svc.ValidateTables)
 	clockcheck.MustPass("match")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -28,3 +28,13 @@ func (s *LoginAdminServer) RemovePlayersFromAccounts(ctx context.Context, in *lo
 	l := loginadminlogic.NewRemovePlayersFromAccountsLogic(ctx, s.svcCtx)
 	return l.RemovePlayersFromAccounts(in)
 }
+
+func (s *LoginAdminServer) ScheduleAccountDeletion(ctx context.Context, in *login.ScheduleAccountDeletionRequest) (*login.AccountDeletionResponse, error) {
+	l := loginadminlogic.NewScheduleAccountDeletionLogic(ctx, s.svcCtx)
+	return l.ScheduleAccountDeletion(in)
+}
+
+func (s *LoginAdminServer) ResetAccountRealName(ctx context.Context, in *login.ResetAccountRealNameRequest) (*login.ResetAccountRealNameResponse, error) {
+	l := loginadminlogic.NewResetAccountRealNameLogic(ctx, s.svcCtx)
+	return l.ResetAccountRealName(in)
+}

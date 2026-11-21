@@ -23,7 +23,7 @@ func (l *CreatePlayerLogic) checkRoleNameContent(requested, account string) *log
 	if requested == "" || guard == nil {
 		return nil
 	}
-	return roleNameContentTip(guard.Check(l.ctx, cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 0, requested), account)
+	return roleNameContentTip(guard.Check(contentguard.WithAccount(l.ctx, account), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 0, requested), account)
 }
 
 // roleNameContentTip 把送检结局换成建角的提示。名字类场景只有「通过」才算能用:

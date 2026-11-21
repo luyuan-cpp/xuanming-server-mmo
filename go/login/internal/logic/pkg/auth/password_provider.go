@@ -207,9 +207,6 @@ func (p *ProductionPasswordProvider) ValidatePassword(ctx context.Context, accou
 		return nil, fmt.Errorf("%w: %w", ErrPasswordKDFCapacity, err)
 	}
 	if ValidatePasswordAccount(account) != nil || password == "" || len(password) > passwordMaxBytes {
-		if _, err := p.verifyWithLimit(ctx, "invalid-input-dummy-password", p.dummyHash); err != nil {
-			return nil, err
-		}
 		return nil, ErrInvalidCredentials
 	}
 

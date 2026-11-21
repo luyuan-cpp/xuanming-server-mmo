@@ -48,11 +48,11 @@ constexpr GuildRuleTable::ParseTableT_ GuildRuleTable::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      13,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -103,9 +103,18 @@ constexpr GuildRuleTable::ParseTableT_ GuildRuleTable::InternalGenerateParseTabl
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildRuleTable, _impl_.trial_invite_cooldown_seconds_), 9>(),
        {80, 9, 0,
         PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.trial_invite_cooldown_seconds_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 rename_cooldown_seconds = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildRuleTable, _impl_.rename_cooldown_seconds_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.rename_cooldown_seconds_)}},
+      // uint32 name_hold_seconds = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildRuleTable, _impl_.name_hold_seconds_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.name_hold_seconds_)}},
+      // uint64 rename_cost_funds = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildRuleTable, _impl_.rename_cost_funds_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.rename_cost_funds_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -131,6 +140,12 @@ constexpr GuildRuleTable::ParseTableT_ GuildRuleTable::InternalGenerateParseTabl
       {PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.trial_invite_ttl_seconds_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 trial_invite_cooldown_seconds = 10;
       {PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.trial_invite_cooldown_seconds_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rename_cooldown_seconds = 11;
+      {PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.rename_cooldown_seconds_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 name_hold_seconds = 12;
+      {PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.name_hold_seconds_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 rename_cost_funds = 13;
+      {PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.rename_cost_funds_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -152,7 +167,10 @@ inline constexpr GuildRuleTable::Impl_::Impl_(
         reunion_min_online_members_{0u},
         activity_join_min_hours_{0u},
         trial_invite_ttl_seconds_{0u},
-        trial_invite_cooldown_seconds_{0u} {}
+        trial_invite_cooldown_seconds_{0u},
+        rename_cooldown_seconds_{0u},
+        name_hold_seconds_{0u},
+        rename_cost_funds_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr GuildRuleTable::GuildRuleTable(::_pbi::ConstantInitialized,
@@ -406,7 +424,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_._has_bits_),
-        13, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.application_expire_hours_),
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.max_pending_applications_per_player_),
@@ -417,6 +435,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.activity_join_min_hours_),
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.trial_invite_ttl_seconds_),
         PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.trial_invite_cooldown_seconds_),
+        PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.rename_cooldown_seconds_),
+        PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.name_hold_seconds_),
+        PROTOBUF_FIELD_OFFSET(::GuildRuleTable, _impl_.rename_cost_funds_),
         0,
         1,
         2,
@@ -427,6 +448,9 @@ const ::uint32_t
         7,
         8,
         9,
+        10,
+        11,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GuildRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -437,7 +461,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::GuildRuleTable)},
-        {23, sizeof(::GuildRuleTableData)},
+        {29, sizeof(::GuildRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -446,7 +470,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_guildrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guildrule_table.proto\"\350\002\n\016GuildRuleTab"
+    "\n\025guildrule_table.proto\"\277\003\n\016GuildRuleTab"
     "le\022\n\n\002id\030\001 \001(\r\022 \n\030application_expire_hou"
     "rs\030\002 \001(\r\022+\n#max_pending_applications_per"
     "_player\030\003 \001(\r\022*\n\"max_pending_application"
@@ -455,16 +479,18 @@ const char descriptor_table_protodef_guildrule_5ftable_2eproto[] ABSL_ATTRIBUTE_
     " \001(\r\022\"\n\032reunion_min_online_members\030\007 \001(\r"
     "\022\037\n\027activity_join_min_hours\030\010 \001(\r\022 \n\030tri"
     "al_invite_ttl_seconds\030\t \001(\r\022%\n\035trial_inv"
-    "ite_cooldown_seconds\030\n \001(\r\"3\n\022GuildRuleT"
-    "ableData\022\035\n\004data\030\001 \003(\0132\017.GuildRuleTableB"
-    "@\n\016com.game.tableB\030GuildRuleTableOuterCl"
-    "assP\001Z\022generated/pb/tableb\006proto3"
+    "ite_cooldown_seconds\030\n \001(\r\022\037\n\027rename_coo"
+    "ldown_seconds\030\013 \001(\r\022\031\n\021name_hold_seconds"
+    "\030\014 \001(\r\022\031\n\021rename_cost_funds\030\r \001(\004\"3\n\022Gui"
+    "ldRuleTableData\022\035\n\004data\030\001 \003(\0132\017.GuildRul"
+    "eTableB@\n\016com.game.tableB\030GuildRuleTable"
+    "OuterClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guildrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guildrule_5ftable_2eproto = {
     false,
     false,
-    513,
+    600,
     descriptor_table_protodef_guildrule_5ftable_2eproto,
     "guildrule_table.proto",
     &descriptor_table_guildrule_5ftable_2eproto_once,
@@ -509,9 +535,9 @@ inline void GuildRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, trial_invite_cooldown_seconds_) -
+           offsetof(Impl_, rename_cost_funds_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::trial_invite_cooldown_seconds_));
+               sizeof(Impl_::rename_cost_funds_));
 }
 GuildRuleTable::~GuildRuleTable() {
   // @@protoc_insertion_point(destructor:GuildRuleTable)
@@ -566,10 +592,10 @@ PROTOBUF_NOINLINE void GuildRuleTable::Clear() {
         reinterpret_cast<char*>(&_impl_.activity_join_min_hours_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.activity_join_min_hours_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     ::memset(&_impl_.trial_invite_ttl_seconds_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.trial_invite_cooldown_seconds_) -
-        reinterpret_cast<char*>(&_impl_.trial_invite_ttl_seconds_)) + sizeof(_impl_.trial_invite_cooldown_seconds_));
+        reinterpret_cast<char*>(&_impl_.rename_cost_funds_) -
+        reinterpret_cast<char*>(&_impl_.trial_invite_ttl_seconds_)) + sizeof(_impl_.rename_cost_funds_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -684,6 +710,33 @@ PROTOBUF_NOINLINE void GuildRuleTable::Clear() {
     }
   }
 
+  // uint32 rename_cooldown_seconds = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_rename_cooldown_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_rename_cooldown_seconds(), target);
+    }
+  }
+
+  // uint32 name_hold_seconds = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_name_hold_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_name_hold_seconds(), target);
+    }
+  }
+
+  // uint64 rename_cost_funds = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_rename_cost_funds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_rename_cost_funds(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -767,7 +820,7 @@ PROTOBUF_NOINLINE void GuildRuleTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint32 trial_invite_ttl_seconds = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_trial_invite_ttl_seconds() != 0) {
@@ -780,6 +833,27 @@ PROTOBUF_NOINLINE void GuildRuleTable::Clear() {
       if (this_._internal_trial_invite_cooldown_seconds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_trial_invite_cooldown_seconds());
+      }
+    }
+    // uint32 rename_cooldown_seconds = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_rename_cooldown_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rename_cooldown_seconds());
+      }
+    }
+    // uint32 name_hold_seconds = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_name_hold_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_name_hold_seconds());
+      }
+    }
+    // uint64 rename_cost_funds = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_rename_cost_funds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_rename_cost_funds());
       }
     }
   }
@@ -842,7 +916,7 @@ void GuildRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_trial_invite_ttl_seconds() != 0) {
         _this->_impl_.trial_invite_ttl_seconds_ = from._impl_.trial_invite_ttl_seconds_;
@@ -851,6 +925,21 @@ void GuildRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_trial_invite_cooldown_seconds() != 0) {
         _this->_impl_.trial_invite_cooldown_seconds_ = from._impl_.trial_invite_cooldown_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_rename_cooldown_seconds() != 0) {
+        _this->_impl_.rename_cooldown_seconds_ = from._impl_.rename_cooldown_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_name_hold_seconds() != 0) {
+        _this->_impl_.name_hold_seconds_ = from._impl_.name_hold_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_rename_cost_funds() != 0) {
+        _this->_impl_.rename_cost_funds_ = from._impl_.rename_cost_funds_;
       }
     }
   }
@@ -872,8 +961,8 @@ void GuildRuleTable::InternalSwap(GuildRuleTable* PROTOBUF_RESTRICT PROTOBUF_NON
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.trial_invite_cooldown_seconds_)
-      + sizeof(GuildRuleTable::_impl_.trial_invite_cooldown_seconds_)
+      PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.rename_cost_funds_)
+      + sizeof(GuildRuleTable::_impl_.rename_cost_funds_)
       - PROTOBUF_FIELD_OFFSET(GuildRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

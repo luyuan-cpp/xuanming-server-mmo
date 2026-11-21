@@ -5,9 +5,7 @@
 #include <map>
 #include <optional>
 #include <set>
-#include <tuple>
 #include <type_traits>
-#include <typeindex>
 #include <utility>
 
 #include "engine/core/error_handling/error_handling.h"
@@ -384,6 +382,20 @@ bool BagService::ReleaseHold(entt::entity playerEntity, const uint64_t holdId)
 	return holds != nullptr && item_hold::Remove(*holds, holdId) > 0;
 }
 
+bool BagService::CloneBagForTransaction(const Bag &source, Bag &candidate)
+{
+    candidate.store_ = source.store_;
+    candidate.layout_ = source.layout_->Clone();
+    if (candidate.layout_ == nullptr)
+    {
+        return false;
+    }
+    candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
+    candidate.profileId_ = source.profileId_;
+    candidate.playerGuid = source.playerGuid;
+    return true;
+}
+
 uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
     const std::string& extra, const std::function<uint32_t()>& beforeCommit, const uint64_t consumeFromHoldId,
@@ -417,35 +429,18 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     auto& temporary = bags->bags[kTemporary];
     if (!inventory.IsLayerConsistent() || !temporary.IsLayerConsistent()) return kInvalidParameter;
 
-    const auto fingerprint = [](const Bag& bag) {
-        std::vector<std::pair<Guid, std::string>> items;
-        bag.store_.ForEach([&items](Guid id, const ItemComp& item) { items.emplace_back(id, item.SerializeAsString()); });
-        std::sort(items.begin(), items.end());
-        std::vector<std::pair<uint32_t, Guid>> slots(bag.layout_->Slots().begin(), bag.layout_->Slots().end());
-        std::sort(slots.begin(), slots.end());
-        const auto* grid = dynamic_cast<const GridLayout*>(bag.layout_.get());
-        return std::tuple{std::move(items), std::move(slots), bag.store_.NextAcquireSeq(), bag.Capacity(),
-            bag.layout_.get(), std::type_index(typeid(*bag.layout_)), grid ? grid->Width() : 0u,
-            grid ? grid->Height() : 0u, bag.layout_->FreeCells(),
-            bag.ProfileId(), bag.PlayerGuid(), bag.admission_.get()};
-    };
-    const auto inventoryBefore = fingerprint(inventory), temporaryBefore = fingerprint(temporary);
+    const uint64_t inventoryVersion = inventory.MutationVersion();
+    const uint64_t temporaryVersion = temporary.MutationVersion();
     const auto sameSource = [&] {
         if (!tlsEcs.actorRegistry.valid(playerEntity) || tlsEcs.GetPlayer(playerId) != playerEntity
             || tlsEcs.GetPlayerId(playerEntity) != playerId || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return false;
         const auto* current = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
-        return current == bags && fingerprint(current->bags[kInventory]) == inventoryBefore
-            && fingerprint(current->bags[kTemporary]) == temporaryBefore;
-    };
-    const auto clone = [](const Bag& source, Bag& candidate) {
-        candidate.store_ = source.store_;
-        candidate.layout_ = source.layout_->Clone();
-        candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
-        candidate.profileId_ = source.profileId_; candidate.playerGuid = source.playerGuid;
-        return candidate.layout_ != nullptr;
+        return current == bags
+            && current->bags[kInventory].MutationVersion() == inventoryVersion
+            && current->bags[kTemporary].MutationVersion() == temporaryVersion;
     };
     Bag nextInventory, nextTemporary;
-    if (!clone(inventory, nextInventory) || !clone(temporary, nextTemporary)) return kInvalidParameter;
+    if (!CloneBagForTransaction(inventory, nextInventory) || !CloneBagForTransaction(temporary, nextTemporary)) return kInvalidParameter;
     // 「实际持有」= 可计数总量 - 别的预留(consumeFromHoldId 那一份可以动用)。必须拿原包问:候选副本的地址不是他的人物背包。
     // 夹到 0 的项不交给容器(容器把 0 数量当编程错误)。
     ItemCountMap consumable;
@@ -503,7 +498,9 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     // 原策略不移交，候选从未发布；所有可能拒绝的步骤都已完成。这里不回调、不yield。
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
     inventory.store_ = std::move(nextInventory.store_); inventory.layout_ = std::move(nextInventory.layout_);
+    ++inventory.mutationVersion_;
     temporary.store_ = std::move(nextTemporary.store_); temporary.layout_ = std::move(nextTemporary.layout_);
+    ++temporary.mutationVersion_;
     // 改投的那一批与两包的发布在同一段:之后不再有失败分支(GrantOverflowRoute::commit 不得失败)。
     if (routed) overflowRoute->commit(gained);
     for (const auto& entry : drained)
@@ -539,11 +536,7 @@ uint32_t BagService::CheckInventoryExchangeSpace(entt::entity playerEntity, cons
         if (GainBlockService::IsItemGainBlocked(playerEntity,config)) return kAssetBlocked;
     }
     Bag candidate;
-    candidate.store_ = inventory.store_;
-    candidate.layout_ = inventory.layout_->Clone();
-    if (candidate.layout_ == nullptr) return kInvalidParameter;
-    candidate.admission_ = std::make_unique<BorrowedAdmission>(inventory.Admission());
-    candidate.profileId_ = inventory.profileId_; candidate.playerGuid = inventory.playerGuid;
+    if (!CloneBagForTransaction(inventory, candidate)) return kInvalidParameter;
     if (!consumed.empty()) {
         const auto error = candidate.RemoveItems(consumed);
         if (error != kSuccess) return error;
@@ -576,32 +569,18 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
         return true;
     };
     if (!gainsAllowed()) return kAssetBlocked;
-    const auto fingerprint = [](const Bag& bag) {
-        std::vector<std::pair<Guid, std::string>> items;
-        bag.store_.ForEach([&items](Guid id, const ItemComp& item) { items.emplace_back(id, item.SerializeAsString()); });
-        std::sort(items.begin(), items.end());
-        std::vector<std::pair<uint32_t, Guid>> slots(bag.layout_->Slots().begin(), bag.layout_->Slots().end());
-        std::sort(slots.begin(), slots.end());
-        return std::tuple{std::move(items), std::move(slots), bag.store_.NextAcquireSeq(), bag.Capacity(),
-            bag.layout_.get(), bag.admission_.get(), bag.ProfileId(), bag.PlayerGuid()};
-    };
-    const auto inventoryBefore = fingerprint(inventory), equipmentBefore = fingerprint(equipment);
+    const uint64_t inventoryVersion = inventory.MutationVersion();
+    const uint64_t equipmentVersion = equipment.MutationVersion();
     const auto sameSource = [&] {
         if (!tlsEcs.actorRegistry.valid(playerEntity) || tlsEcs.GetPlayer(playerId) != playerEntity ||
             !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return false;
         const auto* current = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
-        return current == bags && fingerprint(inventory) == inventoryBefore && fingerprint(equipment) == equipmentBefore;
-    };
-    const auto clone = [](const Bag& source, Bag& candidate) {
-        candidate.store_ = source.store_;
-        candidate.layout_ = source.layout_->Clone();
-        candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
-        candidate.profileId_ = source.profileId_;
-        candidate.playerGuid = source.playerGuid;
-        return candidate.layout_ != nullptr;
+        return current == bags
+            && current->bags[kInventory].MutationVersion() == inventoryVersion
+            && current->bags[kEquipment].MutationVersion() == equipmentVersion;
     };
     Bag nextInventory, nextEquipment;
-    if (!clone(inventory, nextInventory) || !clone(equipment, nextEquipment)) return kInvalidParameter;
+    if (!CloneBagForTransaction(inventory, nextInventory) || !CloneBagForTransaction(equipment, nextEquipment)) return kInvalidParameter;
     std::set<Guid> changed;
     for (const auto& edit : replacements) {
         if ((edit.bagType != kInventory && edit.bagType != kEquipment) || edit.expected.item_id() == 0 ||
@@ -636,8 +615,10 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
     inventory.store_ = std::move(nextInventory.store_);
     inventory.layout_ = std::move(nextInventory.layout_);
+    ++inventory.mutationVersion_;
     equipment.store_ = std::move(nextEquipment.store_);
     equipment.layout_ = std::move(nextEquipment.layout_);
+    ++equipment.mutationVersion_;
     written = std::move(created);
     for (const auto& entry : drained)
         TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);

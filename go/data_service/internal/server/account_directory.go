@@ -284,3 +284,39 @@ func (s *DataServiceServer) GetAccountRealName(ctx context.Context, in *dspb.Get
 	}
 	return &dspb.GetAccountRealNameResponse{Found: found, RealNamePi: pi}, nil
 }
+
+// UpsertAccountChannelIdentity 登记或刷新账号最近登录拿到的渠道标识与 open_id,只认 login。
+func (s *DataServiceServer) UpsertAccountChannelIdentity(ctx context.Context, in *dspb.UpsertAccountChannelIdentityRequest) (*emptypb.Empty, error) {
+	if err := s.admitDirectory(ctx, "UpsertAccountChannelIdentity", in); err != nil {
+		return nil, err
+	}
+	if s.svcCtx.ChannelIdentities == nil {
+		return nil, status.Error(codes.Unavailable, "channel identity store not configured")
+	}
+	if err := s.svcCtx.ChannelIdentities.UpsertChannelIdentity(ctx, in.GetAccount(), in.GetChannel(), in.GetOpenId()); err != nil {
+		return nil, directoryError(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// GetPlayerChannelIdentity 按 player_id 查所属账号的渠道身份、建号时刻与角色等级(content_guard / chat 用,只读)。
+func (s *DataServiceServer) GetPlayerChannelIdentity(ctx context.Context, in *dspb.GetPlayerChannelIdentityRequest) (*dspb.GetPlayerChannelIdentityResponse, error) {
+	if s.svcCtx.ChannelIdentities == nil {
+		return nil, status.Error(codes.Unavailable, "channel identity store not configured")
+	}
+	if in.GetPlayerId() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "player_id required")
+	}
+	out, err := s.svcCtx.ChannelIdentities.ChannelIdentityOfPlayer(ctx, in.GetPlayerId())
+	if err != nil {
+		if ctx.Err() != nil || errors.Is(err, accountdirectory.ErrUnavailable) {
+			return &dspb.GetPlayerChannelIdentityResponse{Retry: true}, nil
+		}
+		if errors.Is(err, accountdirectory.ErrInvalid) {
+			return nil, directoryError(err)
+		}
+		logx.Errorf("[channel-identity] read failed player=%d: %v", in.GetPlayerId(), err)
+		return &dspb.GetPlayerChannelIdentityResponse{Retry: true}, nil
+	}
+	return out, nil
+}

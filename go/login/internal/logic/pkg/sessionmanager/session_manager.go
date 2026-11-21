@@ -45,6 +45,9 @@ type PlayerSession struct {
 	// SessionIncarnation 是写下这条会话的 gate 连接的会话代次(SessionDetails.session_incarnation);0 = 旧版 login 写入。
 	// player_locator 据此忽略同号旧连接迟到的断线(gate-online-identity.md §10.4「断线通知」)。
 	SessionIncarnation uint64 `json:"session_incarnation"`
+	// GateZoneID 是写下这条会话的 gate 连接所在的区号(login 的 Node.ZoneId);0 = 旧版 login 写入。
+	// AssignGate 重连免排队直接按它判「会话是否在本区」(login-queue-2026-05.md §8)。
+	GateZoneID uint32 `json:"gate_zone_id"`
 }
 
 // EnterGameDecision mirrors Centre's enum.
@@ -98,6 +101,8 @@ type OnlineSessionInput struct {
 	LoginGeneration uint64
 	// SessionIncarnation 是发起本次登录的 gate 连接的会话代次,原样写进会话记录。
 	SessionIncarnation uint64
+	// GateZoneID 是发起本次登录的 gate 连接所在的区号(login 的 Node.ZoneId),原样写进会话记录。
+	GateZoneID uint32
 }
 
 func idempotencyKey(playerID uint64, requestID string) string {
@@ -164,9 +169,9 @@ func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorCli
 // loginGeneration 是本条重连链铸出的代次,由 player_locator 随整字节 CAS 写进会话记录。
 // 返回值是 locator 回带的会话记录:旧版 locator 不认这个字段,会原样回出上一条会话的代次,
 // 所以调用方下游一律用自己铸出的值,不用返回值里的(scene-enter-session-fence.md §3.4)。
-// sessionIncarnation 是发起重连的 gate 连接的会话代次,player_locator 原样写进会话记录。
+// sessionIncarnation 与 gateZoneID 分别是发起重连的 gate 连接的会话代次与所在区号,player_locator 原样写进会话记录。
 func Reconnect(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64,
-	newSessionID uint32, gateID string, gateInstanceID string, sessionIncarnation uint64,
+	newSessionID uint32, gateID string, gateInstanceID string, sessionIncarnation uint64, gateZoneID uint32,
 	account string, requestID string, loginGeneration uint64,
 ) (*PlayerSession, error) {
 	resp, err := plClient.Reconnect(ctx, &plpb.ReconnectRequest{
@@ -178,6 +183,7 @@ func Reconnect(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID 
 		RequestId:          requestID,
 		LoginGeneration:    loginGeneration,
 		SessionIncarnation: sessionIncarnation,
+		GateZoneId:         gateZoneID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("player_locator Reconnect: %w", err)
@@ -263,20 +269,20 @@ func SetIdempotency(ctx context.Context, rdb redis.UniversalClient, playerID uin
 
 func toProto(s *PlayerSession) *plpb.PlayerSession {
 	return &plpb.PlayerSession{
-		PlayerId:        s.PlayerID,
-		SessionId:       s.SessionID,
-		GateId:          s.GateID,
-		GateInstanceId:  s.GateInstanceID,
-		SceneNodeId:     s.SceneNodeID,
-		SceneId:         s.SceneID,
-		SessionVersion:  s.SessionVersion,
-		State:           plpb.PlayerSessionState(s.State),
-		LastActiveTs:    s.LastActiveTs,
-		RequestId:       s.RequestID,
-		Account:         s.Account,
-		LoginGeneration: s.LoginGeneration,
-
+		PlayerId:           s.PlayerID,
+		SessionId:          s.SessionID,
+		GateId:             s.GateID,
+		GateInstanceId:     s.GateInstanceID,
+		SceneNodeId:        s.SceneNodeID,
+		SceneId:            s.SceneID,
+		SessionVersion:     s.SessionVersion,
+		State:              plpb.PlayerSessionState(s.State),
+		LastActiveTs:       s.LastActiveTs,
+		RequestId:          s.RequestID,
+		Account:            s.Account,
+		LoginGeneration:    s.LoginGeneration,
 		SessionIncarnation: s.SessionIncarnation,
+		GateZoneId:         s.GateZoneID,
 	}
 }
 
@@ -285,20 +291,20 @@ func fromProto(pb *plpb.PlayerSession) *PlayerSession {
 		return nil
 	}
 	return &PlayerSession{
-		PlayerID:        pb.PlayerId,
-		SessionID:       pb.SessionId,
-		GateID:          pb.GateId,
-		GateInstanceID:  pb.GateInstanceId,
-		SceneNodeID:     pb.SceneNodeId,
-		SceneID:         pb.SceneId,
-		Account:         pb.Account,
-		SessionVersion:  pb.SessionVersion,
-		State:           int32(pb.State),
-		LastActiveTs:    pb.LastActiveTs,
-		RequestID:       pb.RequestId,
-		LoginGeneration: pb.LoginGeneration,
-
+		PlayerID:           pb.PlayerId,
+		SessionID:          pb.SessionId,
+		GateID:             pb.GateId,
+		GateInstanceID:     pb.GateInstanceId,
+		SceneNodeID:        pb.SceneNodeId,
+		SceneID:            pb.SceneId,
+		Account:            pb.Account,
+		SessionVersion:     pb.SessionVersion,
+		State:              int32(pb.State),
+		LastActiveTs:       pb.LastActiveTs,
+		RequestID:          pb.RequestId,
+		LoginGeneration:    pb.LoginGeneration,
 		SessionIncarnation: pb.SessionIncarnation,
+		GateZoneID:         pb.GateZoneId,
 	}
 }
 
@@ -312,6 +318,7 @@ func applyOnlineSession(session *PlayerSession, input OnlineSessionInput) {
 	session.SessionID = input.SessionID
 	session.GateID = input.GateID
 	session.GateInstanceID = input.GateInstanceID
+	session.GateZoneID = input.GateZoneID
 	session.SessionIncarnation = input.SessionIncarnation
 	session.Account = input.Account
 	session.State = StateOnline

@@ -40,19 +40,6 @@
 
 #include "CfgActorActionCombatStateRow.generated.h"
 
-/// ActorActionCombatState.state 的子消息行。
-USTRUCT(BlueprintType)
-struct FCfgActorActionCombatStateState
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
-	int32 state_mode = 0;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
-	int32 state_tip = 0;
-};
-
 /// ActorActionCombatState 的一行。字段名与 actoractioncombatstate.json 的键逐字符一致(snake_case),
 /// 见文件头「字段名口径」。
 ///
@@ -68,9 +55,19 @@ struct FCfgActorActionCombatStateRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
+	/** 动作 ID(eActorAction: 0=UseSkill, 1=JoinFollow, 2=MountActor, 3=UnmountActor) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
 	int32 id = 0;
 
+	/** 战斗异常状态 ID(eActorCombatState: 0=None, 1=Silence) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
-	TArray<FCfgActorActionCombatStateState> state;
+	int32 state_id = 0;
+
+	/** 互斥模式(与 ActorActionState 统一): 0=互斥拒绝, 1=允许, 2=打断 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
+	int32 state_mode = 0;
+
+	/** 互斥拒绝时返回给客户端的 tip 错误码(state_mode=0 时生效;非互斥行填 kSuccess=1000) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|ActorActionCombatState")
+	int32 state_tip = 0;
 };

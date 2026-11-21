@@ -29,6 +29,8 @@ import (
 	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
 
+	"shared/dsclient"
+	"shared/generated/table"
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
@@ -37,6 +39,7 @@ import (
 	"shared/playersync"
 	"shared/rolefence"
 	"shared/serviceauth"
+	"shared/tablebundle"
 	"shared/tracing/kafkagotrace"
 
 	redv9 "github.com/redis/go-redis/v9"
@@ -90,12 +93,16 @@ type ServiceContext struct {
 	// 到期终局恢复的翻页游标不挂在这里:它是 match.global.outcome.recover 循环的局部状态(logic/global_outcome_recover.go)。
 	GlobalGatherSlots chan struct{}
 
-	// Catalog 是启动时由 PlayMode / Dungeon / ZoneGroup 三张表编译的模板目录,之后只读
-	// (docs/design/global-match-hierarchical-pools.md §7)。手工构造的单测 ServiceContext 可为 nil。
-	Catalog *catalog.Catalog
-	// BattleScripts 是启动时解析、按配表校验过的内置官方战斗剧本目录,之后只读(docs/design/battle-script.md §5)。
-	// 建房时据它与玩家选用解析每一方的剧本;手工构造的单测 ServiceContext 可为 nil(= 不带任何剧本)。
-	BattleScripts *battlescript.Catalog
+	// Catalog 是启动时由 PlayMode / Dungeon / ZoneGroup 三张表编译的模板目录(热更时通过 liveCatalog 原子切换)。
+	// 手工构造的单测 ServiceContext 可直接写 Catalog 或留 nil;业务读路径一律经 ActiveCatalog()。
+	Catalog     *catalog.Catalog
+	liveCatalog atomic.Pointer[catalog.Catalog]
+	// BattleScripts 是启动时解析、按配表校验过的内置官方战斗剧本目录(热更时通过 liveBattleScripts 原子切换)。
+	// 手工构造的单测 ServiceContext 可直接写 BattleScripts 或留 nil;业务读路径一律经 ActiveBattleScripts()。
+	BattleScripts     *battlescript.Catalog
+	liveBattleScripts atomic.Pointer[battlescript.Catalog]
+	// TableBundle 负责表包启动校验与运行期两阶段热更(未设 MMORPG_TABLE_BUNDLE_ROOT 时仅执行启动校验)。
+	TableBundle *tablebundle.Manager
 	// MatchNodes 是 match 实例自身注册(MatchNodeService)的 etcd 镜像。按池撮合用它的实例 UUID 作成员表,
 	// 以最高随机权重哈希决定每个池由哪个副本负责(internal/poolowner)。
 	MatchNodes *discovery.NodeWatcher
@@ -325,21 +332,39 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.MatchNodes = discovery.NewNodeWatcher("match", MatchNodeRpcPrefix, metrics.SetDiscoveredNodes, nil).StableOnly()
 	sc.Placement = battleplace.New()
 
-	// 模板目录读表失败或校验不过直接拒绝启动:不带着坏表开放任何匹配入口。
-	matchCatalog, err := catalog.Load(c.TableDir)
+	// 模板目录与内置官方剧本经 tablebundle 两阶段加载与校验:
+	// 启动失败直接拒启,运行期热更先在候选 TableSet 上编译校验再原子替换 liveCatalog / liveBattleScripts / Authority.Catalog。
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:           "match",
+		ImageTableDir:         c.TableDir,
+		UseBinary:             false,
+		StrictStartupValidate: true,
+		PrepareHook: func(_ string, ts *table.TableSet) (func(), error) {
+			nextCatalog, err := catalog.BuildFromTableSet(ts)
+			if err != nil {
+				return nil, fmt.Errorf("build match template catalog: %w", err)
+			}
+			nextScripts, err := battlescript.LoadFromTableSet(ts)
+			if err != nil {
+				return nil, fmt.Errorf("build official battle scripts: %w", err)
+			}
+			return func() {
+				sc.liveCatalog.Store(nextCatalog)
+				sc.liveBattleScripts.Store(nextScripts)
+				if sc.Authority != nil {
+					sc.Authority.SwapCatalog(nextCatalog)
+				}
+			}, nil
+		},
+	})
 	if err != nil {
 		sc.Stop()
-		panic(fmt.Errorf("failed to load match template catalog (TableDir=%s): %w", c.TableDir, err))
+		panic(fmt.Errorf("failed to load match tables (TableDir=%s): %w", c.TableDir, err))
 	}
+	sc.TableBundle = tableMgr
+	matchCatalog := sc.ActiveCatalog()
 	sc.Catalog = matchCatalog
-
-	// 内置官方剧本按配表校验不过同样拒绝启动:坏配置不能带病上线,开局时也就不会有半份剧本。
-	battleScripts, err := battlescript.LoadWithTables(c.TableDir)
-	if err != nil {
-		sc.Stop()
-		panic(fmt.Errorf("failed to load official battle scripts (TableDir=%s): %w", c.TableDir, err))
-	}
-	sc.BattleScripts = battleScripts
+	sc.BattleScripts = sc.ActiveBattleScripts()
 
 	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
 	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
@@ -377,6 +402,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		sc.Stop()
 		panic(fmt.Errorf("invalid global match scope rules: %w", err))
 	}
+	// Authority 已就绪后再启动后台热更轮询,避免首拍回调看到 Authority==nil。
+	sc.TableBundle.Start()
 	// 成局恢复、整队维护、闲置队伍到期、投榜按片分工,与撮合池同一条归属规则(OwnsWork)。
 	store.BindWorkOwner(sc.OwnsWork)
 	// 角色归属锁本库的护栏副本,自愈、事务外的读和入场校验走 data_service(docs/design/horizontal-scale-logical-db.md §3)。
@@ -505,7 +532,7 @@ func NewDataServiceClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
 		logx.Error("[match] DataServiceRpc.NonBlock=false is not allowed; forced to true (blocking connection would prevent match startup when data_service is unavailable)")
 		c.NonBlock = true
 	}
-	conn := zrpc.MustNewClient(c)
+	conn := zrpc.MustNewClient(dsclient.Conf(c))
 	return dspb.NewDataServiceClient(conn.Conn())
 }
 
@@ -648,6 +675,7 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	// 最后一个用同区判定的调用方已经退出。必须早于封写者资格和关库,否则最后一拍重读会报假故障。
 	sc.MergedZones.Stop()
+	sc.TableBundle.Stop()
 	sc.WriterConfig.Seal()
 	var result error
 	if sc.Authority != nil {
@@ -665,6 +693,39 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 		sc.RelayAdmission.Hold()
 	}
 	return result
+}
+
+// ActiveCatalog 返回当前生效的匹配模板目录(运行期热更经 liveCatalog 原子切换;未走 LoadAtStartup 的单测回落到 Catalog)。
+func (sc *ServiceContext) ActiveCatalog() *catalog.Catalog {
+	if sc == nil {
+		return nil
+	}
+	if c := sc.liveCatalog.Load(); c != nil {
+		return c
+	}
+	return sc.Catalog
+}
+
+// ActiveBattleScripts 返回当前生效的内置官方战斗剧本目录(同 ActiveCatalog 口径)。
+func (sc *ServiceContext) ActiveBattleScripts() *battlescript.Catalog {
+	if sc == nil {
+		return nil
+	}
+	if b := sc.liveBattleScripts.Load(); b != nil {
+		return b
+	}
+	return sc.BattleScripts
+}
+
+// ValidateTables 是 match 的 --validate-tables 预检钩子:与生产运行期热更使用完全相同的目录与剧本编译校验。
+func ValidateTables(_ string, ts *table.TableSet) (func(), error) {
+	if _, err := catalog.BuildFromTableSet(ts); err != nil {
+		return nil, fmt.Errorf("build match template catalog: %w", err)
+	}
+	if _, err := battlescript.LoadFromTableSet(ts); err != nil {
+		return nil, fmt.Errorf("build official battle scripts: %w", err)
+	}
+	return nil, nil
 }
 
 // Stop 是带时限的 StopAndReport(排空号段、flush Kafka 在途批次)。幂等,正常退出与启动失败路径可安全共用。

@@ -38,6 +38,10 @@ public final class DeliveryStore {
         this(jdbc, manager, props, new RmbConsignmentStore(jdbc, manager, Clock.systemUTC(),
             new RmbConsignmentProperties(), (RmbConsignmentStore.PayoutEvidenceVerifier) null), Clock.systemUTC());
     }
+    public DeliveryStore(JdbcTemplate jdbc, PlatformTransactionManager manager, CommerceProperties props,
+            RmbConsignmentStore consignments) {
+        this(jdbc, manager, props, consignments, Clock.systemUTC());
+    }
     @Autowired public DeliveryStore(JdbcTemplate jdbc, PlatformTransactionManager manager, CommerceProperties props,
             RmbConsignmentStore consignments, Clock clock) {
         this.jdbc = jdbc;
@@ -117,7 +121,7 @@ public final class DeliveryStore {
                 if (count < 1 || count > 4096)
                     throw new CommerceException(503, "已冻结的SKU游戏数量越界");
                 itemCount = (int) count;
-            } else if (itemConfigId == 0 && perUnit == 0 && currencyType >= 0 && currencyPerUnit > 0 && quantity > 0) {
+            } else if (itemConfigId == 0 && perUnit == 0 && CatalogAdminStore.ALLOWED_CURRENCY_TYPES.contains(currencyType) && currencyPerUnit > 0 && quantity > 0) {
                 currencyAmount = Math.multiplyExact(quantity, currencyPerUnit);
                 if (currencyAmount > MAX_CURRENCY_GRANT)
                     throw new CommerceException(503, "已冻结的SKU货币数量越界");
@@ -156,8 +160,8 @@ public final class DeliveryStore {
                 "SELECT trade_order_id,state,proof FROM commerce_delivery_receipt WHERE order_sn=?", in.orderId());
             if (!existing.isEmpty()) {
                 var old = existing.getFirst();
-                if (!in.tradeOrderId().equals(old.get("trade_order_id")) || !in.state().equals(old.get("state"))
-                    || !in.proof().equals(old.get("proof")))
+                // 幂等重放只核对 trade 合同号与终局状态,不比较 proof(工作流后续快照可能演进,见设计 §8.2.5)。
+                if (!in.tradeOrderId().equals(old.get("trade_order_id")) || !in.state().equals(old.get("state")))
                     throw new CommerceException(409, "同一交付意图的终局发生冲突");
                 return;
             }
@@ -202,16 +206,57 @@ public final class DeliveryStore {
     }
 
     /**
-     * 待退款的付款,每条是要退的那一笔(退款原因见 CommerceApi.RefundReason):交易键取待办自己的,金额币种取那笔付款回执的实收值。
-     * 异常付款的回执没有绑定订单(order_sn 为 NULL),订单号取待办上的。适配器以 transactionId 作渠道退款的幂等键(CommerceApi.PendingRefund)。
+     * 待退款的付款(首页至多 100 条)。完整分页走 refundsPage(DeliveryApi.RefundPoll)。
      */
     public List<CommerceApi.PendingRefund> refunds() {
-        return jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency,r.source FROM "
-                + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.channel=r.channel AND p.transaction_id=r.transaction_id "
-                + "WHERE r.status='PENDING' ORDER BY r.order_sn,r.channel,r.transaction_id LIMIT 100",
-            (r, n)
-                -> new CommerceApi.PendingRefund(r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5),
-                    CommerceApi.RefundReason.stored(r.getString(6))));
+        return refundsPage(new DeliveryApi.RefundPoll(100, "")).entries();
+    }
+
+    /**
+     * 按确定性游标分页列出待退款的付款(/internal/refunds/poll,payment 角色):
+     * 每条是要退的那一笔(退款原因见 CommerceApi.RefundReason):交易键取待办自己的,金额币种取那笔付款回执的实收值。
+     * 游标格式为 "r1:<orderSn>:<channel>:<transactionId>",空串表示从头扫;返回 nextCursor 为空表示已是最后一页。
+     */
+    public DeliveryApi.RefundPage refundsPage(DeliveryApi.RefundPoll input) {
+        int limit = input == null || input.limit() == 0 ? 100 : input.limit();
+        if (limit < 1 || limit > 100)
+            throw new CommerceException(400, "退款分页批量非法");
+        String rawCursor = input == null || input.cursor() == null ? "" : input.cursor();
+        List<CommerceApi.PendingRefund> rows;
+        if (rawCursor.isEmpty()) {
+            rows = jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency,r.source FROM "
+                    + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.channel=r.channel AND p.transaction_id=r.transaction_id "
+                    + "WHERE r.status='PENDING' ORDER BY r.order_sn,r.channel,r.transaction_id LIMIT ?",
+                (r, n)
+                    -> new CommerceApi.PendingRefund(r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5),
+                        CommerceApi.RefundReason.stored(r.getString(6))),
+                limit + 1);
+        } else {
+            String[] parts = rawCursor.split(":", -1);
+            if (parts.length != 4 || !"r1".equals(parts[0])
+                || !parts[1].matches(PaymentPolicy.ORDER)
+                || !parts[2].matches("[a-z][a-z0-9_-]{1,31}")
+                || !parts[3].matches("[A-Za-z0-9_-]{1,128}"))
+                throw new CommerceException(400, "退款分页游标非法");
+            byte[] channelBytes = ascii(parts[2]);
+            byte[] txnBytes = ascii(parts[3]);
+            rows = jdbc.query("SELECT r.order_sn,p.channel,p.transaction_id,p.amount_minor,p.currency,r.source FROM "
+                    + "commerce_refund_intent r JOIN commerce_payment_receipt p ON p.channel=r.channel AND p.transaction_id=r.transaction_id "
+                    + "WHERE r.status='PENDING' AND (r.order_sn>? OR (r.order_sn=? AND (r.channel>? OR (r.channel=? AND r.transaction_id>?)))) "
+                    + "ORDER BY r.order_sn,r.channel,r.transaction_id LIMIT ?",
+                (r, n)
+                    -> new CommerceApi.PendingRefund(r.getString(1), r.getString(2), r.getString(3), r.getLong(4), r.getString(5),
+                        CommerceApi.RefundReason.stored(r.getString(6))),
+                parts[1], parts[1], channelBytes, channelBytes, txnBytes, limit + 1);
+        }
+        boolean hasMore = rows.size() > limit;
+        List<CommerceApi.PendingRefund> entries = hasMore ? List.copyOf(rows.subList(0, limit)) : List.copyOf(rows);
+        String nextCursor = "";
+        if (hasMore && !entries.isEmpty()) {
+            var last = entries.getLast();
+            nextCursor = "r1:" + last.orderId() + ":" + last.channel() + ":" + last.transactionId();
+        }
+        return new DeliveryApi.RefundPage(entries, nextCursor);
     }
 
     /**
@@ -267,7 +312,10 @@ public final class DeliveryStore {
                     throw new CommerceException(409, "退款流水冲突");
                 return;
             }
-            if (!"PENDING".equals(intent.get("status")))
+            String intentStatus = (String) intent.get("status");
+            if ("MANUAL".equals(intentStatus) || "REVOKED".equals(intentStatus))
+                throw new CommerceException(409, "退款待办已终结");
+            if (!"PENDING".equals(intentStatus))
                 throw new CommerceException(503, "退款待办已终结但缺退款回执");
             if (ordersOwnPayment && ((Number) lockedOrder.getFirst().get("status")).intValue() != 5)
                 throw new CommerceException(409, "订单不在退款中");
@@ -384,8 +432,8 @@ public final class DeliveryStore {
                 in.orderId(), in.revision());
             if (!existing.isEmpty()) {
                 var old = existing.getFirst();
-                if (!in.tradeOrderId().equals(old.get("trade_order_id")) || !in.state().equals(old.get("state"))
-                    || !in.proof().equals(old.get("proof")))
+                // 幂等重放只核对 trade 合同号与终局状态,不比较 proof(工作流后续快照可能演进,见设计 §8.2.5)。
+                if (!in.tradeOrderId().equals(old.get("trade_order_id")) || !in.state().equals(old.get("state")))
                     throw new CommerceException(409, "同一修订号的扣回结论发生冲突");
                 return;
             }

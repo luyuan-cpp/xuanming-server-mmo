@@ -8,6 +8,9 @@
 #include "muduo/base/Logging.h"
 
 #include "actor/actor_net_id.h"
+#include "actor/action_state/constants/actor_state.h"
+#include "actor/action_state/system/actor_action_state.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "core/constants/fps.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h" // kInvalidSessionId
@@ -295,6 +298,8 @@ namespace
 		StopMotion(follower, *driven, stop);
 		stop.Flush();
 		registry.remove<TeamFollowerComp>(follower);
+		// 同步清除行为状态位:若由状态互斥打断触发进入 Detach,位早已清零,此处幂等返回且不会重入钩子。
+		(void)ActorActionStateSystem::RemoveState(follower, kActorStateTeamFollow);
 		// 队长离开本节点(交接、退出、实体没了):记下"在等队长的去留",有结论之后 PlayerTeamSystem 再跟一次
 		// (TeamFollowAwaitLeaderComp 的说明)。暂离中的不记:他本来就不想跟。
 		if (reason == TEAM_FOLLOW_STOP_REASON_LEADER_GONE && leaderPlayerId != 0 &&
@@ -736,6 +741,12 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 	{
 		return false;
 	}
+	// 状态互斥门禁:互斥表已加载时(生产节点与完整表用例),先在零副作用阶段校验能否进入跟随态(例如战斗中拒绝)。
+	if (ActorActionStateSystem::HasActionPolicy(kActorActionJoinFollow) &&
+		ActorActionStateSystem::CanExecuteActionWithoutStateChange(follower, kActorActionJoinFollow) != kSuccess)
+	{
+		return false;
+	}
 
 	// 已经接在这个队长身后:只补一次状态通知(客户端重复声明跟随时它要知道自己仍在被驱动)。
 	if (const auto* driven = registry.try_get<TeamFollowerComp>(follower); driven != nullptr && driven->leader == leader)
@@ -776,7 +787,19 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 
 	// 已经重新接上:不再等上一个队长的去留。
 	registry.remove<TeamFollowAwaitLeaderComp>(follower);
-	return PlaceMember(leader, *comp, follower, walkAllowed);
+	if (!PlaceMember(leader, *comp, follower, walkAllowed))
+	{
+		return false;
+	}
+	if (ActorActionStateSystem::HasActionPolicy(kActorActionJoinFollow))
+	{
+		(void)ActorActionStateSystem::TryPerformAction(follower, kActorActionJoinFollow, kActorStateTeamFollow);
+	}
+	else
+	{
+		(void)ActorActionStateSystem::AddState(follower, kActorStateTeamFollow);
+	}
+	return true;
 }
 
 const std::vector<entt::entity>& TeamFollowSystem::TakeFollowersWithSettledLeader()

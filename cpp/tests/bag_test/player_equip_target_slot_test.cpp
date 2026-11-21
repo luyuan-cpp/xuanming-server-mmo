@@ -15,6 +15,7 @@
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/bag_marshal.h"
 #include "services/scene/player/system/player_equip.h"
 #include "table/code/attributeallocratio_table.h"
@@ -91,6 +92,7 @@ protected:
 
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{91000});
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(80);
         tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player);

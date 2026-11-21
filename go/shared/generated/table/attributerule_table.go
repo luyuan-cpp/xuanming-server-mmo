@@ -45,25 +45,40 @@ func NewAttributeRuleTableManager() *AttributeRuleTableManager {
 }
 
 func (m *AttributeRuleTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *AttributeRuleTableManager) swapSnapshot(snap *attributeruleSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *AttributeRuleTableManager) loadSnapshot(configDir string, useBinary bool) (*attributeruleSnapshot, error) {
     var container pb.AttributeRuleTableData
 
     if useBinary {
         path := filepath.Join(configDir, "attributerule.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "attributerule.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -76,8 +91,7 @@ func (m *AttributeRuleTableManager) Load(configDir string, useBinary bool) error
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *AttributeRuleTableManager) FindAll() []*pb.AttributeRuleTable {

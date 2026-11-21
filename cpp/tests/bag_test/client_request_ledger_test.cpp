@@ -30,6 +30,7 @@
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_mystery_merchant.pb.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "table/code/attributeallocratio_table.h"
@@ -467,6 +468,7 @@ protected:
 	{
 		const auto entity = tlsEcs.actorRegistry.create();
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, Guid{kSchemePlayerGuid});
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		tlsEcs.actorRegistry.emplace<BaseAttributesComp>(entity);
 		tlsEcs.actorRegistry.emplace<LevelComp>(entity).set_level(kSchemePlayerLevel);
 		tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(entity);

@@ -319,6 +319,16 @@ func (c *battleDirectConn) Close() {
 	}
 }
 
+// verifyFighterDelivery 校验参战者直连投递契约:就绪补拉和公共回合帧必须来自直连,
+// 个人终局只能由 Scene 持久结算后经大厅通知,直连不得提前发(总体存盘方案 §5.4)。
+func (c *battleDirectConn) verifyFighterDelivery() error {
+	if c.turnResults.Load() < 1 || c.battleEnds.Load() != 0 || c.stateReplies.Load() < 1 {
+		return fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends=0; personal settlement must arrive through scene",
+			c.summary())
+	}
+	return nil
+}
+
 // summary 给日志 / 断言用的一行摘要。heartbeat_replies 是直连上认领到的心跳回包数(gate-client-heartbeat.md §14):
 // battle 在握手应答里通告了心跳,robot 当场发第一条,所以健康的直连上它恒 ≥ 1。
 func (c *battleDirectConn) summary() string {

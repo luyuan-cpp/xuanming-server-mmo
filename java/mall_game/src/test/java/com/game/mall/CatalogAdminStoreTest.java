@@ -245,6 +245,23 @@ class CatalogAdminStoreTest {
         }
     }
 
+    @Test void 货币发放只接受已知游戏币种_未知币种拒绝() {
+        try (var f = new CommerceFixture()) {
+            var store = admin(f);
+            for (int type : List.of(0, 1, 2)) {
+                var ok = store.create(ACTOR, new CatalogAdminApi.Create("curr-ok-00" + type, 10 + type,
+                    new CatalogAdminApi.Terms(200, "curr-" + type, 600, "CNY", true, 0, 0, "货币包" + type, type, 60), 100));
+                assertEquals(type, ok.currencyType());
+                assertEquals(60, ok.currencyAmount());
+            }
+            for (int badType : List.of(-1, 3, 99)) {
+                refuses(400, () -> store.create(ACTOR, new CatalogAdminApi.Create("curr-bad-00" + Math.abs(badType), 99,
+                    new CatalogAdminApi.Terms(200, "curr-bad", 600, "CNY", true, 0, 0, "非法货币", badType, 60), 10)));
+            }
+            assertEquals(3, f.count("pms_sku_stock"));
+        }
+    }
+
     @Test void 坏响应日志一律返回服务不可用_不能接管重做或替换原件() throws Exception {
         try (var f = new CommerceFixture()) {
             var store = admin(f);

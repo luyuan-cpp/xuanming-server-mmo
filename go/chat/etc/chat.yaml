@@ -72,6 +72,7 @@ Middlewares:
   StatConf:
     IgnoreContentMethods:
       - /chatpb.ClientPlayerChat/SendChat
+      - /chatpb.ClientPlayerChat/ReportChat
 
 # chat 不连 Redis:发送决定、限速与历史读取都在 SQL 原件库(当前合同见设计§19)。
 # zrpc.RpcServerConf 自带的 Redis 段是 optional,只在 Auth=true 时用,chat 不开 Auth,所以不写;ChatRedis 段已删。
@@ -97,6 +98,13 @@ RateLimitPerSecond: 5
 # 同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限;只管世界频道。世界频道一条消息要推给全服在线玩家,
 # 这个间隔把全服世界消息量压在「在线人数 ÷ 间隔」之内。K8s ConfigMap 逐字镜像这一行。
 WorldChannelCooldownMs: 5000
+# 反广告/防刷屏阈值(k8s_deploy.ps1 镜像这些标量)。
+WorldMinLevel: 5
+DuplicateSpamWindowMs: 60000
+DuplicateSpamMaxSenders: 2
+DuplicateSpamMaxPerSender: 2
+NewAccountAgeHours: 24
+NewAccountDailyPrivateLimit: 10
 # 每个SQL频道窗口最多可见的最近条数。
 HistoryMaxEntries: 200
 # 频道闲置窗口TTL(秒)，保持每次接受续期语义；显示过期不删除原UUID收据。原件本身保留 30 天后由库删除(TiDB TTL),

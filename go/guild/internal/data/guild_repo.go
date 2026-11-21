@@ -89,6 +89,10 @@ var (
 	// 首次请求已经写成了指令(它比本次的事务前查重晚一步提交)。本事务整体回滚、什么都不写;
 	// 调用方按去重记录找回首次那笔指令答复,不是业务拒绝,也不是故障。
 	ErrClientRequestReplayed = errors.New("guild client request already applied")
+	// ErrGuildRenameCooldown:距上一次帮会改名尚未满冷却时长。
+	ErrGuildRenameCooldown = errors.New("guild rename is in cooldown")
+	// ErrGuildRenameSameName:新帮会名规范化后与当前帮会名一致。
+	ErrGuildRenameSameName = errors.New("guild rename target equals current name")
 )
 
 // GuildData is the persistence-layer representation of a guild (stored in Redis + MySQL).
@@ -105,8 +109,10 @@ type GuildData struct {
 	// 丢失/分叉后可由 RebuildRanks 从这里全量重建。
 	Score int64 `json:"score"`
 	// Funds 是帮会资金(捐献累加、升级消耗);B1 恒为 0,B5 起写入。
-	Funds   uint64       `json:"funds"`
-	Members []MemberData `json:"members"`
+	Funds uint64 `json:"funds"`
+	// RenamedMs 是上一次帮会改名成功的 Unix 毫秒时刻(0 = 未改过名)。
+	RenamedMs uint64       `json:"renamed_ms"`
+	Members   []MemberData `json:"members"`
 }
 
 type MemberData struct {
@@ -133,7 +139,7 @@ type GuildRepo struct {
 	rdb         redis.UniversalClient
 	db          *sql.DB
 	defaultTTL  time.Duration
-	cacheLoadMu sync.Mutex
+	cacheLoadMu [256]sync.Mutex
 	// fence 是角色护栏,ConfigureRoleFence 启动时写一次;occupancy 是 match 上的历练占用,BindTrialOccupancy 启动时写一次。之后都只读。
 	fence     *rolefence.Guard
 	occupancy TrialOccupancy
@@ -316,9 +322,10 @@ func (r *GuildRepo) GetGuild(ctx context.Context, guildID uint64) (*GuildData, e
 		return guild, err
 	}
 
-	// 只压平本实例的同 key miss；跨实例的旧回填由 generation Lua 拦截。
-	r.cacheLoadMu.Lock()
-	defer r.cacheLoadMu.Unlock()
+	// 按 key 分桶压平本实例同 key miss，避免冷启动/击穿时全服不同公会串行排队；跨实例旧回填由 generation Lua 拦截。
+	mu := &r.cacheLoadMu[guildID&255]
+	mu.Lock()
+	defer mu.Unlock()
 	if guild, found, err := r.getCachedGuild(ctx, guildID); err != nil || found {
 		return guild, err
 	}
@@ -343,7 +350,8 @@ func (r *GuildRepo) GetGuild(ctx context.Context, guildID uint64) (*GuildData, e
 		payload,
 		r.defaultTTL.Milliseconds(),
 	).Int(); err != nil {
-		return nil, fmt.Errorf("fill guild cache %d: %w", guildID, err)
+		// 权威 MySQL 结果已在手，回填缓存失败降级返回结果并记错误（与 friend_repo 同口径）。
+		logx.WithContext(ctx).Errorf("fill guild cache %d failed: %v", guildID, err)
 	}
 	return guild, nil
 }
@@ -358,8 +366,9 @@ func (r *GuildRepo) GetPlayerGuildID(ctx context.Context, playerID uint64) (uint
 		return 0, fmt.Errorf("redis get player guild %d: %w", playerID, err)
 	}
 
-	r.cacheLoadMu.Lock()
-	defer r.cacheLoadMu.Unlock()
+	mu := &r.cacheLoadMu[playerID&255]
+	mu.Lock()
+	defer mu.Unlock()
 	val, err = r.rdb.Get(ctx, playerGuildKey(playerID)).Uint64()
 	if err == nil {
 		return val, nil
@@ -385,7 +394,7 @@ func (r *GuildRepo) GetPlayerGuildID(ctx context.Context, playerID uint64) (uint
 		strconv.FormatUint(guildID, 10),
 		r.defaultTTL.Milliseconds(),
 	).Int(); err != nil {
-		return 0, fmt.Errorf("fill player guild cache %d: %w", playerID, err)
+		logx.WithContext(ctx).Errorf("fill player guild cache %d failed: %v", playerID, err)
 	}
 	return guildID, nil
 }
@@ -483,7 +492,7 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		if err := deleteApplicationsOfPlayer(ctx, tx, leader.PlayerID); err != nil {
 			return fmt.Errorf("delete applications of founder %d: %w", leader.PlayerID, err)
 		}
-		// 最后一条写(见函数头:P1 的登记例外)。之后只剩 COMMIT。
+		// 最后一条写(见函数头:P1 的登记例外),紧随其后复核旧名保护表(§5:必须先拿 uk_guild 再读保护表)。
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, score_version, funds)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -493,6 +502,9 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 				return ErrGuildNameTaken
 			}
 			return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
+		}
+		if err := claimGuildNameHold(ctx, tx, guild.GuildID, nameNorm, guild.CreateTimeMs); err != nil {
+			return err
 		}
 		return nil
 	}); err != nil {
@@ -574,12 +586,12 @@ func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*Gu
 // 公会行不存在返回 (nil, nil);调用方按各自语义决定这是 ErrGuildGone 还是"未入帮"。
 func loadGuild(ctx context.Context, q queryer, guildID uint64) (*GuildData, error) {
 	row := q.QueryRowContext(ctx,
-		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds FROM guild WHERE guild_id = ?",
+		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds, renamed_ms FROM guild WHERE guild_id = ?",
 		guildID)
 
 	var guild GuildData
 	err := row.Scan(&guild.GuildID, &guild.Name, &guild.LeaderID, &guild.Level,
-		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score, &guild.Funds)
+		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score, &guild.Funds, &guild.RenamedMs)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

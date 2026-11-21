@@ -642,12 +642,10 @@ bool RoleAdmissionSystem::IsSnapshotCommitted(entt::entity player, const PlayerA
     const auto* admission = tlsEcs.actorRegistry.try_get<PlayerRoleAdmissionComp>(player);
     const auto identity = ConfirmedIdentity(playerId);
     const auto& first = snapshot.player_database_data();
-    const uint64_t epoch = stored ? stored->committed_owner_epoch : 0, seq = stored ? stored->committed_save_seq : 0;
     return stored != nullptr && stored->snapshot.get() == &snapshot && owner != nullptr && admission != nullptr
         && identity && identity->player_id() == playerId && !identity->scene_instance_id().empty()
         && admission->generation == identity->generation() && admission->ownerRevision == identity->owner_revision()
-        && first.player_id() == playerId && epoch != 0 && seq != 0
-        && owner->epoch == epoch;
+        && first.player_id() == playerId && stored->IsCommittedForOwner(owner->epoch);
 }
 bool RoleAdmissionSystem::Seal(const common::base::RoleTradeSeal& seal) {
     const auto local = ReadLocalNode();

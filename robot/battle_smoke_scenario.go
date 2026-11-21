@@ -510,15 +510,11 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	}
 
 	turns := bot.player.GetTurnCount()
-	// 就绪补拉和公共回合帧必须来自直连；个人终局只能由 Scene 持久结算后经大厅通知。
-	// 上面的 WaitBattleEnd 已核本局身份；直连不得提前发个人终局(总体存盘方案 §5.4)。
 	directTurns := int(direct.turnResults.Load())
 	zap.L().Info("[battle-smoke] A direct-connect delivery", zap.String("counts", direct.summary()))
-	if directTurns < 1 || direct.battleEnds.Load() != 0 || direct.stateReplies.Load() < 1 {
+	if err := direct.verifyFighterDelivery(); err != nil {
 		return battleSmokeFighterResult{step: "a-direct-delivery",
-			err: fmt.Errorf("fighter direct connection saw %s, expected state_replies>=1, turn_results>=1 and battle_ends=0; personal settlement must arrive through scene",
-				direct.summary()),
-			battleId: battleId, outcome: outcome, turns: turns}
+			err: err, battleId: battleId, outcome: outcome, turns: turns}
 	}
 	// 直连心跳(gate-client-heartbeat.md §14):battle 在握手应答里通告参数,robot 当场发第一条,battle 必须回。
 	// 没有回包说明 battle 没通告(robot 一条都没发)或没处理心跳;后者会把心跳当未知消息断开直连,前面的投递断言多半已先失败。

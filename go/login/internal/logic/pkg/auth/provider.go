@@ -13,6 +13,8 @@ type AuthResult struct {
 	// Channel 是这份凭证最初来自哪个渠道(auth_type)。只有 access_token 这种转手的凭证填(签发令牌时的 auth_type);
 	// 为空时就是请求里的 auth_type。防沉迷按它判定由谁实名(docs/design/real-name-anti-addiction.md §4)。
 	Channel string
+	// OpenID 是第三方渠道返回的渠道内用户标识(如微信 / 抖音小游戏 openid)。内容安全接口(msgSecCheck)按它标识发言者。
+	OpenID string
 }
 
 // Provider validates an auth token and returns the resolved account.

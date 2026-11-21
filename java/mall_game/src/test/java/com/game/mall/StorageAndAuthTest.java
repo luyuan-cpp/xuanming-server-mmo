@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 class StorageAndAuthTest {
     @Test void schemaGateRequiresVersionUniqueKeysAndBinaryIdentifiers() throws Exception {
         try (var f = new CommerceFixture()) { SchemaVerifier.verify(f.jdbc, f.source); f.jdbc.update("UPDATE commerce_schema_version SET storage_contract='foreign-mall'"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
-        try (var f = new CommerceFixture()) { f.jdbc.execute("DROP TABLE commerce_payment_receipt");f.jdbc.execute("CREATE TABLE commerce_payment_receipt(channel VARBINARY(32),transaction_id VARBINARY(128),order_sn VARCHAR(36),amount_minor BIGINT,currency VARCHAR(16))"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
+        try (var f = new CommerceFixture()) { f.jdbc.execute("DROP TABLE commerce_payment_receipt");f.jdbc.execute("CREATE TABLE commerce_payment_receipt(channel VARBINARY(32),transaction_id VARBINARY(128),order_sn VARCHAR(36),amount_minor BIGINT,currency VARCHAR(16),revision INT,fact VARCHAR(8))"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
         try (var f = new CommerceFixture()) { f.jdbc.execute("ALTER TABLE oms_order RENAME TO oms_order_binary_fixture");f.jdbc.execute("CREATE VIEW oms_order AS SELECT id,order_sn,buyer_id,CAST(request_id AS CHAR(128)) AS request_id,sku_id,quantity,pay_amount,currency,status,create_time_ms,payment_deadline_ms,payment_time_ms FROM oms_order_binary_fixture"); assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source)); }
     }
     // 2026-11-05 之前布局的库(付款回执订单列 NOT NULL、没有异常付款表、退款两表按订单号)记不下已付订单的第二笔钱,必须拒启;
@@ -42,6 +42,10 @@ class StorageAndAuthTest {
             second.claim("gateway", "noncecase00000001", now); assertEquals(2, f.count("commerce_request_nonce"));
             assertEquals(401, assertThrows(CommerceException.class, () -> second.claim("gateway", "expired0000000001", now - 500_000)).status());
             assertEquals(401, assertThrows(CommerceException.class, () -> second.claim("gateway", "future00000000001", now + 500_000)).status());
+            assertEquals(2, f.count("commerce_request_nonce"));
+            f.jdbc.update("INSERT INTO commerce_request_nonce(caller_role,nonce,expires_ms) VALUES(?,?,?)",
+                "gateway", "expired-nonce-row".getBytes(StandardCharsets.US_ASCII), now - 10_000);
+            assertEquals(1, first.pruneExpired(), "定时清理应删除过期 nonce 而不碰有效行");
             assertEquals(2, f.count("commerce_request_nonce"));
         }
     }

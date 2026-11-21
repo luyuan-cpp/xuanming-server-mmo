@@ -1,6 +1,8 @@
 #include "metrics/prometheus_text.h"
 
 #include <array>
+#include <cmath>
+#include <cstdio>
 
 namespace prometheus_text
 {
@@ -140,6 +142,18 @@ namespace prometheus_text
 		AppendSample({}, labels, nullptr, value);
 	}
 
+	void Writer::SampleDouble(std::initializer_list<Label> labels, double value)
+	{
+		if (!familyValid_ || familyType_ == MetricType::kHistogram || !LabelsValid(labels) || !std::isfinite(value))
+		{
+			++droppedSamples_;
+			return;
+		}
+		char buf[64]{};
+		std::snprintf(buf, sizeof(buf), "%.6g", value);
+		AppendSampleText({}, labels, nullptr, buf);
+	}
+
 	void Writer::Histogram(std::initializer_list<Label> labels, std::span<const uint64_t> upperBounds,
 						   std::span<const uint64_t> bucketCounts, uint64_t sum)
 	{
@@ -174,8 +188,51 @@ namespace prometheus_text
 		AppendSample("_count", labels, nullptr, cumulative);
 	}
 
+	void Writer::HistogramDouble(std::initializer_list<Label> labels, std::span<const double> upperBounds,
+								 std::span<const uint64_t> bucketCounts, double sum)
+	{
+		bool valid = familyValid_ && familyType_ == MetricType::kHistogram && LabelsValid(labels) &&
+					 bucketCounts.size() == upperBounds.size() + 1 && std::isfinite(sum);
+		for (const auto &label : labels)
+		{
+			valid = valid && label.name != "le";
+		}
+		for (size_t i = 0; valid && i < upperBounds.size(); ++i)
+		{
+			valid = std::isfinite(upperBounds[i]) && (i == 0 || upperBounds[i - 1] < upperBounds[i]);
+		}
+		if (!valid)
+		{
+			++droppedSamples_;
+			return;
+		}
+
+		uint64_t cumulative = 0;
+		for (size_t i = 0; i < upperBounds.size(); ++i)
+		{
+			cumulative += bucketCounts[i];
+			char buf[64]{};
+			std::snprintf(buf, sizeof(buf), "%.6g", upperBounds[i]);
+			const Label le{"le", buf};
+			AppendSample("_bucket", labels, &le, cumulative);
+		}
+		cumulative += bucketCounts.back();
+		const Label infinity{"le", "+Inf"};
+		AppendSample("_bucket", labels, &infinity, cumulative);
+		char sumBuf[64]{};
+		std::snprintf(sumBuf, sizeof(sumBuf), "%.6g", sum);
+		AppendSampleText("_sum", labels, nullptr, sumBuf);
+		AppendSample("_count", labels, nullptr, cumulative);
+	}
+
 	void Writer::AppendSample(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
 							  uint64_t value)
+	{
+		AppendSampleText(suffix, labels, extra, std::to_string(value));
+	}
+
+	void Writer::AppendSampleText(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
+								  std::string_view valueText)
 	{
 		text_ += family_;
 		text_ += suffix;
@@ -206,7 +263,7 @@ namespace prometheus_text
 			text_ += '}';
 		}
 		text_ += ' ';
-		text_ += std::to_string(value);
+		text_ += valueText;
 		text_ += '\n';
 	}
 } // namespace prometheus_text

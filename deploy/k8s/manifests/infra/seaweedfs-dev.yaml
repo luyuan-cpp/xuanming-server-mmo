@@ -76,12 +76,15 @@ spec:
           args:
             - |
               shell() { weed shell -master=localhost:9333 -filer=localhost:8888 2>/dev/null; }
-              until echo "s3.bucket.list" | shell | grep -qw "__LOKI_S3_BUCKET__"; do
-                echo "s3.bucket.create -name __LOKI_S3_BUCKET__" | shell >/dev/null || true
-                echo "waiting for bucket __LOKI_S3_BUCKET__"
-                sleep 2
+              for bucket in __LOKI_S3_BUCKET__ __TABLE_SYNC_S3_BUCKET__; do
+                [ "$bucket" = "none" ] && continue
+                until echo "s3.bucket.list" | shell | grep -qw "$bucket"; do
+                  echo "s3.bucket.create -name $bucket" | shell >/dev/null || true
+                  echo "waiting for bucket $bucket"
+                  sleep 2
+                done
+                echo "bucket $bucket ready"
               done
-              echo "bucket __LOKI_S3_BUCKET__ ready"
               exec sleep 2147483647
           resources:
             requests:

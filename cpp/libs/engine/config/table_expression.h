@@ -21,6 +21,7 @@ public:
 
     bool Init(const StringVector& paramNames)
     {
+        registeredParamNames = paramNames;
         paramList.clear();
         paramList.resize(paramNames.size());
 
@@ -62,6 +63,32 @@ public:
         return expression.value();
     }
 
+    // 无状态只读求值(docs/design/config-table-hot-reload.md §16 第 2 条):
+    // 多间战斗房间共用同一份不可变 TableSet 时不触碰成员 paramList / expression,
+    // 全部绑定在栈局部变量上完成。
+    T Evaluate(const std::string& expressionStr, const ParamListType& params = {}) const
+    {
+        if (params.size() != registeredParamNames.size())
+        {
+            return T{};
+        }
+        ParamListType localParams = params;
+        SymbolTableType localSymbolTable;
+        localSymbolTable.add_function("random", customRandom<T>);
+        for (std::size_t i = 0; i < registeredParamNames.size(); ++i)
+        {
+            localSymbolTable.add_variable(registeredParamNames[i], localParams[i]);
+        }
+        ExpressionType localExpression;
+        localExpression.register_symbol_table(localSymbolTable);
+        ParserType localParser;
+        if (!localParser.compile(expressionStr, localExpression))
+        {
+            return T{};
+        }
+        return localExpression.value();
+    }
+
 private:
     bool RegisterVariables(const StringVector& paramNames) {
         if (paramNames.size() != paramList.size()) {
@@ -73,6 +100,7 @@ private:
         return true;
     }
 
+    StringVector registeredParamNames;
     ParamListType paramList;
     ExpressionType expression;
     SymbolTableType symbolTable;

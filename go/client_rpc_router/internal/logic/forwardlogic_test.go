@@ -23,6 +23,7 @@ import (
 	pb "proto/client_rpc_router"
 	base "proto/common/base"
 
+	"shared/circuitbreaker"
 	"shared/releasetrack"
 
 	"github.com/stretchr/testify/require"
@@ -664,4 +665,103 @@ func TestForwardEmptyBodyRoundTrips(t *testing.T) {
 	require.Equal(t, "match-1|", string(resp.SerializedMessage))
 	_, gotBody, _ := target.snapshot()
 	require.Empty(t, gotBody)
+}
+
+func TestForwardCircuitBreakerSkipsBrokenEndpointAndRoutesToHealthy(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceGetQueueStatusMessageId)
+	dialer := newBufDialer(t)
+	broken := startEchoTarget(t, "match-bad", route.FullMethod)
+	broken.failWith = status.Error(codes.Unavailable, "down")
+	healthy := startEchoTarget(t, "match-ok", route.FullMethod)
+	dialer.add("match-bad", broken)
+	dialer.add("match-ok", healthy)
+
+	now := time.Unix(5000, 0)
+	sc := newSvcCtx(t, dialer, 2000)
+	sc.Breakers = circuitbreaker.NewEndpointSet(2, 10*time.Second, func() time.Time { return now })
+	addNode(sc, base.ENodeType_MatchNodeService, 1, 1, "match-bad")
+	addNode(sc, base.ENodeType_MatchNodeService, 2, 1, "match-ok")
+
+	// 让 match-bad 先达到 2 次失败阈值进入 Open。
+	sc.Breakers.RecordFailure("match-bad")
+	sc.Breakers.RecordFailure("match-bad")
+	require.Equal(t, circuitbreaker.StateOpen, sc.Breakers.State("match-bad"))
+
+	// 之后连续转发必须全部跳过 match-bad、落到健康节点 match-ok。
+	for i := 0; i < 10; i++ {
+		resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+			Forward(forwardReq(game.MatchServiceGetQueueStatusMessageId, uint64(i+1), 1, []byte("ping")))
+		require.NoError(t, err)
+		require.Nil(t, resp.ErrorMessage)
+		require.Equal(t, "match-ok|ping", string(resp.SerializedMessage))
+	}
+	badCalls, _, _ := broken.snapshot()
+	require.Zero(t, badCalls, "熔断打开期不得再向故障节点发请求")
+}
+
+func TestForwardCircuitBreakerAllOpenFastFailsAndRecoversHalfOpen(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceGetQueueStatusMessageId)
+	dialer := newBufDialer(t)
+	target := startEchoTarget(t, "match-1", route.FullMethod)
+	target.failWith = status.Error(codes.Unavailable, "overloaded")
+	dialer.add("match-1", target)
+
+	now := time.Unix(6000, 0)
+	sc := newSvcCtx(t, dialer, 2000)
+	sc.Breakers = circuitbreaker.NewEndpointSet(2, 10*time.Second, func() time.Time { return now })
+	addNode(sc, base.ENodeType_MatchNodeService, 1, 1, "match-1")
+
+	msgLabel := metrics.MessageIdLabel(game.MatchServiceGetQueueStatusMessageId, true)
+	openBefore := metrics.ForwardTotalValue(msgLabel, metrics.OutcomeCircuitOpen)
+
+	// 前 2 次真实调用失败 → 打开熔断。
+	for i := 0; i < 2; i++ {
+		resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+			Forward(forwardReq(game.MatchServiceGetQueueStatusMessageId, uint64(i+1), 1, []byte("x")))
+		require.NoError(t, err)
+		requireEnvelopeError(t, resp, uint64(i+1), game.MatchServiceGetQueueStatusMessageId, constants.ErrServiceUnavailable)
+	}
+	require.Equal(t, circuitbreaker.StateOpen, sc.Breakers.State("match-1"))
+	callsAtOpen, _, _ := target.snapshot()
+	require.Equal(t, 2, callsAtOpen)
+
+	// 第 3 次在熔断期内快速失败，不触达目标。
+	resp, err := logic.NewForwardLogic(ctxWithSession(), sc).
+		Forward(forwardReq(game.MatchServiceGetQueueStatusMessageId, 3, 1, []byte("x")))
+	require.NoError(t, err)
+	requireEnvelopeError(t, resp, 3, game.MatchServiceGetQueueStatusMessageId, constants.ErrServiceUnavailable)
+	require.Equal(t, openBefore+1, metrics.ForwardTotalValue(msgLabel, metrics.OutcomeCircuitOpen))
+	callsAfterFastFail, _, _ := target.snapshot()
+	require.Equal(t, 2, callsAfterFastFail)
+
+	// 10 秒冷却结束后目标恢复：HalfOpen 探测成功 → 回到 Closed。
+	target.failWith = nil
+	now = now.Add(10 * time.Second)
+	resp, err = logic.NewForwardLogic(ctxWithSession(), sc).
+		Forward(forwardReq(game.MatchServiceGetQueueStatusMessageId, 4, 1, []byte("ok")))
+	require.NoError(t, err)
+	require.Nil(t, resp.ErrorMessage)
+	require.Equal(t, "match-1|ok", string(resp.SerializedMessage))
+	require.Equal(t, circuitbreaker.StateClosed, sc.Breakers.State("match-1"))
+}
+
+func TestForwardCallerCancelDoesNotTripEndpointBreaker(t *testing.T) {
+	route, _ := game.LookupRoute(game.MatchServiceGetQueueStatusMessageId)
+	dialer := newBufDialer(t)
+	target := startEchoTarget(t, "match-1", route.FullMethod)
+	target.block = true
+	dialer.add("match-1", target)
+
+	now := time.Unix(7000, 0)
+	sc := newSvcCtx(t, dialer, 2000)
+	sc.Breakers = circuitbreaker.NewEndpointSet(1, 10*time.Second, func() time.Time { return now })
+	addNode(sc, base.ENodeType_MatchNodeService, 1, 1, "match-1")
+
+	ctx, cancel := context.WithCancel(ctxWithSession())
+	cancel()
+	resp, err := logic.NewForwardLogic(ctx, sc).
+		Forward(forwardReq(game.MatchServiceGetQueueStatusMessageId, 1, 1, []byte("x")))
+	require.NoError(t, err)
+	requireEnvelopeError(t, resp, 1, game.MatchServiceGetQueueStatusMessageId, constants.ErrServiceUnavailable)
+	require.Equal(t, circuitbreaker.StateClosed, sc.Breakers.State("match-1"), "调用方主动取消不得误触发目标熔断")
 }

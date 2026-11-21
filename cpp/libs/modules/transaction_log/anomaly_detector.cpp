@@ -2,6 +2,7 @@
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <chrono>
+#include <limits>
 
 #include <muduo/base/Logging.h>
 
@@ -21,16 +22,55 @@ thread_local std::unordered_map<uint32_t, AnomalyThreshold>
 
 thread_local AnomalyThreshold AnomalyDetector::defaultThreshold_{};
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-static uint64_t NowSeconds()
+namespace
 {
-    return static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count());
+thread_local AnomalyDetector::SteadyNowFn tlsSteadyNowForTest = nullptr;
+
+// 滑动窗口与告警冷却统一使用单调时钟(AGENTS.md §11.3),不受 NTP/墙钟回拨影响。
+uint64_t SteadyNowSeconds()
+{
+    if (tlsSteadyNowForTest != nullptr)
+    {
+        return tlsSteadyNowForTest();
+    }
+    const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now().time_since_epoch());
+    return elapsed.count() > 0 ? static_cast<uint64_t>(elapsed.count()) : 0;
+}
+
+// 仅用于告警 JSON 的对外可读时间戳。
+uint64_t WallNowSeconds()
+{
+    const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+    return elapsed.count() > 0 ? static_cast<uint64_t>(elapsed.count()) : 0;
+}
+
+uint64_t SaturatingAdd(uint64_t lhs, uint64_t rhs)
+{
+    constexpr uint64_t kMax = (std::numeric_limits<uint64_t>::max)();
+    return rhs > kMax - lhs ? kMax : lhs + rhs;
+}
+
+uint64_t RecomputeCumulativeAmount(const std::deque<AnomalyEvent> &events)
+{
+    uint64_t sum = 0;
+    for (const auto &ev : events)
+    {
+        sum = SaturatingAdd(sum, ev.amount);
+    }
+    return sum;
+}
+
+bool IsBucketInCooldown(const PlayerAnomalyBucket &bucket, uint64_t now, uint32_t windowSeconds)
+{
+    return bucket.hasAlerted && now >= bucket.lastAlertAt && (now - bucket.lastAlertAt) < windowSeconds;
+}
+} // namespace
+
+void AnomalyDetector::SetSteadyNowForTest(SteadyNowFn fn)
+{
+    tlsSteadyNowForTest = fn;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,25 +111,61 @@ const AnomalyThreshold &AnomalyDetector::GetItemThreshold(uint32_t configId)
 bool AnomalyDetector::RecordAndCheck(PlayerAnomalyBucket &bucket, uint64_t amount,
                                      const AnomalyThreshold &threshold)
 {
-    const uint64_t now = NowSeconds();
+    constexpr uint64_t kMax = (std::numeric_limits<uint64_t>::max)();
+    const uint64_t now = SteadyNowSeconds();
     const uint64_t windowStart = (now > threshold.windowSeconds) ? (now - threshold.windowSeconds) : 0;
 
-    // Prune expired events
+    const bool wasSaturated = (bucket.cumulativeAmount == kMax);
+    bool removedAny = false;
+
+    // 清理窗口外过期事件；饱和状态下弹出旧事件后通过剩余事件重算累计值，防止下溢或虚高。
     while (!bucket.events.empty() && bucket.events.front().timestamp < windowStart)
     {
-        bucket.cumulativeAmount -= bucket.events.front().amount;
+        const uint64_t evicted = bucket.events.front().amount;
         bucket.events.pop_front();
+        removedAny = true;
+        if (!wasSaturated)
+        {
+            bucket.cumulativeAmount = bucket.cumulativeAmount >= evicted ? (bucket.cumulativeAmount - evicted) : 0;
+        }
     }
 
-    // Record new event
-    bucket.events.push_back({now, amount});
-    bucket.cumulativeAmount += amount;
+    // 限制单桶队列长度，防止高频刷取造成无界内存增长。
+    while (bucket.events.size() >= kMaxEventsPerBucket)
+    {
+        const uint64_t evicted = bucket.events.front().amount;
+        bucket.events.pop_front();
+        removedAny = true;
+        if (!wasSaturated)
+        {
+            bucket.cumulativeAmount = bucket.cumulativeAmount >= evicted ? (bucket.cumulativeAmount - evicted) : 0;
+        }
+    }
 
-    // Check thresholds
+    if (wasSaturated && removedAny)
+    {
+        bucket.cumulativeAmount = RecomputeCumulativeAmount(bucket.events);
+    }
+
+    // 记录新事件，使用饱和加法防止 uint64_t 回绕绕过金额阈值。
+    bucket.events.push_back({now, amount});
+    bucket.cumulativeAmount = SaturatingAdd(bucket.cumulativeAmount, amount);
+
     const bool countExceeded = bucket.events.size() > threshold.maxCountPerWindow;
     const bool amountExceeded = bucket.cumulativeAmount > threshold.maxAmountPerWindow;
+    if (!countExceeded && !amountExceeded)
+    {
+        return false;
+    }
 
-    return countExceeded || amountExceeded;
+    // 每桶在单个窗口期内至多告警一次，避免超限后每笔收益连续刷爆日志与 Kafka。
+    if (IsBucketInCooldown(bucket, now, threshold.windowSeconds))
+    {
+        return false;
+    }
+    bucket.hasAlerted = true;
+    bucket.lastAlertAt = now;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +197,7 @@ void AnomalyDetector::EmitAlert(entt::entity player, const std::string &category
                             ",\"threshold_count\":" + std::to_string(threshold.maxCountPerWindow) +
                             ",\"threshold_amount\":" + std::to_string(threshold.maxAmountPerWindow) +
                             ",\"window_seconds\":" + std::to_string(threshold.windowSeconds) +
-                            ",\"timestamp\":" + std::to_string(NowSeconds()) + "}";
+                            ",\"timestamp\":" + std::to_string(WallNowSeconds()) + "}";
 
     const std::string key = std::to_string(playerId);
     auto err = KafkaProducer::Instance().send(kAnomalyAlertTopic, alertJson, key);
@@ -164,6 +240,33 @@ bool AnomalyDetector::RecordItemGain(entt::entity player, uint32_t configId, uin
     if (window == nullptr)
     {
         return false;
+    }
+
+    // 定期清理已完全过期且不在冷却期内的物品桶，防止长会话累计大量无用 configId 键。
+    const uint64_t now = SteadyNowSeconds();
+    if (!window->items.empty() && (!window->hasPrunedItems || now != window->lastItemPruneAt))
+    {
+        for (auto it = window->items.begin(); it != window->items.end();)
+        {
+            if (it->first == configId)
+            {
+                ++it;
+                continue;
+            }
+            const auto &itemThreshold = GetItemThreshold(it->first);
+            const uint64_t itemWindowStart = (now > itemThreshold.windowSeconds) ? (now - itemThreshold.windowSeconds) : 0;
+            const bool eventsExpired = it->second.events.empty() || it->second.events.back().timestamp < itemWindowStart;
+            if (eventsExpired && !IsBucketInCooldown(it->second, now, itemThreshold.windowSeconds))
+            {
+                it = window->items.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        window->hasPrunedItems = true;
+        window->lastItemPruneAt = now;
     }
 
     auto &bucket = window->items[configId];
@@ -216,7 +319,7 @@ uint32_t AnomalyDetector::GetCurrencyGainCount(entt::entity player, CurrencyType
     }
 
     const auto &threshold = GetCurrencyThreshold(type);
-    const uint64_t now = NowSeconds();
+    const uint64_t now = SteadyNowSeconds();
     const uint64_t windowStart = (now > threshold.windowSeconds) ? (now - threshold.windowSeconds) : 0;
 
     // Count only events within the window

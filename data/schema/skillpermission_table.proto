@@ -13,6 +13,7 @@ message SkillPermissionTable {
   option (cfg_sheet)       = "SkillPermission";
   option (cfg_source_file) = "SkillPermission.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   repeated uint32 skill_type = 2 [(cfg_slots) = 6, (cfg_tip_ref) = true];

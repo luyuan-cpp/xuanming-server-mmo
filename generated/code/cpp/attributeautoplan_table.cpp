@@ -1,5 +1,8 @@
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "google/protobuf/util/json_util.h"
-#include "core/utils/file/file2string.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/attributeautoplan_table.h"
@@ -7,20 +10,39 @@
 std::string GetConfigDir();
 bool UseProtoBinaryTables();
 
-void AttributeAutoPlanTableManager::Load() {
-    auto snap = std::make_unique<Snapshot>();
+bool AttributeAutoPlanTableManager::ParseSnapshotFromDir(
+    const std::string& configDir,
+    const bool useBinary,
+    std::shared_ptr<const Snapshot>& out,
+    std::string& err) {
+    std::string prefix = configDir;
+    if (!prefix.empty() && prefix.back() != '/' && prefix.back() != '\\') {
+        prefix.push_back('/');
+    }
+    const std::string path = prefix + (useBinary ? "attributeautoplan.pb" : "attributeautoplan.json");
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        err = "failed to open AttributeAutoPlan table file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (input.bad()) {
+        err = "failed to read AttributeAutoPlan table file: " + path;
+        return false;
+    }
+    const std::string contents = buffer.str();
 
-    if (UseProtoBinaryTables()) {
-        const std::string path = GetConfigDir() + "attributeautoplan.pb";
-        const auto contents = File2String(path);
+    auto snap = std::make_shared<Snapshot>();
+    if (useBinary) {
         if (!snap->data.ParseFromString(contents)) {
-            LOG_FATAL << "AttributeAutoPlan binary parse failed: " << path;
+            err = "AttributeAutoPlan binary parse failed: " + path;
+            return false;
         }
     } else {
-        const std::string path = GetConfigDir() + "attributeautoplan.json";
-        const auto contents = File2String(path);
-        if (const auto result = google::protobuf::util::JsonStringToMessage(contents.data(), &snap->data); !result.ok()) {
-            LOG_FATAL << "AttributeAutoPlan" << result.message().data();
+        if (const auto result = google::protobuf::util::JsonStringToMessage(contents, &snap->data); !result.ok()) {
+            err = std::string("AttributeAutoPlan json parse failed: ") + std::string(result.message());
+            return false;
         }
     }
 
@@ -37,7 +59,17 @@ void AttributeAutoPlanTableManager::Load() {
         snap->poolIdIndex[row_data.pool_id()].push_back(&row_data);
     }
 
-    snapshot = std::move(snap);
+    out = std::move(snap);
+    return true;
+}
+
+void AttributeAutoPlanTableManager::Load() {
+    std::shared_ptr<const Snapshot> snap;
+    std::string err;
+    if (!ParseSnapshotFromDir(GetConfigDir(), UseProtoBinaryTables(), snap, err)) {
+        LOG_FATAL << err;
+    }
+    InstallSnapshot(std::move(snap));
 }
 
 std::pair<const AttributeAutoPlanTable*, uint32_t> AttributeAutoPlanTableManager::FindById(const uint32_t tableId) {

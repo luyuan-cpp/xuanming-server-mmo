@@ -31,10 +31,21 @@ type connector struct {
 	keepLockWait bool
 	permission   Permission
 	placed       *placedDialer // nil = 固定连 inner;有值时 inner 不用,每条连接按当前映射拨号
+	logicalDB    string        // 逻辑库名(传给 connectGate 区分各个逻辑库)
+	connectGate  ConnectGate   // 可选:包住一次建物理连接(拨号 + 握手 + 会话核对);nil = 不启用
 }
 
 func (c connector) Driver() driver.Driver { return opaqueDriver{} }
-func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c connector) Connect(ctx context.Context) (conn driver.Conn, err error) {
+	if c.connectGate != nil {
+		settle, gateErr := c.connectGate(ctx, c.logicalDB)
+		if gateErr != nil {
+			return nil, gateErr
+		}
+		if settle != nil {
+			defer func() { settle(err) }()
+		}
+	}
 	var gate writerGate = passGate{}
 	if c.permission.kind == permissionWriter {
 		gate = runtimeGate{config: c.permission.writer}
@@ -42,7 +53,6 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	inner := c.inner
 	var stale func() bool
 	if c.placed != nil {
-		var err error
 		if inner, stale, err = c.placed.dial(); err != nil {
 			return nil, err
 		}
@@ -55,6 +65,12 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	return guarded.Connect(ctx)
 }
 
+// ConnectGate 包住一次建物理连接(落点解析、拨号与会话核对)。
+// 回错误时不建连,Connect 直接回这个错误;否则回 settle,建连结束后带着结局调一次。
+// 本包不引入任何熔断实现,也不改变错误的不透明性:钩子只知道这一次建连成没成。
+// 设计见 docs/design/data-service-breaker-per-logical-db.md §5.1。
+type ConnectGate func(ctx context.Context, logicalDB string) (settle func(error), err error)
+
 // PlacementResolver 给出逻辑库当前的物理落点。shared/dbplacement.Watcher 实现它,本包不碰 etcd。
 type PlacementResolver interface {
 	// ResolvePlacement 返回逻辑库当前所在集群的地址和映射版本。建连、连接复用、连接归还都会调,必须便宜、不阻塞。
@@ -66,13 +82,20 @@ type PlacementResolver interface {
 type OpenOption func(*openOptions)
 
 type openOptions struct {
-	placement PlacementResolver
+	placement   PlacementResolver
+	connectGate ConnectGate
 }
 
 // WithPlacement 让连接池按映射拨号:DSN 里的地址不用,其余连接参数不变。*sql.DB 句柄全程不变,业务代码不用改。
 // 不传这个选项时行为和没有映射时完全一样。设计见 docs/design/horizontal-scale-logical-db.md §8.1。
 func WithPlacement(resolver PlacementResolver) OpenOption {
 	return func(o *openOptions) { o.placement = resolver }
+}
+
+// WithConnectGate 给 Open / OpenForMigration 建的连接池挂上建连钩子(例如按逻辑库的熔断)。
+// 不传或传 nil 时与改动前逐字相同;PinCurrentSession / PinPlacedSession 不带钩子,不受影响。
+func WithConnectGate(gate ConnectGate) OpenOption {
+	return func(o *openOptions) { o.connectGate = gate }
 }
 
 // placedDialer 按映射选集群建连,并给每条连接一个「映射是否已变」的判定。
@@ -363,7 +386,13 @@ func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, ma
 	if err != nil {
 		return nil, errors.New("权威SQL连接器无效")
 	}
-	conn := connector{inner: inner, backend: parsedBackend, permission: permission}
+	conn := connector{
+		inner:       inner,
+		backend:     parsedBackend,
+		permission:  permission,
+		logicalDB:   expectedDatabase,
+		connectGate: opts.connectGate,
+	}
 	if opts.placement != nil {
 		conn.placed = newPlacedDialer(parsed, opts.placement)
 	}

@@ -25,6 +25,7 @@ import (
 
 	"shared/assetopwake"
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/currencytype"
 	"shared/dbplacement"
 	"shared/idsegment"
@@ -135,6 +136,9 @@ type Config struct {
 	Commerce CommerceConf `json:"Commerce,optional"`
 	Mall     MallConf     `json:"Mall,optional"`
 	Rmb      RmbConf      `json:",optional"`
+
+	// ContentGuard 是内容安全服务(go/content_guard)的调用端:人民币寄售标题在落库前先送检。
+	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 }
 
 type RmbConf struct {

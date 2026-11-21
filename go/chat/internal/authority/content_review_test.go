@@ -26,32 +26,37 @@ func TestReviewOnlyTrustsPassAndSaneMask(t *testing.T) {
 		return result
 	}))(s)
 
-	content, tip := s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
+	content, tip, pending := s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
 	require.Zero(t, tip)
+	require.False(t, pending)
 	require.Equal(t, "原文", content)
 	require.Equal(t, cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, gotScene)
 	require.EqualValues(t, 7, gotPlayer)
 	require.Equal(t, "原文", gotText)
 
-	_, _ = s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, 7, "原文")
+	_, _, _ = s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, 7, "原文")
 	require.Equal(t, cgpb.TextScene_TEXT_SCENE_CHAT_PRIVATE, gotScene)
 
 	for name, c := range map[string]struct {
 		result  contentguard.Result
 		content string
 		tip     uint32
+		pending bool
 	}{
-		"masked":                  {contentguard.Result{Verdict: contentguard.Masked, Masked: "** 原文"}, "** 原文", 0},
-		"masked but blank":        {contentguard.Result{Verdict: contentguard.Masked, Masked: " "}, "", constants.ErrContentRejected},
-		"masked longer than max":  {contentguard.Result{Verdict: contentguard.Masked, Masked: strings.Repeat("*", 17)}, "", constants.ErrContentRejected},
-		"reject":                  {contentguard.Result{Verdict: contentguard.Reject}, "", constants.ErrContentRejected},
-		"unavailable":             {contentguard.Result{Verdict: contentguard.Unavailable}, "", constants.ErrContentCheckUnavailable},
-		"zero value fails closed": {contentguard.Result{}, "", constants.ErrContentRejected},
+		"masked":                  {contentguard.Result{Verdict: contentguard.Masked, Masked: "** 原文"}, "** 原文", 0, false},
+		"masked but blank":        {contentguard.Result{Verdict: contentguard.Masked, Masked: " "}, "", constants.ErrContentRejected, false},
+		"masked longer than max":  {contentguard.Result{Verdict: contentguard.Masked, Masked: strings.Repeat("*", 17)}, "", constants.ErrContentRejected, false},
+		"reject":                  {contentguard.Result{Verdict: contentguard.Reject}, "", constants.ErrContentRejected, false},
+		"reject contact ad":       {contentguard.Result{Verdict: contentguard.Reject, Category: cgpb.TextCategory_TEXT_CATEGORY_AD}, "", constants.ErrContactRejected, false},
+		"unavailable":             {contentguard.Result{Verdict: contentguard.Unavailable}, "", constants.ErrContentCheckUnavailable, false},
+		"zero value fails closed": {contentguard.Result{}, "", constants.ErrContentRejected, false},
+		"world pending platform":  {contentguard.Result{Verdict: contentguard.Pass, PendingPlatformReview: true}, "原文", 0, true},
 	} {
 		result = c.result
-		content, tip = s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
+		content, tip, pending = s.review(ctx, chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
 		require.Equal(t, c.tip, tip, name)
 		require.Equal(t, c.content, content, name)
+		require.Equal(t, c.pending, pending, name)
 	}
 }
 
@@ -59,7 +64,8 @@ func TestReviewOnlyTrustsPassAndSaneMask(t *testing.T) {
 func TestReviewWithoutGuardPassesThrough(t *testing.T) {
 	s := &Store{rules: Rules{MaxContentBytes: 16}}
 	WithContentGuard(nil)(s)
-	content, tip := s.review(context.Background(), chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
+	content, tip, pending := s.review(context.Background(), chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, 7, "原文")
 	require.Zero(t, tip)
+	require.False(t, pending)
 	require.Equal(t, "原文", content)
 }

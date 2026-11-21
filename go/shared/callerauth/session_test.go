@@ -2,9 +2,14 @@ package callerauth
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // 跨语言契约:C++ gate(caller_auth.h)拼出的 canonical 必须与这里逐字节相同。
@@ -108,6 +113,25 @@ func TestPublicKeysRejectWrongLengthSignature(t *testing.T) {
 func TestZeroSignerRefusesToSign(t *testing.T) {
 	if _, err := SignCanonical(Ed25519Signer{}, "gate", "/a.B/C", nil, 1, "00112233445566778899aabbccddeeff"); err == nil {
 		t.Fatal("没有私钥的签名器不应签出东西")
+	}
+}
+
+func TestSessionInterceptorRecordsPrometheusMetricWithoutGoZeroEnable(t *testing.T) {
+	keys, err := ParsePublicKeys(rfc8032Test1PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interceptor := SessionInterceptor(NewVerifier(Options{Keys: keys, Enforce: true, AllowedCallers: []string{"gate"}}))
+	before := testutil.ToFloat64(sessionVerifyTotal.WithLabelValues(Reason(ErrBadPayload)))
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(MetaSessionDetail, "!!!not-base64!!!"))
+	_, err = interceptor(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/guild.GuildService/GetGuild"},
+		func(context.Context, any) (any, error) { return nil, nil })
+	if err == nil {
+		t.Fatal("malformed session metadata must fail authentication")
+	}
+	after := testutil.ToFloat64(sessionVerifyTotal.WithLabelValues(Reason(ErrBadPayload)))
+	if after != before+1 {
+		t.Fatalf("caller_auth_session_verify_total did not increment without go-zero prometheus.Enable(): before=%v after=%v", before, after)
 	}
 }
 

@@ -15,7 +15,7 @@
 >
 > - zrpc 的服务端自带熔断(`Middlewares.Breaker` 缺省开,`serverinterceptors.UnaryBreakerInterceptor`),键是 gRPC 方法名,回 `Unavailable`、`DeadlineExceeded` 的调用计成失败(`zrpc/internal/codes.Acceptable`)。go/db 对存储侧的失败一律回 `Unavailable`,所以整库不可达时这一层本来就在把调用快速挡回。
 > - 它不分库。算法是 Google SRE 的自适应限流(`core/breaker/googlebreaker.go`:10 秒窗口,成功数 × 1.5 小于总数就按比例丢,被丢的也计入总数)。这个算法假定后端越被限流、成功率越高;而这里的失败占比是流量结构决定的常数——失联的那个库的玩家一定失败。于是一个库失联且流量占比超过三分之一时(存档库不超过 3 个时,任何一个库都是),放行比例每个窗口按「1.5 ×(1 − 失败占比)」衰减,指向健康库的存盘与认领也几乎全被挡掉,只剩每秒强制放行的一次:单库故障被放大成整个地域存不了盘、进不了场。原稿评审 F1 要避免的正是这种放大。
-> - 处置:`go/db/db.go` 关掉 zrpc 按方法的那一层(代码里写死,yaml 写开也不认);`go/db/internal/playerstore/server.go` 的 `enterStore` 给每个存档库一个 go-zero 的同款熔断(具名 `player_store/<编号>`),包住打开与事务。不算库故障的两种失败:闸门冻结(搬库窗口,库没坏)、调用方自己取消。被挡回的调用回 `Unavailable`(scene 照旧按结果未知重试),记 `db_player_store_requests_total{result="unavailable"}`;原来被框架挡掉的调用进不了这个指标。目录路由(data_service)不可达由 zrpc 客户端自带的熔断管,不受这次改动影响。
+> - 处置:`go/db/db.go` 关掉 zrpc 按方法的那一层(代码里写死,yaml 写开也不认);`go/db/internal/playerstore/server.go` 的 `enterStore` 给每个存档库一个 go-zero 的同款熔断(具名 `player_store/<编号>`),包住打开与事务。不算库故障的两种失败:闸门冻结(搬库窗口,库没坏)、调用方自己取消。被挡回的调用回 `Unavailable`(scene 照旧按结果未知重试),记 `db_player_store_requests_total{result="unavailable"}`;原来被框架挡掉的调用进不了这个指标。目录路由(data_service)随后也在同日落码改为「服务端建连处按逻辑库熔断 + 全仓调用方经 `shared/dsclient.Conf` 关掉按方法的客户端熔断」,见 `docs/design/data-service-breaker-per-logical-db.md`(已落码,未编译)。
 > - 这不是把删掉的冷却接回来:不需要判别错误类型(没拿到结论的失败都算),不自己探活,没有自己的状态机;用的是框架现成的熔断,只把键从方法换成库。验证命令见 `docs/PROGRESS.md` 2026-11-20「go/db 熔断改成按存档库」。
 
 > **状态**：v0.3.1（2026-10-14，Claude）。第 1 批已获负责人授权（2026-10-13，「L-04 第 1 批 + 读写超时」），**代码已按本稿落码，未编译、未测试**（AGENTS.md §10.1）。负责人同时要求「先实现代码，先不管测试，测试记录到上线待做里面」，未执行的验证列在 [godb-pipeline-launch-todo.md](../ops/godb-pipeline-launch-todo.md)。

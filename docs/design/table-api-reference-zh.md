@@ -317,38 +317,44 @@ MissionTableManager::Instance().SetLoadSuccessCallback([]() {
 
 ## 9. 热更新
 
-### 工作原理
+完整设计见 [配置表热更：表包、轨道指针与进程内整批切换](config-table-hot-reload.md)。
 
-1. `ReloadTables()` 调用 `LoadTables()`，重建所有 Snapshot。
-2. 每个 `Load()` 创建全新的 `Snapshot`（新的 idMap、新的索引、新的数据）。
-3. 旧 Snapshot 被原子替换（`unique_ptr` swap）。
-4. `LoadSuccess()` 回调在所有表加载完毕后触发。
-5. 全局 `loadSuccessCallback` 最后触发。
-6. 版本号递增。
+### 工作原理（两阶段整批切换）
+
+1. **只切声明过的表**：逐表在 `data/schema/*_table.proto` 声明 `option (cfg_hot_reload) = true;`（缺省 `false`）。改动触及未声明表时进程不切换并汇报 `needs_restart`，待滚动重启生效。
+2. **C++（`TableBundleManager` + `TableSet`）**：
+   - `ParseSnapshotFromDir` 构造独立不可变 `std::shared_ptr<const XxxTableSnapshot>`，失败返回错误、不 `LOG_FATAL`；
+   - 主 EventLoop 每轮 `queueInLoop` 分片解析 1 张表（不起新线程），装成整套 `TableSet`；
+   - 在 `ScopedTableSetOverride` 作用域内执行 `TableLoadHandler::Validate()`，失败即丢弃并继续用旧表；
+   - 到 `activate_at_ms` 原子 `CommitTableSet` 并触发 `OnCommitted`，旧 `TableSet` 留存 10 分钟后退役（战斗房间显式持有 `shared_ptr<const TableSet>` 直到该局结束）。
+3. **Go（`shared/tablebundle` + `table.Prepare` / `table.Commit` / `table.Current`）**：
+   - `table.Prepare(dir, useBinary)` 构造独立 `*table.TableSet`，校验与派生数据编译通过后由 `table.Commit(ts)` 替换各表 `atomic.Pointer` 并发布 `table.Current()`；
+   - 跨多张表要求同版一致时先取 `ts := table.Current()` 再经 `ts` 查询；旧的裸赋值 `ReloadTables` 已删除。
 
 ### 安全性
 
 | 操作 | 效果 |
 |------|------|
-| 增加行 | 新 Snapshot 包含新行 + 更新的索引 |
-| 删除行 | 新 Snapshot 不包含已删行 |
-| 修改行 | 新 Snapshot 包含修改后的数据 |
-| FK 查询 | 无状态，始终查询当前 Snapshot |
-| idx 查询 | 索引在 Load() 中重建，返回新数据的 const 引用 |
-| 反向 FK | 索引在 Load() 中重建，返回新数据的 const 引用 |
+| 增加行 | 新 `TableSet` 包含新行 + 更新的索引 |
+| 删除行 | 新 `TableSet` 不包含已删行（`(cfg_ids_permanent)` 表禁止删行） |
+| 修改行 | 新 `TableSet` 包含修改后的数据 |
+| FK 查询 | 无状态，始终查询当前快照 |
+| idx / 反向 FK 查询 | 索引在 `Prepare` 阶段重建，提交后原子切换 |
 
 ### 注意事项
 
-`ReloadTables()` 之后，任何持有的旧 Snapshot 的**原始指针**或 **string_view** 都将**悬垂**。重载后必须重新查询。
+**硬规则（`data/AGENTS.md`）**：业务结构体、定时器闭包与协程状态**只存 id，不存表行原始指针或 `string_view`**。C++ 10 分钟退役期仅兜底单次短 `co_await`，过了 10 分钟保存的行指针仍会悬垂。
 
 ---
 
 ## 10. Schema 选项速查
 
-选项词表在 [cfg_options.proto](../../data/schema/cfg_options.proto)。下表均写在 schema 字段选项中，不写入 xlsx 表头。
+选项词表在 [cfg_options.proto](../../data/schema/cfg_options.proto)。下表均写在 schema 选项中，不写入 xlsx 表头。
 
 | 选项 | 说明 | 示例 |
 |------|------|------|
+| `cfg_hot_reload` | 表级选项；是否允许运行期热更（缺省 `false`） | `option (cfg_hot_reload) = true;` |
+| `cfg_ids_permanent` | 表级选项；表行 ID 只增不删（如 `Item`、`Pet`） | `option (cfg_ids_permanent) = true;` |
 | `cfg_key` | 唯一键；与 cfg_multi 合用时为多值键 | `(cfg_key) = true` |
 | `cfg_multi` | 主键可重复或二级键多值；重复主键不生成 FindById | `(cfg_multi) = true` |
 | `cfg_index` | 二级索引 | `(cfg_index) = true` |
@@ -365,10 +371,10 @@ MissionTableManager::Instance().SetLoadSuccessCallback([]() {
 
 ## 11. 线程安全
 
-- **加载阶段**: 每个表在独立线程中加载（`LoadTablesAsync`），只访问自身数据，无跨表依赖。安全。
-- **读取阶段**: 所有读取通过不可变 Snapshot 进行。多线程可并发读取。安全。
-- **重载**: `ReloadTables()` 须在单线程（主线程/加载线程）中调用。swap 后，读者在下次访问时看到新数据。
-- **FK helper**: 无状态内联函数，读取当前 Snapshot。线程安全。
+- **启动加载阶段**：C++ `LoadTablesAsync` 并行解析并在返回前全部 `join`；Go `tablebundle.LoadAtStartup` 在提供服务前同步提交首套 `TableSet`。
+- **读取阶段**：所有读取通过不可变 `Snapshot` / `TableSet` 进行，无状态 const `Evaluate*` 表达式求值，支持并发读取。
+- **热更提交**：C++ 全程在主 EventLoop 单线程执行（不新起线程）；Go 在后台协程 `Prepare` + 校验完成后经 `atomic.Pointer` 发布 `Commit`。
+- **FK helper**：无状态内联函数，读取当前快照，线程安全。
 
 ---
 

@@ -380,4 +380,12 @@ TEST_F(BagServiceItemHoldTest, InventorySnapshotListsHeldQuantitiesForTheClient)
 	EXPECT_EQ(0, warehouse.held_items_size()) << "预留只约束人物背包";
 }
 
+TEST(ItemHoldRules, RenameKindIsValidAndNamed)
+{
+	PlayerItemHoldComp holds;
+	ASSERT_EQ(AddVerdict::kAdded, item_hold::Add(holds, 990001, ItemHoldKind::kRename, {{kPotion, 1}}, 10, 20));
+	EXPECT_STREQ("rename", item_hold::ItemHoldKindName(static_cast<uint32_t>(ItemHoldKind::kRename)));
+	EXPECT_TRUE(item_hold::Validate(holds).empty());
+}
+
 } // namespace

@@ -10,8 +10,9 @@ import (
 	"shared/accountdirectory"
 	"shared/callerauth"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -31,12 +32,11 @@ const (
 	rejectIncompleteOnlineActor = "incomplete_identity"
 )
 
-var entryRejectedTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+var entryRejectedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "online_entry",
 	Name:      "rejected_total",
 	Help:      "在线域入口拒绝次数;入口准入的 reason 取 client_without_session / internal_with_session / unverified_session / incomplete_identity,归属预检取 ownership_changed / ownership_unverified。",
-	Labels:    []string{"reason"},
-})
+}, []string{"reason"})
 
 type sessionKey struct{}
 
@@ -125,25 +125,25 @@ func EntryInterceptor(callable func(fullMethod string) bool, anonymousReads ...s
 				return next(ctx, request)
 			}
 			// 只有内部进程会不带会话调客户端方法:必然是调用方写错了,不是玩家行为。
-			entryRejectedTotal.Inc(rejectClientWithoutSession)
+			entryRejectedTotal.WithLabelValues(rejectClientWithoutSession).Inc()
 			logx.WithContext(ctx).Errorf("[online-entry] Rejecting %s without gate session: client methods accept only requests forwarded by gate", info.FullMethod)
 			return nil, status.Errorf(codes.PermissionDenied, "%s accepts only client requests forwarded by gate", info.FullMethod)
 		}
 		verified, ok := callerauth.AuthenticatedSession(ctx)
 		if !ok {
-			entryRejectedTotal.Inc(rejectUnverifiedSession)
+			entryRejectedTotal.WithLabelValues(rejectUnverifiedSession).Inc()
 			logx.WithContext(ctx).Errorf("[online-entry] Rejecting %s: session metadata present but not verified (GateInterceptor must run first)", info.FullMethod)
 			return nil, status.Error(codes.Unauthenticated, "session is not verified")
 		}
 		if !client {
-			entryRejectedTotal.Inc(rejectInternalWithSession)
+			entryRejectedTotal.WithLabelValues(rejectInternalWithSession).Inc()
 			logx.WithContext(ctx).Errorf("[online-entry] Rejecting client call to non-client method %s (session_id=%d)", info.FullMethod, verified.GetSessionId())
 			return nil, status.Errorf(codes.PermissionDenied, "%s is not callable by clients", info.FullMethod)
 		}
 		bound, err := CaptureSession(ctx)
 		if err != nil {
 			// 客户端驱动(离场后仍发在线请求、绑定未到时抢发),按请求计数,不逐条打日志。
-			entryRejectedTotal.Inc(rejectIncompleteOnlineActor)
+			entryRejectedTotal.WithLabelValues(rejectIncompleteOnlineActor).Inc()
 			return nil, status.Error(codes.PermissionDenied, "online request has no original role identity")
 		}
 		return next(WithSession(bound, verified), request)

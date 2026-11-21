@@ -43,6 +43,7 @@
 #include "node/system/etcd/etcd_service.h"
 #include "node/system/etcd/kill_switch_etcd_sync.h"
 #include "kill_switch/kill_switch.h"
+#include "table_bundle/table_bundle_manager.h"
 #include "node/system/grpc_call_deadline.h"
 #include "node/system/node/node_connector.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -2482,6 +2483,10 @@ void Node::FinalizeShutdownInLoop()
 	}
 	shutdownDrainTimer.Cancel();
 	maintenanceControlTimer_.Cancel();
+	if (tableBundleManager_)
+	{
+		tableBundleManager_->Stop();
+	}
 	CloseTransportOwnersInLoop();
 	eventLoop.queueInLoop([this]
 	{
@@ -2537,6 +2542,7 @@ void Node::FinalizeTeardownInLoop()
 	// /metrics 出口同理趁 EventLoop 还活着释放(~TcpServer 要在 loop 线程上关掉已有连接);它的采集回调读 tlsEcs,
 	// 必须排在 tlsEcs.Clear() 之前。关闭排进队列的连接收尾由下面的两跳 queueInLoop 排空。
 	metricsExporter_.reset();
+	tableBundleManager_.reset();
 	// span 导出:RPC 通道、Kafka、Redis 都已收尾,最后一批 client / consumer span 已经入队。导出器在本 loop 上有界冲刷
 	// (≤ shutdownTimeout,默认 2 秒),没冲完就同上面一样让一轮再进来:重入时上面各步都是空操作。在 logSystem.stop() 之前,
 	// 收尾日志还写得出去;它排进队列的连接收尾由下面的两跳 queueInLoop 排空。
@@ -2631,7 +2637,8 @@ void Node::LoadConfigs()
 
 void Node::LoadAllConfigData()
 {
-	LoadTablesAsync();
+	tableBundleManager_ = std::make_shared<table_bundle::TableBundleManager>(eventLoop);
+	tableBundleManager_->LoadAtStartup(GetConfigDir(), UseProtoBinaryTables());
 }
 
 void Node::SetupTimeZone()

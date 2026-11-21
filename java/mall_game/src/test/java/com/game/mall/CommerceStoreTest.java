@@ -465,6 +465,25 @@ class CommerceStoreTest {
             assertEquals(0, f.count("oms_order")); assertEquals(0, f.value("pms_sku_stock", "lock_stock"));
         }
     }
+    @Test void 超时未支付订单自动过期取消_宽限期内不误杀_到期后释放库存与配额() {
+        try (var f = new CommerceFixture()) {
+            f.sku(1, 5, 100);
+            var order = f.store.create("1", request("expire-order-001", 1, 2));
+            assertEquals(2, f.value("pms_sku_stock", "lock_stock"));
+            var beforeGrace = new CommerceStore(f.jdbc, f.manager,
+                java.time.Clock.fixed(java.time.Instant.ofEpochMilli(order.paymentDeadlineMs() + CommerceStore.EXPIRY_GRACE_MS - 1), java.time.ZoneOffset.UTC), f.props);
+            assertEquals(0, beforeGrace.expireOverdueOrders(), "宽限期内不提前取消");
+            assertEquals("AWAITING_PAYMENT", f.store.get("1", owned(order)).state());
+
+            var afterGrace = new CommerceStore(f.jdbc, f.manager,
+                java.time.Clock.fixed(java.time.Instant.ofEpochMilli(order.paymentDeadlineMs() + CommerceStore.EXPIRY_GRACE_MS), java.time.ZoneOffset.UTC), f.props);
+            assertEquals(1, afterGrace.expireOverdueOrders(), "超过支付窗口+宽限期的未付单应被取消");
+            assertEquals(0, afterGrace.expireOverdueOrders(), "重复扫幂等");
+            assertEquals("CANCELLED", f.store.get("1", owned(order)).state());
+            assertEquals(0, f.value("pms_sku_stock", "lock_stock"), "库存预占应已释放");
+            assertEquals(5, f.value("pms_sku_stock", "stock"), "未支付取消不扣库存");
+        }
+    }
     private static void parallel(int count, ThrowingConsumer action) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(8); CountDownLatch start = new CountDownLatch(1);
         try {

@@ -27,11 +27,6 @@ public final class ActorActionStateTableOuterClass extends com.google.protobuf.G
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_ActorActionStatestate_descriptor;
-  static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_ActorActionStatestate_fieldAccessorTable;
-  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_ActorActionStateTable_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -50,33 +45,26 @@ public final class ActorActionStateTableOuterClass extends com.google.protobuf.G
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\034actoractionstate_table.proto\">\n\025ActorA" +
-      "ctionStatestate\022\022\n\nstate_mode\030\001 \001(\r\022\021\n\ts" +
-      "tate_tip\030\002 \001(\r\"J\n\025ActorActionStateTable\022" +
-      "\n\n\002id\030\001 \001(\r\022%\n\005state\030\002 \003(\0132\026.ActorAction" +
-      "Statestate\"A\n\031ActorActionStateTableData\022" +
-      "$\n\004data\030\001 \003(\0132\026.ActorActionStateTableBG\n" +
-      "\016com.game.tableB\037ActorActionStateTableOu" +
-      "terClassP\001Z\022generated/pb/tableb\006proto3"
+      "\n\034actoractionstate_table.proto\"\\\n\025ActorA" +
+      "ctionStateTable\022\n\n\002id\030\001 \001(\r\022\020\n\010state_id\030" +
+      "\003 \001(\r\022\022\n\nstate_mode\030\004 \001(\r\022\021\n\tstate_tip\030\005" +
+      " \001(\r\"A\n\031ActorActionStateTableData\022$\n\004dat" +
+      "a\030\001 \003(\0132\026.ActorActionStateTableBG\n\016com.g" +
+      "ame.tableB\037ActorActionStateTableOuterCla" +
+      "ssP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         });
-    internal_static_ActorActionStatestate_descriptor =
-      getDescriptor().getMessageType(0);
-    internal_static_ActorActionStatestate_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_ActorActionStatestate_descriptor,
-        new java.lang.String[] { "StateMode", "StateTip", });
     internal_static_ActorActionStateTable_descriptor =
-      getDescriptor().getMessageType(1);
+      getDescriptor().getMessageType(0);
     internal_static_ActorActionStateTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ActorActionStateTable_descriptor,
-        new java.lang.String[] { "Id", "State", });
+        new java.lang.String[] { "Id", "StateId", "StateMode", "StateTip", });
     internal_static_ActorActionStateTableData_descriptor =
-      getDescriptor().getMessageType(2);
+      getDescriptor().getMessageType(1);
     internal_static_ActorActionStateTableData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ActorActionStateTableData_descriptor,

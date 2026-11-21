@@ -29,10 +29,13 @@ MACHINE_FIELD = re.compile(r"(?:^|_)(?:request_id|cursor|token|ticket|id)$")
 # scene 的 PetSystem::RequestRename。
 REVIEWED = {
     "CreatePlayerRequest.name": "TEXT_SCENE_ROLE_NAME",
+    "RenamePlayerRequest.name": "TEXT_SCENE_ROLE_NAME",
     "CreateGuildRequest.name": "TEXT_SCENE_GUILD_NAME",
+    "RenameGuildRequest.name": "TEXT_SCENE_GUILD_NAME",
     "SetAnnouncementRequest.announcement": "TEXT_SCENE_GUILD_ANNOUNCEMENT",
     "ChatMessage.content": "TEXT_SCENE_CHAT_WORLD / TEXT_SCENE_CHAT_PRIVATE",
     "RenamePetRequest.name": "TEXT_SCENE_PET_NAME",
+    "CreateRmbConsignmentRequest.title": "TEXT_SCENE_TRADE_TITLE",
 }
 
 # 豁免:字段 -> 为什么不用送检。
@@ -67,12 +70,14 @@ EXEMPT = {
     # 名字以 Request 结尾、其实是服务器下发的。
     "GameKickPlayerRequest.operator": "服务器下发的踢人原因,不是玩家输入",
     "TipInfoMessage.parameters": "随踢人通知下发的提示参数,服务器填的",
+    # 聊天举报说明:仅记入举报审计表给运营后台审核,不向其他玩家展示,服务端限长度与UTF-8。
+    "ReportChatRequest.detail": "仅入举报审计表,不向其他玩家展示",
+    # 聊天撤回原因:内部/GM/后台撤回审计用,CLIENT_RPC_SERVER_ONLY 禁止客户端直调。
+    "RetractWorldChatRequest.reason": "服务端内部/GM撤回原因,客户端不可调(CLIENT_RPC_SERVER_ONLY)",
 }
 
 # 待接入:别的玩家看得到、现在还没送检的字段。登记在这里是为了不让它悄悄留着;接上之后挪到 REVIEWED。
-PENDING = {
-    "CreateRmbConsignmentRequest.title": "聚宝斋人民币寄售标题,全服可见;trade 还没接内容安全(设计稿 §10)",
-}
+PENDING = {}
 
 COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 SCALARS = {"bytes", "bool", "double", "float", "string"}

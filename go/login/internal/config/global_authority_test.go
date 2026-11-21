@@ -131,7 +131,7 @@ func TestGlobalLoginStartupGuardsBeforeExternalWork(t *testing.T) {
 	}{
 		// main 刻意不建 topic(login.go 的注释,control-plane-topic-partitioning §3.1),这里列的是它真正的外部动作。
 		{"../../login.go", "main", []string{"NewServiceContextForDrain", "NewServiceContext", "startGRPCServer"}},
-		{"../svc/servicecontext.go", "NewServiceContext", []string{"LoadTables", "InitAuthProviders", "NewClient"}},
+		{"../svc/servicecontext.go", "NewServiceContext", []string{"LoadAtStartup", "InitAuthProviders", "NewClient"}},
 	} {
 		file, err := parser.ParseFile(token.NewFileSet(), entry.path, nil, parser.SkipObjectResolution)
 		if err != nil {

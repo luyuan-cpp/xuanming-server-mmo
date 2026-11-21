@@ -37,15 +37,32 @@ inline bool ValidCaller(std::string_view caller) {
         return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
     });
 }
+inline bool ValidDigestHex(std::string_view digest) {
+    return digest.size() == 64 && std::all_of(digest.begin(), digest.end(), [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+    });
+}
+inline std::string SignatureForDigest(std::string_view method, std::string_view digest,
+    std::string_view caller, std::string_view secret, uint64_t timestampMs) {
+    const std::string normalizedSecret = token_security::TrimAscii(secret);
+    if (method.empty() || method.front() != '/' || method.find_first_of("\r\n") != std::string_view::npos
+        || !ValidCaller(caller) || normalizedSecret.size() < 32 || timestampMs == 0 || !ValidDigestHex(digest)) return {};
+    return token_security::HmacSha256Hex(normalizedSecret, "v1\n" + std::string(method) + "\n" + std::string(caller)
+        + "\n" + std::to_string(timestampMs) + "\n" + std::string(digest));
+}
 inline std::string Signature(std::string_view method, const google::protobuf::Message& request,
     std::string_view caller, std::string_view secret, uint64_t timestampMs) {
     const std::string normalizedSecret = token_security::TrimAscii(secret);
     if (method.empty() || method.front() != '/' || method.find_first_of("\r\n") != std::string_view::npos
         || !ValidCaller(caller) || normalizedSecret.size() < 32 || timestampMs == 0) return {};
-    const std::string digest = Digest(request);
-    if (digest.empty()) return {};
-    return token_security::HmacSha256Hex(normalizedSecret, "v1\n" + std::string(method) + "\n" + std::string(caller)
-        + "\n" + std::to_string(timestampMs) + "\n" + digest);
+    return SignatureForDigest(method, Digest(request), caller, normalizedSecret, timestampMs);
+}
+inline bool SignForDigest(std::string_view method, std::string_view digest,
+    common::base::ServiceCallAuth& auth, std::string_view caller, std::string_view secret, uint64_t timestampMs) {
+    const std::string signature = SignatureForDigest(method, digest, caller, secret, timestampMs);
+    if (signature.empty()) return false;
+    auth.set_caller(std::string(caller)); auth.set_timestamp_ms(timestampMs); auth.set_signature_hex(signature);
+    return true;
 }
 inline bool Sign(std::string_view method, google::protobuf::Message& request,
     common::base::ServiceCallAuth& auth, std::string_view caller, std::string_view secret, uint64_t timestampMs) {

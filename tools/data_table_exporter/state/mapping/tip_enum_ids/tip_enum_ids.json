@@ -80,7 +80,14 @@
         "LoginRealNameAlreadyBound": 2046,
         "LoginRealNameServiceUnavailable": 2047,
         "LoginMinorNotInPlayTime": 2048,
-        "LoginMinorPlayTimeOver": 2049
+        "LoginMinorPlayTimeOver": 2049,
+        "RoleNameCheckUnavailable": 2050,
+        "RoleRenameCooldown": 2051,
+        "RoleRenameNoCard": 2052,
+        "RoleRenameInProgress": 2053,
+        "RoleRenameFrozen": 2054,
+        "RoleRenameSameName": 2055,
+        "RoleRenameExpired": 2056
       }
     },
     "scene_error": {
@@ -304,7 +311,12 @@
         "GuildTrialInviteDeclined": 14039,
         "GuildTrialInviteCooldown": 14040,
         "GuildTrialServiceBusy": 14041,
-        "GuildTrialBattleAborted": 14042
+        "GuildTrialBattleAborted": 14042,
+        "GuildNameSensitive": 14043,
+        "GuildAnnouncementSensitive": 14044,
+        "GuildTextCheckUnavailable": 14045,
+        "GuildRenameCooldown": 14046,
+        "GuildRenameSameName": 14047
       }
     },
     "friend_error": {
@@ -404,7 +416,8 @@
         "PetGoldNotEnough": 26013,
         "PetNoAutoPlan": 26014,
         "PetNothingToChange": 26015,
-        "PetIdGenerateFailed": 26016
+        "PetIdGenerateFailed": 26016,
+        "PetNameSensitive": 26017
       }
     },
     "trade_error": {
@@ -426,7 +439,9 @@
         "TradeAuctionEnded": 20012,
         "TradeAssetDeliveryPending": 20013,
         "TradeManualReview": 20014,
-        "TradeAssetNotTradable": 20015
+        "TradeAssetNotTradable": 20015,
+        "TradeTitleSensitive": 20016,
+        "TradeTextCheckUnavailable": 20017
       }
     },
     "asset_error": {
@@ -568,6 +583,19 @@
         "AfkPassStackLimit": 32002,
         "AfkPassFrozen": 32003,
         "AfkPassUnavailable": 32004
+      }
+    },
+    "chat_error": {
+      "base": 18000,
+      "width": 1000,
+      "ids": {
+        "ChatContentRejected": 18000,
+        "ChatContentCheckUnavailable": 18001,
+        "ChatLevelTooLow": 18002,
+        "ChatDuplicateSpam": 18003,
+        "ChatPrivateTargetLimit": 18004,
+        "ChatContactRejected": 18005,
+        "ChatMessageNotFound": 18006
       }
     }
   },

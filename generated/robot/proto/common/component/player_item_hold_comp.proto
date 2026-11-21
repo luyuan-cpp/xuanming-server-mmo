@@ -26,7 +26,7 @@ message ItemHoldLine {
 // 一份预留。
 message ItemHold {
   uint64 hold_id = 1;               // 预留方给的号,在本玩家名下唯一;战斗预留 = battle_id
-  uint32 kind = 2;                  // ItemHoldKind(item_hold.h):1 = 战斗
+  uint32 kind = 2;                  // ItemHoldKind(item_hold.h):1 = 战斗,2 = 角色改名
   repeated ItemHoldLine lines = 3;  // 按 config_id 升序、互不重复、count > 0
   uint64 created_at_ms = 4;         // 建立时刻(UTC 毫秒),只进日志
   uint64 review_after_ms = 5;       // 预留方在这个时刻(UTC 毫秒)之后复核要不要继续留;战斗 = 冻结到期时刻

@@ -7,7 +7,6 @@ package constants
 
 import (
 	"shared/generated/pb/table"
-	"shared/serverbase"
 )
 
 const (
@@ -28,6 +27,3 @@ const (
 	ErrMinorDailyLimit   = uint32(table.PaymentError_kPaymentMinorDailyLimit)
 	ErrMinorMonthlyLimit = uint32(table.PaymentError_kPaymentMinorMonthlyLimit)
 )
-
-// TipClassifier 是本服务的 in-band 业务码定性函数,定性全部来自 Tip.xlsx 的 fault 列。
-func TipClassifier() serverbase.Classifier { return serverbase.TipVerdict }

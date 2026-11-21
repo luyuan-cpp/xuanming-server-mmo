@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"actoractioncombatstate_table.proto\"D\n\x1b\x41\x63torActionCombatStatestate\x12\x12\n\nstate_mode\x18\x01 \x01(\r\x12\x11\n\tstate_tip\x18\x02 \x01(\r\"V\n\x1b\x41\x63torActionCombatStateTable\x12\n\n\x02id\x18\x01 \x01(\r\x12+\n\x05state\x18\x02 \x03(\x0b\x32\x1c.ActorActionCombatStatestate\"M\n\x1f\x41\x63torActionCombatStateTableData\x12*\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x1c.ActorActionCombatStateTableBM\n\x0e\x63om.game.tableB%ActorActionCombatStateTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\"actoractioncombatstate_table.proto\"b\n\x1b\x41\x63torActionCombatStateTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x10\n\x08state_id\x18\x03 \x01(\r\x12\x12\n\nstate_mode\x18\x04 \x01(\r\x12\x11\n\tstate_tip\x18\x05 \x01(\r\"M\n\x1f\x41\x63torActionCombatStateTableData\x12*\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x1c.ActorActionCombatStateTableBM\n\x0e\x63om.game.tableB%ActorActionCombatStateTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,10 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'actoractioncombatstate_tabl
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB%ActorActionCombatStateTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_ACTORACTIONCOMBATSTATESTATE']._serialized_start=38
-  _globals['_ACTORACTIONCOMBATSTATESTATE']._serialized_end=106
-  _globals['_ACTORACTIONCOMBATSTATETABLE']._serialized_start=108
-  _globals['_ACTORACTIONCOMBATSTATETABLE']._serialized_end=194
-  _globals['_ACTORACTIONCOMBATSTATETABLEDATA']._serialized_start=196
-  _globals['_ACTORACTIONCOMBATSTATETABLEDATA']._serialized_end=273
+  _globals['_ACTORACTIONCOMBATSTATETABLE']._serialized_start=38
+  _globals['_ACTORACTIONCOMBATSTATETABLE']._serialized_end=136
+  _globals['_ACTORACTIONCOMBATSTATETABLEDATA']._serialized_start=138
+  _globals['_ACTORACTIONCOMBATSTATETABLEDATA']._serialized_end=215
 # @@protoc_insertion_point(module_scope)

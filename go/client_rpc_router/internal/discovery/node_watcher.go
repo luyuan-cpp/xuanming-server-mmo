@@ -103,6 +103,8 @@ type trackGroup struct {
 	// arc 是本路由服在这个环上挑选的那段弧(subset.go)。先按轨道分组再取子集(设计 §3.1):canary 组有实例就只在
 	// canary 组的弧上挑;弧长至少一台目标,组非空就一定挑得到。
 	arc aperture
+	// arcTargets 是弧覆盖到的去重目标快照,建索引时一次性算好,供熔断摘除时 O(子集大小) 无分配切流。
+	arcTargets []NodeEntry
 }
 
 func buildPickIndex(nodes map[string]NodeEntry, subsetRank, subsetPeers, subsetSize int) *pickIndex {
@@ -114,10 +116,17 @@ func buildPickIndex(nodes map[string]NodeEntry, subsetRank, subsetPeers, subsetS
 	}
 	for track, ring := range byTrack {
 		sortRing(ring)
+		arc := newAperture(subsetRank, subsetPeers, len(ring), subsetSize)
+		indices := arc.targetIndices()
+		arcTargets := make([]NodeEntry, 0, len(indices))
+		for _, idx := range indices {
+			arcTargets = append(arcTargets, ring[idx])
+		}
 		index.trackGroups = append(index.trackGroups, trackGroup{
-			track: track,
-			ring:  ring,
-			arc:   newAperture(subsetRank, subsetPeers, len(ring), subsetSize),
+			track:      track,
+			ring:       ring,
+			arc:        arc,
+			arcTargets: arcTargets,
 		})
 	}
 	return index
@@ -359,26 +368,65 @@ func (w *NodeWatcher) reportCount(count int) {
 // Select 在轨道组之间判断(每条轨道至多一组、组都非空),所以「退回」的语义与按实例过滤时完全相同;
 // 子集只在组内收窄候选,不改变选哪条轨道。
 func (w *NodeWatcher) PickRandomForTrack(session releasetrack.Track) (NodeEntry, bool) {
+	entry, ok, _ := w.PickRandomForTrackMatching(session, nil)
+	return entry, ok
+}
+
+// PickRandomForTrackMatching 在轨道与确定性子集内按 allow 挑选可用实例(用于跳过熔断打开的实例)。
+// 先按原弧权重 O(1) 抽一次,命中被拒时在同弧其余去重实例里从随机偏移起顺扫,保证健康实例均匀承接切流。
+// hadCandidates 为真而 ok 为假表示有实例但全部被 allow 拒绝(例如全员熔断)。
+func (w *NodeWatcher) PickRandomForTrackMatching(session releasetrack.Track, allow func(NodeEntry) bool) (entry NodeEntry, ok bool, hadCandidates bool) {
 	chosen := releasetrack.Select(session, w.index.Load().trackGroups, func(group trackGroup) releasetrack.Track { return group.track })
 	if len(chosen) == 0 {
-		return NodeEntry{}, false
+		return NodeEntry{}, false, false
 	}
 	group := chosen[0]
-	return group.ring[group.arc.pick(rand.Intn)], true
+	first := group.ring[group.arc.pick(rand.Intn)]
+	if allow == nil || allow(first) {
+		return first, true, true
+	}
+	targets := group.arcTargets
+	if len(targets) <= 1 {
+		return NodeEntry{}, false, true
+	}
+	start := rand.Intn(len(targets))
+	for i := 0; i < len(targets); i++ {
+		cand := targets[(start+i)%len(targets)]
+		if cand.Endpoint == first.Endpoint {
+			continue
+		}
+		if allow(cand) {
+			return cand, true, true
+		}
+	}
+	return NodeEntry{}, false, true
 }
 
 // PickRandomInZone 只在 zone_id 相同的节点里随机取一个(zone-scoped 节点类型
 // 的选法,设计决策 D33:login 只服务本 zone,跨 zone 打过去会话对不上)。不看发布轨道。
 // 该 zone 没有实例返回 false —— 不回退到其它 zone。
 func (w *NodeWatcher) PickRandomInZone(zoneId uint32) (NodeEntry, bool) {
-	return pickRandom(w.index.Load().byZone[zoneId])
+	entry, ok, _ := w.PickRandomInZoneMatching(zoneId, nil)
+	return entry, ok
 }
 
-func pickRandom(candidates []NodeEntry) (NodeEntry, bool) {
+// PickRandomInZoneMatching 同 PickRandomInZone,按 allow 跳过熔断实例。
+func (w *NodeWatcher) PickRandomInZoneMatching(zoneId uint32, allow func(NodeEntry) bool) (entry NodeEntry, ok bool, hadCandidates bool) {
+	candidates := w.index.Load().byZone[zoneId]
 	if len(candidates) == 0 {
-		return NodeEntry{}, false
+		return NodeEntry{}, false, false
 	}
-	return candidates[rand.Intn(len(candidates))], true
+	start := rand.Intn(len(candidates))
+	if allow == nil {
+		return candidates[start], true, true
+	}
+	for i := 0; i < len(candidates); i++ {
+		cand := candidates[(start+i)%len(candidates)]
+		if allow(cand) {
+			return cand, true, true
+		}
+	}
+	return NodeEntry{}, false, true
 }
 
 // Count 返回镜像里的节点数量。

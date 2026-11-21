@@ -19,15 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ContentGuard_CheckText_FullMethodName = "/content_guard.ContentGuard/CheckText"
+	ContentGuard_CheckText_FullMethodName         = "/content_guard.ContentGuard/CheckText"
+	ContentGuard_CheckPlatformText_FullMethodName = "/content_guard.ContentGuard/CheckPlatformText"
 )
 
 // ContentGuardClient is the client API for ContentGuard service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ContentGuardClient interface {
-	// 判定一段文字。纯计算,不落库;同一版词库下同样的入参结果相同。
+	// 判定一段文字。纯计算+可选平台接口。
 	CheckText(ctx context.Context, in *CheckTextRequest, opts ...grpc.CallOption) (*CheckTextResponse, error)
+	// 异步复检平台内容安全(如世界频道超时先放行后的后台复检)。不走本地词库,只调平台审核。
+	CheckPlatformText(ctx context.Context, in *CheckTextRequest, opts ...grpc.CallOption) (*CheckTextResponse, error)
 }
 
 type contentGuardClient struct {
@@ -48,12 +51,24 @@ func (c *contentGuardClient) CheckText(ctx context.Context, in *CheckTextRequest
 	return out, nil
 }
 
+func (c *contentGuardClient) CheckPlatformText(ctx context.Context, in *CheckTextRequest, opts ...grpc.CallOption) (*CheckTextResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckTextResponse)
+	err := c.cc.Invoke(ctx, ContentGuard_CheckPlatformText_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ContentGuardServer is the server API for ContentGuard service.
 // All implementations must embed UnimplementedContentGuardServer
 // for forward compatibility.
 type ContentGuardServer interface {
-	// 判定一段文字。纯计算,不落库;同一版词库下同样的入参结果相同。
+	// 判定一段文字。纯计算+可选平台接口。
 	CheckText(context.Context, *CheckTextRequest) (*CheckTextResponse, error)
+	// 异步复检平台内容安全(如世界频道超时先放行后的后台复检)。不走本地词库,只调平台审核。
+	CheckPlatformText(context.Context, *CheckTextRequest) (*CheckTextResponse, error)
 	mustEmbedUnimplementedContentGuardServer()
 }
 
@@ -66,6 +81,9 @@ type UnimplementedContentGuardServer struct{}
 
 func (UnimplementedContentGuardServer) CheckText(context.Context, *CheckTextRequest) (*CheckTextResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckText not implemented")
+}
+func (UnimplementedContentGuardServer) CheckPlatformText(context.Context, *CheckTextRequest) (*CheckTextResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckPlatformText not implemented")
 }
 func (UnimplementedContentGuardServer) mustEmbedUnimplementedContentGuardServer() {}
 func (UnimplementedContentGuardServer) testEmbeddedByValue()                      {}
@@ -106,6 +124,24 @@ func _ContentGuard_CheckText_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ContentGuard_CheckPlatformText_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckTextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ContentGuardServer).CheckPlatformText(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ContentGuard_CheckPlatformText_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ContentGuardServer).CheckPlatformText(ctx, req.(*CheckTextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ContentGuard_ServiceDesc is the grpc.ServiceDesc for ContentGuard service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -116,6 +152,10 @@ var ContentGuard_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckText",
 			Handler:    _ContentGuard_CheckText_Handler,
+		},
+		{
+			MethodName: "CheckPlatformText",
+			Handler:    _ContentGuard_CheckPlatformText_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

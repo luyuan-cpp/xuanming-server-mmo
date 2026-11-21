@@ -301,6 +301,46 @@ class AssignGateRateLimiterTest {
         assertEquals("ACCOUNT_COOLDOWN", second.getReason());
     }
 
+    @Test
+    void checkIpOnly_skipsWaveZoneAndCooldown_andEnforcesSharedIpBucket() {
+        // 波次尚未开放:checkIpOnly 不能被波次挡住(排队中续期也要能成功)。
+        var cfg = new RateLimitProperties.WaveSchedule();
+        cfg.setEnabled(true);
+        cfg.setStartEpochSec(Instant.now().getEpochSecond() + 60);
+        var step = new RateLimitProperties.WaveStep();
+        step.setOffsetSec(0);
+        step.setAllowZones(List.of(1L));
+        cfg.setSchedule(List.of(step));
+        AssignGateRateLimiter limiter = limiter(new WaveSchedule(cfg, cfg.getStartEpochSec()));
+
+        store.then(Admission.ok()).then(Admission.ok()).then(Admission.ipEmpty());
+
+        assertTrue(limiter.checkIpOnly("10.0.0.10").isPass());
+        assertTrue(limiter.checkIpOnly("10.0.0.10").isPass(), "同一 IP 连续调用不受账号冷却阻拦");
+        var denied = limiter.checkIpOnly("10.0.0.10");
+        assertTrue(denied.isDeny());
+        assertEquals("IP_RATE_LIMIT", denied.getReason());
+
+        assertEquals(3, store.calls.size());
+        for (Bucket[] call : store.calls) {
+            assertEquals("rl:ip:10.0.0.10", call[0].key());
+            assertNull(call[1], "checkIpOnly 不碰区桶");
+        }
+        assertEquals(2, decisions("pass"));
+        assertEquals(1, decisions("ip_deny"));
+    }
+
+    @Test
+    void checkIpOnly_disabledOrBlankIp() {
+        props.setEnabled(false);
+        assertTrue(limiter().checkIpOnly("10.0.0.10").isPass());
+        assertEquals(0, store.calls.size());
+
+        props.setEnabled(true);
+        assertTrue(limiter().checkIpOnly(" ").isPass());
+        assertEquals("rl:ip:?", store.calls.get(0)[0].key());
+    }
+
     /** 按顺序回放预设结果的假存储(预设用完后一律放行),并记下每次调用的两个桶。 */
     private static final class ScriptedStore implements RateLimitStore {
         private final Deque<Object> results = new ArrayDeque<>();

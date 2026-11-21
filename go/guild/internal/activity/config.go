@@ -76,6 +76,22 @@ func ValidateTables() error {
 	})
 }
 
+// ValidateTablesIn 在候选 TableSet 上执行与启动期完全一致的帮会活动表校验,不触碰全局单例。
+func ValidateTablesIn(ts *table.TableSet) error {
+	if ts == nil || ts.GuildRule == nil || ts.GuildActivity == nil || ts.GuildLevel == nil || ts.Reward == nil || ts.Item == nil || ts.Dungeon == nil {
+		return errors.New("guild activity tables: TableSet missing required table managers")
+	}
+	rule, _ := ts.GuildRule.FindById(RuleRowID)
+	return validateRows(activityTables{
+		rows:          ts.GuildActivity.FindAll(),
+		rule:          rule,
+		levelExists:   ts.GuildLevel.Exists,
+		rewardOf:      ts.Reward.FindById,
+		itemExists:    ts.Item.Exists,
+		dungeonExists: ts.Dungeon.Exists,
+	})
+}
+
 // validateRows 是 ValidateTables 的纯函数部分。检查顺序:规则行 → 逐行 → 同类型时间窗不重叠。
 func validateRows(t activityTables) error {
 	if t.levelExists == nil || t.rewardOf == nil || t.itemExists == nil || t.dungeonExists == nil {

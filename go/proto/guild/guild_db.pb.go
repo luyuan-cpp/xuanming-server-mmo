@@ -325,7 +325,9 @@ type GuildRecord struct {
 	NameNorm     string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
 	// score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
 	// 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
-	ScoreVersion  uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"` // 追加区:从 13 起。
+	ScoreVersion uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"`
+	// 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
+	RenamedMs     uint64 `protobuf:"varint,13,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"` // 追加区:从 14 起。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -440,6 +442,13 @@ func (x *GuildRecord) GetNameNorm() string {
 func (x *GuildRecord) GetScoreVersion() uint64 {
 	if x != nil {
 		return x.ScoreVersion
+	}
+	return 0
+}
+
+func (x *GuildRecord) GetRenamedMs() uint64 {
+	if x != nil {
+		return x.RenamedMs
 	}
 	return 0
 }
@@ -2311,11 +2320,82 @@ func (x *GuildClientRequestRecord) GetCreatedMs() uint64 {
 	return 0
 }
 
+// 帮会改名旧名保护表(docs/design/rename-and-content-safety.md §5):锁序位置 12(全序末尾)。
+// D-14 要求显式声明整数主键(hold_id),唯一性由 uk_guild_name_hold(name_norm,整列 VARCHAR(191)) 保证。
+// 事务顺序固定:必须先写 guild(INSERT / UPDATE 拿到 uk_guild 锁),再查/改本表,防止并发抢注刚放下的旧名。
+type GuildNameHoldRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HoldId        uint64                 `protobuf:"varint,1,opt,name=hold_id,json=holdId,proto3" json:"hold_id,omitempty"`
+	NameNorm      string                 `protobuf:"bytes,2,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`
+	GuildId       uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	HeldUntilMs   uint64                 `protobuf:"varint,4,opt,name=held_until_ms,json=heldUntilMs,proto3" json:"held_until_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildNameHoldRecord) Reset() {
+	*x = GuildNameHoldRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildNameHoldRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildNameHoldRecord) ProtoMessage() {}
+
+func (x *GuildNameHoldRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildNameHoldRecord.ProtoReflect.Descriptor instead.
+func (*GuildNameHoldRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GuildNameHoldRecord) GetHoldId() uint64 {
+	if x != nil {
+		return x.HoldId
+	}
+	return 0
+}
+
+func (x *GuildNameHoldRecord) GetNameNorm() string {
+	if x != nil {
+		return x.NameNorm
+	}
+	return ""
+}
+
+func (x *GuildNameHoldRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildNameHoldRecord) GetHeldUntilMs() uint64 {
+	if x != nil {
+		return x.HeldUntilMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\n" +
-	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xad\x03\n" +
+	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xcc\x03\n" +
 	"\vGuildRecord\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -2330,7 +2410,9 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x05funds\x18\n" +
 	" \x01(\x04R\x05funds\x12\x1b\n" +
 	"\tname_norm\x18\v \x01(\tR\bnameNorm\x12#\n" +
-	"\rscore_version\x18\f \x01(\x04R\fscoreVersion:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
+	"\rscore_version\x18\f \x01(\x04R\fscoreVersion\x12\x1d\n" +
+	"\n" +
+	"renamed_ms\x18\r \x01(\x04R\trenamedMs:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
 	"\x16GuildPlayerStateRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -2538,7 +2620,12 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x05op_id\x18\x03 \x01(\x04R\x04opId\x12\x1d\n" +
 	"\n" +
 	"created_ms\x18\x04 \x01(\x04R\tcreatedMs:W\x8a\x92\xf4\x01\x14guild_client_request\x92\x92\xf4\x01\x1bplayer_id,client_request_idڒ\xf4\x01\n" +
-	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
+	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc9\x01\n" +
+	"\x13GuildNameHoldRecord\x12\x17\n" +
+	"\ahold_id\x18\x01 \x01(\x04R\x06holdId\x12\x1b\n" +
+	"\tname_norm\x18\x02 \x01(\tR\bnameNorm\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\"\n" +
+	"\rheld_until_ms\x18\x04 \x01(\x04R\vheldUntilMs:=\x8a\x92\xf4\x01\x0fguild_name_hold\x92\x92\xf4\x01\ahold_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
 	"\x12GuildAssetOpStatus\x12%\n" +
 	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
@@ -2583,7 +2670,7 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_proto_guild_guild_db_proto_goTypes = []any{
 	(GuildAssetOpStatus)(0),             // 0: guildpb.GuildAssetOpStatus
 	(GuildAssetOpKind)(0),               // 1: guildpb.GuildAssetOpKind
@@ -2610,6 +2697,7 @@ var file_proto_guild_guild_db_proto_goTypes = []any{
 	(*GuildTrialLaunchRoleRecord)(nil),  // 22: guildpb.GuildTrialLaunchRoleRecord
 	(*GuildTrialRewardOwedRecord)(nil),  // 23: guildpb.GuildTrialRewardOwedRecord
 	(*GuildClientRequestRecord)(nil),    // 24: guildpb.GuildClientRequestRecord
+	(*GuildNameHoldRecord)(nil),         // 25: guildpb.GuildNameHoldRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
 	1,  // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
@@ -2639,7 +2727,7 @@ func file_proto_guild_guild_db_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   20,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

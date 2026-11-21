@@ -16,14 +16,11 @@
 // 未设置 / 设了不认识的值 = prod = 拒绝。本地联调由 tools/scripts/start_game.ps1
 // 显式设 dev。
 //
-// ⚠️ 跨节点相对包含与 scene_admin_handler.cpp 同一形态、同一理由(gate_security.h
-// 的正确归宿是 cpp/libs/engine/core/,搬迁牵动九个文件,另开一件事做)。
-
 #include <string_view>
 
 #include <muduo/base/Logging.h>
 
-#include "../../../../gate/gate_security.h"
+#include "security/gm_security.h"
 
 namespace scene_gm_guard
 {
@@ -67,8 +64,8 @@ inline bool IsClientGmMethodName(std::string_view name)
 // 拒绝一律留痕:这是"有人在直连 scene 打 GM"的唯一信号源。
 inline bool RejectGmClientRpc(const char *rpcName)
 {
-	if (gate_security::ClassifyGmClientMessage(CurrentSceneRunMode()) ==
-		gate_security::GmClientMessageVerdict::kAllow)
+	if (gm_security::ClassifyGmClientMessage(CurrentSceneRunMode()) ==
+		gm_security::GmClientMessageVerdict::kAllow)
 	{
 		return false;
 	}

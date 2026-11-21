@@ -95,10 +95,13 @@ public:
 
     static BattleRoomManager &Instance();
 
-    // 表加载完成后在本节点 EventLoop 安装一次，房间共享只读配置源。
-    void SetDataProvider(std::shared_ptr<turnbattle::BattleDataProvider> provider) {
-        dataProvider_ = std::move(provider);
-    }
+    // 表加载或热更提交后在本节点 EventLoop 安装:现役 provider 按指纹登记,旧 provider 保留 10 分钟
+    // 供切换窗口内尚未切换的 scene 开局按指纹命中;已建好的房间持有自己的 shared_ptr 保活到终局
+    // (docs/design/config-table-hot-reload.md §8.4)。
+    void SetDataProvider(std::shared_ptr<turnbattle::BattleDataProvider> provider);
+    void RegisterTableProvider(const std::string &fingerprint,
+                               std::shared_ptr<turnbattle::BattleDataProvider> provider,
+                               bool makeActive = true);
 
     // ---- 房间生命周期回调(集群外入口 D82 / D85;main.cpp 装配,转发给 Agones GameServerLifecycle) ----
     //
@@ -371,7 +374,8 @@ private:
         bool outcomeInFlight = false;
         bool outcomeExhausted = false;
         uint64_t outcomeAttempt = 0;
-        std::string outcomePayload;
+        // 冻结的终局提交原件(含战报回放外壳):冻结时组装并算一次摘要,重放只更新 auth 签名,避免重复拷贝与重算摘要。
+        std::optional<::match::CommitBattleOutcomeRequest> frozenOutcomeRequest;
         std::string outcomeRequestDigest;
         std::chrono::steady_clock::time_point outcomeSince{};
         std::chrono::steady_clock::time_point nextOutcomeAttempt{};
@@ -382,8 +386,6 @@ private:
         // 战报回放录制器(docs/design/battle-report-replay.md §6):CreateBattleRequest.record_replay 为真才创建,
         // 终局冻结之后清空。不录的房间没有任何额外开销。
         std::optional<turnbattle::BattleReplayRecorder> replay;
-        // 与终局原件一起冻结的回放外壳,首次提交与每次重放逐字节相同;空 = 本局不录,或录制被丢弃(不影响终局)。
-        std::optional<::BattleReplayEnvelope> outcomeReplay;
         turnbattle::TurnBattleEngine engine;
         // player_id → 路由信息副本(快照携带,battle 不查 etcd 定位对端)。
         // 有序容器:广播与结算的遍历顺序稳定,日志/回放可复现。
@@ -436,7 +438,20 @@ private:
         std::map<uint64_t, std::weak_ptr<muduo::net::TcpConnection>> directConnByPlayer;
     };
 
+    struct RetainedProvider
+    {
+        std::shared_ptr<turnbattle::BattleDataProvider> provider;
+        std::chrono::steady_clock::time_point retainUntil;
+    };
+
+    std::shared_ptr<turnbattle::BattleDataProvider> ResolveProviderForRequest(
+        const ::CreateBattleRequest &request,
+        std::string &matchedFingerprint);
+    void ReapRetiredProviders(std::chrono::steady_clock::time_point now);
+
     std::shared_ptr<turnbattle::BattleDataProvider> dataProvider_;
+    std::string activeTableFingerprint_;
+    std::unordered_map<std::string, RetainedProvider> providersByFingerprint_;
     BattleRoom *FindRoom(uint64_t battleId);
 
     // 房间插表(键 = room->battleId):成功后房间表触发一次 onCreated,返回表内的房间。
@@ -473,9 +488,9 @@ private:
     // 原件无效时置 outcomeExhausted:终局保持未知,房间滞留,由 match 在权威截止后裁决。
     void BeginResultCommit(BattleRoom&, ::eBattleOutcome, ::eSpectateEndReason,
                            std::optional<::TurnResultS2C>, ::BattleStateS2C);
-    // 终局请求原件(不含签名)。冻结时算摘要与每次重放发送都只用它拼:新字段只在这一处加,
-    // 两处拼法不一致会让摘要永远对不上、终局永远发不出去(battle-report-replay.md §6.2)。
-    static ::match::CommitBattleOutcomeRequest BuildOutcomeRequest(const BattleRoom& room);
+    // 组装冻结的终局请求原件(不含签名):冻结时调用一次,首次与每次重放直接复用同一原件(battle-report-replay.md §6.2、§6.3)。
+    static ::match::CommitBattleOutcomeRequest BuildOutcomeRequest(
+        const BattleRoom& room, std::string rawResultPayload, std::optional<::BattleReplayEnvelope> replay);
     // 战报录制:拷一份观众版帧(RedactStateForViewer(state, 0))交给录制器;不录的房间直接返回。
     void RecordReplayRound(BattleRoom& room, const ::TurnResultS2C& result) const;
     static bool TerminalPending(const BattleRoom& room) { return room.outcomePending; }

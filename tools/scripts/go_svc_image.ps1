@@ -199,6 +199,9 @@ $Catalogue = [ordered]@{
     # 由 Dockerfile.go-svc 通用的 COPY 带入,不需要改 Dockerfile。按包构建:payment.go 依赖同目录的 channels.go,所以 Entry 是 "."。
     # 同一镜像既跑 payment StatefulSet,也跑 payment-migrate Job(args 加 -migrate,D-14)。
     payment         = @{ Dir = "payment";         Entry = ".";                      ImageName = "mmorpg-payment" }
+    # 配置表热更分发 sidecar(docs/design/config-table-hot-reload.md §7):作为原生 sidecar 随所有读表工作负载部署。
+    # 复用 Dockerfile.go-svc(go/table_sync 只依赖 shared 与 etcd/prometheus,无新第三方库);发布工具 cmd/table-bundle 不进镜像。
+    "table-sync"    = @{ Dir = "table_sync";      Entry = "./cmd/table-sync";       ImageName = "mmorpg-table-sync" }
 }
 
 # 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。

@@ -98,7 +98,6 @@ set(SOURCE_FILES
     utils/encode/base64.cpp
     utils/encode/sha256.cpp
     utils/file/file2string.cpp
-    utils/log/spdlog_file.cpp
     utils/proto/message_util.cpp
     utils/proto/proto_field_checker.cpp
     utils/random/random.cpp

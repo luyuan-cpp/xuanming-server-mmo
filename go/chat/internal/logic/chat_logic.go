@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"chat/internal/authority"
 	"chat/internal/constants"
@@ -12,12 +14,21 @@ import (
 	"chat/internal/svc"
 	chatpb "proto/chat"
 	base "proto/common/base"
+	cgpb "proto/content_guard"
+	"shared/contentguard"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
-const maxRequestIdBytes = 64
+const (
+	maxRequestIdBytes    = 64
+	maxRetractReasonSize = 128
+	maxReportDetailSize  = 200
+	asyncRecheckTimeout  = 4 * time.Second
+	platformRejectReason = "platform_async_reject"
+)
 
 type rejection struct {
 	code    uint32
@@ -81,7 +92,7 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		return reject(rejectStorage)
 	}
 	if result.Tip != 0 {
-		// 两种限流回同一个提示码;指标分开记,看得出是单人突发还是世界频道发言间隔在挡。正文送检没过的两种结局各记各的。
+		// 按拒因分别记入低基数 send_total 指标。
 		outcome := svc.OutcomeRateLimited
 		switch {
 		case result.Cooldown:
@@ -90,6 +101,14 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 			outcome = svc.OutcomeContentRejected
 		case result.Tip == constants.ErrContentCheckUnavailable:
 			outcome = svc.OutcomeContentUnavailable
+		case result.Tip == constants.ErrLevelTooLow:
+			outcome = svc.OutcomeLevelTooLow
+		case result.Tip == constants.ErrDuplicateSpam:
+			outcome = svc.OutcomeDuplicateSpam
+		case result.Tip == constants.ErrPrivateTargetLimit:
+			outcome = svc.OutcomePrivateTargetLimit
+		case result.Tip == constants.ErrContactRejected:
+			outcome = svc.OutcomeContactRejected
 		}
 		svc.ObserveSend(label, outcome)
 		return &chatpb.SendChatResponse{ErrorMessage: &base.TipInfoMessage{Id: result.Tip}}, nil
@@ -99,10 +118,108 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		outcome = svc.OutcomeDuplicate
 	}
 	svc.ObserveSend(label, outcome)
-	// 世界频道首次提交:推给全部在线玩家(docs/design/chat-world-channel-fanout.md §4)。提交已经生效,
-	// 推送只是通知,失败只记日志与指标,应答照常成功;重放的 result.Message 为 nil,不推第二次。
+	// 世界频道首次提交:推给全部在线玩家(docs/design/chat-world-channel-fanout.md §4)。
 	l.svcCtx.PublishWorld(l.ctx, result.Message)
+	if result.PendingPlatformReview && result.Message != nil {
+		l.scheduleAsyncWorldPlatformRecheck(result.Message, result.PlatformReviewContent)
+	}
 	return &chatpb.SendChatResponse{}, nil
+}
+
+func (l *ChatLogic) scheduleAsyncWorldPlatformRecheck(msg *chatpb.ChatMessage, rawContent string) {
+	checker := l.svcCtx.PlatformCheck
+	if checker == nil && l.svcCtx.ContentGuard != nil && l.svcCtx.ContentGuard.Enabled() {
+		checker = l.svcCtx.ContentGuard.CheckPlatform
+	}
+	if checker == nil || l.svcCtx.Authority == nil || msg == nil || rawContent == "" {
+		return
+	}
+	sc := l.svcCtx
+	senderID := msg.SenderPlayerId
+	sendTimeMs := msg.SendTimeMs
+	safego.Go("chat.world_platform_recheck", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), asyncRecheckTimeout)
+		defer cancel()
+		res := checker(ctx, cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, senderID, rawContent)
+		if res.Verdict != contentguard.Reject {
+			if res.Verdict == contentguard.Unavailable {
+				logx.Errorf("[chat] Async platform moderation unavailable, sender=%d send_time_ms=%d", senderID, sendTimeMs)
+			}
+			return
+		}
+		retracted, _, err := sc.Authority.RetractWorld(ctx, senderID, sendTimeMs, platformRejectReason)
+		if err != nil {
+			logx.Errorf("[chat] Async world chat retraction failed, sender=%d send_time_ms=%d: %v", senderID, sendTimeMs, err)
+			return
+		}
+		if retracted {
+			sc.PublishWorldRetract(ctx, &chatpb.ChatRetractedNotify{
+				Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
+				SenderPlayerId: senderID,
+				SendTimeMs:     sendTimeMs,
+				Reason:         platformRejectReason,
+			})
+		}
+	})
+}
+
+func (l *ChatLogic) ReportChat(in *chatpb.ReportChatRequest) (*chatpb.ReportChatResponse, error) {
+	actor, ok := session.PlayerID(l.ctx)
+	if !ok {
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+	}
+	if in == nil || in.GetTargetSenderPlayerId() == 0 || in.GetSendTimeMs() <= 0 ||
+		in.GetReason() == 0 || in.GetReason() > 4 || len(in.GetDetail()) > maxReportDetailSize || !utf8.ValidString(in.GetDetail()) {
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+	}
+	if _, ok := channelAccepted(in.GetChannel(), actor, in.GetTargetSenderPlayerId()); !ok {
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+	}
+	if l.ctx.Err() != nil || l.svcCtx.Authority == nil {
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage}}, nil
+	}
+	tip, err := l.svcCtx.Authority.ReportMessage(l.ctx, proto.Clone(in).(*chatpb.ReportChatRequest))
+	if err != nil {
+		if errors.Is(err, authority.ErrOriginal) || errors.Is(err, authority.ErrInvalid) {
+			return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+		}
+		l.Error("Chat report SQL write failed")
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage}}, nil
+	}
+	if tip != 0 {
+		return &chatpb.ReportChatResponse{ErrorMessage: &base.TipInfoMessage{Id: tip}}, nil
+	}
+	return &chatpb.ReportChatResponse{}, nil
+}
+
+func (l *ChatLogic) RetractWorldChat(in *chatpb.RetractWorldChatRequest) (*chatpb.RetractWorldChatResponse, error) {
+	if in == nil || in.GetSenderPlayerId() == 0 || in.GetSendTimeMs() <= 0 ||
+		len(in.GetReason()) > maxRetractReasonSize || !utf8.ValidString(in.GetReason()) {
+		return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+	}
+	if l.ctx.Err() != nil || l.svcCtx.Authority == nil {
+		return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage}}, nil
+	}
+	retracted, tip, err := l.svcCtx.Authority.RetractWorld(l.ctx, in.GetSenderPlayerId(), in.GetSendTimeMs(), strings.TrimSpace(in.GetReason()))
+	if err != nil {
+		if errors.Is(err, authority.ErrInvalid) {
+			return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil
+		}
+		l.Error("Chat retract SQL write failed")
+		return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage}}, nil
+	}
+	if tip != 0 {
+		return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: tip}}, nil
+	}
+	if retracted {
+		l.svcCtx.PublishWorldRetract(l.ctx, &chatpb.ChatRetractedNotify{
+			Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
+			SenderPlayerId: in.GetSenderPlayerId(),
+			SendTimeMs:     in.GetSendTimeMs(),
+			Reason:         strings.TrimSpace(in.GetReason()),
+		})
+	}
+	return &chatpb.RetractWorldChatResponse{Retracted: retracted}, nil
 }
 
 func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.PullChatHistoryResponse, error) {

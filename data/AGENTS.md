@@ -153,8 +153,8 @@ cd tools/data_table_exporter && py -m pytest -q
 | **ActivitySchedule** | `ActivitySchedule.xlsx` | `activityschedule_table.proto` | 11 | 11 | 3 | — | — | `id` | `id→Mission.id` | — | — | — |
 | **ActivityVitalityReward** | `ActivityVitalityReward.xlsx` | `activityvitalityreward_table.proto` | 4 | 4 | 0 | — | — | `rule_id` `reward_id` | `rule_id→ActivityVitalityRule.id` `reward_id→Reward.id` | — | — | — |
 | **ActivityVitalityRule** | `ActivityVitalityRule.xlsx` | `activityvitalityrule_table.proto` | 6 | 6 | 0 | — | — | — | — | — | — | — |
-| **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
-| **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
+| **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 5 | 4 | 8 | — | — | — | — | — | — | — |
+| **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 5 | 4 | 12 | — | — | — | — | — | — | — |
 | **AfkPassRule** | `AfkPassRule.xlsx` | `afkpassrule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **AttributeAllocRatio** | `AttributeAllocRatio.xlsx` | `attributeallocratio_table.proto` | 10 | 10 | 8 | — | — | `dimension_id` `class_id` | `dimension_id→AttributeDimension.id` | — | — | — |
 | **AttributeAutoPlan** | `AttributeAutoPlan.xlsx` | `attributeautoplan_table.proto` | 14 | 6 | 6 | — | — | `class_id` `pool_id` | `pool_id→AttributePool.id` `dimension→AttributeDimension.id` | — | — | — |
@@ -181,9 +181,9 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildActivity** | `GuildActivity.xlsx` | `guildactivity_table.proto` | 15 | 15 | 3 | — | — | `reward_id` `dungeon_id` | `reward_id→Reward.id` `dungeon_id→Dungeon.id` | — | — | — |
 | **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
-| **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 10 | 10 | 1 | — | — | — | — | — | — | — |
+| **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 13 | 13 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
-| **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 132 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
+| **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 133 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
 | **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 91 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
@@ -197,7 +197,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 4 | 4 | 5 | — | — | — | — | — | — | — |
 | **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 5 | 5 | 7 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
-| **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
+| **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 11 | 11 | 1 | — | — | — | — | — | — | — |
 | **Skill** | `Skill.xlsx` | `skill_table.proto` | 81 | 56 | 115 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
@@ -205,6 +205,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **54** 张表、**624** 个物理列、**476** 个进产物的字段。
+合计 **54** 张表、**625** 个物理列、**487** 个进产物的字段。
 
 <!-- END GENERATED -->

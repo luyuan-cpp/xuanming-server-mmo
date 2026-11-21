@@ -69,14 +69,6 @@ extern const ::google::protobuf::internal::ClassDataFull ActorActionStateTableDa
 #else
 extern const ActorActionStateTableDataGlobalsTypeInternal ActorActionStateTableData_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
-class ActorActionStatestate;
-struct ActorActionStatestateGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern ActorActionStatestateGlobalsTypeInternal ActorActionStatestate_globals_;
-extern const ::google::protobuf::internal::ClassDataFull ActorActionStatestate_class_data_;
-#else
-extern const ActorActionStatestateGlobalsTypeInternal ActorActionStatestate_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -86,219 +78,6 @@ namespace protobuf {
 // ===================================================================
 
 
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStatestate final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:ActorActionStatestate) */ {
- public:
-  inline ActorActionStatestate() : ActorActionStatestate(nullptr) {}
-  ~ActorActionStatestate() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(ActorActionStatestate* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(ActorActionStatestate));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr ActorActionStatestate(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline ActorActionStatestate(const ActorActionStatestate& from) : ActorActionStatestate(nullptr, from) {}
-  inline ActorActionStatestate(ActorActionStatestate&& from) noexcept : ActorActionStatestate(nullptr, ::std::move(from)) {}
-  inline ActorActionStatestate& operator=(const ActorActionStatestate& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ActorActionStatestate& operator=(ActorActionStatestate&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const ActorActionStatestate& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorActionStatestate>(&ActorActionStatestate_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 0;
-  friend void swap(ActorActionStatestate& a, ActorActionStatestate& b) { a.Swap(&b); }
-  inline void Swap(ActorActionStatestate* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ActorActionStatestate* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] ActorActionStatestate* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<ActorActionStatestate>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const ActorActionStatestate& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const ActorActionStatestate& from) { ActorActionStatestate::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(ActorActionStatestate* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "ActorActionStatestate"; }
-
-  explicit ActorActionStatestate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  ActorActionStatestate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ActorActionStatestate& from);
-  ActorActionStatestate(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ActorActionStatestate&& from) noexcept
-      : ActorActionStatestate(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kStateModeFieldNumber = 1,
-    kStateTipFieldNumber = 2,
-  };
-  // uint32 state_mode = 1;
-  void clear_state_mode() ;
-  [[nodiscard]] ::uint32_t state_mode() const;
-  void set_state_mode(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_state_mode() const;
-  void _internal_set_state_mode(::uint32_t value);
-
-  public:
-  // uint32 state_tip = 2;
-  void clear_state_tip() ;
-  [[nodiscard]] ::uint32_t state_tip() const;
-  void set_state_tip(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_state_tip() const;
-  void _internal_set_state_tip(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:ActorActionStatestate)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const ActorActionStatestate& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint32_t state_mode_;
-    ::uint32_t state_tip_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_actoractionstate_5ftable_2eproto;
-};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTable final : public ::google::protobuf::Message
@@ -357,7 +136,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTable final : publi
   [[nodiscard]] static const ActorActionStateTable& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorActionStateTable>(&ActorActionStateTable_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 0;
   friend void swap(ActorActionStateTable& a, ActorActionStateTable& b) { a.Swap(&b); }
   inline void Swap(ActorActionStateTable* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -449,30 +228,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTable final : publi
 
   // accessors -------------------------------------------------------
   enum : int {
-    kStateFieldNumber = 2,
     kIdFieldNumber = 1,
+    kStateIdFieldNumber = 3,
+    kStateModeFieldNumber = 4,
+    kStateTipFieldNumber = 5,
   };
-  // repeated .ActorActionStatestate state = 2;
-  [[nodiscard]] int state_size()
-      const;
-  private:
-  int _internal_state_size() const;
-
-  public:
-  void clear_state() ;
-  [[nodiscard]] const ::ActorActionStatestate& state(int index) const;
-  [[nodiscard]] ::ActorActionStatestate* PROTOBUF_NONNULL mutable_state(int index);
-  ::ActorActionStatestate* PROTOBUF_NONNULL add_state();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>&
-  state() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>* PROTOBUF_NONNULL
-  mutable_state();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>& _internal_state() const;
-  ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -483,12 +243,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTable final : publi
   void _internal_set_id(::uint32_t value);
 
   public:
+  // uint32 state_id = 3;
+  void clear_state_id() ;
+  [[nodiscard]] ::uint32_t state_id() const;
+  void set_state_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state_id() const;
+  void _internal_set_state_id(::uint32_t value);
+
+  public:
+  // uint32 state_mode = 4;
+  void clear_state_mode() ;
+  [[nodiscard]] ::uint32_t state_mode() const;
+  void set_state_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state_mode() const;
+  void _internal_set_state_mode(::uint32_t value);
+
+  public:
+  // uint32 state_tip = 5;
+  void clear_state_tip() ;
+  [[nodiscard]] ::uint32_t state_tip() const;
+  void set_state_tip(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state_tip() const;
+  void _internal_set_state_tip(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ActorActionStateTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<3, 4,
+                          0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -516,8 +306,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTable final : publi
         const ActorActionStateTable& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::ActorActionStatestate > state_;
     ::uint32_t id_;
+    ::uint32_t state_id_;
+    ::uint32_t state_mode_;
+    ::uint32_t state_tip_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -581,7 +373,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTableData final : p
   [[nodiscard]] static const ActorActionStateTableData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorActionStateTableData>(&ActorActionStateTableData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(ActorActionStateTableData& a, ActorActionStateTableData& b) { a.Swap(&b); }
   inline void Swap(ActorActionStateTableData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -750,65 +542,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorActionStateTableData final : p
 #endif  // __GNUC__
 // -------------------------------------------------------------------
 
-// ActorActionStatestate
-
-// uint32 state_mode = 1;
-inline void ActorActionStatestate::clear_state_mode() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint32_t ActorActionStatestate::state_mode() const {
-  // @@protoc_insertion_point(field_get:ActorActionStatestate.state_mode)
-  return _internal_state_mode();
-}
-inline void ActorActionStatestate::set_state_mode(::uint32_t value) {
-  _internal_set_state_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:ActorActionStatestate.state_mode)
-}
-inline ::uint32_t ActorActionStatestate::_internal_state_mode() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.state_mode_;
-}
-inline void ActorActionStatestate::_internal_set_state_mode(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_mode_ = value;
-}
-
-// uint32 state_tip = 2;
-inline void ActorActionStatestate::clear_state_tip() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_tip_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint32_t ActorActionStatestate::state_tip() const {
-  // @@protoc_insertion_point(field_get:ActorActionStatestate.state_tip)
-  return _internal_state_tip();
-}
-inline void ActorActionStatestate::set_state_tip(::uint32_t value) {
-  _internal_set_state_tip(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:ActorActionStatestate.state_tip)
-}
-inline ::uint32_t ActorActionStatestate::_internal_state_tip() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.state_tip_;
-}
-inline void ActorActionStatestate::_internal_set_state_tip(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_tip_ = value;
-}
-
-// -------------------------------------------------------------------
-
 // ActorActionStateTable
 
 // uint32 id = 1;
 inline void ActorActionStateTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint32_t ActorActionStateTable::id() const {
   // @@protoc_insertion_point(field_get:ActorActionStateTable.id)
@@ -816,7 +556,7 @@ inline ::uint32_t ActorActionStateTable::id() const {
 }
 inline void ActorActionStateTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:ActorActionStateTable.id)
 }
 inline ::uint32_t ActorActionStateTable::_internal_id() const {
@@ -828,59 +568,76 @@ inline void ActorActionStateTable::_internal_set_id(::uint32_t value) {
   _impl_.id_ = value;
 }
 
-// repeated .ActorActionStatestate state = 2;
-inline int ActorActionStateTable::_internal_state_size() const {
-  return _internal_state().size();
-}
-inline int ActorActionStateTable::state_size() const {
-  return _internal_state_size();
-}
-inline void ActorActionStateTable::clear_state() {
+// uint32 state_id = 3;
+inline void ActorActionStateTable::clear_state_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.state_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
-inline const ::ActorActionStatestate& ActorActionStateTable::state(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:ActorActionStateTable.state)
-  return _internal_state().Get(index);
+inline ::uint32_t ActorActionStateTable::state_id() const {
+  // @@protoc_insertion_point(field_get:ActorActionStateTable.state_id)
+  return _internal_state_id();
 }
-inline ::ActorActionStatestate* PROTOBUF_NONNULL ActorActionStateTable::mutable_state(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:ActorActionStateTable.state)
-  return _internal_mutable_state()->Mutable(index);
+inline void ActorActionStateTable::set_state_id(::uint32_t value) {
+  _internal_set_state_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ActorActionStateTable.state_id)
 }
-inline ::ActorActionStatestate* PROTOBUF_NONNULL ActorActionStateTable::add_state()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::ActorActionStatestate* _add =
-      _internal_mutable_state()->InternalAddWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:ActorActionStateTable.state)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>& ActorActionStateTable::state() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:ActorActionStateTable.state)
-  return _internal_state();
-}
-inline ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>* PROTOBUF_NONNULL
-ActorActionStateTable::mutable_state() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:ActorActionStateTable.state)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_state();
-}
-inline const ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>&
-ActorActionStateTable::_internal_state() const {
+inline ::uint32_t ActorActionStateTable::_internal_state_id() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.state_;
+  return _impl_.state_id_;
 }
-inline ::google::protobuf::RepeatedPtrField<::ActorActionStatestate>* PROTOBUF_NONNULL
-ActorActionStateTable::_internal_mutable_state() {
+inline void ActorActionStateTable::_internal_set_state_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_id_ = value;
+}
+
+// uint32 state_mode = 4;
+inline void ActorActionStateTable::clear_state_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ActorActionStateTable::state_mode() const {
+  // @@protoc_insertion_point(field_get:ActorActionStateTable.state_mode)
+  return _internal_state_mode();
+}
+inline void ActorActionStateTable::set_state_mode(::uint32_t value) {
+  _internal_set_state_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ActorActionStateTable.state_mode)
+}
+inline ::uint32_t ActorActionStateTable::_internal_state_mode() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.state_;
+  return _impl_.state_mode_;
+}
+inline void ActorActionStateTable::_internal_set_state_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_mode_ = value;
+}
+
+// uint32 state_tip = 5;
+inline void ActorActionStateTable::clear_state_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_tip_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ActorActionStateTable::state_tip() const {
+  // @@protoc_insertion_point(field_get:ActorActionStateTable.state_tip)
+  return _internal_state_tip();
+}
+inline void ActorActionStateTable::set_state_tip(::uint32_t value) {
+  _internal_set_state_tip(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ActorActionStateTable.state_tip)
+}
+inline ::uint32_t ActorActionStateTable::_internal_state_tip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_tip_;
+}
+inline void ActorActionStateTable::_internal_set_state_tip(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_tip_ = value;
 }
 
 // -------------------------------------------------------------------

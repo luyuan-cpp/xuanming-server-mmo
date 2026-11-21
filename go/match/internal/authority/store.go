@@ -10,6 +10,7 @@ import (
 	"shared/authoritysql"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
@@ -37,8 +38,8 @@ type Store struct {
 	fence       *rolefence.Guard
 	fenceStates rolefence.StateReader
 	admissions  rolefence.AdmissionVerifier
-	// catalog 与 schedule 由 ConfigureMatchCatalog 启动时装配，之后只读（见 match_rules.go）。
-	catalog  *catalog.Catalog
+	// catalog 由 ConfigureMatchCatalog 装配,运行期可由表包热更通过 SwapCatalog 原子替换;schedule 之后只读。
+	catalog  atomic.Pointer[catalog.Catalog]
 	schedule scope.Schedule
 	// zones 是合服映射缓存，BindMergedZones 启动时写一次，之后只读（见 merged_zones.go）。
 	zones *placement.MergedZoneCache
@@ -213,7 +214,7 @@ func (s *Store) commitProfileOnce(ctx context.Context, pid uint64, plan, binding
 	}
 	// 整队unit固定入队时全员探测原件；单人刷新不得绕过P全员/Team/launch锁顺序改单票。
 	// 入口已关闭的票不再续命：不刷新它的有效期，最长一个探测有效期后自然过期出队。
-	if e == nil && active.State == 1 && active.TeamId == 0 && s.catalog.Open(pb.MatchMode(active.Mode), active.ConfigId) {
+	if e == nil && active.State == 1 && active.TeamId == 0 && s.Catalog().Open(pb.MatchMode(active.Mode), active.ConfigId) {
 		oldProfile, decodeErr := DecodeProfile(active.NetworkProfile)
 		if decodeErr != nil {
 			return decodeErr
@@ -607,7 +608,7 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 		for _, member := range locked {
 			current = append(current, actual[member.PlayerId])
 		}
-		if !s.catalog.Open(pb.MatchMode(f.Mode), f.ConfigId) {
+		if !s.Catalog().Open(pb.MatchMode(f.Mode), f.ConfigId) {
 			return ErrTemplateClosed
 		}
 		// 组里没有陌生人时不必等跨机房阈值：首选机房没有节点就直接放到硬延迟内的机房（D3）。

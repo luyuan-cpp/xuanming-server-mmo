@@ -336,15 +336,14 @@ namespace
     }
 
     // 校验 CreateBattleRequest 携带的指纹(request.table_fingerprint + 每个快照的
-    // table_fingerprint,非空才比)与本节点指纹一致。返回 false = 按 enforce 拒绝开局。
-    bool CheckTableFingerprint(const ::CreateBattleRequest &request)
+    // table_fingerprint,非空才比)与目标 provider 指纹一致。返回 false = 按 enforce 拒绝开局。
+    bool CheckTableFingerprintAgainst(const ::CreateBattleRequest &request, const std::string &self)
     {
         const auto mode = CurrentFingerprintMode();
         if (mode == FingerprintMode::Off)
         {
             return true;
         }
-        const auto &self = turnbattle::BattleTableFingerprint::Current();
 
         // 收集所有不一致来源(request 本身 + 各玩家快照),一次日志说清楚
         std::string mismatches;
@@ -389,6 +388,97 @@ BattleRoomManager &BattleRoomManager::Instance()
     // 单 loop 线程访问,无并发构造问题
     static BattleRoomManager instance;
     return instance;
+}
+
+void BattleRoomManager::SetDataProvider(std::shared_ptr<turnbattle::BattleDataProvider> provider)
+{
+    RegisterTableProvider(turnbattle::BattleTableFingerprint::Current(), std::move(provider), true);
+}
+
+void BattleRoomManager::RegisterTableProvider(
+    const std::string &fingerprint,
+    std::shared_ptr<turnbattle::BattleDataProvider> provider,
+    const bool makeActive)
+{
+    if (!provider)
+    {
+        return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    ReapRetiredProviders(now);
+
+    // 换新现役 provider 之前,把旧现役放进保留表 10 分钟,覆盖切换窗口里尚未切换的 scene。
+    if (makeActive && dataProvider_ && !activeTableFingerprint_.empty() &&
+        activeTableFingerprint_ != fingerprint)
+    {
+        providersByFingerprint_[activeTableFingerprint_] =
+            RetainedProvider{dataProvider_, now + std::chrono::minutes(10)};
+    }
+    if (!fingerprint.empty())
+    {
+        providersByFingerprint_[fingerprint] =
+            RetainedProvider{provider, now + std::chrono::minutes(10)};
+    }
+    if (makeActive)
+    {
+        dataProvider_ = std::move(provider);
+        activeTableFingerprint_ = fingerprint;
+    }
+}
+
+void BattleRoomManager::ReapRetiredProviders(const std::chrono::steady_clock::time_point now)
+{
+    for (auto it = providersByFingerprint_.begin(); it != providersByFingerprint_.end();)
+    {
+        if (it->first != activeTableFingerprint_ && now >= it->second.retainUntil)
+        {
+            it = providersByFingerprint_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+std::shared_ptr<turnbattle::BattleDataProvider> BattleRoomManager::ResolveProviderForRequest(
+    const ::CreateBattleRequest &request,
+    std::string &matchedFingerprint)
+{
+    ReapRetiredProviders(std::chrono::steady_clock::now());
+
+    // 确定请求侧携带的期望指纹(优先 request.table_fingerprint,否则取首个非空玩家快照指纹)。
+    std::string requested = request.table_fingerprint();
+    if (requested.empty())
+    {
+        for (const auto &snapshot : request.players())
+        {
+            if (!snapshot.table_fingerprint().empty())
+            {
+                requested = snapshot.table_fingerprint();
+                break;
+            }
+        }
+    }
+
+    const std::string &activeFp = activeTableFingerprint_.empty()
+                                      ? turnbattle::BattleTableFingerprint::Current()
+                                      : activeTableFingerprint_;
+    if (requested.empty() || requested == activeFp)
+    {
+        matchedFingerprint = activeFp;
+        return dataProvider_;
+    }
+
+    if (const auto it = providersByFingerprint_.find(requested);
+        it != providersByFingerprint_.end() && it->second.provider)
+    {
+        matchedFingerprint = it->first;
+        return it->second.provider;
+    }
+
+    matchedFingerprint = activeFp;
+    return dataProvider_;
 }
 
 BattleRoomManager::BattleRoom *BattleRoomManager::FindRoom(const uint64_t battleId)
@@ -506,20 +596,23 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         }
     }
 
-    // 配表指纹:出快照的 scene / 编排的 match 与本节点读的不是同一份战斗表时,
-    // 确定性引擎的结果对各方不再可复现;按配置 warn/enforce(cross-zone-matchmaking.md §10)
-    if (!CheckTableFingerprint(request))
+    // 配表指纹(cross-zone-matchmaking.md §10;config-table-hot-reload.md §8.4):
+    // 先按请求指纹在现役 + 退役保留列表里匹配 provider,命中则整局绑定该套不可变 TableSet;
+    // 未命中按 warn/enforce 判定。
+    std::string matchedFingerprint;
+    auto roomProvider = ResolveProviderForRequest(request, matchedFingerprint);
+    if (!CheckTableFingerprintAgainst(request, matchedFingerprint))
     {
         // TipInfoMessage 只有 id + parameters:说明文本放 parameters[0],match 日志可直接打出来
         response.mutable_error_message()->set_id(kFeatureUnavailable);
         response.mutable_error_message()->add_parameters(
             "battle table fingerprint mismatch: node=" +
-            turnbattle::BattleTableFingerprint::Current() +
+            matchedFingerprint +
             " request=" + request.table_fingerprint());
         return;
     }
 
-    auto room = std::make_unique<BattleRoom>(dataProvider_);
+    auto room = std::make_unique<BattleRoom>(std::move(roomProvider));
     room->battleId = battleId;
     room->matchMode = request.match_mode();
     room->battleConfigId = request.battle_config_id();
@@ -1372,16 +1465,17 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
     return event;
 }
 
-::match::CommitBattleOutcomeRequest BattleRoomManager::BuildOutcomeRequest(const BattleRoom &room)
+::match::CommitBattleOutcomeRequest BattleRoomManager::BuildOutcomeRequest(
+    const BattleRoom &room, std::string rawResultPayload, std::optional<::BattleReplayEnvelope> replay)
 {
     ::match::CommitBattleOutcomeRequest request;
     request.set_battle_id(room.battleId);
     request.set_placement_operation_id(room.placementOperation);
     request.set_target_instance_id(room.targetInstance);
-    request.set_raw_result_payload(room.outcomePayload);
-    if (room.outcomeReplay)
+    request.set_raw_result_payload(std::move(rawResultPayload));
+    if (replay)
     {
-        *request.mutable_replay() = *room.outcomeReplay;
+        *request.mutable_replay() = std::move(*replay);
     }
     return request;
 }
@@ -1410,26 +1504,29 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
     room.outcomePending = true;
     room.outcomeSince = std::chrono::steady_clock::now();
     room.pendingResult = BuildResult(room, outcome);
+    std::string rawResultPayload;
     // 原终局只计算一次；未知回执不允许重新取掉落、时间或目标UUID。
     if (room.pendingResult.settlement_format_version() != 1 ||
-        !room.pendingResult.SerializeToString(&room.outcomePayload) || room.outcomePayload.empty()) {
+        !room.pendingResult.SerializeToString(&rawResultPayload) || rawResultPayload.empty()) {
         room.outcomeExhausted = true;
         LOG_ERROR << "metric=battle_sql_outcome_source_invalid;terminal remains unknown";
         // 这间房留在节点上排不空,周期提醒要靠滞留定时器(2026-10-22 评审补)。
         EnsureStuckRoomReporter();
         return;
     }
-    // 战报回放与终局原件一起冻结,只算一次:重放时逐字节相同,摘要与签名都覆盖它(battle-report-replay.md BR-4)。
+    // 战报回放与终局原件一起冻结,只算一次:重放时逐字节相同,摘要与签名都覆盖它(battle-report-replay.md BR-4、§6.3)。
     // 冻结失败(压缩失败、超上限)只让这一局没有回放,终局照常提交。
+    std::optional<::BattleReplayEnvelope> outcomeReplay;
     if (room.replay)
     {
-        room.outcomeReplay = room.replay->Freeze(room.pendingResult.outcome(), room.pendingResult.total_rounds(),
-                                                 room.pendingResult.finished_at_ms());
+        outcomeReplay = room.replay->Freeze(room.pendingResult.outcome(), room.pendingResult.total_rounds(),
+                                            room.pendingResult.finished_at_ms());
         room.replay.reset();
     }
-    const auto original = BuildOutcomeRequest(room);
+    auto original = BuildOutcomeRequest(room, std::move(rawResultPayload), std::move(outcomeReplay));
     room.outcomeRequestDigest = service_call_auth::Digest(original);
     if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureStuckRoomReporter(); return; }
+    room.frozenOutcomeRequest = std::move(original);
     sqlOutcomeRooms_.insert(room.battleId);
     if (!sqlOutcomeTimer_.IsActive()) sqlOutcomeTimer_.RunEvery(1.0, [weak = WeakSelf()] {
         if (const auto self = weak.lock()) self->PumpSqlOutcomes();
@@ -1504,12 +1601,14 @@ void BattleRoomManager::SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &s
 {
     constexpr std::string_view method = "/match.MatchInternal/CommitBattleOutcome";
     // 下面任何一步没走到真正发出(原件缺字段、次数用尽、签不出),都不推后下次尝试(见 PumpSqlOutcomes)。
-    if (room.targetInstance.empty() || room.placementOperation.empty()) return;
+    if (room.targetInstance.empty() || room.placementOperation.empty() ||
+        !room.frozenOutcomeRequest || room.outcomeRequestDigest.empty()) return;
     if (room.outcomeAttempt == std::numeric_limits<uint64_t>::max()) return;
     const auto battleId = room.battleId;
-    auto request = BuildOutcomeRequest(room);
-    if (service_call_auth::Digest(request) != room.outcomeRequestDigest ||
-        !service_call_auth::Sign(method, request, *request.mutable_auth(), "battle", secret, TimeSystem::NowMillisecondsUTC())) return;
+    auto& request = *room.frozenOutcomeRequest;
+    // 冻结原件除 auth 外永不修改:重放按冻结摘要直接签发,避免循环线程上重复拷贝与哈希整份回放正文(§6.3)。
+    if (!service_call_auth::SignForDigest(method, room.outcomeRequestDigest, *request.mutable_auth(), "battle", secret,
+                                          TimeSystem::NowMillisecondsUTC())) return;
     const auto attempt = ++room.outcomeAttempt;
     const auto op = room.placementOperation, instance = room.targetInstance, digest = room.outcomeRequestDigest;
     // 在途状态与下次尝试时刻都在发送之前记好;发送之后不再碰 room,回复只按 battle_id 重查房间。

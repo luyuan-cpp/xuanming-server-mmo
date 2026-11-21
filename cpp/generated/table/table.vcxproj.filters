@@ -585,6 +585,9 @@
     <ClInclude Include="proto\tip\afk_pass_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\tip\chat_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\tip\equip_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -1007,6 +1010,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\afk_pass_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\chat_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\equip_error_tip.pb.cc">

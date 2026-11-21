@@ -54,6 +54,18 @@ struct GuildRuleTrial_invite_cooldown_secondsComp {
     uint32_t value;
 };
 
+struct GuildRuleRename_cooldown_secondsComp {
+    uint32_t value;
+};
+
+struct GuildRuleName_hold_secondsComp {
+    uint32_t value;
+};
+
+struct GuildRuleRename_cost_fundsComp {
+    uint64_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,4 +100,13 @@ inline GuildRuleTrial_invite_ttl_secondsComp MakeGuildRuleTrial_invite_ttl_secon
 }
 inline GuildRuleTrial_invite_cooldown_secondsComp MakeGuildRuleTrial_invite_cooldown_secondsComp(const GuildRuleTable& row) {
     return { row.trial_invite_cooldown_seconds() };
+}
+inline GuildRuleRename_cooldown_secondsComp MakeGuildRuleRename_cooldown_secondsComp(const GuildRuleTable& row) {
+    return { row.rename_cooldown_seconds() };
+}
+inline GuildRuleName_hold_secondsComp MakeGuildRuleName_hold_secondsComp(const GuildRuleTable& row) {
+    return { row.name_hold_seconds() };
+}
+inline GuildRuleRename_cost_fundsComp MakeGuildRuleRename_cost_fundsComp(const GuildRuleTable& row) {
+    return { row.rename_cost_funds() };
 }

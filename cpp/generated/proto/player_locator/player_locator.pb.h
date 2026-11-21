@@ -615,9 +615,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
     kAccountFieldNumber = 8,
     kPlayerIdFieldNumber = 1,
     kTokenExpiryMsFieldNumber = 6,
+    kNewSessionIdFieldNumber = 2,
+    kGateZoneIdFieldNumber = 11,
     kLoginGenerationFieldNumber = 9,
     kSessionIncarnationFieldNumber = 10,
-    kNewSessionIdFieldNumber = 2,
   };
   // string gate_id = 3;
   void clear_gate_id() ;
@@ -714,6 +715,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
   void _internal_set_token_expiry_ms(::uint64_t value);
 
   public:
+  // uint32 new_session_id = 2;
+  void clear_new_session_id() ;
+  [[nodiscard]] ::uint32_t new_session_id() const;
+  void set_new_session_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_new_session_id() const;
+  void _internal_set_new_session_id(::uint32_t value);
+
+  public:
+  // uint32 gate_zone_id = 11;
+  void clear_gate_zone_id() ;
+  [[nodiscard]] ::uint32_t gate_zone_id() const;
+  void set_gate_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gate_zone_id() const;
+  void _internal_set_gate_zone_id(::uint32_t value);
+
+  public:
   // uint64 login_generation = 9;
   void clear_login_generation() ;
   [[nodiscard]] ::uint64_t login_generation() const;
@@ -734,21 +755,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
   void _internal_set_session_incarnation(::uint64_t value);
 
   public:
-  // uint32 new_session_id = 2;
-  void clear_new_session_id() ;
-  [[nodiscard]] ::uint32_t new_session_id() const;
-  void set_new_session_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_new_session_id() const;
-  void _internal_set_new_session_id(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:playerlocator.ReconnectRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 95,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -784,9 +795,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
     ::google::protobuf::internal::ArenaStringPtr account_;
     ::uint64_t player_id_;
     ::uint64_t token_expiry_ms_;
+    ::uint32_t new_session_id_;
+    ::uint32_t gate_zone_id_;
     ::uint64_t login_generation_;
     ::uint64_t session_incarnation_;
-    ::uint32_t new_session_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -954,9 +966,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
     kSceneIdFieldNumber = 6,
     kTokenExpiryMsFieldNumber = 8,
     kLastActiveTsFieldNumber = 11,
+    kStateFieldNumber = 10,
+    kGateZoneIdFieldNumber = 16,
     kLoginGenerationFieldNumber = 14,
     kSessionIncarnationFieldNumber = 15,
-    kStateFieldNumber = 10,
   };
   // string gate_id = 3;
   void clear_gate_id() ;
@@ -1108,6 +1121,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
   void _internal_set_last_active_ts(::int64_t value);
 
   public:
+  // .playerlocator.PlayerSessionState state = 10;
+  void clear_state() ;
+  [[nodiscard]] ::playerlocator::PlayerSessionState state() const;
+  void set_state(::playerlocator::PlayerSessionState value);
+
+  private:
+  ::playerlocator::PlayerSessionState _internal_state() const;
+  void _internal_set_state(::playerlocator::PlayerSessionState value);
+
+  public:
+  // uint32 gate_zone_id = 16;
+  void clear_gate_zone_id() ;
+  [[nodiscard]] ::uint32_t gate_zone_id() const;
+  void set_gate_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gate_zone_id() const;
+  void _internal_set_gate_zone_id(::uint32_t value);
+
+  public:
   // uint64 login_generation = 14;
   void clear_login_generation() ;
   [[nodiscard]] ::uint64_t login_generation() const;
@@ -1128,22 +1161,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
   void _internal_set_session_incarnation(::uint64_t value);
 
   public:
-  // .playerlocator.PlayerSessionState state = 10;
-  void clear_state() ;
-  [[nodiscard]] ::playerlocator::PlayerSessionState state() const;
-  void set_state(::playerlocator::PlayerSessionState value);
-
-  private:
-  ::playerlocator::PlayerSessionState _internal_state() const;
-  void _internal_set_state(::playerlocator::PlayerSessionState value);
-
-  public:
   // @@protoc_insertion_point(class_scope:playerlocator.PlayerSession)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 105,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 113,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1183,9 +1206,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
     ::uint64_t scene_id_;
     ::uint64_t token_expiry_ms_;
     ::int64_t last_active_ts_;
+    int state_;
+    ::uint32_t gate_zone_id_;
     ::uint64_t login_generation_;
     ::uint64_t session_incarnation_;
-    int state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3733,7 +3757,7 @@ inline void PlayerSession::_internal_set_session_version(::uint32_t value) {
 inline void PlayerSession::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::playerlocator::PlayerSessionState PlayerSession::state() const {
   // @@protoc_insertion_point(field_get:playerlocator.PlayerSession.state)
@@ -3741,7 +3765,7 @@ inline ::playerlocator::PlayerSessionState PlayerSession::state() const {
 }
 inline void PlayerSession::set_state(::playerlocator::PlayerSessionState value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:playerlocator.PlayerSession.state)
 }
 inline ::playerlocator::PlayerSessionState PlayerSession::_internal_state() const {
@@ -3909,7 +3933,7 @@ inline void PlayerSession::set_allocated_account(::std::string* PROTOBUF_NULLABL
 inline void PlayerSession::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t PlayerSession::login_generation() const {
   // @@protoc_insertion_point(field_get:playerlocator.PlayerSession.login_generation)
@@ -3917,7 +3941,7 @@ inline ::uint64_t PlayerSession::login_generation() const {
 }
 inline void PlayerSession::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:playerlocator.PlayerSession.login_generation)
 }
 inline ::uint64_t PlayerSession::_internal_login_generation() const {
@@ -3933,7 +3957,7 @@ inline void PlayerSession::_internal_set_login_generation(::uint64_t value) {
 inline void PlayerSession::clear_session_incarnation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_incarnation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t PlayerSession::session_incarnation() const {
   // @@protoc_insertion_point(field_get:playerlocator.PlayerSession.session_incarnation)
@@ -3941,7 +3965,7 @@ inline ::uint64_t PlayerSession::session_incarnation() const {
 }
 inline void PlayerSession::set_session_incarnation(::uint64_t value) {
   _internal_set_session_incarnation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:playerlocator.PlayerSession.session_incarnation)
 }
 inline ::uint64_t PlayerSession::_internal_session_incarnation() const {
@@ -3951,6 +3975,30 @@ inline ::uint64_t PlayerSession::_internal_session_incarnation() const {
 inline void PlayerSession::_internal_set_session_incarnation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_incarnation_ = value;
+}
+
+// uint32 gate_zone_id = 16;
+inline void PlayerSession::clear_gate_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t PlayerSession::gate_zone_id() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerSession.gate_zone_id)
+  return _internal_gate_zone_id();
+}
+inline void PlayerSession::set_gate_zone_id(::uint32_t value) {
+  _internal_set_gate_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerSession.gate_zone_id)
+}
+inline ::uint32_t PlayerSession::_internal_gate_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gate_zone_id_;
+}
+inline void PlayerSession::_internal_set_gate_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_zone_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4545,7 +4593,7 @@ inline void ReconnectRequest::_internal_set_player_id(::uint64_t value) {
 inline void ReconnectRequest::clear_new_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.new_session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t ReconnectRequest::new_session_id() const {
   // @@protoc_insertion_point(field_get:playerlocator.ReconnectRequest.new_session_id)
@@ -4553,7 +4601,7 @@ inline ::uint32_t ReconnectRequest::new_session_id() const {
 }
 inline void ReconnectRequest::set_new_session_id(::uint32_t value) {
   _internal_set_new_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:playerlocator.ReconnectRequest.new_session_id)
 }
 inline ::uint32_t ReconnectRequest::_internal_new_session_id() const {
@@ -4913,7 +4961,7 @@ inline void ReconnectRequest::set_allocated_account(::std::string* PROTOBUF_NULL
 inline void ReconnectRequest::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t ReconnectRequest::login_generation() const {
   // @@protoc_insertion_point(field_get:playerlocator.ReconnectRequest.login_generation)
@@ -4921,7 +4969,7 @@ inline ::uint64_t ReconnectRequest::login_generation() const {
 }
 inline void ReconnectRequest::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:playerlocator.ReconnectRequest.login_generation)
 }
 inline ::uint64_t ReconnectRequest::_internal_login_generation() const {
@@ -4937,7 +4985,7 @@ inline void ReconnectRequest::_internal_set_login_generation(::uint64_t value) {
 inline void ReconnectRequest::clear_session_incarnation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_incarnation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t ReconnectRequest::session_incarnation() const {
   // @@protoc_insertion_point(field_get:playerlocator.ReconnectRequest.session_incarnation)
@@ -4945,7 +4993,7 @@ inline ::uint64_t ReconnectRequest::session_incarnation() const {
 }
 inline void ReconnectRequest::set_session_incarnation(::uint64_t value) {
   _internal_set_session_incarnation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:playerlocator.ReconnectRequest.session_incarnation)
 }
 inline ::uint64_t ReconnectRequest::_internal_session_incarnation() const {
@@ -4955,6 +5003,30 @@ inline ::uint64_t ReconnectRequest::_internal_session_incarnation() const {
 inline void ReconnectRequest::_internal_set_session_incarnation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_incarnation_ = value;
+}
+
+// uint32 gate_zone_id = 11;
+inline void ReconnectRequest::clear_gate_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t ReconnectRequest::gate_zone_id() const {
+  // @@protoc_insertion_point(field_get:playerlocator.ReconnectRequest.gate_zone_id)
+  return _internal_gate_zone_id();
+}
+inline void ReconnectRequest::set_gate_zone_id(::uint32_t value) {
+  _internal_set_gate_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:playerlocator.ReconnectRequest.gate_zone_id)
+}
+inline ::uint32_t ReconnectRequest::_internal_gate_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gate_zone_id_;
+}
+inline void ReconnectRequest::_internal_set_gate_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_zone_id_ = value;
 }
 
 // -------------------------------------------------------------------

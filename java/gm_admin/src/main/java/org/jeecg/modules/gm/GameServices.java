@@ -2,8 +2,8 @@ package org.jeecg.modules.gm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
 import io.grpc.CallOptions;
@@ -53,42 +53,66 @@ public final class GameServices {
             @Value("${gm.game.mail-admin-secret:}") String mailSecret,
             @Value("${gm.game.plaintext:false}") boolean plaintext,
             @Value("${gm.game.scene-targets-json:}") String sceneTargetsJson,
+            @Value("${gm.game.scene-etcd-url:}") String sceneEtcdUrl,
             @Value("${gm.game.scene-admin-secret:}") String sceneSecret) {
         this(GameProto.load(), mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, 5000,
-                sceneTargetsJson, sceneSecret);
+                sceneTargetsJson, sceneEtcdUrl, sceneSecret, GamePlayerAdmin.DEFAULT_DISCOVERY_TTL_MS);
     }
 
     GameServices(GameProto proto, ObjectMapper mapper, String dataTarget, String locatorTarget,
             String mailTarget, String mailSecret, boolean plaintext, long budgetMillis) {
-        this(proto, mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, budgetMillis, "{}", "");
+        this(proto, mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, budgetMillis,
+                "{}", "", "", GamePlayerAdmin.DEFAULT_DISCOVERY_TTL_MS);
     }
 
     GameServices(GameProto proto, ObjectMapper mapper, String dataTarget, String locatorTarget,
             String mailTarget, String mailSecret, boolean plaintext, long budgetMillis, String sceneTargetsJson, String sceneSecret) {
+        this(proto, mapper, dataTarget, locatorTarget, mailTarget, mailSecret, plaintext, budgetMillis,
+                sceneTargetsJson, "", sceneSecret, GamePlayerAdmin.DEFAULT_DISCOVERY_TTL_MS);
+    }
+
+    GameServices(GameProto proto, ObjectMapper mapper, String dataTarget, String locatorTarget,
+            String mailTarget, String mailSecret, boolean plaintext, long budgetMillis, String sceneTargetsJson,
+            String sceneEtcdUrl, String sceneSecret, long discoveryTtlMs) {
         this.proto = proto;
         this.mapper = mapper;
         this.mailSecret = mailSecret == null ? "" : mailSecret.strip();
         if (budgetMillis <= 0 || budgetMillis > 5000) throw new IllegalArgumentException("游戏调用预算非法");
         this.budgetMillis = budgetMillis;
+        GamePlayerAdmin admin = null;
         try {
-            data = channel(dataTarget, plaintext);
-            locator = channel(locatorTarget, plaintext);
-            mail = channel(mailTarget, plaintext);
-            playerAdmin = new GamePlayerAdmin(proto, mapper, locator, sceneTargetsJson, sceneSecret, budgetMillis,
-                    target -> channel(target, plaintext));
+            data = managedChannel(dataTarget, plaintext);
+            locator = managedChannel(locatorTarget, plaintext);
+            mail = managedChannel(mailTarget, plaintext);
+            admin = new GamePlayerAdmin(proto, mapper, locator, sceneTargetsJson, sceneEtcdUrl, sceneSecret,
+                    budgetMillis, discoveryTtlMs, target -> createChannel(target, plaintext));
+            playerAdmin = admin;
         } catch (RuntimeException error) {
-            close();
+            if (admin != null) admin.close();
+            closeFixedChannels();
             throw error;
         }
     }
 
     public ArrayNode currencyTypes() { return proto.currencyTypes(); }
 
+    public boolean supportsCurrency(int currencyType) { return proto.supportsCurrency(currencyType); }
+
+    public boolean mailEnabled() {
+        return mail != null && mailSecret.getBytes(StandardCharsets.UTF_8).length >= 32;
+    }
+
     public boolean playerCommandsEnabled() { return playerAdmin.enabled(); }
 
     public ObjectNode sendPlayerCommand(ObjectNode frozenRequest) { return playerAdmin.execute(frozenRequest); }
 
-    private ManagedChannel channel(String target, boolean plaintext) {
+    private ManagedChannel managedChannel(String target, boolean plaintext) {
+        ManagedChannel channel = createChannel(target, plaintext);
+        if (channel != null) channels.add(channel);
+        return channel;
+    }
+
+    private ManagedChannel createChannel(String target, boolean plaintext) {
         if (target == null || target.isBlank()) return null;
         URI uri;
         try { uri = URI.create("tcp://" + target); }
@@ -104,9 +128,7 @@ public final class GameServices {
         NettyChannelBuilder builder = NettyChannelBuilder.forAddress(host, uri.getPort())
                 .disableRetry().maxInboundMessageSize(1024 * 1024);
         if (plaintext) builder.usePlaintext(); else builder.useTransportSecurity();
-        ManagedChannel channel = builder.build();
-        channels.add(channel);
-        return channel;
+        return builder.build();
     }
 
     /** 全链路共用一个截止时间；没有查到角色和依赖失败是不同结果。 */
@@ -235,13 +257,18 @@ public final class GameServices {
         return new CallFailure("INVALID_ARGUMENT", message, false, 0);
     }
 
-    @PreDestroy
-    public void close() {
+    private void closeFixedChannels() {
         for (ManagedChannel channel : channels) channel.shutdownNow();
         for (ManagedChannel channel : channels) {
             try { channel.awaitTermination(2, TimeUnit.SECONDS); }
             catch (InterruptedException error) { Thread.currentThread().interrupt(); return; }
         }
+    }
+
+    @PreDestroy
+    public void close() {
+        if (playerAdmin != null) playerAdmin.close();
+        closeFixedChannels();
     }
 
     public static final class CallFailure extends RuntimeException {

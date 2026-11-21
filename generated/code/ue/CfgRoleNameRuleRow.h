@@ -82,4 +82,20 @@ struct FCfgRoleNameRuleRow : public FTableRowBase
 	/** 说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RoleNameRule")
 	FString desc;
+
+	/** 两次角色改名之间的冷却秒数(默认 604800 = 7 天;0 = 无冷却) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RoleNameRule")
+	int32 rename_cooldown_seconds = 0;
+
+	/** 改名后旧名保护期秒数,期内他人不可占用、本人可改回(默认 604800 = 7 天) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RoleNameRule")
+	int32 old_name_hold_seconds = 0;
+
+	/** 角色改名消耗道具 id(Item.id,默认 3401 改名卡;启动校验 fail-closed 核验存在) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RoleNameRule")
+	int32 rename_item_id = 0;
+
+	/** 每次角色改名消耗道具数量(>= 1,默认 1) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RoleNameRule")
+	int32 rename_item_count = 0;
 };

@@ -52,6 +52,10 @@ message PlayerSession {
   // SetDisconnecting 的请求与本记录的代次都非 0 且不等时,判为同一 gate 进程里同号旧连接迟到的断线,忽略;
   // 0 = 旧版 login 写入,不校验(docs/design/gate-online-identity.md §10.4「断线通知」)。不从旧记录继承。
   uint64 session_incarnation = 15;
+  // 写下本记录的那条 gate 连接所在的区号(发起 SetSession / Reconnect 的 login 进程 Node.ZoneId)。
+  // AssignGate 重连免排队直接按它判「会话是否在本区」(合服角色掉 gate 仍可精确免排队,跨区访客不再误免,
+  // docs/design/login-queue-2026-05.md §8)。0 = 旧版 login 写入,不从旧记录继承。
+  uint32 gate_zone_id = 16;
 }
 
 message SetSessionRequest {
@@ -106,6 +110,8 @@ message ReconnectRequest {
   uint64 login_generation = 9;
   // 发起重连的那条 gate 连接的会话代次,原样写进会话记录(PlayerSession.session_incarnation);0 = 旧版 login,如实写 0。
   uint64 session_incarnation = 10;
+  // 发起重连的那条 gate 连接所在的区号(login 的 Node.ZoneId),原样写进会话记录(PlayerSession.gate_zone_id);0 = 旧版 login,如实写 0。
+  uint32 gate_zone_id = 11;
 }
 
 message ReconnectResponse {

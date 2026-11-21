@@ -208,6 +208,21 @@ Rmb:
   # 默认仅金币0；钻石1需显式开启；绑定币2永远禁售。
   CurrencyTypes: [0]
 
+# 内容安全(go/content_guard):人民币寄售标题全服可见,落库前先送检。
+# 缺省严格;Optional: true 只在本机使用,k8s_deploy.ps1 的 New-ContentGuardClientYaml 渲染进集群时删掉它。
+ContentGuard:
+  Rpc:
+    Etcd:
+      Hosts:
+        - 127.0.0.1:2379
+      Key: contentguard.rpc
+    Timeout: 500
+    NonBlock: true
+    Middlewares:
+      Breaker: true
+  Optional: true
+  TimeoutMs: 300
+
 # 链路追踪阶段三(docs/design/distributed-tracing.md §10.3):go-zero 把 span 经 OTLP/gRPC 送本机 Alloy
 # (deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。Name 与 Loki 的 service 标签同值。
 # 头部全采(Sampler 1.0),取舍在采集器。Alloy 没起时导出器在后台重连、丢 span,不影响业务;不想导出就加 Disabled: true。

@@ -13,6 +13,7 @@
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_rename.h"
 #include "player/system/player_save_metrics.h" // [SaveTiming] 汇总行
 #include "player/system/player_store_client.h"
 #include "player/system/release_fence.h" // [ReleaseFence] 汇总行
@@ -201,7 +202,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 离线托管角色的在场心跳与托管归位信息(hosted_presence.h,player-connection-lost-hold.md §4.5)同一个节拍:
         // 每名托管角色 20 秒一次,按玩家号错开。停机 drain 期间照常续:带着托管改派票据退出中、改派待确认的角色
         // 节点还在对他负责,不让 player_locator 在改派有结论之前就替他归位。静态函数,不引入新的绑定。
-        PlayerLifecycleSystem::RefreshHostedPresence(TimeSystem::NowSecondsUTC()); });
+        PlayerLifecycleSystem::RefreshHostedPresence(TimeSystem::NowSecondsUTC());
+        // 角色改名瞬时失败的退避重试(表为空时 O(1) 返回)。
+        PlayerRenameSystem::Tick(TimeSystem::NowMillisecondsUTC()); });
     retryTimerActive_ = true;
 
     // 每 30 秒打一轮计数快照。

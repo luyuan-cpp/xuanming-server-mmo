@@ -11,6 +11,7 @@ import (
 	"time"
 
 	assetpb "proto/common/asset"
+	rollbackpb "proto/common/rollback"
 	tradepb "proto/trade"
 
 	"shared/assetop"
@@ -939,9 +940,9 @@ const (
 		AssetOpTableName + " WHERE `status` = ? AND `op_id` > ? ORDER BY `op_id` ASC LIMIT ?"
 
 	// sqlListAbandonCandidates:自动放弃的候选(非加锁读,按 op_id 翻页)。只给候选,判定在持租约之后逐行复核。
-	// 只列 abandonableStream(TRADE_DEBIT)的行,理由见 abandonableStream。
+	// 只列 abandonableStream(TRADE_DEBIT) 且排除付款撤销扣回(TX_PAYMENT_REVERSAL):拒付玩家长期离线也不得放弃扣回腿。
 	sqlListAbandonCandidates = "SELECT `op_id` FROM " + AssetOpTableName +
-		" WHERE `status` = ? AND `stream` = ? AND `created_ms` < ? AND `op_id` > ? ORDER BY `op_id` ASC LIMIT ?"
+		" WHERE `status` = ? AND `stream` = ? AND `tx_type` <> ? AND `created_ms` < ? AND `op_id` > ? ORDER BY `op_id` ASC LIMIT ?"
 
 	// sqlAbandonAssetOp:放弃 CAS,以 (op_id, status=PENDING, lease_token) 为条件(assetop.Abandoner 契约)。
 	// 不置 durable(不是 scene 确认的结局)、不改 last_outcome(保留最后一次真实答复作证据);
@@ -974,6 +975,9 @@ const auditPageSize = 500
 // 日对账(CountPendingByClass)不按流区分放弃候选:超龄的 CREDIT 行仍会计进 abandon_candidate 类(口径在 assetop,本表只喂列)。
 // v1 没有任何 CREDIT 生产者,这种行不存在;P3 若先上 CREDIT 生产者、后补对侧账,这一类的计数会多出"永远不会被放弃"的行。
 const abandonableStream = assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT
+
+// nonAbandonableTxType 是即使落在 TRADE_DEBIT 流也不允许自动放弃的交易类型(付款渠道撤销扣回,payment-recharge.md §8.3.7)。
+const nonAbandonableTxType = uint32(rollbackpb.TransactionType_TX_PAYMENT_REVERSAL)
 
 // ListPendingByPlayer 实现 assetop.PlayerPendingLister:列出某玩家的 PENDING 行主键,条数 <= limit。
 // 没有 PENDING 行时回 (nil, nil)。limit <= 0 直接回空,不发 SQL。
@@ -1058,7 +1062,7 @@ func (r *AssetOpRepo) ListAbandonCandidates(ctx context.Context, createdBeforeMs
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 	ids, err := r.queryOpIDs(ctx, sqlListAbandonCandidates,
-		PendingStatus(), uint32(abandonableStream), createdBeforeMs, afterOpID, limit)
+		PendingStatus(), uint32(abandonableStream), nonAbandonableTxType, createdBeforeMs, afterOpID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list abandon candidates %s: %w", AssetOpTableName, err)
 	}
@@ -1084,6 +1088,10 @@ func (r *AssetOpRepo) Abandon(ctx context.Context, op assetop.Op, nowMs uint64) 
 	if op.Stream != abandonableStream {
 		return fmt.Errorf("abandon %s %d: 流 %d 不允许自动放弃(对侧账未落地之前只放弃 TRADE_DEBIT)",
 			AssetOpTableName, op.OpID, int32(op.Stream))
+	}
+	if op.TxType == nonAbandonableTxType {
+		return fmt.Errorf("abandon %s %d: 付款撤销扣回(TX_PAYMENT_REVERSAL)不允许自动放弃",
+			AssetOpTableName, op.OpID)
 	}
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()

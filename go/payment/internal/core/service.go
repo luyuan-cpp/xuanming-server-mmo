@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -46,6 +47,7 @@ type Store interface {
 	Intent(ctx context.Context, hi, lo uint64) (*paymentpb.PaymentIntentRecord, error)
 	InsertIntent(ctx context.Context, rec *paymentpb.PaymentIntentRecord) (*paymentpb.PaymentIntentRecord, bool, error)
 	ReserveIntent(ctx context.Context, rec *paymentpb.PaymentIntentRecord, limit data.SpendLimit) (*paymentpb.PaymentIntentRecord, bool, error)
+	RecordMinorPaymentTxn(ctx context.Context, rec *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord, limit data.SpendLimit, paidMs, now uint64, overLimitReason string) (data.RecordMinorPaymentOutcome, error)
 	ReviveMinorIntent(ctx context.Context, intent *paymentpb.PaymentIntentRecord, limit data.SpendLimit, paidMs, now uint64, force bool) (bool, error)
 	SetChannelRef(ctx context.Context, hi, lo uint64, ref string, refMs uint64, payer string, now uint64) error
 	ClaimActiveQuery(ctx context.Context, rec *paymentpb.PaymentIntentRecord, now uint64) (bool, error)
@@ -58,11 +60,14 @@ type Store interface {
 	Txn(ctx context.Context, channel uint32, hi, lo uint64) (*paymentpb.PaymentTxnRecord, error)
 	InsertTxn(ctx context.Context, rec *paymentpb.PaymentTxnRecord) (*paymentpb.PaymentTxnRecord, bool, error)
 	FlipFact(ctx context.Context, rec *paymentpb.PaymentTxnRecord, observedMs, now uint64) (bool, error)
+	TouchFactObserved(ctx context.Context, rec *paymentpb.PaymentTxnRecord, observedMs, now uint64) error
+	OldestMallPendingMs(ctx context.Context) (uint64, error)
+	OldestFinalizePendingMs(ctx context.Context) (uint64, error)
 	DueMallTxns(ctx context.Context, now uint64, limit int) ([]*paymentpb.PaymentTxnRecord, error)
 	ClaimMall(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease, now uint64) (bool, error)
 	SettleMall(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease uint64, s data.MallSync, now uint64) error
 	DeferMall(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease, next uint64, lastErr string, now uint64) error
-	ClaimRefund(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease, now uint64) (bool, error)
+	ClaimRefund(ctx context.Context, rec *paymentpb.PaymentTxnRecord, outRefundNo string, lease, now uint64) (bool, error)
 	SaveRefund(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease uint64, p data.RefundProgress, now uint64) error
 	DueFinalize(ctx context.Context, now uint64, limit int) ([]*paymentpb.PaymentTxnRecord, error)
 	ClaimFinalize(ctx context.Context, rec *paymentpb.PaymentTxnRecord, lease, now uint64) (bool, error)
@@ -78,7 +83,7 @@ type Mall interface {
 	OrderView(ctx context.Context, orderID string) (mall.Order, error)
 	RecordPayment(ctx context.Context, payment mall.Payment) (mall.Outcome, error)
 	PushRevision(ctx context.Context, revision mall.Revision) (uint32, error)
-	PendingRefunds(ctx context.Context) ([]mall.PendingRefund, error)
+	PendingRefunds(ctx context.Context, cursor string) (mall.PendingRefundPage, error)
 	ReportRefund(ctx context.Context, refund mall.Refund) error
 	CloseRefund(ctx context.Context, closure mall.RefundClosure) error
 }
@@ -482,7 +487,7 @@ func (s *Service) activeQuery(ctx context.Context, intent *paymentpb.PaymentInte
 	if err != nil || result.Payment == nil || (result.State != channel.TradePaid && result.State != channel.TradeRefundedOutside) {
 		return intent, nil
 	}
-	if err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside); err != nil {
+	if _, err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside); err != nil {
 		return intent, unknownOnly(err)
 	}
 	// 记账之后意图可能转已付,也可能关掉(渠道侧已退、这笔钱不算订单的付款):重读,不猜。
@@ -562,11 +567,18 @@ func (s *Service) SubmitPurchase(ctx context.Context, in SubmitRequest) (Submitt
 			logx.WithContext(ctx).Infof("[payment] Submitted %s purchase is bound to another order than the client claimed: submitted_order=%s bound_order=%s",
 				ch.Name(), in.OrderID, result.Payment.OrderID)
 		}
-		if err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside); err != nil {
+		stored, err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside)
+		if err != nil {
 			if errors.Is(err, ErrFactConflict) {
-				break // 已记下的与这次不同,人工核对;客户端再交也不会变
+				// Google Play 不能消耗/确认冲突交易(让 Google 3 天自动退款);App Store 必须结束交易以免锁死账号复购。
+				finish = ch.ID() != paymentpb.PayChannel_PAY_CHANNEL_GOOGLE
+				break
 			}
 			return Submitted{Intent: s.ownedView(ctx, in.Player, in.OrderID)}, err
+		}
+		if ch.ID() == paymentpb.PayChannel_PAY_CHANNEL_GOOGLE {
+			// Google Play 只有进入商城记账链路的交易才允许客户端结束/确认;转人工(ORPHAN)或拒收的不确认,保留 Google 3 天自动退款。
+			finish = stored != nil && (stored.MallState == data.MallPending || stored.MallState == data.MallBound || stored.MallState == data.MallRefundQueued)
 		}
 		if result.State == channel.TradePaid && result.Payment.OrderID != "" {
 			in.OrderID = result.Payment.OrderID
@@ -601,7 +613,7 @@ func (s *Service) ownedView(ctx context.Context, player uint64, orderID string) 
 func (s *Service) HandleNotification(ctx context.Context, ch channel.Channel, note channel.Notification) error {
 	var errs []error
 	if note.Payment != nil {
-		if err := s.record(ctx, ch, *note.Payment, false); err != nil && !errors.Is(err, ErrFactConflict) {
+		if _, err := s.record(ctx, ch, *note.Payment, false); err != nil && !errors.Is(err, ErrFactConflict) {
 			errs = append(errs, err)
 		}
 	}
@@ -631,7 +643,8 @@ func (s *Service) verifyReceipt(ctx context.Context, ch channel.Channel, receipt
 	}
 	switch result.State {
 	case channel.TradePaid, channel.TradeRefundedOutside:
-		return s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside)
+		_, err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside)
+		return err
 	case channel.TradeClosed:
 		if result.Payment != nil {
 			return s.revoke(ctx, ch, channel.Revocation{TransactionID: result.Payment.TransactionID, Revoked: true, ObservedAt: s.now(), Detail: "recheck"})
@@ -642,20 +655,19 @@ func (s *Service) verifyReceipt(ctx context.Context, ch channel.Channel, receipt
 
 // RecordPayment 记一笔渠道核实过的付款(回调入口、用例用)。重复的通知幂等。
 func (s *Service) RecordPayment(ctx context.Context, ch channel.Channel, payment channel.Payment) error {
-	return s.record(ctx, ch, payment, false)
+	_, err := s.record(ctx, ch, payment, false)
+	return err
 }
 
-// record 先写付款事实(幂等),再改意图状态,最后叫醒推进任务。两步之间崩溃时意图仍在等付款,下一次查单、回调或提交会补上第二步。
-//
-// 下面这些情形钱是真的,但不能按正常付款发货,记成人工处理(ORPHAN),不投商城、不做渠道收尾:
-//   - 认不出订单(商户单号或绑定不是本服务发出的形状)、交易号报不进商城;
-//   - 商店定价的付款没有对应的意图(要用意图上的订单冻结金额);
-//   - 商品号与订单的 SKU 对不上、商店实收价与订单价对不上(同币种时)、账号绑定与买家对不上;
-//   - 渠道标明的测试交易,而这个渠道不接受(或这名玩家不在审核名单里);
-//   - 渠道核实时已经撤销(refundedOutside):在本服务之外退的款,不发货。
-//
-// Google 的收尾(consume)只对正常记账的做:人工处理的不消耗,三天后 Google 自动退款,钱回到用户手里。
-func (s *Service) record(ctx context.Context, ch channel.Channel, payment channel.Payment, refundedOutside bool) error {
+// revocationTombstoneReason 标记「退款通知先于付款通知到达」写下的墓碑行,挡住晚到的付款通知防止给已退款单发货。
+const revocationTombstoneReason = "revoked at the channel before payment notification arrived; not delivered"
+
+// minorLateOverLimitReason 标记未成年人迟到付款在额度行锁下复核超限。
+const minorLateOverLimitReason = "minor spending limit reached by a payment that arrived after its intent closed"
+
+// record 先写付款事实(幂等),再改意图状态,最后叫醒推进任务。
+// 未成年人正常付款把「额度行锁 + 意图行锁 + 写付款事实 + 转 PAID」收口为单事务(RecordMinorPaymentTxn),消除 TOCTOU 与提前占额。
+func (s *Service) record(ctx context.Context, ch channel.Channel, payment channel.Payment, refundedOutside bool) (*paymentpb.PaymentTxnRecord, error) {
 	now := s.now()
 	nowMs := uint64(now.UnixMilli())
 	paidAt := payment.PaidAt
@@ -695,38 +707,68 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 			intent = found
 			rec.PlayerId = found.PlayerId
 		case !errors.Is(err, data.ErrNotFound):
-			return err
+			return nil, err
 		}
 	}
 	if rec.MallState == data.MallPending {
 		s.screen(ch, payment, intent, rec, orphan)
 	}
 	if refundedOutside {
+		// 记成奇数修订号 1(REVOKED),后续若 App Store 撤回退款(REFUND_REVERSED)能识别方向翻转而非静默丢弃。
+		rec.FactRevision = 1
 		orphan("refunded at the channel before this service recorded it; not delivered")
-	}
-	if intent != nil && intent.State == data.IntentClosed && minorIntent(intent) && countsForIntent(rec, intent) {
-		if err := s.recheckLatePayment(ctx, rec, intent, now, orphan); err != nil {
-			return err
-		}
 	}
 	if payment.NeedsFinalize && rec.MallState == data.MallPending {
 		rec.FinalizeState, rec.FinalizeNextMs = data.FinalizePending, nowMs
 	}
-	stored, inserted, err := s.store.InsertTxn(ctx, rec)
-	if err != nil {
-		countFact(ch.Name(), "store_error")
-		return err
+	var (
+		stored        *paymentpb.PaymentTxnRecord
+		inserted      bool
+		intentSettled bool
+		err           error
+	)
+	if intent != nil && minorIntent(intent) && countsForIntent(rec, intent) && !refundedOutside {
+		paidMs := max(nowMs, intent.CreatedMs)
+		limit := s.spendLimit(intent.MinorAge, time.UnixMilli(int64(paidMs)))
+		outcome, recErr := s.store.RecordMinorPaymentTxn(ctx, rec, intent, limit, paidMs, nowMs, minorLateOverLimitReason)
+		if recErr != nil {
+			countFact(ch.Name(), "store_error")
+			return nil, recErr
+		}
+		stored, inserted = outcome.Stored, outcome.Inserted
+		if outcome.Inserted {
+			intentSettled = true
+			if outcome.WasClosed {
+				if outcome.OverLimit {
+					countMinorGate("late_payment_over_limit")
+				} else {
+					countMinorGate("late_payment_admitted")
+				}
+			}
+		}
+	} else {
+		stored, inserted, err = s.store.InsertTxn(ctx, rec)
+		if err != nil {
+			countFact(ch.Name(), "store_error")
+			return nil, err
+		}
+	}
+	// 退款通知先于付款通知到达时留下的墓碑行:直接按已撤销重复吞掉,不报冲突、不发货。
+	if !inserted && stored.FactRevision > 0 && data.Revoked(stored.FactRevision) &&
+		stored.MallLastError == revocationTombstoneReason && stored.TransactionId == rec.TransactionId {
+		countFact(ch.Name(), "duplicate")
+		return stored, nil
 	}
 	if !inserted && !sameFact(stored, rec) {
 		countFact(ch.Name(), "conflict")
 		logx.WithContext(ctx).Errorf("[payment] Channel %s reported transaction ...%s again with a different amount or binding; the recorded fact is kept, check it manually",
 			ch.Name(), tail(payment.TransactionID))
-		return ErrFactConflict
+		return nil, ErrFactConflict
 	}
-	// 重复报告补做上一次可能没做完的第二步;已被渠道撤销的事实不再改意图(revoke 管它)。
-	if (stored.OrderHi != 0 || stored.OrderLo != 0) && (inserted || !data.Revoked(stored.FactRevision)) {
+	// 非未成年人事务路径或重复报告补做第二步;已被渠道撤销的事实不再改意图(revoke 管它)。
+	if !intentSettled && (stored.OrderHi != 0 || stored.OrderLo != 0) && (inserted || !data.Revoked(stored.FactRevision)) {
 		if err := s.settleIntent(ctx, ch, stored, intent, inserted, refundedOutside, nowMs); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	switch {
@@ -740,7 +782,7 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 		countFact(ch.Name(), "recorded")
 	}
 	s.Kick()
-	return nil
+	return stored, nil
 }
 
 // settleIntent 是记账的第二步:按记下的这笔钱改订单的意图。首次记账与重复报告都走这里,幂等。
@@ -830,7 +872,33 @@ func (s *Service) revoke(ctx context.Context, ch channel.Channel, revocation cha
 		txn, err := s.store.Txn(ctx, uint32(ch.ID()), hi, lo)
 		if errors.Is(err, data.ErrNotFound) {
 			if revocation.Revoked && revocation.Payment != nil {
-				return s.record(ctx, ch, *revocation.Payment, true)
+				_, err := s.record(ctx, ch, *revocation.Payment, true)
+				return err
+			}
+			if revocation.Revoked {
+				if revocation.OutRefundNo != "" && revocation.OutRefundNo == data.OutRefundNo(ch.Name(), revocation.TransactionID) {
+					return nil // 己方退款回调先到或本机未记过:忽略
+				}
+				// 退款回调先于迟到的付款回调到达:写一条 FactRevision=1 墓碑行,挡住晚到的付款通知防止发货。
+				var orderHi, orderLo uint64
+				if oid, parseErr := data.OrderIDFromOutTradeNo(revocation.OutTradeNo); parseErr == nil {
+					orderHi, orderLo, _ = data.OrderKey(oid)
+				}
+				nowMs := uint64(s.now().UnixMilli())
+				tomb := &paymentpb.PaymentTxnRecord{Channel: uint32(ch.ID()), TxnHi: hi, TxnLo: lo, TransactionId: revocation.TransactionID,
+					OrderHi: orderHi, OrderLo: orderLo, OutTradeNo: revocation.OutTradeNo,
+					MallState: data.MallOrphan, MallDue: 0, MallLastError: revocationTombstoneReason,
+					FactRevision: 1, FactObservedMs: observedMs, CreatedMs: nowMs, UpdatedMs: nowMs}
+				_, inserted, insErr := s.store.InsertTxn(ctx, tomb)
+				if insErr != nil {
+					return insErr
+				}
+				if !inserted {
+					continue // 并发付款刚落库:重读并按正常撤销翻转
+				}
+				countFact(ch.Name(), "revoked")
+				logx.WithContext(ctx).Infof("[payment] Recorded revocation tombstone for %s transaction ...%s before payment notification arrived", ch.Name(), tail(revocation.TransactionID))
+				return nil
 			}
 			logx.WithContext(ctx).Infof("[payment] Revocation for a transaction this service never recorded: channel=%s transaction=...%s", ch.Name(), tail(revocation.TransactionID))
 			return nil
@@ -842,11 +910,15 @@ func (s *Service) revoke(ctx context.Context, ch channel.Channel, revocation cha
 			return ErrFactConflict
 		}
 		switch {
-		case txn.RefundState == data.RefundRequested || txn.RefundState == data.RefundSucceeded || txn.RefundState == data.RefundReported:
+		case txn.RefundState != data.RefundNone || (revocation.OutRefundNo != "" && revocation.OutRefundNo == data.OutRefundNo(ch.Name(), txn.TransactionId)):
 			return nil
-		case txn.FactRevision > 0 && observedMs <= txn.FactObservedMs:
-			return nil // 比上一次翻转更早的观测:过时(App Store 的通知可能乱序到达)
+		case (txn.FactRevision > 0 && observedMs <= txn.FactObservedMs) || (txn.FactRevision == 0 && observedMs < txn.FactObservedMs):
+			return nil // 比已记观测更早的通知:过时(App Store 等通知可能乱序到达)
 		case data.Revoked(txn.FactRevision) == revocation.Revoked:
+			// 方向未变但观测时刻更新(例如 App Store 乱序先收到 REFUND_REVERSED):推高 fact_observed_ms 以拒绝迟到的旧 REFUND。
+			if observedMs > txn.FactObservedMs {
+				return s.store.TouchFactObserved(ctx, txn, observedMs, uint64(s.now().UnixMilli()))
+			}
 			return nil
 		case !revocation.Revoked && ch.ID() != paymentpb.PayChannel_PAY_CHANNEL_APPLE:
 			return nil
@@ -881,10 +953,22 @@ func (s *Service) revoke(ctx context.Context, ch channel.Channel, revocation cha
 	return errors.New("payment: the transaction fact kept changing while applying a revocation")
 }
 
-// sameFact 比对同一交易号的两次报告。玩家号与金额不比:意图可能晚于第一次报告才读到(商店渠道的金额取自意图)。
+// sameFact 比对同一交易号的两次报告。玩家号与商店订单金额不比:意图可能晚于第一次报告才读到(商店渠道的金额取自意图);
+// 非商店渠道(支付宝/微信/抖音)若两次报告均带实付金额/币种,必须一致,防止篡改或冲突金额被静默放过。
 func sameFact(a, b *paymentpb.PaymentTxnRecord) bool {
-	return a.TransactionId == b.TransactionId && a.OrderHi == b.OrderHi && a.OrderLo == b.OrderLo &&
-		(a.StoreAmountMinor == 0 || b.StoreAmountMinor == 0 || a.StoreAmountMinor == b.StoreAmountMinor)
+	if a.TransactionId != b.TransactionId || a.OrderHi != b.OrderHi || a.OrderLo != b.OrderLo {
+		return false
+	}
+	if a.StoreAmountMinor != 0 && b.StoreAmountMinor != 0 && a.StoreAmountMinor != b.StoreAmountMinor {
+		return false
+	}
+	if a.PaidAmountMinor != 0 && b.PaidAmountMinor != 0 && a.PaidAmountMinor != b.PaidAmountMinor {
+		return false
+	}
+	if a.PaidCurrency != "" && b.PaidCurrency != "" && !strings.EqualFold(a.PaidCurrency, b.PaidCurrency) {
+		return false
+	}
+	return true
 }
 
 func intentView(r *paymentpb.PaymentIntentRecord) *paymentpb.PayIntentView {

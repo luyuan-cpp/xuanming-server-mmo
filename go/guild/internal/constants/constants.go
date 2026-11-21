@@ -84,6 +84,10 @@ const (
 	// ErrTextCheckUnavailable:内容安全服务不可达或超时,这段文字没检成。服务端故障(表里 fault = 1),客户端稍后重试;
 	// 不放行没检过的帮名和公告。
 	ErrTextCheckUnavailable = uint32(table.GuildError_kGuildTextCheckUnavailable)
+	// ErrRenameCooldown:距上一次帮会改名成功尚未过 GuildRule.rename_cooldown_seconds。
+	ErrRenameCooldown = uint32(table.GuildError_kGuildRenameCooldown)
+	// ErrRenameSameName:新帮名规范化后与当前帮名相同。
+	ErrRenameSameName = uint32(table.GuildError_kGuildRenameSameName)
 	// ErrHomeZoneUnknown:data_service 里没有该玩家的归属 zone 映射,无法判定他属于哪个区的帮会。
 	// 是数据状态不是故障:这名玩家在 player_route 里没有归属行(建角时写入),要查数据。
 	ErrHomeZoneUnknown = uint32(table.GuildError_kGuildHomeZoneUnknown)

@@ -25,12 +25,12 @@ import (
 	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
-	"shared/generated/table"
 	"shared/idsegment"
 	"shared/kafkacmd"
 	"shared/kafkautil"
 	"shared/playerredis"
 	"shared/playersync"
+	"shared/tablebundle"
 )
 
 // playerSyncServiceName 是本服务在落地恢复摘要指标 player_sync_bump_total 里的 service label。
@@ -98,6 +98,8 @@ type ServiceContext struct {
 	PlayerSyncBumper *playersync.Bumper
 	// PlayerSyncRedisClient 是 PlayerSyncBumper 专用的玩家域客户端,只由 Stop 关闭;别的代码不要拿它发命令。
 	PlayerSyncRedisClient redis.UniversalClient
+	// TableBundle 负责配置表启动校验与运行期两阶段热更(由 guild.go 装配校验钩子后 Start)。
+	TableBundle *tablebundle.Manager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -114,7 +116,14 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	if len(writer.InstanceID()) != 16 || len(writer.WriterKey()) != 16 || root == nil || relay == nil || root == relay {
 		panic("guild SQL boot or SOURCE/RELAY wiring missing, or roles reused")
 	}
-	table.LoadTables(c.TableDir, false)
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:   "guild",
+		ImageTableDir: c.TableDir,
+		UseBinary:     false,
+	})
+	if err != nil {
+		panic(fmt.Errorf("guild load config tables failed: %w", err))
+	}
 
 	// 控制集群一个句柄:节点客户端不自动重发结果未知的命令(R8),发送前按控制集群键策略核对。
 	controlRedisConf := c.EffectiveControlRedis()
@@ -206,6 +215,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		// 服务名 "guild" 只作 player_sync_bump_total 的 service label(有界常量,不带任何 id)。
 		PlayerSyncBumper:      playersync.NewBumper(playersync.NewGoRedisEvaler(syncRdb), playerSyncServiceName),
 		PlayerSyncRedisClient: syncRdb,
+		TableBundle:           tableMgr,
 	}
 	sc.initDataServiceClient()
 	sc.initGuildIDSegment()
@@ -436,6 +446,7 @@ func (s *ServiceContext) StopAndReport(ctx context.Context) error {
 	if err = s.RelayAdmission.Wait(ctx); err != nil {
 		return err
 	}
+	s.TableBundle.Stop()
 	s.WriterConfig.Seal()
 	var result error
 	if s.PlayerSyncRedisClient != nil {

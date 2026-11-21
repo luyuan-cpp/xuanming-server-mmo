@@ -100,6 +100,32 @@ func (s *gateStore) ReviveMinorIntent(_ context.Context, _ *paymentpb.PaymentInt
 	return s.within, nil
 }
 
+func (s *gateStore) RecordMinorPaymentTxn(_ context.Context, rec *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord,
+	_ data.SpendLimit, _, _ uint64, overLimitReason string) (data.RecordMinorPaymentOutcome, error) {
+	key := [3]uint64{uint64(rec.Channel), rec.TxnHi, rec.TxnLo}
+	if existing, ok := s.txns[key]; ok {
+		return data.RecordMinorPaymentOutcome{Stored: existing, Inserted: false, WasClosed: intent.State == data.IntentClosed}, nil
+	}
+	out := data.RecordMinorPaymentOutcome{Stored: rec, Inserted: true, WasClosed: intent.State == data.IntentClosed}
+	switch intent.State {
+	case data.IntentCreated:
+		intent.State = data.IntentPaid
+		s.marked++
+	case data.IntentClosed:
+		s.revives = append(s.revives, false)
+		if !s.within {
+			out.OverLimit = true
+			rec.MallState, rec.MallDue, rec.MallLastError = data.MallOrphan, 0, overLimitReason
+			rec.FinalizeState, rec.FinalizeNextMs = data.FinalizeNone, 0
+		} else {
+			intent.State = data.IntentPaid
+			s.marked++
+		}
+	}
+	s.txns[key] = rec
+	return out, nil
+}
+
 func (s *gateStore) Txn(_ context.Context, ch uint32, hi, lo uint64) (*paymentpb.PaymentTxnRecord, error) {
 	if rec, ok := s.txns[[3]uint64{uint64(ch), hi, lo}]; ok {
 		return rec, nil
@@ -122,16 +148,34 @@ func (s *gateStore) MarkIntentPaid(context.Context, uint64, uint64, uint64) erro
 	return nil
 }
 
-func (s *gateStore) FlipFact(context.Context, *paymentpb.PaymentTxnRecord, uint64, uint64) (bool, error) {
+func (s *gateStore) FlipFact(_ context.Context, rec *paymentpb.PaymentTxnRecord, observedMs, _ uint64) (bool, error) {
+	rec.FactRevision++
+	rec.FactObservedMs = observedMs
 	return true, nil
 }
+
+func (s *gateStore) TouchFactObserved(_ context.Context, rec *paymentpb.PaymentTxnRecord, observedMs, _ uint64) error {
+	if observedMs > rec.FactObservedMs {
+		rec.FactObservedMs = observedMs
+	}
+	return nil
+}
+
+func (s *gateStore) OldestMallPendingMs(context.Context) (uint64, error)     { return 0, nil }
+func (s *gateStore) OldestFinalizePendingMs(context.Context) (uint64, error) { return 0, nil }
 
 func (s *gateStore) SetIntentState(_ context.Context, _, _ uint64, state uint32, _ uint64) error {
 	s.states = append(s.states, state)
 	return nil
 }
 
-func (s *gateStore) ClaimRefund(context.Context, *paymentpb.PaymentTxnRecord, uint64, uint64) (bool, error) {
+func (s *gateStore) ClaimRefund(_ context.Context, rec *paymentpb.PaymentTxnRecord, outRefundNo string, _, _ uint64) (bool, error) {
+	if rec.RefundState == data.RefundNone {
+		rec.RefundState = data.RefundRequested
+	}
+	if rec.OutRefundNo == "" {
+		rec.OutRefundNo = outRefundNo
+	}
 	return true, nil
 }
 
@@ -161,7 +205,7 @@ func gateService(t *testing.T, names RealNames, store *gateStore, amount uint64,
 	platforms := map[paymentpb.PayClientPlatform][]paymentpb.PayChannel{
 		paymentpb.PayClientPlatform_PAY_CLIENT_PLATFORM_ANDROID_APP: {paymentpb.PayChannel_PAY_CHANNEL_DEVPAY, paymentpb.PayChannel_PAY_CHANNEL_DOUYIN_MINIGAME},
 	}
-	svc, err := New(store, gateMall{order: order}, []channel.Channel{devpay, douyinStub{devpay}, appleStub{devpay}, googleStub{devpay}}, platforms,
+	svc, err := New(store, gateMall{order: order}, []channel.Channel{devpay, douyinStub{devpay}, appleStub{devpay}, googleStub{DevPay: devpay}}, platforms,
 		Options{RealNames: names})
 	if err != nil {
 		t.Fatal(err)

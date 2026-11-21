@@ -212,7 +212,7 @@ func (p *WeChatProvider) Validate(ctx context.Context, code string) (*AuthResult
 	}
 	account := "wx_" + id
 	logx.Infof("WeChat auth ok: account=%s openid=%s union=%v", account, maskOAuthId(r.OpenId), r.UnionId != "")
-	return &AuthResult{Account: account}, nil
+	return &AuthResult{Account: account, OpenID: r.OpenId}, nil
 }
 
 // wechatErrCodeIsProviderSide 判断 errcode 指向的是本服务的渠道配置或微信自身状态,而不是玩家凭证:

@@ -48,16 +48,15 @@ python java/gm_admin/run_local.py status
 
 草稿先落管理库，再核对目标、参数和原因；发送只提交命令号。
 
-- 邮件超时保留原命令，核对后可显式重试同号，复用服务端持久幂等。`DELIVERED` 不等于附件已领取。
-- 玩家 GM 仅允许开发或测试服的在线玩家，草稿有效期五分钟。命令进入 `SENDING` 后禁止重新发送；`UNKNOWN` 需核对玩家与服务日志，不能重新生成相同操作来重试。`EXECUTED` 表示同步域操作完成，持久化仍走游戏原有流程。
+- 邮件支持按权威 `CurrencyType` 选择币种（银两/灵石/绑定灵石）与物品附件；超时保留原命令，核对后可显式重试同号，复用服务端持久幂等。`DELIVERED` 不等于附件已领取。
+- 玩家 GM 仅允许开发或测试服的在线玩家，草稿有效期五分钟（在数据库 `FOR UPDATE` 事务内原子拦截过期）。命令进入 `SENDING` 后禁止重新发送；`UNKNOWN` 需核对玩家与服务日志，不能重新生成相同操作来重试。`EXECUTED` 表示同步域操作完成，持久化仍走游戏原有流程。
 - 币种来自游戏协议目录；等级为 1–85，直接 GM 发物最多 99 个。金额和玩家 ID 使用十进制字符串。
+- 审计列表支持按玩家 ID 与状态筛选及分页（`page` / `pageSize`），核对弹窗支持查看完整 `gm_command_audit` 状态变更轨迹（`/gm/mail/commands/{id}/audit` 与 `/gm/player-commands/{id}/audit`）。
 
-生产部署另行配置域名、HTTPS 和服务间 TLS；当前脚本仅监听本机。
+生产部署另行配置域名、HTTPS 和服务间 TLS；水平扩展场景节点时，除静态映射 `GM_SCENE_TARGETS_JSON` 外，还可配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）动态发现 etcd `SceneNodeService.rpc/` 下的场景 `grpcEndpoint`；多副本 GM 管理后端支持并发安全启动迁移（`gm_install` 版本 1–5，含查询/审计复合索引）。
 
-## Scene 最后部署
+## Scene 部署与通道状态
 
-当前网页已完成原生登录、退出重登、十二项权限展示和七项操作目录验收；读服务转发已就绪。用户已明确选择先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建，因此玩家命令和邮件写通道保持禁用。这不影响通过浏览器访问管理网页。
+本机 11-18 重建完成后，`deploy/debug/compose.game.yml` 与 `deploy/gm-admin/scene-deploy.py` 已支持在 `x-xuanming-rebuild` 之上完成 GM Scene 提升并保持重启自愈（`start_docker_debug.py --execute` 自动恢复 GM MySQL/Redis、只读桥、独立 Mail、已封印 Scene 与 GM 前后端）；`probe_scene.py --execute` 已验证无副作用探针通过。
 
-现役手绘表挂载缺少新节点必读的 `equipartifact.json` 和 `equipv1affix.json`，且其余装备、技能表也有变化。本轮不执行下面的 stage/apply，不更新表快照、manifest 或 Compose；后续须先统一验收并准备兼容表快照。部署工具会在写配置前拒绝缺表。差异记录在 `build/verification/gm-admin-20261117/scene/table-compatibility-review.json`。
-
-`python deploy/gm-admin/scene-deploy.py prepare` 只生成私有配置、现役身份快照和 `scene/plan.json`，不构建或重启。按计划完成正式 C++ 镜像构建，再运行 `stage --build-result <构建凭据>`，生成精确配置差异。只有最后显式执行 `apply --execute` 才会替换一个 scene 容器并断开其现有连接；其他 16 个服务必须保持原身份和状态。执行前后均检查四份 Compose 来源、SDK、源码、镜像与配置，检查失败不自动重试。完整就绪凭据通过后重启 GM Java 后台，才会启用写通道。
+如需重新执行 Scene GM 提升：`python deploy/gm-admin/scene-deploy.py prepare` 生成私有配置、现役身份快照和 `scene/plan.json`；`stage`（或重建后自动对齐现役镜像）生成精确配置差异；显式执行 `apply --execute` 替换 `scene` 容器并校验其余容器身份不变。完整就绪凭据通过后重启 GM Java 后台，才会启用写通道。

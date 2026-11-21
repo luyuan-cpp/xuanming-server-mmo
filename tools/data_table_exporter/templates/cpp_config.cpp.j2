@@ -1,6 +1,9 @@
 {# cpp_config.cpp.j2 — per-table config manager implementation #}
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "google/protobuf/util/json_util.h"
-#include "core/utils/file/file2string.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/{{ sheetname | lower }}_table.h"
@@ -8,20 +11,39 @@
 std::string GetConfigDir();
 bool UseProtoBinaryTables();
 
-void {{ sheetname }}TableManager::Load() {
-    auto snap = std::make_unique<Snapshot>();
+bool {{ sheetname }}TableManager::ParseSnapshotFromDir(
+    const std::string& configDir,
+    const bool useBinary,
+    std::shared_ptr<const Snapshot>& out,
+    std::string& err) {
+    std::string prefix = configDir;
+    if (!prefix.empty() && prefix.back() != '/' && prefix.back() != '\\') {
+        prefix.push_back('/');
+    }
+    const std::string path = prefix + (useBinary ? "{{ sheetname | lower }}.pb" : "{{ sheetname | lower }}.json");
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        err = "failed to open {{ sheetname }} table file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (input.bad()) {
+        err = "failed to read {{ sheetname }} table file: " + path;
+        return false;
+    }
+    const std::string contents = buffer.str();
 
-    if (UseProtoBinaryTables()) {
-        const std::string path = GetConfigDir() + "{{ sheetname | lower }}.pb";
-        const auto contents = File2String(path);
+    auto snap = std::make_shared<Snapshot>();
+    if (useBinary) {
         if (!snap->data.ParseFromString(contents)) {
-            LOG_FATAL << "{{ sheetname }} binary parse failed: " << path;
+            err = "{{ sheetname }} binary parse failed: " + path;
+            return false;
         }
     } else {
-        const std::string path = GetConfigDir() + "{{ sheetname | lower }}.json";
-        const auto contents = File2String(path);
-        if (const auto result = google::protobuf::util::JsonStringToMessage(contents.data(), &snap->data); !result.ok()) {
-            LOG_FATAL << "{{ sheetname }}" << result.message().data();
+        if (const auto result = google::protobuf::util::JsonStringToMessage(contents, &snap->data); !result.ok()) {
+            err = std::string("{{ sheetname }} json parse failed: ") + std::string(result.message());
+            return false;
         }
     }
 
@@ -52,7 +74,17 @@ void {{ sheetname }}TableManager::Load() {
     });
 {%- endfor %}
 
-    snapshot = std::move(snap);
+    out = std::move(snap);
+    return true;
+}
+
+void {{ sheetname }}TableManager::Load() {
+    std::shared_ptr<const Snapshot> snap;
+    std::string err;
+    if (!ParseSnapshotFromDir(GetConfigDir(), UseProtoBinaryTables(), snap, err)) {
+        LOG_FATAL << err;
+    }
+    InstallSnapshot(std::move(snap));
 }
 
 {%- if not table.multi_primary_key %}

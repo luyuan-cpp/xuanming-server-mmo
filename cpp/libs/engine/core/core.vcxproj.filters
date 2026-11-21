@@ -8,6 +8,7 @@
     <ClCompile Include="node\system\etcd\etcd_manager.cpp" />
     <ClCompile Include="node\system\etcd\etcd_service.cpp" />
     <ClCompile Include="node\system\etcd\kill_switch_etcd_sync.cpp" />
+    <ClCompile Include="table_bundle\table_bundle_manager.cpp" />
     <ClCompile Include="node\system\etcd\etcd_transport.cpp" />
     <ClCompile Include="node\system\etcd\muduo_etcd_transport.cpp" />
     <ClCompile Include="node\system\node\node.cpp" />
@@ -67,6 +68,7 @@
     <ClInclude Include="node\system\etcd\etcd_manager.h" />
     <ClInclude Include="node\system\etcd\etcd_service.h" />
     <ClInclude Include="node\system\etcd\kill_switch_etcd_sync.h" />
+    <ClInclude Include="table_bundle\table_bundle_manager.h" />
     <ClInclude Include="node\system\etcd\etcd_transport.h" />
     <ClInclude Include="node\system\etcd\muduo_etcd_transport.h" />
     <ClInclude Include="node\system\etcd\etcd_endpoint.h" />

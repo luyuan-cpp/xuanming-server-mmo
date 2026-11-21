@@ -697,7 +697,7 @@ var (
 	accountDirectoryRPCSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: subsystem,
 		Name:      "account_directory_rpc_seconds",
-		Help:      "Account directory RPC handler latency by rpc (read|create|lookup|repair|remove) and result (ok|not_found|rejected|error).",
+		Help:      "Account directory RPC handler latency by rpc (read|create|lookup|repair|remove|deletion_request|deletion_cancel|deletion_claim|deletion_finish) and result (ok|not_found|rejected|error).",
 		Buckets:   loginReadLatencyBuckets,
 	}, []string{"rpc", "result"})
 
@@ -711,7 +711,7 @@ func registerLoginReads() {
 }
 
 // PrimeLoginReads 预建 home_zone_read_seconds(2 × 3 = 6 条,批量查的 not_found 也建,让两种 rpc 的列形状一致)与
-// account_directory_rpc_seconds(5 × 4 = 20 条)的全部组合;home_zone_batch_ids 无 label,注册即导出。
+// account_directory_rpc_seconds(9 × 4 = 36 条)的全部组合;home_zone_batch_ids 无 label,注册即导出。
 // server.NewDataServiceServer 调用;可重复调用(只建子序列,不打点)。
 func PrimeLoginReads() {
 	registerLoginReads()

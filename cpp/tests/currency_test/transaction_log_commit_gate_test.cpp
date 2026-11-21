@@ -86,13 +86,18 @@ namespace
         // 一次 AttachDue 的全部产出:两类记录。
         struct Attached
         {
-            google::protobuf::RepeatedPtrField<TransactionLogEntry> logs;
-            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> snapshots;
+            google::protobuf::RepeatedPtrField<TransactionLogEntry> logs_;
+            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> snapshots_;
+
+            int logs_size() const { return logs_.size(); }
+            const TransactionLogEntry &logs(int index) const { return logs_.Get(index); }
+            int snapshots_size() const { return snapshots_.size(); }
+            const PlayerSnapshotEntry &snapshots(int index) const { return snapshots_.Get(index); }
 
             std::vector<uint64_t> TxIds() const
             {
                 std::vector<uint64_t> ids;
-                for (const auto &entry : logs)
+                for (const auto &entry : logs_)
                 {
                     ids.push_back(entry.tx_id());
                 }
@@ -102,7 +107,7 @@ namespace
             std::size_t LogBytes() const
             {
                 std::size_t bytes = 0;
-                for (const auto &entry : logs)
+                for (const auto &entry : logs_)
                 {
                     bytes += entry.ByteSizeLong();
                 }
@@ -113,7 +118,7 @@ namespace
         static Attached Attach(uint64_t player, uint64_t mark)
         {
             Attached out;
-            AuditOutbox::AttachDue(player, mark, out.logs, out.snapshots);
+            AuditOutbox::AttachDue(player, mark, out.logs_, out.snapshots_);
             return out;
         }
     };

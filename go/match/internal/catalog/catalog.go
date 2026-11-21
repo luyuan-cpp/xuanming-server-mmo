@@ -101,8 +101,28 @@ func Load(tableDir string) (*Catalog, error) {
 	if err := table.ZoneGroupTableManagerInstance.Load(tableDir, false); err != nil {
 		return nil, fmt.Errorf("catalog: 读取 ZoneGroup 表失败: %w", err)
 	}
+	return buildFromManagers(
+		table.DungeonTableManagerInstance,
+		table.PlayModeTableManagerInstance,
+		table.ZoneGroupTableManagerInstance,
+	)
+}
+
+// BuildFromTableSet 从候选 TableSet 编译不可变目录,不触碰全局表单例(两阶段热更与 --validate-tables 专用)。
+func BuildFromTableSet(ts *table.TableSet) (*Catalog, error) {
+	if ts == nil || ts.Dungeon == nil || ts.PlayMode == nil || ts.ZoneGroup == nil {
+		return nil, errors.New("catalog: TableSet missing Dungeon/PlayMode/ZoneGroup tables")
+	}
+	return buildFromManagers(ts.Dungeon, ts.PlayMode, ts.ZoneGroup)
+}
+
+func buildFromManagers(
+	dungeons *table.DungeonTableManager,
+	playModes *table.PlayModeTableManager,
+	zoneGroups *table.ZoneGroupTableManager,
+) (*Catalog, error) {
 	var rows Rows
-	for _, row := range table.DungeonTableManagerInstance.FindAll() {
+	for _, row := range dungeons.FindAll() {
 		monsters := 0
 		for _, monster := range row.GetMonster() {
 			if monster != 0 {
@@ -111,10 +131,10 @@ func Load(tableDir string) (*Catalog, error) {
 		}
 		rows.Dungeons = append(rows.Dungeons, DungeonRow{Id: row.GetId(), MaxTeamSize: row.GetMaxTeamSize(), TimeLimitSeconds: row.GetTimeLimit(), MonsterCount: monsters})
 	}
-	for _, row := range table.PlayModeTableManagerInstance.FindAll() {
+	for _, row := range playModes.FindAll() {
 		rows.PlayModes = append(rows.PlayModes, PlayModeRow{Id: row.GetId(), Mode: matchpb.MatchMode(row.GetMatchMode()), ConfigId: row.GetBattleConfigId(), Enabled: row.GetEnabled(), TeamSizeMax: row.GetTeamSizeMax()})
 	}
-	for _, row := range table.ZoneGroupTableManagerInstance.FindAll() {
+	for _, row := range zoneGroups.FindAll() {
 		rows.ZoneGroups = append(rows.ZoneGroups, scope.Range{GroupID: row.GetGroupId(), ZoneBegin: row.GetZoneBegin(), ZoneEnd: row.GetZoneEnd()})
 	}
 	return New(rows)

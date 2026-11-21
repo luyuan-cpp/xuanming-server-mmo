@@ -78,7 +78,7 @@
 
       <a-col :xs="24" :xl="14">
         <a-card v-if="hasPermission('gm:mail:prepare')" title="邮件发放" class="gm-card">
-          <p class="gm-hint">附件可同时包含银两和一种物品；留空则不附加该项。所有操作都需要填写原因。</p>
+          <p class="gm-hint">附件可同时包含货币和一种物品；留空则不附加该项。所有操作都需要填写原因。</p>
           <BasicForm @register="registerMailForm" :disabled="mutationBusy || !mailEnabled" />
           <a-alert v-if="prepareError" type="warning" show-icon :message="prepareError" class="gm-space" />
           <div class="gm-actions">
@@ -109,15 +109,48 @@
       <template #extra>
         <a-button v-auth="'gm:audit:read'" :loading="auditLoading" :disabled="mutationBusy" @click="loadAudit">刷新审计</a-button>
       </template>
+      <div class="gm-filters">
+        <a-input
+          v-model:value="auditFilterPlayerId"
+          class="gm-filter-input"
+          inputmode="numeric"
+          allow-clear
+          placeholder="按玩家 ID 筛选"
+          :disabled="mutationBusy"
+          @press-enter="applyAuditFilter"
+        />
+        <a-select
+          v-model:value="auditFilterStatus"
+          class="gm-filter-select"
+          allow-clear
+          placeholder="全部状态"
+          :options="mailStatusOptions"
+          :disabled="mutationBusy"
+          @change="applyAuditFilter"
+        />
+        <a-button :loading="auditLoading" :disabled="mutationBusy" @click="applyAuditFilter">筛选</a-button>
+        <a-button :disabled="mutationBusy" @click="resetAuditFilter">重置</a-button>
+      </div>
       <a-alert v-if="auditError" type="warning" show-icon :message="auditError" class="gm-space" />
-      <p class="gm-hint">展示最近 50 条命令。已投递表示邮件服务确认收件，不表示玩家已领取。点击“核对 / 详情”查看冻结的请求与结果。</p>
+      <p class="gm-hint gm-space">已投递表示邮件服务确认收件，不表示玩家已领取。点击“核对 / 详情”查看冻结的请求、状态轨迹与结果。</p>
       <BasicTable @register="registerAuditTable" :data-source="auditRecords" :loading="auditLoading">
         <template #status="{ record }"
           ><a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag></template
         >
         <template #action="{ record }"><a-button type="link" :disabled="mutationBusy" @click="reviewCommand(record)">核对 / 详情</a-button></template>
       </BasicTable>
-      <p class="gm-hint gm-space">共 {{ auditTotal }} 条记录，本页显示 {{ auditRecords.length }} 条。</p>
+      <div class="gm-pagination">
+        <p class="gm-hint">共 {{ auditTotal }} 条记录，当前第 {{ auditPage }} 页（本页 {{ auditRecords.length }} 条）。</p>
+        <a-pagination
+          :current="auditPage"
+          :page-size="auditPageSize"
+          :total="auditTotal"
+          :page-size-options="['20', '50', '100']"
+          show-size-changer
+          :disabled="mutationBusy || auditLoading"
+          @change="onAuditPageChange"
+        />
+      </div>
     </a-card>
 
     <BasicModal
@@ -149,7 +182,7 @@
           >
           <a-descriptions-item label="货币附件">
             <div v-for="(currency, index) in reviewCurrencies" :key="index" class="gm-id">
-              {{ currency.currencyType === 0 ? '银两' : `货币 ${currency.currencyType}` }}：{{ currency.amount }}
+              {{ mailCurrencyName(currency.currencyType) }}：{{ currency.amount }}
             </div>
             <span v-if="!reviewCurrencies.length">无</span>
           </a-descriptions-item>
@@ -164,6 +197,23 @@
         <a-collapse class="gm-space">
           <a-collapse-panel key="request" header="完整请求记录">
             <pre class="gm-json">{{ pretty(reviewedCommand.request) }}</pre>
+          </a-collapse-panel>
+          <a-collapse-panel v-if="hasPermission('gm:audit:read')" key="audit" header="状态变更轨迹">
+            <a-spin :spinning="auditHistoryLoading">
+              <a-alert v-if="auditHistoryError" type="warning" show-icon :message="auditHistoryError" />
+              <a-empty v-else-if="!auditHistory.length" description="暂无审计轨迹" />
+              <div v-else class="gm-timeline">
+                <div v-for="entry in auditHistory" :key="entry.id" class="gm-timeline-item">
+                  <div class="gm-timeline-meta">
+                    <a-tag :color="statusColor(entry.event)">{{ statusLabel(entry.event) }}</a-tag>
+                    <span>第 {{ entry.attempt }} 次</span>
+                    <span>操作人：{{ entry.operator }}</span>
+                    <span class="gm-hint">{{ entry.createdAt }}</span>
+                  </div>
+                  <pre v-if="entry.result" class="gm-json">{{ pretty(entry.result) }}</pre>
+                </div>
+              </div>
+            </a-spin>
           </a-collapse-panel>
         </a-collapse>
         <template v-if="reviewedCommand.result">
@@ -198,7 +248,9 @@
       </template>
       <template #footer>
         <a-button :disabled="mutationBusy" @click="closeReviewModal">关闭</a-button>
-        <a-button v-auth="'gm:audit:read'" :loading="auditLoading" :disabled="mutationBusy" @click="loadAudit">刷新原命令状态</a-button>
+        <a-button v-auth="'gm:audit:read'" :loading="auditLoading || auditHistoryLoading" :disabled="mutationBusy" @click="refreshReviewedCommand">
+          刷新原命令状态
+        </a-button>
         <a-button
           v-if="canSendReviewed"
           v-auth="'gm:mail:send'"
@@ -225,6 +277,8 @@
   import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
     buildMailDraft,
+    currencyLabel,
+    getGmCommandAudit,
     getGmCommands,
     getGmOverview,
     getGmPlayer,
@@ -232,6 +286,7 @@
     normalizePlayerId,
     prepareGmMail,
     sendGmMail,
+    type GmAuditEntry,
     type GmCommand,
     type GmOverview,
     type GmPlayer,
@@ -246,6 +301,18 @@
   const overviewLoading = ref(false);
   const overviewError = ref('');
   const mailEnabled = computed(() => overview.value?.mailEnabled === true && !overviewError.value);
+  const mailCurrencyOptions = computed(() => {
+    const currencies = overview.value?.currencies;
+    if (currencies?.length) return currencies.map((currency) => ({ value: currency.id, label: currencyLabel(currency.label) }));
+    return [{ value: 0, label: '银两' }];
+  });
+  const mailStatusOptions = [
+    { value: 'DRAFT', label: '待确认草稿' },
+    { value: 'SENDING', label: '发送中' },
+    { value: 'DELIVERED', label: '已投递' },
+    { value: 'REJECTED', label: '已拒绝' },
+    { value: 'UNKNOWN', label: '结果未知' },
+  ];
   const serviceMessage = computed(() =>
     overviewLoading.value ? '正在检查邮件服务状态…' : overviewError.value || '邮件服务尚未接入或未启用，暂不能生成或发送邮件。'
   );
@@ -274,8 +341,16 @@
   });
   const auditRecords = ref<GmCommand[]>([]);
   const auditTotal = ref(0);
+  const auditPage = ref(1);
+  const auditPageSize = ref(50);
+  const auditFilterPlayerId = ref('');
+  const auditFilterStatus = ref<string | undefined>(undefined);
   const auditLoading = ref(false);
   const auditError = ref('');
+  const auditHistory = ref<GmAuditEntry[]>([]);
+  const auditHistoryLoading = ref(false);
+  const auditHistoryError = ref('');
+  let auditHistoryVersion = 0;
   const [registerReviewModal, { openModal: openReviewModal, closeModal: closeReviewModal }] = useModal();
 
   function invalidateDraft() {
@@ -306,10 +381,20 @@
       componentProps: { rows: 3, placeholder: '可留空，最多 4096 个字符', onChange: invalidateDraft },
     },
     {
+      field: 'currencyType',
+      label: '附件币种',
+      component: 'Select',
+      defaultValue: 0,
+      componentProps: () => ({
+        options: mailCurrencyOptions.value,
+        onChange: invalidateDraft,
+      }),
+    },
+    {
       field: 'currencyAmount',
-      label: '银两数量',
+      label: '货币数量',
       component: 'Input',
-      componentProps: { inputmode: 'numeric', placeholder: '留空则不发银两', onChange: invalidateDraft },
+      componentProps: { inputmode: 'numeric', placeholder: '留空则不发货币', onChange: invalidateDraft },
     },
     {
       field: 'itemConfigId',
@@ -417,6 +502,13 @@
     return names[key] || key;
   }
 
+  function mailCurrencyName(type: unknown): string {
+    const id = typeof type === 'number' ? type : Number(type);
+    const found = overview.value?.currencies?.find((currency) => currency.id === id);
+    if (found) return currencyLabel(found.label);
+    return id === 0 ? '银两' : `货币 ${String(type ?? '')}`;
+  }
+
   function statusLabel(status: string): string {
     return (
       ({ DRAFT: '待确认草稿', SENDING: '发送中', DELIVERED: '已投递', REJECTED: '已拒绝', UNKNOWN: '结果未知' } as Record<string, string>)[status] ||
@@ -486,6 +578,30 @@
     reviewConfirmed.value = false;
     sendError.value = command.id === unconfirmedCommandId.value ? '上次发送未获确认，不会自动重发。请先核对审计记录；重试将沿用此命令号。' : '';
     openReviewModal(true);
+    void loadAuditHistory(command.id);
+  }
+
+  async function loadAuditHistory(commandId: string) {
+    if (!hasPermission('gm:audit:read')) return;
+    const version = ++auditHistoryVersion;
+    auditHistoryLoading.value = true;
+    auditHistoryError.value = '';
+    try {
+      const entries = await getGmCommandAudit(commandId);
+      if (version === auditHistoryVersion) auditHistory.value = entries;
+    } catch (error) {
+      if (version === auditHistoryVersion) {
+        auditHistory.value = [];
+        auditHistoryError.value = `状态轨迹加载失败。${errorText(error)}`;
+      }
+    } finally {
+      if (version === auditHistoryVersion) auditHistoryLoading.value = false;
+    }
+  }
+
+  async function refreshReviewedCommand() {
+    await loadAudit();
+    if (reviewedCommand.value) await loadAuditHistory(reviewedCommand.value.id);
   }
 
   async function prepareMail() {
@@ -498,7 +614,7 @@
     let command: GmCommand | undefined;
     try {
       // 先完成纯校验，再产生请求号。请求失败保留原号；只有输入变更或明确开始新操作才清除。
-      const draft = buildMailDraft(getFieldsValue(), clientRequestId.value);
+      const draft = buildMailDraft(getFieldsValue(), clientRequestId.value, overview.value?.currencies);
       if (!clientRequestId.value) clientRequestId.value = newClientRequestId();
       draft.clientRequestId = clientRequestId.value;
       command = await prepareGmMail(draft);
@@ -537,13 +653,37 @@
       sending.value = false;
     }
     await loadAudit();
+    if (reviewedCommand.value) await loadAuditHistory(reviewedCommand.value.id);
+  }
+
+  function applyAuditFilter() {
+    auditPage.value = 1;
+    void loadAudit();
+  }
+
+  function resetAuditFilter() {
+    auditFilterPlayerId.value = '';
+    auditFilterStatus.value = undefined;
+    auditPage.value = 1;
+    void loadAudit();
+  }
+
+  function onAuditPageChange(page: number, pageSize: number) {
+    auditPage.value = page;
+    auditPageSize.value = pageSize;
+    void loadAudit();
   }
 
   async function loadAudit() {
     if (auditLoading.value || !hasPermission('gm:audit:read')) return;
     auditLoading.value = true;
     try {
-      const page = await getGmCommands();
+      const page = await getGmCommands({
+        page: auditPage.value,
+        pageSize: auditPageSize.value,
+        playerId: auditFilterPlayerId.value,
+        status: auditFilterStatus.value,
+      });
       auditRecords.value = page.records;
       auditTotal.value = page.total;
       auditError.value = '';
@@ -632,6 +772,34 @@
     background: #f1f5f9;
     color: #1e293b;
     border-radius: 6px;
+  }
+  .gm-filters,
+  .gm-pagination,
+  .gm-timeline-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .gm-filter-input {
+    width: 220px;
+  }
+  .gm-filter-select {
+    width: 160px;
+  }
+  .gm-pagination {
+    justify-content: space-between;
+    margin-top: 16px;
+  }
+  .gm-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .gm-timeline-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px 12px;
   }
   @media (max-width: 640px) {
     .gm-console {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -39,6 +40,9 @@ struct PlayerAnomalyBucket
 {
     std::deque<AnomalyEvent> events;
     uint64_t cumulativeAmount{0};
+    // 冷却状态:单桶超限告警后在窗口期内不再重复刷屏(单调时钟秒)。
+    bool hasAlerted{false};
+    uint64_t lastAlertAt{0};
 };
 
 // 按需状态,只由 Record* 经 WindowForWrite 首次写入时创建,不入库。
@@ -47,11 +51,21 @@ struct PlayerAnomalyWindowComp
 {
     std::unordered_map<uint32_t, PlayerAnomalyBucket> currencies;
     std::unordered_map<uint32_t, PlayerAnomalyBucket> items;
+    // 上次惰性清理过期物品桶的单调时钟秒,避免同秒内重复扫表。
+    bool hasPrunedItems{false};
+    uint64_t lastItemPruneAt{0};
 };
 
 class AnomalyDetector
 {
 public:
+    // 单桶事件队列硬上限,防止高频刷取造成无界内存增长。
+    static constexpr std::size_t kMaxEventsPerBucket = 4096;
+
+    // 单测注入的单调时钟(秒);传 nullptr 恢复 std::chrono::steady_clock。
+    using SteadyNowFn = uint64_t (*)();
+    static void SetSteadyNowForTest(SteadyNowFn fn);
+
     // ── Configuration ────────────────────────────────────────────────────
 
     // Set threshold for a specific currency type.

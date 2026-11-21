@@ -343,6 +343,7 @@ func TestOnlyGetPlayerGuildAcceptsCallsWithoutSession(t *testing.T) {
 		{pb.GuildService_LeaveGuild_FullMethodName, false},
 		{pb.GuildService_DisbandGuild_FullMethodName, false},
 		{pb.GuildService_SetAnnouncement_FullMethodName, false},
+		{pb.GuildService_RenameGuild_FullMethodName, false},
 	} {
 		t.Run(tc.method, func(t *testing.T) {
 			handlerCalled := false

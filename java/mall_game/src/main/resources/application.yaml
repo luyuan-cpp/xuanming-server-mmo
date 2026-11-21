@@ -1,12 +1,17 @@
 server:
   address: ${COMMERCE_BIND_ADDRESS:127.0.0.1}
   port: ${COMMERCE_PORT:18120}
+  shutdown: graceful
+  tomcat:
+    connection-timeout: 5s
+    keep-alive-timeout: 30s
   error:
     include-message: never
     include-stacktrace: never
 # 链路追踪(docs/design/distributed-tracing.md §7):接住 trade、网关带来的 traceparent,日志带同一个 traceId。
-# 商城只在内网、调用方都经 HMAC 认证,所以照常接收传播头(公网入口的网关才藏掉)。actuator 只为追踪自动配置,
-# web 端点一个都不开,对外 HTTP 面不变。
+# 商城只在内网、调用方都经 HMAC 认证,所以照常接收传播头(公网入口的网关才藏掉)。
+# actuator 只暴露 health 及 K8s 探针分组(livenessState / readinessState,不含 DB 指示器,避免共享库抖动把两副本同时判死);
+# HmacAuthentication 只对 /actuator/health/readiness 与 /actuator/health/liveness 的无正文 GET 放行,复合 /actuator/health 与业务接口仍须 HMAC。
 management:
   tracing:
     sampling:
@@ -19,13 +24,28 @@ management:
   endpoints:
     web:
       exposure:
-        exclude: "*"
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState
 # 控制台一行一条 JSON(logstash 风格,与 gateway_node 一致):Micrometer 放进 MDC 的 traceId / spanId 成为顶层字段。
 logging:
   structured:
     format:
       console: logstash
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 25s
+  task:
+    scheduling:
+      pool:
+        size: 2
   sql:
     init:
       mode: never

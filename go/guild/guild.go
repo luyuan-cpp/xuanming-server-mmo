@@ -46,6 +46,7 @@ import (
 	"shared/contentguard"
 	"shared/etcdwatch"
 	"shared/generated/clientrpc"
+	"shared/generated/table"
 	"shared/grpcstats"
 	"shared/idsegment"
 	"shared/kafkautil"
@@ -57,6 +58,7 @@ import (
 	"shared/serverbase"
 	"shared/shutdownbudget"
 	"shared/sqlpoolstats"
+	"shared/tablebundle"
 )
 
 var configFile = flag.String("f", "etc/guild.yaml", "config file path")
@@ -74,6 +76,17 @@ const guildShutdownDrain = 18 * time.Second
 var guildAnonymousReads = []string{pb.GuildService_GetPlayerGuild_FullMethodName}
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+var validateTablesDir = flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析 + 帮会管理/经济/活动校验)后退出")
+
+func validateGuildTableSet(_ string, ts *table.TableSet) (func(), error) {
+	if err := logic.ValidateEconomyTablesIn(ts); err != nil {
+		return nil, fmt.Errorf("guild economy/management tables invalid: %w", err)
+	}
+	if err := activity.ValidateTablesIn(ts); err != nil {
+		return nil, fmt.Errorf("guild activity tables invalid: %w", err)
+	}
+	return nil, nil
+}
 
 // migrateOnly:`guild -f <yaml> -migrate` 只对 mmorpg_guild 跑一次 schemamigrate.Up 后退出
 // (退出码 0 成功 / 1 错误 / 3 锁忙 / 4 需人工),不连 Redis / etcd / data_service,供将来的
@@ -109,6 +122,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("guild", *validateTablesDir, false, validateGuildTableSet)
 	clockcheck.MustPass("guild")
 	conf.MustLoad(*configFile, &config.AppConfig)
 	// 停机强退时限要盖住在途请求与 StopAndReport 的有序收尾(guildShutdownDrain);必须在建 zrpc 服务之前。
@@ -174,6 +188,8 @@ func main() {
 	if err := activity.ValidateTables(); err != nil {
 		logx.Must(fmt.Errorf("guild activity tables invalid: %w", err))
 	}
+	svcCtx.TableBundle.SetPrepareHook(validateGuildTableSet)
+	svcCtx.TableBundle.Start()
 
 	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
 	if err := ensureSchema(context.Background(), svcCtx.DB, config.AppConfig, schemamigrate.Up, schemamigrate.Plan); err != nil {

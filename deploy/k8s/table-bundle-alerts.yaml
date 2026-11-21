@@ -1,0 +1,83 @@
+# 配置表热更与表包分发的 Prometheus 告警规则(docs/design/config-table-hot-reload.md §11)。
+# 处置见 docs/ops/table-hot-reload-runbook.md。
+# 安装方式:
+#   kubectl apply -n observability -f deploy/k8s/table-bundle-alerts.yaml
+# 抓取前提:
+#   - 业务进程(C++ 节点 /metrics 与 Go 服务 /metrics)暴露 table_bundle_info / table_reload_total;
+#   - 每个带表包 sidecar 的 Pod 暴露 table-sync :9099/metrics(table_sync_etcd_last_read_timestamp_seconds)。
+# 契约测试:tools/scripts/tests/k8s_table_bundle_contract.tests.ps1。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: table-bundle-alerts
+  labels:
+    app: table-bundle
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: table-bundle.reload
+      interval: 30s
+      rules:
+        - alert: TableBundleRejected
+          expr: |
+            sum by (namespace, pod, schema_digest) (
+              increase(table_reload_total{result="rejected"}[10m])
+            ) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "实例 {{ $labels.pod }} 在 10 分钟内拒绝了新配置表包"
+            description: >-
+              业务进程在准备或校验阶段拒绝了目标配置表包,当前继续使用旧表(docs/design/config-table-hot-reload.md §10、§11)。
+              若尚未到达 activate_at 应立即取消 next(table-bundle cancel);若已过生效时刻,
+              当前集群已出现部分新表部分旧表,立即按手册检查拒绝原因并决定回滚或向前修复。
+            runbook_url: docs/ops/table-hot-reload-runbook.md
+
+        - alert: TableBundleNotConverged
+          expr: |
+            count by (release_track, schema_digest) (
+              count by (release_track, schema_digest, content_digest) (
+                table_bundle_info == 1
+              )
+            ) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "轨道 {{ $labels.release_track }} / schema {{ $labels.schema_digest }} 下各实例持有的表包超过 10 分钟未收敛"
+            description: >-
+              同一发布轨道、同一 schema 线下的多个实例手上的 content_digest 不一致且持续超过 10 分钟(设计 §11)。
+              常见原因:个别 Pod 的 table-sync 拉包失败、校验被拒、改了不可热更表后未完成滚动重启,或有人绕过管理接口删了指针。
+              先调用 GET /admin/tables 查看各 Pod 汇报状态。
+            runbook_url: docs/ops/table-hot-reload-runbook.md
+
+        - alert: TableSyncStale
+          expr: |
+            (time() - table_sync_etcd_last_read_timestamp_seconds) > 120
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "table-sync sidecar {{ $labels.pod }} 超过 2 分钟未成功读到 etcd 指针"
+            description: >-
+              table-sync 超过 120 秒没有成功完成对 etcd /mmorpg/tables/pointer/ 的全量读(设计 §10、§11)。
+              当前业务进程不受影响(继续使用本地已有表包),但无法接收新表包或定时切换。检查 etcd 连通性与 sidecar 日志。
+            runbook_url: docs/ops/table-hot-reload-runbook.md
+
+        - alert: TableBundleNeedsRestart
+          expr: |
+            sum by (namespace, pod) (
+              increase(table_reload_total{result="needs_restart"}[24h])
+            ) > 0
+          for: 24h
+          labels:
+            severity: info
+          annotations:
+            summary: "实例 {{ $labels.pod }} 因变更涉及不可热更表停留在 needs_restart 超过 24 小时"
+            description: >-
+              目标表包修改了未声明 (cfg_hot_reload) = true 的结构表,进程按设计拒绝运行期热切并汇报 needs_restart(设计 §5.3、§11)。
+              请按发布手册安排滚动重启使新表生效。
+            runbook_url: docs/ops/table-hot-reload-runbook.md

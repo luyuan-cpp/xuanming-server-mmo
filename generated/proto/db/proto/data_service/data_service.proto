@@ -33,6 +33,9 @@ service DataService {
   rpc GetAccountRealName(GetAccountRealNameRequest) returns (GetAccountRealNameResponse) {}
   // 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
   rpc ResetAccountRealName(ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse) {}
+  // 第三方登录渠道身份(docs/design/rename-and-content-safety.md §6.5):login 登录成功后登记(签名鉴权),content_guard 按角色读。
+  rpc UpsertAccountChannelIdentity(UpsertAccountChannelIdentityRequest) returns (google.protobuf.Empty) {}
+  rpc GetPlayerChannelIdentity(GetPlayerChannelIdentityRequest) returns (GetPlayerChannelIdentityResponse) {}
   // 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
   rpc BeginAccountRoleTrade(BeginAccountRoleTradeRequest) returns (AccountRoleTradeReceipt) {}
   // 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -867,4 +870,27 @@ message GetPlayerItemGainBlockRequest { uint64 player_id = 1; }
 message GetPlayerItemGainBlockResponse {
   bool found = 1;                          // false = 这个玩家没有写权行(从未建角)
   PlayerItemGainBlockComp block = 2;       // found=true 且从未被封过时为空消息(不是缺席)
+}
+
+// ── 账号渠道身份与发言画像(docs/design/rename-and-content-safety.md §6.5 / §7)──
+
+message UpsertAccountChannelIdentityRequest {
+  common.base.ServiceCallAuth auth = 1;
+  string account = 2;
+  string channel = 3;
+  string open_id = 4;
+}
+
+message GetPlayerChannelIdentityRequest {
+  uint64 player_id = 1;
+}
+
+message GetPlayerChannelIdentityResponse {
+  bool found = 1;
+  string account = 2;
+  string channel = 3;
+  string open_id = 4;
+  uint64 account_created_ms = 5;
+  uint32 player_level = 6;
+  bool retry = 7;
 }

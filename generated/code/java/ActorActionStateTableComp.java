@@ -23,4 +23,22 @@ public final class ActorActionStateTableComp {
         }
     }
 
+    public record State_id(int value) {
+        public static State_id from(ActorActionStateTable row) {
+            return new State_id(row.getStateId());
+        }
+    }
+
+    public record State_mode(int value) {
+        public static State_mode from(ActorActionStateTable row) {
+            return new State_mode(row.getStateMode());
+        }
+    }
+
+    public record State_tip(int value) {
+        public static State_tip from(ActorActionStateTable row) {
+            return new State_tip(row.getStateTip());
+        }
+    }
+
 }

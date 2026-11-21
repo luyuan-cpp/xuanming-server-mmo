@@ -4,22 +4,27 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <ranges>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include "table_log.h"
 #include "table/proto/actoractionstate_table.pb.h"
 
+// 不可变表快照:独立命名以便 table_loader.h 仅用前向声明组合 TableSet,
+// 不向所有节点入口扇出 50+ 表头文件(docs/design/config-table-hot-reload.md §8.2)。
+struct ActorActionStateTableSnapshot {
+    using IdMapType = std::unordered_multimap<uint32_t, const ActorActionStateTable*>;
+
+    ActorActionStateTableData data;
+    IdMapType idMap;
+};
+
 class ActorActionStateTableManager {
 public:
-    using IdMapType = std::unordered_map<uint32_t, const ActorActionStateTable*>;
+    using Snapshot = ActorActionStateTableSnapshot;
+    using IdMapType = Snapshot::IdMapType;
     using LoadSuccessCallback = std::function<void()>;
-
-    // Internal snapshot holding all parsed data and indices.
-    // Load() builds a new snapshot and swaps it in, replacing the old one.
-    struct Snapshot {
-        ActorActionStateTableData data;
-        IdMapType idMap;
-    };
 
     static ActorActionStateTableManager& Instance() {
         static ActorActionStateTableManager instance;
@@ -27,6 +32,19 @@ public:
     }
 
     const Snapshot& GetSnapshot() const { return *snapshot; }
+    std::shared_ptr<const Snapshot> CurrentSnapshot() const { return snapshot; }
+
+    // 两阶段解析:只读目录构建新快照,失败返回 false 与英文原因,不触碰现役快照也不 LOG_FATAL。
+    static bool ParseSnapshotFromDir(const std::string& configDir,
+                                     bool useBinary,
+                                     std::shared_ptr<const Snapshot>& out,
+                                     std::string& err);
+
+    void InstallSnapshot(std::shared_ptr<const Snapshot> next) {
+        if (next) {
+            snapshot = std::move(next);
+        }
+    }
 
     const ActorActionStateTableData& FindAll() const { return snapshot->data; }
 
@@ -39,8 +57,19 @@ public:
     //   ❌ 把 const ActorActionStateTable* 存进成员、容器、闭包、协程帧
     //
     // 存指针在热更那一刻就是野指针,而且不会有任何报错。
-    std::pair<const ActorActionStateTable*, uint32_t> FindById(uint32_t tableId);
-    std::pair<const ActorActionStateTable*, uint32_t> FindByIdSilent(uint32_t tableId);
+    // 这张表的主键可重复((cfg_multi)),因此**不提供 FindById** —— 单值语义不成立。
+    //
+    // 返回的是 multimap 的 equal_range 视图,**不拷贝、不分配**:
+    //
+    //     for (const auto* row : Mgr::Instance().FindAllById(id)) { ... }
+    //
+    // 视图与它产出的指针一样,只在下一次 Load() 之前有效。
+    auto FindAllById(uint32_t tableId) const {
+        auto [first, last] = snapshot->idMap.equal_range(tableId);
+        return std::ranges::subrange(first, last) | std::views::values;
+    }
+
+    std::size_t CountById(uint32_t tableId) const { return snapshot->idMap.count(tableId); }
     const IdMapType& GetIdMap() const { return snapshot->idMap; }
 
     void Load();
@@ -65,7 +94,8 @@ public:
         std::vector<const ActorActionStateTable*> result;
         result.reserve(ids.size());
         for (auto id : ids) {
-            if (auto it = snapshot->idMap.find(id); it != snapshot->idMap.end()) {
+            auto [first, last] = snapshot->idMap.equal_range(id);
+            for (auto it = first; it != last; ++it) {
                 result.push_back(it->second);
             }
         }
@@ -106,7 +136,7 @@ public:
 
 private:
     LoadSuccessCallback loadSuccessCallback;
-    std::unique_ptr<Snapshot> snapshot = std::make_unique<Snapshot>();
+    std::shared_ptr<const Snapshot> snapshot = std::make_shared<const Snapshot>();
 };
 
 inline const ActorActionStateTableData& FindAllActorActionStateTable() {

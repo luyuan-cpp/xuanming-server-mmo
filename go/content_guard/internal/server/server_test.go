@@ -12,6 +12,7 @@ import (
 
 	"content_guard/internal/config"
 	"content_guard/internal/engine"
+	"content_guard/internal/platform"
 	"content_guard/internal/wordlist"
 )
 
@@ -80,6 +81,9 @@ func TestFullMethodNameMatchesGeneratedConstant(t *testing.T) {
 	if config.CheckTextFullMethod != cgpb.ContentGuard_CheckText_FullMethodName {
 		t.Fatalf("config.CheckTextFullMethod = %q, generated = %q", config.CheckTextFullMethod, cgpb.ContentGuard_CheckText_FullMethodName)
 	}
+	if config.CheckPlatformTextFullMethod != cgpb.ContentGuard_CheckPlatformText_FullMethodName {
+		t.Fatalf("config.CheckPlatformTextFullMethod = %q, generated = %q", config.CheckPlatformTextFullMethod, cgpb.ContentGuard_CheckPlatformText_FullMethodName)
+	}
 }
 
 func TestCheckTextVerdicts(t *testing.T) {
@@ -108,6 +112,11 @@ func TestCheckTextVerdicts(t *testing.T) {
 	name := check(t, s, cgpb.TextScene_TEXT_SCENE_ROLE_NAME, "大笨蛋")
 	if name.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_REJECT {
 		t.Fatalf("name: %+v", name)
+	}
+	// 寄售标题全服可见:辱骂与广告引流均按拒绝处理,不打码放行。
+	tradeAbuse := check(t, s, cgpb.TextScene_TEXT_SCENE_TRADE_TITLE, "大笨蛋")
+	if tradeAbuse.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_REJECT {
+		t.Fatalf("tradeAbuse: %+v", tradeAbuse)
 	}
 	// 公告里冒充官方那一类不管。
 	notice := check(t, s, cgpb.TextScene_TEXT_SCENE_GUILD_ANNOUNCEMENT, "官方活动今晚开")
@@ -161,5 +170,66 @@ func TestWithoutRequireLexiconBuiltinWordsStillApply(t *testing.T) {
 	out := check(t, s, cgpb.TextScene_TEXT_SCENE_GUILD_NAME, "官方帮会")
 	if out.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_REJECT || out.GetCategory() != cgpb.TextCategory_TEXT_CATEGORY_IMPERSONATION || out.GetLexiconVersion() != 0 {
 		t.Fatalf("built-in word in a guild name: %+v", out)
+	}
+}
+
+type stubReviewer struct {
+	res     platform.ReviewResult
+	syncRes platform.ReviewResult
+}
+
+func (r stubReviewer) Review(_ context.Context, _ cgpb.TextScene, _ uint64, _, _ string, _ bool) platform.ReviewResult {
+	return r.res
+}
+
+func (r stubReviewer) ReviewSync(_ context.Context, _ cgpb.TextScene, _ uint64, _, _ string) platform.ReviewResult {
+	if r.syncRes.Outcome != platform.OutcomeSkip || r.syncRes.Category != cgpb.TextCategory_TEXT_CATEGORY_UNSPECIFIED {
+		return r.syncRes
+	}
+	return r.res
+}
+
+func TestExternalReviewerOverridesLocalPassAndSupportsWorldAsyncRecheck(t *testing.T) {
+	e := engine.New()
+	rej := New(e, false, 64, WithReviewer(stubReviewer{
+		res: platform.ReviewResult{Outcome: platform.OutcomeReject, Category: cgpb.TextCategory_TEXT_CATEGORY_AD},
+	}))
+	out := check(t, rej, cgpb.TextScene_TEXT_SCENE_ROLE_NAME, "逍遥剑仙")
+	if out.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_REJECT || out.GetCategory() != cgpb.TextCategory_TEXT_CATEGORY_AD {
+		t.Fatalf("external reject got %+v", out)
+	}
+
+	unavail := New(e, false, 64, WithReviewer(stubReviewer{
+		res: platform.ReviewResult{Outcome: platform.OutcomeUnavailable},
+	}))
+	_, err := unavail.CheckText(context.Background(), &cgpb.CheckTextRequest{
+		Scene:   cgpb.TextScene_TEXT_SCENE_ROLE_NAME,
+		Text:    "逍遥剑仙",
+		Account: "wx_abc",
+	})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("external unavailable code = %v, want Unavailable", status.Code(err))
+	}
+
+	pendingAndReject := New(e, false, 64, WithReviewer(stubReviewer{
+		res:     platform.ReviewResult{Outcome: platform.OutcomePending},
+		syncRes: platform.ReviewResult{Outcome: platform.OutcomeReject, Category: cgpb.TextCategory_TEXT_CATEGORY_POLITICS},
+	}))
+	worldOut, err := pendingAndReject.CheckText(context.Background(), &cgpb.CheckTextRequest{
+		Scene:         cgpb.TextScene_TEXT_SCENE_CHAT_WORLD,
+		Text:          "正常表象内容",
+		PlayerId:      7,
+		AsyncPlatform: true,
+	})
+	if err != nil || worldOut.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_PASS || !worldOut.GetPendingPlatformReview() {
+		t.Fatalf("world chat async pending got %+v err=%v", worldOut, err)
+	}
+	recheckOut, err := pendingAndReject.CheckPlatformText(context.Background(), &cgpb.CheckTextRequest{
+		Scene:    cgpb.TextScene_TEXT_SCENE_CHAT_WORLD,
+		Text:     "正常表象内容",
+		PlayerId: 7,
+	})
+	if err != nil || recheckOut.GetVerdict() != cgpb.TextVerdict_TEXT_VERDICT_REJECT || recheckOut.GetCategory() != cgpb.TextCategory_TEXT_CATEGORY_POLITICS {
+		t.Fatalf("CheckPlatformText got %+v err=%v", recheckOut, err)
 	}
 }

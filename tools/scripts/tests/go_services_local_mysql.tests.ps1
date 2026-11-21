@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     本机 MySQL 配置派生与正式启动入口传递回归。
@@ -11,6 +11,7 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/../lib/account_directory_dev_secret.ps1"
 . "$PSScriptRoot/../lib/match_dev_secret.ps1"
 . "$PSScriptRoot/../lib/role_fence_dev_secret.ps1"
+. "$PSScriptRoot/../lib/gate_identity_environment.ps1"
 . "$PSScriptRoot/../lib/release_common.ps1"
 $parseErrors = $null
 $launcherAst = [System.Management.Automation.Language.Parser]::ParseFile($LauncherPath, [ref]$null, [ref]$parseErrors)

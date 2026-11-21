@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18rolenamerule_table.proto\"\xaa\x01\n\x11RoleNameRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x11\n\tmin_chars\x18\x02 \x01(\r\x12\x11\n\tmax_chars\x18\x03 \x01(\r\x12\x18\n\x10generated_prefix\x18\x04 \x01(\t\x12\x1c\n\x14generated_suffix_len\x18\x05 \x01(\r\x12\x1d\n\x15max_generate_attempts\x18\x06 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x07 \x01(\t\"9\n\x15RoleNameRuleTableData\x12 \n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x12.RoleNameRuleTableBC\n\x0e\x63om.game.tableB\x1bRoleNameRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18rolenamerule_table.proto\"\x9d\x02\n\x11RoleNameRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x11\n\tmin_chars\x18\x02 \x01(\r\x12\x11\n\tmax_chars\x18\x03 \x01(\r\x12\x18\n\x10generated_prefix\x18\x04 \x01(\t\x12\x1c\n\x14generated_suffix_len\x18\x05 \x01(\r\x12\x1d\n\x15max_generate_attempts\x18\x06 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x07 \x01(\t\x12\x1f\n\x17rename_cooldown_seconds\x18\x08 \x01(\r\x12\x1d\n\x15old_name_hold_seconds\x18\t \x01(\r\x12\x16\n\x0erename_item_id\x18\n \x01(\r\x12\x19\n\x11rename_item_count\x18\x0b \x01(\r\"9\n\x15RoleNameRuleTableData\x12 \n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x12.RoleNameRuleTableBC\n\x0e\x63om.game.tableB\x1bRoleNameRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\033RoleNameRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_ROLENAMERULETABLE']._serialized_start=29
-  _globals['_ROLENAMERULETABLE']._serialized_end=199
-  _globals['_ROLENAMERULETABLEDATA']._serialized_start=201
-  _globals['_ROLENAMERULETABLEDATA']._serialized_end=258
+  _globals['_ROLENAMERULETABLE']._serialized_end=314
+  _globals['_ROLENAMERULETABLEDATA']._serialized_start=316
+  _globals['_ROLENAMERULETABLEDATA']._serialized_end=373
 # @@protoc_insertion_point(module_scope)

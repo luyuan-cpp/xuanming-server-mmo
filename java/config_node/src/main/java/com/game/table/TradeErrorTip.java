@@ -99,6 +99,14 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTradeAssetNotTradable = 20015;</code>
      */
     kTradeAssetNotTradable(20015),
+    /**
+     * <code>kTradeTitleSensitive = 20016;</code>
+     */
+    kTradeTitleSensitive(20016),
+    /**
+     * <code>kTradeTextCheckUnavailable = 20017;</code>
+     */
+    kTradeTextCheckUnavailable(20017),
     UNRECOGNIZED(-1),
     ;
 
@@ -179,6 +187,14 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTradeAssetNotTradable = 20015;</code>
      */
     public static final int kTradeAssetNotTradable_VALUE = 20015;
+    /**
+     * <code>kTradeTitleSensitive = 20016;</code>
+     */
+    public static final int kTradeTitleSensitive_VALUE = 20016;
+    /**
+     * <code>kTradeTextCheckUnavailable = 20017;</code>
+     */
+    public static final int kTradeTextCheckUnavailable_VALUE = 20017;
 
 
     public final int getNumber() {
@@ -222,6 +238,8 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
         case 20013: return kTradeAssetDeliveryPending;
         case 20014: return kTradeManualReview;
         case 20015: return kTradeAssetNotTradable;
+        case 20016: return kTradeTitleSensitive;
+        case 20017: return kTradeTextCheckUnavailable;
         default: return null;
       }
     }
@@ -287,7 +305,7 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025trade_error_tip.proto*\362\003\n\013trade_error\022" +
+      "\n\025trade_error_tip.proto*\260\004\n\013trade_error\022" +
       "\022\n\016kTrade_errorOK\020\000\022\033\n\025kTradeListingNotF" +
       "ound\020\240\234\001\022\033\n\025kTradeHomeZoneUnknown\020\241\234\001\022 \n" +
       "\032kTradeFavoriteLimitReached\020\242\234\001\022\033\n\025kTrad" +
@@ -300,8 +318,9 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
       "oLow\020\253\234\001\022\030\n\022kTradeAuctionEnded\020\254\234\001\022 \n\032kT" +
       "radeAssetDeliveryPending\020\255\234\001\022\030\n\022kTradeMa" +
       "nualReview\020\256\234\001\022\034\n\026kTradeAssetNotTradable" +
-      "\020\257\234\001B$\n\016com.game.tableZ\022generated/pb/tab" +
-      "leb\006proto3"
+      "\020\257\234\001\022\032\n\024kTradeTitleSensitive\020\260\234\001\022 \n\032kTra" +
+      "deTextCheckUnavailable\020\261\234\001B$\n\016com.game.t" +
+      "ableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

@@ -26,14 +26,14 @@ public class ActorActionStateTableManager {
      */
     private static class Snapshot {
         final ActorActionStateTableData data;
-        final Map<Integer, ActorActionStateTable> kvData;
+        final Map<Integer, List<ActorActionStateTable>> kvData;
 
 
 
 
 
         Snapshot(ActorActionStateTableData data,
-                 Map<Integer, ActorActionStateTable> kvData) {
+                 Map<Integer, List<ActorActionStateTable>> kvData) {
             this.data = data;
             this.kvData = kvData;
         }
@@ -59,10 +59,10 @@ public class ActorActionStateTableManager {
         }
         ActorActionStateTableData data = builder.build();
 
-        Map<Integer, ActorActionStateTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<ActorActionStateTable>> kvData = new HashMap<>(data.getDataCount());
 
         for (ActorActionStateTable row : data.getDataList()) {
-            kvData.put(row.getId(), row);
+            kvData.computeIfAbsent(row.getId(), k -> new ArrayList<>()).add(row);
         }
 
         this.snapshot = new Snapshot(data, kvData);
@@ -72,12 +72,17 @@ public class ActorActionStateTableManager {
         return snapshot.data;
     }
 
-    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
-    public ActorActionStateTable findById(int id) {
-        return snapshot.kvData.get(id);
+    /**
+     * 返回该 id 命中的全部行。这张表的主键声明了 (cfg_multi)，单值语义不成立，
+     * 因此不提供 findById —— 把可重复主键当单值用会在编译期断，而不是悄悄只看第一行。
+     *
+     * <p>热更契约：返回的对象属于当前快照，只许当场用，调用方**只存 id**。
+     */
+    public List<ActorActionStateTable> findAllById(int id) {
+        return snapshot.kvData.getOrDefault(id, Collections.emptyList());
     }
 
-    public Map<Integer, ActorActionStateTable> getKvData() {
+    public Map<Integer, List<ActorActionStateTable>> getKvData() {
         return Collections.unmodifiableMap(snapshot.kvData);
     }
 
@@ -101,7 +106,7 @@ public class ActorActionStateTableManager {
     // ---- Count ----
 
     public int count() {
-        return snapshot.kvData.size();
+        return snapshot.data.getDataCount();
     }
 
 
@@ -114,8 +119,7 @@ public class ActorActionStateTableManager {
         Snapshot snap = this.snapshot;
         List<ActorActionStateTable> result = new ArrayList<>(ids.size());
         for (int id : ids) {
-            ActorActionStateTable row = snap.kvData.get(id);
-            if (row != null) { result.add(row); }
+            result.addAll(snap.kvData.getOrDefault(id, Collections.emptyList()));
         }
         return result;
     }

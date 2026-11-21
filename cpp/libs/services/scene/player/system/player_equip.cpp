@@ -26,6 +26,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_mutability.h"
 
 #include "table/code/attributedimension_table.h"
 #include "table/code/equipaffixpool_table.h"
@@ -370,14 +371,16 @@ uint64_t RandBelow(uint64_t n) {
 	return tlsRandom.Rand<uint64_t>(0, n - 1);
 }
 
-// 写入口统一前置:实体有效 / 未跨 zone 冻结 / 不在战斗(与 PetSystem、PlayerAttributeSystem 同口径,
-// 只是冻结与战斗各有自己的 tip,玩家看得懂为什么换不了)。
+// 写入口统一前置:实体有效 / 玩家处于可写状态(未冻结、未交接、未退出且受 owner_epoch 围栏保护) / 不在战斗。
 uint32_t CheckWritable(entt::entity player) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return kEntityIsNull;
 	}
-	if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player)) {
-		LOG_WARN << "[PlayerEquip] Rejected: cross-zone freeze in progress player_id=" << tlsEcs.GetPlayerId(player);
+	if (const auto mutability = player_mutability::ClassifyPlayerMutability(player);
+		mutability != player_mutability::PlayerMutability::kMutable) {
+		LOG_WARN << "[PlayerEquip] Rejected: player not mutable reason="
+				 << player_mutability::PlayerMutabilityName(mutability)
+				 << " player_id=" << tlsEcs.GetPlayerId(player);
 		return kEquipFrozen;
 	}
 	if (PlayerBattleSystem::IsInBattle(player)) {

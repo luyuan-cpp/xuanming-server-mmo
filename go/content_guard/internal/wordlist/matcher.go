@@ -147,6 +147,35 @@ func tokenBounded(elems []textnorm.Elem, start, end int) bool {
 	return true
 }
 
+// OrigSpan 是原文的字符闭区间(按 rune 计),供外围启发式检测对齐白名单词豁免。
+type OrigSpan struct{ Start, End int32 }
+
+// AllowOrigSpans 返回折叠序列命中的全部白名单词在原文里的 rune 区间。
+func (m *Matcher) AllowOrigSpans(elems []textnorm.Elem) []OrigSpan {
+	if len(elems) == 0 {
+		return nil
+	}
+	spans := m.allowSpans(elems)
+	if len(spans) == 0 {
+		return nil
+	}
+	out := make([]OrigSpan, 0, len(spans))
+	for _, s := range spans {
+		out = append(out, OrigSpan{Start: elems[s.start].Orig, End: elems[s.end].Orig})
+	}
+	return out
+}
+
+// OrigCovered 报告原文字符区间 [startOrig, endOrig] 是否完全落在任意白名单段内。
+func OrigCovered(spans []OrigSpan, startOrig, endOrig int32) bool {
+	for _, s := range spans {
+		if s.Start <= startOrig && endOrig <= s.End {
+			return true
+		}
+	}
+	return false
+}
+
 // span 是折叠序列里的一段,闭区间。
 type span struct{ start, end int }
 

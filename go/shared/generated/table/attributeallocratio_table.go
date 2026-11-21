@@ -49,25 +49,40 @@ func NewAttributeAllocRatioTableManager() *AttributeAllocRatioTableManager {
 }
 
 func (m *AttributeAllocRatioTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *AttributeAllocRatioTableManager) swapSnapshot(snap *attributeallocratioSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *AttributeAllocRatioTableManager) loadSnapshot(configDir string, useBinary bool) (*attributeallocratioSnapshot, error) {
     var container pb.AttributeAllocRatioTableData
 
     if useBinary {
         path := filepath.Join(configDir, "attributeallocratio.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "attributeallocratio.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -84,8 +99,7 @@ func (m *AttributeAllocRatioTableManager) Load(configDir string, useBinary bool)
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *AttributeAllocRatioTableManager) FindAll() []*pb.AttributeAllocRatioTable {

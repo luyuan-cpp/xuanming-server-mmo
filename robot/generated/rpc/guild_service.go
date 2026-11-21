@@ -170,6 +170,29 @@ func (guildServiceRpc) decodeSetAnnouncement(reply *base.MessageContent, err err
 	return resp, nil
 }
 
+// RenameGuild 异步调用 GuildService.RenameGuild(REQUEST),done 的契约见 GuildService。
+func (r guildServiceRpc) RenameGuild(c *pkg.GameClient, req *guild.RenameGuildRequest, timeout time.Duration, done func(*guild.RenameGuildResponse, error)) {
+	c.Call(game.GuildServiceRenameGuildMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRenameGuild(reply, err))
+	})
+}
+
+// RenameGuildSync 同步调用 GuildService.RenameGuild(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r guildServiceRpc) RenameGuildSync(ctx context.Context, c *pkg.GameClient, req *guild.RenameGuildRequest, timeout time.Duration) (*guild.RenameGuildResponse, error) {
+	return r.decodeRenameGuild(c.CallSync(ctx, game.GuildServiceRenameGuildMessageId, req, timeout))
+}
+
+func (guildServiceRpc) decodeRenameGuild(reply *base.MessageContent, err error) (*guild.RenameGuildResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &guild.RenameGuildResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode GuildService.RenameGuild reply: %w", err)
+	}
+	return resp, nil
+}
+
 // SetGuildMemberRole 异步调用 GuildService.SetGuildMemberRole(REQUEST),done 的契约见 GuildService。
 func (r guildServiceRpc) SetGuildMemberRole(c *pkg.GameClient, req *guild.SetGuildMemberRoleRequest, timeout time.Duration, done func(*guild.SetGuildMemberRoleResponse, error)) {
 	c.Call(game.GuildServiceSetGuildMemberRoleMessageId, req, timeout, func(reply *base.MessageContent, err error) {

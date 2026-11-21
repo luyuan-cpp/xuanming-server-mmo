@@ -14,10 +14,13 @@ import (
 
 // fakeRPC 是 ContentGuardClient 的替身:记下收到的请求,按预设回包。
 type fakeRPC struct {
-	out   *cgpb.CheckTextResponse
-	err   error
-	delay time.Duration
-	calls []*cgpb.CheckTextRequest
+	out           *cgpb.CheckTextResponse
+	platformOut   *cgpb.CheckTextResponse
+	err           error
+	platformErr   error
+	delay         time.Duration
+	calls         []*cgpb.CheckTextRequest
+	platformCalls []*cgpb.CheckTextRequest
 }
 
 func (f *fakeRPC) CheckText(ctx context.Context, in *cgpb.CheckTextRequest, _ ...grpc.CallOption) (*cgpb.CheckTextResponse, error) {
@@ -30,6 +33,11 @@ func (f *fakeRPC) CheckText(ctx context.Context, in *cgpb.CheckTextRequest, _ ..
 		}
 	}
 	return f.out, f.err
+}
+
+func (f *fakeRPC) CheckPlatformText(_ context.Context, in *cgpb.CheckTextRequest, _ ...grpc.CallOption) (*cgpb.CheckTextResponse, error) {
+	f.platformCalls = append(f.platformCalls, in)
+	return f.platformOut, f.platformErr
 }
 
 func TestFromResponseOnlyTrustsPassAndMasked(t *testing.T) {
@@ -173,5 +181,21 @@ func TestNewWithoutTargetNeedsOptional(t *testing.T) {
 	}
 	if _, err = New("test", Conf{}); err == nil {
 		t.Fatalf("New must refuse a conf without a target unless Optional is set")
+	}
+}
+
+func TestCheckWorldAndCheckPlatform(t *testing.T) {
+	rpc := &fakeRPC{
+		out:         &cgpb.CheckTextResponse{Verdict: cgpb.TextVerdict_TEXT_VERDICT_PASS, PendingPlatformReview: true},
+		platformOut: &cgpb.CheckTextResponse{Verdict: cgpb.TextVerdict_TEXT_VERDICT_REJECT, Category: cgpb.TextCategory_TEXT_CATEGORY_POLITICS},
+	}
+	client := NewWithClient(rpc, time.Second)
+	res := client.CheckWorld(context.Background(), 99, "hello world")
+	if res.Verdict != Pass || !res.PendingPlatformReview || !rpc.calls[0].GetAsyncPlatform() {
+		t.Fatalf("CheckWorld got %+v req=%+v", res, rpc.calls[0])
+	}
+	post := client.CheckPlatform(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 99, "hello world")
+	if post.Verdict != Reject || post.Category != cgpb.TextCategory_TEXT_CATEGORY_POLITICS || len(rpc.platformCalls) != 1 {
+		t.Fatalf("CheckPlatform got %+v calls=%d", post, len(rpc.platformCalls))
 	}
 }

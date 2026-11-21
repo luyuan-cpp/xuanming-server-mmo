@@ -1,10 +1,12 @@
 package com.game.mall;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import java.nio.charset.StandardCharsets;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -13,16 +15,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Repository
 @DependsOn("commerceSchemaReady")
 public class NonceStore {
+    private static final Logger LOG = LoggerFactory.getLogger(NonceStore.class);
     private final JdbcTemplate jdbc;
     private final String nowSql;
+    private final String pruneExpiredSql;
     private final TransactionTemplate tx;
-    private final AtomicInteger requests = new AtomicInteger();
     public NonceStore(JdbcTemplate jdbc, CommerceProperties props, PlatformTransactionManager manager) {
         this.jdbc = jdbc;
         tx = new TransactionTemplate(manager); tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW); tx.setTimeout(5);
         boolean h2 = Boolean.TRUE.equals(jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Boolean>) connection -> connection.getMetaData().getDatabaseProductName().equals("H2")));
         nowSql = h2 ? "CAST(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP())*1000 AS BIGINT)" : props.isRequireTidb() ? "(TIDB_CURRENT_TSO() >> 18)" : "CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS SIGNED)";
+        pruneExpiredSql = h2
+                ? "DELETE FROM commerce_request_nonce WHERE expires_ms<? LIMIT 500"
+                : "DELETE FROM commerce_request_nonce WHERE expires_ms<? ORDER BY expires_ms LIMIT 500";
         jdbc.setQueryTimeout(5);
     }
     public void claim(String role, String nonce, long sentMs) {
@@ -34,13 +40,6 @@ public class NonceStore {
         jdbc.queryForList("SELECT nonce FROM commerce_request_nonce WHERE caller_role=? AND nonce=?", role, nonce.getBytes(StandardCharsets.US_ASCII));
         long nowMs = jdbc.queryForObject("SELECT " + nowSql, Long.class);
         if (nowMs < HmacAuthentication.WINDOW_MS) { throw new CommerceException(503, "权威认证时间不可用"); }
-        // nonce 属于同一个权威 SQL 域；多副本与重启不丢去重信息。清理只处理已过签名窗口的行。
-        if ((requests.getAndIncrement() & 63) == 0) {
-            for (Expired row : jdbc.query("SELECT caller_role,nonce FROM commerce_request_nonce WHERE expires_ms<? ORDER BY expires_ms,caller_role,nonce LIMIT 128",
-                    (rs, index) -> new Expired(rs.getString(1), rs.getBytes(2)), nowMs)) {
-                jdbc.update("DELETE FROM commerce_request_nonce WHERE caller_role=? AND nonce=? AND expires_ms<?", row.role(), row.nonce(), nowMs);
-            }
-        }
         // 时窗由同一权威 SQL 时钟在插入语句内裁决，不能用各应用副本的墙钟各自验过期。
         // 去重再保留 10 分钟，覆盖至多 5 秒的 SQL/行锁等待；禁止暂停旧验签结果后重新插入。
         try {
@@ -50,5 +49,24 @@ public class NonceStore {
         }
         catch (DuplicateKeyException replay) { throw new CommerceException(409, "签名请求已使用，请以新 nonce 重试原业务请求号"); }
     }
-    private record Expired(String role, byte[] nonce) {}
+
+    /** 定时分批清理过期 nonce，避免热路径鉴权承担跨副本锁等待。 */
+    @Scheduled(fixedDelay = 10_000, initialDelay = 10_000)
+    void runPruneExpired() {
+        try {
+            pruneExpired();
+        } catch (RuntimeException failed) {
+            LOG.warn("scheduled nonce cleanup failed: type={}", failed.getClass().getSimpleName());
+        }
+    }
+
+    public int pruneExpired() {
+        Integer deleted = tx.execute(status -> {
+            jdbc.queryForList("SELECT expires_ms FROM commerce_request_nonce LIMIT 1");
+            Long nowMs = jdbc.queryForObject("SELECT " + nowSql, Long.class);
+            if (nowMs == null || nowMs < HmacAuthentication.WINDOW_MS) { return 0; }
+            return jdbc.update(pruneExpiredSql, nowMs);
+        });
+        return deleted == null ? 0 : deleted;
+    }
 }

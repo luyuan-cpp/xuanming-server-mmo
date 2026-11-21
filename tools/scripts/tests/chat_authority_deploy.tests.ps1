@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 # 只读部署契约与最小权限模板；不启动服务、不执行DDL、不访问集群。
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
@@ -45,9 +45,11 @@ Test-Case 'Chat业务角色无DDL或聊天记录改删权，迁移角色没有�
     $runtime=ChatSource 'deploy/sql/chat_runtime_role.sql'
     $migration=ChatSource 'deploy/sql/chat_migration_role.sql'
     $grants=@(($runtime-split "`n")|Where-Object {$_-match '^GRANT '})
-    Assert-Equal 2 $grants.Count '逐表具名授权，只有聊天库两张表'
+    Assert-Equal 6 $grants.Count '逐表具名授权，只有聊天库六张表'
     Assert-NotMatch ($grants-join "`n") '`mmorpg_global`' '身份校验走目录RPC，运行角色不碰全局库'
-    Assert-Match $runtime 'GRANT SELECT, INSERT ON `mmorpg_chat`.`chat_send_authority`' '永久消息原件只允许读和追加'
+    foreach($appendOnly in @('chat_send_authority','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target')) {
+        Assert-Match $runtime ("GRANT SELECT, INSERT ON ``mmorpg_chat``\.``$appendOnly``") "$appendOnly 原件只允许读和追加"
+    }
     Assert-NotMatch ($grants-join "`n") '\b(?:ALL|CREATE|ALTER|DROP|DELETE|INDEX|GRANT OPTION)\b' '常驻账号没有迁移、删除或转授权能力'
     Assert-NotMatch $migration '`mmorpg_global`' '迁移角色无全局归属写权限'
     Assert-NotMatch (ChatSource 'deploy/mysql-init/00_init_zone_dbs.sql') 'GRANT ALL PRIVILEGES ON `mmorpg_chat`' '不把旧appuser的全权复用给Chat'

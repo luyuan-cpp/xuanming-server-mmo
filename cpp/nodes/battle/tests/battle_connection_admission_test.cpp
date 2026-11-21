@@ -316,6 +316,36 @@ TEST(BattleConnectionAdmission, UnauthenticatedPoolIsBudgetedLikeTheGate)
     EXPECT_EQ(Rejected(admission, RejectReason::kPreAuthEarlyDrop), 1u);
 }
 
+// 半关闭的未认证连接:在 200ms 短宽限期内跳过淘汰;超过宽限期(或未记录半关闭时刻且建连满 minEvictableAge)
+// 后允许承压淘汰,避免长期滞留未认证池触发 kPreAuthBudget 误拒新连接。
+TEST(BattleConnectionAdmission, OverdueHalfClosedUnauthenticatedConnectionBecomesEvictable)
+{
+    const PreAuthBudget budget{2, 4, seconds(3)};
+    // 刚进入半关闭(100ms < 200ms 宽限):不淘汰。
+    EXPECT_FALSE(IsHalfClosedPreAuthEvictable(milliseconds(150), milliseconds(100), budget));
+    EXPECT_EQ(EffectivePreAuthEvictAge(/*connected=*/false, milliseconds(150), milliseconds(100), budget),
+              milliseconds(150));
+
+    // 半关闭已满 200ms 宽限,即便总建连时间尚不足 minEvictableAge,有效年龄也会抬到 minEvictableAge 以触发淘汰。
+    EXPECT_TRUE(IsHalfClosedPreAuthEvictable(milliseconds(250), milliseconds(200), budget));
+    const auto effectiveAge =
+        EffectivePreAuthEvictAge(/*connected=*/false, milliseconds(250), milliseconds(200), budget);
+    EXPECT_GE(effectiveAge, budget.minEvictableAge);
+
+    Admission admission(RateLimit{1000, 1000});
+    admission.Configure(RateLimit{1000, 1000}, budget);
+    const Verdict verdict = admission.Admit(Peer(), 0, 1000, /*unauthenticated=*/4, effectiveAge, kT0);
+    EXPECT_EQ(verdict, (Verdict{.evictOldestUnauthenticated = true}));
+
+    // 没有 halfClosedAt 记录(例如对端触发半关闭):按 max(minEvictableAge, kHalfCloseEvictGrace) 判逾期。
+    EXPECT_FALSE(IsHalfClosedPreAuthEvictable(seconds(2), std::nullopt, budget));
+    EXPECT_TRUE(IsHalfClosedPreAuthEvictable(seconds(3), std::nullopt, budget));
+
+    // 仍处于 connected 的连接保持原始建连年龄,不被半关闭规则提前抬高。
+    EXPECT_EQ(EffectivePreAuthEvictAge(/*connected=*/true, milliseconds(250), milliseconds(200), budget),
+              milliseconds(250));
+}
+
 // 按来源限速只在开启且承压时生效、只对公网来源生效:平时同一个 /24 再多直连也不拦;池到了早拒起点之后,
 // 超出这个公网前缀的桶就拒,别的前缀照常;私网来源(边缘 nginx、集群内)承压时也不拦。
 TEST(BattleConnectionAdmission, PerSourceLimitingAppliesOnlyUnderPressureAndOnlyToPublicSources)

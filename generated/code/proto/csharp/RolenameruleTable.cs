@@ -22,18 +22,20 @@ public static partial class RolenameruleTableReflection {
   static RolenameruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chhyb2xlbmFtZXJ1bGVfdGFibGUucHJvdG8iqgEKEVJvbGVOYW1lUnVsZVRh",
+          "Chhyb2xlbmFtZXJ1bGVfdGFibGUucHJvdG8inQIKEVJvbGVOYW1lUnVsZVRh",
           "YmxlEgoKAmlkGAEgASgNEhEKCW1pbl9jaGFycxgCIAEoDRIRCgltYXhfY2hh",
           "cnMYAyABKA0SGAoQZ2VuZXJhdGVkX3ByZWZpeBgEIAEoCRIcChRnZW5lcmF0",
           "ZWRfc3VmZml4X2xlbhgFIAEoDRIdChVtYXhfZ2VuZXJhdGVfYXR0ZW1wdHMY",
-          "BiABKA0SDAoEZGVzYxgHIAEoCSI5ChVSb2xlTmFtZVJ1bGVUYWJsZURhdGES",
-          "IAoEZGF0YRgBIAMoCzISLlJvbGVOYW1lUnVsZVRhYmxlQkMKDmNvbS5nYW1l",
-          "LnRhYmxlQhtSb2xlTmFtZVJ1bGVUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJh",
-          "dGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "BiABKA0SDAoEZGVzYxgHIAEoCRIfChdyZW5hbWVfY29vbGRvd25fc2Vjb25k",
+          "cxgIIAEoDRIdChVvbGRfbmFtZV9ob2xkX3NlY29uZHMYCSABKA0SFgoOcmVu",
+          "YW1lX2l0ZW1faWQYCiABKA0SGQoRcmVuYW1lX2l0ZW1fY291bnQYCyABKA0i",
+          "OQoVUm9sZU5hbWVSdWxlVGFibGVEYXRhEiAKBGRhdGEYASADKAsyEi5Sb2xl",
+          "TmFtZVJ1bGVUYWJsZUJDCg5jb20uZ2FtZS50YWJsZUIbUm9sZU5hbWVSdWxl",
+          "VGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::RoleNameRuleTable), global::RoleNameRuleTable.Parser, new[]{ "Id", "MinChars", "MaxChars", "GeneratedPrefix", "GeneratedSuffixLen", "MaxGenerateAttempts", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::RoleNameRuleTable), global::RoleNameRuleTable.Parser, new[]{ "Id", "MinChars", "MaxChars", "GeneratedPrefix", "GeneratedSuffixLen", "MaxGenerateAttempts", "Desc", "RenameCooldownSeconds", "OldNameHoldSeconds", "RenameItemId", "RenameItemCount" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RoleNameRuleTableData), global::RoleNameRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -83,6 +85,10 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     generatedSuffixLen_ = other.generatedSuffixLen_;
     maxGenerateAttempts_ = other.maxGenerateAttempts_;
     desc_ = other.desc_;
+    renameCooldownSeconds_ = other.renameCooldownSeconds_;
+    oldNameHoldSeconds_ = other.oldNameHoldSeconds_;
+    renameItemId_ = other.renameItemId_;
+    renameItemCount_ = other.renameItemCount_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -176,6 +182,54 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     }
   }
 
+  /// <summary>Field number for the "rename_cooldown_seconds" field.</summary>
+  public const int RenameCooldownSecondsFieldNumber = 8;
+  private uint renameCooldownSeconds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RenameCooldownSeconds {
+    get { return renameCooldownSeconds_; }
+    set {
+      renameCooldownSeconds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "old_name_hold_seconds" field.</summary>
+  public const int OldNameHoldSecondsFieldNumber = 9;
+  private uint oldNameHoldSeconds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint OldNameHoldSeconds {
+    get { return oldNameHoldSeconds_; }
+    set {
+      oldNameHoldSeconds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "rename_item_id" field.</summary>
+  public const int RenameItemIdFieldNumber = 10;
+  private uint renameItemId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RenameItemId {
+    get { return renameItemId_; }
+    set {
+      renameItemId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "rename_item_count" field.</summary>
+  public const int RenameItemCountFieldNumber = 11;
+  private uint renameItemCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RenameItemCount {
+    get { return renameItemCount_; }
+    set {
+      renameItemCount_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -198,6 +252,10 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     if (GeneratedSuffixLen != other.GeneratedSuffixLen) return false;
     if (MaxGenerateAttempts != other.MaxGenerateAttempts) return false;
     if (Desc != other.Desc) return false;
+    if (RenameCooldownSeconds != other.RenameCooldownSeconds) return false;
+    if (OldNameHoldSeconds != other.OldNameHoldSeconds) return false;
+    if (RenameItemId != other.RenameItemId) return false;
+    if (RenameItemCount != other.RenameItemCount) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -212,6 +270,10 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     if (GeneratedSuffixLen != 0) hash ^= GeneratedSuffixLen.GetHashCode();
     if (MaxGenerateAttempts != 0) hash ^= MaxGenerateAttempts.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (RenameCooldownSeconds != 0) hash ^= RenameCooldownSeconds.GetHashCode();
+    if (OldNameHoldSeconds != 0) hash ^= OldNameHoldSeconds.GetHashCode();
+    if (RenameItemId != 0) hash ^= RenameItemId.GetHashCode();
+    if (RenameItemCount != 0) hash ^= RenameItemCount.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -258,6 +320,22 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
       output.WriteRawTag(58);
       output.WriteString(Desc);
     }
+    if (RenameCooldownSeconds != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(RenameCooldownSeconds);
+    }
+    if (OldNameHoldSeconds != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(OldNameHoldSeconds);
+    }
+    if (RenameItemId != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(RenameItemId);
+    }
+    if (RenameItemCount != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(RenameItemCount);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -296,6 +374,22 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
       output.WriteRawTag(58);
       output.WriteString(Desc);
     }
+    if (RenameCooldownSeconds != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(RenameCooldownSeconds);
+    }
+    if (OldNameHoldSeconds != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(OldNameHoldSeconds);
+    }
+    if (RenameItemId != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(RenameItemId);
+    }
+    if (RenameItemCount != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(RenameItemCount);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -326,6 +420,18 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (RenameCooldownSeconds != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(RenameCooldownSeconds);
+    }
+    if (OldNameHoldSeconds != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(OldNameHoldSeconds);
+    }
+    if (RenameItemId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(RenameItemId);
+    }
+    if (RenameItemCount != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(RenameItemCount);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -359,6 +465,18 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.RenameCooldownSeconds != 0) {
+      RenameCooldownSeconds = other.RenameCooldownSeconds;
+    }
+    if (other.OldNameHoldSeconds != 0) {
+      OldNameHoldSeconds = other.OldNameHoldSeconds;
+    }
+    if (other.RenameItemId != 0) {
+      RenameItemId = other.RenameItemId;
+    }
+    if (other.RenameItemCount != 0) {
+      RenameItemCount = other.RenameItemCount;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -407,6 +525,22 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
           Desc = input.ReadString();
           break;
         }
+        case 64: {
+          RenameCooldownSeconds = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          OldNameHoldSeconds = input.ReadUInt32();
+          break;
+        }
+        case 80: {
+          RenameItemId = input.ReadUInt32();
+          break;
+        }
+        case 88: {
+          RenameItemCount = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -452,6 +586,22 @@ public sealed partial class RoleNameRuleTable : pb::IMessage<RoleNameRuleTable>
         }
         case 58: {
           Desc = input.ReadString();
+          break;
+        }
+        case 64: {
+          RenameCooldownSeconds = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          OldNameHoldSeconds = input.ReadUInt32();
+          break;
+        }
+        case 80: {
+          RenameItemId = input.ReadUInt32();
+          break;
+        }
+        case 88: {
+          RenameItemCount = input.ReadUInt32();
           break;
         }
       }

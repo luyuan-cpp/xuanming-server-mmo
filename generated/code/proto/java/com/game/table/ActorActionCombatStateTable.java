@@ -28,7 +28,6 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private ActorActionCombatStateTable() {
-    state_ = java.util.Collections.emptyList();
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -60,45 +59,37 @@ private static final long serialVersionUID = 0L;
     return id_;
   }
 
-  public static final int STATE_FIELD_NUMBER = 2;
-  @SuppressWarnings("serial")
-  private java.util.List<com.game.table.ActorActionCombatStatestate> state_;
+  public static final int STATE_ID_FIELD_NUMBER = 3;
+  private int stateId_ = 0;
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_id = 3;</code>
+   * @return The stateId.
    */
   @java.lang.Override
-  public java.util.List<com.game.table.ActorActionCombatStatestate> getStateList() {
-    return state_;
+  public int getStateId() {
+    return stateId_;
   }
+
+  public static final int STATE_MODE_FIELD_NUMBER = 4;
+  private int stateMode_ = 0;
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_mode = 4;</code>
+   * @return The stateMode.
    */
   @java.lang.Override
-  public java.util.List<? extends com.game.table.ActorActionCombatStatestateOrBuilder> 
-      getStateOrBuilderList() {
-    return state_;
+  public int getStateMode() {
+    return stateMode_;
   }
+
+  public static final int STATE_TIP_FIELD_NUMBER = 5;
+  private int stateTip_ = 0;
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_tip = 5;</code>
+   * @return The stateTip.
    */
   @java.lang.Override
-  public int getStateCount() {
-    return state_.size();
-  }
-  /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-   */
-  @java.lang.Override
-  public com.game.table.ActorActionCombatStatestate getState(int index) {
-    return state_.get(index);
-  }
-  /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-   */
-  @java.lang.Override
-  public com.game.table.ActorActionCombatStatestateOrBuilder getStateOrBuilder(
-      int index) {
-    return state_.get(index);
+  public int getStateTip() {
+    return stateTip_;
   }
 
   private byte memoizedIsInitialized = -1;
@@ -118,8 +109,14 @@ private static final long serialVersionUID = 0L;
     if (id_ != 0) {
       output.writeUInt32(1, id_);
     }
-    for (int i = 0; i < state_.size(); i++) {
-      output.writeMessage(2, state_.get(i));
+    if (stateId_ != 0) {
+      output.writeUInt32(3, stateId_);
+    }
+    if (stateMode_ != 0) {
+      output.writeUInt32(4, stateMode_);
+    }
+    if (stateTip_ != 0) {
+      output.writeUInt32(5, stateTip_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -129,15 +126,18 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(1, id_);
     }
-
-        {
-          final int count = state_.size();
-          for (int i = 0; i < count; i++) {
-            size += com.google.protobuf.CodedOutputStream
-              .computeMessageSizeNoTag(state_.get(i));
-          }
-          size += 1 * count;
-        }
+    if (stateId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(3, stateId_);
+    }
+    if (stateMode_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(4, stateMode_);
+    }
+    if (stateTip_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(5, stateTip_);
+    }
     return size;
   }
   @java.lang.Override
@@ -164,8 +164,12 @@ private static final long serialVersionUID = 0L;
 
     if (getId()
         != other.getId()) return false;
-    if (!getStateList()
-        .equals(other.getStateList())) return false;
+    if (getStateId()
+        != other.getStateId()) return false;
+    if (getStateMode()
+        != other.getStateMode()) return false;
+    if (getStateTip()
+        != other.getStateTip()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -179,10 +183,12 @@ private static final long serialVersionUID = 0L;
     hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + ID_FIELD_NUMBER;
     hash = (53 * hash) + getId();
-    if (getStateCount() > 0) {
-      hash = (37 * hash) + STATE_FIELD_NUMBER;
-      hash = (53 * hash) + getStateList().hashCode();
-    }
+    hash = (37 * hash) + STATE_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getStateId();
+    hash = (37 * hash) + STATE_MODE_FIELD_NUMBER;
+    hash = (53 * hash) + getStateMode();
+    hash = (37 * hash) + STATE_TIP_FIELD_NUMBER;
+    hash = (53 * hash) + getStateTip();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -315,13 +321,9 @@ private static final long serialVersionUID = 0L;
       super.clear();
       bitField0_ = 0;
       id_ = 0;
-      if (stateBuilder_ == null) {
-        state_ = java.util.Collections.emptyList();
-      } else {
-        state_ = null;
-        stateBuilder_.clear();
-      }
-      bitField0_ = (bitField0_ & ~0x00000002);
+      stateId_ = 0;
+      stateMode_ = 0;
+      stateTip_ = 0;
       return this;
     }
 
@@ -348,28 +350,24 @@ private static final long serialVersionUID = 0L;
     @java.lang.Override
     public com.game.table.ActorActionCombatStateTable buildPartial() {
       com.game.table.ActorActionCombatStateTable result = new com.game.table.ActorActionCombatStateTable(this);
-      buildPartialRepeatedFields(result);
       if (bitField0_ != 0) { buildPartial0(result); }
       onBuilt();
       return result;
-    }
-
-    private void buildPartialRepeatedFields(com.game.table.ActorActionCombatStateTable result) {
-      if (stateBuilder_ == null) {
-        if (((bitField0_ & 0x00000002) != 0)) {
-          state_ = java.util.Collections.unmodifiableList(state_);
-          bitField0_ = (bitField0_ & ~0x00000002);
-        }
-        result.state_ = state_;
-      } else {
-        result.state_ = stateBuilder_.build();
-      }
     }
 
     private void buildPartial0(com.game.table.ActorActionCombatStateTable result) {
       int from_bitField0_ = bitField0_;
       if (((from_bitField0_ & 0x00000001) != 0)) {
         result.id_ = id_;
+      }
+      if (((from_bitField0_ & 0x00000002) != 0)) {
+        result.stateId_ = stateId_;
+      }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.stateMode_ = stateMode_;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.stateTip_ = stateTip_;
       }
     }
 
@@ -388,31 +386,14 @@ private static final long serialVersionUID = 0L;
       if (other.getId() != 0) {
         setId(other.getId());
       }
-      if (stateBuilder_ == null) {
-        if (!other.state_.isEmpty()) {
-          if (state_.isEmpty()) {
-            state_ = other.state_;
-            bitField0_ = (bitField0_ & ~0x00000002);
-          } else {
-            ensureStateIsMutable();
-            state_.addAll(other.state_);
-          }
-          onChanged();
-        }
-      } else {
-        if (!other.state_.isEmpty()) {
-          if (stateBuilder_.isEmpty()) {
-            stateBuilder_.dispose();
-            stateBuilder_ = null;
-            state_ = other.state_;
-            bitField0_ = (bitField0_ & ~0x00000002);
-            stateBuilder_ = 
-              com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
-                 internalGetStateFieldBuilder() : null;
-          } else {
-            stateBuilder_.addAllMessages(other.state_);
-          }
-        }
+      if (other.getStateId() != 0) {
+        setStateId(other.getStateId());
+      }
+      if (other.getStateMode() != 0) {
+        setStateMode(other.getStateMode());
+      }
+      if (other.getStateTip() != 0) {
+        setStateTip(other.getStateTip());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -445,19 +426,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000001;
               break;
             } // case 8
-            case 18: {
-              com.game.table.ActorActionCombatStatestate m =
-                  input.readMessage(
-                      com.game.table.ActorActionCombatStatestate.parser(),
-                      extensionRegistry);
-              if (stateBuilder_ == null) {
-                ensureStateIsMutable();
-                state_.add(m);
-              } else {
-                stateBuilder_.addMessage(m);
-              }
+            case 24: {
+              stateId_ = input.readUInt32();
+              bitField0_ |= 0x00000002;
               break;
-            } // case 18
+            } // case 24
+            case 32: {
+              stateMode_ = input.readUInt32();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 32
+            case 40: {
+              stateTip_ = input.readUInt32();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 40
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -507,244 +490,100 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private java.util.List<com.game.table.ActorActionCombatStatestate> state_ =
-      java.util.Collections.emptyList();
-    private void ensureStateIsMutable() {
-      if (!((bitField0_ & 0x00000002) != 0)) {
-        state_ = new java.util.ArrayList<com.game.table.ActorActionCombatStatestate>(state_);
-        bitField0_ |= 0x00000002;
-       }
+    private int stateId_ ;
+    /**
+     * <code>uint32 state_id = 3;</code>
+     * @return The stateId.
+     */
+    @java.lang.Override
+    public int getStateId() {
+      return stateId_;
+    }
+    /**
+     * <code>uint32 state_id = 3;</code>
+     * @param value The stateId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateId(int value) {
+
+      stateId_ = value;
+      bitField0_ |= 0x00000002;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 state_id = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStateId() {
+      bitField0_ = (bitField0_ & ~0x00000002);
+      stateId_ = 0;
+      onChanged();
+      return this;
     }
 
-    private com.google.protobuf.RepeatedFieldBuilder<
-        com.game.table.ActorActionCombatStatestate, com.game.table.ActorActionCombatStatestate.Builder, com.game.table.ActorActionCombatStatestateOrBuilder> stateBuilder_;
+    private int stateMode_ ;
+    /**
+     * <code>uint32 state_mode = 4;</code>
+     * @return The stateMode.
+     */
+    @java.lang.Override
+    public int getStateMode() {
+      return stateMode_;
+    }
+    /**
+     * <code>uint32 state_mode = 4;</code>
+     * @param value The stateMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateMode(int value) {
 
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public java.util.List<com.game.table.ActorActionCombatStatestate> getStateList() {
-      if (stateBuilder_ == null) {
-        return java.util.Collections.unmodifiableList(state_);
-      } else {
-        return stateBuilder_.getMessageList();
-      }
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public int getStateCount() {
-      if (stateBuilder_ == null) {
-        return state_.size();
-      } else {
-        return stateBuilder_.getCount();
-      }
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public com.game.table.ActorActionCombatStatestate getState(int index) {
-      if (stateBuilder_ == null) {
-        return state_.get(index);
-      } else {
-        return stateBuilder_.getMessage(index);
-      }
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder setState(
-        int index, com.game.table.ActorActionCombatStatestate value) {
-      if (stateBuilder_ == null) {
-        if (value == null) {
-          throw new NullPointerException();
-        }
-        ensureStateIsMutable();
-        state_.set(index, value);
-        onChanged();
-      } else {
-        stateBuilder_.setMessage(index, value);
-      }
+      stateMode_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
       return this;
     }
     /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+     * <code>uint32 state_mode = 4;</code>
+     * @return This builder for chaining.
      */
-    public Builder setState(
-        int index, com.game.table.ActorActionCombatStatestate.Builder builderForValue) {
-      if (stateBuilder_ == null) {
-        ensureStateIsMutable();
-        state_.set(index, builderForValue.build());
-        onChanged();
-      } else {
-        stateBuilder_.setMessage(index, builderForValue.build());
-      }
+    public Builder clearStateMode() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      stateMode_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int stateTip_ ;
+    /**
+     * <code>uint32 state_tip = 5;</code>
+     * @return The stateTip.
+     */
+    @java.lang.Override
+    public int getStateTip() {
+      return stateTip_;
+    }
+    /**
+     * <code>uint32 state_tip = 5;</code>
+     * @param value The stateTip to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateTip(int value) {
+
+      stateTip_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
       return this;
     }
     /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+     * <code>uint32 state_tip = 5;</code>
+     * @return This builder for chaining.
      */
-    public Builder addState(com.game.table.ActorActionCombatStatestate value) {
-      if (stateBuilder_ == null) {
-        if (value == null) {
-          throw new NullPointerException();
-        }
-        ensureStateIsMutable();
-        state_.add(value);
-        onChanged();
-      } else {
-        stateBuilder_.addMessage(value);
-      }
+    public Builder clearStateTip() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      stateTip_ = 0;
+      onChanged();
       return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder addState(
-        int index, com.game.table.ActorActionCombatStatestate value) {
-      if (stateBuilder_ == null) {
-        if (value == null) {
-          throw new NullPointerException();
-        }
-        ensureStateIsMutable();
-        state_.add(index, value);
-        onChanged();
-      } else {
-        stateBuilder_.addMessage(index, value);
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder addState(
-        com.game.table.ActorActionCombatStatestate.Builder builderForValue) {
-      if (stateBuilder_ == null) {
-        ensureStateIsMutable();
-        state_.add(builderForValue.build());
-        onChanged();
-      } else {
-        stateBuilder_.addMessage(builderForValue.build());
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder addState(
-        int index, com.game.table.ActorActionCombatStatestate.Builder builderForValue) {
-      if (stateBuilder_ == null) {
-        ensureStateIsMutable();
-        state_.add(index, builderForValue.build());
-        onChanged();
-      } else {
-        stateBuilder_.addMessage(index, builderForValue.build());
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder addAllState(
-        java.lang.Iterable<? extends com.game.table.ActorActionCombatStatestate> values) {
-      if (stateBuilder_ == null) {
-        ensureStateIsMutable();
-        com.google.protobuf.AbstractMessageLite.Builder.addAll(
-            values, state_);
-        onChanged();
-      } else {
-        stateBuilder_.addAllMessages(values);
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder clearState() {
-      if (stateBuilder_ == null) {
-        state_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00000002);
-        onChanged();
-      } else {
-        stateBuilder_.clear();
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public Builder removeState(int index) {
-      if (stateBuilder_ == null) {
-        ensureStateIsMutable();
-        state_.remove(index);
-        onChanged();
-      } else {
-        stateBuilder_.remove(index);
-      }
-      return this;
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public com.game.table.ActorActionCombatStatestate.Builder getStateBuilder(
-        int index) {
-      return internalGetStateFieldBuilder().getBuilder(index);
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public com.game.table.ActorActionCombatStatestateOrBuilder getStateOrBuilder(
-        int index) {
-      if (stateBuilder_ == null) {
-        return state_.get(index);  } else {
-        return stateBuilder_.getMessageOrBuilder(index);
-      }
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public java.util.List<? extends com.game.table.ActorActionCombatStatestateOrBuilder> 
-         getStateOrBuilderList() {
-      if (stateBuilder_ != null) {
-        return stateBuilder_.getMessageOrBuilderList();
-      } else {
-        return java.util.Collections.unmodifiableList(state_);
-      }
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public com.game.table.ActorActionCombatStatestate.Builder addStateBuilder() {
-      return internalGetStateFieldBuilder().addBuilder(
-          com.game.table.ActorActionCombatStatestate.getDefaultInstance());
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public com.game.table.ActorActionCombatStatestate.Builder addStateBuilder(
-        int index) {
-      return internalGetStateFieldBuilder().addBuilder(
-          index, com.game.table.ActorActionCombatStatestate.getDefaultInstance());
-    }
-    /**
-     * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-     */
-    public java.util.List<com.game.table.ActorActionCombatStatestate.Builder> 
-         getStateBuilderList() {
-      return internalGetStateFieldBuilder().getBuilderList();
-    }
-    private com.google.protobuf.RepeatedFieldBuilder<
-        com.game.table.ActorActionCombatStatestate, com.game.table.ActorActionCombatStatestate.Builder, com.game.table.ActorActionCombatStatestateOrBuilder> 
-        internalGetStateFieldBuilder() {
-      if (stateBuilder_ == null) {
-        stateBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
-            com.game.table.ActorActionCombatStatestate, com.game.table.ActorActionCombatStatestate.Builder, com.game.table.ActorActionCombatStatestateOrBuilder>(
-                state_,
-                ((bitField0_ & 0x00000002) != 0),
-                getParentForChildren(),
-                isClean());
-        state_ = null;
-      }
-      return stateBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:ActorActionCombatStateTable)

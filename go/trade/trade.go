@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"shared/authoritysql"
 	"shared/callerauth"
+	"shared/contentguard"
 	"shared/drainproof"
 	"shared/rolefence"
 	"strconv"
@@ -300,7 +301,12 @@ func runTrade(c config.Config) (runErr error) {
 	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix, NodeTypes: []string{base.ENodeType_name[int32(nodeType)]}})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
+	contentGuard, cgErr := contentguard.New("trade", c.ContentGuard)
+	if cgErr != nil {
+		return fmt.Errorf("trade content guard wiring failed: %w", cgErr)
+	}
 	deps := logic.NewDeps(svcCtx)
+	deps.ContentGuard = contentGuard
 	serverReady := make(chan struct{})
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		// 两个服务挂在同一个 gRPC server 上:客户端协议与内部 TradeAdmin 的隔离靠会话拦截器的

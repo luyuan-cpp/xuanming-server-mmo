@@ -3,6 +3,7 @@ package org.jeecg.modules.gm;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
+import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.UnauthorizedException;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
@@ -112,6 +113,7 @@ class GmPlayerCommandControllerTest {
         verifyNoInteractions(journal);
     }
     @Test void expiredDraftCannotBeSentAndPermissionIsRecheckedAtSend() {
+        when(subject.isPermitted("gm:pet:grant")).thenReturn(true);
         ObjectNode command = json.createObjectNode().put("id", "42").put("commandType", "PLAYER")
                 .put("operation", "pet.grant").put("status", "DRAFT");
         command.putObject("request").put("issuedAtMs", Long.toString(System.currentTimeMillis() - 600_000));
@@ -120,5 +122,21 @@ class GmPlayerCommandControllerTest {
         doThrow(new UnauthorizedException()).when(subject).checkPermission("gm:pet:grant");
         assertThrows(UnauthorizedException.class, () -> controller.send("42"));
         verify(journal, never()).sendPlayerCommand(anyString(), anyString(), any());
+    }
+
+    @Test void unprivilegedUserCannotProbeCommandIdBeforeAuthorization() {
+        assertThrows(AuthorizationException.class, () -> controller.send("42"));
+        verifyNoInteractions(journal);
+    }
+
+    @Test void auditPaginationAndTimelineRequireAuditPermission() {
+        when(journal.listPlayerCommands(2, 25, "1001", "EXECUTED")).thenReturn(json.createObjectNode().put("total", 0));
+        controller.list(2, 25, "1001", "EXECUTED");
+        verify(subject).checkPermission("gm:audit:read");
+        verify(journal).listPlayerCommands(2, 25, "1001", "EXECUTED");
+
+        when(journal.auditHistory("42", "PLAYER")).thenReturn(json.createObjectNode().put("commandId", "42"));
+        controller.audit("42");
+        verify(journal).auditHistory("42", "PLAYER");
     }
 }

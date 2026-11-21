@@ -43,7 +43,9 @@ message GuildRecord {
   // score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
   // 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
   uint64 score_version = 12;
-  // 追加区:从 13 起。
+  // 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
+  uint64 renamed_ms = 13;
+  // 追加区:从 14 起。
 }
 
 message GuildPlayerStateRecord {
@@ -489,4 +491,21 @@ message GuildClientRequestRecord {            // 锁序位置 11
   uint64 op_id = 3;                    // 首次写成的 guild_asset_op.op_id;种类与参数以那一行为准,本表不重复存
   uint64 created_ms = 4;               // = 那一行的 created_ms(预留事务的 now);清理按它判龄
   // 追加区:从 5 起。
+}
+
+// 帮会改名旧名保护表(docs/design/rename-and-content-safety.md §5):锁序位置 12(全序末尾)。
+// D-14 要求显式声明整数主键(hold_id),唯一性由 uk_guild_name_hold(name_norm,整列 VARCHAR(191)) 保证。
+// 事务顺序固定:必须先写 guild(INSERT / UPDATE 拿到 uk_guild 锁),再查/改本表,防止并发抢注刚放下的旧名。
+message GuildNameHoldRecord {
+  option(OptionTableName) = "guild_name_hold";
+  option(OptionPrimaryKey) = "hold_id";
+  option(OptionUniqueKey) = "name_norm";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 hold_id = 1;
+  string name_norm = 2;
+  uint64 guild_id = 3;
+  uint64 held_until_ms = 4;
 }

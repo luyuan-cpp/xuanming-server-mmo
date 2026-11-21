@@ -216,4 +216,39 @@ TEST_F(BagSpaceFreedTest, NothingHappensWithoutAListener)
 	EXPECT_EQ(5u, Inventory().GetTotalItemCount(kPotion));
 }
 
+// Bag::MutationVersion 每次真实写操作递增,供 BagService 以 O(1) 校验事务期间的源包并发/重入改动。
+TEST_F(BagSpaceFreedTest, MutationVersionIncrementsAndDetectsReentrantBagModification)
+{
+	const uint64_t v0 = Inventory().MutationVersion();
+	EXPECT_GT(v0, 0u);
+
+	// 失败调用不推进版本号。
+	EXPECT_NE(kSuccess, Inventory().RemoveItem(kUnknownGuid));
+	EXPECT_EQ(v0, Inventory().MutationVersion());
+
+	// 成功扣减推进版本号。
+	ASSERT_EQ(kSuccess, BagService::RemoveItemsExact(player, Inventory(), {{kPotion, 1}}, TX_ITEM_DESTROY));
+	const uint64_t v1 = Inventory().MutationVersion();
+	EXPECT_GT(v1, v0);
+
+	// ConsumeInventoryAndGrant 在 overflowRoute.accept 中发生重入修改背包时,O(1) 版本检查必须整笔拒绝。
+	Inventory().SetCapacityForRestore(Inventory().OccupiedGridCount());
+	Temporary().SetCapacityForRestore(Temporary().OccupiedGridCount());
+	const uint64_t vBefore = Inventory().MutationVersion();
+	int commits = 0;
+	const BagService::GrantOverflowRoute reentrantRoute{
+		[&](const ItemCountMap &)
+		{
+			Inventory().ExpandCapacity(1); // 重入修改源包
+			return static_cast<uint32_t>(kSuccess);
+		},
+		[&](const ItemCountMap &) { ++commits; }};
+	EXPECT_EQ(kInvalidParameter,
+			  BagService::ConsumeInventoryAndGrant(player, {}, {{kTalisman, 1}}, /*correlationId=*/99, "{}", {}, 0,
+												   &reentrantRoute));
+	EXPECT_EQ(0, commits);
+	EXPECT_GT(Inventory().MutationVersion(), vBefore);
+	EXPECT_EQ(5u, Inventory().GetTotalItemCount(kPotion));
+}
+
 } // namespace

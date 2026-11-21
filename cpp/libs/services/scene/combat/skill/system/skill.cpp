@@ -31,11 +31,14 @@
 #include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp(属性加点二级属性)
 #include "services/battle/system/combat_damage_rules.h"  // 与回合引擎共用的伤害公式
 
+#include "modules/combat_ai/fsm.h"
+#include "modules/combat_ai/state_mutex_matrix.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "time/comp/timer_task_comp.h"
 #include "time/system/time_cooldown.h"
 #include "time/system/time.h"
 #include <algorithm>
+#include <bit>
 #include <core/system/id_generator.h>
 #include <utils/random/random.h>
 
@@ -128,6 +131,140 @@ uint32_t CheckRequiredSkillComps(entt::entity caster, uint32_t skillTableId) {
 // 以前只摘被检查的那一个组件,引导被打断后 RunEvery 会一直跑下去。
 void EndAllSkillPhases(entt::entity caster) {
 	tlsEcs.actorRegistry.remove<CastingTimerComp, RecoveryTimerComp, ChannelFinishTimerComp, ChannelIntervalTimerComp>(caster);
+}
+
+enum class SkillCastPhase : uint8_t {
+	kIdle = 0,
+	kCasting = 1,
+	kChanneling = 2,
+	kRecovery = 3,
+	kCount = 4,
+};
+
+enum class SkillCastEvent : uint8_t {
+	kStartCast = 0,
+	kEnterChannel = 1,
+	kEnterRecovery = 2,
+	kFinish = 3,
+	kInterrupt = 4,
+	kCount = 5,
+};
+
+// 纯值上下文(无裸指针成员),供施法相位 FSM 统一驱动定时器装卸与上下文收尾。
+struct SkillCastFsmCtx {
+	entt::entity caster{entt::null};
+	uint64_t skillId{0};
+	uint32_t interruptNotifySkillTableId{0};
+	double primaryDurationSec{0.0};
+	double secondaryDurationSec{0.0};
+	bool channelCastPoint{false};
+	bool emitInterruptNotice{false};
+};
+
+SkillCastPhase DetectSkillCastPhase(entt::entity caster) {
+	if (!tlsEcs.actorRegistry.valid(caster)) {
+		return SkillCastPhase::kIdle;
+	}
+	if (tlsEcs.actorRegistry.all_of<CastingTimerComp>(caster)) {
+		return SkillCastPhase::kCasting;
+	}
+	if (tlsEcs.actorRegistry.any_of<ChannelFinishTimerComp, ChannelIntervalTimerComp>(caster)) {
+		return SkillCastPhase::kChanneling;
+	}
+	if (tlsEcs.actorRegistry.all_of<RecoveryTimerComp>(caster)) {
+		return SkillCastPhase::kRecovery;
+	}
+	return SkillCastPhase::kIdle;
+}
+
+combat_ai::Fsm<SkillCastPhase, SkillCastEvent, SkillCastFsmCtx>& GetSkillCastPhaseFsm() {
+	using CastFsm = combat_ai::Fsm<SkillCastPhase, SkillCastEvent, SkillCastFsmCtx>;
+	static thread_local bool initialized = false;
+	static thread_local CastFsm fsm(SkillCastPhase::kIdle);
+	if (!initialized) {
+		initialized = true;
+
+		auto startCastHook = [](SkillCastPhase, SkillCastPhase, SkillCastEvent, SkillCastFsmCtx& ctx) {
+			auto& castingTimerComp = tlsEcs.actorRegistry.emplace_or_replace<CastingTimerComp>(ctx.caster);
+			castingTimerComp.skillId = ctx.skillId;
+			const bool isChannel = ctx.channelCastPoint;
+			castingTimerComp.timer.RunAfter(ctx.primaryDurationSec,
+				[casterEntity = ctx.caster, skillId = ctx.skillId, isChannel] {
+					tlsEcs.actorRegistry.remove<CastingTimerComp>(casterEntity);
+					if (isChannel) {
+						SkillSystem::HandleChannelSkillSpell(casterEntity, skillId);
+					} else {
+						SkillSystem::HandleGeneralSkillSpell(casterEntity, skillId);
+					}
+				});
+		};
+
+		auto enterChannelHook = [](SkillCastPhase, SkillCastPhase, SkillCastEvent, SkillCastFsmCtx& ctx) {
+			tlsEcs.actorRegistry.remove<CastingTimerComp>(ctx.caster);
+			auto& channelFinishTimerComp = tlsEcs.actorRegistry.emplace_or_replace<ChannelFinishTimerComp>(ctx.caster);
+			channelFinishTimerComp.skillId = ctx.skillId;
+			channelFinishTimerComp.timer.RunAfter(ctx.primaryDurationSec,
+				[casterEntity = ctx.caster, skillId = ctx.skillId] {
+					SkillSystem::HandleChannelFinish(casterEntity, skillId);
+				});
+			auto& channelIntervalTimer = tlsEcs.actorRegistry.emplace_or_replace<ChannelIntervalTimerComp>(ctx.caster).timer;
+			channelIntervalTimer.RunEvery(ctx.secondaryDurationSec,
+				[casterEntity = ctx.caster, skillId = ctx.skillId] {
+					SkillSystem::HandleChannelThink(casterEntity, skillId);
+				});
+		};
+
+		auto enterRecoveryHook = [](SkillCastPhase, SkillCastPhase, SkillCastEvent, SkillCastFsmCtx& ctx) {
+			tlsEcs.actorRegistry.remove<CastingTimerComp, ChannelFinishTimerComp, ChannelIntervalTimerComp>(ctx.caster);
+			auto& recoveryTimerComp = tlsEcs.actorRegistry.emplace_or_replace<RecoveryTimerComp>(ctx.caster);
+			recoveryTimerComp.skillId = ctx.skillId;
+			recoveryTimerComp.timer.RunAfter(ctx.primaryDurationSec,
+				[casterEntity = ctx.caster, skillId = ctx.skillId] {
+					tlsEcs.actorRegistry.remove<RecoveryTimerComp>(casterEntity);
+					SkillSystem::HandleSkillFinish(casterEntity, skillId);
+				});
+		};
+
+		auto interruptHook = [](SkillCastPhase, SkillCastPhase, SkillCastEvent, SkillCastFsmCtx& ctx) {
+			if (ctx.emitInterruptNotice && ctx.interruptNotifySkillTableId != 0) {
+				SkillSystem::SendSkillInterruptedMessage(ctx.caster, ctx.interruptNotifySkillTableId);
+			}
+			if (ctx.skillId != 0) {
+				SkillSystem::HandleSkillFinish(ctx.caster, ctx.skillId);
+			}
+			EndAllSkillPhases(ctx.caster);
+		};
+
+		auto finishHook = [](SkillCastPhase, SkillCastPhase, SkillCastEvent, SkillCastFsmCtx& ctx) {
+			if (ctx.skillId != 0) {
+				SkillSystem::HandleSkillFinish(ctx.caster, ctx.skillId);
+			}
+			EndAllSkillPhases(ctx.caster);
+		};
+
+		fsm.AddAnyTransition(SkillCastEvent::kStartCast, SkillCastPhase::kCasting, {}, startCastHook, /*allowSelf=*/true);
+		fsm.AddEvents({
+			{SkillCastEvent::kEnterChannel,
+			 {SkillCastPhase::kIdle, SkillCastPhase::kCasting},
+			 SkillCastPhase::kChanneling,
+			 {},
+			 enterChannelHook},
+			{SkillCastEvent::kEnterRecovery,
+			 {SkillCastPhase::kIdle, SkillCastPhase::kCasting, SkillCastPhase::kChanneling},
+			 SkillCastPhase::kRecovery,
+			 {},
+			 enterRecoveryHook},
+		});
+		fsm.AddAnyTransition(SkillCastEvent::kInterrupt, SkillCastPhase::kIdle, {}, interruptHook, /*allowSelf=*/true);
+		fsm.AddAnyTransition(SkillCastEvent::kFinish, SkillCastPhase::kIdle, {}, finishHook, /*allowSelf=*/true);
+	}
+	return fsm;
+}
+
+bool DriveSkillCastPhase(SkillCastEvent event, SkillCastFsmCtx& ctx) {
+	auto& fsm = GetSkillCastPhaseFsm();
+	fsm.Reset(DetectSkillCastPhase(ctx.caster));
+	return fsm.Trigger(event, ctx);
 }
 
 // 延迟落点失败只结束指定技能,避免旧回调清掉后来施法的相位。
@@ -321,13 +458,13 @@ uint32_t CanUseSkillInCurrentState(const uint32_t state, const uint32_t skill) {
 
 
 uint32_t CheckBuff(const entt::entity casterEntity, const SkillTable* skillTable) {
-	// CombatStateCollectionComp 是按需状态(CombatStateSystem::AddCombatState 第一次加状态时创建),
-	// 不存在 = 身上没有任何战斗状态 = 不受限制,这里放行是正常分支,不是缺必需组件。
-	ECS_GET_OR_RETURN(combatStateCollection, CombatStateCollectionComp, casterEntity, kSuccess);
-
-	// Every active combat state must permit every skill type this skill carries.
-	for (const auto& [currentState, buffList] : combatStateCollection->states())
+	// 按 O(1) 战斗异常状态位图遍历激活状态,不再遍历 protobuf::Map;
+	// 位图为 0 表示身上无战斗异常状态,直接放行。
+	uint64_t combatMask = CombatStateSystem::ActiveMask(casterEntity);
+	while (combatMask != 0)
 	{
+		const auto currentState = static_cast<uint32_t>(std::countr_zero(combatMask));
+		combatMask &= (combatMask - 1);
 		for (const auto& skillType : skillTable->skill_type()) {
 			RETURN_ON_ERROR(CanUseSkillInCurrentState(currentState, static_cast<eSkillType>(skillType)));
 		}
@@ -336,14 +473,44 @@ uint32_t CheckBuff(const entt::entity casterEntity, const SkillTable* skillTable
 	return kSuccess;
 }
 
-
-uint32_t CheckState(const entt::entity casterEntity, const SkillTable* skillTable) {
-	RETURN_ON_ERROR(ActorActionStateSystem::TryPerformAction(casterEntity, kActorActionUseSkill, kActorStateCombat));
+uint32_t CheckItemUse(const entt::entity casterEntity, const SkillTable* skillTable) {
+	// TODO: Validate item requirements before skill use
 	return kSuccess;
 }
 
-uint32_t CheckItemUse(const entt::entity casterEntity, const SkillTable* skillTable) {
-	// TODO: Validate item requirements before skill use
+template <typename PhaseComp>
+uint32_t InspectCastPhaseReadOnly(const entt::entity casterEntity, const SkillTable* skillTable) {
+	const auto* phase = tlsEcs.actorRegistry.try_get<PhaseComp>(casterEntity);
+	if (phase == nullptr || !phase->timer.IsActive()) {
+		return kSuccess;
+	}
+	if (!skillTable->immediate()) {
+		return MAKE_ERROR_MSG(kSkillUnInterruptible,
+			"skill_id=" << skillTable->id()
+			<< " caster=" << entt::to_integral(casterEntity));
+	}
+	return kSuccess;
+}
+
+// 统一施法状态门禁(两阶段事务):
+// 阶段 1 纯只读预检(Buff 技能权限 / 战斗异常互斥 / 行为状态互斥 / 道具 / 在途施法相位可打断性),
+// 任意一项不通过直接返回,保证零副作用;
+// 阶段 2 统一提交(清理或打断在途施法相位 -> 行为互斥打断并触发子系统退出钩子 -> 激活战斗态)。
+uint32_t TryEnterSkillCastGate(const entt::entity casterEntity, const SkillTable* skillRow) {
+	// ---- 阶段 1:纯只读预检(零副作用) ----
+	RETURN_ON_ERROR(CheckBuff(casterEntity, skillRow));
+	RETURN_ON_ERROR(CombatStateSystem::ValidateSkillUsage(casterEntity, kActorActionUseSkill));
+	RETURN_ON_ERROR(ActorActionStateSystem::CanExecuteActionWithoutStateChange(casterEntity, kActorActionUseSkill));
+	RETURN_ON_ERROR(CheckItemUse(casterEntity, skillRow));
+	RETURN_ON_ERROR(InspectCastPhaseReadOnly<CastingTimerComp>(casterEntity, skillRow));
+	RETURN_ON_ERROR(InspectCastPhaseReadOnly<RecoveryTimerComp>(casterEntity, skillRow));
+	RETURN_ON_ERROR(InspectCastPhaseReadOnly<ChannelFinishTimerComp>(casterEntity, skillRow));
+
+	// ---- 阶段 2:统一打断与入态 ----
+	RETURN_ON_ERROR(SkillSystem::CheckCasting(casterEntity, skillRow));
+	RETURN_ON_ERROR(SkillSystem::CheckRecovery(casterEntity, skillRow));
+	RETURN_ON_ERROR(SkillSystem::CheckChannel(casterEntity, skillRow));
+	RETURN_ON_ERROR(ActorActionStateSystem::TryPerformAction(casterEntity, kActorActionUseSkill, kActorStateCombat));
 	return kSuccess;
 }
 
@@ -371,18 +538,8 @@ uint32_t SkillSystem::CheckSkillPrerequisites(const entt::entity casterEntity, c
 
 	RETURN_ON_ERROR(ValidateTarget(casterEntity, request, target));
 	RETURN_ON_ERROR(CheckCooldown(casterEntity, skillRow));
-	// 相位检查可能打断旧施法。可以提前完成的纯校验必须先过,拒绝新技能时保留旧上下文和相位。
 	RETURN_ON_ERROR(CheckPlayerLevel(casterEntity, skillRow));
-	RETURN_ON_ERROR(CheckBuff(casterEntity, skillRow));
-	RETURN_ON_ERROR(CombatStateSystem::ValidateSkillUsage(casterEntity, kActorActionUseSkill));
-	RETURN_ON_ERROR(ActorActionStateSystem::CanExecuteActionWithoutStateChange(casterEntity, kActorActionUseSkill));
-	RETURN_ON_ERROR(CheckItemUse(casterEntity, skillRow));
-
-	RETURN_ON_ERROR(CheckCasting(casterEntity, skillRow));
-	RETURN_ON_ERROR(CheckRecovery(casterEntity, skillRow));
-	RETURN_ON_ERROR(CheckChannel(casterEntity, skillRow));
-	// 提交阶段由动作入口复核并激活状态。
-	RETURN_ON_ERROR(CheckState(casterEntity, skillRow));
+	RETURN_ON_ERROR(TryEnterSkillCastGate(casterEntity, skillRow));
 	return kSuccess;
 }
 
@@ -415,15 +572,12 @@ void SkillSystem::HandleSkillRecovery(const entt::entity casterEntity, uint64_t 
 
 	LookupSkillOrReturnVoid(skillContext->skilltableid());
 
-	// 后摇相位开始(按需状态,生命周期见 skill_comp.h)
-	auto& recoveryTimerComp = tlsEcs.actorRegistry.emplace_or_replace<RecoveryTimerComp>(casterEntity);
-	recoveryTimerComp.skillId = skillId;
-	recoveryTimerComp.timer.RunAfter(skillRow->recovery_time(), [casterEntity = casterEntity, skillId = skillId] {
-		// 后摇结束:先摘相位组件再收尾。在自身定时器回调里销毁组件是安全的 ——
-		// TimerTaskComp::OnTimer 调完回调就返回,不再碰组件。
-		tlsEcs.actorRegistry.remove<RecoveryTimerComp>(casterEntity);
-		HandleSkillFinish(casterEntity, skillId);
-		});
+	// 后摇相位开始(经由施法相位 FSM 驱动,自动清理旧相位并挂接 RecoveryTimerComp)
+	SkillCastFsmCtx fsmCtx;
+	fsmCtx.caster = casterEntity;
+	fsmCtx.skillId = skillId;
+	fsmCtx.primaryDurationSec = skillRow->recovery_time();
+	DriveSkillCastPhase(SkillCastEvent::kEnterRecovery, fsmCtx);
 }
 
 void SkillSystem::HandleSkillFinish(const entt::entity casterEntity, uint64_t skillId) {
@@ -470,17 +624,13 @@ void SkillSystem::HandleChannelSkillSpell(entt::entity casterEntity, uint64_t sk
 
 	if (!HandleSkillSpell(casterEntity, skillId)) return;
 
-	// 引导相位开始(按需状态,生命周期见 skill_comp.h):结束定时器 + 周期 think 定时器
-	auto& channelFinishTimerComp = tlsEcs.actorRegistry.emplace_or_replace<ChannelFinishTimerComp>(casterEntity);
-	channelFinishTimerComp.skillId = skillId;
-	channelFinishTimerComp.timer.RunAfter(skillRow->channel_finish(), [casterEntity = casterEntity, skillId = skillId] {
-		return HandleChannelFinish(casterEntity, skillId);
-		});
-
-	auto& channelIntervalTimer = tlsEcs.actorRegistry.emplace_or_replace<ChannelIntervalTimerComp>(casterEntity).timer;
-	channelIntervalTimer.RunEvery(skillRow->channel_think(), [casterEntity = casterEntity, skillId = skillId] {
-		return HandleChannelThink(casterEntity, skillId);
-		});
+	// 引导相位开始(经由施法相位 FSM 驱动:同时挂接结束定时器与周期 think 定时器)
+	SkillCastFsmCtx fsmCtx;
+	fsmCtx.caster = casterEntity;
+	fsmCtx.skillId = skillId;
+	fsmCtx.primaryDurationSec = skillRow->channel_finish();
+	fsmCtx.secondaryDurationSec = skillRow->channel_think();
+	DriveSkillCastPhase(SkillCastEvent::kEnterChannel, fsmCtx);
 }
 
 void SkillSystem::HandleChannelThink(entt::entity casterEntity, uint64_t skillId) {
@@ -505,13 +655,6 @@ void SkillSystem::HandleChannelFinish(const entt::entity casterEntity, const uin
 uint32_t SkillSystem::ValidateTarget(const entt::entity casterEntity, const ::ReleaseSkillRequest* request, const entt::entity target) {
 	LookupSkillOrReturnError(request->skill_table_id());
 
-	// Validate target ID
-	if (!skillRow->targeting_mode().empty() && request->target_id() <= 0) {
-		return MAKE_ERROR_MSG(kSkillInvalidTargetId,
-			"target_id=" << request->target_id()
-			<< " skill_table_id=" << request->skill_table_id());
-	}
-
 	for (auto& tabSkillType : skillRow->targeting_mode()) {
 		const auto targetingMode = (1 << tabSkillType);
 
@@ -522,6 +665,12 @@ uint32_t SkillSystem::ValidateTarget(const entt::entity casterEntity, const ::Re
 
 		if (targetingMode != kTargetedSkill) {
 			continue;
+		}
+
+		if (request->target_id() <= 0) {
+			return MAKE_ERROR_MSG(kSkillInvalidTargetId,
+				"target_id=" << request->target_id()
+				<< " skill_table_id=" << request->skill_table_id());
 		}
 
 		// 目标类型、同场景与冻结条件已由 ValidateSkillTargetEntity 统一校验。
@@ -558,15 +707,13 @@ uint32_t CheckTimerPhase(const entt::entity casterEntity, const SkillTable* skil
 
 	if (!phase->timer.IsActive())
 	{
-		// 组件在、定时器却没在跑:某条路径开始了相位却没挂上定时器,或结束时漏摘。
-		// 它的结束回调永远不会来了,不能因此把施法者永久卡住:记错误,然后按「这次施法结束」
-		// 收尾 —— 与打断分支同样处理。只摘这一个组件不够:残留的是引导结束定时器时,
-		// 周期 think 定时器还在跑;这次施法的上下文也没人收,会一直留在上下文表里。
+		// 组件在、定时器却没在跑:通过 FSM kFinish 统一收尾旧上下文并摘除全部相位定时器。
 		LOG_ERROR << "Stale skill phase component without active timer. caster=" << entt::to_integral(casterEntity)
 			<< " skill_id=" << phase->skillId << " skill_table_id=" << skillTable->id();
-		const auto staleSkillId = phase->skillId;
-		SkillSystem::HandleSkillFinish(casterEntity, staleSkillId);
-		EndAllSkillPhases(casterEntity);
+		SkillCastFsmCtx fsmCtx;
+		fsmCtx.caster = casterEntity;
+		fsmCtx.skillId = phase->skillId;
+		DriveSkillCastPhase(SkillCastEvent::kFinish, fsmCtx);
 		return kSuccess;
 	}
 
@@ -579,14 +726,13 @@ uint32_t CheckTimerPhase(const entt::entity casterEntity, const SkillTable* skil
 
 	LOG_INFO << "Immediate skill: " << skillTable->id()
 		<< " is currently in phase. Sending interrupt message.";
-	SkillSystem::SendSkillInterruptedMessage(casterEntity, skillTable->id());
-	// 被打断的那一次施法,它的 SkillContext 是在 ReleaseSkill 里建的,
-	// 只有 HandleSkillFinish 会删。相位组件摘掉之后回调再也不会触发,
-	// 上下文就永久留在施法者的 SkillContextCompMap 里 ——
-	// 玩家每打断一次泄漏一条,无上界。先收口上下文,再结束这次施法的全部相位。
-	const auto interruptedSkillId = phase->skillId;
-	SkillSystem::HandleSkillFinish(casterEntity, interruptedSkillId);
-	EndAllSkillPhases(casterEntity);
+	// 通过 FSM kInterrupt 统一广播打断消息、收口上下文并结束这次施法的全部相位。
+	SkillCastFsmCtx fsmCtx;
+	fsmCtx.caster = casterEntity;
+	fsmCtx.skillId = phase->skillId;
+	fsmCtx.interruptNotifySkillTableId = skillTable->id();
+	fsmCtx.emitInterruptNotice = true;
+	DriveSkillCastPhase(SkillCastEvent::kInterrupt, fsmCtx);
 	return kSuccess;
 }
 
@@ -653,30 +799,19 @@ void SkillSystem::SetupCastingTimer(entt::entity casterEntity, const SkillTable*
 		LOG_ERROR << "SetupCastingTimer: invalid caster or skill table, caster=" << entt::to_integral(casterEntity);
 		return;
 	}
-	// 前摇到点后进入哪种施放:普通技能直接结算,引导技能进入引导相位。
-	// 其它类型没有前摇相位,不挂组件 —— 以前先懒建一个空的 CastingTimerComp,
-	// 留给下一次施法的 CheckCasting 去摘(F051)。
-	void (*onCastPoint)(entt::entity, uint64_t) = nullptr;
-	if (IsSkillOfType(skillTable->id(), kGeneralSkill)) {
-		onCastPoint = &SkillSystem::HandleGeneralSkillSpell;
-	}
-	else if (IsSkillOfType(skillTable->id(), kChannelSkill)) {
-		onCastPoint = &SkillSystem::HandleChannelSkillSpell;
-	}
-	if (onCastPoint == nullptr) {
+	const bool isGeneral = IsSkillOfType(skillTable->id(), kGeneralSkill);
+	const bool isChannel = !isGeneral && IsSkillOfType(skillTable->id(), kChannelSkill);
+	if (!isGeneral && !isChannel) {
 		return;
 	}
 
-	// 前摇相位开始(按需状态,生命周期见 skill_comp.h)
-	auto& castingTimerComp = tlsEcs.actorRegistry.emplace_or_replace<CastingTimerComp>(casterEntity);
-	castingTimerComp.skillId = skillId;
-	castingTimerComp.timer.RunAfter(skillTable->cast_point(),
-		[casterEntity = casterEntity, skillId = skillId, onCastPoint] {
-			// 前摇结束:先摘相位组件再进入施放。在自身定时器回调里销毁组件是安全的 ——
-			// TimerTaskComp::OnTimer 调完回调就返回,不再碰组件。
-			tlsEcs.actorRegistry.remove<CastingTimerComp>(casterEntity);
-			onCastPoint(casterEntity, skillId);
-		});
+	// 前摇相位开始(经由施法相位 FSM 驱动,统一装卸 CastingTimerComp)
+	SkillCastFsmCtx fsmCtx;
+	fsmCtx.caster = casterEntity;
+	fsmCtx.skillId = skillId;
+	fsmCtx.primaryDurationSec = skillTable->cast_point();
+	fsmCtx.channelCastPoint = isChannel;
+	DriveSkillCastPhase(SkillCastEvent::kStartCast, fsmCtx);
 }
 
 void SkillSystem::SendSkillInterruptedMessage(const entt::entity casterEntity, const uint32_t skillTableId) {
@@ -694,6 +829,42 @@ void SkillSystem::SendSkillInterruptedMessage(const entt::entity casterEntity, c
 		SceneSkillClientPlayerNotifySkillInterruptedMessageId,
 		skillInterruptedS2C
 	);
+}
+
+void SkillSystem::InterruptActiveCast(const entt::entity casterEntity) {
+	if (!tlsEcs.actorRegistry.valid(casterEntity)) {
+		return;
+	}
+
+	uint64_t activeSkillId = 0;
+	bool wasActiveTimer = false;
+	auto probe = [&](const auto* phase) {
+		if (phase != nullptr && activeSkillId == 0) {
+			activeSkillId = phase->skillId;
+			wasActiveTimer = phase->timer.IsActive();
+		}
+	};
+	probe(tlsEcs.actorRegistry.try_get<CastingTimerComp>(casterEntity));
+	probe(tlsEcs.actorRegistry.try_get<ChannelFinishTimerComp>(casterEntity));
+	probe(tlsEcs.actorRegistry.try_get<RecoveryTimerComp>(casterEntity));
+
+	const bool hasAnyPhase = activeSkillId != 0 ||
+		tlsEcs.actorRegistry.any_of<CastingTimerComp, RecoveryTimerComp,
+			ChannelFinishTimerComp, ChannelIntervalTimerComp>(casterEntity);
+	if (!hasAnyPhase) {
+		return;
+	}
+
+	SkillCastFsmCtx fsmCtx;
+	fsmCtx.caster = casterEntity;
+	fsmCtx.skillId = activeSkillId;
+	fsmCtx.emitInterruptNotice = wasActiveTimer;
+	if (wasActiveTimer && activeSkillId != 0) {
+		if (const auto context = FindCasterSkillContext(casterEntity, activeSkillId)) {
+			fsmCtx.interruptNotifySkillTableId = context->skilltableid();
+		}
+	}
+	DriveSkillCastPhase(SkillCastEvent::kInterrupt, fsmCtx);
 }
 
 void SkillSystem::TriggerSkillEffect(const entt::entity casterEntity, const uint64_t skillId) {

@@ -64,9 +64,10 @@ const (
 
 // Result 是一次送检的结果。
 type Result struct {
-	Verdict  Verdict
-	Masked   string
-	Category cgpb.TextCategory
+	Verdict               Verdict
+	Masked                string
+	Category              cgpb.TextCategory
+	PendingPlatformReview bool
 }
 
 // Usable 报告这段文字能不能用(原文或打码后的)。
@@ -122,14 +123,71 @@ func NewWithClient(rpc cgpb.ContentGuardClient, timeout time.Duration) *Client {
 // Enabled 报告是否真的会送检。
 func (c *Client) Enabled() bool { return c != nil && c.rpc != nil }
 
+type accountCtxKey struct{}
+
+// WithAccount 在 ctx 上附带玩家的渠道账号(如 wx_<openid> / dy_<openid>),供 content_guard 路由外部平台审核接口。
+func WithAccount(ctx context.Context, account string) context.Context {
+	if account == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, accountCtxKey{}, account)
+}
+
+func accountFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	acc, _ := ctx.Value(accountCtxKey{}).(string)
+	return acc
+}
+
 // Check 送检一段文字。空文字不送检,直接放行。
 func (c *Client) Check(ctx context.Context, scene cgpb.TextScene, playerID uint64, text string) Result {
+	return c.doCheck(ctx, scene, playerID, text, false)
+}
+
+// CheckWorld 送检世界频道文字,允许 content_guard 在短超时后先放行并由调用方异步调用 CheckPlatform 复核。
+func (c *Client) CheckWorld(ctx context.Context, playerID uint64, text string) Result {
+	return c.doCheck(ctx, cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, playerID, text, true)
+}
+
+// CheckPlatform 同步调起外部平台复检(用于世界频道短超时先放行后的异步补审撤回)。
+func (c *Client) CheckPlatform(ctx context.Context, scene cgpb.TextScene, playerID uint64, text string) Result {
+	if text == "" || !c.Enabled() {
+		return Result{Verdict: Pass}
+	}
+	budget := c.timeout
+	if budget < 3*time.Second {
+		budget = 3 * time.Second
+	}
+	callCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	out, err := c.rpc.CheckPlatformText(callCtx, &cgpb.CheckTextRequest{
+		Scene:    scene,
+		Text:     text,
+		PlayerId: playerID,
+		Account:  accountFromContext(ctx),
+	})
+	if err != nil {
+		c.logFailure(scene, err)
+		return Result{Verdict: Unavailable}
+	}
+	return FromResponse(out)
+}
+
+func (c *Client) doCheck(ctx context.Context, scene cgpb.TextScene, playerID uint64, text string, asyncPlatform bool) Result {
 	if text == "" || !c.Enabled() {
 		return Result{Verdict: Pass}
 	}
 	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	out, err := c.rpc.CheckText(callCtx, &cgpb.CheckTextRequest{Scene: scene, Text: text, PlayerId: playerID})
+	out, err := c.rpc.CheckText(callCtx, &cgpb.CheckTextRequest{
+		Scene:         scene,
+		Text:          text,
+		PlayerId:      playerID,
+		Account:       accountFromContext(ctx),
+		AsyncPlatform: asyncPlatform,
+	})
 	if err != nil {
 		c.logFailure(scene, err)
 		if c.optional {
@@ -145,10 +203,15 @@ func (c *Client) Check(ctx context.Context, scene cgpb.TextScene, playerID uint6
 func FromResponse(out *cgpb.CheckTextResponse) Result {
 	switch out.GetVerdict() {
 	case cgpb.TextVerdict_TEXT_VERDICT_PASS:
-		return Result{Verdict: Pass}
+		return Result{Verdict: Pass, PendingPlatformReview: out.GetPendingPlatformReview()}
 	case cgpb.TextVerdict_TEXT_VERDICT_MASKED:
 		if out.GetMaskedText() != "" {
-			return Result{Verdict: Masked, Masked: out.GetMaskedText(), Category: out.GetCategory()}
+			return Result{
+				Verdict:               Masked,
+				Masked:                out.GetMaskedText(),
+				Category:              out.GetCategory(),
+				PendingPlatformReview: out.GetPendingPlatformReview(),
+			}
 		}
 	}
 	return Result{Verdict: Reject, Category: out.GetCategory()}

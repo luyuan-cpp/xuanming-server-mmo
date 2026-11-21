@@ -65,7 +65,6 @@ include_directories(
 
 set(SOURCE_FILES
     ecs_context.cpp
-    lua_state.cpp
     node_context_manager.cpp
     redis_manager.cpp
     trace_context_tls.cpp

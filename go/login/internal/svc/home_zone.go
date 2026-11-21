@@ -7,6 +7,7 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/homezone"
 	dspb "proto/data_service"
+	"shared/dsclient"
 )
 
 // initHomeZoneResolver 给 CreatePlayer / Login / EnterGame 装上 player_route 映射的客户端。
@@ -19,7 +20,7 @@ import (
 // 让建角失败 —— 所以这里按 ERROR 而不是 WARN 报,运维必须看到。
 func (s *ServiceContext) initHomeZoneResolver() {
 	if s.DataServiceClient == nil && hasRpcTarget(config.AppConfig.DataServiceRpc) {
-		conn := zrpc.MustNewClient(config.AppConfig.DataServiceRpc)
+		conn := zrpc.MustNewClient(dsclient.Conf(config.AppConfig.DataServiceRpc))
 		s.DataServiceClient = dspb.NewDataServiceClient(conn.Conn())
 	}
 	hz := config.AppConfig.HomeZone

@@ -215,6 +215,9 @@ func (c Config) Validate() error {
 	if err := checkBaseURL("Payment.Mall.BaseURL", p.Mall.BaseURL, true); err != nil {
 		return err
 	}
+	if p.Mall.TimeoutMs < 0 || (p.Mall.TimeoutMs > 0 && (p.Mall.TimeoutMs < 500 || p.Mall.TimeoutMs > 15000)) {
+		return errors.New("payment config: Payment.Mall.TimeoutMs must be 0 (default) or between 500 and 15000")
+	}
 	if p.WechatPay.Enabled || p.Alipay.Enabled {
 		if err := checkBaseURL("Payment.NotifyBaseURL", p.NotifyBaseURL, relaxed); err != nil {
 			return err

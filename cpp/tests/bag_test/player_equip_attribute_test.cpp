@@ -50,6 +50,7 @@
 #include "modules/id_segment/guid_segment_registry.h"
 #include "modules/mission/comp/mission_comp.h" // MissionsContainerComp(存档往返用例补齐持久化组件)
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "muduo/base/Logging.h" // Logger::setOutput:数「推面板」留下的那条 WARN(见 PanelPushProbe)
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -905,6 +906,7 @@ protected:
 		const auto entity = tlsEcs.actorRegistry.create();
 		players.push_back(entity);
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, kPlayerIdBase + players.size());
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		auto &base = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(entity);
 		base.set_health(kFarAboveAnyMax);
 		base.set_mana(kFarAboveAnyMax);
@@ -934,6 +936,7 @@ protected:
 		const auto entity = tlsEcs.actorRegistry.create();
 		players.push_back(entity);
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, kPlayerIdBase + players.size());
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		auto &base = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(entity);
 		base.set_health(kFarAboveAnyMax);
 		base.set_mana(kFarAboveAnyMax);

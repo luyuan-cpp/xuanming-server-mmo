@@ -8,7 +8,7 @@
 
 固定上游 v3.9.6，提交 `49c29032e18df784f1a75123d90647bc8f74cedb`。`java/gm_admin` 保存自有扩展、配置模板及构建脚本；上游源码和构建产物放 `build/gm-admin-upstream`，由准备脚本校验提交后应用扩展，避免把第三方源码混入本仓改动。独立管理库保存账号、权限及管理日志，不跨库 SQL 修改玩家。
 
-接入范围：区服只读列表、按玩家 ID 精确查询公开资料及在线状态、个人邮件附件发银两和物品，以及已有七项玩家 GM：增加货币、扣除货币、封禁/解禁货币获取、设置等级、发放宝宝、发放物品。玩家 ID、金额、邮件号保持十进制字符串，不经过 JavaScript Number。查询不返回登录令牌或账号认证材料。
+接入范围：区服只读列表、按玩家 ID 精确查询公开资料及在线状态、个人邮件附件发货币（按权威 `CurrencyType` 目录支持银两/灵石/绑定灵石）和物品，以及已有七项玩家 GM：增加货币、扣除货币、封禁/解禁货币获取、设置等级、发放宝宝、发放物品。玩家 ID、金额、邮件号保持十进制字符串，不经过 JavaScript Number。查询不返回登录令牌或账号认证材料。审计列表支持按玩家 ID / 状态筛选与分页，核对弹窗可查看完整的 `gm_command_audit` 状态变更轨迹。
 
 ## 七项在线玩家 GM
 
@@ -16,9 +16,9 @@
 
 管理员在网页选择操作、币种及参数，先创建冻结草稿再确认；草稿有效期五分钟。币种目录来自权威 `CurrencyType` 描述，当前包括银两、灵石、绑定灵石。等级沿用现有 1–85 范围，直接发物品沿用单次 99 个上限；邮件附件使用自身规则。
 
-后台从可信 PlayerLocator 定位当前会话，再选择部署配置中的 `node_id -> host:port` 映射，浏览器不能提供地址。专用 `MMORPG_GM_PLAYER_COMMAND_SECRET` 与原停机/实体检查密钥分离，Java 使用 `GM_SCENE_ADMIN_SECRET`；HMAC 绑定完整方法、节点、操作者、冻结时间、nonce 和清空 auth 后的确定性 protobuf SHA-256。
+后台从可信 PlayerLocator 定位当前会话，优先命中静态部署映射 `GM_SCENE_TARGETS_JSON`（用于本机 Docker 回环端口映射等静态覆盖），未命中时可通过可选配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）经 etcd v3 `/v3/kv/range` 动态发现 `SceneNodeService.rpc/` 下的场景节点 `grpcEndpoint`（跳过 `/allocated/` 占位键，拒绝无 `grpcEndpoint` 或同 `nodeId` 脑裂双注册，动态维护最多 1024 个场景连接池并在节点换址/下线时优雅关闭旧连接），浏览器永远不能提供地址。专用 `MMORPG_GM_PLAYER_COMMAND_SECRET` 与原停机/实体检查密钥分离，Java 使用 `GM_SCENE_ADMIN_SECRET`；HMAC 绑定完整方法、节点、操作者、冻结时间、nonce 和清空 auth 后的确定性 protobuf SHA-256。C++ 公共 GM 安全基元已统一上提到引擎层 `cpp/libs/engine/core/security/gm_security.h`（消除 scene 对 `gate_security.h` 的跨节点相对包含），`CommandCache` 按「草稿 5 分钟有效期 + 允许时钟偏差」安全回收已绝不可能再通过 `Verify` 的旧条目（未过期条目绝不提前淘汰），`BlockCurrency`/`UnblockCurrency` 成功后立即调用 `RequestKeyProgressSave` 对齐其余五项操作的持久化时机。
 
-玩家命令与邮件使用独立命令类型及权限。七个权限为 `gm:currency:add`、`gm:currency:deduct`、`gm:currency:block`、`gm:currency:unblock`、`gm:player:level`、`gm:pet:grant`、`gm:item:grant`，创建和发送两次均检查。直接 GM 无跨进程持久去重承诺：命令一旦进入 SENDING，超时、进程退出或 UNKNOWN 后都永久禁止同单重发；完成后只返回原 EXECUTED 记录。场景另有 nonce 与进程内命令缓存，但不把它宣称为跨重启 exactly-once。EXECUTED 表示同步域操作已成功，落盘仍走现有场景持久化流程。
+玩家命令与邮件使用独立命令类型及权限。七个权限为 `gm:currency:add`、`gm:currency:deduct`、`gm:currency:block`、`gm:currency:unblock`、`gm:player:level`、`gm:pet:grant`、`gm:item:grant`，创建和发送两次均检查（发送接口在查库前先验证至少持有一项玩家 GM 权限，消除 ID 探测预言机）。草稿 5 分钟有效期在 `GmCommandJournal` 的 `FOR UPDATE` 事务内基于统一时钟原子拦截，超时草稿不会转入 `SENDING`。管理库迁移 `GmInstallation`（版本 1–5）通过事务首行占位 `gm_install` 主键支持多副本并发安全启动，并幂等创建查询与审计复合索引。直接 GM 无跨进程持久去重承诺：命令一旦进入 SENDING，超时、进程退出或 UNKNOWN 后都永久禁止同单重发；完成后只返回原 EXECUTED 记录。场景另有 nonce 与进程内命令缓存，但不把它宣称为跨重启 exactly-once。EXECUTED 表示同步域操作已成功，落盘仍走现有场景持久化流程。
 
 仓库还包含收件箱处置、资产回收、排行榜、交易人工处置、区服公告等管理 API；它们不是这七项客户端 GM，也没有统一文本命令解释器。本轮未接入这些额外操作的网页流程，不把它们列为已完成。
 
@@ -42,6 +42,6 @@
 
 验收分别覆盖：鉴权与越权拒绝、真实协议签名、64 位 ID、草稿幂等、并发发送、邮件超时同号重放、直接 GM 未知结果禁止重发、审计持久化、前端构建及真实登录。网页地址为 `http://127.0.0.1:3101/`，已完成原生验证码登录、退出重登、十二项权限展示和七项操作目录检查，并经真实 DataService 查询不存在的角色验证读取链路。集成检查不对用户已有角色发放资产。独立 mail 已完成正式迁移、写者登记及健康检查；原有游戏容器未重启。
 
-用户最新决定是先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建。现役手绘表挂载缺少新节点必读的 `equipartifact.json`、`equipv1affix.json`，其余装备、技能表也有变化；本轮不更新表快照、manifest 或 Compose，不执行 Scene stage/apply 或运行期探针。玩家 GM 和邮件写通道因此保持禁用，网页本身可以登录和查看。表差异见 `build/verification/gm-admin-20261117/scene/table-compatibility-review.json`，部署入口的缺表检查会在配置写入前拒绝继续。
+2026-11-20 状态更新：随着 11-18 全量重建完成并补齐 `equipartifact.json` / `equipv1affix.json`、`deploy/debug/compose.game.yml` 补入 GM Scene 环境变量与回环端口 `127.0.0.1:2355:50001`、以及 `gm_rpc_startup.py` / `gm_admin_startup.py` / `gm_scene_promotion.py` / `scene-deploy.py` 支持重建后提升与重启自愈，本机 Scene 写通道与独立 Mail 通道均已激活并通过 `probe_scene.py --execute`（未签名 `PERMISSION_DENIED`、合法签名无副作用业务拒绝 `OK` + `tipId=1006`）。同日完成服务端 C++ 与 GM 前后端强一致/水平扩展标准收口（详见 `docs/PROGRESS.md`），协议生成/编译/单测/冒烟移交 Codex 验证。
 
-本模块首先接当前 C++/Go/Java 网关混合服务端。独立 Java 全服务版使用不同内部管理协议，不能假称已兼容；需独立适配并登记 PARITY。
+本模块首先接当前 C++/Go/Java 网关混合服务端。独立 Java 全服务版使用不同内部管理协议，保留在 `PARITY.md` TODO，不假称已兼容。

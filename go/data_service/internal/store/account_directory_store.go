@@ -125,6 +125,7 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 		keys  []string
 	}{
 		{&dbpb.AccountDirectory{}, AccountDirectoryTableName, []string{"account"}},
+		{&dbpb.AccountChannelIdentity{}, AccountChannelIdentityTableName, []string{"account"}},
 		{&dbpb.AccountRole{}, AccountRoleTableName, []string{"player_id"}},
 		{&dbpb.AccountRoleRemoval{}, AccountRoleRemovalTableName, []string{"player_id"}},
 		{&dbpb.AccountRoleRef{}, AccountRoleRefTableName, []string{"account", "player_id"}},
@@ -148,16 +149,25 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 			return fmt.Errorf("账号目录必须逐字节比较: %s", shape.table)
 		}
 	}
-	// 回执只存账号摘要,没有 account 列,单独核列与主键。
-	if err := assertColumnsPresent(ctx, conn, name, &dbpb.AccountDeletionReceipt{}, AccountDeletionReceiptTableName); err != nil {
-		return err
-	}
-	keys, err := primaryKeyColumns(ctx, conn, name, AccountDeletionReceiptTableName)
-	if err != nil {
-		return err
-	}
-	if !slices.Equal(keys, []string{"account_digest"}) {
-		return fmt.Errorf("账号目录主键不符: %s", AccountDeletionReceiptTableName)
+	// 回执与改名记录没有 account 列,单独核列与主键。
+	for _, extra := range []struct {
+		model proto.Message
+		table string
+		keys  []string
+	}{
+		{&dbpb.AccountDeletionReceipt{}, AccountDeletionReceiptTableName, []string{"account_digest"}},
+		{&dbpb.AccountRoleRename{}, AccountRoleRenameTableName, []string{"player_id"}},
+	} {
+		if err := assertColumnsPresent(ctx, conn, name, extra.model, extra.table); err != nil {
+			return err
+		}
+		keys, err := primaryKeyColumns(ctx, conn, name, extra.table)
+		if err != nil {
+			return err
+		}
+		if !slices.Equal(keys, extra.keys) {
+			return fmt.Errorf("账号目录主键不符: %s", extra.table)
+		}
 	}
 	return nil
 }

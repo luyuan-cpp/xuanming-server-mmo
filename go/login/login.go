@@ -25,22 +25,24 @@ import (
 	"shared/callerauth"
 	"shared/clockcheck"
 	"shared/drainproof"
+	"shared/generated/table"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/shutdownbudget"
+	"shared/tablebundle"
 	"shared/tracing"
 	"strconv"
 	"syscall"
 	"time"
 
+	"context"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -55,6 +57,7 @@ var maintenanceDir = flag.String("maintenance-drain-dir", "", "私有stop/report
 var maintenanceSHA = flag.String("maintenance-drain-sha256", "", "runtime Receipt原文件SHA256")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+var validateTablesDir = flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析 + 角色名/职业表校验)后退出")
 
 const nodeType = login_proto.ENodeType_LoginNodeService
 
@@ -66,6 +69,9 @@ func main() {
 	if *showVersion {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("login", *validateTablesDir, false, func(_ string, ts *table.TableSet) (func(), error) {
+		return nil, svc.ValidateLoginTables(ts)
+	})
 	clockcheck.MustPass("login")
 
 	// Load config file

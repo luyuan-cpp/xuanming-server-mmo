@@ -34,6 +34,10 @@ class Service;
 
 // Prometheus /metrics 出口(core/metrics/metrics_http_exporter.h),完整定义只在 node.cpp 里需要。
 class MetricsHttpExporter;
+namespace table_bundle
+{
+class TableBundleManager;
+}
 // span 导出线程(core/tracing/otlp_span_exporter.h,docs/design/distributed-tracing.md §10.3),完整定义只在 node.cpp 里需要。
 namespace tracing
 {
@@ -362,6 +366,9 @@ protected:
     std::unique_ptr<tracing::OtlpSpanExporter> spanExporter_;
     // 热关停的独立 etcd 连接:InitKillSwitch 创建,CloseTransportOwnersInLoop 里与注册那条传输一起 Shutdown(loop 仍在运行)。
     std::unique_ptr<KillSwitchEtcdSync> killSwitchSync_;
+    // 配置表表包加载与运行期热更管理器(docs/design/config-table-hot-reload.md §8.2):
+    // 随 Node 存活,FinalizeShutdownInLoop 时 Stop(),FinalizeTeardownInLoop 时释放。
+    std::shared_ptr<table_bundle::TableBundleManager> tableBundleManager_;
     TimerTaskComp serviceHealthMonitorTimer;
     // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——
@@ -529,6 +536,7 @@ struct DependencyGate
                                 }
 
                                 ready = true;
+                                probeTimer.Cancel();
                                 LOG_INFO << nodeName << " dependency ready: all required nodes discovered. "
                                          << "required=" << Node::FormatNodeTypeNames(requiredNodeTypes)
                                          << " conditions=" << extraConditions.size();

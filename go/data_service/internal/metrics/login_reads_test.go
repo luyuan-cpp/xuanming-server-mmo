@@ -21,7 +21,10 @@ func TestLoginReadClosedSets(t *testing.T) {
 	}{
 		{"homeZoneRPCs", homeZoneRPCs, []string{"home", "batch"}},
 		{"homeZoneReadResults", homeZoneReadResults, []string{"ok", "not_found", "error"}},
-		{"accountDirectoryRPCs", accountDirectoryRPCs, []string{"read", "create", "lookup", "repair", "remove"}},
+		{"accountDirectoryRPCs", accountDirectoryRPCs, []string{
+			"read", "create", "lookup", "repair", "remove",
+			"deletion_request", "deletion_cancel", "deletion_claim", "deletion_finish",
+		}},
 		{"accountDirectoryResults", accountDirectoryResults, []string{"ok", "not_found", "rejected", "error"}},
 	} {
 		if len(tc.got) != len(tc.want) {
@@ -35,7 +38,7 @@ func TestLoginReadClosedSets(t *testing.T) {
 	}
 }
 
-// TestPrimeLoginReadsCreatesAllSeries:PrimeLoginReads 之后 home_zone_read_seconds 6 条、account_directory_rpc_seconds 20 条
+// TestPrimeLoginReadsCreatesAllSeries:PrimeLoginReads 之后 home_zone_read_seconds 6 条、account_directory_rpc_seconds 36 条
 // 全部存在,且没有封闭集合之外的组合;home_zone_batch_ids 无 label,注册即导出一条。
 // 只断言存在与形状,不断言计数为 0:同一进程里其余用例(或 -count=N 的上一轮)可能已经打过点。
 func TestPrimeLoginReadsCreatesAllSeries(t *testing.T) {
@@ -49,7 +52,7 @@ func TestPrimeLoginReadsCreatesAllSeries(t *testing.T) {
 		count   int
 	}{
 		{"data_service_home_zone_read_seconds", homeZoneRPCs, homeZoneReadResults, 6},
-		{"data_service_account_directory_rpc_seconds", accountDirectoryRPCs, accountDirectoryResults, 20},
+		{"data_service_account_directory_rpc_seconds", accountDirectoryRPCs, accountDirectoryResults, 36},
 	} {
 		want := map[string]bool{}
 		for _, rpc := range tc.rpcs {

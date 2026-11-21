@@ -42,6 +42,22 @@ struct RoleNameRuleDescComp {
     std::string_view value;
 };
 
+struct RoleNameRuleRename_cooldown_secondsComp {
+    uint32_t value;
+};
+
+struct RoleNameRuleOld_name_hold_secondsComp {
+    uint32_t value;
+};
+
+struct RoleNameRuleRename_item_idComp {
+    uint32_t value;
+};
+
+struct RoleNameRuleRename_item_countComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -67,4 +83,16 @@ inline RoleNameRuleMax_generate_attemptsComp MakeRoleNameRuleMax_generate_attemp
 }
 inline RoleNameRuleDescComp MakeRoleNameRuleDescComp(const RoleNameRuleTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline RoleNameRuleRename_cooldown_secondsComp MakeRoleNameRuleRename_cooldown_secondsComp(const RoleNameRuleTable& row) {
+    return { row.rename_cooldown_seconds() };
+}
+inline RoleNameRuleOld_name_hold_secondsComp MakeRoleNameRuleOld_name_hold_secondsComp(const RoleNameRuleTable& row) {
+    return { row.old_name_hold_seconds() };
+}
+inline RoleNameRuleRename_item_idComp MakeRoleNameRuleRename_item_idComp(const RoleNameRuleTable& row) {
+    return { row.rename_item_id() };
+}
+inline RoleNameRuleRename_item_countComp MakeRoleNameRuleRename_item_countComp(const RoleNameRuleTable& row) {
+    return { row.rename_item_count() };
 }

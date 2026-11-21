@@ -65,4 +65,14 @@ func TestValidateWorldCooldownAndHistoryWindowAgainstRetention(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 	cfg.HistoryTTLSeconds = constants.MaxHistoryTTLSeconds + 1
 	require.ErrorContains(t, cfg.Validate(), "HistoryTTLSeconds")
+
+	cfg = valid()
+	cfg.WorldMinLevel = -1
+	require.ErrorContains(t, cfg.Validate(), "WorldMinLevel")
+	cfg = valid()
+	cfg.DuplicateSpamWindowMs = 600001
+	require.ErrorContains(t, cfg.Validate(), "DuplicateSpamWindowMs")
+	cfg = valid()
+	cfg.NewAccountAgeHours = 721
+	require.ErrorContains(t, cfg.Validate(), "NewAccountAgeHours")
 }

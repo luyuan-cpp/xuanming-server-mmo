@@ -183,6 +183,50 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int RENAME_COOLDOWN_SECONDS_FIELD_NUMBER = 8;
+  private int renameCooldownSeconds_ = 0;
+  /**
+   * <code>uint32 rename_cooldown_seconds = 8;</code>
+   * @return The renameCooldownSeconds.
+   */
+  @java.lang.Override
+  public int getRenameCooldownSeconds() {
+    return renameCooldownSeconds_;
+  }
+
+  public static final int OLD_NAME_HOLD_SECONDS_FIELD_NUMBER = 9;
+  private int oldNameHoldSeconds_ = 0;
+  /**
+   * <code>uint32 old_name_hold_seconds = 9;</code>
+   * @return The oldNameHoldSeconds.
+   */
+  @java.lang.Override
+  public int getOldNameHoldSeconds() {
+    return oldNameHoldSeconds_;
+  }
+
+  public static final int RENAME_ITEM_ID_FIELD_NUMBER = 10;
+  private int renameItemId_ = 0;
+  /**
+   * <code>uint32 rename_item_id = 10;</code>
+   * @return The renameItemId.
+   */
+  @java.lang.Override
+  public int getRenameItemId() {
+    return renameItemId_;
+  }
+
+  public static final int RENAME_ITEM_COUNT_FIELD_NUMBER = 11;
+  private int renameItemCount_ = 0;
+  /**
+   * <code>uint32 rename_item_count = 11;</code>
+   * @return The renameItemCount.
+   */
+  @java.lang.Override
+  public int getRenameItemCount() {
+    return renameItemCount_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -218,6 +262,18 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, desc_);
     }
+    if (renameCooldownSeconds_ != 0) {
+      output.writeUInt32(8, renameCooldownSeconds_);
+    }
+    if (oldNameHoldSeconds_ != 0) {
+      output.writeUInt32(9, oldNameHoldSeconds_);
+    }
+    if (renameItemId_ != 0) {
+      output.writeUInt32(10, renameItemId_);
+    }
+    if (renameItemCount_ != 0) {
+      output.writeUInt32(11, renameItemCount_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -247,6 +303,22 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, desc_);
+    }
+    if (renameCooldownSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, renameCooldownSeconds_);
+    }
+    if (oldNameHoldSeconds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, oldNameHoldSeconds_);
+    }
+    if (renameItemId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(10, renameItemId_);
+    }
+    if (renameItemCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(11, renameItemCount_);
     }
     return size;
   }
@@ -286,6 +358,14 @@ private static final long serialVersionUID = 0L;
         != other.getMaxGenerateAttempts()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getRenameCooldownSeconds()
+        != other.getRenameCooldownSeconds()) return false;
+    if (getOldNameHoldSeconds()
+        != other.getOldNameHoldSeconds()) return false;
+    if (getRenameItemId()
+        != other.getRenameItemId()) return false;
+    if (getRenameItemCount()
+        != other.getRenameItemCount()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -311,6 +391,14 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getMaxGenerateAttempts();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + RENAME_COOLDOWN_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getRenameCooldownSeconds();
+    hash = (37 * hash) + OLD_NAME_HOLD_SECONDS_FIELD_NUMBER;
+    hash = (53 * hash) + getOldNameHoldSeconds();
+    hash = (37 * hash) + RENAME_ITEM_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getRenameItemId();
+    hash = (37 * hash) + RENAME_ITEM_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getRenameItemCount();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -449,6 +537,10 @@ private static final long serialVersionUID = 0L;
       generatedSuffixLen_ = 0;
       maxGenerateAttempts_ = 0;
       desc_ = "";
+      renameCooldownSeconds_ = 0;
+      oldNameHoldSeconds_ = 0;
+      renameItemId_ = 0;
+      renameItemCount_ = 0;
       return this;
     }
 
@@ -503,6 +595,18 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.renameCooldownSeconds_ = renameCooldownSeconds_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.oldNameHoldSeconds_ = oldNameHoldSeconds_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.renameItemId_ = renameItemId_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.renameItemCount_ = renameItemCount_;
+      }
     }
 
     @java.lang.Override
@@ -541,6 +645,18 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00000040;
         onChanged();
+      }
+      if (other.getRenameCooldownSeconds() != 0) {
+        setRenameCooldownSeconds(other.getRenameCooldownSeconds());
+      }
+      if (other.getOldNameHoldSeconds() != 0) {
+        setOldNameHoldSeconds(other.getOldNameHoldSeconds());
+      }
+      if (other.getRenameItemId() != 0) {
+        setRenameItemId(other.getRenameItemId());
+      }
+      if (other.getRenameItemCount() != 0) {
+        setRenameItemCount(other.getRenameItemCount());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -603,6 +719,26 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 58
+            case 64: {
+              renameCooldownSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              oldNameHoldSeconds_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
+            case 80: {
+              renameItemId_ = input.readUInt32();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 80
+            case 88: {
+              renameItemCount_ = input.readUInt32();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 88
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -920,6 +1056,134 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private int renameCooldownSeconds_ ;
+    /**
+     * <code>uint32 rename_cooldown_seconds = 8;</code>
+     * @return The renameCooldownSeconds.
+     */
+    @java.lang.Override
+    public int getRenameCooldownSeconds() {
+      return renameCooldownSeconds_;
+    }
+    /**
+     * <code>uint32 rename_cooldown_seconds = 8;</code>
+     * @param value The renameCooldownSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRenameCooldownSeconds(int value) {
+
+      renameCooldownSeconds_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 rename_cooldown_seconds = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRenameCooldownSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      renameCooldownSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int oldNameHoldSeconds_ ;
+    /**
+     * <code>uint32 old_name_hold_seconds = 9;</code>
+     * @return The oldNameHoldSeconds.
+     */
+    @java.lang.Override
+    public int getOldNameHoldSeconds() {
+      return oldNameHoldSeconds_;
+    }
+    /**
+     * <code>uint32 old_name_hold_seconds = 9;</code>
+     * @param value The oldNameHoldSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOldNameHoldSeconds(int value) {
+
+      oldNameHoldSeconds_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 old_name_hold_seconds = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOldNameHoldSeconds() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      oldNameHoldSeconds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int renameItemId_ ;
+    /**
+     * <code>uint32 rename_item_id = 10;</code>
+     * @return The renameItemId.
+     */
+    @java.lang.Override
+    public int getRenameItemId() {
+      return renameItemId_;
+    }
+    /**
+     * <code>uint32 rename_item_id = 10;</code>
+     * @param value The renameItemId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRenameItemId(int value) {
+
+      renameItemId_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 rename_item_id = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRenameItemId() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      renameItemId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int renameItemCount_ ;
+    /**
+     * <code>uint32 rename_item_count = 11;</code>
+     * @return The renameItemCount.
+     */
+    @java.lang.Override
+    public int getRenameItemCount() {
+      return renameItemCount_;
+    }
+    /**
+     * <code>uint32 rename_item_count = 11;</code>
+     * @param value The renameItemCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRenameItemCount(int value) {
+
+      renameItemCount_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 rename_item_count = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRenameItemCount() {
+      bitField0_ = (bitField0_ & ~0x00000400);
+      renameItemCount_ = 0;
       onChanged();
       return this;
     }

@@ -63,4 +63,28 @@ public interface RoleNameRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 rename_cooldown_seconds = 8;</code>
+   * @return The renameCooldownSeconds.
+   */
+  int getRenameCooldownSeconds();
+
+  /**
+   * <code>uint32 old_name_hold_seconds = 9;</code>
+   * @return The oldNameHoldSeconds.
+   */
+  int getOldNameHoldSeconds();
+
+  /**
+   * <code>uint32 rename_item_id = 10;</code>
+   * @return The renameItemId.
+   */
+  int getRenameItemId();
+
+  /**
+   * <code>uint32 rename_item_count = 11;</code>
+   * @return The renameItemCount.
+   */
+  int getRenameItemCount();
 }

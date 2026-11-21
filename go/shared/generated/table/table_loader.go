@@ -2,804 +2,1012 @@
 package table
 
 import (
-    "fmt"
-    "log"
-    "sync"
+	"fmt"
+	"log"
+	"sync"
+	"sync/atomic"
 )
 
-var loadSuccessCallback func()
+// SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
+const SchemaDigest = "de4be939691ab0e3"
+
+var hotReloadableTables = map[string]bool{
+	"ActivitySchedule": true,
+	"ActivityVitalityReward": true,
+	"ActivityVitalityRule": true,
+	"Buff": true,
+	"Cooldown": true,
+	"GuildDonate": true,
+	"GuildShop": true,
+	"MessageLimiter": true,
+	"Monster": true,
+	"MysteryMerchantGoods": true,
+	"MysteryMerchantRule": true,
+	"Skill": true,
+	"SkillPermission": true,
+}
+
+var allTableNames = []string{
+	"ActivitySchedule",
+	"ActivityVitalityReward",
+	"ActivityVitalityRule",
+	"ActorActionCombatState",
+	"ActorActionState",
+	"AfkPassRule",
+	"AttributeAllocRatio",
+	"AttributeAutoPlan",
+	"AttributeDimension",
+	"AttributePool",
+	"AttributeRule",
+	"BaseScene",
+	"Buff",
+	"Class",
+	"Condition",
+	"Cooldown",
+	"Dungeon",
+	"EquipAffixPool",
+	"EquipAffixRule",
+	"EquipArtifact",
+	"EquipAttribute",
+	"EquipAttributeCap",
+	"EquipEnhance",
+	"EquipGem",
+	"EquipGemSocket",
+	"EquipSlot",
+	"EquipV1Affix",
+	"GlobalVariable",
+	"GuildActivity",
+	"GuildDonate",
+	"GuildLevel",
+	"GuildRule",
+	"GuildShop",
+	"Item",
+	"MessageLimiter",
+	"Mirror",
+	"Mission",
+	"Monster",
+	"MysteryMerchantGoods",
+	"MysteryMerchantRule",
+	"MysteryMerchantSpot",
+	"Pet",
+	"PetEntry",
+	"PetRule",
+	"PetTier",
+	"PlayMode",
+	"Reward",
+	"RoleNameRule",
+	"Skill",
+	"SkillPermission",
+	"Test",
+	"TestMultiKey",
+	"World",
+	"ZoneGroup",
+}
+
+// IsHotReloadable 按本二进制编译期名单判定该表是否允许运行期热更(cfg_hot_reload)。
+func IsHotReloadable(tableName string) bool {
+	return hotReloadableTables[tableName]
+}
+
+// TableNames 返回本二进制包含的全部表名副本(按字典序)。
+func TableNames() []string {
+	out := make([]string, len(allTableNames))
+	copy(out, allTableNames)
+	return out
+}
+
+// BundleIdentity 记录一套 TableSet 的来源与摘要身份。
+type BundleIdentity struct {
+	SchemaDigest  string
+	ContentDigest string
+	Version       uint64
+	LoadSeq       uint64
+	Source        string // "image" 或 "bundle"
+}
+
+// TableSet 持有整批不可变表快照:需要跨多张表读同一版本的业务先取 ts := table.Current() 再经 ts 读取。
+type TableSet struct {
+	Identity BundleIdentity
+	ActivitySchedule *ActivityScheduleTableManager
+	ActivityVitalityReward *ActivityVitalityRewardTableManager
+	ActivityVitalityRule *ActivityVitalityRuleTableManager
+	ActorActionCombatState *ActorActionCombatStateTableManager
+	ActorActionState *ActorActionStateTableManager
+	AfkPassRule *AfkPassRuleTableManager
+	AttributeAllocRatio *AttributeAllocRatioTableManager
+	AttributeAutoPlan *AttributeAutoPlanTableManager
+	AttributeDimension *AttributeDimensionTableManager
+	AttributePool *AttributePoolTableManager
+	AttributeRule *AttributeRuleTableManager
+	BaseScene *BaseSceneTableManager
+	Buff *BuffTableManager
+	Class *ClassTableManager
+	Condition *ConditionTableManager
+	Cooldown *CooldownTableManager
+	Dungeon *DungeonTableManager
+	EquipAffixPool *EquipAffixPoolTableManager
+	EquipAffixRule *EquipAffixRuleTableManager
+	EquipArtifact *EquipArtifactTableManager
+	EquipAttribute *EquipAttributeTableManager
+	EquipAttributeCap *EquipAttributeCapTableManager
+	EquipEnhance *EquipEnhanceTableManager
+	EquipGem *EquipGemTableManager
+	EquipGemSocket *EquipGemSocketTableManager
+	EquipSlot *EquipSlotTableManager
+	EquipV1Affix *EquipV1AffixTableManager
+	GlobalVariable *GlobalVariableTableManager
+	GuildActivity *GuildActivityTableManager
+	GuildDonate *GuildDonateTableManager
+	GuildLevel *GuildLevelTableManager
+	GuildRule *GuildRuleTableManager
+	GuildShop *GuildShopTableManager
+	Item *ItemTableManager
+	MessageLimiter *MessageLimiterTableManager
+	Mirror *MirrorTableManager
+	Mission *MissionTableManager
+	Monster *MonsterTableManager
+	MysteryMerchantGoods *MysteryMerchantGoodsTableManager
+	MysteryMerchantRule *MysteryMerchantRuleTableManager
+	MysteryMerchantSpot *MysteryMerchantSpotTableManager
+	Pet *PetTableManager
+	PetEntry *PetEntryTableManager
+	PetRule *PetRuleTableManager
+	PetTier *PetTierTableManager
+	PlayMode *PlayModeTableManager
+	Reward *RewardTableManager
+	RoleNameRule *RoleNameRuleTableManager
+	Skill *SkillTableManager
+	SkillPermission *SkillPermissionTableManager
+	Test *TestTableManager
+	TestMultiKey *TestMultiKeyTableManager
+	World *WorldTableManager
+	ZoneGroup *ZoneGroupTableManager
+}
+
+var (
+	loadSuccessCallback func()
+	currentTableSet     atomic.Pointer[TableSet]
+	commitSeq           atomic.Uint64
+	commitCallbacksMu   sync.Mutex
+	commitCallbacks     []func(*TableSet)
+)
+
+// Current 返回当前已提交的整套不可变 TableSet;尚未 LoadTables / Commit 前返回 nil。
+func Current() *TableSet {
+	return currentTableSet.Load()
+}
+
+// Prepare 从 configDir 解析全部配置表到一套全新的独立 TableSet,不修改任何现役单例。
+// 任意一张表失败立即返回错误。
+func Prepare(configDir string, useBinary bool) (*TableSet, error) {
+	ts := &TableSet{
+		Identity: BundleIdentity{
+			SchemaDigest: SchemaDigest,
+		},
+		ActivitySchedule: NewActivityScheduleTableManager(),
+		ActivityVitalityReward: NewActivityVitalityRewardTableManager(),
+		ActivityVitalityRule: NewActivityVitalityRuleTableManager(),
+		ActorActionCombatState: NewActorActionCombatStateTableManager(),
+		ActorActionState: NewActorActionStateTableManager(),
+		AfkPassRule: NewAfkPassRuleTableManager(),
+		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
+		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
+		AttributeDimension: NewAttributeDimensionTableManager(),
+		AttributePool: NewAttributePoolTableManager(),
+		AttributeRule: NewAttributeRuleTableManager(),
+		BaseScene: NewBaseSceneTableManager(),
+		Buff: NewBuffTableManager(),
+		Class: NewClassTableManager(),
+		Condition: NewConditionTableManager(),
+		Cooldown: NewCooldownTableManager(),
+		Dungeon: NewDungeonTableManager(),
+		EquipAffixPool: NewEquipAffixPoolTableManager(),
+		EquipAffixRule: NewEquipAffixRuleTableManager(),
+		EquipArtifact: NewEquipArtifactTableManager(),
+		EquipAttribute: NewEquipAttributeTableManager(),
+		EquipAttributeCap: NewEquipAttributeCapTableManager(),
+		EquipEnhance: NewEquipEnhanceTableManager(),
+		EquipGem: NewEquipGemTableManager(),
+		EquipGemSocket: NewEquipGemSocketTableManager(),
+		EquipSlot: NewEquipSlotTableManager(),
+		EquipV1Affix: NewEquipV1AffixTableManager(),
+		GlobalVariable: NewGlobalVariableTableManager(),
+		GuildActivity: NewGuildActivityTableManager(),
+		GuildDonate: NewGuildDonateTableManager(),
+		GuildLevel: NewGuildLevelTableManager(),
+		GuildRule: NewGuildRuleTableManager(),
+		GuildShop: NewGuildShopTableManager(),
+		Item: NewItemTableManager(),
+		MessageLimiter: NewMessageLimiterTableManager(),
+		Mirror: NewMirrorTableManager(),
+		Mission: NewMissionTableManager(),
+		Monster: NewMonsterTableManager(),
+		MysteryMerchantGoods: NewMysteryMerchantGoodsTableManager(),
+		MysteryMerchantRule: NewMysteryMerchantRuleTableManager(),
+		MysteryMerchantSpot: NewMysteryMerchantSpotTableManager(),
+		Pet: NewPetTableManager(),
+		PetEntry: NewPetEntryTableManager(),
+		PetRule: NewPetRuleTableManager(),
+		PetTier: NewPetTierTableManager(),
+		PlayMode: NewPlayModeTableManager(),
+		Reward: NewRewardTableManager(),
+		RoleNameRule: NewRoleNameRuleTableManager(),
+		Skill: NewSkillTableManager(),
+		SkillPermission: NewSkillPermissionTableManager(),
+		Test: NewTestTableManager(),
+		TestMultiKey: NewTestMultiKeyTableManager(),
+		World: NewWorldTableManager(),
+		ZoneGroup: NewZoneGroupTableManager(),
+	}
+	if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ActivitySchedule table failed: %w", err)
+	}
+	if err := ts.ActivityVitalityReward.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ActivityVitalityReward table failed: %w", err)
+	}
+	if err := ts.ActivityVitalityRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ActivityVitalityRule table failed: %w", err)
+	}
+	if err := ts.ActorActionCombatState.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ActorActionCombatState table failed: %w", err)
+	}
+	if err := ts.ActorActionState.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ActorActionState table failed: %w", err)
+	}
+	if err := ts.AfkPassRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AfkPassRule table failed: %w", err)
+	}
+	if err := ts.AttributeAllocRatio.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AttributeAllocRatio table failed: %w", err)
+	}
+	if err := ts.AttributeAutoPlan.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AttributeAutoPlan table failed: %w", err)
+	}
+	if err := ts.AttributeDimension.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AttributeDimension table failed: %w", err)
+	}
+	if err := ts.AttributePool.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AttributePool table failed: %w", err)
+	}
+	if err := ts.AttributeRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AttributeRule table failed: %w", err)
+	}
+	if err := ts.BaseScene.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare BaseScene table failed: %w", err)
+	}
+	if err := ts.Buff.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Buff table failed: %w", err)
+	}
+	if err := ts.Class.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Class table failed: %w", err)
+	}
+	if err := ts.Condition.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Condition table failed: %w", err)
+	}
+	if err := ts.Cooldown.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Cooldown table failed: %w", err)
+	}
+	if err := ts.Dungeon.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Dungeon table failed: %w", err)
+	}
+	if err := ts.EquipAffixPool.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipAffixPool table failed: %w", err)
+	}
+	if err := ts.EquipAffixRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipAffixRule table failed: %w", err)
+	}
+	if err := ts.EquipArtifact.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipArtifact table failed: %w", err)
+	}
+	if err := ts.EquipAttribute.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipAttribute table failed: %w", err)
+	}
+	if err := ts.EquipAttributeCap.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipAttributeCap table failed: %w", err)
+	}
+	if err := ts.EquipEnhance.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipEnhance table failed: %w", err)
+	}
+	if err := ts.EquipGem.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipGem table failed: %w", err)
+	}
+	if err := ts.EquipGemSocket.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipGemSocket table failed: %w", err)
+	}
+	if err := ts.EquipSlot.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipSlot table failed: %w", err)
+	}
+	if err := ts.EquipV1Affix.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipV1Affix table failed: %w", err)
+	}
+	if err := ts.GlobalVariable.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GlobalVariable table failed: %w", err)
+	}
+	if err := ts.GuildActivity.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildActivity table failed: %w", err)
+	}
+	if err := ts.GuildDonate.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildDonate table failed: %w", err)
+	}
+	if err := ts.GuildLevel.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildLevel table failed: %w", err)
+	}
+	if err := ts.GuildRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildRule table failed: %w", err)
+	}
+	if err := ts.GuildShop.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildShop table failed: %w", err)
+	}
+	if err := ts.Item.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Item table failed: %w", err)
+	}
+	if err := ts.MessageLimiter.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare MessageLimiter table failed: %w", err)
+	}
+	if err := ts.Mirror.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Mirror table failed: %w", err)
+	}
+	if err := ts.Mission.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Mission table failed: %w", err)
+	}
+	if err := ts.Monster.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Monster table failed: %w", err)
+	}
+	if err := ts.MysteryMerchantGoods.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare MysteryMerchantGoods table failed: %w", err)
+	}
+	if err := ts.MysteryMerchantRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare MysteryMerchantRule table failed: %w", err)
+	}
+	if err := ts.MysteryMerchantSpot.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare MysteryMerchantSpot table failed: %w", err)
+	}
+	if err := ts.Pet.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Pet table failed: %w", err)
+	}
+	if err := ts.PetEntry.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PetEntry table failed: %w", err)
+	}
+	if err := ts.PetRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PetRule table failed: %w", err)
+	}
+	if err := ts.PetTier.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PetTier table failed: %w", err)
+	}
+	if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PlayMode table failed: %w", err)
+	}
+	if err := ts.Reward.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Reward table failed: %w", err)
+	}
+	if err := ts.RoleNameRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare RoleNameRule table failed: %w", err)
+	}
+	if err := ts.Skill.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Skill table failed: %w", err)
+	}
+	if err := ts.SkillPermission.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SkillPermission table failed: %w", err)
+	}
+	if err := ts.Test.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare Test table failed: %w", err)
+	}
+	if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TestMultiKey table failed: %w", err)
+	}
+	if err := ts.World.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare World table failed: %w", err)
+	}
+	if err := ts.ZoneGroup.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare ZoneGroup table failed: %w", err)
+	}
+	return ts, nil
+}
+
+// Commit 把 Prepare 产出的整套 TableSet 提交生效:
+// 先替换全部包级单例的原子快照指针,再原子发布 Current(),最后按序回调 OnTablesCommit 监听器。
+func Commit(ts *TableSet) {
+	if ts == nil {
+		return
+	}
+	ts.Identity.LoadSeq = commitSeq.Add(1)
+	if ts.ActivitySchedule != nil {
+		ActivityScheduleTableManagerInstance.swapSnapshot(ts.ActivitySchedule.snap.Load())
+	}
+	if ts.ActivityVitalityReward != nil {
+		ActivityVitalityRewardTableManagerInstance.swapSnapshot(ts.ActivityVitalityReward.snap.Load())
+	}
+	if ts.ActivityVitalityRule != nil {
+		ActivityVitalityRuleTableManagerInstance.swapSnapshot(ts.ActivityVitalityRule.snap.Load())
+	}
+	if ts.ActorActionCombatState != nil {
+		ActorActionCombatStateTableManagerInstance.swapSnapshot(ts.ActorActionCombatState.snap.Load())
+	}
+	if ts.ActorActionState != nil {
+		ActorActionStateTableManagerInstance.swapSnapshot(ts.ActorActionState.snap.Load())
+	}
+	if ts.AfkPassRule != nil {
+		AfkPassRuleTableManagerInstance.swapSnapshot(ts.AfkPassRule.snap.Load())
+	}
+	if ts.AttributeAllocRatio != nil {
+		AttributeAllocRatioTableManagerInstance.swapSnapshot(ts.AttributeAllocRatio.snap.Load())
+	}
+	if ts.AttributeAutoPlan != nil {
+		AttributeAutoPlanTableManagerInstance.swapSnapshot(ts.AttributeAutoPlan.snap.Load())
+	}
+	if ts.AttributeDimension != nil {
+		AttributeDimensionTableManagerInstance.swapSnapshot(ts.AttributeDimension.snap.Load())
+	}
+	if ts.AttributePool != nil {
+		AttributePoolTableManagerInstance.swapSnapshot(ts.AttributePool.snap.Load())
+	}
+	if ts.AttributeRule != nil {
+		AttributeRuleTableManagerInstance.swapSnapshot(ts.AttributeRule.snap.Load())
+	}
+	if ts.BaseScene != nil {
+		BaseSceneTableManagerInstance.swapSnapshot(ts.BaseScene.snap.Load())
+	}
+	if ts.Buff != nil {
+		BuffTableManagerInstance.swapSnapshot(ts.Buff.snap.Load())
+	}
+	if ts.Class != nil {
+		ClassTableManagerInstance.swapSnapshot(ts.Class.snap.Load())
+	}
+	if ts.Condition != nil {
+		ConditionTableManagerInstance.swapSnapshot(ts.Condition.snap.Load())
+	}
+	if ts.Cooldown != nil {
+		CooldownTableManagerInstance.swapSnapshot(ts.Cooldown.snap.Load())
+	}
+	if ts.Dungeon != nil {
+		DungeonTableManagerInstance.swapSnapshot(ts.Dungeon.snap.Load())
+	}
+	if ts.EquipAffixPool != nil {
+		EquipAffixPoolTableManagerInstance.swapSnapshot(ts.EquipAffixPool.snap.Load())
+	}
+	if ts.EquipAffixRule != nil {
+		EquipAffixRuleTableManagerInstance.swapSnapshot(ts.EquipAffixRule.snap.Load())
+	}
+	if ts.EquipArtifact != nil {
+		EquipArtifactTableManagerInstance.swapSnapshot(ts.EquipArtifact.snap.Load())
+	}
+	if ts.EquipAttribute != nil {
+		EquipAttributeTableManagerInstance.swapSnapshot(ts.EquipAttribute.snap.Load())
+	}
+	if ts.EquipAttributeCap != nil {
+		EquipAttributeCapTableManagerInstance.swapSnapshot(ts.EquipAttributeCap.snap.Load())
+	}
+	if ts.EquipEnhance != nil {
+		EquipEnhanceTableManagerInstance.swapSnapshot(ts.EquipEnhance.snap.Load())
+	}
+	if ts.EquipGem != nil {
+		EquipGemTableManagerInstance.swapSnapshot(ts.EquipGem.snap.Load())
+	}
+	if ts.EquipGemSocket != nil {
+		EquipGemSocketTableManagerInstance.swapSnapshot(ts.EquipGemSocket.snap.Load())
+	}
+	if ts.EquipSlot != nil {
+		EquipSlotTableManagerInstance.swapSnapshot(ts.EquipSlot.snap.Load())
+	}
+	if ts.EquipV1Affix != nil {
+		EquipV1AffixTableManagerInstance.swapSnapshot(ts.EquipV1Affix.snap.Load())
+	}
+	if ts.GlobalVariable != nil {
+		GlobalVariableTableManagerInstance.swapSnapshot(ts.GlobalVariable.snap.Load())
+	}
+	if ts.GuildActivity != nil {
+		GuildActivityTableManagerInstance.swapSnapshot(ts.GuildActivity.snap.Load())
+	}
+	if ts.GuildDonate != nil {
+		GuildDonateTableManagerInstance.swapSnapshot(ts.GuildDonate.snap.Load())
+	}
+	if ts.GuildLevel != nil {
+		GuildLevelTableManagerInstance.swapSnapshot(ts.GuildLevel.snap.Load())
+	}
+	if ts.GuildRule != nil {
+		GuildRuleTableManagerInstance.swapSnapshot(ts.GuildRule.snap.Load())
+	}
+	if ts.GuildShop != nil {
+		GuildShopTableManagerInstance.swapSnapshot(ts.GuildShop.snap.Load())
+	}
+	if ts.Item != nil {
+		ItemTableManagerInstance.swapSnapshot(ts.Item.snap.Load())
+	}
+	if ts.MessageLimiter != nil {
+		MessageLimiterTableManagerInstance.swapSnapshot(ts.MessageLimiter.snap.Load())
+	}
+	if ts.Mirror != nil {
+		MirrorTableManagerInstance.swapSnapshot(ts.Mirror.snap.Load())
+	}
+	if ts.Mission != nil {
+		MissionTableManagerInstance.swapSnapshot(ts.Mission.snap.Load())
+	}
+	if ts.Monster != nil {
+		MonsterTableManagerInstance.swapSnapshot(ts.Monster.snap.Load())
+	}
+	if ts.MysteryMerchantGoods != nil {
+		MysteryMerchantGoodsTableManagerInstance.swapSnapshot(ts.MysteryMerchantGoods.snap.Load())
+	}
+	if ts.MysteryMerchantRule != nil {
+		MysteryMerchantRuleTableManagerInstance.swapSnapshot(ts.MysteryMerchantRule.snap.Load())
+	}
+	if ts.MysteryMerchantSpot != nil {
+		MysteryMerchantSpotTableManagerInstance.swapSnapshot(ts.MysteryMerchantSpot.snap.Load())
+	}
+	if ts.Pet != nil {
+		PetTableManagerInstance.swapSnapshot(ts.Pet.snap.Load())
+	}
+	if ts.PetEntry != nil {
+		PetEntryTableManagerInstance.swapSnapshot(ts.PetEntry.snap.Load())
+	}
+	if ts.PetRule != nil {
+		PetRuleTableManagerInstance.swapSnapshot(ts.PetRule.snap.Load())
+	}
+	if ts.PetTier != nil {
+		PetTierTableManagerInstance.swapSnapshot(ts.PetTier.snap.Load())
+	}
+	if ts.PlayMode != nil {
+		PlayModeTableManagerInstance.swapSnapshot(ts.PlayMode.snap.Load())
+	}
+	if ts.Reward != nil {
+		RewardTableManagerInstance.swapSnapshot(ts.Reward.snap.Load())
+	}
+	if ts.RoleNameRule != nil {
+		RoleNameRuleTableManagerInstance.swapSnapshot(ts.RoleNameRule.snap.Load())
+	}
+	if ts.Skill != nil {
+		SkillTableManagerInstance.swapSnapshot(ts.Skill.snap.Load())
+	}
+	if ts.SkillPermission != nil {
+		SkillPermissionTableManagerInstance.swapSnapshot(ts.SkillPermission.snap.Load())
+	}
+	if ts.Test != nil {
+		TestTableManagerInstance.swapSnapshot(ts.Test.snap.Load())
+	}
+	if ts.TestMultiKey != nil {
+		TestMultiKeyTableManagerInstance.swapSnapshot(ts.TestMultiKey.snap.Load())
+	}
+	if ts.World != nil {
+		WorldTableManagerInstance.swapSnapshot(ts.World.snap.Load())
+	}
+	if ts.ZoneGroup != nil {
+		ZoneGroupTableManagerInstance.swapSnapshot(ts.ZoneGroup.snap.Load())
+	}
+	currentTableSet.Store(ts)
+
+	commitCallbacksMu.Lock()
+	cbs := make([]func(*TableSet), len(commitCallbacks))
+	copy(cbs, commitCallbacks)
+	commitCallbacksMu.Unlock()
+	for _, cb := range cbs {
+		cb(ts)
+	}
+}
+
+// OnTablesCommit 注册每次整批 Commit 生效后的回调(启动与热更均会触发)。
+func OnTablesCommit(cb func(*TableSet)) {
+	if cb == nil {
+		return
+	}
+	commitCallbacksMu.Lock()
+	commitCallbacks = append(commitCallbacks, cb)
+	commitCallbacksMu.Unlock()
+}
 
 // LoadTables loads all config tables synchronously.
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTables(configDir string, useBinary bool) {
-    if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ActivitySchedule table: %v", err)
-    }
-    if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
-    }
-    if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
-    }
-    if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ActorActionCombatState table: %v", err)
-    }
-    if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ActorActionState table: %v", err)
-    }
-    if err := AfkPassRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AfkPassRule table: %v", err)
-    }
-    if err := AttributeAllocRatioTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
-    }
-    if err := AttributeAutoPlanTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
-    }
-    if err := AttributeDimensionTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AttributeDimension table: %v", err)
-    }
-    if err := AttributePoolTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AttributePool table: %v", err)
-    }
-    if err := AttributeRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load AttributeRule table: %v", err)
-    }
-    if err := BaseSceneTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load BaseScene table: %v", err)
-    }
-    if err := BuffTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Buff table: %v", err)
-    }
-    if err := ClassTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Class table: %v", err)
-    }
-    if err := ConditionTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Condition table: %v", err)
-    }
-    if err := CooldownTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Cooldown table: %v", err)
-    }
-    if err := DungeonTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Dungeon table: %v", err)
-    }
-    if err := EquipAffixPoolTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipAffixPool table: %v", err)
-    }
-    if err := EquipAffixRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipAffixRule table: %v", err)
-    }
-    if err := EquipArtifactTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipArtifact table: %v", err)
-    }
-    if err := EquipAttributeTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipAttribute table: %v", err)
-    }
-    if err := EquipAttributeCapTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipAttributeCap table: %v", err)
-    }
-    if err := EquipEnhanceTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipEnhance table: %v", err)
-    }
-    if err := EquipGemTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipGem table: %v", err)
-    }
-    if err := EquipGemSocketTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipGemSocket table: %v", err)
-    }
-    if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipSlot table: %v", err)
-    }
-    if err := EquipV1AffixTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load EquipV1Affix table: %v", err)
-    }
-    if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GlobalVariable table: %v", err)
-    }
-    if err := GuildActivityTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GuildActivity table: %v", err)
-    }
-    if err := GuildDonateTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GuildDonate table: %v", err)
-    }
-    if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GuildLevel table: %v", err)
-    }
-    if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GuildRule table: %v", err)
-    }
-    if err := GuildShopTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load GuildShop table: %v", err)
-    }
-    if err := ItemTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Item table: %v", err)
-    }
-    if err := MessageLimiterTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load MessageLimiter table: %v", err)
-    }
-    if err := MirrorTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Mirror table: %v", err)
-    }
-    if err := MissionTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Mission table: %v", err)
-    }
-    if err := MonsterTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Monster table: %v", err)
-    }
-    if err := MysteryMerchantGoodsTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load MysteryMerchantGoods table: %v", err)
-    }
-    if err := MysteryMerchantRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load MysteryMerchantRule table: %v", err)
-    }
-    if err := MysteryMerchantSpotTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load MysteryMerchantSpot table: %v", err)
-    }
-    if err := PetTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Pet table: %v", err)
-    }
-    if err := PetEntryTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load PetEntry table: %v", err)
-    }
-    if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load PetRule table: %v", err)
-    }
-    if err := PetTierTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load PetTier table: %v", err)
-    }
-    if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load PlayMode table: %v", err)
-    }
-    if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Reward table: %v", err)
-    }
-    if err := RoleNameRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load RoleNameRule table: %v", err)
-    }
-    if err := SkillTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Skill table: %v", err)
-    }
-    if err := SkillPermissionTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load SkillPermission table: %v", err)
-    }
-    if err := TestTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load Test table: %v", err)
-    }
-    if err := TestMultiKeyTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load TestMultiKey table: %v", err)
-    }
-    if err := WorldTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load World table: %v", err)
-    }
-    if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load ZoneGroup table: %v", err)
-    }
+	ts, err := Prepare(configDir, useBinary)
+	if err != nil {
+		log.Fatalf("failed to load tables from %s: %v", configDir, err)
+	}
+	ts.Identity.Source = "image"
+	Commit(ts)
 
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
+	if loadSuccessCallback != nil {
+		loadSuccessCallback()
+	}
 }
 
 // LoadTablesAsync loads all config tables using goroutines.
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
-    var wg sync.WaitGroup
-    wg.Add(54)
-    go func() {
-        defer wg.Done()
-        if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ActivitySchedule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ActivityVitalityRewardTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ActivityVitalityRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ActorActionCombatState table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ActorActionState table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AfkPassRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AfkPassRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AttributeAllocRatioTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AttributeAutoPlanTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AttributeDimensionTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AttributeDimension table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AttributePoolTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AttributePool table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := AttributeRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load AttributeRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := BaseSceneTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load BaseScene table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := BuffTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Buff table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ClassTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Class table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ConditionTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Condition table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := CooldownTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Cooldown table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := DungeonTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Dungeon table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipAffixPoolTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipAffixPool table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipAffixRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipAffixRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipArtifactTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipArtifact table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipAttributeTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipAttribute table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipAttributeCapTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipAttributeCap table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipEnhanceTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipEnhance table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipGemTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipGem table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipGemSocketTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipGemSocket table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipSlot table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := EquipV1AffixTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load EquipV1Affix table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GlobalVariable table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GuildActivityTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GuildActivity table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GuildDonateTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GuildDonate table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GuildLevel table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GuildRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := GuildShopTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load GuildShop table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ItemTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Item table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MessageLimiterTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load MessageLimiter table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MirrorTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Mirror table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MissionTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Mission table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MonsterTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Monster table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MysteryMerchantGoodsTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load MysteryMerchantGoods table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MysteryMerchantRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load MysteryMerchantRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := MysteryMerchantSpotTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load MysteryMerchantSpot table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := PetTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Pet table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := PetEntryTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load PetEntry table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load PetRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := PetTierTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load PetTier table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load PlayMode table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Reward table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := RoleNameRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load RoleNameRule table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := SkillTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Skill table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := SkillPermissionTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load SkillPermission table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := TestTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load Test table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := TestMultiKeyTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load TestMultiKey table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := WorldTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load World table: %v", err)
-        }
-    }()
-    go func() {
-        defer wg.Done()
-        if err := ZoneGroupTableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load ZoneGroup table: %v", err)
-        }
-    }()
+	ts := &TableSet{
+		Identity: BundleIdentity{
+			SchemaDigest: SchemaDigest,
+			Source:       "image",
+		},
+		ActivitySchedule: NewActivityScheduleTableManager(),
+		ActivityVitalityReward: NewActivityVitalityRewardTableManager(),
+		ActivityVitalityRule: NewActivityVitalityRuleTableManager(),
+		ActorActionCombatState: NewActorActionCombatStateTableManager(),
+		ActorActionState: NewActorActionStateTableManager(),
+		AfkPassRule: NewAfkPassRuleTableManager(),
+		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
+		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
+		AttributeDimension: NewAttributeDimensionTableManager(),
+		AttributePool: NewAttributePoolTableManager(),
+		AttributeRule: NewAttributeRuleTableManager(),
+		BaseScene: NewBaseSceneTableManager(),
+		Buff: NewBuffTableManager(),
+		Class: NewClassTableManager(),
+		Condition: NewConditionTableManager(),
+		Cooldown: NewCooldownTableManager(),
+		Dungeon: NewDungeonTableManager(),
+		EquipAffixPool: NewEquipAffixPoolTableManager(),
+		EquipAffixRule: NewEquipAffixRuleTableManager(),
+		EquipArtifact: NewEquipArtifactTableManager(),
+		EquipAttribute: NewEquipAttributeTableManager(),
+		EquipAttributeCap: NewEquipAttributeCapTableManager(),
+		EquipEnhance: NewEquipEnhanceTableManager(),
+		EquipGem: NewEquipGemTableManager(),
+		EquipGemSocket: NewEquipGemSocketTableManager(),
+		EquipSlot: NewEquipSlotTableManager(),
+		EquipV1Affix: NewEquipV1AffixTableManager(),
+		GlobalVariable: NewGlobalVariableTableManager(),
+		GuildActivity: NewGuildActivityTableManager(),
+		GuildDonate: NewGuildDonateTableManager(),
+		GuildLevel: NewGuildLevelTableManager(),
+		GuildRule: NewGuildRuleTableManager(),
+		GuildShop: NewGuildShopTableManager(),
+		Item: NewItemTableManager(),
+		MessageLimiter: NewMessageLimiterTableManager(),
+		Mirror: NewMirrorTableManager(),
+		Mission: NewMissionTableManager(),
+		Monster: NewMonsterTableManager(),
+		MysteryMerchantGoods: NewMysteryMerchantGoodsTableManager(),
+		MysteryMerchantRule: NewMysteryMerchantRuleTableManager(),
+		MysteryMerchantSpot: NewMysteryMerchantSpotTableManager(),
+		Pet: NewPetTableManager(),
+		PetEntry: NewPetEntryTableManager(),
+		PetRule: NewPetRuleTableManager(),
+		PetTier: NewPetTierTableManager(),
+		PlayMode: NewPlayModeTableManager(),
+		Reward: NewRewardTableManager(),
+		RoleNameRule: NewRoleNameRuleTableManager(),
+		Skill: NewSkillTableManager(),
+		SkillPermission: NewSkillPermissionTableManager(),
+		Test: NewTestTableManager(),
+		TestMultiKey: NewTestMultiKeyTableManager(),
+		World: NewWorldTableManager(),
+		ZoneGroup: NewZoneGroupTableManager(),
+	}
+	var wg sync.WaitGroup
+	wg.Add(54)
+	go func() {
+		defer wg.Done()
+		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ActivitySchedule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.ActivityVitalityReward.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ActivityVitalityReward table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.ActivityVitalityRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ActivityVitalityRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.ActorActionCombatState.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ActorActionCombatState table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.ActorActionState.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ActorActionState table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AfkPassRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AfkPassRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AttributeAllocRatio.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AttributeAutoPlan.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AttributeDimension.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AttributeDimension table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AttributePool.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AttributePool table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AttributeRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AttributeRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.BaseScene.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load BaseScene table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Buff.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Buff table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Class.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Class table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Condition.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Condition table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Cooldown.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Cooldown table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Dungeon.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Dungeon table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipAffixPool.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipAffixPool table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipAffixRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipAffixRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipArtifact.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipArtifact table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipAttribute.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipAttribute table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipAttributeCap.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipAttributeCap table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipEnhance.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipEnhance table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipGem.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipGem table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipGemSocket.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipGemSocket table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipSlot.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipSlot table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipV1Affix.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipV1Affix table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GlobalVariable.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GlobalVariable table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildActivity.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildActivity table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildDonate.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildDonate table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildLevel.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildLevel table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildShop.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildShop table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Item.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Item table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.MessageLimiter.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load MessageLimiter table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Mirror.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Mirror table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Mission.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Mission table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Monster.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Monster table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.MysteryMerchantGoods.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load MysteryMerchantGoods table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.MysteryMerchantRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load MysteryMerchantRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.MysteryMerchantSpot.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load MysteryMerchantSpot table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Pet.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Pet table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.PetEntry.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PetEntry table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.PetRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PetRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.PetTier.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PetTier table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PlayMode table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Reward.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Reward table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.RoleNameRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load RoleNameRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Skill.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Skill table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.SkillPermission.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SkillPermission table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.Test.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load Test table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TestMultiKey table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.World.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load World table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.ZoneGroup.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load ZoneGroup table: %v", err)
+		}
+	}()
 
-    wg.Wait()
+	wg.Wait()
+	Commit(ts)
 
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
+	if loadSuccessCallback != nil {
+		loadSuccessCallback()
+	}
 }
 
-// OnTablesLoadSuccess registers a callback invoked after all tables load.
+// OnTablesLoadSuccess registers a callback invoked after initial table load completes.
 func OnTablesLoadSuccess(cb func()) {
-    loadSuccessCallback = cb
-}
-
-// ReloadTables re-creates all table managers and loads fresh data.
-// Safe for hot-reload: replaces the global instances atomically.
-func ReloadTables(configDir string, useBinary bool) error {
-    newActivitySchedule := NewActivityScheduleTableManager()
-    if err := newActivitySchedule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ActivitySchedule failed: %w", err)
-    }
-    newActivityVitalityReward := NewActivityVitalityRewardTableManager()
-    if err := newActivityVitalityReward.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ActivityVitalityReward failed: %w", err)
-    }
-    newActivityVitalityRule := NewActivityVitalityRuleTableManager()
-    if err := newActivityVitalityRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ActivityVitalityRule failed: %w", err)
-    }
-    newActorActionCombatState := NewActorActionCombatStateTableManager()
-    if err := newActorActionCombatState.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ActorActionCombatState failed: %w", err)
-    }
-    newActorActionState := NewActorActionStateTableManager()
-    if err := newActorActionState.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ActorActionState failed: %w", err)
-    }
-    newAfkPassRule := NewAfkPassRuleTableManager()
-    if err := newAfkPassRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AfkPassRule failed: %w", err)
-    }
-    newAttributeAllocRatio := NewAttributeAllocRatioTableManager()
-    if err := newAttributeAllocRatio.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AttributeAllocRatio failed: %w", err)
-    }
-    newAttributeAutoPlan := NewAttributeAutoPlanTableManager()
-    if err := newAttributeAutoPlan.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AttributeAutoPlan failed: %w", err)
-    }
-    newAttributeDimension := NewAttributeDimensionTableManager()
-    if err := newAttributeDimension.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AttributeDimension failed: %w", err)
-    }
-    newAttributePool := NewAttributePoolTableManager()
-    if err := newAttributePool.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AttributePool failed: %w", err)
-    }
-    newAttributeRule := NewAttributeRuleTableManager()
-    if err := newAttributeRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload AttributeRule failed: %w", err)
-    }
-    newBaseScene := NewBaseSceneTableManager()
-    if err := newBaseScene.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload BaseScene failed: %w", err)
-    }
-    newBuff := NewBuffTableManager()
-    if err := newBuff.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Buff failed: %w", err)
-    }
-    newClass := NewClassTableManager()
-    if err := newClass.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Class failed: %w", err)
-    }
-    newCondition := NewConditionTableManager()
-    if err := newCondition.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Condition failed: %w", err)
-    }
-    newCooldown := NewCooldownTableManager()
-    if err := newCooldown.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Cooldown failed: %w", err)
-    }
-    newDungeon := NewDungeonTableManager()
-    if err := newDungeon.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Dungeon failed: %w", err)
-    }
-    newEquipAffixPool := NewEquipAffixPoolTableManager()
-    if err := newEquipAffixPool.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipAffixPool failed: %w", err)
-    }
-    newEquipAffixRule := NewEquipAffixRuleTableManager()
-    if err := newEquipAffixRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipAffixRule failed: %w", err)
-    }
-    newEquipArtifact := NewEquipArtifactTableManager()
-    if err := newEquipArtifact.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipArtifact failed: %w", err)
-    }
-    newEquipAttribute := NewEquipAttributeTableManager()
-    if err := newEquipAttribute.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipAttribute failed: %w", err)
-    }
-    newEquipAttributeCap := NewEquipAttributeCapTableManager()
-    if err := newEquipAttributeCap.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipAttributeCap failed: %w", err)
-    }
-    newEquipEnhance := NewEquipEnhanceTableManager()
-    if err := newEquipEnhance.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipEnhance failed: %w", err)
-    }
-    newEquipGem := NewEquipGemTableManager()
-    if err := newEquipGem.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipGem failed: %w", err)
-    }
-    newEquipGemSocket := NewEquipGemSocketTableManager()
-    if err := newEquipGemSocket.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipGemSocket failed: %w", err)
-    }
-    newEquipSlot := NewEquipSlotTableManager()
-    if err := newEquipSlot.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipSlot failed: %w", err)
-    }
-    newEquipV1Affix := NewEquipV1AffixTableManager()
-    if err := newEquipV1Affix.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload EquipV1Affix failed: %w", err)
-    }
-    newGlobalVariable := NewGlobalVariableTableManager()
-    if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GlobalVariable failed: %w", err)
-    }
-    newGuildActivity := NewGuildActivityTableManager()
-    if err := newGuildActivity.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GuildActivity failed: %w", err)
-    }
-    newGuildDonate := NewGuildDonateTableManager()
-    if err := newGuildDonate.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GuildDonate failed: %w", err)
-    }
-    newGuildLevel := NewGuildLevelTableManager()
-    if err := newGuildLevel.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GuildLevel failed: %w", err)
-    }
-    newGuildRule := NewGuildRuleTableManager()
-    if err := newGuildRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GuildRule failed: %w", err)
-    }
-    newGuildShop := NewGuildShopTableManager()
-    if err := newGuildShop.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload GuildShop failed: %w", err)
-    }
-    newItem := NewItemTableManager()
-    if err := newItem.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Item failed: %w", err)
-    }
-    newMessageLimiter := NewMessageLimiterTableManager()
-    if err := newMessageLimiter.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload MessageLimiter failed: %w", err)
-    }
-    newMirror := NewMirrorTableManager()
-    if err := newMirror.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Mirror failed: %w", err)
-    }
-    newMission := NewMissionTableManager()
-    if err := newMission.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Mission failed: %w", err)
-    }
-    newMonster := NewMonsterTableManager()
-    if err := newMonster.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Monster failed: %w", err)
-    }
-    newMysteryMerchantGoods := NewMysteryMerchantGoodsTableManager()
-    if err := newMysteryMerchantGoods.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload MysteryMerchantGoods failed: %w", err)
-    }
-    newMysteryMerchantRule := NewMysteryMerchantRuleTableManager()
-    if err := newMysteryMerchantRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload MysteryMerchantRule failed: %w", err)
-    }
-    newMysteryMerchantSpot := NewMysteryMerchantSpotTableManager()
-    if err := newMysteryMerchantSpot.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload MysteryMerchantSpot failed: %w", err)
-    }
-    newPet := NewPetTableManager()
-    if err := newPet.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Pet failed: %w", err)
-    }
-    newPetEntry := NewPetEntryTableManager()
-    if err := newPetEntry.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload PetEntry failed: %w", err)
-    }
-    newPetRule := NewPetRuleTableManager()
-    if err := newPetRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload PetRule failed: %w", err)
-    }
-    newPetTier := NewPetTierTableManager()
-    if err := newPetTier.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload PetTier failed: %w", err)
-    }
-    newPlayMode := NewPlayModeTableManager()
-    if err := newPlayMode.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload PlayMode failed: %w", err)
-    }
-    newReward := NewRewardTableManager()
-    if err := newReward.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Reward failed: %w", err)
-    }
-    newRoleNameRule := NewRoleNameRuleTableManager()
-    if err := newRoleNameRule.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload RoleNameRule failed: %w", err)
-    }
-    newSkill := NewSkillTableManager()
-    if err := newSkill.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Skill failed: %w", err)
-    }
-    newSkillPermission := NewSkillPermissionTableManager()
-    if err := newSkillPermission.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload SkillPermission failed: %w", err)
-    }
-    newTest := NewTestTableManager()
-    if err := newTest.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload Test failed: %w", err)
-    }
-    newTestMultiKey := NewTestMultiKeyTableManager()
-    if err := newTestMultiKey.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload TestMultiKey failed: %w", err)
-    }
-    newWorld := NewWorldTableManager()
-    if err := newWorld.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload World failed: %w", err)
-    }
-    newZoneGroup := NewZoneGroupTableManager()
-    if err := newZoneGroup.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload ZoneGroup failed: %w", err)
-    }
-
-    // Swap all instances at once after all loads succeed.
-    ActivityScheduleTableManagerInstance = newActivitySchedule
-    ActivityVitalityRewardTableManagerInstance = newActivityVitalityReward
-    ActivityVitalityRuleTableManagerInstance = newActivityVitalityRule
-    ActorActionCombatStateTableManagerInstance = newActorActionCombatState
-    ActorActionStateTableManagerInstance = newActorActionState
-    AfkPassRuleTableManagerInstance = newAfkPassRule
-    AttributeAllocRatioTableManagerInstance = newAttributeAllocRatio
-    AttributeAutoPlanTableManagerInstance = newAttributeAutoPlan
-    AttributeDimensionTableManagerInstance = newAttributeDimension
-    AttributePoolTableManagerInstance = newAttributePool
-    AttributeRuleTableManagerInstance = newAttributeRule
-    BaseSceneTableManagerInstance = newBaseScene
-    BuffTableManagerInstance = newBuff
-    ClassTableManagerInstance = newClass
-    ConditionTableManagerInstance = newCondition
-    CooldownTableManagerInstance = newCooldown
-    DungeonTableManagerInstance = newDungeon
-    EquipAffixPoolTableManagerInstance = newEquipAffixPool
-    EquipAffixRuleTableManagerInstance = newEquipAffixRule
-    EquipArtifactTableManagerInstance = newEquipArtifact
-    EquipAttributeTableManagerInstance = newEquipAttribute
-    EquipAttributeCapTableManagerInstance = newEquipAttributeCap
-    EquipEnhanceTableManagerInstance = newEquipEnhance
-    EquipGemTableManagerInstance = newEquipGem
-    EquipGemSocketTableManagerInstance = newEquipGemSocket
-    EquipSlotTableManagerInstance = newEquipSlot
-    EquipV1AffixTableManagerInstance = newEquipV1Affix
-    GlobalVariableTableManagerInstance = newGlobalVariable
-    GuildActivityTableManagerInstance = newGuildActivity
-    GuildDonateTableManagerInstance = newGuildDonate
-    GuildLevelTableManagerInstance = newGuildLevel
-    GuildRuleTableManagerInstance = newGuildRule
-    GuildShopTableManagerInstance = newGuildShop
-    ItemTableManagerInstance = newItem
-    MessageLimiterTableManagerInstance = newMessageLimiter
-    MirrorTableManagerInstance = newMirror
-    MissionTableManagerInstance = newMission
-    MonsterTableManagerInstance = newMonster
-    MysteryMerchantGoodsTableManagerInstance = newMysteryMerchantGoods
-    MysteryMerchantRuleTableManagerInstance = newMysteryMerchantRule
-    MysteryMerchantSpotTableManagerInstance = newMysteryMerchantSpot
-    PetTableManagerInstance = newPet
-    PetEntryTableManagerInstance = newPetEntry
-    PetRuleTableManagerInstance = newPetRule
-    PetTierTableManagerInstance = newPetTier
-    PlayModeTableManagerInstance = newPlayMode
-    RewardTableManagerInstance = newReward
-    RoleNameRuleTableManagerInstance = newRoleNameRule
-    SkillTableManagerInstance = newSkill
-    SkillPermissionTableManagerInstance = newSkillPermission
-    TestTableManagerInstance = newTest
-    TestMultiKeyTableManagerInstance = newTestMultiKey
-    WorldTableManagerInstance = newWorld
-    ZoneGroupTableManagerInstance = newZoneGroup
-
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
-    return nil
+	loadSuccessCallback = cb
 }

@@ -48,6 +48,7 @@ import (
 	tradepb "proto/trade"
 	"shared/assetop"
 	"shared/authoritysql"
+	"shared/dsclient"
 	"trade/internal/config"
 	"trade/internal/constants"
 	"trade/internal/data"
@@ -232,7 +233,7 @@ func openLedger(rpc zrpc.RpcClientConf) (*assetop.DataServiceLedger, func(), err
 	if !config.HasRpcTarget(rpc) {
 		return nil, nil, errors.New("DataServiceRpc is not configured: the committed asset ledger cannot be read, refusing to run (transaction_log is not evidence)")
 	}
-	client, err := zrpc.NewClient(rpc)
+	client, err := zrpc.NewClient(dsclient.Conf(rpc))
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect data_service for the committed asset ledger: %w", err)
 	}

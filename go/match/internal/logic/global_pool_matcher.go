@@ -95,7 +95,7 @@ func (m *poolMatcher) round(parent context.Context) {
 		metrics.SetBattleNodes(state, count)
 	}
 	var owned []poolowner.Segment
-	for _, segment := range poolowner.Segments(s.Catalog.Pools(), registeredRegions(nodes), func(pool catalog.Pool) uint32 {
+	for _, segment := range poolowner.Segments(s.ActiveCatalog().Pools(), registeredRegions(nodes), func(pool catalog.Pool) uint32 {
 		return s.Config.GlobalMatch.SubPoolCount(uint32(pool.Mode), pool.ConfigId)
 	}) {
 		if s.OwnsWork(segment.Key()) {
@@ -302,7 +302,7 @@ func segmentPasses(role poolowner.Role) poolgroup.Passes {
 func reportUnusedSubPools(s *svc.ServiceContext) {
 	for _, entry := range s.Config.GlobalMatch.SubPools {
 		used := false
-		for _, pool := range s.Catalog.Pools() {
+		for _, pool := range s.ActiveCatalog().Pools() {
 			if uint32(pool.Mode) == entry.Mode && pool.ConfigId == entry.ConfigId && poolowner.Split(pool) {
 				used = true
 				break
@@ -507,7 +507,7 @@ func poolUnitInput(s *svc.ServiceContext, unit poolUnit, now uint64) (poolgroup.
 			}
 		}
 		input.Players = append(input.Players, ticket.PlayerId)
-		input.Members = append(input.Members, scope.Member{Node: s.Catalog.ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
+		input.Members = append(input.Members, scope.Member{Node: s.ActiveCatalog().ZoneNode(zones.Final(ticket.ZoneId)), EnqueuedMs: ticket.EnqueuedMs})
 	}
 	// 队伍分：单排是本人评分，整队是成员平均分加组队加成；提交点按同一公式复核组内极差（authority.requireRatedSpread）。
 	ratings := make([]int64, len(unit.tickets))

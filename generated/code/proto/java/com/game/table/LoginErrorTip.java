@@ -235,6 +235,34 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginMinorPlayTimeOver = 2049;</code>
      */
     kLoginMinorPlayTimeOver(2049),
+    /**
+     * <code>kRoleNameCheckUnavailable = 2050;</code>
+     */
+    kRoleNameCheckUnavailable(2050),
+    /**
+     * <code>kRoleRenameCooldown = 2051;</code>
+     */
+    kRoleRenameCooldown(2051),
+    /**
+     * <code>kRoleRenameNoCard = 2052;</code>
+     */
+    kRoleRenameNoCard(2052),
+    /**
+     * <code>kRoleRenameInProgress = 2053;</code>
+     */
+    kRoleRenameInProgress(2053),
+    /**
+     * <code>kRoleRenameFrozen = 2054;</code>
+     */
+    kRoleRenameFrozen(2054),
+    /**
+     * <code>kRoleRenameSameName = 2055;</code>
+     */
+    kRoleRenameSameName(2055),
+    /**
+     * <code>kRoleRenameExpired = 2056;</code>
+     */
+    kRoleRenameExpired(2056),
     UNRECOGNIZED(-1),
     ;
 
@@ -451,6 +479,34 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginMinorPlayTimeOver = 2049;</code>
      */
     public static final int kLoginMinorPlayTimeOver_VALUE = 2049;
+    /**
+     * <code>kRoleNameCheckUnavailable = 2050;</code>
+     */
+    public static final int kRoleNameCheckUnavailable_VALUE = 2050;
+    /**
+     * <code>kRoleRenameCooldown = 2051;</code>
+     */
+    public static final int kRoleRenameCooldown_VALUE = 2051;
+    /**
+     * <code>kRoleRenameNoCard = 2052;</code>
+     */
+    public static final int kRoleRenameNoCard_VALUE = 2052;
+    /**
+     * <code>kRoleRenameInProgress = 2053;</code>
+     */
+    public static final int kRoleRenameInProgress_VALUE = 2053;
+    /**
+     * <code>kRoleRenameFrozen = 2054;</code>
+     */
+    public static final int kRoleRenameFrozen_VALUE = 2054;
+    /**
+     * <code>kRoleRenameSameName = 2055;</code>
+     */
+    public static final int kRoleRenameSameName_VALUE = 2055;
+    /**
+     * <code>kRoleRenameExpired = 2056;</code>
+     */
+    public static final int kRoleRenameExpired_VALUE = 2056;
 
 
     public final int getNumber() {
@@ -528,6 +584,13 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
         case 2047: return kLoginRealNameServiceUnavailable;
         case 2048: return kLoginMinorNotInPlayTime;
         case 2049: return kLoginMinorPlayTimeOver;
+        case 2050: return kRoleNameCheckUnavailable;
+        case 2051: return kRoleRenameCooldown;
+        case 2052: return kRoleRenameNoCard;
+        case 2053: return kRoleRenameInProgress;
+        case 2054: return kRoleRenameFrozen;
+        case 2055: return kRoleRenameSameName;
+        case 2056: return kRoleRenameExpired;
         default: return null;
       }
     }
@@ -593,7 +656,7 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025login_error_tip.proto*\372\013\n\013login_error\022" +
+      "\n\025login_error_tip.proto*\263\r\n\013login_error\022" +
       "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF" +
       "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n" +
       "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k" +
@@ -631,9 +694,13 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       "lNameTooManyAttempts\020\375\017\022\037\n\032kLoginRealNam" +
       "eAlreadyBound\020\376\017\022%\n kLoginRealNameServic" +
       "eUnavailable\020\377\017\022\035\n\030kLoginMinorNotInPlayT" +
-      "ime\020\200\020\022\034\n\027kLoginMinorPlayTimeOver\020\201\020B$\n\016" +
-      "com.game.tableZ\022generated/pb/tableb\006prot" +
-      "o3"
+      "ime\020\200\020\022\034\n\027kLoginMinorPlayTimeOver\020\201\020\022\036\n\031" +
+      "kRoleNameCheckUnavailable\020\202\020\022\030\n\023kRoleRen" +
+      "ameCooldown\020\203\020\022\026\n\021kRoleRenameNoCard\020\204\020\022\032" +
+      "\n\025kRoleRenameInProgress\020\205\020\022\026\n\021kRoleRenam" +
+      "eFrozen\020\206\020\022\030\n\023kRoleRenameSameName\020\207\020\022\027\n\022" +
+      "kRoleRenameExpired\020\210\020B$\n\016com.game.tableZ" +
+      "\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

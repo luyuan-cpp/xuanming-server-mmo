@@ -25,6 +25,7 @@ protected:
 
     void TearDown() override
     {
+        AnomalyDetector::SetSteadyNowForTest(nullptr);
         for (const auto player : players)
         {
             if (tlsEcs.actorRegistry.valid(player)) tlsEcs.actorRegistry.destroy(player);
@@ -32,6 +33,7 @@ protected:
         AnomalyDetector::ClearAll();
         AnomalyDetector::SetCurrencyThreshold(kCurrencyGold, AnomalyThreshold{});
         AnomalyDetector::SetItemThreshold(kItemConfigId, AnomalyThreshold{});
+        AnomalyDetector::SetDefaultThreshold(AnomalyThreshold{});
     }
 
     entt::entity CreatePlayer()
@@ -195,5 +197,92 @@ TEST_F(PlayerAnomalyWindowTest, DisabledRecordingDoesNotCreateWindows)
     EXPECT_FALSE(AnomalyDetector::RecordItemGain(player, kItemConfigId, 1));
     EXPECT_EQ(0u, AnomalyDetector::GetCurrencyGainCount(player, kCurrencyGold));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerAnomalyWindowComp>(player));
+}
+
+TEST_F(PlayerAnomalyWindowTest, AlertCooldownSuppressesRepeatAlertsWithinWindowAndRealertsAfterExpiry)
+{
+    static uint64_t fakeNow = 1000;
+    fakeNow = 1000;
+    AnomalyDetector::SetSteadyNowForTest([]() { return fakeNow; });
+
+    AnomalyThreshold threshold;
+    threshold.maxCountPerWindow = 100;
+    threshold.maxAmountPerWindow = 10;
+    threshold.windowSeconds = 60;
+    AnomalyDetector::SetCurrencyThreshold(kCurrencyGold, threshold);
+
+    const auto player = CreatePlayer();
+    EXPECT_FALSE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 10));
+    EXPECT_TRUE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 1)) << "首次越界触发告警";
+    // 窗口期内后续超限收益受冷却抑制,不再反复告警。
+    fakeNow = 1030;
+    EXPECT_FALSE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 50));
+    fakeNow = 1059;
+    EXPECT_FALSE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 50));
+    // 冷却期满(now - lastAlertAt >= windowSeconds)且窗口仍超限时允许再次告警。
+    fakeNow = 1060;
+    EXPECT_TRUE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 50));
+}
+
+TEST_F(PlayerAnomalyWindowTest, CumulativeAmountSaturatesWithoutWrapAroundAndRecoversOnExpiry)
+{
+    static uint64_t fakeNow = 2000;
+    fakeNow = 2000;
+    AnomalyDetector::SetSteadyNowForTest([]() { return fakeNow; });
+
+    AnomalyThreshold threshold;
+    threshold.maxCountPerWindow = 100;
+    threshold.maxAmountPerWindow = 1000;
+    threshold.windowSeconds = 30;
+    AnomalyDetector::SetCurrencyThreshold(kCurrencyGold, threshold);
+
+    const auto player = CreatePlayer();
+    constexpr uint64_t kMax = (std::numeric_limits<uint64_t>::max)();
+    EXPECT_TRUE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, kMax - 5));
+    // 若使用普通加法会回绕成 5 并低于阈值;饱和加法应钉在 UINT64_MAX。
+    EXPECT_FALSE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 10));
+    const auto &window = tlsEcs.actorRegistry.get<PlayerAnomalyWindowComp>(player);
+    EXPECT_EQ(kMax, window.currencies.at(static_cast<uint32_t>(kCurrencyGold)).cumulativeAmount);
+
+    // 过期后清理旧事件并重算累计值,不能停留在 UINT64_MAX 或下溢。
+    fakeNow = 2031;
+    EXPECT_FALSE(AnomalyDetector::RecordCurrencyGain(player, kCurrencyGold, 7));
+    EXPECT_EQ(7u, window.currencies.at(static_cast<uint32_t>(kCurrencyGold)).cumulativeAmount);
+    EXPECT_EQ(1u, AnomalyDetector::GetCurrencyGainCount(player, kCurrencyGold));
+}
+
+TEST_F(PlayerAnomalyWindowTest, EventsDequeIsCappedAndExpiredItemBucketsArePruned)
+{
+    static uint64_t fakeNow = 3000;
+    fakeNow = 3000;
+    AnomalyDetector::SetSteadyNowForTest([]() { return fakeNow; });
+
+    AnomalyThreshold itemThreshold;
+    itemThreshold.maxCountPerWindow = (std::numeric_limits<uint32_t>::max)();
+    itemThreshold.maxAmountPerWindow = (std::numeric_limits<uint32_t>::max)();
+    itemThreshold.windowSeconds = 20;
+    AnomalyDetector::SetDefaultThreshold(itemThreshold);
+
+    const auto player = CreatePlayer();
+    // 超过单桶上限时只保留最近 kMaxEventsPerBucket 条事件。
+    for (std::size_t i = 0; i < AnomalyDetector::kMaxEventsPerBucket + 16; ++i)
+    {
+        EXPECT_FALSE(AnomalyDetector::RecordItemGain(player, 1001, 2));
+    }
+    const auto &window = tlsEcs.actorRegistry.get<PlayerAnomalyWindowComp>(player);
+    ASSERT_TRUE(window.items.contains(1001));
+    EXPECT_EQ(AnomalyDetector::kMaxEventsPerBucket, window.items.at(1001).events.size());
+    EXPECT_EQ(AnomalyDetector::kMaxEventsPerBucket * 2u, window.items.at(1001).cumulativeAmount);
+
+    // 另一物品桶过期后,新物品入账触发惰性清理,释放已过期的旧桶。
+    EXPECT_FALSE(AnomalyDetector::RecordItemGain(player, 1002, 1));
+    ASSERT_EQ(2u, window.items.size());
+
+    fakeNow = 3021;
+    EXPECT_FALSE(AnomalyDetector::RecordItemGain(player, 1003, 1));
+    EXPECT_FALSE(window.items.contains(1001));
+    EXPECT_FALSE(window.items.contains(1002));
+    EXPECT_TRUE(window.items.contains(1003));
+    EXPECT_EQ(1u, window.items.size());
 }
 } // namespace

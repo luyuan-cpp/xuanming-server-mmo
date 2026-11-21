@@ -121,7 +121,8 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 // guildTestDropTables:本服务全部表 + schemamigrate 台账,按**逆锁序**排(tables.go 的 Tables() 倒过来)。
 // 新增表时同步追加(TestDropListCoversTables 守数量);漏了新表,复用 guild_test 库时上一轮的行会残留到下一轮。
 var guildTestDropTables = []string{
-	"guild_client_request",                          // 客户端幂等键去重记录(全序末尾 R,逆锁序排最前)
+	"guild_name_hold",                               // 帮会改名旧名保护表(全序末尾,逆锁序排最前)
+	"guild_client_request",                          // 客户端幂等键去重记录(R)
 	"guild_trial_reward_owed", "guild_trial_battle", // B6b 同道历练两表(W、T)
 	"guild_activity_progress",                                      // B6a 活动进度(P)
 	"guild_daily_counter", "guild_asset_op", "guild_player_op_seq", // B5a 资产三表

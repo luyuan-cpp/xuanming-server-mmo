@@ -148,10 +148,45 @@ func TestActionTable(t *testing.T) {
 		{SceneChat, wordlist.CategoryPorn, actionReject},
 		{SceneChat, wordlist.CategoryAd, actionReject},
 		{SceneChat, wordlist.CategoryOther, actionReject},
+		{ScenePrivateLabel, wordlist.CategoryImpersonation, actionReject},
+		{ScenePrivateLabel, wordlist.CategoryAbuse, actionReject},
 	}
 	for _, r := range rows {
 		if got := actionFor(r.class, r.category); got != r.want {
 			t.Errorf("actionFor(%d, %s) = %d, want %d", r.class, r.category, got, r.want)
 		}
+	}
+}
+
+func TestContactAdDetectionAndAllowlist(t *testing.T) {
+	e := New()
+	e.Swap(2, &wordlist.Lexicon{Allow: []string{"13800138000"}})
+
+	for _, bad := range []string{
+		"加 v 一二三四五六",
+		"微信①②③④⑤",
+		"详情见 https://bad.example.com/gift",
+		"欢迎加 13912345678",
+	} {
+		got := e.Check(SceneChat, bad)
+		if got.Verdict != VerdictReject || got.Category != wordlist.CategoryAd {
+			t.Errorf("%q: got %+v, want Reject Ad", bad, got)
+		}
+	}
+	// 辱骂与引流并存时,拒绝高于打码。
+	e.Swap(3, &wordlist.Lexicon{
+		Deny:  []wordlist.Entry{{Word: "笨蛋", Category: wordlist.CategoryAbuse, Mode: wordlist.ModeSub}},
+		Allow: []string{"13800138000"},
+	})
+	if got := e.Check(SceneChat, "笨蛋 加vx123456"); got.Verdict != VerdictReject || got.Category != wordlist.CategoryAd {
+		t.Fatalf("combined abuse + contact ad got %+v, want Reject Ad", got)
+	}
+	// 白名单精确放行。
+	if got := e.Check(SceneChat, "官方示例 13800138000"); got.Verdict != VerdictPass {
+		t.Fatalf("allowlisted number got %+v, want Pass", got)
+	}
+	// 私有标签不做联系方式启发式拦截。
+	if got := e.Check(ScenePrivateLabel, "加v123456方案"); got.Verdict != VerdictPass {
+		t.Fatalf("private label got %+v, want Pass", got)
 	}
 }

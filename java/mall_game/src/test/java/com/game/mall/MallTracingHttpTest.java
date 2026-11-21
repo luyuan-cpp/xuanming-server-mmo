@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
     // 只核对日志里的 traceId,不往本机 Alloy 导出 span(阶段三的导出器,设计 §10.3),用例不依赖外部采集器。
     "management.otlp.tracing.export.enabled=false"
 })
+@AutoConfigureObservability(metrics = false)
 @Import({MallTracingHttpTest.ProbeConfiguration.class, H2CommerceTestConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)
 class MallTracingHttpTest {

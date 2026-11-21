@@ -21,6 +21,7 @@
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/scene/player_afk_pass.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/afk_pass.h"
 #include "services/scene/player/system/afk_pass_rules.h"
 #include "table/code/afkpassrule_table.h"
@@ -161,6 +162,7 @@ protected:
 	{
 		const auto entity = tlsEcs.actorRegistry.create();
 		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(entity, guid);
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(entity).epoch = 1;
 		auto &values = tlsEcs.actorRegistry.emplace<CurrencyComp>(entity);
 		while (values.values_size() < static_cast<int>(kCurrencyMax))
 		{
@@ -252,6 +254,14 @@ TEST_F(AfkPassSystemTest, RejectionsChangeNothing)
 	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	EXPECT_EQ(AfkPassSystem::Buy(player, Request(7103), kNow, response), kAfkPassFrozen);
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+	tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+	EXPECT_EQ(AfkPassSystem::Buy(player, Request(7103), kNow, response), kAfkPassFrozen);
+	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+
+	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+	EXPECT_EQ(AfkPassSystem::Buy(player, Request(7103), kNow, response), kAfkPassFrozen);
+	tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
 
 	SetExpiry(kNow + static_cast<uint64_t>(rule.maxRemainingDays) * kDay);
 	EXPECT_EQ(AfkPassSystem::Buy(player, Request(7104), kNow, response), kAfkPassStackLimit);

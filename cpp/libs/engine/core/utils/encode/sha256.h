@@ -4,26 +4,11 @@
 #include <string>
 #include <string_view>
 
-// Sha256 — minimal, dependency-free SHA-256 implementation.
+// Sha256 — 基于 BoringSSL/OpenSSL EVP_sha256 的单次 SHA-256 摘要封装。
 //
-// Why this lives here:
-//   现在唯一的调用方是战斗配表指纹(services/battle/data/battle_table_fingerprint.cpp:
-//   scene / battle 两端对同一批配表字节算指纹比对),需要的只是一个稳定、无依赖、一次算完的
-//   SHA-256。
-//
-//   历史:它最初(2026-05-23)是为跨 zone 搬数据链的 payload 去重而写 —— 让目的端区分
-//   "Kafka 原样重投"与"reaper 带着变了的 payload 重发"。那条链(player_migrate / ACK /
-//   CrossZoneReaper)已按 docs/design/cross-zone-scene-travel.md CZ-1 整条删除,该用途不复
-//   存在。当时"scene 节点不链接 OpenSSL,为一次哈希引入它不划算"的前提也只代表当时:
-//   scene.vcxproj / CMakeLists 现在已有 OpenSSL(token_security.h 的 HMAC 用它)。
-//   保留这份 ~150 行的自包含实现,是因为指纹契约已经建立在它上面,不是因为没得选。
-//
-// Implementation note:
-//   Standard FIPS 180-4 SHA-256, public-domain reference structure.
-//   Big-endian state on output (32 bytes). Tested against the canonical
-//   test vectors ("abc" → ba7816bf...) in cpp/tests if a test gets added
-//   for it; the reference implementation is small enough to be reviewed
-//   by hand.
+// 用于战斗配表指纹(battle_table_fingerprint.cpp)、导航文件校验(navigation.cpp)与维护原件摘要(node.cpp)。
+// 对外接口只暴露单次计算(HashBytes / HashToBytes / HashToHex),底层委托给 BoringSSL/OpenSSL,
+// 避免在业务仓库中自行维护 FIPS 180-4 轮函数实现。
 
 class Sha256
 {

@@ -289,6 +289,7 @@ Peer *Upgrade(const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *in)
     in->retrieveAll();
     conn->send(response.data(), static_cast<int>(response.size()));
     conn->shutdown();
+    conn->forceCloseWithDelay(0.1);
     if (Sampled(++tlsCounters.rejected))
     {
         LOG_WARN << "WebSocket upgrade requests rejected (sampled), rejected_total=" << tlsCounters.rejected
@@ -456,6 +457,7 @@ void FinishRead(const muduo::net::TcpConnectionPtr &conn)
     const char code[2] = {static_cast<char>(peer->closeCode >> 8), static_cast<char>(peer->closeCode & 0xFF)};
     SendControl(conn, kOpClose, code, peer->closeCode == 0 ? 0 : sizeof(code));
     conn->shutdown();
+    conn->forceCloseWithDelay(0.1);
 }
 
 bool IsUpgraded(const muduo::net::TcpConnectionPtr &conn)

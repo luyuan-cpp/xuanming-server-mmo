@@ -52,11 +52,15 @@ type Rules struct {
 	// WorldHistoryCacheMs 是世界频道近窗快照的最长使用时长(毫秒),0 = 每次拉取都直读 SQL(world_window.go)。
 	// 同样不进 policyBytes,理由同 ActorVerifyTTLSeconds。
 	WorldHistoryCacheMs int
-	// WorldChannelCooldownMs 是同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限。
-	// 世界频道一条消息要推给全服在线玩家,每秒条数(RateLimitPerSecond)只管单人突发,管不住全服总量;
-	// 发言间隔把全服世界消息量压在「在线人数 ÷ 间隔」之内(docs/design/chat-world-channel-fanout.md §5)。
-	// 不进 policyBytes:它是运营会调的值,滚动改它时各副本短暂按不同间隔判,只影响新请求放不放行,不改变已登记原件的判定。
+	// WorldChannelCooldownMs:同一名玩家相邻两条世界频道消息的最短间隔(毫秒),0 = 不限。
 	WorldChannelCooldownMs int
+	// 以下运维防刷/安全阈值均不进 policyBytes(允许副本滚动热调,不触发历史策略漂移)。
+	WorldMinLevel               int
+	DuplicateSpamWindowMs       int
+	DuplicateSpamMaxSenders     int
+	DuplicateSpamMaxPerSender   int
+	NewAccountAgeHours          int
+	NewAccountDailyPrivateLimit int
 }
 
 type SendResult struct {
@@ -67,12 +71,17 @@ type SendResult struct {
 	// Message 是本次首次提交的显示原件(与历史里那一份逐字相同),只在这次请求真正写入了新的一行时非 nil;
 	// 重放、限流都为 nil。世界频道推送只推它,重放不再推第二次(docs/design/chat-world-channel-fanout.md §4)。
 	Message *chatpb.ChatMessage
+	// PendingPlatformReview 表示内容安全层对本次世界消息走了短超时先放行,调用方需异步调用 CheckPlatformText 复检并在违时撤回。
+	PendingPlatformReview bool
+	PlatformReviewContent string
 }
 
 // Service是真实调用面与独立逻辑测试的同一接缝；nil依赖拒绝，不存在Redis授权回落。
 type Service interface {
 	Send(context.Context, *chatpb.SendChatRequest) (SendResult, error)
 	Pull(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
+	RetractWorld(context.Context, uint64, int64, string) (bool, uint32, error)
+	ReportMessage(context.Context, *chatpb.ReportChatRequest) (uint32, error)
 }
 
 type Store struct {
@@ -80,10 +89,12 @@ type Store struct {
 	states rolefence.StateReader
 	rules  Rules
 	// guard 是正文送检的接缝(content_review.go)。nil = 不送检,只有单测这样装。
-	guard  contentguard.Checker
-	clock  func(context.Context, *sql.Tx) (uint64, error)
-	actors *actorVerifyCache
-	world  *worldWindow // nil = 世界频道直读
+	guard        contentguard.Checker
+	profiles     ProfileReader
+	profileCache *profileCache
+	clock        func(context.Context, *sql.Tx) (uint64, error)
+	actors       *actorVerifyCache
+	world        *worldWindow // nil = 世界频道直读
 }
 
 // receipt只描述SQL元数据；业务原件始终是原PB字节，不复制PB字段定义。
@@ -120,7 +131,9 @@ func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend 
 	if db == nil || states == nil || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds || rules.WorldHistoryCacheMs < 0 || rules.WorldHistoryCacheMs > constants.MaxWorldHistoryCacheMs {
 		return nil, ErrInvalid
 	}
-	if rules.WorldChannelCooldownMs < 0 || rules.WorldChannelCooldownMs > constants.MaxWorldChannelCooldownMs {
+	if rules.WorldChannelCooldownMs < 0 || rules.WorldChannelCooldownMs > constants.MaxWorldChannelCooldownMs ||
+		rules.WorldMinLevel < 0 || rules.DuplicateSpamWindowMs < 0 || rules.DuplicateSpamMaxSenders < 0 ||
+		rules.DuplicateSpamMaxPerSender < 0 || rules.NewAccountAgeHours < 0 || rules.NewAccountDailyPrivateLimit < 0 {
 		return nil, ErrInvalid
 	}
 	// 原件到期由库删除(schema.go 的 TTL 属性):可见窗口必须短于保留期,否则还在窗口里的历史会被删掉。
@@ -133,8 +146,13 @@ func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend 
 	if err := CheckSchema(ctx, db); err != nil {
 		return nil, err
 	}
+	profileTTL := time.Duration(rules.ActorVerifyTTLSeconds) * time.Second
+	if profileTTL < 30*time.Second {
+		profileTTL = 30 * time.Second
+	}
 	s := &Store{db: db, states: states, rules: rules, clock: databaseNow,
-		actors: newActorVerifyCache(time.Duration(rules.ActorVerifyTTLSeconds)*time.Second, actorVerifyMaxEntries, monotonicSinceStart())}
+		actors:       newActorVerifyCache(time.Duration(rules.ActorVerifyTTLSeconds)*time.Second, actorVerifyMaxEntries, monotonicSinceStart()),
+		profileCache: newProfileCache(profileTTL, profileCacheMaxEntries, monotonicSinceStart())}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -296,10 +314,12 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		}
 		return SendResult{Tip: r.tip, Duplicate: true}, nil
 	}
-	// 正文送检在事务之外、任何写入之前(content_review.go):事务里不做远程调用。
-	content, rejectTip := s.review(ctx, in.Message.Channel, actor, strings.TrimSpace(in.Message.Content))
-	if rejectTip != 0 {
-		// 没过之前先看是不是重放:首次已接受的原件不因词库后来变了、或内容安全服务此刻不可达而改口。
+	// 档案与等级检查在发送事务之外:读到等级不足前先查是不是已有 request_id 重放,避免影响重放幂等。
+	profile, hasProfile, err := s.loadPlayerProfile(ctx, actor, peer)
+	if err != nil {
+		return SendResult{}, err
+	}
+	rejectOrReplay := func(tip uint32) (SendResult, error) {
 		winner, readErr := scanReceipt(s.db.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
 		if readErr == nil {
 			return replay(winner)
@@ -307,7 +327,16 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		if !errors.Is(readErr, sql.ErrNoRows) {
 			return SendResult{}, readErr
 		}
-		return SendResult{Tip: rejectTip}, nil
+		return SendResult{Tip: tip}, nil
+	}
+	if peer == 0 && s.rules.WorldMinLevel > 0 && hasProfile && int(profile.Level) < s.rules.WorldMinLevel {
+		return rejectOrReplay(constants.ErrLevelTooLow)
+	}
+	// 正文送检在事务之外、任何写入之前(content_review.go):事务里不做远程调用。
+	rawTrimmed := strings.TrimSpace(in.Message.Content)
+	content, rejectTip, pendingPlatform := s.review(ctx, in.Message.Channel, actor, rawTrimmed)
+	if rejectTip != 0 {
+		return rejectOrReplay(rejectTip)
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
@@ -334,9 +363,8 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_send_authority WHERE player_id=? AND state=1 AND accepted_ms>=? AND accepted_ms<?", actor, start, start+1000).Scan(&count); err != nil {
 		return SendResult{}, err
 	}
-	// limited 是两种限流共用的出口。计数或间隔查询看到的行里可能有同一 request_id 并发首发的赢家:它已提交就是重复,不是超限。
-	// 否则客户端换新 id 重发会多出一条。
-	limited := func(cooldown bool) (SendResult, error) {
+	// limited 是限流/防刷/新号限额在已开事务内共用的出口:先核是否同一 request_id 并发首发赢家。
+	txRejectOrReplay := func(tip uint32, cooldown bool) (SendResult, error) {
 		winner, readErr := scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
 		if readErr == nil {
 			return replay(winner)
@@ -344,10 +372,10 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		if !errors.Is(readErr, sql.ErrNoRows) {
 			return SendResult{}, readErr
 		}
-		return SendResult{Tip: constants.ErrRateLimited, Cooldown: cooldown}, nil
+		return SendResult{Tip: tip, Cooldown: cooldown}, nil
 	}
 	if count >= uint64(s.rules.RateLimitPerSecond) {
-		return limited(false)
+		return txRejectOrReplay(constants.ErrRateLimited, false)
 	}
 	if peer == 0 && s.rules.WorldChannelCooldownMs > 0 {
 		cooling, coolErr := worldCooldownActive(ctx, tx, actor, now, uint64(s.rules.WorldChannelCooldownMs))
@@ -355,8 +383,18 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 			return SendResult{}, coolErr
 		}
 		if cooling {
-			return limited(true)
+			return txRejectOrReplay(constants.ErrRateLimited, true)
 		}
+	}
+	if privTip, privErr := s.checkAndRecordPrivateTarget(ctx, tx, actor, peer, now, profile, hasProfile); privErr != nil {
+		return SendResult{}, privErr
+	} else if privTip != 0 {
+		return txRejectOrReplay(privTip, false)
+	}
+	if spamTip, spamErr := s.checkAndRecordRepeatSpam(ctx, tx, actor, now, rawTrimmed); spamErr != nil {
+		return SendResult{}, spamErr
+	} else if spamTip != 0 {
+		return txRejectOrReplay(spamTip, false)
 	}
 	var payload []byte
 	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: content, SendTimeMs: int64(now)}
@@ -383,7 +421,12 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		// 本副本上的下一次世界频道拉取必须看得到这条(读己之写);别的副本最多滞后 WorldHistoryCacheMs。
 		s.world.invalidate()
 	}
-	return SendResult{Message: message}, nil
+	out := SendResult{Message: message}
+	if peer == 0 && pendingPlatform {
+		out.PendingPlatformReview = true
+		out.PlatformReviewContent = rawTrimmed
+	}
+	return out, nil
 }
 
 // worldCooldownActive 报告这名玩家是否还在世界频道的发言间隔里:最近 cooldownMs 毫秒内已有一条被接受的世界频道消息。
@@ -507,6 +550,19 @@ func readWorldRows(ctx context.Context, tx *sql.Tx, limit int) ([]historyRow, er
 			return nil, err
 		}
 		merged = append(merged, rows...)
+	}
+	if len(merged) > 0 {
+		minMs := merged[0].acceptedMs
+		for _, row := range merged[1:] {
+			if row.acceptedMs < minMs {
+				minMs = row.acceptedMs
+			}
+		}
+		retracted, err := loadRetractedWorldKeys(ctx, tx, minMs)
+		if err != nil {
+			return nil, err
+		}
+		merged = filterRetractedRows(merged, retracted)
 	}
 	return newestRows(merged, limit), nil
 }

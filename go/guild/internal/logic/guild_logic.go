@@ -784,6 +784,7 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		MaxMembers:   g.MaxMembers,
 		ZoneId:       l.repo.FinalZone(g.ZoneID), // 客户端看到的是最终区,和玩家自己的归属区同一口径
 		Funds:        g.Funds,
+		RenamedMs:    g.RenamedMs,
 	}
 	officerCount := uint32(0)
 	for _, m := range g.Members {

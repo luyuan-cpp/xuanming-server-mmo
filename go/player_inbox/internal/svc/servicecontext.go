@@ -25,6 +25,7 @@ import (
 	"shared/clusterredis"
 	"shared/dbplacement"
 	"shared/drainproof"
+	"shared/dsclient"
 	"shared/etcdwatch"
 	"shared/kafkacmd"
 	"shared/leader"
@@ -157,7 +158,7 @@ func productionDeps() externalDeps {
 		openPlayerRedis:  openPlayerRedis,
 		openDataService: func(c zrpc.RpcClientConf) (*grpc.ClientConn, error) {
 			// 不用 MustNewClient:它在配置错误时直接退出进程,跳过本函数「返回错误、关闭已建资源」的契约。
-			cli, err := zrpc.NewClient(c)
+			cli, err := zrpc.NewClient(dsclient.Conf(c))
 			if err != nil {
 				return nil, err
 			}

@@ -626,7 +626,7 @@ $homeZoneReadResults = @('ok', 'not_found', 'error')
 #   (account_role_trade.go)与入场登记(account_role_admission.go)不在该文件,不计入。
 # $accountDirectoryResults:result 取值。rejected = 鉴权失败或业务拒绝(InvalidArgument / PermissionDenied /
 #   ResourceExhausted / FailedPrecondition),error = 依赖故障(Unavailable),not_found = NotFound。
-$accountDirectoryRpcs = @('read', 'create', 'lookup', 'repair', 'remove')
+$accountDirectoryRpcs = @('read', 'create', 'lookup', 'repair', 'remove', 'deletion_request', 'deletion_cancel', 'deletion_claim', 'deletion_finish')
 $accountDirectoryResults = @('ok', 'not_found', 'rejected', 'error')
 # $redisAlwaysCommands:R2 在 Δcalls 前 8 名之外必列的命令(有就列),对应核心读写。
 $redisAlwaysCommands = @('mget', 'evalsha', 'eval', 'get', 'set')

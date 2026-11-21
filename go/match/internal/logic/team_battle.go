@@ -38,7 +38,7 @@ func NewTeamBattleStarter(svcCtx *svc.ServiceContext) *TeamBattleStarter {
 func (s *TeamBattleStarter) TeamSizeFor(mode, battleConfigId uint32) uint32 {
 	switch matchpb.MatchMode(mode) {
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
-		return min(s.svcCtx.Catalog.MaxTeamSize(matchpb.MatchMode(mode), battleConfigId), kMaxBattleTeamSize)
+		return min(s.svcCtx.ActiveCatalog().MaxTeamSize(matchpb.MatchMode(mode), battleConfigId), kMaxBattleTeamSize)
 	default:
 		return 0
 	}

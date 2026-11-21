@@ -214,20 +214,20 @@ func TestAlipayNotificationBecomesAPayment(t *testing.T) {
 		t.Fatalf("sign: %v", err)
 	}
 	for name, body := range map[string][]byte{
-		"the amount changed after signing":      tamper(t, body, "total_amount=6.10", "total_amount=7.10"),
-		"a key sent twice":                      append(append([]byte(nil), body...), "&total_amount=0.01"...),
+		"the amount changed after signing":       tamper(t, body, "total_amount=6.10", "total_amount=7.10"),
+		"a key sent twice":                       append(append([]byte(nil), body...), "&total_amount=0.01"...),
 		"a signature that also covers sign_type": alipayForm(wrongRule, overSignType),
-		"signed by another key":                 alipayFixture{alipay: f.app}.notice(t, alipayPaidParams()),
-		"no signature":                          alipayForm(alipayPaidParams(), ""),
-		"not a form":                            []byte("%zz"),
-		"another app":                           with(func(p map[string]string) { p["app_id"] = "2021000000000002" }),
-		"another seller":                        with(func(p map[string]string) { p["seller_id"] = "2088000000000002" }),
-		"the old RSA sign type":                 with(func(p map[string]string) { p["sign_type"] = "RSA" }),
-		"no trade_no":                           with(func(p map[string]string) { delete(p, "trade_no") }),
-		"no out_trade_no":                       with(func(p map[string]string) { delete(p, "out_trade_no") }),
-		"an amount with three decimals":         with(func(p map[string]string) { p["total_amount"] = "6.100" }),
-		"an amount of nothing":                  with(func(p map[string]string) { p["total_amount"] = "0.00" }),
-		"an unreadable gmt_payment":             with(func(p map[string]string) { p["gmt_payment"] = "2026/11/20 19:59:30" }),
+		"signed by another key":                  alipayFixture{alipay: f.app}.notice(t, alipayPaidParams()),
+		"no signature":                           alipayForm(alipayPaidParams(), ""),
+		"not a form":                             []byte("%zz"),
+		"another app":                            with(func(p map[string]string) { p["app_id"] = "2021000000000002" }),
+		"another seller":                         with(func(p map[string]string) { p["seller_id"] = "2088000000000002" }),
+		"the old RSA sign type":                  with(func(p map[string]string) { p["sign_type"] = "RSA" }),
+		"no trade_no":                            with(func(p map[string]string) { delete(p, "trade_no") }),
+		"no out_trade_no":                        with(func(p map[string]string) { delete(p, "out_trade_no") }),
+		"an amount with three decimals":          with(func(p map[string]string) { p["total_amount"] = "6.100" }),
+		"an amount of nothing":                   with(func(p map[string]string) { p["total_amount"] = "0.00" }),
+		"an unreadable gmt_payment":              with(func(p map[string]string) { p["gmt_payment"] = "2026/11/20 19:59:30" }),
 	} {
 		if _, err := f.channel.ParseNotification(nil, body); !errors.Is(err, ErrBadSignature) {
 			t.Fatalf("%s: err = %v, want ErrBadSignature", name, err)
@@ -389,11 +389,11 @@ func TestAlipayQueryMapsTradeStatus(t *testing.T) {
 		reply  alipayReply
 		callOp string // 期望的 CallError.Op;空串表示期望别的错误
 	}{
-		"an unknown trade_status":  {reply: alipayReply{node: alipayTradeNode("TRADE_FROZEN", paidAt)}},
-		"another order":            {reply: alipayReply{node: strings.Replace(paid, testOutTradeNo, "ffffffffffffffffffffffffffffffff", 1)}},
-		"a payment without an id":  {reply: alipayReply{node: strings.Replace(paid, aliTradeNo, "", 1)}},
-		"a payment of nothing":     {reply: alipayReply{node: strings.Replace(paid, `"total_amount":"6.10"`, `"total_amount":"0.00"`, 1)}},
-		"an answer without a sign": {reply: alipayReply{raw: `{"alipay_trade_query_response":` + paid + `}`}},
+		"an unknown trade_status":                {reply: alipayReply{node: alipayTradeNode("TRADE_FROZEN", paidAt)}},
+		"another order":                          {reply: alipayReply{node: strings.Replace(paid, testOutTradeNo, "ffffffffffffffffffffffffffffffff", 1)}},
+		"a payment without an id":                {reply: alipayReply{node: strings.Replace(paid, aliTradeNo, "", 1)}},
+		"a payment of nothing":                   {reply: alipayReply{node: strings.Replace(paid, `"total_amount":"6.10"`, `"total_amount":"0.00"`, 1)}},
+		"an answer without a sign":               {reply: alipayReply{raw: `{"alipay_trade_query_response":` + paid + `}`}},
 		"an answer whose sign covers other text": {reply: alipayReply{raw: `{"alipay_trade_query_response":` + strings.Replace(paid, "6.10", "9.10", 1) + `,"sign":"` + signed + `"}`}},
 		"an answer that repeats its node": {reply: alipayReply{raw: `{"alipay_trade_query_response":` + strings.Replace(paid, "6.10", "9.10", 1) +
 			`,"alipay_trade_query_response":` + paid + `,"sign":"` + signed + `"}`}},

@@ -67,9 +67,9 @@ echo     9.  Robot       (build + run load-test client)
 echo     10. Infra       (docker-compose up: Kafka/Redis/MySQL/etcd)
 echo     11. Infra down  (docker-compose down)
 echo     12. Build       (compile C++ + Go, no launch)
-echo     13. Proto       (regenerate proto code)
+echo     13. Proto       (regenerate proto + db/login goctl wrappers)
 echo     14. Export      (Excel data table export)
-echo     15. Gen         (Export tables + regenerate proto)
+echo     15. Gen         (Export tables + proto + db/login goctl wrappers)
 echo     16. Clean logs  (delete all log files)
 echo     17. UI          (mprocs TUI dashboard)
 echo     18. Start SA-Token  (local Spring Boot auth app)
@@ -707,11 +707,11 @@ echo     infra-down     Stop local infra
 echo     obs            Start Grafana + Loki + Alloy log viewer (http://localhost:3000)
 echo     obs-down       Stop the log viewer stack
 echo     build          Compile C++ + Go (no launch)
-echo     proto          Regenerate proto code
+echo     proto          Regenerate proto code + db/login goctl wrappers
 echo     export         Run Excel data table exporter (Python)
 echo     export ^<cfg^>   Use custom config (default: exporter_config.yaml)
 echo                    Optional Python override: set PYTHON_EXE=C:\path\to\python.exe
-echo     gen            Export tables + regenerate proto (both)
+echo     gen            Export tables + regenerate proto + db/login goctl wrappers
 echo     clean-logs     Delete all log files under run\logs
 echo     ui             mprocs TUI dashboard (all processes)
 echo     ui-cpp         mprocs TUI (C++ nodes only)

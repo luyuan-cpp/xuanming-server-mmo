@@ -82,8 +82,7 @@ bool Durable(entt::entity player, uint64_t revision) {
     const auto* identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
     const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
     if (revision == 0 || identity == nullptr || !player_mutability::HasFencedOwnership(player) ||
-        owner == nullptr || persisted == nullptr || !persisted->HasSnapshot() ||
-        persisted->committed_owner_epoch != owner->epoch || persisted->committed_save_seq == 0) return false;
+        owner == nullptr || persisted == nullptr || !persisted->IsCommittedForOwner(owner->epoch)) return false;
     const auto& saved = persisted->snapshot->player_database_data();
     return saved.player_id() == identity->value && saved.client_request_ledger().material_reward().revision() >= revision;
 }

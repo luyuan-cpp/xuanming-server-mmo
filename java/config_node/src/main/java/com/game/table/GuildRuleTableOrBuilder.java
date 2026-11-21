@@ -69,4 +69,22 @@ public interface GuildRuleTableOrBuilder extends
    * @return The trialInviteCooldownSeconds.
    */
   int getTrialInviteCooldownSeconds();
+
+  /**
+   * <code>uint32 rename_cooldown_seconds = 11;</code>
+   * @return The renameCooldownSeconds.
+   */
+  int getRenameCooldownSeconds();
+
+  /**
+   * <code>uint32 name_hold_seconds = 12;</code>
+   * @return The nameHoldSeconds.
+   */
+  int getNameHoldSeconds();
+
+  /**
+   * <code>uint64 rename_cost_funds = 13;</code>
+   * @return The renameCostFunds.
+   */
+  long getRenameCostFunds();
 }

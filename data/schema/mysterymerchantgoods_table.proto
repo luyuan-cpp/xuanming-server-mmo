@@ -24,6 +24,7 @@ message MysteryMerchantGoodsTable {
   option (cfg_sheet)       = "MysteryMerchantGoods";
   option (cfg_source_file) = "MysteryMerchantGoods.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   // 商品 id
   uint32 id = 1;

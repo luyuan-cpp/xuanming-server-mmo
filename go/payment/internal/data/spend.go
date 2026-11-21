@@ -122,6 +122,81 @@ func (r *Repo) ReserveIntent(ctx context.Context, rec *paymentpb.PaymentIntentRe
 	return rec, true, nil
 }
 
+// RecordMinorPaymentOutcome 是原子落账未成年人付款事实与意图转已付的结论。
+type RecordMinorPaymentOutcome struct {
+	Stored    *paymentpb.PaymentTxnRecord
+	Inserted  bool // true = 本次新建了 payment_txn 行
+	WasClosed bool // true = 锁定时意图已处于 CLOSED(迟到付款)
+	OverLimit bool // true = 迟到付款在额度行锁下超限,已按 MallOrphan 落账且未恢复意图
+}
+
+// RecordMinorPaymentTxn 在未成年人额度行锁与意图行锁下,把「核对/恢复意图状态 + 写入付款事实」合并成单个原子事务,
+// 消除 unlocked 读意图与 MarkIntentPaid 之间的 TOCTOU 绕过,以及 ReviveMinorIntent 成功但 InsertTxn 失败导致的提前占额。
+func (r *Repo) RecordMinorPaymentTxn(ctx context.Context, rec *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord,
+	limit SpendLimit, paidMs, now uint64, overLimitReason string) (RecordMinorPaymentOutcome, error) {
+	tx, err := r.spendTx(ctx)
+	if err != nil {
+		return RecordMinorPaymentOutcome{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := lockSpender(ctx, tx, intent.SpenderHi, intent.SpenderLo, now); err != nil {
+		return RecordMinorPaymentOutcome{}, err
+	}
+	var state uint32
+	if err := tx.QueryRowContext(ctx, "SELECT state FROM payment_intent WHERE order_hi=? AND order_lo=? FOR UPDATE",
+		intent.OrderHi, intent.OrderLo).Scan(&state); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RecordMinorPaymentOutcome{}, ErrNotFound
+		}
+		return RecordMinorPaymentOutcome{}, err
+	}
+	existing, err := scanTxn(tx.QueryRowContext(ctx, "SELECT "+txnColumns+" FROM payment_txn WHERE channel=? AND txn_hi=? AND txn_lo=? FOR UPDATE",
+		rec.Channel, rec.TxnHi, rec.TxnLo))
+	switch {
+	case err == nil:
+		return RecordMinorPaymentOutcome{Stored: existing, Inserted: false, WasClosed: state == IntentClosed}, nil
+	case !errors.Is(err, ErrNotFound):
+		return RecordMinorPaymentOutcome{}, err
+	}
+	out := RecordMinorPaymentOutcome{Stored: rec, Inserted: true, WasClosed: state == IntentClosed}
+	switch state {
+	case IntentCreated:
+		if _, err := tx.ExecContext(ctx, "UPDATE payment_intent SET state=?,paid_ms=?,channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=? AND state=?",
+			IntentPaid, paidMs, now, intent.OrderHi, intent.OrderLo, IntentCreated); err != nil {
+			return RecordMinorPaymentOutcome{}, err
+		}
+	case IntentClosed:
+		if err := checkSpend(ctx, tx, intent, limit); err != nil {
+			if !errors.Is(err, ErrMonthlyLimit) && !errors.Is(err, ErrDailyLimit) {
+				return RecordMinorPaymentOutcome{}, err
+			}
+			out.OverLimit = true
+			rec.MallState, rec.MallDue, rec.MallLastError = MallOrphan, 0, overLimitReason
+			rec.FinalizeState, rec.FinalizeNextMs = FinalizeNone, 0
+		} else {
+			if _, err := tx.ExecContext(ctx, "UPDATE payment_intent SET state=?,paid_ms=?,channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=? AND state=?",
+				IntentPaid, paidMs, now, intent.OrderHi, intent.OrderLo, IntentClosed); err != nil {
+				return RecordMinorPaymentOutcome{}, err
+			}
+		}
+	case IntentPaid:
+		// 意图已由同单另一笔付款转已付:照常记下本笔付款事实交商城按重复付款退回,不重复计额。
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO payment_txn ("+txnColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		rec.Channel, rec.TxnHi, rec.TxnLo, rec.TransactionId, rec.OrderHi, rec.OrderLo, rec.OutTradeNo, rec.PlayerId,
+		rec.PaidAmountMinor, rec.PaidCurrency, rec.PaidMs,
+		rec.MallState, rec.MallRefundReason, rec.MallAttempts, rec.NextAttemptMs, rec.MallLastError,
+		rec.RefundState, rec.OutRefundNo, rec.RefundId, rec.RefundMs, rec.RefundAttempts, rec.RefundNextMs, rec.RefundLastError, rec.CreatedMs, rec.UpdatedMs,
+		rec.FactRevision, rec.FactObservedMs, rec.MallRevision, rec.MallDue, rec.ChannelToken, rec.ChannelOrderId, rec.StoreAmountMinor, rec.StoreCurrency,
+		rec.FinalizeState, rec.FinalizeNextMs, rec.ProductId); err != nil {
+		return RecordMinorPaymentOutcome{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return RecordMinorPaymentOutcome{}, err
+	}
+	return out, nil
+}
+
 // ReviveMinorIntent 在额度行锁下复核一笔已关闭的未成年人意图重新转成已付(迟到的付款、App Store 撤回退款)。
 // 额度够:转 PAID、计入 paidMs 所在的月与日,回 true。不够:force 为假时什么都不改、回 false(这笔钱转人工,不发货);
 // force 为真时照样转 PAID(钱又回到商户,商城照常收敛),回 false 让调用方记合规事件。

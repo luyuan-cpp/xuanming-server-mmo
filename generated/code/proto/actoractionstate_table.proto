@@ -8,14 +8,11 @@ option java_outer_classname = "ActorActionStateTableOuterClass";
 option java_multiple_files = true;
 
 
-message ActorActionStatestate {
-	uint32 state_mode = 1;
-	uint32 state_tip = 2;
-}
-
 message ActorActionStateTable {
 	uint32 id = 1;
-	repeated ActorActionStatestate state = 2;
+	uint32 state_id = 3;
+	uint32 state_mode = 4;
+	uint32 state_tip = 5;
 }
 
 message ActorActionStateTableData {

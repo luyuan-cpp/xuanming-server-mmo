@@ -473,6 +473,10 @@ func runDataService(c config.Config) (runErr error) {
 	var rpcServerMu sync.Mutex
 	serverReady := make(chan struct{})
 
+	// 熔断按逻辑库在建连处做(internal/svc/db_breaker.go),关掉 zrpc 自带的按方法服务端熔断,yaml 写开也不认:
+	// 目录各片与存档库可落在不同集群,一个集群失联且流量占比过三分之一时,按方法的熔断会把同一方法上指向健康库的调用
+	// 也挡掉(docs/design/data-service-breaker-per-logical-db.md §1、§5.1)。Shedding 与 Timeout 不动。
+	c.Middlewares.Breaker = false
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		rpcServerMu.Lock()
 		rpcServer = grpcServer

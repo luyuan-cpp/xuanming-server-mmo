@@ -104,6 +104,28 @@
           >刷新审计</a-button
         >
       </div>
+      <div class="filters">
+        <a-input
+          v-model:value="filterPlayerId"
+          class="filter-input"
+          inputmode="numeric"
+          allow-clear
+          placeholder="按玩家 ID 筛选"
+          :disabled="blocked"
+          @press-enter="applyAuditFilter"
+        />
+        <a-select
+          v-model:value="filterStatus"
+          class="filter-select"
+          allow-clear
+          placeholder="全部状态"
+          :options="playerStatusOptions"
+          :disabled="blocked"
+          @change="applyAuditFilter"
+        />
+        <a-button :loading="auditLoading" :disabled="blocked" @click="applyAuditFilter">筛选</a-button>
+        <a-button :disabled="blocked" @click="resetAuditFilter">重置</a-button>
+      </div>
       <a-alert
         v-if="auditError"
         class="space"
@@ -130,13 +152,20 @@
           ></template
         >
       </BasicTable>
-      <p class="hint space">
-        最近 50 条，共
-        {{
-          total
-        }}
-        条。结果未知时先检查玩家状态和服务日志，不要重复创建同一操作。
-      </p>
+      <div class="pagination space">
+        <p class="hint">
+          共 {{ total }} 条，当前第 {{ auditPage }} 页（本页 {{ records.length }} 条）。结果未知时先检查玩家状态和服务日志，不要重复创建同一操作。
+        </p>
+        <a-pagination
+          :current="auditPage"
+          :page-size="auditPageSize"
+          :total="total"
+          :page-size-options="['20', '50', '100']"
+          show-size-changer
+          :disabled="blocked || auditLoading"
+          @change="onAuditPageChange"
+        />
+      </div>
     </div>
 
     <BasicModal
@@ -236,13 +265,50 @@
           show-icon
           :message="sendError"
         />
-        <a-collapse class="space"
-          ><a-collapse-panel key="details" header="冻结的请求与执行结果">
+        <a-collapse class="space">
+          <a-collapse-panel key="details" header="冻结的请求与执行结果">
             <pre class="json">{{
               pretty({ request: reviewed.request, result: reviewed.result })
             }}</pre>
-          </a-collapse-panel></a-collapse
-        >
+          </a-collapse-panel>
+          <a-collapse-panel
+            v-if="hasPermission('gm:audit:read')"
+            key="audit"
+            header="状态变更轨迹"
+          >
+            <a-spin :spinning="auditHistoryLoading">
+              <a-alert
+                v-if="auditHistoryError"
+                type="warning"
+                show-icon
+                :message="auditHistoryError"
+              />
+              <a-empty
+                v-else-if="!auditHistory.length"
+                description="暂无审计轨迹"
+              />
+              <div v-else class="timeline">
+                <div
+                  v-for="entry in auditHistory"
+                  :key="entry.id"
+                  class="timeline-item"
+                >
+                  <div class="timeline-meta">
+                    <a-tag :color="statusColor(entry.event)">{{
+                      statusLabel(entry.event)
+                    }}</a-tag>
+                    <span>第 {{ entry.attempt }} 次</span>
+                    <span>操作人：{{ entry.operator }}</span>
+                    <span class="hint">{{ entry.createdAt }}</span>
+                  </div>
+                  <pre v-if="entry.result" class="json">{{
+                    pretty(entry.result)
+                  }}</pre>
+                </div>
+              </div>
+            </a-spin>
+          </a-collapse-panel>
+        </a-collapse>
         <a-checkbox
           v-if="canSend"
           v-model:checked="confirmed"
@@ -255,9 +321,9 @@
         <a-button :disabled="blocked" @click="closeModal">关闭</a-button>
         <a-button
           v-auth="'gm:audit:read'"
-          :loading="auditLoading"
+          :loading="auditLoading || auditHistoryLoading"
           :disabled="blocked"
-          @click="loadAudit"
+          @click="refreshReviewed"
           >刷新原命令状态</a-button
         >
         <a-button
@@ -282,10 +348,15 @@ import { BasicTable, useTable, type BasicColumn } from "/@/components/Table";
 import { BasicModal, useModal } from "/@/components/Modal";
 import { usePermission } from "/@/hooks/web/usePermission";
 import { useMessage } from "/@/hooks/web/useMessage";
-import { newClientRequestId } from "/@/api/gm/console";
+import {
+  currencyLabel,
+  newClientRequestId,
+  type GmAuditEntry,
+} from "/@/api/gm/console";
 import {
   PLAYER_OPERATIONS,
   buildPlayerCommandDraft,
+  getPlayerCommandAudit,
   getPlayerCommandCatalog,
   getPlayerCommands,
   preparePlayerCommand,
@@ -374,8 +445,23 @@ const reviewedArguments = computed<Record<string, unknown>>(() => {
 const [registerModal, { openModal, closeModal }] = useModal();
 const records = ref<PlayerCommand[]>([]);
 const total = ref(0);
+const auditPage = ref(1);
+const auditPageSize = ref(50);
+const filterPlayerId = ref("");
+const filterStatus = ref<string | undefined>(undefined);
+const playerStatusOptions = [
+  { value: "DRAFT", label: "待确认草稿" },
+  { value: "SENDING", label: "执行中" },
+  { value: "EXECUTED", label: "已执行" },
+  { value: "UNKNOWN", label: "结果未知" },
+  { value: "REJECTED", label: "已拒绝" },
+];
 const auditLoading = ref(false);
 const auditError = ref("");
+const auditHistory = ref<GmAuditEntry[]>([]);
+const auditHistoryLoading = ref(false);
+const auditHistoryError = ref("");
+let auditHistoryVersion = 0;
 
 function invalidateDraft() {
   clientRequestId.value = "";
@@ -579,16 +665,6 @@ function argumentValue(key: string, value: unknown) {
       ? pretty(value)
       : String(value ?? "未提供");
 }
-function currencyLabel(label: string) {
-  return (
-    (
-      { GOLD: "银两", DIAMOND: "灵石", BIND_DIAMOND: "绑定灵石" } as Record<
-        string,
-        string
-      >
-    )[label.replace(/^CURRENCY_TYPE_/, "")] || label
-  );
-}
 
 async function loadCatalog() {
   if (catalogLoading.value) return;
@@ -640,9 +716,31 @@ function showReview(command: PlayerCommand) {
   confirmed.value = false;
   sendError.value = "";
   openModal(true);
+  void loadAuditHistory(command.id);
 }
 function review(command: PlayerCommand) {
   if (!blocked.value) showReview(command);
+}
+async function loadAuditHistory(commandId: string) {
+  if (!hasPermission("gm:audit:read")) return;
+  const version = ++auditHistoryVersion;
+  auditHistoryLoading.value = true;
+  auditHistoryError.value = "";
+  try {
+    const entries = await getPlayerCommandAudit(commandId);
+    if (version === auditHistoryVersion) auditHistory.value = entries;
+  } catch (error) {
+    if (version === auditHistoryVersion) {
+      auditHistory.value = [];
+      auditHistoryError.value = `状态轨迹加载失败。${errorText(error)}`;
+    }
+  } finally {
+    if (version === auditHistoryVersion) auditHistoryLoading.value = false;
+  }
+}
+async function refreshReviewed() {
+  await loadAudit();
+  if (reviewed.value) await loadAuditHistory(reviewed.value.id);
 }
 async function prepare() {
   if (blocked.value || !operationEnabled.value) return;
@@ -700,12 +798,33 @@ async function send() {
     emit("busy-change", false);
   }
   await loadAudit();
+  if (reviewed.value) await loadAuditHistory(reviewed.value.id);
+}
+function applyAuditFilter() {
+  auditPage.value = 1;
+  void loadAudit();
+}
+function resetAuditFilter() {
+  filterPlayerId.value = "";
+  filterStatus.value = undefined;
+  auditPage.value = 1;
+  void loadAudit();
+}
+function onAuditPageChange(page: number, pageSize: number) {
+  auditPage.value = page;
+  auditPageSize.value = pageSize;
+  void loadAudit();
 }
 async function loadAudit() {
   if (auditLoading.value || !hasPermission("gm:audit:read")) return;
   auditLoading.value = true;
   try {
-    const page = await getPlayerCommands();
+    const page = await getPlayerCommands({
+      page: auditPage.value,
+      pageSize: auditPageSize.value,
+      playerId: filterPlayerId.value,
+      status: filterStatus.value,
+    });
     records.value = page.records;
     total.value = page.total;
     auditError.value = "";
@@ -783,5 +902,35 @@ onUnmounted(() => {
   overflow-wrap: anywhere;
   max-height: 340px;
   overflow: auto;
+}
+.filters,
+.pagination,
+.timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filters {
+  margin-bottom: 12px;
+}
+.filter-input {
+  width: 220px;
+}
+.filter-select {
+  width: 160px;
+}
+.pagination {
+  justify-content: space-between;
+}
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.timeline-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
 }
 </style>

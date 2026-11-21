@@ -271,3 +271,7 @@
 | 17 | high(前提同第 11 条,再加 TiCDC 正在换 owner 或滚动升级) | 第 11 条把「TiCDC 说没有这个 changefeed」当成已撤掉。TiCDC 查 changefeed 答的是 owner 内存里的那一份,owner 刚接任、各节点版本不一致时,还在的 changefeed 它也这样答 | 先核 TiCDC 健康(`/api/v2/health`)再问,不健康按查不成拒绝 |
 
 没核到的:TiCDC 的应答(本机没有镜像,只从 tiflow `release-8.5` 的源码核到 `ErrChangeFeedNotExists` 属于按 400 回的那一组)。第 17 条依据的是对 tiflow owner 实现的记忆,判断错了的后果是 cleanup 多问一次或者一直拒绝,不会多删;搬库手册 §10 列了用真实 TiCDC 核的办法。
+
+### 6.7 2026-11-20 逻辑库故障隔离(data_service 熔断)
+
+`go/db` 与 `data_service` 在多逻辑库部署下原先共用 go-zero zrpc 按方法粒度的熔断,单个分片失联且流量占比超过 1/3 时会把同一方法上指向健康库的调用一并熔断。`data_service` 已改为服务端关 zrpc 按方法熔断、在 `shared/authoritysql` 建连处按逻辑库名熔断(闸门冻结与调用方取消不计失败),14 个 Go 调用方统一经 `shared/dsclient.Conf` 关掉客户端按方法熔断([data-service-breaker-per-logical-db.md](data-service-breaker-per-logical-db.md),已落码未编译)。被熔断挡回的调用未建连、未发 SQL,不改变既有数据一致性与排空语义。

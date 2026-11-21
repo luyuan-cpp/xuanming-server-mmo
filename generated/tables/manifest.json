@@ -1,16 +1,19 @@
 {
-  "schema_version": 1,
-  "version": 44,
-  "content_digest": "1f2db95c3d41d7f0c24f2f6ef0f6c127abc96282675b836002cb0c7fc793e3b1",
-  "generated_at": "2026-11-20T07:22:27Z",
+  "schema_version": 2,
+  "schema_digest": "de4be939691ab0e3",
+  "version": 45,
+  "content_digest": "85c1a119cd542b3fd09afaf54261d4a34997e4239421ea20ffd1d4fc4d7f1a42",
+  "generated_at": "2026-11-20T18:07:25Z",
   "source_rev": {
-    "commit": "ccf2840b2e126aba36d09b6223286e9cfba4f3a9",
+    "commit": "b6a08148c4d71f0274e945b0ec7ce7a1add5c08d",
     "data_dirty": true
   },
   "table_count": 54,
   "tables": [
     {
       "name": "ActivitySchedule",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 3,
       "source": {
         "file": "ActivitySchedule.xlsx",
@@ -34,6 +37,8 @@
     },
     {
       "name": "ActivityVitalityReward",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 0,
       "source": {
         "file": "ActivityVitalityReward.xlsx",
@@ -57,6 +62,8 @@
     },
     {
       "name": "ActivityVitalityRule",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 0,
       "source": {
         "file": "ActivityVitalityRule.xlsx",
@@ -80,52 +87,58 @@
     },
     {
       "name": "ActorActionCombatState",
-      "rows": 4,
+      "hot_reload": false,
+      "ids_permanent": false,
+      "rows": 8,
       "source": {
         "file": "ActorActionCombatState.xlsx",
-        "size": 4128,
-        "sha256": "dcd08d69048ac51c300e5ff6808dfbfa2c580a1a5e4e29798ddf806de3423659"
+        "size": 5247,
+        "sha256": "a45ee7a3d6adf60c69ab22e0a82fbd1c8cce85c3740c7bd0894a38e14b3c0d85"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "actoractioncombatstate.json",
-          "size": 844,
-          "sha256": "6cb16b9316beabace8eb45a7cb07f19a5495370cb541ab1fc6527efcaa3b234d"
+          "size": 656,
+          "sha256": "b148d4b71a4d3410b58d7a620991d400824fbea57e8a8e969d4f85ec72a34684"
         },
         {
           "kind": "binary",
           "file": "actoractioncombatstate.pb",
-          "size": 58,
-          "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
+          "size": 76,
+          "sha256": "52a9737ba6f80f3021af29a348b613b87e4b4f4f009ede517c494e36eae83276"
         }
       ]
     },
     {
       "name": "ActorActionState",
-      "rows": 4,
+      "hot_reload": false,
+      "ids_permanent": false,
+      "rows": 12,
       "source": {
         "file": "ActorActionState.xlsx",
-        "size": 4124,
-        "sha256": "06eb45c8a0902e33cefbe2846ed28120fa051c28156a5c6b99424b7c885d5dc9"
+        "size": 5316,
+        "sha256": "b1776307634d92c09b1115bda1cb8c481458970c29f88d0b666c5f6b4095cccf"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "actoractionstate.json",
-          "size": 844,
-          "sha256": "6cb16b9316beabace8eb45a7cb07f19a5495370cb541ab1fc6527efcaa3b234d"
+          "size": 976,
+          "sha256": "d86ed5bb97c6e8b3519a0a0a8e2c17f455e7a2a3c7375334552c86e977baeac0"
         },
         {
           "kind": "binary",
           "file": "actoractionstate.pb",
-          "size": 58,
-          "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
+          "size": 114,
+          "sha256": "8a29bd7b30ce66b0b935eb8a770f3c7aa34a286c71d7009d4ec9cb7f62f88320"
         }
       ]
     },
     {
       "name": "AfkPassRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "AfkPassRule.xlsx",
@@ -149,6 +162,8 @@
     },
     {
       "name": "AttributeAllocRatio",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 8,
       "source": {
         "file": "AttributeAllocRatio.xlsx",
@@ -172,6 +187,8 @@
     },
     {
       "name": "AttributeAutoPlan",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 6,
       "source": {
         "file": "AttributeAutoPlan.xlsx",
@@ -195,6 +212,8 @@
     },
     {
       "name": "AttributeDimension",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 8,
       "source": {
         "file": "AttributeDimension.xlsx",
@@ -218,6 +237,8 @@
     },
     {
       "name": "AttributePool",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 2,
       "source": {
         "file": "AttributePool.xlsx",
@@ -241,6 +262,8 @@
     },
     {
       "name": "AttributeRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "AttributeRule.xlsx",
@@ -264,6 +287,8 @@
     },
     {
       "name": "BaseScene",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 21,
       "source": {
         "file": "BaseScene.xlsx",
@@ -287,6 +312,8 @@
     },
     {
       "name": "Buff",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 98,
       "source": {
         "file": "Buff.xlsx",
@@ -310,6 +337,8 @@
     },
     {
       "name": "Class",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 9,
       "source": {
         "file": "Class.xlsx",
@@ -333,6 +362,8 @@
     },
     {
       "name": "Condition",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 29,
       "source": {
         "file": "Condition.xlsx",
@@ -356,6 +387,8 @@
     },
     {
       "name": "Cooldown",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 9,
       "source": {
         "file": "Cooldown.xlsx",
@@ -379,6 +412,8 @@
     },
     {
       "name": "Dungeon",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 4,
       "source": {
         "file": "Dungeon.xlsx",
@@ -402,6 +437,8 @@
     },
     {
       "name": "EquipAffixPool",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 29,
       "source": {
         "file": "EquipAffixPool.xlsx",
@@ -425,6 +462,8 @@
     },
     {
       "name": "EquipAffixRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "EquipAffixRule.xlsx",
@@ -448,6 +487,8 @@
     },
     {
       "name": "EquipArtifact",
+      "hot_reload": false,
+      "ids_permanent": true,
       "rows": 8,
       "source": {
         "file": "EquipArtifact.xlsx",
@@ -471,6 +512,8 @@
     },
     {
       "name": "EquipAttribute",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 26,
       "source": {
         "file": "EquipAttribute.xlsx",
@@ -494,6 +537,8 @@
     },
     {
       "name": "EquipAttributeCap",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 125,
       "source": {
         "file": "EquipAttributeCap.xlsx",
@@ -517,6 +562,8 @@
     },
     {
       "name": "EquipEnhance",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 22,
       "source": {
         "file": "EquipEnhance.xlsx",
@@ -540,6 +587,8 @@
     },
     {
       "name": "EquipGem",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 12,
       "source": {
         "file": "EquipGem.xlsx",
@@ -563,6 +612,8 @@
     },
     {
       "name": "EquipGemSocket",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 6,
       "source": {
         "file": "EquipGemSocket.xlsx",
@@ -586,6 +637,8 @@
     },
     {
       "name": "EquipSlot",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 11,
       "source": {
         "file": "EquipSlot.xlsx",
@@ -609,6 +662,8 @@
     },
     {
       "name": "EquipV1Affix",
+      "hot_reload": false,
+      "ids_permanent": true,
       "rows": 36,
       "source": {
         "file": "EquipV1Affix.xlsx",
@@ -632,6 +687,8 @@
     },
     {
       "name": "GlobalVariable",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 16,
       "source": {
         "file": "GlobalVariable.xlsx",
@@ -655,6 +712,8 @@
     },
     {
       "name": "GuildActivity",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 3,
       "source": {
         "file": "GuildActivity.xlsx",
@@ -678,6 +737,8 @@
     },
     {
       "name": "GuildDonate",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 3,
       "source": {
         "file": "GuildDonate.xlsx",
@@ -701,6 +762,8 @@
     },
     {
       "name": "GuildLevel",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 10,
       "source": {
         "file": "GuildLevel.xlsx",
@@ -724,29 +787,33 @@
     },
     {
       "name": "GuildRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "GuildRule.xlsx",
-        "size": 5483,
-        "sha256": "90f60b1d1530f07c8c168b0a53a442f419703cd8f327f55391274eb311118da1"
+        "size": 5674,
+        "sha256": "9266647d4eac50258c5550652260010ab40a2c91fc8e88c160e37097d4fc7752"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildrule.json",
-          "size": 377,
-          "sha256": "864d4ebc1963e17962c236f5485340356f66611b216a330f8676e50c8401972f"
+          "size": 477,
+          "sha256": "072c4de9c98d1e730a2e8f0280dd058f59c57c622df8863a740f9e27da039ee6"
         },
         {
           "kind": "binary",
           "file": "guildrule.pb",
-          "size": 22,
-          "sha256": "2047d097275e79d19ea7adfe8a237952131d50c3723024067013db7d54d04711"
+          "size": 33,
+          "sha256": "18980d869af9a09151e628fd8010a3c69a1701ef964234c333378a5aa1dcf283"
         }
       ]
     },
     {
       "name": "GuildShop",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 11,
       "source": {
         "file": "GuildShop.xlsx",
@@ -770,29 +837,33 @@
     },
     {
       "name": "Item",
-      "rows": 132,
+      "hot_reload": false,
+      "ids_permanent": true,
+      "rows": 133,
       "source": {
         "file": "Item.xlsx",
-        "size": 14996,
-        "sha256": "0205b4784931ee9d382b82ceaaf1ce8bb1c851db6cd84bc438925d563774eb5d"
+        "size": 13788,
+        "sha256": "25d7abe7cca0c225dae0e5d624560c6b25fcd4876c143081b9428dc24d5d5976"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 50606,
-          "sha256": "8db67092b7aa516c8d725488451ac35bb99e4c32777f4076f5073d257c802781"
+          "size": 51055,
+          "sha256": "bf11497181a829c6fe4689c0044b8a117e7ebd84fd89deaea28128ddc53e226c"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 11002,
-          "sha256": "ed34426f7c28b79c4e827111cef6b63e56d924ba4f410d48df7c3ede7ed80adc"
+          "size": 11103,
+          "sha256": "3f9f87683f07f182389d40233d890bcb241411a9065cf9694a08ee3a53f52a7c"
         }
       ]
     },
     {
       "name": "MessageLimiter",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 91,
       "source": {
         "file": "MessageLimiter.xlsx",
@@ -816,6 +887,8 @@
     },
     {
       "name": "Mirror",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 2,
       "source": {
         "file": "Mirror.xlsx",
@@ -839,6 +912,8 @@
     },
     {
       "name": "Mission",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 17,
       "source": {
         "file": "Mission.xlsx",
@@ -862,6 +937,8 @@
     },
     {
       "name": "Monster",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 16,
       "source": {
         "file": "Monster.xlsx",
@@ -885,6 +962,8 @@
     },
     {
       "name": "MysteryMerchantGoods",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 12,
       "source": {
         "file": "MysteryMerchantGoods.xlsx",
@@ -908,6 +987,8 @@
     },
     {
       "name": "MysteryMerchantRule",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "MysteryMerchantRule.xlsx",
@@ -931,6 +1012,8 @@
     },
     {
       "name": "MysteryMerchantSpot",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 6,
       "source": {
         "file": "MysteryMerchantSpot.xlsx",
@@ -954,6 +1037,8 @@
     },
     {
       "name": "Pet",
+      "hot_reload": false,
+      "ids_permanent": true,
       "rows": 22,
       "source": {
         "file": "Pet.xlsx",
@@ -977,6 +1062,8 @@
     },
     {
       "name": "PetEntry",
+      "hot_reload": false,
+      "ids_permanent": true,
       "rows": 21,
       "source": {
         "file": "PetEntry.xlsx",
@@ -1000,6 +1087,8 @@
     },
     {
       "name": "PetRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "PetRule.xlsx",
@@ -1023,6 +1112,8 @@
     },
     {
       "name": "PetTier",
+      "hot_reload": false,
+      "ids_permanent": true,
       "rows": 5,
       "source": {
         "file": "PetTier.xlsx",
@@ -1046,6 +1137,8 @@
     },
     {
       "name": "PlayMode",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 7,
       "source": {
         "file": "PlayMode.xlsx",
@@ -1069,6 +1162,8 @@
     },
     {
       "name": "Reward",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 7,
       "source": {
         "file": "Reward.xlsx",
@@ -1092,29 +1187,33 @@
     },
     {
       "name": "RoleNameRule",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 1,
       "source": {
         "file": "RoleNameRule.xlsx",
-        "size": 5201,
-        "sha256": "ca4f1674b5ad25db6c151450927ef43dda33ae73478164d752cdf0e5eb56d5a4"
+        "size": 5531,
+        "sha256": "f344c1ac33d77356faa1e7d53cbbad72bd7f2263904982e8815c010e1d77ec3f"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rolenamerule.json",
-          "size": 199,
-          "sha256": "b004e910ab8c5ed46d56afcdb646e0f36de8c32714252105553fd2ee39aa6d7e"
+          "size": 327,
+          "sha256": "3a769a9b0140b05b4d852f48a92f607c51129378885522b09bf96549c758866b"
         },
         {
           "kind": "binary",
           "file": "rolenamerule.pb",
-          "size": 37,
-          "sha256": "bf1490a12a559ce1c219b74280eddddba8163aaef5228553a938d6dbcc295cf3"
+          "size": 50,
+          "sha256": "54ace139e5fafdbfb7d2a962e5551170a61b77a2403810c770913fa43ba1da71"
         }
       ]
     },
     {
       "name": "Skill",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 115,
       "source": {
         "file": "Skill.xlsx",
@@ -1138,6 +1237,8 @@
     },
     {
       "name": "SkillPermission",
+      "hot_reload": true,
+      "ids_permanent": false,
       "rows": 3,
       "source": {
         "file": "SkillPermission.xlsx",
@@ -1161,6 +1262,8 @@
     },
     {
       "name": "Test",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 6,
       "source": {
         "file": "Test.xlsx",
@@ -1184,6 +1287,8 @@
     },
     {
       "name": "TestMultiKey",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 6,
       "source": {
         "file": "TestMultiKey.xlsx",
@@ -1207,6 +1312,8 @@
     },
     {
       "name": "World",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 16,
       "source": {
         "file": "World.xlsx",
@@ -1230,6 +1337,8 @@
     },
     {
       "name": "ZoneGroup",
+      "hot_reload": false,
+      "ids_permanent": false,
       "rows": 2,
       "source": {
         "file": "ZoneGroup.xlsx",

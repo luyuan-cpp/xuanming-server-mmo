@@ -2,71 +2,169 @@
 package table
 
 import (
-    "fmt"
-    "log"
-    "sync"
+	"fmt"
+	"log"
+	"sync"
+	"sync/atomic"
 )
 
-var loadSuccessCallback func()
+// SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
+const SchemaDigest = "{{ schema_digest }}"
+
+var hotReloadableTables = map[string]bool{
+{%- for item in hot_reload_names %}
+	"{{ item }}": true,
+{%- endfor %}
+}
+
+var allTableNames = []string{
+{%- for item in sheetnames %}
+	"{{ item }}",
+{%- endfor %}
+}
+
+// IsHotReloadable 按本二进制编译期名单判定该表是否允许运行期热更(cfg_hot_reload)。
+func IsHotReloadable(tableName string) bool {
+	return hotReloadableTables[tableName]
+}
+
+// TableNames 返回本二进制包含的全部表名副本(按字典序)。
+func TableNames() []string {
+	out := make([]string, len(allTableNames))
+	copy(out, allTableNames)
+	return out
+}
+
+// BundleIdentity 记录一套 TableSet 的来源与摘要身份。
+type BundleIdentity struct {
+	SchemaDigest  string
+	ContentDigest string
+	Version       uint64
+	LoadSeq       uint64
+	Source        string // "image" 或 "bundle"
+}
+
+// TableSet 持有整批不可变表快照:需要跨多张表读同一版本的业务先取 ts := table.Current() 再经 ts 读取。
+type TableSet struct {
+	Identity BundleIdentity
+{%- for item in sheetnames %}
+	{{ item }} *{{ item }}TableManager
+{%- endfor %}
+}
+
+var (
+	loadSuccessCallback func()
+	currentTableSet     atomic.Pointer[TableSet]
+	commitSeq           atomic.Uint64
+	commitCallbacksMu   sync.Mutex
+	commitCallbacks     []func(*TableSet)
+)
+
+// Current 返回当前已提交的整套不可变 TableSet;尚未 LoadTables / Commit 前返回 nil。
+func Current() *TableSet {
+	return currentTableSet.Load()
+}
+
+// Prepare 从 configDir 解析全部配置表到一套全新的独立 TableSet,不修改任何现役单例。
+// 任意一张表失败立即返回错误。
+func Prepare(configDir string, useBinary bool) (*TableSet, error) {
+	ts := &TableSet{
+		Identity: BundleIdentity{
+			SchemaDigest: SchemaDigest,
+		},
+{%- for item in sheetnames %}
+		{{ item }}: New{{ item }}TableManager(),
+{%- endfor %}
+	}
+{%- for item in sheetnames %}
+	if err := ts.{{ item }}.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare {{ item }} table failed: %w", err)
+	}
+{%- endfor %}
+	return ts, nil
+}
+
+// Commit 把 Prepare 产出的整套 TableSet 提交生效:
+// 先替换全部包级单例的原子快照指针,再原子发布 Current(),最后按序回调 OnTablesCommit 监听器。
+func Commit(ts *TableSet) {
+	if ts == nil {
+		return
+	}
+	ts.Identity.LoadSeq = commitSeq.Add(1)
+{%- for item in sheetnames %}
+	if ts.{{ item }} != nil {
+		{{ item }}TableManagerInstance.swapSnapshot(ts.{{ item }}.snap.Load())
+	}
+{%- endfor %}
+	currentTableSet.Store(ts)
+
+	commitCallbacksMu.Lock()
+	cbs := make([]func(*TableSet), len(commitCallbacks))
+	copy(cbs, commitCallbacks)
+	commitCallbacksMu.Unlock()
+	for _, cb := range cbs {
+		cb(ts)
+	}
+}
+
+// OnTablesCommit 注册每次整批 Commit 生效后的回调(启动与热更均会触发)。
+func OnTablesCommit(cb func(*TableSet)) {
+	if cb == nil {
+		return
+	}
+	commitCallbacksMu.Lock()
+	commitCallbacks = append(commitCallbacks, cb)
+	commitCallbacksMu.Unlock()
+}
 
 // LoadTables loads all config tables synchronously.
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTables(configDir string, useBinary bool) {
-{%- for item in sheetnames %}
-    if err := {{ item }}TableManagerInstance.Load(configDir, useBinary); err != nil {
-        log.Fatalf("failed to load {{ item }} table: %v", err)
-    }
-{%- endfor %}
+	ts, err := Prepare(configDir, useBinary)
+	if err != nil {
+		log.Fatalf("failed to load tables from %s: %v", configDir, err)
+	}
+	ts.Identity.Source = "image"
+	Commit(ts)
 
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
+	if loadSuccessCallback != nil {
+		loadSuccessCallback()
+	}
 }
 
 // LoadTablesAsync loads all config tables using goroutines.
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
-    var wg sync.WaitGroup
-    wg.Add({{ sheetnames | length }})
+	ts := &TableSet{
+		Identity: BundleIdentity{
+			SchemaDigest: SchemaDigest,
+			Source:       "image",
+		},
+{%- for item in sheetnames %}
+		{{ item }}: New{{ item }}TableManager(),
+{%- endfor %}
+	}
+	var wg sync.WaitGroup
+	wg.Add({{ sheetnames | length }})
 
 {%- for item in sheetnames %}
-    go func() {
-        defer wg.Done()
-        if err := {{ item }}TableManagerInstance.Load(configDir, useBinary); err != nil {
-            log.Fatalf("failed to load {{ item }} table: %v", err)
-        }
-    }()
+	go func() {
+		defer wg.Done()
+		if err := ts.{{ item }}.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load {{ item }} table: %v", err)
+		}
+	}()
 {%- endfor %}
 
-    wg.Wait()
+	wg.Wait()
+	Commit(ts)
 
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
+	if loadSuccessCallback != nil {
+		loadSuccessCallback()
+	}
 }
 
-// OnTablesLoadSuccess registers a callback invoked after all tables load.
+// OnTablesLoadSuccess registers a callback invoked after initial table load completes.
 func OnTablesLoadSuccess(cb func()) {
-    loadSuccessCallback = cb
-}
-
-// ReloadTables re-creates all table managers and loads fresh data.
-// Safe for hot-reload: replaces the global instances atomically.
-func ReloadTables(configDir string, useBinary bool) error {
-{%- for item in sheetnames %}
-    new{{ item }} := New{{ item }}TableManager()
-    if err := new{{ item }}.Load(configDir, useBinary); err != nil {
-        return fmt.Errorf("reload {{ item }} failed: %w", err)
-    }
-{%- endfor %}
-
-    // Swap all instances at once after all loads succeed.
-{%- for item in sheetnames %}
-    {{ item }}TableManagerInstance = new{{ item }}
-{%- endfor %}
-
-    if loadSuccessCallback != nil {
-        loadSuccessCallback()
-    }
-    return nil
+	loadSuccessCallback = cb
 }

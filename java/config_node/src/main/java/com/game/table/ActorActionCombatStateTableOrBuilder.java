@@ -17,26 +17,20 @@ public interface ActorActionCombatStateTableOrBuilder extends
   int getId();
 
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_id = 3;</code>
+   * @return The stateId.
    */
-  java.util.List<com.game.table.ActorActionCombatStatestate> 
-      getStateList();
+  int getStateId();
+
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_mode = 4;</code>
+   * @return The stateMode.
    */
-  com.game.table.ActorActionCombatStatestate getState(int index);
+  int getStateMode();
+
   /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
+   * <code>uint32 state_tip = 5;</code>
+   * @return The stateTip.
    */
-  int getStateCount();
-  /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-   */
-  java.util.List<? extends com.game.table.ActorActionCombatStatestateOrBuilder> 
-      getStateOrBuilderList();
-  /**
-   * <code>repeated .ActorActionCombatStatestate state = 2;</code>
-   */
-  com.game.table.ActorActionCombatStatestateOrBuilder getStateOrBuilder(
-      int index);
+  int getStateTip();
 }

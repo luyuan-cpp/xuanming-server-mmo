@@ -63,9 +63,6 @@ public class RateLimitProperties {
      */
     private long queueRetryIpCostMilli = 100;
 
-    /** Hard queue timeout (ms). After this the client gets QUEUE_TIMEOUT. */
-    private long queueTimeoutMs = 300_000;
-
     /**
      * 可信反向代理的 CIDR 列表(如 10.0.0.0/8)。**只有**当 socket 对端落在这些网段内,
      * 才解析 X-Forwarded-For;否则一律用 socket 对端地址。
@@ -143,8 +140,6 @@ public class RateLimitProperties {
     public void setQueueRetryJitterMs(long queueRetryJitterMs) { this.queueRetryJitterMs = queueRetryJitterMs; }
     public long getQueueRetryIpCostMilli() { return queueRetryIpCostMilli; }
     public void setQueueRetryIpCostMilli(long queueRetryIpCostMilli) { this.queueRetryIpCostMilli = queueRetryIpCostMilli; }
-    public long getQueueTimeoutMs() { return queueTimeoutMs; }
-    public void setQueueTimeoutMs(long queueTimeoutMs) { this.queueTimeoutMs = queueTimeoutMs; }
 
     public List<String> getTrustedProxies() { return trustedProxies; }
     public void setTrustedProxies(List<String> trustedProxies) {

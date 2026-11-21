@@ -193,7 +193,12 @@ std::optional<std::string> GzipDecompress(const std::string& compressed, const s
             return std::nullopt;
         }
     }
+    const bool hasTrailing = stream.avail_in != 0;
     inflateEnd(&stream);
+    if (hasTrailing)
+    {
+        return std::nullopt;
+    }
     return out;
 }
 

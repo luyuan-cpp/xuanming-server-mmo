@@ -14,7 +14,8 @@
 #include "player/comp/player_ownership_comp.h" // AfkPassRedisKey
 #include "player/system/afk_pass_rules.h"
 #include "player/system/client_request_ledger.h"
-#include "player/system/player_lifecycle.h" // IsPlayerFrozen、RequestKeyProgressSave
+#include "player/system/player_lifecycle.h" // RequestKeyProgressSave
+#include "player/system/player_mutability.h"
 #include "thread_context/ecs_context.h"
 
 #include "table/code/afkpassrule_table.h"
@@ -175,9 +176,9 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 	{
 		return kAfkPassPriceChanged;
 	}
-	// 4. 冻结(跨区传送、交易封存):判定函数与 CurrencySystem 内部用的是同一个,这里放行的请求不会在扣钱时被它以冻结拒绝。
+	// 4. 不可写窗口(冻结、跨区交接、退出在途、无归属围栏):与全局玩家可写闸保持一致。
 	//    战斗中不拦:开通不碰战斗快照。
-	if (PlayerLifecycleSystem::IsPlayerFrozen(player))
+	if (!player_mutability::IsPlayerMutable(player))
 	{
 		return kAfkPassFrozen;
 	}

@@ -3818,3 +3818,510 @@
 - 剩下的代码：渠道复核收尾（中断的复核改了 6 个源文件、写了 4 个测试文件，还缺苹果、谷歌、抖音的测试，抖音协议要对官方文档）、安卓微信支付回调页与两家 SDK 依赖、商城健康检查改成 HTTP、Unity IAP 编译后的修正。
 - 验证：导表与协议生成、四种语言的构建与单测、部署脚本测试、Unity、devpay 本机冒烟、kind 冒烟。全部没跑过。
 - Java 独立仓（AGENTS §12）：只登记待做，`PARITY.md` 已有条目。
+
+## 2026-11-20 Gemini（Carbon Medium）：战报回放真 TiDB 4+15 验证通过与跨区 1v1 冒烟诊断
+
+- **真 TiDB v8.5.2（`build/verification/battle-report-20261120/match/tidb/`）**：
+  - 当前工作区 `go/match` 的 `go build ./...`、`go vet ./...` 均 exit 0；启动前可用物理内存 7.728 GiB（高于 4 GiB 门槛），经 `sql_fixture_env.ps1` 新收据目录与 `MATCH_IT_REQUIRE_TIDB=1` 启动隔离集群（`127.0.0.1:24411`）。
+  - `go test ./internal/authority/... -run "BattleReport" -count=1 -v`：5/5 PASS（含全部 4 个 `TestBattleReportTiDB*`），0 FAIL、0 SKIP（80.744s）。
+  - `go test ./internal/authority/... -run "TerminalTiDB|CompletionTiDB" -count=1 -v -timeout 20m`：15 个顶层用例（含 8 个子用例，共 23 项）全部 PASS，0 FAIL、0 SKIP（324.819s）。
+  - `CommitBattleOutcome` 耗时采样（只读 `-overlay`，未改工作区源码）：无回放首次提交 52,551 us（重放 13,409 / 2,872 us）；带合格回放首次提交 82,657 us（重放 5,812 / 6,423 us）；坏外壳丢回放写列表 78,139 us；未请求回放丢弃（含冷 Region 分裂）507,358 us。
+- **跨区 1v1 冒烟准备与运行（`build/verification/battle-report-20261120/smoke/`）**：
+  - 复现并留存 11-10 离线准备失败底层 stderr：`ValueError: 开发子网与现有 Docker 网络重叠: festival-maps-20261109_default (172.29.222.0/24)`。
+  - 在隔离目录按 A17c 单地域存档库（`player_store_1000000_db`）、`rank` 服务、二区 `<InstanceKey>.yaml` 运行配置、串行 `*-sql-boot` 注册链及本栈 `LOGIN_DEV_PASSWORD_SHARED_SECRET` 生成双区隔离配置（`172.29.229.0/24`）；重建当前可编译的 9 个 Go 镜像（`login`、`rank` 因其他会话在途改动沿用 `2026-11-18` 同协议缓存镜像），仅压缩 WSL 页缓存即恢复可用内存至 4.569 GiB（未终止任何宿主进程）。
+  - 双区 39 容器全部健康拉起，`match-migrate` 显式建出 `match_battle_report` 与 `match_player_battle_report`；`robot`（`-mod=readonly` 编译）双端跨区成局 `battle_id=7272395305044938803`，直连打满 24 回合，battle 产出 `metric=battle_replay_frozen battle_id=7272395305044938803 rounds=24 truncated=0 raw_bytes=10878 payload_bytes=1531 compress_us=3240`，终局提交与 scene 经大厅推送的个人 `NotifyBattleEnd` 均已到达。
+- **拦停首错（按 `AGENTS.md` §10.3 低档模型不改代码停下，待切最高档模型修复）**：
+  - 原文：`CROSS_ZONE_MATCH_FAIL step=a-direct-delivery reason=direct connection saw total=26 state_replies=1 turn_results=24 battle_ends=0 spectate_states=0 spectate_turns=0 spectate_ends=0 heartbeat_replies=5, expected state_replies>=1, turn_results>=1 and battle_ends>=1`
+  - 根因：总体存盘方案 §5.4 已将个人 `BattleEndS2C` 改为仅由 scene 经大厅连接下发（`battle_room_manager.cpp:1617`），同仓 `robot/battle_smoke_scenario.go:517` 已改为 `direct.battleEnds.Load() != 0`，而 `robot/battle_smoke_cross_zone_scenario.go:344` 漏改仍要求 `direct.battleEnds.Load() >= 1`，在进入第 239 行第 5 步 `battleReportSmokeCheck` 前 4 行固定报错。
+  - 待续项：切 `Gemini 4 Neon Extra` 将 `robot/battle_smoke_cross_zone_scenario.go:344-347` 对齐 `battle_smoke_scenario.go:517-520`，再切回低档模型重编 `smoke/robot.exe`、复用 `smoke/go-build-9` 镜像复跑 `smoke/run_smoke_verification.ps1` 取齐 `BATTLE_REPORT_OK` 与 `CROSS_ZONE_MATCH_OK`。所有临时容器、卷、网络已清理。
+
+
+## 2026-11-20 Gemini（Gemini 4 Neon Extra）：托管内部密钥部署收尾修复——按 StatefulSet/Deployment 滚动重启（护住 Agones scene Fleet）、写入移到各写前闸之后、取消全集群 `list secrets`、补换值 infra 重启提醒（未跑测试，待低档模型验证；Java 不适用）
+
+- **起因**：对 2026-11-20「部署替运维维护 domain-service-secrets 的内部调用密钥」条目做静态复核，修四处实害与两处文档残余：
+  1. **`-ResyncDomainServiceSecrets` 重启方式**：原来 `kubectl delete pod -n <ns> -l "app in (...)" --wait=false` 会无视 PDB 与滚动策略一次性全杀 `scene` 与 `db`/`data-service`，且把 Agones `scene` Fleet 的 `Allocated` GameServer 直接打成 `Unhealthy` 强踢玩家。
+  2. **接入位置破坏写前零写保证**：原来 `Sync-ManagedDomainServiceSecrets` 在 `switch ($Command)` 之前，早于 `Apply-Infra`（核心 Redis 重启闸、Loki 形态闸、集群 UID、TLS Secret）与 `Apply-Zone`（SQL 写者名册、服务端预演、旧形态删除闸）的写前闸，被拒时已写 Secret 甚至删 Pod。
+  3. **集群级 RBAC 权限面**：原来 `Read-DomainServiceSecretEntries` 用 `kubectl get secrets --all-namespaces`，是全脚本唯一要求全集群 `list secrets` 的调用（`--field-selector` 不收敛 K8s RBAC 权限）。
+  4. **换值步骤漏重启 infra / 换 4 把 zone 键的口径**：先改 infra 再跑 `-ResyncDomainServiceSecrets` 时 infra 未被改写不会自动重启，多消费者键（如 `role-fence-coordinator` 的 6 个服务含 `-canary`）容易漏重启。
+- **改动**（main 工作区，未提交）：
+  - `tools/scripts/k8s_deploy.ps1`：
+    - `Read-DomainServiceSecretEntries`：改为先 `kubectl get namespaces -o name`（非敏感元数据），再按 namespace 逐个读 infra 与 `<NamespacePrefix>-*` 的 `domain-service-secrets`（`--ignore-not-found -o json`），RBAC 可收口到按 namespace + `resourceNames`。
+    - `Get-ManagedDomainServiceSecretPlan`：新增返回字段 `InfraManualRestarts`（只记「zone 改写了共享键但 infra 未改写，且该消费者不在 `Restarts[infra]` 里」的 infra 消费者）。
+    - `Sync-ManagedDomainServiceSecrets`：执行一次后清空 `$script:ManagedDomainServiceSecretPlan`（`all-up` 不重复写）；改写后的重启改为按 `Get-WorkloadKind` 分 `statefulset` / `deployment` 先列本 namespace 实际存在的对象再执行 `kubectl rollout restart`（先滚 StatefulSet 再滚 Deployment，不强杀 Pod）；`scene` 在重启名单但无 `scene*` Deployment（Agones Fleet 形态）时告警给出 `tools/scripts/k8s_scene_roll.ps1 -Namespace <ns> -Fleet <...> -Restart`；`InfraManualRestarts` 非空时告警给出 `kubectl -n <infra> rollout restart ...`（含 `-canary` 提示）。
+    - 接入位置：从门禁块末尾移入 `Apply-Infra`（全部写前闸与 `Ensure-Namespace` 之后、`$infraManifests` 之前）与 `Apply-Zone`（`-SqlSchemaOnly` 在 `Ensure-Namespace` 之后、正常路径在 `Remove-ClientEntryObsoleteResources` 之后、`New-NodeConfigMapYaml` 之前）。
+  - `tools/scripts/tests/k8s_migrate_gate.tests.ps1`：同步更新托管密钥 4 条用例（`InfraManualRestarts` 与同服务去重；按 namespace 读且不触碰别的前缀 / 不调 `get secrets --all-namespaces`；`rollout restart` 顺序、Agones Fleet 告警、infra 手工重启告警与 run-once 幂等；`Apply-Infra` / `Apply-Zone` 接入位置）。
+  - `tools/scripts/tests/k8s_client_entry_contract.tests.ps1`：假 kubectl 夹具同步改为匹配 `get namespaces -o name` 与按 namespace 读 `domain-service-secrets`。
+  - 文档与注释：`docs/ops/k8s-open-server-runbook.md`（§1 商城第 4 点与托管密钥维护/换值步骤 1、3、4、6）、`deploy/k8s/README.md`（`-ResyncDomainServiceSecrets`）、`deploy/k8s/manifests/go-svc/payment.yaml`（第 16 行注释）。
+- **已跑只读静态预检**（按 `AGENTS.md §10.3`，未跑任何测试套件）：
+  - PowerShell `Parser::ParseFile` 语法检查（`k8s_deploy.ps1`、`k8s_migrate_gate.tests.ps1`、`k8s_client_entry_contract.tests.ps1`）：均 `0 error(s)`；
+  - `python tools/scripts/check_log_text_english.py`：通过（`log text check passed: no CJK literals in log/console calls`）。
+- **未验证（交低档模型 Gemini `Carbon Medium` 或 Codex `6.1 Sol Ultra` 执行，仓库根，无需集群）**：
+  1. `pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1`：期望全 PASS（重点核对 5 条「托管内部密钥…」用例）。
+  2. `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`：期望全 PASS（重点核对「非 DryRun 负向:…」「非 DryRun 无漂移:…」与包装链契约）。
+  3. 回归：`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`pwsh -NoProfile -File tools/scripts/tests/k8s_login_auth_provider_guard.tests.ps1`。
+  4. `python tools/scripts/check_log_text_english.py`：期望 0 violations。
+- **Java 版（AGENTS §12）**：不适用，不往 `PARITY.md` 加行。
+
+## 2026-11-20 Gemini（Gemini 4 Neon Extra）：`data_service` 熔断从按方法改为按逻辑库建连闸口，全仓调用方关闭按方法客户端熔断（已落码，未编译、未运行；Java 不适用）
+
+- **设计依据**：`docs/design/data-service-breaker-per-logical-db.md`（§5、§6 全量 32 文件落码；负责人 2026-11-20 批准按最标准方式直接落码）。
+- **根因**：`data_service` 背后按逻辑库分片（目录 K 片、流水库、按 `storage_id` 各一的存档库），不同逻辑库经 `tools/dbmove` 可落在不同集群。原先服务端 zrpc `Middlewares.Breaker` 与各 Go 调用方客户端 `Middlewares.Breaker` 均按方法粒度熔断、不分后端，单个逻辑库集群失联且流量占某方法 1/3 以上时，两层熔断会把同一方法上指向健康逻辑库的调用连带挡掉。
+- **改动**（main 工作区，未提交）：
+  - **服务端（6 个文件）**：
+    - `go/shared/authoritysql/pool.go`：新增 `ConnectGate` 类型与 `WithConnectGate` 选项，`connector` 记录 `logicalDB` 与 `connectGate`，在 `connector.Connect` 包住落点解析、拨号与会话核对（拒连时不拨号；建连结束结算 `err`；搬库闸门冻结 `ErrWriterFrozen` 发生在建连之后，天然结算 `nil` 不计故障）。
+    - `go/shared/authoritysql/connect_gate_test.go`（新）：覆盖拒连不拨号、成功/落点失败/拨号失败结算、闸门冻结不计建连失败、`WithConnectGate` 选项。
+    - `go/data_service/internal/svc/db_breaker.go`（新）：`newLogicalDBConnectGate()` 按具名熔断 `logical_db/<logicalDB>` 门控建连，调用方主动取消（`context.Canceled`）与成功记 `Accept`，其余失败记 `Reject("connect failed")`，拒连错误带逻辑库名并包 `breaker.ErrServiceUnavailable`。
+    - `go/data_service/internal/svc/db_breaker_test.go`（新）：覆盖坏库打开熔断（错带库名与 `breaker.ErrServiceUnavailable`）时健康库每次放行，以及 `context.Canceled` 永不触发熔断。
+    - `go/data_service/internal/svc/servicecontext.go`：给 `mysqlCfg.PoolOptions` 安全追加 `authoritysql.WithConnectGate(newLogicalDBConnectGate())`。
+    - `go/data_service/data_service.go`：在 `zrpc.MustNewServer` 前强制 `c.Middlewares.Breaker = false`（忽略 yaml 配置）。
+  - **调用方（16 个文件）**：
+    - `go/shared/dsclient/dsclient.go`（新）：`Conf(c zrpc.RpcClientConf) zrpc.RpcClientConf` 强制关闭 `c.Middlewares.Breaker = false`。
+    - `go/shared/dsclient/dsclient_test.go`（新）：验证 `Conf` 仅修改 `Breaker`，并扫描 `go/` 下全部非测试 `.go` 文件，机械守卫凡出现 `NewDataServiceClient(` 的文件必须经 `dsclient.Conf(`。
+    - 14 处 `data_service` 客户端构造点统一接入 `dsclient.Conf(...)`：`go/chat/internal/svc/authority.go`、`go/db/player_store_wiring.go`、`go/friend/internal/svc/servicecontext.go`、`go/guild/internal/svc/guild_id_minter.go`、`go/guild/cmd/assetopfix/main.go`、`go/login/internal/svc/home_zone.go`、`go/login/internal/svc/player_id_minter.go`、`go/match/internal/svc/servicecontext.go`、`go/payment/channels.go`、`go/player_inbox/internal/svc/servicecontext.go`、`go/scene_manager/internal/svc/servicecontext.go`、`go/shared/domainhost/dependencies.go`、`go/trade/internal/svc/servicecontext.go`、`go/trade/cmd/assetopfix/main.go`。
+  - **配置与注释（4 个文件）**：`go/login/etc/login.yaml`、`go/scene_manager/etc/scene_manager_service.yaml`、`tools/scripts/k8s_deploy.ps1`（login ConfigMap）、`deploy/login-stack.linux/login.yaml` 的 `DataServiceRpc.Middlewares.Breaker` 均改为 `false` 并同步说明。
+  - **文档（4 个设计文档 + 本条目）**：更新 `docs/design/data-service-breaker-per-logical-db.md` 状态、`docs/design/db-task-store-unavailable-deferral.md` 文首说明、`docs/design/horizontal-scale-logical-db.md` §11 批次表、`docs/design/data-consistency-guarantee-map-20261020.md` §6.7。
+- **已跑只读静态预检**（按 `AGENTS.md §10.3`，未编译、未运行测试）：
+  - `gofmt -l` 核查全部 22 个 Go 文件（本批改动行零格式差异；`go/data_service/internal/svc/servicecontext.go` 仅含既有未改行对齐差异）；
+  - 全仓扫描 `go/` 非测试 `.go` 文件：14/14 处 `NewDataServiceClient(` 均含 `dsclient.Conf(`；
+  - `tools/scripts/k8s_deploy.ps1` PowerShell `Parser::ParseFile` 0 error；
+  - `python tools/scripts/check_log_text_english.py`：0 violations。
+- **未验证（交低档模型 Gemini `Carbon Medium` 或 Codex `6.1 Sol Ultra` 执行）**：
+  1. 核心单测与守卫（环境 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）：
+     - `go/shared`：`go vet ./authoritysql/... ./dsclient/... ./domainhost/... && go test ./authoritysql/... ./dsclient/... -run "TestConnectGate|TestWithConnectGate|TestConfDisablesOnlyBreaker|TestAllDataServiceClientConstructorsUseDsclientConf" -count=1 -v`
+     - `go/data_service`：`go build ./... && go vet ./... && go test ./internal/svc/... -run "TestLogicalDBConnectGate" -count=1 -v`
+  2. 全量调用方编译与 vet（11 个模块依次执行 `go build ./... && go vet ./...`）：`go/shared`、`go/chat`、`go/db`、`go/friend`、`go/guild`、`go/login`、`go/match`、`go/payment`、`go/player_inbox`、`go/scene_manager`、`go/trade`。
+  3. 部署脚本回归（仓库根）：`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`。
+  4. 可选调试栈冒烟（需目录 `LogicalShards > 1` 或多 SQL 实例）：停掉其中一个实例，验证落在另一实例的账号登录/建角/进场正常，`data_service` 日志仅见坏库 `logical database ... circuit breaker is open`；单 SQL 实例环境不可测，如实报未运行。
+- **Java 版（AGENTS §12）**：不适用（Java 版无 `data_service` 与 go-zero），不往 `PARITY.md` 加行。
+
+## 2026-11-20 Gemini（Gemini 4 Neon Extra）：战报回放服务端标准收口与 Unity 客户端全量落码（未编译运行，待 Codex 验证；Java 留 TODO）
+
+- **范围与约束**：所有改动直接落于服务端与客户端 `main` 工作区，未建分支、未提交、未碰其他会话在途文件（`go/login`、`go/rank`、`player_pet.cpp`、客户端 `PaymentClient.cs` / `PlayerFeaturesClient.Activities.cs`）。按 `AGENTS.md §10.3` 仅改代码/测试/文档与跑只读静态预检，编译、单测与跨区冒烟移交 Codex。Java 版保留在 `PARITY.md` TODO。
+- **服务端改动（`xuanming-server-mmo-cpp`）**：
+  - **C++ 终局冻结原件与预摘要签名（修复设计 §6.3 重试重复拷贝与双次 SHA-256）**：`cpp/libs/engine/core/security/service_call_auth.h` 新增 `ValidDigestHex`、`SignatureForDigest`、`SignForDigest`（`Signature` 委托单一实现）；`cpp/nodes/battle/logic/battle_room_manager.{h,cpp}` 将 `outcomePayload` + `outcomeReplay` 收敛为单份 `std::optional<::match::CommitBattleOutcomeRequest> frozenOutcomeRequest`，`BeginResultCommit` 冻结并算一次 `Digest`，`SendSqlOutcome` 按冻结摘要直接 `SignForDigest` 更新 `auth`；`cpp/nodes/battle/tests/battle_observer_contract_test.cpp` 新增 `ReplayOutcomeRetriesReuseFrozenBodyAndPassVerify` 与 `MakeOutcomeDue`。
+  - **C++ gzip 尾字节收紧**：`cpp/libs/services/battle/system/battle_replay_recorder.cpp` 的 `GzipDecompress` 在 `Z_STREAM_END` 后检查 `stream.avail_in != 0` 拒绝尾部夹带字节；`cpp/tests/turn_battle_engine_test/battle_replay_recorder_test.cpp` 补断言。
+  - **Go / K8s 回滚开关与逻辑层单测**：`go/match/etc/match_service.yaml` 显式补 `BattleReport.Enabled: true`；`tools/scripts/k8s_deploy.ps1` 镜像至 `go-svc-match-config`；`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 补镜像契约断言；新增 `go/match/internal/logic/battlereportlogic_test.go` 覆盖缺会话 / 未绑角色 / `battle_id=0` / 存储报错。
+  - **robot 参战直连断言对齐**：`robot/battle_direct_conn.go` 抽出 `verifyFighterDelivery()`，收敛 `battle_smoke_cross_zone_scenario.go` 与 `battle_smoke_scenario.go`（个人 `BattleEndS2C` 由 scene 经大厅推达，直连 `battle_ends` 应为 0），解除跨区冒烟第 5 步 `battleReportSmokeCheck` 前置拦截；`robot/battle_direct_conn_test.go` 新增 `TestBattleDirectVerifyFighterDelivery`。
+  - **文档同步**：更新 `docs/design/battle-report-replay.md`（状态、§6.2、§6.3、§7.4 删角清理已接入 `role_fence_purge.go`）与 `docs/handoff/battle-report-replay-client.md`（§9 客户端仓核对与落码清单）。
+- **Unity 客户端改动（`../mmorpg-client`）**：
+  - 核对协议与 C# 生成产物已齐全（`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`），无需重跑协议生成。
+  - **纯逻辑（单线程 WebGL 安全、零 Unity 依赖）**：新增 `Assets/Scripts/Game/Battle/BattleReplayDecoder.cs`（版本/上限校验、流式限长 `GZipStream` 防解压炸弹 + `NONE` 兜底）、`BattleReportClient.cs`（大厅连接单飞 RPC、断线/换角代次失效、NotFound 移行、Internal/限频不自动重试、4 份 LRU 缓存、胜负与近期 PVP 资格纯函数）、`BattleReplayPlayer.cs`（从任意第 k 回合起播、倍速 1x/2x/4x、暂停/继续、跳过终态、`DEADLINE_DRAW` 含空回合、`truncated`、配表指纹对比提示）。
+  - **接线与 uGUI**：`GameClient.cs` 挂接大厅传输 `BattleReports`；`WorldHudNavigation.cs` 末尾追加 `WorldHudEntry.BattleReport`；新增 `BattleReportPanel.cs`（可滚动 100 条 PVP 战报列表）；`BattleResultPanel.cs` 为近期 PVP 补弹战果加可选「看回放」按钮（默认参数兼容全量旧单测）；`BattleScreen.cs` 新增只读回放模式（`OpenReplay`、`CoPlayReplayTurn`、底部控制条含上一回合/暂停/下一回合/倍速/跳过/跳回合/退出回放）并在 `BattleHudLogic.cs` 登记交互矩形；`BattleUiRoot.cs` 编排战报入口与离线回放循环（不改 3 参 `BindSources` 签名以兼容生命周期单测）；`BattleUiWidgets.cs` 补窗体与输入框换肤。
+  - **EditMode 单测**：新增 `Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`，完整覆盖交接文档 §7 全部类别。
+- **待 Codex 验证**：C++ `battle.vcxproj` + `turn_battle_engine_test` + `battle_observer_contract_test`（`/m:1`）；Go `go/match` build/vet/test（含 `TestBattleReport*` 与 `battlereportlogic_test.go`）+ `k8s_deploy_contract.tests.ps1`；`robot` `-mod=readonly` build/vet/test + 重跑跨区 1v1 冒烟取 `BATTLE_REPORT_OK` 与 `CROSS_ZONE_MATCH_OK`；客户端 `client_compile_check.ps1` 与 Unity EditMode `Battle` 测试集。
+
+
+## 2026-11-20 Gemini（Gemini 4 Neon Extra）：独立 GM 管理系统现场打通与服务端 / 管理前端强一致 + 水平扩展标准收口（本轮新增代码未编译，交 Codex 验证；Java 全服务版留 TODO）
+
+- **本机「玩家 GM 服务未启用」现场修复（已实测跑通）**：
+  - 根因：11-18 重建后 `rpc-bridge/ready.json` 仍钉旧容器 ID、`xuanming-gm-mail-mail-1` 处于 `Exited (255)`、`deploy/debug/compose.game.yml` 缺 GM Scene 密钥环境变量与回环端口 `127.0.0.1:2355:50001`，且 `scene-deploy.py` / `gm_scene_promotion.py` / `docker_rebuild_recovery.py` 尚未支持 `x-xuanming-rebuild` 之上直接提升 GM Scene。
+  - 修复（其中 Python 启动/提升脚本与 217/217 单测已在 `b6a08148c` 落库，`deploy/debug/compose.game.yml` 改动在当前 `main` 工作区）：刷新 `rpc-bridge` 上游、`ensure_mail` 自愈拉起 `mail`、`scene-deploy.py` 动态发现现役手绘表与 `afterRebuild` 提升、完成 `scene` 提升与 `start_docker_debug.py --execute` 自检，实测 `probe_scene.py --execute`（`SceneRuntimeProbeIT`）通过（未签名 `PERMISSION_DENIED`，合法签名 `OK` + `tipId=1006` + `executed=false`）。
+- **全栈审计与标准收口改动（全部在 `main` 工作区，未建分支、未提交，未触碰其他会话文件）**：
+  1. **C++ 公共 GM 安全基元上提核心层 + `CommandCache` 过期回收 + 封禁即时请求存盘**：
+     - 新增 `cpp/libs/engine/core/security/gm_security.h`（纯头文件，命名空间 `gm_security`），`cpp/nodes/gate/gate_security.h` 改为 `using gm_security::...` 别名保持 `gate` 与 `gate_security_test.cpp` 100% 兼容。
+     - `cpp/nodes/scene/handler/rpc/scene_admin_handler.cpp`、`cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`、`cpp/nodes/scene/handler/grpc/gm_player_command_security.h` 全部改用 `#include "security/gm_security.h"`，彻底清除三处延迟的跨节点相对路径包含（`../../../gate/gate_security.h`）；同步更新 `cpp/tests/currency_test/client_gm_gate_test.cpp`、`cpp/tests/bag_test/player_equip_test.cpp` 与 `cpp/nodes/gate/SECURITY.md`。
+     - 修复 `gm_player_command::CommandCache` 满 10,000 条后永久拒单的 DoS 缺陷：按 `issued_at_ms / 1000 + 300 + max(0, skewSeconds)` 最小堆安全回收已绝无可能再通过 `Verify` 的过期条目，未过期条目绝不提前淘汰；`cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 传入当前时间与偏差并补齐 `kBlockCurrency` / `kUnblockCurrency` 成功后触发 `PlayerLifecycleSystem::RequestKeyProgressSave`；`cpp/tests/currency_test/gm_player_command_test.cpp` 补乱序插入与边界回收回归单测。
+  2. **GM Java 后端（`java/gm_admin`）强一致性、安全收口与水平扩展**：
+     - **动态场景发现（可水平扩展）**：`GamePlayerAdmin.java`、`GameServices.java`、`application-gm.yml`、`run_local.py` 新增可选 `gm.game.scene-etcd-url`（`GM_SCENE_ETCD_URL`，强制 HTTPS 或本机回环 HTTP）。优先静态映射 `GM_SCENE_TARGETS_JSON`，未命中时经 etcd v3 `/v3/kv/range` 动态发现 `SceneNodeService.rpc/` 下场景 `grpcEndpoint`（跳过 `/allocated/`、忽略缺 `grpcEndpoint`、脑裂双注册 fail-closed 报 `SCENE_AMBIGUOUS`、复用连接安全策略拒绝远端明文），移除 64 节点硬上限改为 1024 LRU 通道池并优雅关闭替换/下线通道；`GamePlayerAdminTest.java` 新增本机回环 mock etcd 全套测试。
+     - **多副本并发迁移安全 + 复合索引**：`GmInstallation.java` 将版本 1–4 改为事务首行占位 `gm_install` 主键（仅在并发副本已提交同版本时跳过 `DuplicateKeyException`，本事务业务失败仍整笔回滚），新增版本 5 幂等创建 4 条 `gm_command` / `gm_command_audit` 查询与审计复合索引；`GmInstallationTest.java` 补索引幂等测试。
+     - **原子过期拦截 + ID 生成加固 + 审计分页筛选与轨迹**：`GmCommandJournal.java` 在 `sendInternal` 的 `FOR UPDATE` 锁内用统一时钟原子拦截超 5 分钟 `PLAYER` 草稿（避免过期草稿误转 `SENDING`），加固 `nextId()` 避开 0 与随机主键碰撞，新增带校验分页与 `playerId`/`status` 筛选的 `list(...)`/`listPlayerCommands(...)` 及 `auditHistory(id, kind)`；`GmCommandJournalTest.java` 补全回归测试。
+     - **全币种邮件支持 + 密钥裁剪一致 + 鉴权预言机修复**：`GmController.java` 修复 `mailSecret.strip()` 校验一致性、在 `/gm/overview` 下发权威 `currencies`、放开邮件附件全币种（银两/灵石/绑定灵石，受 `game.supportsCurrency` 校验）、补 `/gm/mail/commands` 分页筛选与 `/gm/mail/commands/{id}/audit`；`GmPlayerCommandController.java` 在 `POST /gm/player-commands/{id}/send` 查库前先验至少持有一项玩家 GM 权限（消除 ID 探测预言机），补 `/gm/player-commands` 分页筛选与 `/gm/player-commands/{id}/audit`；`GmControllerTest.java`、`GmPlayerCommandControllerTest.java`、`GameServicesTest.java` 全部补测。
+  3. **GM Vue 3 前端（`java/gm_admin/frontend`）**：
+     - `console.ts`、`playerCommands.ts`、`index.vue`、`PlayerCommands.vue`：抽取共享 `currencyLabel`；邮件表单支持选择权威币种（默认银两）；邮件与玩家 GM 审计表补齐按玩家 ID / 状态筛选与分页器；核对弹窗补齐 `gm_command_audit` 完整状态变更轨迹展示。
+  4. **文档同步**：更新 `docs/design/jeecg-gm-administration.md` 与 `java/gm_admin/README.md`。
+- **只读静态预检**：待在落盘后执行 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（见下方最终汇报）。
+- **未编译 / 待 Codex 验证清单**（本轮未改 `.proto`，无需重跑协议生成；`java/gm_admin/prepare.py` 会在打包前重建 `gm-contracts.pb`）：
+  1. GM Java 扩展单测 + 打包 + Vue 3 前端构建：
+     - `python java/gm_admin/prepare.py`
+     - `mvn -f java/gm_admin/pom.xml -DskipTests=false test`（期望全部单测 PASS，含新增 etcd 动态发现、并发索引迁移、原子过期、分页筛选、审计轨迹、多币种邮件、鉴权预言机用例）
+     - `mvn -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package`
+     - `pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 build`
+  2. C++ 编译与单测（注：`scene.lib` 当前仍受其他会话的 `player_pet.cpp:1025 kPetNameSensitive` 阻塞，但独立单测与 `gate` 可先验证）：
+     - `msbuild /m:1 cpp/nodes/gate/gate.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - 独立 `gate_security_test.cpp`（Linux/容器）：`g++ -std=c++23 -I cpp/nodes/gate -I cpp/libs/engine/core -I third_party/googletest/googletest/include -I third_party/googletest/googletest cpp/nodes/gate/tests/gate_security_test.cpp third_party/googletest/googletest/src/gtest-all.cc third_party/googletest/googletest/src/gtest_main.cc -lssl -lcrypto -lpthread -o /tmp/gate_security_test && /tmp/gate_security_test`
+     - `msbuild /m:1 cpp/tests/currency_test/currency_test.vcxproj /p:Configuration=Debug /p:Platform=x64` 后运行 `currency_test --gtest_filter="GmPlayerCommand.*:ClientGmGateTest.*"`
+     - 待其他会话修复 `kPetNameSensitive` 后：`msbuild /m:1 cpp/nodes/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64`、`bag_test --gtest_filter="PlayerEquipTest.GmGrantItemHandlerFollowsTheSceneRunMode"`、`tools/scripts/build_linux.sh`
+  3. 本机重启 GM 网页与探针冒烟：重拉 GM 前后端后跑 `python java/gm_admin/probe_scene.py --execute` 并在浏览器核对 `http://127.0.0.1:3101/` 邮件多币种选择、审计筛选/分页与状态变更轨迹弹窗。
+- **Java 全服务版（AGENTS §12）**：保留在 `PARITY.md` TODO，本轮未改独立 Java 全服务仓 `xuanming-server-mmo`。
+
+
+## 2026-11-20 Gemini（Neon Extra 改码 + Carbon Medium 验证）：真钱支付接入剩余 4 项代码补齐与验证回执
+
+- **依据与分工**：严格按 `docs/handoff/payment-integration-handoff-20261120.md` 与 `AGENTS.md §10.3` 执行——全部代码与测试修改在 `Gemini 4 Neon Extra` 完成，全部导表、协议生成、构建、单测、契约测试与隔离 TiDB 真库验证由独立验证员 `Carbon Medium` 执行（未建分支、未 `git commit` / `git push`、未触碰本机在跑的 `xuanming-debug-current` / `xuanming-gm-*` / `redis` 容器，日志位于已忽略目录 `build/verification/payment-20261120/`）。
+- **代码补齐与测试修复（Gemini 4 Neon Extra）**：
+  1. **§2.1 支付渠道复核收尾（`go/payment/internal/channel/`）**：
+     - 复核并保留此前复核留下的 6 个源文件修复（含 `channel.go` 的 `send()` 剥离传输错误中带密钥的 URL、`apple.go` 无 `data` 通知处理/179 天底线/窗口折半、`google.go` `errGoogleCerts` 区分、`wechatpay.go` `ORDER_CLOSED` 归入关单），全部 `.go` 经 `gofmt -w` 对齐。
+     - `google.go`：空解析公钥集（`len(keys) == 0`）拒缓存并返回 `errGoogleCerts`。
+     - `douyin.go`：对照抖音开放平台小游戏虚拟支付官方文档（`developer.open-douyin.com`）补齐 GET 回调验证 `Handshake(rw, r) bool`（实现 `channel.Handshaker`，已由 `internal/notify` 自动接入）、`goodName` 改为官方 10 字符上限（超长截断、空回落 `"游戏道具"`）、拒绝空 `timestamp`/`nonce`。
+     - 新增纯标准库离线单测 `apple_test.go`、`google_test.go`、`douyin_test.go`（零外网、`fixedNow`），并修正时间字面量以对齐 `testPaidAt`/`testNow`。
+  2. **§2.2 安卓微信支付与支付宝插件（`../mmorpg-client/Assets/Plugins/Android/MmorpgPay.androidlib/`）**：
+     - 仿照现有 `MmorpgGoogleSignIn.androidlib` 新增 `build.gradle`（`wechat-sdk-android:6.8.40`、`alipaysdk-android:15.8.42`）、`AndroidManifest.xml`（`<queries>` 声明微信/支付宝包名，通过 `${applicationId}.wxapi.WXPayEntryActivity` `<activity-alias>` 指向 `com.mmorpg.pay.WechatPayCallbackActivity`，无需写死安卓包名）、`consumer-rules.pro`、`WechatPayCallbackActivity.java`（仅 `handleIntent` + `finally { finish(); }`，忽略客户端结果）、`MmorpgPay.androidlib.meta`（Android-only）。
+     - 核对 `Assets/Scripts/Game/Jubaozhai/AndroidPayBridges.cs` 反射类名、方法与字段名与两份 SDK 一致。
+  3. **§2.3 商城 K8s HTTP 健康探针**：
+     - `java/mall_game/src/main/resources/application.yaml`：仅暴露 `health`，开启 `probes.enabled: true`，`liveness`/`readiness` 分组分别只含 `livenessState`/`readinessState`（不含 DB 指示器，与 `gateway_node` 同口径）。
+     - `java/mall_game/src/main/java/com/game/mall/HmacAuthentication.java`：在规范路径校验之后仅对无正文 `GET /actuator/health/readiness` 与 `/actuator/health/liveness` 放行免 HMAC，复合 `/actuator/health` 及其他接口保持 fail-closed。
+     - `java/mall_game/pom.xml`、`deploy/k8s/manifests/java-svc/mall.yaml`（三处探针由 `tcpSocket` 改为 `httpGet`）、`deploy/k8s/README.md`、`tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1` 同步更新；新增 `java/mall_game/src/test/java/com/game/mall/MallHealthProbeHttpTest.java`。
+  4. **§2.4 客户端 Unity IAP 与验证期间发现的测试缺陷修复**：
+     - 核对 `../mmorpg-client/Assets/Scripts/Game/Jubaozhai/StorePayBridge.cs` 与本地已解析包 `Library/PackageCache/com.unity.purchasing@015b4cec2127`（5.0.4）源码：`CartItem.Product`、`PurchaseFailureReason.UserCancelled`、`StoreController` 及 Apple/Google 扩展接口全部一致，无需改动。
+     - `../mmorpg-client/Assets/Scripts/Game/Jubaozhai/PaymentClient.cs`：`DeviceOs` 改用编译期 `#if UNITY_IOS / UNITY_ANDROID / UNITY_WEBGL`（与同文件 `Platform` 一致），消除独立 NUnit 下调用 `Application.platform` 触发的 `SecurityException` ECall。
+     - `java/mall_game/src/main/java/com/game/mall/DeliveryStore.java`：补回 4 参构造函数委派给 5 参 + `Clock.systemUTC()`（修复 `RmbConsignmentStoreTest` 编译错误）。
+     - `java/mall_game/src/test/java/com/game/mall/{StorageAndAuthTest,MockPaymentStoreTest,MallTracingHttpTest}.java`：手建表夹具补齐支付线新增列（`commerce_payment_receipt` 的 `revision,fact`、`commerce_refund_intent` 的 `close_reason`）；`MallTracingHttpTest` 补 `@AutoConfigureObservability(metrics = false)` 对齐 `GatewayTracingIntegrationTest`（否则 Spring Boot 测试自动关闭追踪传播导致 `traceparent` 降级为 noop）。
+     - `go/trade/internal/commerce/delivery_order_db_test.go:84`：删去已提交在 HEAD 里阻塞整包编译的 1 行未用变量 `ctx := context.Background()`。
+- **验证结果（Carbon Medium 执行 + 只读预检）**：
+  1. **导表与协议生成（PASS）**：`cmd /c "echo. | .\dev.bat gen"`（`exit=0`）；前置仓库 `third_party\protobuf\install_vs2026_dbg\bin`（`libprotoc 35.1`）运行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`（`exit=0`）；核对 `go/shared/generated/pb/table/payment_error_tip.pb.go`（`kPaymentRealNameRequired`）、`cpp/generated/table/proto/tip/payment_error_tip.pb.{h,cc}`、`go/proto/payment/payment_table.pb.go`（`PaymentSpendRecord`、`SpenderHi`）、`../mmorpg-client/Assets/Scripts/Proto/Generated/PaymentErrorTip.cs` 均存在且匹配。
+  2. **`go/payment`（100% PASS，含真 TiDB）**：`gofmt -l .`（0 文件）、`go mod tidy`（无改动）、`go build ./...`、`go vet ./...` 均 `exit=0`；离线 `go test ./... -count=1 -v` 顶层 **64 PASS / 94 子用例 PASS / 0 FAIL / 3 SKIP**（其中 `internal/channel` **51 PASS / 94 子用例 PASS**，含 `apple_test.go`、`google_test.go`、`douyin_test.go` 及原 4 个测试文件）；再起隔离临时 `TiDB v8.5.2`（本地已缓存镜像 `--pull=never`，`127.0.0.1:14000`，完事 `finally` 删除零残留），设 `PAYMENT_TEST_DSN` + `PAYMENT_REQUIRE_TIDB=1` 跑 `go test ./internal/data/... -count=1 -v` -> **7/7 PASS / 0 SKIP / 0 FAIL**（`TestTiDBReserveIntentSerializesOnePerson`、`TestTiDBReserveIntentIsIdempotentPerOrder`、`TestTiDBPaidClosedAndRevivedIntents` 全绿）；`go run . -version` 与 `go build ./cmd/devpaynotify` 均 `exit=0`。
+  3. **`go/trade`（100% PASS，含真 TiDB）**：`go build ./...`、`go test ./internal/commerce/... -count=1 -v` 顶层 **90 PASS / 136 子用例 PASS / 0 FAIL**（`TestPlanOfficialFollowsPaymentRevisions` 4 子用例及 `TestCommerceSignatureMatchesCrossLanguageGoldenForPaymentPost` 全绿）；隔离临时 `TiDB v8.5.2` 上加载 `tools/scripts/sql_fixture_env.ps1` 并设 `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1` 跑 `go test ./internal/commerce -run 'TestTiDBMallReversalClawsBackThenRegrants|TestTiDBMallBridgeWaitsForCommittedLegAndRecoversLostReceipt' -count=1 -v` -> **2/2 PASS / 0 SKIP / 0 FAIL**。
+  4. **`java/mall_game`（100% PASS）**：在 `java/` 先装本地快照 `authority_jdbc,server_startup` 后，在 `java/mall_game` 执行 `mvn test` -> `BUILD SUCCESS`，**124/124 PASS（0 Failures / 0 Errors / 0 Skipped）**，其中 `PaymentRevisionStoreTest` **7/7**、`MallHealthProbeHttpTest` **1/1**、`StorageAndAuthTest` **6/6**、`MockPaymentStoreTest` **13/13**、`MallTracingHttpTest` **1/1**、`RmbConsignmentStoreTest` **11/11**。
+  5. **C++（本线 0 error，整库受跨会话阻塞）**：`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（10/10 OK）、`python tools/scripts/check_log_text_english.py`（0 violations）；`msbuild /m:1 cpp/generated/table/table.vcxproj` `exit=0`；支付本线 `asset_op_system.cpp` 与 `asset_op_system_test.cpp` 单文件 `/m:1 /t:ClCompile` 与裸指针门禁均 `exit=0`。`scene.vcxproj` 与 `currency_test.vcxproj` 链接被其他会话代码阻塞（未改他人文件），首错原文：
+     - `scene.vcxproj`: `player_pet.cpp(1025,36): error G13DA7946: use of undeclared identifier 'kPetNameSensitive'`
+     - `currency_test.vcxproj`: `transaction_log_commit_gate_test.cpp(167,28): error G60A5EC10: no member named 'logs_size' in '(anonymous namespace)::AuditOutboxTest::Attached'`
+  6. **部署脚本测试（本线 100% PASS）**：`k8s_mall_payment_deploy_contract.tests.ps1` **22/22 PASS**、`sql_boot_catalog_local.tests.ps1` **51/51 PASS**、`redis_player_cluster_contract.tests.ps1` **47/47 PASS**；`k8s_deploy_contract.tests.ps1` 360/364（支付/商城及 `$JavaSvcCatalogue.Keys` 排序断言全 PASS，余 4 项为其他会话的发布轨道/peak-shaving/quorum 反亲和/content-guard 失败）；`k8s_migrate_gate.tests.ps1` 72/78（payment 2 条 schema Job 全 PASS，余 6 项为跨会话托管内部密钥与 match ClusterRole）；`logical_db_deploy_contract.tests.ps1` 45/46（仅缺 `role-fence-trade` 预置清单文档项）；全目录 78 个脚本共 56 PASS / 22 FAIL，全部失败项均与 mall/payment 无关。
+  7. **Unity 客户端（Roslyn 多平台与独立 NUnit 100% PASS）**：`pwsh -File tools/client_compile_check.ps1 -ShowErrors 40` -> `exit=0`（545 文件 0 error）；带 `MMORPG_UNITY_IAP` 对 `Editor` / `UNITY_ANDROID` / `UNITY_IOS` / `UNITY_WEBGL` 四套目标平台 Roslyn 编译全部 **545 文件 0 error**；独立 NUnit 运行 **29/29 PASS**（`PaymentClientTests` **5/5**、`CommerceClientTests` **20/20**、`CommerceRecoveryFileStoreTests` **4/4**）。注：`Temp/UnityLockfile` 存在且 `Unity.exe`（6000.6.0f1，PID 29748）正在打开该工程，未用 `-batchmode` 起第二实例。
+- **未执行项与阻塞原因**：
+  - **C++ `AssetOpSystemTest.*` 运行**：待其他会话修复 `player_pet.cpp:1025` 与 `transaction_log_commit_gate_test.cpp:167` 后重编运行 `currency_test.exe --gtest_filter=AssetOpSystemTest.*`。
+  - **§3 第 8 步本机全栈 devpay 冒烟**：需按 `AGENTS.md §6.2` 清库、起完整 C++ `scene`（受 `player_pet.cpp` 阻塞）并在交互式 Unity 编辑器聚宝斋界面操作，且本机正运行 `xuanming-debug-current` / `xuanming-gm-*` 及 Unity PID 29748，未破坏现场。
+  - **§3 第 9 步 kind 冒烟**：本机未安装 `kind` 且无 `~/.kube/config` 集群上下文，按 `AGENTS.md §10.2` 未擅自安装工具。
+  - **Java 全服务版（AGENTS §12）**：仍登记在 `PARITY.md` 待做，未改独立仓 `D:\luyuan\xuanming-server-mmo`。
+
+
+## 2026-11-20 Gemini（Gemini 4 Neon Extra）：登录排队 / 开服限流与 Unity 客户端全链路标准收口（未生成协议、未编译运行，交 Codex 验证；Java 全服务版留 TODO）
+
+- **背景与核查结论**：
+  - 核查确认 2026-11-19 Unity 排队遗留问题（`open-server-rate-limit-design.md` §11.5 第 6 条「恢复重入自身失败不丢票、按退避回查询」）及多角色重连、`MaxAdmitPerTick=2000` / `MaxQueueLength=1000000`、网关 `queue-retry-min-ms` / 抖动 / IP 0.1 扣费均已在此前会话落库（`mmorpg-client` `02e0ec54`、`xuanming-server-mmo-cpp` `b6a08148c` / `c441ce75e`）。
+  - 本轮逐项排查剩余「以后修 / 残余 / 未测」代码缺口并一次性按强一致、可水平扩展标准收口；所有改动直接落于 `main` 工作区，未建分支、未提交，未触碰其他会话在途文件。
+- **服务端改动（`xuanming-server-mmo-cpp`）**：
+  1. **`PlayerSession.gate_zone_id` 闭环重连免排队强一致（`login-queue-2026-05.md` §8 / §14 #1）**：
+     - `proto/player_locator/player_locator.proto`：`PlayerSession` 新增 `uint32 gate_zone_id = 16`，`ReconnectRequest` 新增 `uint32 gate_zone_id = 11`（仅 Go 内部 gRPC，无 C++ / 客户端消费方）。
+     - `go/player_locator/internal/logic/{setsessionlogic.go,reconnectlogic.go}`：`SetSession` 原样写入不继承旧值，`Reconnect` 同步更新 `session.GateZoneId = in.GateZoneId`；新增 `gate_zone_id_test.go` 覆盖写入、跨区覆盖与旧版写 0 覆盖。
+     - `go/login/internal/logic/pkg/sessionmanager/session_manager.go`：`PlayerSession`、`OnlineSessionInput`、`toProto`、`fromProto`、`applyOnlineSession`、`Reconnect` 全链路透传 `GateZoneID`；`login_generation_test.go` 新增 `TestGateZoneID_SessionMirrorRoundTrip`。
+     - `go/login/internal/logic/clientplayerlogin/entergamelogic.go`：`persistEnterGameSession` 在 `FirstLogin` / `ReplaceLogin`（`SetSession`）与 `ShortReconnect`（`Reconnect`）均写入 `config.AppConfig.Node.ZoneId`；`enter_wiring_test.go` 新增 `TestEnterGame_GateZoneIDReachesTheSessionRecord`。
+     - `go/login/internal/logic/loginpregate/assigngatelogic.go`：`reconnectingPlayer` / `findReconnectingPlayer` 在 `gate_zone_id != 0` 时以 `gate_zone_id == zoneID` 为权威且 0 次读 `zoneGates`（彻底解决合服并入角色原 gate 掉线被误排队、以及本区角色跨区到别区在线误免本区排队）；`gate_zone_id == 0` 保留旧会话兼容兜底；`assigngate_reconnect_test.go` 全量更新并补齐两类新用例及 0 次 gate 列表读断言。
+  2. **网关 `/api/refresh-token` 接入共享 IP 令牌桶 + 清理死键 `queue-timeout-ms`（`open-server-rate-limit-design.md` §3 / §5.4）**：
+     - `java/gateway_node/src/main/java/com/game/gateway/ratelimit/AssignGateRateLimiter.java`：新增 `checkIpOnly(String clientIp)`，复用共享 Redis IP 令牌桶、fail-open 熔断器与决策计数，跳过开服波次、区桶与账号冷却。
+     - `java/gateway_node/src/main/java/com/game/gateway/dto/RefreshTokenResponse.java`：新增 `CODE_RATE_LIMITED = 429`。
+     - `java/gateway_node/src/main/java/com/game/gateway/controller/RefreshTokenController.java`：注入 `AssignGateRateLimiter` 与 `ClientIpResolver`，IP 桶空时回 HTTP 200 `code=429`、`message="IP_RATE_LIMIT"` 不打下游 `RefreshTokenService`。
+     - `java/gateway_node/src/main/java/com/game/gateway/ratelimit/RateLimitProperties.java`、`java/gateway_node/src/main/resources/application.yaml`：删除无任何消费方的死配置 `queueTimeoutMs` / `queue-timeout-ms`；`tools/scripts/release_preflight.ps1` 将原 `ratelimit.queue.timeout` 检查替换为 `ratelimit.queue.retry.min`（校验 `gate.rate-limit.queue-retry-min-ms >= 500`）。
+     - 测试：`AssignGateRateLimiterTest.java` 新增 `checkIpOnly` 跳过波次/区桶/冷却与 IP 拒单用例；新增 `RefreshTokenControllerTest.java`。
+  3. **文档对账同步**：更新 `docs/design/login-queue-2026-05.md`（§6 24h 轮换注释已同步、§7.1 SIGTERM 经 `defer ctx.Stop()` 主动放锁已核实、§8 与 §14 #1 闭环）、`docs/design/open-server-rate-limit-design.md`（§3、§5.4、§10、§11.3 #6、§11.5）、`docs/ops/login-queue-stress-runbook.md`（模式 5）。
+- **Unity 客户端改动（`../mmorpg-client`）**：
+  - `Assets/Scripts/Game/GameClient.cs`：`EnterZone` 第 2 步 `/api/refresh-token` 返回后复核排队总预算；以单调时钟、可随 `_pipelineGen` 翻世代与总预算截止时刻即时退出的 `WaitQueueMs` 取代原 `WaitMs`（不再在取消或到期后干等 30s / 120s，附私有测试接缝 `_queueClockOverride` / `_queueWaitOverride`）。
+  - `Assets/Scripts/Net/GatewayHttpClient.cs`：`PostJson` 非 200 错误文案改为 `string.IsNullOrEmpty(req.error) ? "HTTP " + req.responseCode : req.error`（修复 HTTP 204 等 `req.error` 为空串时丢失状态码）。
+  - 新增 `Assets/Tests/EditMode/Net/LoginQueueFlowTests.cs`（含 `.meta`）：经真实 `GatewayHttpClient`（`UnityWebRequest`）与回环假网关端到端覆盖 §11.5 第 2~7 条（含第 6 条重入断线/502/500/429/100 ratelimit 保票退避 2/4/8/16/30/30s 与恢复回 2s）、503/404 终态、410 换票与无票 410 停止、无票 429 30/60/120s 退避、排队内续期（含 429 退避 / 401 失效 / 续期超预算）、非 200 Spring 错误页与 HTTP 204、以及真实 `WaitQueueMs` `Disconnect` 即时退出。
+  - `Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`：新增 `RecoveryRetriesOnRateLimitQueueHintWithinBudget`（验证断线重连收到 `100 ratelimit` 在 20s 预算内重试成功）并将 `DefinitiveAssignGateResultEndsRecoveryWithoutRetry` 显式标为 `queue_source="login"`。
+- **只读静态预检（已跑，全部通过）**：
+  - `gofmt -l` 核查本轮全部 9 个 Go 文件：0 差异；
+  - `tools/scripts/release_preflight.ps1` PowerShell `Parser::ParseFile`：0 errors；
+  - `python tools/scripts/check_log_text_english.py`：0 violations。
+- **未验证（交 Codex / 低档模型按顺序执行）**：
+  1. **协议生成（仅 Go 内部 `player_locator.proto`，需确保 `protoc` 35.1 在 PATH 前列）**：
+     - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`
+     - 核对 `go/proto/player_locator/player_locator.pb.go` 已生成 `GateZoneId` 字段（`PlayerSession` 与 `ReconnectRequest`）。
+  2. **Go 编译与单测（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go/player_locator`：`go build ./... && go vet ./... && go test ./internal/logic/... -count=1 -v`（含 `TestSetSession_PersistsAndReplacesGateZoneID`、`TestReconnect_UpdatesGateZoneID`）
+     - `go/login`：`go build ./... && go vet ./... && go test ./internal/logic/pkg/sessionmanager/... ./internal/logic/clientplayerlogin/... ./internal/logic/loginpregate/... ./internal/logic/pkg/loginqueue/... -count=1`（含 `TestGateZoneID_SessionMirrorRoundTrip`、`TestEnterGame_GateZoneIDReachesTheSessionRecord`、`TestFindReconnectingPlayer*`）
+     - `robot`：`go build -mod=readonly ./... && go vet -mod=readonly ./... && go test -mod=readonly ./... -count=1`
+  3. **Java Gateway 编译与单测（`java/gateway_node`）**：
+     - `mvn -f java/gateway_node/pom.xml test`（含 `AssignGateRateLimiterTest`、`RefreshTokenControllerTest`、`AssignGateControllerTest`、`LoginEndpointIntegrationTest`、`GatewayTracingIntegrationTest`）
+  4. **预检脚本回归（仓库根）**：
+     - `pwsh -NoProfile -File tools/scripts/release_preflight.ps1`（确认 `ratelimit.queue.retry.min` 为 `PASS` 且不再引用已删的 `queue-timeout-ms`）
+  5. **Unity 客户端编译与 EditMode 测试（`../mmorpg-client`）**：
+     - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`
+     - Unity EditMode 跑 `MmorpgClient.Tests.EditMode.Net.LoginCredentialTests;MmorpgClient.Tests.EditMode.Net.LoginQueueFlowTests;MmorpgClient.Tests.EditMode.Net.GameClientReconnectTests`（含真实 `UnityWebRequest` 回环假网关，无需起服务端）。
+  6. **开排队合入门槛真实 Redis 冒烟（待后续择机执行）**：按 `docs/PROGRESS.md` 前文「登录排队清合入门槛的 Codex 验证单」跑 Redis 7.2 单实例与 Redis 8.10.2 Cluster 两轮，及断网 / 断 `queue-status` 实栈冒烟。
+- **Java 独立全服务版（AGENTS §12）**：已追加登记至 `../xuanming-server-mmo/PARITY.md` TODO，本轮未改独立 Java 仓代码。
+
+
+## 2026-11-20 Gemini（收口收尾）：冷启动回滚、寄售标题审核、角色/帮会改名、外部平台内容安全 + 聊天举报撤回与防刷 + 渠道登录视觉收口（源码已全量落于 main，交 Codex 生成协议/编译/冒烟）
+
+- **状态声明**：严格在双仓 `main` 完成服务端、SQL、K8s 与 Unity 客户端代码及单测编写，未建分支、未提交；按 `AGENTS.md §10.1` 未运行代码生成器（`dev.bat gen`/`proto-gen-run`）、Go/C++/Unity 编译及运行期冒烟，全部留交 Codex 按下方顺序执行。
+- **核心改动清单**：
+  1. **冷启动 Catalog 回滚 & 寄售标题审核 & 角色/帮会改名**：
+     - `go/shared/authoritysql/{catalog.go,tx_outcome_test.go}`、`go/data_service/cmd/writer_authority/{main.go,main_test.go}`。
+     - `go/content_guard` / `go/trade`：`CreateRmbConsignmentRequest.title` 接入 `TEXT_SCENE_TRADE_TITLE`。
+     - Unity 角色改名：`Assets/Scripts/Game/RoleNameRules.cs`、`GameClient.{RoleRename,cs}`、`RpcGuard.cs`、`AttributeUiRoot.cs`、`CharacterSupportWindow.cs`、`RoleRenameClientTests.cs`（C++ `PlayerRenameSystem` 已在主仓）。
+     - 帮会改名：`proto/guild/{guild,guild_db}.proto`、`go/guild/...`（含修补 `economy_logic_test.go` mock SELECT 列数匹配 `renamed_ms`）、Unity `GuildClient.cs`、`RpcGuard.cs`、`GuildWindow.cs`、`GuildUiRoot.cs`、`GuildRenameClientTests.cs`。
+  2. **渠道身份落库与 `content_guard` 外部平台 + 联系方式广告识别**：
+     - `proto/common/database/rollback_database_table.proto`（`account_channel_identity`）、`proto/data_service/data_service.proto`（`UpsertAccountChannelIdentity`、`GetPlayerChannelIdentity`）、`go/data_service/internal/{store/account_channel_identity.go,store/schema.go,store/account_directory_store.go,svc/*,server/{account_directory.go,account_channel_identity_test.go}}`、`go/shared/accountdirectory/client.go`、`go/login/internal/logic/...`。
+     - `proto/content_guard/content_guard.proto`：新增 `AsyncPlatform`、`PendingPlatformReview` 与 `CheckPlatformText` RPC。
+     - `go/content_guard`：新增 `internal/contact` 变体联系方式/URL 识别并接入 `internal/engine`（`ScenePrivateLabel` 豁免启发式误伤）；统一清理 `internal/platform` 重复文件（合并微信 `msgSecCheck` v2 token `40001/40014/42001` 重试与抖音 `antidirt` `hit || prob>=1` + 401 重试、`OutcomePending` 短超时转异步及 `DataService` 目录身份缓存查询）；更新 `config`、`etc/content_guard.yaml`、`server` 与 `go/shared/contentguard`。
+  3. **`go/chat` append-only SQL 撤回、举报与多维防刷 + K8s 脚本同步**：
+     - `proto/chat/chat.proto`：新增 `ReportChat`、`RetractWorldChat`（`CLIENT_RPC_SERVER_ONLY`）、`NotifyWorldChatRetracted`（`CLIENT_RPC_PUSH`，匹配 `cpp/nodes/gate/main.cpp:397` 的 `ClientPlayerChatNotifyWorldChatRetractedMessageId`）。
+     - `deploy/sql/chat_runtime_role.sql`、`go/chat/internal/authority/{schema.go,store.go,retract_report.go,content_review.go,retract_report_test.go,least_privilege_tidb_test.go}`：新增 append-only + TiDB TTL 表 `chat_world_retraction`、`chat_report`、`chat_repeat_event`、`chat_private_daily_target`（运行账号保持仅 `SELECT, INSERT`）；实现世界最低等级（`WorldMinLevel`）、跨副本归一化摘要刷屏拦截、新号每日私聊人数上限、举报写入、世界撤回及 `Pull` 过滤。
+     - `go/chat/internal/{config,constants,svc,logic,server}` 与 `chat_test.go`：接入 `safego` 异步平台复审超时兜底撤回与 Kafka `chat-world-bcast` 广播通知；`tools/scripts/tests/test_client_text_fields_reviewed.py` 补全 `RetractWorldChatRequest.reason` 豁免。
+     - `tools/scripts/k8s_deploy.ps1` 与 `tools/scripts/tests/k8s_deploy_contract.tests.ps1`：镜像 `chat` 新增防刷标量、屏蔽 `ReportChat` / `CheckPlatformText` 日志正文，并为 `content-guard` 配齐可选 `DataServiceRpc`（`NonBlock: true`）。
+  4. **Unity 聊天举报/撤回 UI 与渠道登录官方规范视觉**：
+     - `Assets/Scripts/Game/Social/{SocialState.cs,SocialClient.cs}`、`Assets/Scripts/Net/RpcGuard.cs`、`Assets/Scripts/UI/Ugui/Social/{SocialUiRoot.cs,SocialWindow.cs,SocialWindow.Fidelity.cs}`、`Assets/Tests/EditMode/Social/SocialTests.cs`。
+     - `Assets/Resources/UI/Ugui/RefreshV8/{apple_signin_button,apple_logo,google_signin_button,google_logo}.png{,.meta}` 及 `Assets/Scripts/UI/Ugui/QdaoServerSelectView.Visuals.cs`。
+- **静态检查结果（本轮已跑）**：
+  - 见本次回复中的 `test_client_text_fields_reviewed.py`、`check_log_text_english.py`、`test_cpp_no_raw_pointer_member.py`、`test_cpp_thread_sources.py`、`Parser::ParseFile` 与 `.meta` 检查结果。
+- **交 Codex 执行顺序**：
+  1. **导表与协议/消息号生成（仓库根，`protoc` 35.1 在 PATH 前列）**：
+     - `cmd /c "echo. | .\dev.bat gen"`
+     - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
+     - `pwsh -File tools/scripts/gen_proto.ps1` 及 `pwsh -File tools/scripts/gen_messageids.ps1`（确认生成 `ChatErrorTip`、`ClientPlayerChatRpc.{ReportChatMessageId, NotifyWorldChatRetractedMessageId}`、`go/chat/generated/pb/game/ClientPlayerChatNotifyWorldChatRetractedMessageId`、`go/proto/{chat,content_guard,data_service,guild}` 与 Unity C# 生成代码）。
+  2. **Go 全相关模块编译、Vet 与单测（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go/shared`、`go/data_service`、`go/login`、`go/guild`、`go/trade`、`go/content_guard`、`go/chat`：分别执行 `gofmt -l .`、`go build ./...`、`go vet ./...` 与 `go test ./... -count=1`。
+     - 临时 TiDB 实例下跑 `go/chat/internal/authority` 与 `go/guild` / `go/trade` / `go/data_service` SQL 集成测试（覆盖 `TestAntiSpamRetractAndReportTiDB`、`TestChatTiDBLeastPrivilegeRuntimeContract` 六表最小权限）。
+  3. **部署脚本与静态门禁测试**：
+     - 清理 `MMORPG_*` 环境变量后运行 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（关注 `chat` 与 `content-guard` ConfigMap 用例）。
+     - 运行 `python -X utf8 -m unittest tools/scripts/tests/test_client_text_fields_reviewed.py -v`。
+  4. **C++ 编译与测试**：
+     - `msbuild /m:1 game.sln`（核对 `gate` 中 `ClientPlayerChatNotifyWorldChatRetractedMessageId` 与 `scene` `PlayerRenameSystem` 编过、测试通过）。
+  5. **Unity 客户端（`../mmorpg-client`）**：
+     - Rebake 预制体并检查编译：`Unity.exe -batchmode -quit -projectPath D:\luyuan\mmorpg-client -executeMethod MmorpgClient.UI.EditorTools.QdaoUguiBuilder.BuildAll`（如需提交更新后 Prefab）及 `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`。
+     - 运行 EditMode 测试：`QdaoServerSelectPrefabTests`、`SocialStateTests`、`SocialClientTests`、`RoleRenameClientTests`、`GuildRenameClientTests`。
+  6. **全栈清库冒烟**：因角色改名/帮会改名/渠道身份表为新增列与新表，按 `AGENTS.md §6.2` 清库执行 `-migrate` 后跑一轮角色改名、帮会改名、聊天发送/举报/撤回端到端冒烟。
+- **Java 独立全服务版（AGENTS §12）**：已追加登记至 `../xuanming-server-mmo/PARITY.md` 待做，本轮未改 Java 仓代码。
+
+
+## 2026-11-20 Gemini（全量收口与存量缺陷清零）：配表/改名/跨会话对账修复 + C++ 编译崩溃与 K8s 契约测试全清（未导表、未编译运行，交 Codex 验证）
+
+- **状态声明**：全部服务端与 Unity 客户端改动已落于双仓 `main` 工作区（无分支、未提交），按 `AGENTS.md §10.1` 未执行导表/协议生成/编译/运行测试，全部留交 Codex 按下方修正后的顺序执行。
+- **本会话补齐与跨会话对账修复**：
+  1. **配表、表工程与客户端生成脚本（批 1~6 前置完整闭环）**：
+     - 新增幂等配表脚本 `tools/scripts/rename_content_safety_xlsx_patch.py` 并已更新 `Item.xlsx`、`RoleNameRule.xlsx`、`GuildRule.xlsx`、`Tip.xlsx`（补齐 `//login_error` +7、`//guild_error` +5、`//trade_error` +2、`//pet_error` +`PetNameSensitive` 及新建 `//chat_error base=18000` +7，同时解除前文记录的 `player_pet.cpp:1025` `kPetNameSensitive` 编译阻塞）。
+     - 新增 `data/schema/{rolenamerule_table,guildrule_table}.proto` 并接线 `cpp/generated/table/{table.vcxproj,table.vcxproj.filters,CMakeLists.txt}`；同步 `../mmorpg-client/tools/{gen_proto.ps1,gen_messageids.ps1}`（加入 `chat_error_tip.proto`、`pet_error_tip.proto` 与 `GuildServiceRenameGuild`）。
+     - 完整落码角色改名 C++/Go 侧与背包占用机制（`cpp/libs/modules/bag/item_hold.h`、`proto/common/component/player_item_hold_comp.proto`、`cpp/libs/services/scene/player/system/{player_rename_rules.h,player_rename.{h,cpp},player_lifecycle.cpp}`、`cpp/tests/bag_test/{item_hold_test,player_rename_test}.cpp`、`go/data_service/internal/{server/account_role_rename*.go,store/account_role_rename_tidb_test.go}`），补齐并修正帮会改名事务/保护表与客户端调用编译错误。
+  2. **跨会话接口与测试夹具修复**：
+     - `go/content_guard/content_guard.go`：`c.DataServiceRpc` 改用 `dsclient.Conf(c.DataServiceRpc)` 包装，满足 `go/shared/dsclient/dsclient_test.go::TestAllDataServiceClientConstructorsUseDsclientConf`。
+     - `go/chat/internal/authority/fixture_test.go`：测试夹具关闭全部 5 张带 TTL 的表（`chat_send_authority`、`chat_world_retraction`、`chat_report`、`chat_repeat_event`、`chat_private_daily_target`）的 TTL，并将 `fixture.GrantTables(...)` 补全至 6 张表（修复 TiDB 集成测试缺权 1142 错误）。
+     - `tools/scripts/tests/chat_authority_deploy.tests.ps1` 与 `tools/scripts/tests/sql_boot_catalog_local.tests.ps1`：对齐 `mmorpg_chat` 6 张表（5 张 append-only `SELECT, INSERT` + `chat_policy` `SELECT`）与 `mmorpg_guild` 的 `guild_name_hold`。
+     - 核对 `NotifyWorldChatRetracted` / `ClientPlayerChatNotifyWorldChatRetractedMessageId` 在 `proto/chat/chat.proto`、`cpp/nodes/gate/main.cpp`、`go/chat` 与 Unity `SocialClient.cs` 全链路一致；对 4 个未格式化 Go 文件执行 `gofmt -w`。
+  3. **同步清零已发现的存量 C++ 与 K8s 契约测试缺陷**：
+     - **C++ `turn_battle_engine_test` 重复读配置崩溃**：`cpp/libs/engine/config/config.cpp` `readBaseDeployConfig` 在 `YAML::LoadFile` 后增加 `baseConfig.Clear()`，避免同一进程多次加载把 `etcd_hosts` 追加成 2 条触发 `LOG_FATAL`；在 `cpp/tests/configuration_table_test/configuration_table_test.cpp` 补回归单测 `ReadBaseDeployConfigTwiceDoesNotAccumulateRepeatedFields`。
+     - **C++ `currency_test` 编译阻塞**：`cpp/tests/currency_test/transaction_log_commit_gate_test.cpp` 为 `AuditOutboxTest::Attached` 补齐 `logs_size()`、`logs(int)`、`snapshots_size()`、`snapshots(int)`（解阻 `currency_test.vcxproj` 与 `AssetOpSystemTest.*`）。
+     - **K8s 契约测试 3 份脚本全部存量失败项**：
+       - `k8s_deploy_contract.tests.ps1`：`tools/scripts/k8s_deploy.ps1` `db` ConfigMap 注释移除字面量 `MMORPG_RELEASE_TRACK`；`deploy/k8s/manifests/infra/etcd.yaml` 将注释移至 `affinity:` 之上；`tools/scripts/tests/lib/deploy_capture.ps1` `Select-ManifestByName` 收紧为区分大小写的顶层 `metadata:` + `[ ]{2,4}name:`，避免误匹配 ConfigMap 里的 `Telemetry.Name: login`。
+       - `k8s_migrate_gate.tests.ps1`：`deploy/k8s/manifests/go-svc/match-battle-pod-reader-rbac.yaml` 注释移除字面量 `ClusterRole`；`mail`/`trade`/`guild` 校验器测试对齐 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS` 明文环境变量（取代已下线的 `gate-identity-auth` Secret）。
+       - `k8s_client_entry_contract.tests.ps1`：`Invoke-DeployWithFakeKubectl` 补齐非 DryRun `staging`/`prod` 必需参数（`PlayerStoreShards = 64`、`NetworkPolicies = 'on'`、`PodNetworkEncryption = 'cilium-wireguard'`）与 3 条 Cilium WireGuard 只读 fake kubectl 规则。
+- **只读静态预检结果（全部通过）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：**10/10 OK**
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：**5/5 OK**
+  - `python tools/scripts/check_log_text_english.py`：**0 violations**
+  - `python tools/scripts/tests/test_client_text_fields_reviewed.py`：**2/2 OK**
+  - `gofmt -l`（本批全部修改/新增 Go 文件）：**0 差异**
+  - `pwsh`（PowerShell 7）`Parser::ParseFile` 校验全部 15 个改动 `.ps1`（服务端 + 客户端）：**15/15 0 errors**
+- **交 Codex 执行的精确命令顺序（请严格先导表/生成协议，再编译/测试）**：
+  1. **导表 + 服务端与客户端协议/消息号生成**（确保 `protoc` 35.1 在 PATH 前列）：
+     - 服务端仓 `D:\luyuan\xuanming-server-mmo-cpp`：
+       - `cmd /c "echo. | .\dev.bat gen"`
+       - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
+       - `pwsh -File go/build.ps1`
+     - 客户端仓 `D:\luyuan\mmorpg-client`（注：上条误写为服务端路径，以此处为准）：
+       - `pwsh -File tools/gen_proto.ps1 -ProtoRoot D:\luyuan\xuanming-server-mmo-cpp`
+       - `pwsh -File tools/gen_messageids.ps1 -ProtoRoot D:\luyuan\xuanming-server-mmo-cpp`
+  2. **Go 编译、Vet、单测与临时 TiDB 集成测试**（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）：
+     - `go/shared`：`go build ./... && go vet ./... && go test ./contentguard/... ./dsclient/... ./authoritysql/... ./accountdirectory/... -count=1`
+     - `go/data_service`：`go build ./... && go vet ./... && go test ./... -count=1`（含 `TestAccountRoleRename*` 与 `account_channel_identity_test.go`，起隔离 TiDB 跑 `DATA_SERVICE_TEST_DSN`）
+     - `go/guild`、`go/content_guard`、`go/chat`、`go/login`、`go/trade`、`go/scene_manager`：分别 `go build ./... && go vet ./... && go test ./... -count=1`（临时 TiDB 下跑 `go/chat/internal/authority` `TestAntiSpamRetractAndReportTiDB` + `TestChatTiDBLeastPrivilegeRuntimeContract` 六表最小权限、`go/guild`、`go/trade` 集成测试）。
+  3. **C++ 串行编译与单测（Debug|x64，严格 `/m:1`）**：
+     - `msbuild /m:1 cpp/generated/table/table.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 game.sln /p:Configuration=Debug /p:Platform=x64`
+     - `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter "bag_test|currency_test|configuration_table_test|turn_battle_engine_test"`
+  4. **Unity 客户端编译与 EditMode 测试（`D:\luyuan\mmorpg-client`）**：
+     - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`
+     - 运行 EditMode 测试：`RoleRenameClientTests`、`GuildRenameClientTests`、`SocialStateTests`、`SocialClientTests`、`QdaoServerSelectPrefabTests`（及按需 `QdaoUguiBuilder.BuildAll`）。
+  5. **PowerShell 契约测试（清 `MMORPG_*` 环境变量后在仓库根执行）**：
+     - `chat_authority_deploy.tests.ps1`、`sql_boot_catalog_local.tests.ps1`、`k8s_deploy_contract.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`k8s_client_entry_contract.tests.ps1`、`logical_db_deploy_contract.tests.ps1`、`maintenance_drain.tests.ps1`、`go_services_local_mysql.tests.ps1`。
+  6. **全栈清库冒烟**：按 `AGENTS.md §6.2` 清库跑 `-migrate` 后验证角色改名、帮会改名、寄售标题审核、聊天发送/撤回/举报端到端链路。
+- **Java 独立全服务版（AGENTS §12）**：已登记于 `../xuanming-server-mmo/PARITY.md` TODO（2026-11-20 末条），本轮未改 Java 仓代码。
+
+
+## 2026-11-20 Gemini（Ponytail 全仓代码审计 + 标准修复收口，两轮全部落盘于 main，构建/测试/冒烟交 Codex 验证；Java 全服务版留 TODO）
+
+- **状态声明**：全工作区 5 仓 Ponytail 代码质量与过度设计审计（报告见对话产物 `ponytail_workspace_audit_20261120.md`）所定位的全部高优安全漏洞、数据强一致缺陷、水平扩展瓶颈、热路径浪费与死代码已完成两轮收口；所有改动严格落于各仓 `main` 工作区（零分支、未 `git commit` / `git push`），未改 `.proto` 与配表（本批无需额外改表；全库如有前序会话新增表/协议请按前序条目顺序先跑导表与 `proto-gen-run`）。第二轮（本轮最终收口）按用户指令与 `AGENTS.md §10.3` 仅执行代码编写与只读静态门禁检查，不跑 `msbuild`/`go build`/`mvn`/Unity/冒烟，全部留交 Codex 按下方清单验收。
+- **本批（第一轮 + 第二轮）服务端改动汇总（`xuanming-server-mmo-cpp`）**：
+  1. **C++ 引擎、Gate、Battle、Scene 与模块（`cpp/`）**：
+     - **安全与连接准入**：`cpp/nodes/gate/handler/rpc/client_session_handler.cpp`（补 `GateTokenPayload.zone_id` 校验；直连模式 `ApplyLoginTransition` 延后至 `HandleGrpcNodeMessage` 发送前一刻；`std::random_device`+`mt19937` 换 `tlsRandom`；删 2026-05-24 `[diag]` 日志）；`cpp/libs/engine/core/network/codec/websocket.cpp` 与 `cpp/nodes/battle/client/{battle_connection_admission.h,battle_client_edge.{h,cpp}}`（补 `forceCloseWithDelay(0.1)`、记录 `halfClosedAt` 并在 200ms 宽限后允许淘汰超龄半关未认证连接；单测 `battle_connection_admission_test.cpp`）。
+     - **数据强一致**：`cpp/libs/services/scene/player/comp/last_persisted_snapshot_comp.h` 新增 `IsCommittedForOwner(currentOwnerEpoch)` 并统一接入 `asset_op_system.cpp`、`player_activity.cpp`、`player_equipment_material_reward.cpp`、`player_equipment_v1.cpp`、`role_admission_system.cpp`；7 处客户端写入入口（`player_equip.cpp`、`player_attribute.cpp`、`player_pet.cpp`、`player_mystery_merchant.cpp`、`afk_pass.cpp`、`player_mission.cpp`、`player_skill.cpp`）统一接入 `player_mutability::IsPlayerMutable`（同时拒绝 `PlayerTravelHandoffComp` / `UnregisterPlayer` / `PlayerFrozenComp` / 无效 `owner_epoch`）；同步更新全部 13 份关联单测夹具并补强测试断言。
+     - **正确性与生命周期**：`cpp/libs/services/player/rpc/player_service_interface.h` 补 `virtual ~PlayerService() = default;`；`cpp/libs/engine/core/node/system/node/node.h` 就绪后 `probeTimer.Cancel()`；`cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 拒 `config_id == 0`；`cpp/libs/services/scene/combat/skill/system/skill.cpp` 去除误拒无目标/AoE 技能的前置 `target_id <= 0`；`cpp/libs/services/scene/combat/buff/system/modifier_buff_impl.cpp` 补 `healthBefore >= maxHealth`、`isfinite` 与下溢护栏；`cpp/libs/services/scene/spatial/system/movement.cpp` 瞬移落位改写 `acceptedLocation`；`cpp/libs/services/scene/player/system/player_equipment_v1.cpp` 改走 `playerlevel::CappedLevel`；`cpp/libs/modules/currency/system/currency_system.cpp` `GetBalance` 恢复只读；`cpp/libs/modules/bag/container_layout.cpp` `GridLayout::PlaceAt` 失败回滚原槽位；`cpp/libs/services/scene/spatial/system/recast.cpp` 校验 `numTiles`/`dataSize >= 0`、`addTile` 失败时 `dtFree(..., DT_ALLOC_PERM_TILE_DATA)` 防泄漏；`cpp/libs/modules/transaction_log/anomaly_detector.{h,cpp}` 切 `steady_clock`、饱和加法、告警冷却、事件队列上限与过期桶懒清理（+3 条单测 `anomaly_detector_test.cpp`）。
+     - **热路径瘦身与去重**：`cpp/libs/engine/core/network/rpc_channel.{h,cpp}` 删死 `gDumpOversizedRpc` 及 `>4KB` 盲解码；`cpp/libs/services/scene/actor/attribute/system/actor_state_attribute_sync.{h,cpp}` 删 5 档零字段同步器并过滤 NPC 观察者；`cpp/libs/services/scene/spatial/system/aoi.cpp` 回收空 hex 桶；`cpp/libs/modules/bag/{bag_system,bag_service}.{h,cpp}` 新增 `Bag::MutationVersion()` 替代 5 遍整包 `SerializeAsString()` + 复用 `CloneBagForTransaction`（+单测 `bag_space_freed_test.cpp`）；`cpp/libs/services/scene/player/system/player_equipment_v1.{h,cpp}` 缓存 `BuildDefinition()`（按表加载版本与表快照地址/行数失效，零裸指针成员；+单测 `player_equipment_craft_test.cpp`）；`cpp/libs/services/scene/combat/buff/system/buff.cpp` 移除无用 `MotionModifierBuffImplSystem` 空调用；`cpp/libs/engine/core/utils/encode/sha256.{h,cpp}` 改用已链 BoringSSL `EVP_Digest(..., EVP_sha256(), ...)`。
+  2. **Go 微服务与工具（`go/`、`tools/`、`deploy/`）**：
+     - `go/payment/internal/channel/{google.go,google_test.go,apple.go,apple_test.go}` 与 `go/payment/internal/core/{service.go,record_test.go,workers.go}`：Google JWKS 锁外拉取 + singleflight 合并 + 60s 冷却防未知 `kid` DoS；Apple `appleMilliunitsToMinor` 按 ISO-4217 0/2/3 位小数换算；`sameFact` 补 `PaidAmountMinor`/`PaidCurrency` 核对；`workers.go` 守卫 `nowMs > txn.CreatedMs` 防无符号下溢（均已补单测）。
+     - `go/login/internal/logic/clientplayerlogin/loginlogic.go`（设备上限校验前移至 `beginWatchedSession`/`CommitLogin`/`RegisterDevice` 之前）、`go/login/internal/logic/pkg/auth/password_provider.go`（去除配额前空口令 64MiB Argon2id）、`go/login/{login.go,go.mod}`（换标准库 `context`）。
+     - `go/shared/{callerauth,roleidentity}` 指标切 `prometheus/promauto`（+`session_test.go`）；`go/guild/internal/data/guild_repo.go` 与 `go/friend/internal/data/friend_repo.go` 改 `[256]sync.Mutex` 条带锁且 `guild_repo` Redis 回填失败时记录日志并返回 MySQL 权威结果；`go/player_inbox/internal/inbox/store_admin.go` 补 `rows.Err()`；`go/match/internal/logic/{global_admission_recovery,global_spectator}.go` 修 `LaunchRelayTask` 返 false 时槽位泄漏；`go/content_guard/go.mod` 删 4 个未用直接依赖；删零调用死目录 `go/shared/{timertask,tablequery,cache}`、`tools/data_table_exporter/core/_old/`、`tools/proto_generator/protogen/internal/lua/`。
+     - `tools/data_consistency_check/main.go`：移除 `ORDER BY RAND()` 改为 `MIN/MAX` 索引范围抽样、删无用 `CountPlayers`、支持 `MMORPG_CONSISTENCY_*` 环境变量传入 DSN/密码。
+     - `tools/scripts/k8s_deploy.ps1`（`Convert-ZonesYamlFallback` 剥离行尾注释、支持任意字段顺序、对未识别行 fail-closed；`Remove-Zone`/`Remove-Infra` 非 dev 强制 `MMORPG_CONFIRM_DELETE_NAMESPACE`/`MMORPG_CONFIRM_DELETE_ALL=YES` 确认，不改 `dev_tools.ps1` 参数契约）、`tools/scripts/lib/account_directory_dev_secret.ps1`（修复环境变量密钥未回写 `run/secrets/` 的漂移）、`deploy/docker-compose.login-stack.yml`（补 `MMORPG_RUN_MODE=dev` 与 `1=` 前缀）。
+  3. **主仓 Java 模块（`java/`）**：
+     - `java/gateway_node`：删除零调用公网票据伪造预言机 `/api/cdn-sign` 5 个类及 yaml 段；`GateTokenSecretGuard`（+`GateTokenSecretGuardTest`）补充 prod 强制校验 `admin.api-key`。
+     - `java/mall_game/src/main/java/com/game/mall/NonceStore.java`：128 次 N+1 `DELETE` 循环改为单条有界 `DELETE ... LIMIT 128`。
+     - `java/gm_admin/src/main/java/org/jeecg/modules/gm/GmController.java`：收紧 `require()` 用户名校验（UTF-8 <= 64B、禁 `|` 与 ISO 控制字符）。
+     - `java/springboot_satoken_auth_starter`：删除 6 个零调用缺陷死类（`UserService`/`SmsService`/`SmsLoginDTO`/`OauthCallbackDTO`/`UserPassword`/`UserPasswordRepository`）。
+- **Unity 客户端改动汇总（`D:\luyuan\mmorpg-client`）**：
+  - 第一轮（已于第一轮通过离线 Roslyn 校验）：清理 `Packages/manifest.json`（移除未入库本地包 `com.unity.ai.assistant` 与 6 个无用包）与 `EditorBuildSettings.asset`；`GameClientBattleTransport.cs` 去协程重入 `Tick()`；`WorldLabelBillboard`/`WorldNameplate`/`MailUiRoot` 缓存引用降 GC；`QdaoUguiTheme.CityPanelRegistry` 统一 15 份主城 `*UiRoot` 互斥；9 个 QA/FX 验证脚本加 `#if UNITY_EDITOR || DEVELOPMENT_BUILD`；删死代码 `Core/Bootstrap.cs`、`Core/MmorpgLogger.cs`、`JubaozhaiDesignFit.cs`。
+  - 第二轮（本轮新增 11 生产 + 6 EditMode 测试文件，保留并发会话在 `GameClient.cs`/`PaymentClient.cs`/`JubaozhaiUiRoot.cs`/`BattleScreen.cs` 的全部改动）：
+    - `MinigamePayBridges.cs` 改为非泛型 `delegate void PayCallback(string value)`，`MinigamePay.jslib` 三入口补 `try/catch` 防 `Busy` 永久锁死；
+    - `PaymentClient.cs` + `StorePayBridge.cs` 新增 `CancelPending()` 与 `_deferredReceipts` 兜底队列，解决移动端 IAP 弹窗期间断线吞掉已付凭证（+3 条单测 `PaymentClientTests.cs`）；
+    - `PetClient.cs` / `PetClient.Shop.cs` / `SpectateClient.cs` 补 `Reset()` 并接入 `GameClient.DisconnectInternal`，`JubaozhaiUiRoot.cs` 接入 `connectionIdentity`/`ObserveConnection`/`Reset()` 防止静默重连与换角脏状态（+单测 `PetClientTests.cs`、`SpectateClientStateMachineTests.cs`、`GameClientReconnectTests.cs`）；
+    - `AttributeClient.cs` 与 `PetClient.cs` 去除重复硬编码数字 `27000..27008`，统一复用 `AttributeClient.DescribeAssetTip`（基于现有 `GuildAssetReasons` 单一常量源；+单测）；
+    - `BattleArtCatalog.cs` 新增 `ReleaseTransientBattleCaches()` 释放非 HUD 瞬态贴图/Sprite/Resources 资产防 WebGL OOM（+单测 `BattleArtCatalogCacheTests.cs`；因 `BattleScreen.cs` 正被战报回放会话修改，1 行调用点 `BattleArtCatalog.ReleaseTransientBattleCaches();` 待该会话合入后挂入 `BattleScreen.Close()`）。
+- **其他同工作区仓库顺手收口摘要**：
+  - `xuanming-server-mmo-python`（第一轮已跑 `pytest` 507 passed）：修 `SceneBattle.reap()` 20Hz 全量反序列化、`prepare()` Redis 失败回滚、`AssetAnomaly` 队头死锁与降级丢告警、Gate `zone_id` 与 WS 踢人 `drain` 与双 Adler32、Portal UTC/62-bit ID/长度校验/共享 `ClientSession`、`SceneNode` `WeakValueDictionary` 单玩家锁等。
+  - `xuanming-server`（Pandora，第一轮 10 模块 `go test` PASS；第二轮补 `services/account/login/internal/conf/conf.go` `require_tidb=true` 生产门禁硬拒公开 dev JWT 密钥与 3 个 dev 开关 + `conf_test.go` 单测）：修邮件双路径领奖 TOCTOU、排行结算单事务原子化、移除 `:21001` 裸露 HTTP RPC、`GroupService` IDOR/配额、交易 WATCH `expired=false`、`pkg/redislock` `PEXPIRE`、删 `kafkax/consistent.go` 及 3 个死包并复用 `pkg/playerdisplay`。
+  - `xuanming-server-mmo`（Java 平行服）：第一轮完成 10 项高危修复，第二轮按要求留 TODO，已追加登记至 `../xuanming-server-mmo/PARITY.md` 末条。
+- **只读静态门禁检查（本轮全部通过）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：**10/10 OK**
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：**5/5 OK**
+  - `python tools/scripts/check_log_text_english.py`：**0 violations**
+  - `gofmt -l`（本批全部修改 Go 文件，含 `go/payment`、`go/guild`、`tools/data_consistency_check`、Pandora `login/internal/conf`）：**0 差异**
+  - PowerShell `Parser::ParseFile`（`tools/scripts/k8s_deploy.ps1`、`tools/scripts/lib/account_directory_dev_secret.ps1`）：**0 errors**
+  - 5 仓分支核对：全部在 `main`（无任何新建分支）。
+- **交 Codex 验证清单（注：前序会话已修补 `kPetNameSensitive` 与 `transaction_log_commit_gate_test.cpp`，请先按前序条目执行导表+协议生成，再执行下方验证）**：
+  1. **主服 C++ 串行编译与单测（Debug|x64，严格 `/m:1`）**：
+     - `msbuild /m:1 game.sln /p:Configuration=Debug /p:Platform=x64`（确认 `core`、`gate`、`scene`、`battle`、`rpc_controller_test`、`currency_test`、`bag_test`、`missions_test`、`skill_test`、`turn_battle_engine_test` 均 0 error；关注 `Sha256::` 消费方均已链 `crypto.lib`）
+     - `rpc_controller_test.exe --gtest_filter="BattleConnectionAdmission*:*AcceptAdmission*"`
+     - `currency_test.exe --gtest_filter="AssetOpSystemTest.*:PlayerAnomalyWindowTest.*:Currency*"`
+     - `bag_test.exe --gtest_filter="PlayerActivitySystemTest.*:AfkPass*:ClientRequest*:PlayerEquip*:PlayerFeatureHandlerTest.*:MissionActionHandlerTest.*:Pet*:PlayerMissionSystemTest.*:PlayerMysteryMerchantTest.*:PlayerBattleSettlement*:BagSpaceFreedTest.*:BagTest.*"`
+     - `missions_test.exe --gtest_filter="*"`
+     - `skill_test.exe --gtest_filter="PlayerSkillBookTest.*:PetEntriesTest.*:Buff*:*Skill*"`
+  2. **主服 Go 编译、Vet 与单测（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go/payment`：`go build ./... && go vet ./... && go test ./... -count=1`（覆盖 `google_test.go` 冷却/singleflight、`apple_test.go` 0/2/3 位小数、`record_test.go` `sameFact`）
+     - `go/guild`、`go/friend`、`go/login`、`go/shared`、`go/player_inbox`、`go/match`、`go/content_guard`、`tools/data_consistency_check`：分别 `go build ./... && go vet ./... && go test ./... -count=1`
+  3. **主服 Java 与 PowerShell 契约测试**：
+     - `mvn -f java/gateway_node/pom.xml test`（含 `GateTokenSecretGuardTest`）
+     - `mvn -f java/mall_game/pom.xml test`（含 `CommerceHttpFlowTest`）
+     - `mvn -f java/gm_admin/pom.xml -DskipTests=false test`（核对 `GmController` 用户名校验）
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`、`tools/scripts/tests/battle_connection_alerts_contract.tests.ps1`
+  4. **Unity 客户端编译与 EditMode 测试（`D:\luyuan\mmorpg-client`）**：
+     - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`（并按需带 `UNITY_WEBGL` 与 `MMORPG_UNITY_IAP` 宏分别过一遍离线 Roslyn）
+     - EditMode：`PaymentClientTests;PetClientTests;SpectateClientStateMachineTests;AttributeClientTests;GameClientReconnectTests;BattleArtCatalogCacheTests;GameClientGateEnvelopeTests;UiHostShutdownTests;JubaozhaiClientTests`
+     - 待战报回放会话合入 `BattleScreen.cs` 后，在 `BattleScreen.Close()` 末尾补挂 1 行 `BattleArtCatalog.ReleaseTransientBattleCaches();`。
+  5. **Pandora（`D:\luyuan\xuanming-server`）**：
+     - 使用 `D:\luyuan\tools\go1.26.8\go\bin\go.exe` 在 `services/account/login` 跑 `go test ./internal/conf/... ./internal/server/... -count=1`。
+- **刻意未动的低优先/架构级瘦身项（需单独决策排期，不影响当前上线）**：29.5 万行零消费导表/生成物（`java/config_node`、`generated/code/{ue,python,java}`、`proto/java`）、`k8s_deploy.ps1` 迁 Helm/Kustomize、`cpp/nodes/_template/`（仍被多份 README/设计文档引用）、`go/login` 的 `NeteaseProvider`（仍被 `auth_init.go` 注册）、以及大文件结构拆分与 Java 平行服进程合并。
+
+### 2026-11-20 配置表热更全 5 批落码（表包 + 轨道指针 + C++/Go 两阶段整批切换 + 战斗每局绑定 + table-sync/管理接口/K8s/审计白名单）— 未导表/未编译/未跑测，交 Codex 验证
+
+- **设计依据**：`docs/design/config-table-hot-reload.md`（§16 全部 8 项已核实，§17 已记批 5 逐表审计台账）；运维手册 `docs/ops/table-hot-reload-runbook.md`；告警 `deploy/k8s/table-bundle-alerts.yaml`；独立 Java 仓留待 `PARITY.md`。
+- **批 1（导表器与模板）**：
+  - `data/schema/cfg_options.proto` 新增 `bool cfg_hot_reload = 60006`；
+  - `tools/data_table_exporter/core/{schema,schema_proto,manifest}.py` 与 `core/generators/config_gen.py`：实现 `compute_schema_digest`（16 位小写 hex，仅计服务端列布局）、manifest 第 2 版（`schema_version=2`、`schema_digest`、逐表 `hot_reload`/`ids_permanent`）、单测 `tests/test_manifest.py` 与 `tests/test_schema_proto.py`；
+  - `cpp/libs/engine/config/table_expression.h`：新增纯 `const` 栈局部求值 `Evaluate(expr, params) const`（兼容旧 `SetParam`/`Value`）；
+  - `templates/cpp_config.{h,cpp}.j2`、`cpp_table_loader.{h,cpp}.j2`：提取顶层不可变 `XxxTableSnapshot`、`ParseSnapshotFromDir`（失败不 `LOG_FATAL`、检查 `ifstream::is_open()` 防止缺失 `.pb` 静默解析为空）、`TableSet`（`shared_ptr<const TableSet>`）、`ScopedTableSetOverride`、`kTableSchemaDigest`、`IsTableHotReloadable`、`CommitTableSet`、`InvokeTablesLoadSuccess`；
+  - `templates/go_config.go.j2`、`go_table_loader.go.j2`：新增 `SchemaDigest`、`IsHotReloadable`、`TableSet`、`Prepare`、`Commit`、`Current`、`OnTablesCommit`，删除带数据竞争的裸赋值 `ReloadTables`；
+  - `templates/java_table_loader.java.j2`：增补 `SCHEMA_DIGEST` 与 `isHotReloadable(String)`。
+- **批 2（进程侧热更与 `--validate-tables`）**：
+  - C++：`cpp/libs/engine/core/metrics/prometheus_text.{h,cpp}` 增 `SampleDouble`/`HistogramDouble`；新建 `cpp/libs/engine/core/table_bundle/table_bundle_manager.{h,cpp}`（登记到 `core.vcxproj`/`.filters`，零裸指针成员、零新线程，2s `TimerTaskComp` 轮询 `POINTER.json`、单表 `queueInLoop` 分片准备、`ScopedTableSetOverride` 校验、`activate_at_ms` 定时提交、10 分钟旧 `TableSet` 退役留存、原子 `STATUS.json`、`RunValidateTablesCli`、5 项 Prometheus 指标）；接线 `node.{h,cpp}`/`node_entry.h` 及 `cpp/nodes/{scene,gate}/main.cpp`（拆分启动一次性 `OnLoaded` 与每次提交 `Validate`/`OnCommitted`）。
+  - Go：新建 `go/shared/tablebundle`（`manifest.go`/`pointer.go`/`metrics.go`/`manager.go`/`cli.go`/`manager_test.go`）；接线 6 个读表服务（`go/match` 实现 `catalog.BuildFromTableSet` + `battlescript.LoadFromTableSet` + `atomic.Pointer` 原子切换与 `authority.Store.SwapCatalog`；`go/guild` 增 `ValidateEconomyTablesIn`/`activity.ValidateTablesIn`；`go/login` 增 `playernamereg.ValidateRulesIn`；`go/scene_manager`/`go/mail`/`go/rank` 接入 `tablebundle.LoadAtStartup` + `-validate-tables`）；删除 `go/player_locator` 无用的 `table.LoadTables`。
+  - 本地工具：`tools/scripts/dev_tools.ps1` 新增 `-Command tables-reload-local` 与 `-Command table-bundle`。
+- **批 3（战斗每局绑定不可变 `TableSet`）**：
+  - `cpp/libs/services/battle/data/battle_table_fingerprint.{h,cpp}` 增 `ComputeFromTableSet`；`table_battle_data_provider.{h,cpp}` 绑定 `shared_ptr<const TableSet>` 与 `shared_ptr<const BattleRewardConfig>`（零表单例直读）；
+  - `cpp/nodes/battle/logic/battle_room_manager.{h,cpp}` 与 `cpp/nodes/battle/main.cpp` 按战斗表指纹索引 provider 池（10 分钟退役期 + 房间显式持有至对局结束），接入 `--validate-tables` 与两阶段 `Validate`/`OnCommitted`；
+  - 新建静态守卫 `tools/scripts/tests/test_battle_no_direct_table_singleton.py`。
+- **批 4（分发与治理）**：
+  - 新建 Go 模块 `go/table_sync`（零新增第三方依赖：自研标准库 AWS SigV4 `internal/s3client` + 确定性平铺打包/安全解包/只增不删 ID 回滚守卫 `internal/bundle` + `internal/pointer` + `cmd/table-sync` 原生 sidecar + `cmd/table-bundle` 发布工具 + 3 套单测）；登记 `"table-sync"` 到 `tools/scripts/go_svc_image.ps1`；
+  - `java/gateway_node` 新增 `TablePointerStore`、`EtcdTablePointerStore`（etcd `mod_revision` CAS）、`AdminTableBundleController`（`GET/PUT/DELETE /admin/tables`、`DELETE /admin/tables/next`）及 `AdminTableBundleControllerTest`；
+  - `tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/dev_tools.ps1`、`deploy/k8s/manifests/infra/seaweedfs-dev.yaml`：可选注入 `table-sync` 原生 sidecar（`-TableSyncS3Endpoint` / `-TableSyncDevFixture`，覆盖 C++ `gate`/`scene`/`battle` 含 Agones Fleet 恒输出 `container: $FleetName` 与 6 个 Go 读表服务，排除 `player-locator` 等非读表服务；未启用时既有清单逐字不变）；同步 `k8s_client_entry_contract.tests.ps1`，新建 `deploy/k8s/table-bundle-alerts.yaml`、`tools/scripts/tests/k8s_table_bundle_contract.tests.ps1` 与 `docs/ops/table-hot-reload-runbook.md`。
+- **批 5（逐表审计放开与文档同步）**：
+  - 为 13 张完成审计的表添加 `option (cfg_hot_reload) = true;`：`MessageLimiter`、`ActivitySchedule`、`ActivityVitalityRule`、`ActivityVitalityReward`、`MysteryMerchantRule`、`MysteryMerchantGoods`、`GuildShop`、`GuildDonate`、`Skill`、`Buff`、`Cooldown`、`SkillPermission`、`Monster`；
+  - 同步 `docs/design/{config-table-hot-reload,mystery-merchant,configurable-templates,table-api-reference-zh}.md`。
+- **只读静态检查（本轮全部通过）**：
+  - `python -m py_compile`（7 个 Python 文件）：0 错误；
+  - `python tools/scripts/tests/test_battle_no_direct_table_singleton.py`：1/1 OK；
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：10/10 OK；
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：5/5 OK；
+  - `python tools/scripts/check_log_text_english.py --root .`：0 violations；
+  - `gofmt -l`（全部新建/修改 Go 文件）：0 差异；
+  - PowerShell `Parser::ParseFile`（6 个 `.ps1` 文件）：0 错误。
+- **交 Codex 验证步骤（按顺序执行）**：
+  1. **导表器单测与重新导表（必须最先跑，生成 manifest v2 与新 C++/Go/Java 表加载器）**：
+     - `python -m pytest tools/data_table_exporter/tests -q`
+     - `dev.bat gen`（或 `python tools/data_table_exporter/export.py` 按仓库导表入口重导三端表代码与 `generated/tables/manifest.json`）
+     - `python tools/scripts/gen_docs_index.py`（刷新 `docs/README.md` 索引，收录 `docs/ops/table-hot-reload-runbook.md`）
+     - 若需 Linux 构建同步刷新 CMakeLists：`python tools/archived/vcxproj2cmake.py`（确认 `cpp/libs/engine/core/CMakeLists.txt` 收录 `table_bundle/table_bundle_manager.cpp`）
+  2. **Go 编译、Vet 与单测（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go/shared`：`go test ./tablebundle/... -race -count=1`
+     - `go/table_sync`：`go test ./... -race -count=1` 且 `go build ./cmd/table-sync ./cmd/table-bundle`
+     - `go/match`、`go/guild`、`go/login`、`go/scene_manager`、`go/mail`、`go/rank`、`go/player_locator`：分别 `go build ./... && go vet ./... && go test ./... -count=1`
+  3. **Java `gateway_node` 单测**：
+     - `mvn -f java/gateway_node/pom.xml test -Dtest=AdminTableBundleControllerTest,AdminKillSwitchControllerTest,AdminApiKeyFilterTest`（或全量 `mvn -f java/gateway_node/pom.xml test`）
+  4. **PowerShell 契约测试**：
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_table_bundle_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/loki_ha_deploy_contract.tests.ps1`
+  5. **C++ 串行编译（Debug|x64，严格 `/m:1`）与 `--validate-tables` 冒烟**：
+     - `msbuild /m:1 game.sln /p:Configuration=Debug /p:Platform=x64`（核对 `core`、`gate`、`scene`、`battle`、`turn_battle_engine_test` 均 0 error；关注 `table_bundle_manager.cpp` 与新 `TableSet` 模板在 MSVC 下的编译）
+     - `turn_battle_engine_test.exe`（核对战斗每局绑定与无状态表达式求值）
+     - 用编出的 `scene.exe`、`gate.exe`、`battle.exe` 与各 Go 服务二进制分别运行 `--validate-tables generated/tables`（验证退出码均为 0）
+     - 本地热更冒烟：设 `MMORPG_TABLE_BUNDLE_ROOT=run/table_bundles` 起单节点，改 `MessageLimiter` 或 `Skill` 数值重导表并执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local`，核对 2 秒内日志打出 `reload committed` 且不中断在打战斗。
+
+
+### 2026-11-20 Gemini（Ponytail 审计残余项最终清零补录，全部落于 main，交 Codex 统一验收）
+
+- **补充收口清单（清零上条遗留的挂接点、热路径、安全洞与零调用死代码）**：
+  1. **Unity 客户端（`D:\luyuan\mmorpg-client`）**：
+     - `Assets/Scripts/UI/Ugui/Battle/BattleScreen.cs`：`Close()` 末尾补挂 1 行 `BattleArtCatalog.ReleaseTransientBattleCaches();`（完整保留并发战报回放改动），使战后瞬态贴图/Sprite/Resources 释放正式生效。
+     - `Assets/Scripts/App/{DevAutoPilot.cs,DevRoleUiDriver.cs}`、`Assets/Scripts/World/Tianyong/{TianyongSandboxAutoDrive.cs,TianyongSandboxHudVerification.cs}` 及其在 `AppBootstrap.cs` / `TianyongSandboxBootstrap.cs` 的 4 处调用点全部包入 `#if UNITY_EDITOR || DEVELOPMENT_BUILD`，彻底将自动驾驶/自动建角/沙盒截图驱动移出正式包与 WebGL 包（`TianyongSandboxBootstrap` 类体保留以兼容场景序列化，全部 EditMode/PlayMode 测试在 `UNITY_EDITOR` 下零回归）。
+  2. **主服 C++ / Go / Java（`D:\luyuan\xuanming-server-mmo-cpp`）**：
+     - `cpp/nodes/scene/handler/rpc/scene_handler.cpp`：`CreateScene` 将 `NavQuerySystem::RequiresNavigation` 校验前移至 `PlacementFence::AdmitCreate` 之前，修复导航缺失拒建时污染放置代次的强一致缺陷。
+     - `cpp/libs/services/scene/spatial/system/aoi.cpp`：`SendVisibilityChanges` 彻底移除全部 5 棵 `std::map` 红黑树，改为平铺 `std::vector` + `std::sort` 按 `(watcher, target)` 与 `target` 归并广播（保持完全一致的确定性顺序，消除视野热路径红黑树节点堆分配）。
+     - `cpp/libs/modules/currency/system/currency_system.{h,cpp}`：删除全仓零调用的 `WaiveDebt` / `FreezeDebt` 死写钱方法（保留单测在用的 `AdjustDebt` / `QueryDebts`）。
+     - `cpp/libs/engine/core/{core.vcxproj,CMakeLists.txt}` 与 `cpp/libs/engine/thread_context/{thread_context.vcxproj,thread_context.vcxproj.filters,CMakeLists.txt}`：移除并删除全仓零调用的 `spdlog_file.{h,cpp}`（死异步日志线程）与 `lua_state.{h,cpp}`（每线程无用 `thread_local sol::state tlsLua`）。
+     - `java/config_node/src/main/java/com/game/config/controller/ReloadController.java` + 新增 `ReloadControllerTest.java`：`POST /api/reload` 补齐鉴权（配置 `config.reload.api-key` 时恒定时间比对 `X-Admin-Key`，否则仅放行无 `X-Forwarded-For` 的直连本机回环，远端一律 403）。
+     - `go/login/internal/svc/{auth_init.go,auth_init_test.go}`：配置了未实现的 `AuthProviders.NetEase` 时启动期直接 `panic` fail-fast，不再静默挂接空桩或读明文凭据（+ `TestInitAuthProvidersRejectsUnimplementedNetEase`）。
+- **本补录只读静态检查**：`test_cpp_no_raw_pointer_member.py`（10/10 OK）、`test_cpp_thread_sources.py`（5/5 OK）、`check_log_text_english.py`（0 violations）、`gofmt -l`（0 差异）、5 仓全在 `main`。
+- **追加至 Codex 验证命令**：
+  - `mvn -f java/config_node/pom.xml test`（验证 `ReloadControllerTest` 与导表 Java 消费端编译）；
+  - `go/login`：`go test ./internal/svc/... -run TestInitAuthProviders -count=1`；
+  - `cpp`：`msbuild /m:1 game.sln /p:Configuration=Debug /p:Platform=x64`（重点覆盖 `core`、`thread_context`、`scene`、`aoi` 相关单测与 `currency_test`）；
+  - `mmorpg-client`：`pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`（同时以不含 `UNITY_EDITOR` / `DEVELOPMENT_BUILD` 的 Release 宏验证 `AppBootstrap` / `TianyongSandboxBootstrap` 零编译错误，以及 `BattleScreen` + `BattleArtCatalogCacheTests`）。
+
+
+## 2026-11-20 Gemini（真钱支付全链路生产标准加固：服务端 + 客户端已落码，未编译，交 Codex 统一验证；Java 全服务版留 TODO）
+
+- **范围与约束**：所有改动直接落于 `main` 工作区（无分支、未 `git commit` / `git push`、未改动他人会话文件）；不保留未上线旧数据兼容包袱，对三方深审发现的全部一致性、并发、扩展性、崩溃恢复与客户端桥接缺陷一次性修复，未留「以后修」；按指令未跑协议生成、编译、单测或冒烟，全部交由 Codex 按下列命令执行；独立 Java 全服务仓 `D:\luyuan\xuanming-server-mmo` 仍留 TODO。
+- **一、`go/payment`、`proto/payment`、`go/shared/tracing` 强一致与高并发加固**：
+  1. **Schema 升级（需 Codex 先跑 `proto-gen-run`）**：`proto/payment/payment_table.proto` 在 `PayFinalizeState` 新增 `PAY_FINALIZE_STATE_FAILED = 3`，并将 `PaymentIntentRecord` 索引升级为 `(spender_hi, spender_lo, state, paid_ms)` 加速未成年人单日/当月汇总。
+  2. **未成年人充值限额原子提交（消除 TOCTOU 越限与并发误扣额度）**：`go/payment/internal/data/spend.go` 新增 `RecordMinorPaymentTxn`，在同一 `ReadCommitted` 事务内完成 `lockSpender` + `payment_intent FOR UPDATE` + `payment_txn FOR UPDATE` + `checkSpend` + `INSERT payment_txn` + `UPDATE payment_intent=PAID`；`go/payment/internal/core/minor.go` 移除过时的 `recheckLatePayment`，并将 `drivesIntent` 收窄为 `MallBound` / 订单本笔 `MallRefundQueued`（不再因 `MallPending` 异常单提前释放限额）。
+  3. **跨序撤销 / 墓碑 / 补发收敛与退款租约防重**：
+     - `go/payment/internal/core/service.go`：`SubmitPurchase` 在谷歌侧遇到 `MallOrphan` / `MallRejected` / `ErrFactConflict` 返回 `Finish=false`（保留 Google 72 小时自动退款保护）；`record()` 在 `refundedOutside` 时写 `FactRevision=1` 并识别先到撤销墓碑；`revoke()` 在 `ErrNotFound` 落 `FactRevision=1` 墓碑并防自身退款误伤、处理乱序 `REFUND_REVERSED` 先于旧 `REFUND`（经 `TouchFactObserved` 推进观测时间）。
+     - `go/payment/internal/data/repo.go`：`ClaimRefund` 原子流转 `RefundNone→RefundRequested`、持久化 `out_refund_no` 并覆盖 `RefundReported`/`RefundFailed` 租约（防止执行与回调竞态及多副本重复锤击）；新增 `OldestMallPendingMs` 与 `OldestFinalizePendingMs`。
+     - `go/payment/internal/core/workers.go`：`pushMall` 改为库级最老待同步指标（退避中不归零，覆盖修订同步）；`processRefunds` 接入游标分页（最多 20 页）与缺失/事实不符自动 `MANUAL` 关单、`mall.ErrConflict` 停试；`finalize` 导出 `payment_finalize_oldest_pending_seconds` 并将已撤销及永久 4xx（400/404/410）落 `FinalizeFailed`；`pollOne` 加 5 分钟历史重叠窗口、改用可取消 25s `pollCtx` + 90s 租约并在排空时及时退出。
+  4. **渠道与回调加固**：
+     - `go/payment/internal/channel/{channel.go,google.go,wechatminigame.go,wechatpay.go,alipay.go}`：Google 与微信小游戏 OAuth Token 刷新改为锁外 singleflight（不持锁跑 HTTP、支持 `ctx.Done()`、401/40001/42001 失效清缓存并重试 1 次）；Google 拉证书用 10s 分离上下文、映射 `ErrTempUnavailable`、`PollHistory` 加 `includeQuantityBasedPartialRefund=true` 及 >50 页折半；微信小游戏 `90016` 返回 `ErrQueryUnsupported`、补全 PKCS#7 全字节填充校验；微信支付 `Close` 将 `ORDERPAID` 视为已关、`Revocation` 补全 `OutTradeNo`/`OutRefundNo`；`mall/client.go` 配置连接池（`MaxIdleConns=64`、`MaxIdleConnsPerHost=32`）并升级 `PendingRefunds(ctx, cursor)` 分页。
+     - `go/shared/tracing/http.go`、`go/payment/internal/notify/notify.go`：公网回调入口改为 `tracing.StartRootSpan`（不信任公网 `traceparent`），加 panic 恢复触发 `relay.Hold()`、`parseTimeout=5s`、`ErrTempUnavailable` 判 `AckRetry`、按渠道类型分配 8s/2.5s 处理预算。
+     - `go/payment/internal/config/config.go`、`payment.go`：校验 `Payment.Mall.TimeoutMs`（0 或 500..15000）、释放 `closeRealNames()`、移除未使用 `TipClassifier()`。
+  5. **Go 单测补充**：更新 `core/minor_test.go`、`core/record_test.go`（谷歌孤儿/冲突不 Finish、乱序撤销安全）、`channel/wechatminigame_test.go`、`channel/wechatpay_test.go`。
+- **二、`go/trade` 与 `cpp/scene` 强一致扣回加固**：
+  1. `go/trade/internal/data/asset_op_repo.go` & `asset_op_recovery_test.go`：`ListAbandonCandidates` 与 `Abandon` 双层禁止自动放弃 `TX_PAYMENT_REVERSAL`（防拒付扣回被 180 天自动清理）。
+  2. `go/trade/internal/commerce/manual_plan.go`：`commercefix` `reissue` 支持重派 `manualReasonPaymentReversal` 的失败 `official_reverse_*`（Stream 3）与 `official_regrant_*`（Stream 4）腿。
+  3. `go/trade/internal/commerce/mall.go` & `official_reversal_test.go`：`NewMall` 配置连接池；`MallOrder` 增加 `PaymentRevision`、`mallAnswer.Version` 升级为严格单调 `(PaymentRevision << 4) | stateRank`（彻底解决撤销/补发后客户端缓存冻结）。
+  4. `cpp/libs/services/scene/player/system/asset_op_system.cpp` & `cpp/tests/currency_test/asset_op_system_test.cpp`：`TX_PAYMENT_REVERSAL` 允许按 `(config_id, count)` 扣回非堆叠道具与已穿戴装备，按 `RecallBagOrder` 全背包扫描（背包→仓库→临时→动态→装备栏，脱装同步 `Recalculate` + `PushPanel`，零裸指针成员）。
+- **三、`java/mall_game`、K8s 部署、告警与文档**：
+  1. `CommerceApi.java` & `CommerceStore.java`：`CommerceApi.Order` 新增 `paymentRevision`（附 8 参重载兼容旧测试）；新增 `@EnableScheduling` 驱动的多副本安全未支付订单超时清理 `expireOverdueOrders()`（60s 宽限期、每批 50 单走 `cancelOrder` 释放库存/寄售预占与未支付配额）；`oms_order` 补 `idx_commerce_status_deadline (status, payment_deadline_ms)` 索引并在 `SchemaVerifier` 校验。
+  2. `NonceStore.java`：移除热路径 1/64 内联 `DELETE`，改为独立 `@Scheduled(fixedDelay = 10_000)` 批量 `LIMIT 500` 清理 `pruneExpired()`。
+  3. `DeliveryApi.java`、`DeliveryStore.java`、`DeliveryController.java`：`/internal/refunds/poll` 升级确定性游标分页 `{entries, nextCursor}`（`r1:<orderSn>:<channel>:<transactionId>`，`commerce_refund_intent` 升级覆盖索引 `(status, order_sn, channel, transaction_id)`）；`settleRefund` 对 `MANUAL`/`REVOKED` 返回 `409`（仅 `REFUNDED` 缺回执回 `503`）；`receipt`/`reversalReceipt` 幂等重放不比较 `proof`（对齐设计 §8.2.5）。
+  4. `PaymentRevisionStore.java`：寄售单（`sku_id=0`）付款撤销止损——未交付（`status=1`）立即作废 `commerce_delivery_intent`（`PENDING→REVOKED`）阻断发货并转 `MANUAL`；已交付（`status=2`）冻结冷却期未提现 `commerce_seller_income`（`available_ms=Long.MAX_VALUE`）并转 `MANUAL`。
+  5. `CatalogAdminStore.java`、`schema.sql`：货币发放严格校验已知游戏币种 `Set.of(0, 1, 2)`（银两/灵石/绑定灵石）。
+  6. `DatabaseConfiguration.java`、`pom.xml`、`application.yaml`、`deploy/k8s/manifests/java-svc/mall.yaml`、`deploy/k8s/manifests/go-svc/payment.yaml`、`tools/scripts/k8s_deploy.ps1`、`deploy/k8s/payment-alerts.yaml`、`deploy/k8s/mysql-connection-alerts.yaml`、`tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1`、`deploy/k8s/README.md`、`docs/design/payment-recharge.md`：
+     - `mall` 接入 `micrometer-registry-prometheus`、Hikari 池定名 `mall`（`minIdle=4`/`maxPoolSize=16`/生命周期与保活配置，清理双设警告）、优雅停机（`graceful` + 25s + K8s `preStop sleep 5` + `terminationGracePeriodSeconds: 40`）、K8s 独立管理端口 `18121`（探针 + `/actuator/prometheus`，与业务 18120 线程池隔离，`socketTimeout=6000` 统一）；`payment.yaml` 补 `startupProbe` 与 `terminationGracePeriodSeconds: 45`；告警新增 `PaymentFinalizeStalled`、`MallHikariAcquireTimeout`、`MallHikariSaturated`；补齐全部 Java 单测与部署契约断言。
+- **四、Unity 客户端（`D:\luyuan\mmorpg-client`）生产级加固**：
+  1. `StorePayBridge.cs`（对照本地 `com.unity.purchasing@015b4cec2127` 5.0.4 源码）：订阅 `OnPurchasesFetched` 恢复 iOS StoreKit 2 启动未完成单并按交易键去重；订阅 `OnStoreDisconnected` 清空连接态并配置有界重连策略；`FetchProducts` 改传 `MaximumNumberOfAttemptsRetryPolicy(2)`（根除无限重试卡死）并加 `_fetchGeneration` 守卫；购买前对空扩展服务/空账号订单标记 fail-closed；`PurchasePending` 同时核对 `productId` 与订单标记。
+  2. `PaymentClient.cs` & `JubaozhaiUiRoot.cs`：收据核验瞬时失败（网络/超时/`KPaymentBusy`/`KPaymentLoginRequired`/`KServiceUnavailable`/`KRateLimitExceeded`）与在途被 `Reset()`/`Disconnected()` 中断均按指数退避（3/6/12/24/30s）重新入队不丢单；`ListChannels()` 独立世代不打断在途支付并修正错误文案；跨角色补单（`FinishTransaction=true && Intent==null`）不启 90s 轮询；`Settled` 优先回传 `intent.OrderId`；终局错误（订单不存在/过期/非法参数）立停轮询；新增 `CancelWatching()`；`bridge.Prepare`/`Launch` 加异常兜底；`JubaozhaiUiRoot` 仅在 `inGame && player != 0` 时驱动 `Tick`，并在 `PaymentClient.Settled` 时无条件刷新背包/宠物资产。
+  3. `AndroidPayBridges.cs`、`MinigamePayBridges.cs`、`MinigamePay.jslib`、`RpcGuard.cs`：安卓双桥捕获全部 `Exception`（支付宝在 `finally` 保证回主线程）；小游戏桥增加单调 `requestId` 与 `CancelPending()`、`.jslib` 防双回调、优先 `getDeviceInfo().platform` 转小写；`RpcGuard` 将 `ClientPlayerPaymentRpc`（396..399）注册到独立 `"payment"` 熔断域。
+  4. `CommerceWindow.cs` & EditMode 单测：支付态变化不再每 2 秒重建整页 UI、支付中禁用支付与取消按钮、支持「停止等待」、后台补单结算不劫持当前页签；`Money()` 补全常见 2 位/0 位国际币种与 0/1/2 游戏币名；`Kind()` 补 `RmbConsignment`；终态寄售隐藏「撤回寄售」；市场挂单无下一页时置灰「下一页」；补全 `PaymentClientTests.cs`、`CommerceClientTests.cs`、`RpcGuardTests.cs`。
+- **已跑只读静态预检（全过）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：10/10 OK；
+  - `python tools/scripts/check_log_text_english.py`：0 violations；
+  - `gofmt -l`（本轮全部修改的 Go 文件）：0 差异；
+  - PowerShell `Parser::ParseFile`（`k8s_deploy.ps1`、`k8s_mall_payment_deploy_contract.tests.ps1`）：0 错误。
+- **交 Codex 验证命令（按顺序执行）**：
+  1. **协议生成（必须最先跑，产出 `PayFinalizeState_PAY_FINALIZE_STATE_FAILED` 与新索引）**：
+     - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`（确保 `third_party\protobuf\install_vs2026_dbg\bin` 的 `protoc 35.1` 在 PATH 前列）
+  2. **Go 编译、Vet、单测与真 TiDB 测试（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go/shared`：`go test ./tracing/... -count=1`
+     - `go/payment`：`go build ./... && go vet ./... && go test ./... -race -count=1`（再配隔离 TiDB `PAYMENT_TEST_DSN` + `PAYMENT_REQUIRE_TIDB=1` 跑 `go test ./internal/data/... -count=1 -v`）
+     - `go/trade`：`go build ./... && go vet ./... && go test ./internal/data/... ./internal/commerce/... -count=1`（再配隔离 TiDB `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1` 跑 `go test ./internal/commerce -run 'TestTiDBMallReversalClawsBackThenRegrants|TestTiDBMallBridgeWaitsForCommittedLegAndRecoversLostReceipt' -count=1 -v`）
+  3. **Java `mall_game` 编译与单测**：
+     - `mvn -f java/pom.xml -pl authority_jdbc,server_startup install -DskipTests`
+     - `mvn -f java/mall_game/pom.xml test`（重点覆盖新增的过期订单清理、退款游标分页、409/proof 重放、寄售撤销止损、币种校验、nonce 清理用例）
+  4. **C++ 串行编译与单测（`/m:1`，注意其他会话在途文件 `player_pet.cpp:1025` / `transaction_log_commit_gate_test.cpp:167`）**：
+     - `msbuild /m:1 cpp/tests/currency_test/currency_test.vcxproj /p:Configuration=Debug /p:Platform=x64`（若跨会话错误已修，运行 `currency_test.exe --gtest_filter=AssetOpSystemTest.*` 验证 `PaymentReversalDebitsStackableAcrossWarehouseAndNonStackableEquipment`）
+  5. **PowerShell 部署契约测试**：
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/sql_boot_catalog_java.tests.ps1`
+  6. **Unity 客户端四平台编译与 EditMode 单测（在 `D:\luyuan\mmorpg-client`）**：
+     - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`（同时带 `MMORPG_UNITY_IAP` 验证 Editor / `UNITY_ANDROID` / `UNITY_IOS` / `UNITY_WEBGL`）
+     - 运行 EditMode 单测：`PaymentClientTests`、`CommerceClientTests`、`CommerceRecoveryFileStoreTests`、`RpcGuardTests`
+  7. **冒烟**：本地 `devpay` 联调冒烟 +（集群就绪后）`kind` 部署冒烟；独立 Java 全服务版留待后续按 `PARITY.md` TODO 跟进。

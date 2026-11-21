@@ -318,6 +318,10 @@ func (s *Store) Summary(ctx context.Context, playerID uint64) (*inboxpb.GetPlaye
 		}
 		streams = append(streams, st)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
@@ -338,6 +342,10 @@ func (s *Store) Summary(ctx context.Context, playerID uint64) (*inboxpb.GetPlaye
 			return nil, err
 		}
 		aggs[d] = a
+	}
+	if err := arows.Err(); err != nil {
+		arows.Close()
+		return nil, err
 	}
 	if err := arows.Close(); err != nil {
 		return nil, err

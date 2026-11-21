@@ -131,9 +131,13 @@ void SendBattleNodeAttachRelayGateErased(entt::registry& , entt::entity , const 
 void SendBattleNodePromoteSpectateBroadcastErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 namespace chatpb{void SendClientPlayerChatSendChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatPullChatHistoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace chatpb{void SendClientPlayerChatReportChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace chatpb{void SendClientPlayerChatRetractWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatNotifyWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace chatpb{void SendClientPlayerChatNotifyWorldChatRetractedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace client_rpc_router{void SendClientRpcRouterForwardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace content_guard{void SendContentGuardCheckTextErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace content_guard{void SendContentGuardCheckPlatformTextErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReadAccountDirectoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCreateAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceLookupAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -142,6 +146,8 @@ namespace data_service{void SendDataServiceRemoveAccountRolesErased(entt::regist
 namespace data_service{void SendDataServiceSetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceResetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceUpsertAccountChannelIdentityErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetPlayerChannelIdentityErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBeginAccountRoleTradeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCancelAccountRoleTradeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -206,6 +212,7 @@ namespace guildpb{void SendGuildServiceGetPlayerGuildErased(entt::registry& , en
 namespace guildpb{void SendGuildServiceLeaveGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceDisbandGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceSetAnnouncementErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceRenameGuildErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceSetGuildMemberRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceKickGuildMemberErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceTransferGuildLeaderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -391,7 +398,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 433,
+static_assert(kMaxRpcMethodCount == 440,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -517,11 +524,26 @@ void InitMessageInfo()
         std::make_unique<::chatpb::PullChatHistoryRequest>(),
         std::make_unique<::chatpb::PullChatHistoryResponse>(),
         1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatPullChatHistoryErased, "/chatpb.ClientPlayerChat/PullChatHistory"};
+    gRpcMethodRegistry[ClientPlayerChatReportChatMessageId] = RpcMethodMeta{
+        "ClientPlayerChat", "ReportChat",
+        std::make_unique<::chatpb::ReportChatRequest>(),
+        std::make_unique<::chatpb::ReportChatResponse>(),
+        1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatReportChatErased, "/chatpb.ClientPlayerChat/ReportChat"};
+    gRpcMethodRegistry[ClientPlayerChatRetractWorldChatMessageId] = RpcMethodMeta{
+        "ClientPlayerChat", "RetractWorldChat",
+        std::make_unique<::chatpb::RetractWorldChatRequest>(),
+        std::make_unique<::chatpb::RetractWorldChatResponse>(),
+        1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatRetractWorldChatErased, "/chatpb.ClientPlayerChat/RetractWorldChat"};
     gRpcMethodRegistry[ClientPlayerChatNotifyWorldChatMessageId] = RpcMethodMeta{
         "ClientPlayerChat", "NotifyWorldChat",
         std::make_unique<::chatpb::ChatMessage>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatNotifyWorldChatErased, "/chatpb.ClientPlayerChat/NotifyWorldChat"};
+    gRpcMethodRegistry[ClientPlayerChatNotifyWorldChatRetractedMessageId] = RpcMethodMeta{
+        "ClientPlayerChat", "NotifyWorldChatRetracted",
+        std::make_unique<::chatpb::ChatRetractedNotify>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::ChatNodeService, chatpb::SendClientPlayerChatNotifyWorldChatRetractedErased, "/chatpb.ClientPlayerChat/NotifyWorldChatRetracted"};
 
     // --- ClientRpcRouter ---
     gRpcMethodRegistry[ClientRpcRouterForwardMessageId] = RpcMethodMeta{
@@ -536,6 +558,11 @@ void InitMessageInfo()
         std::make_unique<::content_guard::CheckTextRequest>(),
         std::make_unique<::content_guard::CheckTextResponse>(),
         1, common::base::eNodeType::ContentGuardNodeService, content_guard::SendContentGuardCheckTextErased, "/content_guard.ContentGuard/CheckText"};
+    gRpcMethodRegistry[ContentGuardCheckPlatformTextMessageId] = RpcMethodMeta{
+        "ContentGuard", "CheckPlatformText",
+        std::make_unique<::content_guard::CheckTextRequest>(),
+        std::make_unique<::content_guard::CheckTextResponse>(),
+        1, common::base::eNodeType::ContentGuardNodeService, content_guard::SendContentGuardCheckPlatformTextErased, "/content_guard.ContentGuard/CheckPlatformText"};
 
     // --- DataService ---
     gRpcMethodRegistry[DataServiceReadAccountDirectoryMessageId] = RpcMethodMeta{
@@ -578,6 +605,16 @@ void InitMessageInfo()
         std::make_unique<::data_service::ResetAccountRealNameRequest>(),
         std::make_unique<::data_service::ResetAccountRealNameResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceResetAccountRealNameErased, "/data_service.DataService/ResetAccountRealName"};
+    gRpcMethodRegistry[DataServiceUpsertAccountChannelIdentityMessageId] = RpcMethodMeta{
+        "DataService", "UpsertAccountChannelIdentity",
+        std::make_unique<::data_service::UpsertAccountChannelIdentityRequest>(),
+        std::make_unique<::google::protobuf::Empty>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceUpsertAccountChannelIdentityErased, "/data_service.DataService/UpsertAccountChannelIdentity"};
+    gRpcMethodRegistry[DataServiceGetPlayerChannelIdentityMessageId] = RpcMethodMeta{
+        "DataService", "GetPlayerChannelIdentity",
+        std::make_unique<::data_service::GetPlayerChannelIdentityRequest>(),
+        std::make_unique<::data_service::GetPlayerChannelIdentityResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerChannelIdentityErased, "/data_service.DataService/GetPlayerChannelIdentity"};
     gRpcMethodRegistry[DataServiceBeginAccountRoleTradeMessageId] = RpcMethodMeta{
         "DataService", "BeginAccountRoleTrade",
         std::make_unique<::data_service::BeginAccountRoleTradeRequest>(),
@@ -962,6 +999,11 @@ void InitMessageInfo()
         std::make_unique<::guildpb::SetAnnouncementRequest>(),
         std::make_unique<::guildpb::SetAnnouncementResponse>(),
         1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetAnnouncementErased, "/guildpb.GuildService/SetAnnouncement"};
+    gRpcMethodRegistry[GuildServiceRenameGuildMessageId] = RpcMethodMeta{
+        "GuildService", "RenameGuild",
+        std::make_unique<::guildpb::RenameGuildRequest>(),
+        std::make_unique<::guildpb::RenameGuildResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceRenameGuildErased, "/guildpb.GuildService/RenameGuild"};
     gRpcMethodRegistry[GuildServiceSetGuildMemberRoleMessageId] = RpcMethodMeta{
         "GuildService", "SetGuildMemberRole",
         std::make_unique<::guildpb::SetGuildMemberRoleRequest>(),
@@ -2496,6 +2538,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerSetAutoBattleMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
+	case ClientPlayerChatReportChatMessageId:
 	case ClientPlayerFriendAddFriendMessageId:
 	case ClientPlayerFriendAcceptFriendMessageId:
 	case ClientPlayerFriendRejectFriendMessageId:
@@ -2514,6 +2557,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceLeaveGuildMessageId:
 	case GuildServiceDisbandGuildMessageId:
 	case GuildServiceSetAnnouncementMessageId:
+	case GuildServiceRenameGuildMessageId:
 	case GuildServiceSetGuildMemberRoleMessageId:
 	case GuildServiceKickGuildMemberMessageId:
 	case GuildServiceTransferGuildLeaderMessageId:

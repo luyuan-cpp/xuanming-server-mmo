@@ -156,6 +156,8 @@ type ServiceContext struct {
 	DeletionCoolingOff time.Duration
 	// AccountRealNames 是账号行上的实名列(docs/design/real-name-anti-addiction.md §5.1):写只认 login,按玩家读只认 payment。
 	AccountRealNames AccountRealNameStore
+	// ChannelIdentities 读写第三方渠道身份与玩家画像(content_guard / chat 用)。
+	ChannelIdentities ChannelIdentityStore
 	// PaymentDirectoryAuth 验 go/payment 的调用证明,只给 GetAccountRealName 用;密钥缺失时为 nil,该 RPC 回 Unavailable。
 	PaymentDirectoryAuth      *serviceauth.Verifier
 	AccountDirectoryAuth      *serviceauth.Verifier
@@ -325,7 +327,10 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		if err != nil {
 			panic(fmt.Sprintf("data_service failed to read logical database placement: %v", err))
 		}
-		mysqlCfg.PoolOptions = dbPlacement.OpenOptions()
+		poolOptions := dbPlacement.OpenOptions()
+		// 按逻辑库建连熔断:目录各片、流水库与按需打开的存档库经 MySQLConfig.ForSchema 共享这一份选项,
+		// 单个集群失联时只快速拒绝落在它上面的逻辑库,不影响健康库(docs/design/data-service-breaker-per-logical-db.md §5.1)。
+		mysqlCfg.PoolOptions = append(poolOptions[:len(poolOptions):len(poolOptions)], authoritysql.WithConnectGate(newLogicalDBConnectGate()))
 		// 目录各片、流水库、存档库各一份写资格。
 		writers, err := authoritysql.LoadWriterConfigs(os.Getenv)
 		if err != nil {
@@ -496,6 +501,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 			logx.Infof("[account-deletion] account deletion enabled: cooling_off=%s", coolingOff)
 		}
 		s.AccountRealNames = directory
+		s.ChannelIdentities = directory
 		if auth, err := serviceauth.New(map[string]string{accountdirectory.PaymentCaller: os.Getenv(accountdirectory.PaymentSecretEnv)}); err != nil {
 			logx.Errorf("[real-name] %s unavailable; GetAccountRealName disabled", accountdirectory.PaymentSecretEnv)
 		} else {

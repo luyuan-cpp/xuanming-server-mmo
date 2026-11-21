@@ -81,11 +81,23 @@ func TestProductionPasswordProviderFailsClosedForUnknownEmptyAndLegacyPlaintext(
 	}
 
 	invalidInput := &fakePasswordHashStore{canonical: "alice", found: true}
-	if _, err := providerWith(invalidInput).ValidatePassword(context.Background(), " alice", "password"); !errors.Is(err, ErrInvalidCredentials) {
+	var kdfCalls atomic.Int32
+	invalidProvider := providerWith(invalidInput)
+	invalidProvider.verifyKDF = func(_, _ string) (bool, error) {
+		kdfCalls.Add(1)
+		return false, nil
+	}
+	if _, err := invalidProvider.ValidatePassword(context.Background(), " alice", "password"); !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("invalid account shape error = %v, want ErrInvalidCredentials", err)
+	}
+	if _, err := invalidProvider.ValidatePassword(context.Background(), "alice", ""); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("empty password error = %v, want ErrInvalidCredentials", err)
 	}
 	if invalidInput.lookups.Load() != 0 {
 		t.Fatalf("invalid account shape must not query MySQL, lookups=%d", invalidInput.lookups.Load())
+	}
+	if kdfCalls.Load() != 0 {
+		t.Fatalf("malformed or empty credentials must not burn KDF slots before quota, calls=%d", kdfCalls.Load())
 	}
 }
 

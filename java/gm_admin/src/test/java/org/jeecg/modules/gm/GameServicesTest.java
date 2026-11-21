@@ -201,8 +201,16 @@ class GameServicesTest {
     @Test
     void unconfiguredMailAndRemotePlaintextFailClosed() throws Exception {
         services = new GameServices(PROTO, MAPPER, "", "", "", "", false, 5000);
+        assertFalse(services.mailEnabled());
+        assertTrue(services.supportsCurrency(0));
+        assertTrue(services.supportsCurrency(1));
+        assertTrue(services.supportsCurrency(2));
+        assertFalse(services.supportsCurrency(3));
         assertEquals("NOT_CONFIGURED", assertThrows(GameServices.CallFailure.class,
                 () -> services.sendMail(frozen())).getCode());
+        services.close();
+        services = new GameServices(PROTO, MAPPER, "", "", "127.0.0.1:50900", " ".repeat(40), true, 5000);
+        assertFalse(services.mailEnabled());
         assertThrows(IllegalArgumentException.class, () -> new GameServices(PROTO, MAPPER,
                 "example.com:443", "", "", SECRET, true, 5000));
     }

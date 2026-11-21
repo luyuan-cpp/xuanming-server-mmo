@@ -34,6 +34,7 @@ import (
 	base "proto/common/base"
 	tradepb "proto/trade"
 
+	"shared/contentguard"
 	"shared/idsegment"
 	"shared/placement"
 
@@ -55,7 +56,8 @@ type Deps struct {
 	Rmb         *commerce.RmbConsignments
 	RmbIdentity RmbIdentityResolver
 	// ManualOps 是转人工合同的人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract);nil = 入口关闭。
-	ManualOps *ManualContractOps
+	ManualOps    *ManualContractOps
+	ContentGuard contentguard.Checker
 }
 
 // NewDeps 用 ServiceContext 组装生产依赖。

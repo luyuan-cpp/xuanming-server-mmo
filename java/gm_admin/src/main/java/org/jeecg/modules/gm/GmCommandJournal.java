@@ -9,8 +9,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Lazy(false)
 public final class GmCommandJournal {
+    static final long PLAYER_DRAFT_TTL_MS = 300_000L;
+    private static final int MAX_PAGE = 10_000;
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final Set<String> MAIL_STATUSES = Set.of("DRAFT", "SENDING", "DELIVERED", "REJECTED", "UNKNOWN");
+    private static final Set<String> PLAYER_STATUSES = Set.of("DRAFT", "SENDING", "EXECUTED", "REJECTED", "UNKNOWN");
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final TransactionTemplate tx;
@@ -82,49 +89,102 @@ public final class GmCommandJournal {
         ObjectNode original = input.deepCopy();
         List<Row> previous = byKey(operator, clientRequestId);
         if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original, kind);
-        long candidate = ids.getAsLong() & Long.MAX_VALUE;
-        if (candidate == 0) throw new IllegalStateException("Command ID generation failed");
-        String id = Long.toString(candidate);
-        long now = clock.millis();
-        ObjectNode request = original.deepCopy();
-        request.put("requestId", id);
-        if (kind.equals("MAIL")) {
-            request.remove("validDays");
-            request.put("recipientPlayerId", playerId).put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
-        } else {
-            request.put("playerId", playerId).put("operator", operator).put("reason", reason).put("issuedAtMs", Long.toString(now));
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String id = nextId();
+            long now = clock.millis();
+            ObjectNode request = original.deepCopy();
+            request.put("requestId", id);
+            if (kind.equals("MAIL")) {
+                request.remove("validDays");
+                request.put("recipientPlayerId", playerId).put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
+            } else {
+                request.put("playerId", playerId).put("operator", operator).put("reason", reason).put("issuedAtMs", Long.toString(now));
+            }
+            try {
+                return tx.execute(status -> {
+                    jdbc.update("INSERT INTO gm_command (id,command_type,operator_name,client_request_id,player_id,reason,input_json,"
+                            + "request_json,status,attempt,created_ms,updated_ms) VALUES (?,?,?,?,?,?,?,?,'DRAFT',0,?,?)",
+                            id, kind, bytes(operator), bytes(clientRequestId), playerId, reason, original.toString(), request.toString(), now, now);
+                    audit(id, operator, "DRAFT", 0, null, now);
+                    return get(id);
+                });
+            } catch (DuplicateKeyException collision) {
+                previous = byKey(operator, clientRequestId);
+                if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original, kind);
+            }
         }
-        try {
-            return tx.execute(status -> {
-                jdbc.update("INSERT INTO gm_command (id,command_type,operator_name,client_request_id,player_id,reason,input_json,"
-                        + "request_json,status,attempt,created_ms,updated_ms) VALUES (?,?,?,?,?,?,?,?,'DRAFT',0,?,?)",
-                        id, kind, bytes(operator), bytes(clientRequestId), playerId, reason, original.toString(), request.toString(), now, now);
-                audit(id, operator, "DRAFT", 0, null, now);
-                return get(id);
-            });
-        } catch (DuplicateKeyException collision) {
-            previous = byKey(operator, clientRequestId);
-            if (!previous.isEmpty()) return replay(previous.get(0), playerId, reason, original, kind);
-            throw conflict("命令号冲突，请重新创建草稿");
-        }
+        throw conflict("命令号冲突，请重新创建草稿");
     }
 
     public ObjectNode get(String id) { return row(id, false).view; }
 
     public ObjectNode list() {
-        return list("MAIL");
+        return list(1, 50, null, null);
+    }
+
+    public ObjectNode list(int page, int pageSize, String playerId, String status) {
+        return list("MAIL", page, pageSize, playerId, status);
     }
 
     public ObjectNode listPlayerCommands() {
-        return list("PLAYER");
+        return listPlayerCommands(1, 50, null, null);
     }
 
-    private ObjectNode list(String kind) {
+    public ObjectNode listPlayerCommands(int page, int pageSize, String playerId, String status) {
+        return list("PLAYER", page, pageSize, playerId, status);
+    }
+
+    private ObjectNode list(String kind, int page, int pageSize, String playerId, String status) {
+        check(page >= 1 && page <= MAX_PAGE, "页码须为 1 至 " + MAX_PAGE);
+        check(pageSize >= 1 && pageSize <= MAX_PAGE_SIZE, "每页条数须为 1 至 " + MAX_PAGE_SIZE);
+        StringBuilder where = new StringBuilder("WHERE command_type=?");
+        List<Object> filterArgs = new ArrayList<>();
+        filterArgs.add(kind);
+        if (playerId != null && !playerId.isBlank()) {
+            String trimmed = playerId.strip();
+            check(trimmed.matches("[1-9][0-9]{0,19}"), "筛选玩家 ID 非法");
+            where.append(" AND player_id=?");
+            filterArgs.add(trimmed);
+        }
+        if (status != null && !status.isBlank()) {
+            String trimmed = status.strip();
+            Set<String> allowed = kind.equals("MAIL") ? MAIL_STATUSES : PLAYER_STATUSES;
+            check(allowed.contains(trimmed), "筛选状态非法");
+            where.append(" AND status=?");
+            filterArgs.add(trimmed);
+        }
+        List<Object> pageArgs = new ArrayList<>(filterArgs);
+        pageArgs.add(pageSize);
+        pageArgs.add((long) (page - 1) * pageSize);
         ObjectNode result = mapper.createObjectNode();
         var records = result.putArray("records");
-        jdbc.query("SELECT * FROM gm_command WHERE command_type=? ORDER BY created_ms DESC,id DESC LIMIT 50", this::map, kind)
-                .forEach(row -> records.add(row.view));
-        result.put("total", jdbc.queryForObject("SELECT COUNT(*) FROM gm_command WHERE command_type=?", Long.class, kind));
+        jdbc.query("SELECT * FROM gm_command " + where + " ORDER BY created_ms DESC,id DESC LIMIT ? OFFSET ?",
+                this::map, pageArgs.toArray()).forEach(row -> records.add(row.view));
+        Long total = jdbc.queryForObject("SELECT COUNT(*) FROM gm_command " + where, Long.class, filterArgs.toArray());
+        result.put("total", total == null ? 0L : total);
+        result.put("page", page);
+        result.put("pageSize", pageSize);
+        return result;
+    }
+
+    public ObjectNode auditHistory(String id, String kind) {
+        check(id != null && id.matches("[1-9][0-9]{0,19}"), "命令 ID 非法");
+        Row command = row(id, false);
+        if (!kind.equals(command.view.path("commandType").asText())) throw conflict("命令类型与操作入口不符");
+        ObjectNode result = mapper.createObjectNode().put("commandId", id);
+        var records = result.putArray("records");
+        jdbc.query("SELECT id,operator_name,event,attempt,result_json,created_ms FROM gm_command_audit WHERE command_id=? ORDER BY id ASC",
+                (rs, index) -> {
+                    ObjectNode entry = mapper.createObjectNode()
+                            .put("id", Long.toString(rs.getLong("id")))
+                            .put("operator", new String(rs.getBytes("operator_name"), StandardCharsets.UTF_8))
+                            .put("event", rs.getString("event"))
+                            .put("attempt", rs.getLong("attempt"))
+                            .put("createdAt", Instant.ofEpochMilli(rs.getLong("created_ms")).toString());
+                    String rawResult = rs.getString("result_json");
+                    entry.set("result", rawResult == null ? mapper.nullNode() : parse(rawResult));
+                    return entry;
+                }, id).forEach(records::add);
         return result;
     }
 
@@ -150,6 +210,13 @@ public final class GmCommandJournal {
             String complete = kind.equals("MAIL") ? "DELIVERED" : "EXECUTED";
             if (current.view.path("status").asText().equals(complete)) return current;
             long now = clock.millis();
+            if (kind.equals("PLAYER") && current.view.path("status").asText().equals("DRAFT")) {
+                long issuedAtMs = parsePositiveLong(current.view.path("request").path("issuedAtMs").asText(""));
+                long age = now - issuedAtMs;
+                if (issuedAtMs <= 0 || age < 0 || age > PLAYER_DRAFT_TTL_MS) {
+                    throw conflict("草稿已过期，请重新创建并核对");
+                }
+            }
             int changed;
             if (kind.equals("MAIL")) {
                 changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
@@ -188,6 +255,20 @@ public final class GmCommandJournal {
             if (changed == 1) audit(id, operator, finalState, claimed.attempt, frozenOutcome, now);
             return get(id);
         });
+    }
+
+    private String nextId() {
+        for (int i = 0; i < 8; i++) {
+            long candidate = ids.getAsLong() & Long.MAX_VALUE;
+            if (candidate != 0) return Long.toString(candidate);
+        }
+        throw new IllegalStateException("Command ID generation failed");
+    }
+
+    private static long parsePositiveLong(String value) {
+        if (value == null || !value.matches("[1-9][0-9]{0,18}")) return 0L;
+        try { return Long.parseLong(value); }
+        catch (NumberFormatException error) { return 0L; }
     }
 
     private ObjectNode replay(Row old, String player, String reason, ObjectNode original, String kind) {

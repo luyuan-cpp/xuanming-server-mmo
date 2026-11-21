@@ -27,9 +27,11 @@ const (
 )
 
 type authoritySpy struct {
-	sends, pulls int
-	send         func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error)
-	pull         func(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
+	sends, pulls, retracts, reports int
+	send                            func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error)
+	pull                            func(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
+	retract                         func(context.Context, uint64, int64, string) (bool, uint32, error)
+	report                          func(context.Context, *chatpb.ReportChatRequest) (uint32, error)
 }
 
 func (s *authoritySpy) Send(ctx context.Context, in *chatpb.SendChatRequest) (authority.SendResult, error) {
@@ -45,6 +47,20 @@ func (s *authoritySpy) Pull(ctx context.Context, in *chatpb.PullChatHistoryReque
 		return s.pull(ctx, in, limit)
 	}
 	return nil, nil
+}
+func (s *authoritySpy) RetractWorld(ctx context.Context, sender uint64, acceptedMs int64, reason string) (bool, uint32, error) {
+	s.retracts++
+	if s.retract != nil {
+		return s.retract(ctx, sender, acceptedMs, reason)
+	}
+	return true, 0, nil
+}
+func (s *authoritySpy) ReportMessage(ctx context.Context, in *chatpb.ReportChatRequest) (uint32, error) {
+	s.reports++
+	if s.report != nil {
+		return s.report(ctx, in)
+	}
+	return 0, nil
 }
 func testConfig() config.Config {
 	return config.Config{MaxContentBytes: 512, HistoryDefaultLimit: 20, HistoryMaxLimit: 50}
@@ -194,6 +210,10 @@ func TestContentReviewRejectionsHaveTheirOwnOutcomes(t *testing.T) {
 	for tip, outcome := range map[uint32]string{
 		constants.ErrContentRejected:         svc.OutcomeContentRejected,
 		constants.ErrContentCheckUnavailable: svc.OutcomeContentUnavailable,
+		constants.ErrLevelTooLow:             svc.OutcomeLevelTooLow,
+		constants.ErrDuplicateSpam:           svc.OutcomeDuplicateSpam,
+		constants.ErrPrivateTargetLimit:      svc.OutcomePrivateTargetLimit,
+		constants.ErrContactRejected:         svc.OutcomeContactRejected,
 	} {
 		before := svc.SendTotalValue(label, outcome)
 		spy.send = func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error) {
@@ -236,4 +256,62 @@ func TestMissingAuthorityNeverFallsBackToRedis(t *testing.T) {
 	r, e := NewChatLogic(playerCtx(playerA), sc).PullChatHistory(&chatpb.PullChatHistoryRequest{Channel: world})
 	require.NoError(t, e)
 	require.Equal(t, constants.ErrStorage, r.GetErrorMessage().GetId())
+}
+
+func TestReportChatValidationAndRelays(t *testing.T) {
+	sc, spy := fixture()
+	resp, err := NewChatLogic(playerCtx(playerA), sc).ReportChat(&chatpb.ReportChatRequest{
+		Channel:              world,
+		TargetSenderPlayerId: playerB,
+		SendTimeMs:           12345,
+		Reason:               0, // 枚举非法
+	})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrInvalidParameter, resp.GetErrorMessage().GetId())
+	require.Zero(t, spy.reports)
+
+	spy.report = func(_ context.Context, in *chatpb.ReportChatRequest) (uint32, error) {
+		require.EqualValues(t, playerB, in.GetTargetSenderPlayerId())
+		return constants.ErrMessageNotFound, nil
+	}
+	resp, err = NewChatLogic(playerCtx(playerA), sc).ReportChat(&chatpb.ReportChatRequest{
+		Channel:              world,
+		TargetSenderPlayerId: playerB,
+		SendTimeMs:           12345,
+		Reason:               1,
+		Detail:               "广告引流",
+	})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrMessageNotFound, resp.GetErrorMessage().GetId())
+	require.Equal(t, 1, spy.reports)
+}
+
+func TestRetractWorldChatPublishesOnlyWhenRetracted(t *testing.T) {
+	sc, spy := fixture()
+	pusher := &pushSpy{}
+	sc.WorldPush = pusher
+	spy.retract = func(_ context.Context, sender uint64, ms int64, reason string) (bool, uint32, error) {
+		return false, 0, nil // 幂等重复撤回
+	}
+	resp, err := NewChatLogic(context.Background(), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
+		SenderPlayerId: playerB,
+		SendTimeMs:     999,
+		Reason:         "gm",
+	})
+	require.NoError(t, err)
+	require.Nil(t, resp.ErrorMessage)
+	require.False(t, resp.GetRetracted())
+	require.Empty(t, pusher.retracted)
+
+	spy.retract = func(_ context.Context, sender uint64, ms int64, reason string) (bool, uint32, error) {
+		return true, 0, nil
+	}
+	resp, err = NewChatLogic(context.Background(), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
+		SenderPlayerId: playerB,
+		SendTimeMs:     999,
+		Reason:         "gm",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.GetRetracted())
+	require.Len(t, pusher.retracted, 1)
 }

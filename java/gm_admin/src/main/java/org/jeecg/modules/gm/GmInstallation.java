@@ -3,6 +3,8 @@ package org.jeecg.modules.gm;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
@@ -13,6 +15,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -21,7 +25,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 仅初始化独立 GM 库；关闭演示账号和无关公开入口，后续启动不重置管理员。 */
+/** 仅初始化独立 GM 库；关闭演示账号和无关公开入口，后续启动与多副本并发启动均不重置管理员。 */
 @Configuration
 @Lazy(false)
 public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
@@ -33,26 +37,19 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
     private final TransactionTemplate tx;
     private final String password;
     private volatile boolean ready;
+
     public GmInstallation(JdbcTemplate db, PlatformTransactionManager transactions,
             @Value("${gm.bootstrap-password:}") String password) {
         this.db = db; this.tx = new TransactionTemplate(transactions); this.password = password;
     }
+
     @Override public void run(ApplicationArguments args) throws Exception {
         if (!"gm_admin".equals(db.queryForObject("SELECT DATABASE()", String.class)))
             throw new IllegalStateException("GM installation requires its dedicated gm_admin database");
         new ResourceDatabasePopulator(new ClassPathResource("gm-schema.sql")).execute(db.getDataSource());
-        db.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
-            try (var columns = connection.getMetaData().getColumns(connection.getCatalog(), null, "gm_command", "command_type")) {
-                if (!columns.next()) {
-                    try (var statement = connection.createStatement()) {
-                        statement.execute("ALTER TABLE gm_command ADD COLUMN command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL'");
-                    }
-                }
-            }
-            return null;
-        });
+        ensureColumn("gm_command", "command_type", "ALTER TABLE gm_command ADD COLUMN command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL'");
         db.execute("CREATE TABLE IF NOT EXISTS gm_install (version INTEGER PRIMARY KEY, installed_at TIMESTAMP NOT NULL)");
-        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=1", Integer.class) == 0) {
+        if (!hasVersion(1)) {
             if (password.length() < 20) throw new IllegalStateException("GM bootstrap password must be injected and at least 20 characters");
             byte[] saltBytes = new byte[4]; new SecureRandom().nextBytes(saltBytes);
             String salt = HexFormat.of().formatHex(saltBytes);
@@ -60,8 +57,7 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             String encoded = (String) Class.forName("org.jeecg.common.util.PasswordUtil")
                     .getMethod("encrypt", String.class, String.class, String.class).invoke(null, "admin", password, salt);
             if (encoded == null || encoded.isBlank()) throw new IllegalStateException("GM bootstrap password encoding failed");
-            tx.executeWithoutResult(status -> {
-                db.update("INSERT INTO gm_install(version,installed_at) VALUES(1,CURRENT_TIMESTAMP)");
+            runMigration(1, () -> {
                 db.update("UPDATE sys_user SET status=2");
                 int changed = db.update("UPDATE sys_user SET password=?,salt=?,status=1,del_flag=0,realname=?,phone=NULL,email=NULL,third_id=NULL,third_type=NULL,last_pwd_update_time=CURRENT_TIMESTAMP WHERE username='admin'", encoded, salt, "GM管理员");
                 if (changed != 1) throw new IllegalStateException("Expected exactly one upstream bootstrap administrator");
@@ -80,43 +76,102 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
                     db.update("INSERT INTO sys_user_role(id,user_id,role_id,tenant_id) VALUES('gm_admin_role',?,?,0)", userId, roleId);
             });
         }
-        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=2", Integer.class) == 0) {
-            tx.executeWithoutResult(status -> {
-                // 首次安装统一使用原生首页配置；独立版本号让已完成账号初始化的库也能补齐首页。
-                db.update("UPDATE sys_role_index SET status='0'");
-                db.update("INSERT INTO sys_role_index(id,role_code,url,component,is_route,priority,status,relation_type) VALUES('gm_default_index','DEF_INDEX_ALL','/gm/console','gm/console/index',1,-100,'1','DEFAULT')");
-                db.update("INSERT INTO gm_install(version,installed_at) VALUES(2,CURRENT_TIMESTAMP)");
-            });
-        }
-        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=3", Integer.class) == 0) {
-            tx.executeWithoutResult(status -> {
-                String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
-                String[] permissions = {"gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant"};
-                String[] labels = {"增加货币", "扣除货币", "封禁货币获取", "解除货币封禁", "设置等级", "发放宝宝", "发放物品"};
-                for (int i = 0; i < permissions.length; i++) {
-                    String id = "gm_player_permission_" + i;
-                    addMenu(id, "gm_console", labels[i], null, null, 2, permissions[i]);
-                    db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_player_" + i, roleId, id);
-                }
-                db.update("INSERT INTO gm_install(version,installed_at) VALUES(3,CURRENT_TIMESTAMP)");
-            });
-        }
-        if (db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=4", Integer.class) == 0) {
-            tx.executeWithoutResult(status -> {
-                // 独立 GM 仅展示游戏管理和原生账号权限管理，不展示上游演示及开发平台菜单。
-                // 只调整菜单展示；保留原生按钮权限和已分配的角色，接口仍由访问保护逐次检查。
-                db.update("UPDATE sys_permission SET hidden=1 WHERE menu_type IN (0,1) AND (url IS NULL OR url NOT IN ('/gm/console','/isystem','/system/user','/system/role','/system/menu'))");
-                // 原生授权树仅递归非叶子节点，GM 菜单必须展开其十二项按钮权限。
-                db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
-                db.update("INSERT INTO gm_install(version,installed_at) VALUES(4,CURRENT_TIMESTAMP)");
-            });
+        runMigration(2, () -> {
+            // 首次安装统一使用原生首页配置；独立版本号让已完成账号初始化的库也能补齐首页。
+            db.update("UPDATE sys_role_index SET status='0'");
+            db.update("INSERT INTO sys_role_index(id,role_code,url,component,is_route,priority,status,relation_type) VALUES('gm_default_index','DEF_INDEX_ALL','/gm/console','gm/console/index',1,-100,'1','DEFAULT')");
+        });
+        runMigration(3, () -> {
+            String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+            String[] permissions = {"gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant"};
+            String[] labels = {"增加货币", "扣除货币", "封禁货币获取", "解除货币封禁", "设置等级", "发放宝宝", "发放物品"};
+            for (int i = 0; i < permissions.length; i++) {
+                String id = "gm_player_permission_" + i;
+                addMenu(id, "gm_console", labels[i], null, null, 2, permissions[i]);
+                db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_player_" + i, roleId, id);
+            }
+        });
+        runMigration(4, () -> {
+            // 独立 GM 仅展示游戏管理和原生账号权限管理，不展示上游演示及开发平台菜单。
+            // 只调整菜单展示；保留原生按钮权限和已分配的角色，接口仍由访问保护逐次检查。
+            db.update("UPDATE sys_permission SET hidden=1 WHERE menu_type IN (0,1) AND (url IS NULL OR url NOT IN ('/gm/console','/isystem','/system/user','/system/role','/system/menu'))");
+            // 原生授权树仅递归非叶子节点，GM 菜单必须展开其十二项按钮权限。
+            db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
+        });
+        if (!hasVersion(5)) {
+            // DDL 在 MySQL 中会隐式提交，先幂等建好查询索引，再以单版本事务落盘版本 5。
+            ensureIndex("gm_command", "idx_gm_command_type_created", "command_type, created_ms, id");
+            ensureIndex("gm_command", "idx_gm_command_type_player_created", "command_type, player_id, created_ms, id");
+            ensureIndex("gm_command", "idx_gm_command_type_status_created", "command_type, status, created_ms, id");
+            ensureIndex("gm_command_audit", "idx_gm_command_audit_command", "command_id, id");
+            runMigration(5, () -> { });
         }
         ready = true;
     }
+
+    private boolean hasVersion(int version) {
+        Integer count = db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=?", Integer.class, version);
+        return count != null && count > 0;
+    }
+
+    /** 先在事务首行占位版本号：多副本并发启动时靠主键锁串行化，避免业务表撞键；若本事务内业务失败则整笔回滚。 */
+    private void runMigration(int version, Runnable work) {
+        if (hasVersion(version)) return;
+        try {
+            tx.executeWithoutResult(status -> {
+                db.update("INSERT INTO gm_install(version,installed_at) VALUES(?,CURRENT_TIMESTAMP)", version);
+                work.run();
+            });
+        } catch (DuplicateKeyException error) {
+            if (!hasVersion(version)) throw error;
+        }
+    }
+
+    private void ensureColumn(String table, String column, String alterSql) {
+        db.execute((ConnectionCallback<Void>) connection -> {
+            if (columnExists(connection, table, column)) return null;
+            try (var statement = connection.createStatement()) {
+                statement.execute(alterSql);
+            } catch (SQLException error) {
+                if (!columnExists(connection, table, column)) throw error;
+            }
+            return null;
+        });
+    }
+
+    private static boolean columnExists(Connection connection, String table, String column) throws SQLException {
+        try (var columns = connection.getMetaData().getColumns(connection.getCatalog(), null, table, column)) {
+            return columns.next();
+        }
+    }
+
+    private void ensureIndex(String table, String indexName, String columns) {
+        db.execute((ConnectionCallback<Void>) connection -> {
+            if (indexExists(connection, table, indexName)) return null;
+            try (var statement = connection.createStatement()) {
+                statement.execute("CREATE INDEX " + indexName + " ON " + table + " (" + columns + ")");
+            } catch (SQLException error) {
+                if (!indexExists(connection, table, indexName)) throw error;
+            }
+            return null;
+        });
+    }
+
+    private static boolean indexExists(Connection connection, String table, String indexName) throws SQLException {
+        try (var indexes = connection.getMetaData().getIndexInfo(connection.getCatalog(), null, table, false, false)) {
+            while (indexes.next()) {
+                String existing = indexes.getString("INDEX_NAME");
+                if (existing != null && existing.equalsIgnoreCase(indexName)) return true;
+            }
+            return false;
+        }
+    }
+
     private void addMenu(String id, String parent, String name, String url, String component, int type, String permission) {
         db.update("INSERT INTO sys_permission(id,parent_id,name,url,component,is_route,menu_type,perms,perms_type,sort_no,is_leaf,hidden,del_flag,status,internal_or_external) VALUES(?,?,?,?,?,1,?,?, '1',-100,1,0,0,'1',0)",
                 id, parent, name, url, component, type, permission);
     }
+
     @Override public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new HandlerInterceptor() {
             @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -131,9 +186,11 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             }
         });
     }
+
     private static boolean blocked(String path) {
         return List.of("/sys/user/register", "/sys/phoneLogin", "/sys/thirdLogin", "/sys/cas/", "/sys/mLogin", "/sys/sms", "/sys/user/phoneVerification", "/sys/user/passwordChange", "/sys/getLoginQrcode", "/sys/getQrcodeToken", "/sys/checkAuth").stream().anyMatch(path::startsWith);
     }
+
     private static boolean reject(HttpServletResponse response, int status) throws java.io.IOException {
         response.setStatus(status); response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"success\":false,\"code\":" + status + ",\"message\":\"GM访问未获授权或服务尚未就绪\"}");

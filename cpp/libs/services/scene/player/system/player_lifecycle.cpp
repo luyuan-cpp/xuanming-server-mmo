@@ -50,6 +50,7 @@
 #include "player/system/release_fence.h" // HandleReleaseFromSceneManager 的纯判定与计数
 #include "player/system/afk_hosting.h" // 断线保留期间查挂机月卡:开通挂机的玩家离线托管、照常跟随
 #include "player/system/afk_pass.h" // 挂机月卡投影:加载、存盘提交、托管心跳三处写出(docs/design/afk-monthly-card.md §5.2)
+#include "player/system/player_rename.h" // 角色改名:入场续做、存盘提交后发 RenameRole、销毁清理(docs/design/rename-and-content-safety.md §4)
 #include "player/system/hosted_presence.h" // 托管在场心跳与托管归位信息(RefreshHostedPresence)
 #include "engine/core/type_define/type_define.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -3503,6 +3504,7 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	DestroyEntity(tlsEcs.actorRegistry, playerEntity);
 	tlsEcs.playerList.erase(playerId);
 	RoleAdmissionSystem::OnDestroyed(playerId);
+	PlayerRenameSystem::OnPlayerDestroyed(playerId);
 
 	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收(连同没交出去的审计记录)。
 	if (PlayerStore().Forget(playerId))
@@ -5527,6 +5529,8 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 
 	// 挂机月卡投影按刚从库里读出的值重建一次(docs/design/afk-monthly-card.md §5.2):回档、投影写丢、Redis 丢键都在这里改正。
 	AfkPassSystem::OnPlayerLoaded(player, TimeSystem::NowSecondsUTC());
+	// 角色改名未完结记录随存档入场立即续发 RenameRole(docs/design/rename-and-content-safety.md §4.5)。
+	PlayerRenameSystem::OnPlayerLoaded(player, TimeSystem::NowMillisecondsUTC());
 
 	return player;
 }
@@ -5880,6 +5884,8 @@ void PlayerLifecycleSystem::OnPlayerStoreSaveDone(Guid playerId, const std::shar
 	{
 		// 挂机月卡投影只写已提交的值(docs/design/afk-monthly-card.md §5.2)。排在下面可能销毁实体的退出收尾之前。
 		AfkPassSystem::OnSaveCommitted(playerId, *message, TimeSystem::NowSecondsUTC());
+		// 角色改名仅在 rename_op 与改名卡预留提交落盘后才发 DataService.RenameRole。
+		PlayerRenameSystem::OnSaveCommitted(playerId, *message, TimeSystem::NowMillisecondsUTC());
 		if (result.saveSeq != 0)
 		{
 			// 提交证据只记给这一笔的原对象,HandlePlayerAsyncSaved 里的 Replace 才能对上。

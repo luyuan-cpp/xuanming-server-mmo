@@ -225,12 +225,9 @@ func (w *WechatPay) do(ctx context.Context, method, pathAndQuery string, body []
 		return 0, nil, err
 	}
 	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	raw, err := readBody(response)
 	if err != nil {
 		return 0, nil, err
-	}
-	if len(raw) > maxResponseBytes {
-		return 0, nil, errors.New("payment channel: wechat_pay answer is too large")
 	}
 	// 带正文的成功应答一律验签:查单结果决定发不发货,不只凭 TLS。错误应答里没有业务事实,与官方 SDK 一样不验。
 	if response.StatusCode/100 == 2 && len(raw) > 0 {
@@ -350,7 +347,8 @@ func (w *WechatPay) Close(ctx context.Context, outTradeNo string) error {
 		return err
 	}
 	code := wechatErrorCode(raw)
-	if status == http.StatusNoContent || status == http.StatusOK || code == "ORDER_NOT_EXIST" || code == "ORDER_CLOSED" {
+	// ORDERPAID 同样回 nil:调用方关单后紧接着会查单,能立刻发现已付并记账,不必等下轮退避。
+	if status == http.StatusNoContent || status == http.StatusOK || code == "ORDER_NOT_EXIST" || code == "ORDER_CLOSED" || code == "ORDERPAID" {
 		return nil
 	}
 	return &CallError{Channel: NameWechatPay, Op: "close", Status: status, Code: code}
@@ -495,6 +493,7 @@ func (w *WechatPay) ParseNotification(r *http.Request, body []byte) (Notificatio
 func (w *WechatPay) refundNotification(plain []byte) (Notification, error) {
 	var refund struct {
 		MchID         string `json:"mchid"`
+		OutTradeNo    string `json:"out_trade_no"`
 		TransactionID string `json:"transaction_id"`
 		OutRefundNo   string `json:"out_refund_no"`
 		RefundStatus  string `json:"refund_status"`
@@ -512,7 +511,8 @@ func (w *WechatPay) refundNotification(plain []byte) (Notification, error) {
 			at = parsed
 		}
 	}
-	return Notification{Revocations: []Revocation{{TransactionID: refund.TransactionID, Revoked: true, ObservedAt: at, Detail: "REFUND.SUCCESS"}}}, nil
+	return Notification{Revocations: []Revocation{{TransactionID: refund.TransactionID, OutTradeNo: refund.OutTradeNo,
+		OutRefundNo: refund.OutRefundNo, Revoked: true, ObservedAt: at, Detail: "REFUND.SUCCESS"}}}, nil
 }
 
 // wechatDecrypt:AEAD_AES_256_GCM,密钥是 APIv3 密钥,密文是 base64(末尾 16 字节是认证标签),随机串 12 字节。

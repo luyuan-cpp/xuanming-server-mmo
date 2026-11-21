@@ -28,6 +28,7 @@ import (
 	"shared/safego"
 	"shared/serverbase"
 	"shared/shutdownbudget"
+	"shared/tablebundle"
 	"shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -42,6 +43,7 @@ import (
 var configFile = flag.String("f", "etc/scene_manager_service.yaml", "the config file")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+var validateTablesDir = flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析)后退出")
 
 // safePointSnowflakeLeaseWatch 是 snowflake worker id 租约丢失守望者的
 // safego 点位名(会变成 safego_panic_total 的 label,必须是常量)。
@@ -58,6 +60,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("scene_manager", *validateTablesDir, false, nil)
 	clockcheck.MustPass("scene_manager")
 
 	var c config.Config

@@ -35,6 +35,7 @@ enum PayFinalizeState {
   PAY_FINALIZE_STATE_NONE = 0;    // 这个渠道不需要
   PAY_FINALIZE_STATE_PENDING = 1;
   PAY_FINALIZE_STATE_DONE = 2;
+  PAY_FINALIZE_STATE_FAILED = 3;  // 渠道永久拒绝(400/404/410)或付款已撤销,不再重试
 }
 
 // 支付意图:一张商城订单至多一行,渠道在第一次建意图时定下,之后不变。
@@ -43,8 +44,8 @@ enum PayFinalizeState {
 message PaymentIntentRecord {
   option (OptionTableName) = "payment_intent";
   option (OptionPrimaryKey) = "order_hi,order_lo";
-  // 主动查单与到期关单的扫描:只扫 state=CREATED 的行。第二条是按人汇总未成年人额度。
-  option (OptionIndex) = "state,next_check_ms;spender_hi,spender_lo,state";
+  // 主动查单与到期关单的扫描:只扫 state=CREATED 的行。第二条是按人按月汇总未成年人额度(带 paid_ms 避免全历史扫描)。
+  option (OptionIndex) = "state,next_check_ms;spender_hi,spender_lo,state,paid_ms";
 
   uint64 order_hi = 1;      // 商城订单号(UUID)的高 64 位
   uint64 order_lo = 2;      // 低 64 位

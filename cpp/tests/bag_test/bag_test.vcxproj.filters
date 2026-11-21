@@ -49,6 +49,9 @@
     <ClCompile Include="afk_pass_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="player_rename_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="player_equip_attribute_test.cpp">
       <Filter>source</Filter>
     </ClCompile>

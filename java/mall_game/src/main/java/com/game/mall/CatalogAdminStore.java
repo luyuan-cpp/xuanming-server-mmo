@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.context.annotation.DependsOn;
@@ -194,9 +195,13 @@ public class CatalogAdminStore {
             && terms.currencyType() == 0 && terms.currencyAmount() == 0;
     }
 
-    /** 货币发放(充值包):每份 1..MAX_CURRENCY_GRANT,物品字段为 0;货币种类 0 是银两,有没有货币看数量。种类是否存在由 trade 收货时核对。 */
+    /** 已知游戏货币种类(proto/common/base/currency_type.proto):0=银两,1=灵石,2=绑定灵石。 */
+    static final Set<Integer> ALLOWED_CURRENCY_TYPES = Set.of(0, 1, 2);
+
+    /** 货币发放(充值包):每份 1..MAX_CURRENCY_GRANT,物品字段为 0;货币种类只允许已知游戏币种(0/1/2)。 */
     private static boolean currencyGrant(CatalogAdminApi.Terms terms) {
-        return terms.itemConfigId() == 0 && terms.countPerUnit() == 0 && terms.currencyType() >= 0
+        return terms.itemConfigId() == 0 && terms.countPerUnit() == 0
+            && ALLOWED_CURRENCY_TYPES.contains(terms.currencyType())
             && terms.currencyAmount() >= 1 && terms.currencyAmount() <= DeliveryStore.MAX_CURRENCY_GRANT;
     }
 

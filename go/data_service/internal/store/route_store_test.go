@@ -89,7 +89,7 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 			t.Fatalf("%s 有 %d 个 ascii 列,只有 %d 个显式 COLLATE ascii_bin(MySQL 默认 ascii_general_ci、TiDB 只有 ascii_bin)", name, n, m)
 		}
 	}
-	// 15张业务/路由表(2026-11-11 加 zone_merge_history)之外，正式authority catalog新增六张永久写资格控制表，外加搬库的哨兵表。
+	// 18张业务/路由表(2026-11-11 加 zone_merge_history，2026-11-19/20 加 account_deletion_receipt、account_role_rename 与 account_channel_identity)之外，正式authority catalog新增六张永久写资格控制表，外加搬库的哨兵表。
 	writerControlDDLs := map[string]string{
 		"writer_registry":                writerRegistryBootstrapDDL,
 		"writer_slot":                    writerSlotBootstrapDDL,
@@ -99,8 +99,8 @@ func TestRouteBootstrapDDLContract(t *testing.T) {
 		"sql_writer_maintenance_receipt": writerMaintenanceReceiptBootstrapDDL,
 		"db_move_sentinel":               moveSentinelBootstrapDDL,
 	}
-	if got, want := len(bootstrapTables), 15+len(writerControlDDLs); got != want {
-		t.Fatalf("bootstrapTables 有 %d 项,want %d(15张业务/路由表加七张闸门表)", got, want)
+	if got, want := len(bootstrapTables), 18+len(writerControlDDLs); got != want {
+		t.Fatalf("bootstrapTables 有 %d 项,want %d(18张业务/路由表加七张闸门表)", got, want)
 	}
 	for name, ddl := range writerControlDDLs {
 		if bootstrapTables[name] != ddl {

@@ -84,9 +84,10 @@ void SceneNodeGrpcImpl::HandleCreateScene(const ::CreateSceneRequest* request,
     ::CreateSceneResponse* response)
 {
     ///<<< BEGIN WRITING YOUR CODE
-    if (request->scene_id() == 0)
+    if (request->scene_id() == 0 || request->config_id() == 0)
     {
-        LOG_ERROR << "[gRPC] CreateScene: scene_id is 0";
+        LOG_ERROR << "[gRPC] CreateScene: invalid scene_id=" << request->scene_id()
+                  << " config_id=" << request->config_id();
         return;
     }
 
@@ -258,7 +259,8 @@ void SceneNodeGrpcImpl::HandleGmExecutePlayerCommand(const ::scene_node::GmExecu
     // 全部同步运行在同一个 Scene loop：查归属、会话、去重占位和域写入之间没有异步间隙。
     static gm_player_command::CommandCache commands;
     response->set_command_id(request->command_id());
-    const auto admission = commands.Begin(*request, *response);
+    const auto admission = commands.Begin(*request, *response,
+        static_cast<int64_t>(std::time(nullptr)), gm_security::ResolveGmSkewSeconds());
     if (admission == gm_player_command::CommandCache::Admission::kReplay) return;
     if (admission != gm_player_command::CommandCache::Admission::kNew) {
         response->mutable_error_message()->set_id(kFeatureUnavailable);
@@ -325,9 +327,11 @@ void SceneNodeGrpcImpl::HandleGmExecutePlayerCommand(const ::scene_node::GmExecu
     }
     case Request::kBlockCurrency:
         error = CurrencySystem::BlockCurrency(player, static_cast<CurrencyType>(request->block_currency().currency_type()));
+        if (error == kSuccess) PlayerLifecycleSystem::RequestKeyProgressSave(player, "gm_currency_block");
         break;
     case Request::kUnblockCurrency:
         error = CurrencySystem::UnblockCurrency(player, static_cast<CurrencyType>(request->unblock_currency().currency_type()));
+        if (error == kSuccess) PlayerLifecycleSystem::RequestKeyProgressSave(player, "gm_currency_unblock");
         break;
     case Request::kGrantItem:
         error = PlayerEquipSystem::GmGrantItem(player, request->grant_item().config_id(), request->grant_item().count());
@@ -476,11 +480,11 @@ void SceneNodeGrpcImpl::GmExecutePlayerCommand(const std::shared_ptr<GmExecutePl
         return;
     }
     const char* secret = std::getenv(gm_player_command::kSecretEnv);
-    static gate_security::GmNonceCache commandNonces;
+    static gm_security::GmNonceCache commandNonces;
     const auto auth = gm_player_command::Verify(*request, gNode->GetNodeId(), secret != nullptr ? secret : "",
-        static_cast<int64_t>(std::time(nullptr)), gate_security::ResolveGmSkewSeconds(), commandNonces);
-    if (auth.result != gate_security::GmAuthResult::kOk) {
-        LOG_WARN << "[GmPlayerCommand] authentication rejected reason=" << gate_security::GmAuthResultName(auth.result);
+        static_cast<int64_t>(std::time(nullptr)), gm_security::ResolveGmSkewSeconds(), commandNonces);
+    if (auth.result != gm_security::GmAuthResult::kOk) {
+        LOG_WARN << "[GmPlayerCommand] authentication rejected reason=" << gm_security::GmAuthResultName(auth.result);
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kPermissionDenied, "GM player command rejected"));
         return;
     }

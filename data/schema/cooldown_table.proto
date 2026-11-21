@@ -13,6 +13,7 @@ message CooldownTable {
   option (cfg_sheet)       = "Cooldown";
   option (cfg_source_file) = "Cooldown.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   uint32 duration = 2;

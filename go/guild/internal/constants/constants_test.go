@@ -79,6 +79,12 @@ func tipCodes() map[string]uint32 {
 		"ErrTrialServiceBusy":            ErrTrialServiceBusy,
 		// 2026-11-11:作废释放时大厅的结束原因。
 		"ErrTrialBattleAborted": ErrTrialBattleAborted,
+		// 2026-11-20:内容安全与帮会改名新增 5 个。
+		"ErrGuildNameSensitive":    ErrGuildNameSensitive,
+		"ErrAnnouncementSensitive": ErrAnnouncementSensitive,
+		"ErrTextCheckUnavailable":  ErrTextCheckUnavailable,
+		"ErrRenameCooldown":        ErrRenameCooldown,
+		"ErrRenameSameName":        ErrRenameSameName,
 	}
 }
 

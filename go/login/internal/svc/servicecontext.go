@@ -40,6 +40,7 @@ import (
 	"shared/idsegment"
 	"shared/playerredis"
 	"shared/safego"
+	"shared/tablebundle"
 	"time"
 )
 
@@ -147,6 +148,19 @@ type ServiceContext struct {
 	accountDeletionStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
+	// TableBundle 负责 login 配表启动校验与运行期两阶段热更。
+	TableBundle *tablebundle.Manager
+}
+
+// ValidateLoginTables 校验 login 依赖的配表(RoleNameRule 与 Class 非空):热更与 --validate-tables 共用。
+func ValidateLoginTables(ts *table.TableSet) error {
+	if ts == nil || ts.Class == nil {
+		return fmt.Errorf("login tables: TableSet missing Class manager")
+	}
+	if len(ts.Class.FindAll()) == 0 {
+		return fmt.Errorf("login tables: Class table is empty")
+	}
+	return playernamereg.ValidateRulesIn(ts)
 }
 
 func NewServiceContext() *ServiceContext {
@@ -158,7 +172,18 @@ func NewServiceContext() *ServiceContext {
 	}
 	ctx := context.Background()
 
-	table.LoadTables(config.AppConfig.TableDir, false)
+	tableMgr, err := tablebundle.LoadAtStartup(tablebundle.Options{
+		ServiceName:           "login",
+		ImageTableDir:         config.AppConfig.TableDir,
+		UseBinary:             false,
+		StrictStartupValidate: false,
+		PrepareHook: func(_ string, ts *table.TableSet) (func(), error) {
+			return nil, ValidateLoginTables(ts)
+		},
+	})
+	if err != nil {
+		panic(fmt.Errorf("login load config tables failed: %w", err))
+	}
 
 	// Register auth providers based on config
 	authCleanup := InitAuthProviders()
@@ -257,7 +282,9 @@ func NewServiceContext() *ServiceContext {
 		TokenManager:        tokenMgr,
 		PreloadPool:         preloadPool,
 		bootInstance:        uuid.New(),
+		TableBundle:         tableMgr,
 	}
+	tableMgr.Start()
 	sc.initLoginQueue()
 	sc.initPlayerIDMinter()
 	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
@@ -914,6 +941,7 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)
 		}
+		s.TableBundle.Stop()
 	})
 	s.backgroundWait.Do(func() {
 		s.backgroundDone = make(chan struct{})

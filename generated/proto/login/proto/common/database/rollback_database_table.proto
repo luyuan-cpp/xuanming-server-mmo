@@ -600,6 +600,17 @@ message account_role_rename {
   uint64 updated_ms = 10;
 }
 
+// 第三方登录渠道身份(docs/design/rename-and-content-safety.md §6.5):按账号分片保存最近一次登录的
+// channel 与 platform open_id,供 content_guard 调平台内容安全接口(如微信 msgSecCheck)使用。
+message account_channel_identity {
+  option(OptionTableName) = "account_channel_identity";
+  option(OptionPrimaryKey) = "account";
+  string account = 1;
+  string channel = 2;
+  string open_id = 3;
+  uint64 updated_ms = 4;
+}
+
 // listing 级永久冻结收据；取消后保留，旧冻结请求重放不能再次冻结。
 message account_role_trade {
   option(OptionTableName) = "account_role_trade";

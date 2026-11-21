@@ -301,6 +301,7 @@ protected:
         admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kPlayerId);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(kPlayerId);
         ASSERT_EQ(kSuccess, PlayerMissionSystem::Initialize(player));

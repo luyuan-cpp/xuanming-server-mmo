@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   One-click Round 19 login-stress orchestrator (1 zone x 45k), verifying the two
   R2 gate-token-expiry fixes (gateTokenTTL 5min->10min + robot retry accounting).
@@ -121,7 +121,7 @@ function Invoke-Baseline {
 # (连库身份取 MMORPG_SQL_SCHEMA_DSN 与 MMORPG_SQL_SCHEMA_PRINCIPAL,不用 yaml 里的账号)。
 # 既有全量本地 reset 同时清全局角色目录；Redis清空不再删除SQL归属。仅原显式wipe门禁允许执行。
 # 目录每片一个库(zone_merged_into、zone_merge_history 只在第 0 片,只清已存在的表),流水库没有这些表,只复位 route_meta。
-$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role', 'account_role_ref', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')
+$RouteDataTables   = @('account_role_trade_holder', 'account_role_admission', 'account_role_transfer_receipt', 'account_role_trade', 'account_role_removal', 'account_role_rename', 'account_role', 'account_role_ref', 'account_deletion_receipt', 'account_directory', 'player_name_owner', 'player_route', 'zone_merged_into', 'zone_merge_history')
 $RouteMetaResetSql = 'UPDATE route_meta SET writable=1 WHERE id=1;'
 
 # 目录各片(Directory.LogicalShards,与 data_service 同一来源;K=1 时库名就是基名)和流水库。

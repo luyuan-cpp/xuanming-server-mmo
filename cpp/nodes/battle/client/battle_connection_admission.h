@@ -19,7 +19,9 @@
 // 单测:cpp/nodes/battle/tests/battle_connection_admission_test.cpp。
 // 线程模型:只在 battle 主 loop 线程上用(与 BattleClientEdge 同线程),不加锁。
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -179,6 +181,38 @@ inline Verdict Decide(const AdmissionState &state, accept_admission::AcceptRateG
         return Verdict{.rejected = RejectReason::kAcceptRate};
     }
     return Verdict{.evictOldestUnauthenticated = preAuth == PreAuthVerdict::kAdmitEvictOldest};
+}
+
+// 半关闭未认证连接的宽限期:rejectAndClose / OnUnknownMessage 均在 shutdown() 后设 100ms 延迟强关,
+// 超过 200ms 仍留在未认证池内说明延迟收尾已逾期,承压时允许直接强关腾位。
+inline constexpr std::chrono::milliseconds kHalfCloseEvictGrace{200};
+
+// 判定一条非 connected(半关闭)未认证连接是否已逾期、可作为承压淘汰目标。
+inline bool IsHalfClosedPreAuthEvictable(const SteadyTime::duration ageSinceOpen,
+                                         const std::optional<SteadyTime::duration> ageSinceHalfClose,
+                                         const PreAuthBudget &budget)
+{
+    if (ageSinceHalfClose)
+    {
+        return *ageSinceHalfClose >= kHalfCloseEvictGrace;
+    }
+    const auto threshold = (std::max)(budget.minEvictableAge, kHalfCloseEvictGrace);
+    return ageSinceOpen >= threshold;
+}
+
+// 计算传给 DecidePreAuth 的有效建连年龄:对仍连着的连接返回 ageSinceOpen;对已逾期的半关闭连接
+// 至少抬到 budget.minEvictableAge,避免未满 minEvictableAge 时误报 kPreAuthBudget 拒绝新连接。
+inline SteadyTime::duration EffectivePreAuthEvictAge(const bool connected,
+                                                     const SteadyTime::duration ageSinceOpen,
+                                                     const std::optional<SteadyTime::duration> ageSinceHalfClose,
+                                                     const PreAuthBudget &budget)
+{
+    if (!connected && IsHalfClosedPreAuthEvictable(ageSinceOpen, ageSinceHalfClose, budget))
+    {
+        const auto minAge = std::chrono::duration_cast<SteadyTime::duration>(budget.minEvictableAge);
+        return (std::max)(ageSinceOpen, minAge);
+    }
+    return ageSinceOpen;
 }
 
 // 换掉按概率早拒用的随机源(传 nullptr 换回缺省的伪随机数)。只给单测用,用完要换回。

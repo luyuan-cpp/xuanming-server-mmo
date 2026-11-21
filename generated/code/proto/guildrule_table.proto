@@ -19,6 +19,9 @@ message GuildRuleTable {
 	uint32 activity_join_min_hours = 8;
 	uint32 trial_invite_ttl_seconds = 9;
 	uint32 trial_invite_cooldown_seconds = 10;
+	uint32 rename_cooldown_seconds = 11;
+	uint32 name_hold_seconds = 12;
+	uint64 rename_cost_funds = 13;
 }
 
 message GuildRuleTableData {

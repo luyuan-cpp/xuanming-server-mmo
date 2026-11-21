@@ -46,6 +46,11 @@ extend google.protobuf.MessageOptions {
   // 玩家存档与在途指令按 id 引用这张表时才需要：scene 查不到某个 id 就能判定它是更新版本或尚未热更到的行，
   // 回 RETRY 等它出现，而不是把引用它的资产当坏数据拒掉（混版本持久字段保护设计 §13 第 10 条）。
   bool cfg_ids_permanent = 60005;
+
+  // 允许运行期热更（docs/design/config-table-hot-reload.md §5.3，缺省 false）：
+  // 只有逐表审计确认「不物化进启动结构、读路径可感知新快照」的表才打开。
+  // 运行期表包变更若触及任何未声明本项的表，进程拒绝整包切换并回报 needs_restart。
+  bool cfg_hot_reload = 60006;
 }
 
 extend google.protobuf.FieldOptions {

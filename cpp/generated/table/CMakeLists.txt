@@ -177,6 +177,7 @@ set(SOURCE_FILES
     proto/tip/mystery_merchant_error_tip.pb.cc
     proto/tip/payment_error_tip.pb.cc
     proto/tip/afk_pass_error_tip.pb.cc
+    proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc
     proto/tip/entity_error_tip.pb.cc

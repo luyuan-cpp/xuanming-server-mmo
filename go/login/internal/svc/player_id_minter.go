@@ -10,6 +10,7 @@ import (
 
 	"login/internal/config"
 	dspb "proto/data_service"
+	"shared/dsclient"
 	"shared/idsegment"
 )
 
@@ -35,7 +36,7 @@ func (s *ServiceContext) initPlayerIDMinter() {
 		panic(fmt.Errorf("IdSegment.Enabled=true but DataServiceRpc has no Etcd.Key / Endpoints / Target " +
 			"(login needs data_service.AllocateIdSegment to mint player ids)"))
 	}
-	conn := zrpc.MustNewClient(config.AppConfig.DataServiceRpc)
+	conn := zrpc.MustNewClient(dsclient.Conf(config.AppConfig.DataServiceRpc))
 	s.DataServiceClient = dspb.NewDataServiceClient(conn.Conn())
 
 	seg, err := idsegment.New(

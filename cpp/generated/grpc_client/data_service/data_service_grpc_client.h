@@ -71,6 +71,22 @@ void SendDataServiceResetAccountRealName(entt::registry& registry, entt::entity 
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendDataServiceResetAccountRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region DataServiceUpsertAccountChannelIdentity
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceUpsertAccountChannelIdentityGrpcPath = "/data_service.DataService/UpsertAccountChannelIdentity";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceUpsertAccountChannelIdentity(entt::registry& registry, entt::entity nodeEntity, const ::data_service::UpsertAccountChannelIdentityRequest& request, GrpcDone<::google::protobuf::Empty> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceUpsertAccountChannelIdentityErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region DataServiceGetPlayerChannelIdentity
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kDataServiceGetPlayerChannelIdentityGrpcPath = "/data_service.DataService/GetPlayerChannelIdentity";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendDataServiceGetPlayerChannelIdentity(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetPlayerChannelIdentityRequest& request, GrpcDone<::data_service::GetPlayerChannelIdentityResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendDataServiceGetPlayerChannelIdentityErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region DataServiceBeginAccountRoleTrade
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kDataServiceBeginAccountRoleTradeGrpcPath = "/data_service.DataService/BeginAccountRoleTrade";

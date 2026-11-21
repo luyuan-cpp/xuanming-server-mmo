@@ -45,6 +45,7 @@ void Bag::SetLayout(std::unique_ptr<IContainerLayout> layout)
 		return;
 	}
 	layout_ = std::move(layout);
+	++mutationVersion_;
 }
 
 void Bag::SetAdmission(std::unique_ptr<IAdmissionPolicy> admission)
@@ -59,6 +60,7 @@ void Bag::SetAdmission(std::unique_ptr<IAdmissionPolicy> admission)
 	// 换成更严的策略后,包里可能留着新策略不接受的存量物品;那是刻意的:
 	// 「入包严格、还原宽容」,不能因为规则变了就丢玩家的东西。
 	admission_ = std::move(admission);
+	++mutationVersion_;
 }
 
 void Bag::SetProfile(BagProfile profile)
@@ -82,6 +84,7 @@ void Bag::SetProfile(BagProfile profile)
 	SetLayout(std::move(profile.layout));
 	SetAdmission(std::move(profile.admission));
 	profileId_ = profile.id;
+	++mutationVersion_;
 }
 
 void Bag::SetCapacityForRestore(std::size_t newCapacity)
@@ -94,6 +97,7 @@ void Bag::SetCapacityForRestore(std::size_t newCapacity)
 		return;
 	}
 	layout_->Resize(newCapacity);
+	++mutationVersion_;
 	AssertLayerConsistency();
 }
 
@@ -348,6 +352,10 @@ void Bag::DrainOneConfig(uint32_t configId, uint32_t count,
             DestroyItem(drain.guid);
         }
     }
+    if (!drains.empty())
+    {
+        ++mutationVersion_;
+    }
 }
 
 uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)
@@ -396,6 +404,7 @@ uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)
 	{
 		DestroyItem(param.item_guid);
 	}
+	++mutationVersion_;
 	AssertLayerConsistency();
 	return kSuccess;
 }
@@ -531,6 +540,7 @@ bool Bag::MergeAndCompact(std::vector<DestroyedInstance> *destroyedOut, CompactP
 	{
 		layout_->ApplyOrder(DesiredOrder());
 	}
+	++mutationVersion_;
 	AssertLayerConsistency();
 	return true;
 }
@@ -759,6 +769,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	// 单一场景逻辑线程，无回调的提交段同时发布两层候选。
 	store_ = std::move(candidate);
 	layout_ = std::move(candidateLayout);
+	++mutationVersion_;
 	if (writtenByEntryOut != nullptr)
 	{
 		writtenByEntryOut->insert(writtenByEntryOut->end(), written.begin(), written.end());
@@ -783,6 +794,10 @@ void Bag::ExpandCapacity(std::size_t sz)
 {
 	// 容量是布局层的属性,增量语义保持不变。
 	layout_->Resize(layout_->Capacity() + sz);
+	if (sz > 0)
+	{
+		++mutationVersion_;
+	}
 	AssertLayerConsistency();
 }
 
@@ -989,6 +1004,7 @@ void Bag::DestroyItem(Guid guid)
 	// 现在是桥层显式地各调一次 —— 这正是桥层存在的理由。
 	store_.Erase(guid);
 	layout_->Remove(guid);
+	++mutationVersion_;
 }
 
 // ── 搬运原语(同一 guid 换包:穿脱 / 包间移动)─────────────────────────────
@@ -1177,6 +1193,7 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 		return PrintStackAndReturnError(kBagAddItemBagFull);
 	}
 
+	++mutationVersion_;
 	AssertLayerConsistency();
 	return kSuccess;
 }
@@ -1291,8 +1308,10 @@ uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
 	// ── 发布:单一场景逻辑线程,中间没有回调;两个包的两层同时换成候选 ──────────
 	store_ = std::move(sourceStore);
 	layout_ = std::move(sourceLayout);
+	++mutationVersion_;
 	target.store_ = std::move(targetStore);
 	target.layout_ = std::move(targetLayout);
+	++target.mutationVersion_;
 	if (absorbedOut != nullptr)
 	{
 		absorbedOut->insert(absorbedOut->end(), absorbed.begin(), absorbed.end());
@@ -1316,6 +1335,7 @@ void Bag::ResetFromSnapshot()
 	// InsertItemForRestore 之前从快照里设好。
 	store_.Clear();
 	layout_->Clear();
+	++mutationVersion_;
 	AssertLayerConsistency();
 }
 
@@ -1335,12 +1355,17 @@ void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize,
 
 void Bag::RestoreItems(std::vector<std::pair<ItemComp, uint32_t>> items)
 {
+	const uint64_t seqBefore = store_.NextAcquireSeq();
 	for (const auto &[item, pos] : items)
 	{
 		if (item.size() > 0)
 		{
 			store_.RaiseAcquireSeq(item.acquire_seq());
 		}
+	}
+	if (store_.NextAcquireSeq() != seqBefore)
+	{
+		++mutationVersion_;
 	}
 	for (auto &[item, pos] : items)
 	{
@@ -1458,6 +1483,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 
 	if (placed)
 	{
+		++mutationVersion_;
 		AssertLayerConsistency();
 		return;
 	}

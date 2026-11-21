@@ -146,6 +146,7 @@ const (
 	PayFinalizeState_PAY_FINALIZE_STATE_NONE    PayFinalizeState = 0 // 这个渠道不需要
 	PayFinalizeState_PAY_FINALIZE_STATE_PENDING PayFinalizeState = 1
 	PayFinalizeState_PAY_FINALIZE_STATE_DONE    PayFinalizeState = 2
+	PayFinalizeState_PAY_FINALIZE_STATE_FAILED  PayFinalizeState = 3 // 渠道永久拒绝(400/404/410)或付款已撤销,不再重试
 )
 
 // Enum value maps for PayFinalizeState.
@@ -154,11 +155,13 @@ var (
 		0: "PAY_FINALIZE_STATE_NONE",
 		1: "PAY_FINALIZE_STATE_PENDING",
 		2: "PAY_FINALIZE_STATE_DONE",
+		3: "PAY_FINALIZE_STATE_FAILED",
 	}
 	PayFinalizeState_value = map[string]int32{
 		"PAY_FINALIZE_STATE_NONE":    0,
 		"PAY_FINALIZE_STATE_PENDING": 1,
 		"PAY_FINALIZE_STATE_DONE":    2,
+		"PAY_FINALIZE_STATE_FAILED":  3,
 	}
 )
 
@@ -877,7 +880,7 @@ var File_proto_payment_payment_table_proto protoreflect.FileDescriptor
 
 const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"\n" +
-	"!proto/payment/payment_table.proto\x12\tpaymentpb\x1a\x1bproto/db/proto_option.proto\"\xfd\x05\n" +
+	"!proto/payment/payment_table.proto\x12\tpaymentpb\x1a\x1bproto/db/proto_option.proto\"\x85\x06\n" +
 	"\x13PaymentIntentRecord\x12\x19\n" +
 	"\border_hi\x18\x01 \x01(\x04R\aorderHi\x12\x19\n" +
 	"\border_lo\x18\x02 \x01(\x04R\aorderLo\x12\x19\n" +
@@ -908,7 +911,7 @@ const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"\n" +
 	"spender_lo\x18\x14 \x01(\x04R\tspenderLo\x12\x17\n" +
 	"\apaid_ms\x18\x15 \x01(\x04R\x06paidMs\x12\x1b\n" +
-	"\tminor_age\x18\x16 \x01(\rR\bminorAge:]\x8a\x92\xf4\x01\x0epayment_intent\x92\x92\xf4\x01\x11order_hi,order_loڒ\xf4\x01/state,next_check_ms;spender_hi,spender_lo,state\"\x9f\x01\n" +
+	"\tminor_age\x18\x16 \x01(\rR\bminorAge:e\x8a\x92\xf4\x01\x0epayment_intent\x92\x92\xf4\x01\x11order_hi,order_loڒ\xf4\x017state,next_check_ms;spender_hi,spender_lo,state,paid_ms\"\x9f\x01\n" +
 	"\x12PaymentSpendRecord\x12\x1d\n" +
 	"\n" +
 	"spender_hi\x18\x01 \x01(\x04R\tspenderHi\x12\x1d\n" +
@@ -980,11 +983,12 @@ const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"\x1aPAY_REFUND_STATE_REQUESTED\x10\x01\x12\x1e\n" +
 	"\x1aPAY_REFUND_STATE_SUCCEEDED\x10\x02\x12\x1d\n" +
 	"\x19PAY_REFUND_STATE_REPORTED\x10\x03\x12\x1b\n" +
-	"\x17PAY_REFUND_STATE_FAILED\x10\x04*l\n" +
+	"\x17PAY_REFUND_STATE_FAILED\x10\x04*\x8b\x01\n" +
 	"\x10PayFinalizeState\x12\x1b\n" +
 	"\x17PAY_FINALIZE_STATE_NONE\x10\x00\x12\x1e\n" +
 	"\x1aPAY_FINALIZE_STATE_PENDING\x10\x01\x12\x1b\n" +
-	"\x17PAY_FINALIZE_STATE_DONE\x10\x02B\x0fZ\rproto/paymentb\x06proto3"
+	"\x17PAY_FINALIZE_STATE_DONE\x10\x02\x12\x1d\n" +
+	"\x19PAY_FINALIZE_STATE_FAILED\x10\x03B\x0fZ\rproto/paymentb\x06proto3"
 
 var (
 	file_proto_payment_payment_table_proto_rawDescOnce sync.Once

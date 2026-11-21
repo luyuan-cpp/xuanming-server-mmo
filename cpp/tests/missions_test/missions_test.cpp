@@ -14,6 +14,7 @@
 #include "modules/mission/system/mission.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mission_error_tip.pb.h"
+#include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/player_mission.h"
 #include "engine/core/utils/random/random.h"
 
@@ -30,6 +31,7 @@ entt::entity CreateTestPlayer()
 {
 	const auto player = tlsEcs.actorRegistry.create();
 	(void)tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{100000} + entt::to_integral(player));
+	tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
 	return player;
 }
 

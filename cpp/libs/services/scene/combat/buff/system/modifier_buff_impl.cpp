@@ -1,5 +1,6 @@
 #include "modifier_buff_impl.h"
 
+#include <cmath>
 #include "muduo/base/Logging.h"
 #include "table/code/buff_table.h"
 #include "table/proto/buff_table.pb.h"
@@ -49,16 +50,24 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
         return false;
     }
 
-    const auto lostHealth = derivedAttributesPbComponent->max_health() - baseAttributesPbComponent->health();
+    const uint64_t healthBefore = baseAttributesPbComponent->health();
+    const uint64_t maxHealth = derivedAttributesPbComponent->max_health();
+    if (healthBefore >= maxHealth) {
+        return false;
+    }
+    const uint64_t lostHealth = maxHealth - healthBefore;
 
     BuffTableManager::Instance().SetHealthRegenerationParam(
         { static_cast<double>(level),  static_cast<double>(lostHealth) });
 
     const auto healingAmount = BuffTableManager::Instance().GetHealthRegeneration(buffTable->id());
-    const auto healthBefore = baseAttributesPbComponent->health();
-    const auto currentHealth = std::min<uint64_t>(derivedAttributesPbComponent->max_health(),
-        static_cast<uint64_t>(static_cast<double>(healthBefore) +
-            healingAmount));
+    if (!std::isfinite(healingAmount) || healingAmount <= 0.0) {
+        return false;
+    }
+    const uint64_t healDelta = healingAmount >= static_cast<double>(lostHealth)
+        ? lostHealth
+        : static_cast<uint64_t>(healingAmount);
+    const uint64_t currentHealth = healthBefore + healDelta;
 
     baseAttributesPbComponent->set_health(currentHealth);
 

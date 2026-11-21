@@ -29,8 +29,6 @@ namespace _fl = ::google::protobuf::internal::field_layout;
 namespace {
 PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
-        // ::ActorActionCombatStatestate
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_actoractioncombatstate_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::ActorActionCombatStateTable
         {&::_pbi::kDescriptorMethods, &::descriptor_table_actoractioncombatstate_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::ActorActionCombatStateTableData
@@ -38,154 +36,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 };
 }  // namespace
 #endif
-class ActorActionCombatStatestate::_Internal {
- public:
-  using HasBits = decltype(::std::declval<ActorActionCombatStatestate>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_._has_bits_);
-};
-
-constexpr ActorActionCombatStatestate::ParseTableT_ ActorActionCombatStatestate::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_._has_bits_),
-      0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::ActorActionCombatStatestate>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // uint32 state_tip = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStatestate, _impl_.state_tip_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_tip_)}},
-      // uint32 state_mode = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStatestate, _impl_.state_mode_), 0>(),
-       {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_mode_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint32 state_mode = 1;
-      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_mode_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 state_tip = 2;
-      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_tip_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    }},
-    // no aux_entries
-    {{
-    }},
-  };
-}
-
-
-inline constexpr ActorActionCombatStatestate::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        state_mode_{0u},
-        state_tip_{0u} {}
-
-template <typename>
-constexpr ActorActionCombatStatestate::ActorActionCombatStatestate(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL ActorActionCombatStatestate::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) ActorActionCombatStatestate(arena);
-}
-constexpr auto ActorActionCombatStatestate::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ActorActionCombatStatestate), alignof(ActorActionCombatStatestate));
-}
-constexpr auto ActorActionCombatStatestate::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &ActorActionCombatStatestate::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<ActorActionCombatStatestate>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &ActorActionCombatStatestate::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<ActorActionCombatStatestate>(), &ActorActionCombatStatestate::ByteSizeLong,
-              &ActorActionCombatStatestate::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[0],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_actoractioncombatstate_5ftable_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct ActorActionCombatStatestateGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr ActorActionCombatStatestateGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 ActorActionCombatStatestate_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(ActorActionCombatStatestate::InternalGenerateClassData_(
-            _default, &ActorActionCombatStatestate_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<ActorActionCombatStatestate>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~ActorActionCombatStatestateGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) ActorActionCombatStatestate _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<ActorActionCombatStatestate>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestateGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ActorActionCombatStatestateGlobalsTypeInternal ActorActionCombatStatestate_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* ActorActionCombatStatestate_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return ActorActionCombatStatestate_globals_.GetClassData();
-#else
-  return ActorActionCombatStatestate_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class ActorActionCombatStateTable::_Internal {
  public:
   using HasBits = decltype(::std::declval<ActorActionCombatStateTable>()._impl_._has_bits_);
@@ -198,13 +48,13 @@ constexpr ActorActionCombatStateTable::ParseTableT_ ActorActionCombatStateTable:
     {
       PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967266,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      1,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
       nullptr,  // post_loop_handler
       ::_pbi::TcParser::GenericFallback,  // fallback
@@ -212,29 +62,39 @@ constexpr ActorActionCombatStateTable::ParseTableT_ ActorActionCombatStateTable:
       ::_pbi::TcParser::GetTable<::ActorActionCombatStateTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .ActorActionCombatStatestate state = 2;
-      {::_pbi::TcParser::FastMtR1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStateTable, _impl_.id_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStateTable, _impl_.id_), 0>(),
+       {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 state_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStateTable, _impl_.state_id_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_id_)}},
+      // uint32 state_mode = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStateTable, _impl_.state_mode_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_mode_)}},
+      // uint32 state_tip = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ActorActionCombatStateTable, _impl_.state_tip_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_tip_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // repeated .ActorActionCombatStatestate state = 2;
-      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 state_id = 3;
+      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 state_mode = 4;
+      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_mode_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 state_tip = 5;
+      {PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_tip_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::ActorActionCombatStatestate>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::ActorActionCombatStatestate_globals_},
-        #endif
-    }},
+    // no aux_entries
     {{
     }},
   };
@@ -245,12 +105,10 @@ inline constexpr ActorActionCombatStateTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        state_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::ActorActionCombatStateTable,
-            PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_)>()
-         }
-        ,
-        id_{0u} {}
+        id_{0u},
+        state_id_{0u},
+        state_mode_{0u},
+        state_tip_{0u} {}
 
 template <typename>
 constexpr ActorActionCombatStateTable::ActorActionCombatStateTable(::_pbi::ConstantInitialized,
@@ -268,7 +126,7 @@ inline void* PROTOBUF_NONNULL ActorActionCombatStateTable::PlacementNew_(
   return ::new (mem) ActorActionCombatStateTable(arena);
 }
 constexpr auto ActorActionCombatStateTable::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ActorActionCombatStateTable), alignof(ActorActionCombatStateTable));
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ActorActionCombatStateTable), alignof(ActorActionCombatStateTable));
 }
 constexpr auto ActorActionCombatStateTable::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -293,7 +151,7 @@ constexpr auto ActorActionCombatStateTable::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[0],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_actoractioncombatstate_5ftable_2eproto,
@@ -444,7 +302,7 @@ constexpr auto ActorActionCombatStateTableData::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[1],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_actoractioncombatstate_5ftable_2eproto,
@@ -503,19 +361,16 @@ const ::uint32_t
     TableStruct_actoractioncombatstate_5ftable_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStatestate, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStatestate, _impl_.state_mode_),
-        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStatestate, _impl_.state_tip_),
-        0,
-        1,
-        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_._has_bits_),
-        5, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.id_),
-        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_id_),
+        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_mode_),
+        PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_tip_),
         0,
+        1,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -525,273 +380,42 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, sizeof(::ActorActionCombatStatestate)},
-        {7, sizeof(::ActorActionCombatStateTable)},
-        {14, sizeof(::ActorActionCombatStateTableData)},
+        {0, sizeof(::ActorActionCombatStateTable)},
+        {11, sizeof(::ActorActionCombatStateTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
-        &::ActorActionCombatStatestate_globals_,
         &::ActorActionCombatStateTable_globals_,
         &::ActorActionCombatStateTableData_globals_,
 };
 const char descriptor_table_protodef_actoractioncombatstate_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\"actoractioncombatstate_table.proto\"D\n\033"
-    "ActorActionCombatStatestate\022\022\n\nstate_mod"
-    "e\030\001 \001(\r\022\021\n\tstate_tip\030\002 \001(\r\"V\n\033ActorActio"
-    "nCombatStateTable\022\n\n\002id\030\001 \001(\r\022+\n\005state\030\002"
-    " \003(\0132\034.ActorActionCombatStatestate\"M\n\037Ac"
-    "torActionCombatStateTableData\022*\n\004data\030\001 "
-    "\003(\0132\034.ActorActionCombatStateTableBM\n\016com"
-    ".game.tableB%ActorActionCombatStateTable"
-    "OuterClassP\001Z\022generated/pb/tableb\006proto3"
+    "\n\"actoractioncombatstate_table.proto\"b\n\033"
+    "ActorActionCombatStateTable\022\n\n\002id\030\001 \001(\r\022"
+    "\020\n\010state_id\030\003 \001(\r\022\022\n\nstate_mode\030\004 \001(\r\022\021\n"
+    "\tstate_tip\030\005 \001(\r\"M\n\037ActorActionCombatSta"
+    "teTableData\022*\n\004data\030\001 \003(\0132\034.ActorActionC"
+    "ombatStateTableBM\n\016com.game.tableB%Actor"
+    "ActionCombatStateTableOuterClassP\001Z\022gene"
+    "rated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_actoractioncombatstate_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_actoractioncombatstate_5ftable_2eproto = {
     false,
     false,
-    360,
+    302,
     descriptor_table_protodef_actoractioncombatstate_5ftable_2eproto,
     "actoractioncombatstate_table.proto",
     &descriptor_table_actoractioncombatstate_5ftable_2eproto_once,
     nullptr,
     0,
-    3,
+    2,
     schemas,
     file_message_globals,
     TableStruct_actoractioncombatstate_5ftable_2eproto::offsets,
     file_level_enum_descriptors_actoractioncombatstate_5ftable_2eproto,
     file_level_service_descriptors_actoractioncombatstate_5ftable_2eproto,
 };
-// ===================================================================
-
-ActorActionCombatStatestate::ActorActionCombatStatestate(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ActorActionCombatStatestate_get_class_data()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:ActorActionCombatStatestate)
-}
-ActorActionCombatStatestate::ActorActionCombatStatestate(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ActorActionCombatStatestate& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ActorActionCombatStatestate_get_class_data()),
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
-  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-PROTOBUF_NDEBUG_INLINE ActorActionCombatStatestate::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
-
-inline void ActorActionCombatStatestate::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-  ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, state_mode_),
-           0,
-           offsetof(Impl_, state_tip_) -
-               offsetof(Impl_, state_mode_) +
-               sizeof(Impl_::state_tip_));
-}
-ActorActionCombatStatestate::~ActorActionCombatStatestate() {
-  // @@protoc_insertion_point(destructor:ActorActionCombatStatestate)
-  SharedDtor(*this);
-}
-inline void ActorActionCombatStatestate::SharedDtor(MessageLite& self) {
-  ActorActionCombatStatestate& this_ = static_cast<ActorActionCombatStatestate&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.~Impl_();
-}
-
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull ActorActionCombatStatestate_class_data_ =
-        ActorActionCombatStatestate::InternalGenerateClassData_(ActorActionCombatStatestate_globals_._default);
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-ActorActionCombatStatestate::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&ActorActionCombatStatestate_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(ActorActionCombatStatestate_class_data_.tc_table);
-  return ActorActionCombatStatestate_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-ActorActionCombatStatestate::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&ActorActionCombatStatestate_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ActorActionCombatStatestate_globals_));
-  return ActorActionCombatStatestate_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ActorActionCombatStatestate::ParseTableT_
-    ActorActionCombatStatestate::_table_ =
-        ActorActionCombatStatestate::InternalGenerateParseTable_(ActorActionCombatStatestate_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void ActorActionCombatStatestate::Clear() {
-// @@protoc_insertion_point(message_clear_start:ActorActionCombatStatestate)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void) cached_has_bits;
-
-  cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    ::memset(&_impl_.state_mode_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.state_tip_) -
-        reinterpret_cast<char*>(&_impl_.state_mode_)) + sizeof(_impl_.state_tip_));
-  }
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL ActorActionCombatStatestate::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const ActorActionCombatStatestate& this_ = static_cast<const ActorActionCombatStatestate&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL ActorActionCombatStatestate::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const ActorActionCombatStatestate& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:ActorActionCombatStatestate)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 state_mode = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (this_._internal_state_mode() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          1, this_._internal_state_mode(), target);
-    }
-  }
-
-  // uint32 state_tip = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    if (this_._internal_state_tip() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          2, this_._internal_state_tip(), target);
-    }
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:ActorActionCombatStatestate)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t ActorActionCombatStatestate::ByteSizeLong(const MessageLite& base) {
-  const ActorActionCombatStatestate& this_ = static_cast<const ActorActionCombatStatestate&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t ActorActionCombatStatestate::ByteSizeLong() const {
-  const ActorActionCombatStatestate& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:ActorActionCombatStatestate)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits = 0;
-  // Prevent compiler warnings about cached_has_bits being unused
-  (void)cached_has_bits;
-
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // uint32 state_mode = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (this_._internal_state_mode() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_state_mode());
-      }
-    }
-    // uint32 state_tip = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_state_tip() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_state_tip());
-      }
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void ActorActionCombatStatestate::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<ActorActionCombatStatestate*>(&to_msg);
-  auto& from = static_cast<const ActorActionCombatStatestate&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(class_specific_merge_from_start:ActorActionCombatStatestate)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (from._internal_state_mode() != 0) {
-        _this->_impl_.state_mode_ = from._impl_.state_mode_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_state_tip() != 0) {
-        _this->_impl_.state_tip_ = from._impl_.state_tip_;
-      }
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void ActorActionCombatStatestate::CopyFrom(const ActorActionCombatStatestate& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:ActorActionCombatStatestate)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void ActorActionCombatStatestate::InternalSwap(ActorActionCombatStatestate* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_tip_)
-      + sizeof(ActorActionCombatStatestate::_impl_.state_tip_)
-      - PROTOBUF_FIELD_OFFSET(ActorActionCombatStatestate, _impl_.state_mode_)>(
-          reinterpret_cast<char*>(&_impl_.state_mode_),
-          reinterpret_cast<char*>(&other->_impl_.state_mode_));
-}
-
-::google::protobuf::Metadata ActorActionCombatStatestate::GetMetadata() const {
-  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
-}
 // ===================================================================
 
 ActorActionCombatStateTable::ActorActionCombatStateTable(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -803,51 +427,30 @@ ActorActionCombatStateTable::ActorActionCombatStateTable(::google::protobuf::Are
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:ActorActionCombatStateTable)
 }
-PROTOBUF_NDEBUG_INLINE ActorActionCombatStateTable::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::ActorActionCombatStateTable& from_msg)
-      : _has_bits_{from._has_bits_},
-        _cached_size_{0},
-        state_ {
-          visibility, ::_pbi::InternalMetadataOffset::Build<
-              ::ActorActionCombatStateTable,
-              PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_)>()
-          , from.state_
-        }
-     {}
-
 ActorActionCombatStateTable::ActorActionCombatStateTable(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const ActorActionCombatStateTable& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ActorActionCombatStateTable& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, ActorActionCombatStateTable_get_class_data()) {
-
+    : ::google::protobuf::Message(arena, ActorActionCombatStateTable_get_class_data()),
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena) {
+    : ::google::protobuf::Message(arena),
 #endif  // PROTOBUF_CUSTOM_VTABLE
-  ActorActionCombatStateTable* const _this = this;
-  (void)_this;
+      _impl_(from._impl_) {
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
-  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.id_ = from._impl_.id_;
-
-  // @@protoc_insertion_point(copy_constructor:ActorActionCombatStateTable)
 }
 PROTOBUF_NDEBUG_INLINE ActorActionCombatStateTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0},
-        state_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::ActorActionCombatStateTable,
-            PROTOBUF_FIELD_OFFSET(::ActorActionCombatStateTable, _impl_.state_)>()
-         }
-     {}
+      : _cached_size_{0} {}
 
 inline void ActorActionCombatStateTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           0,
+           offsetof(Impl_, state_tip_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::state_tip_));
 }
 ActorActionCombatStateTable::~ActorActionCombatStateTable() {
   // @@protoc_insertion_point(destructor:ActorActionCombatStateTable)
@@ -897,10 +500,11 @@ PROTOBUF_NOINLINE void ActorActionCombatStateTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.state_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_tip_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.state_tip_));
   }
-  _impl_.id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -925,7 +529,7 @@ PROTOBUF_NOINLINE void ActorActionCombatStateTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -933,16 +537,30 @@ PROTOBUF_NOINLINE void ActorActionCombatStateTable::Clear() {
     }
   }
 
-  // repeated .ActorActionCombatStatestate state = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    for (unsigned i = 0, n = static_cast<unsigned>(
-                             this_._internal_state_size());
-         i < n; i++) {
-      const auto& repfield = this_._internal_state().Get(i);
-      target =
-          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-              2, repfield, repfield.GetCachedSize(),
-              target, stream);
+  // uint32 state_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_state_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_state_id(), target);
+    }
+  }
+
+  // uint32 state_mode = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_state_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_state_mode(), target);
+    }
+  }
+
+  // uint32 state_tip = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_state_tip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_state_tip(), target);
     }
   }
 
@@ -971,19 +589,33 @@ PROTOBUF_NOINLINE void ActorActionCombatStateTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // repeated .ActorActionCombatStatestate state = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      total_size += 1UL * this_._internal_state_size();
-      for (const auto& msg : this_._internal_state()) {
-        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
-      }
-    }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint32 id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
+      }
+    }
+    // uint32 state_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_state_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state_id());
+      }
+    }
+    // uint32 state_mode = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_state_mode() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state_mode());
+      }
+    }
+    // uint32 state_tip = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_state_tip() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state_tip());
       }
     }
   }
@@ -998,22 +630,31 @@ void ActorActionCombatStateTable::MergeImpl(::google::protobuf::MessageLite& to_
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
-  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:ActorActionCombatStateTable)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      _this->_internal_mutable_state()->InternalMergeFromWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), arena,
-          from._internal_state());
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_state_id() != 0) {
+        _this->_impl_.state_id_ = from._impl_.state_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_state_mode() != 0) {
+        _this->_impl_.state_mode_ = from._impl_.state_mode_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_state_tip() != 0) {
+        _this->_impl_.state_tip_ = from._impl_.state_tip_;
       }
     }
   }
@@ -1034,8 +675,12 @@ void ActorActionCombatStateTable::InternalSwap(ActorActionCombatStateTable* PROT
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  _impl_.state_.InternalSwap(&other->_impl_.state_);
-  swap(_impl_.id_, other->_impl_.id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.state_tip_)
+      + sizeof(ActorActionCombatStateTable::_impl_.state_tip_)
+      - PROTOBUF_FIELD_OFFSET(ActorActionCombatStateTable, _impl_.id_)>(
+          reinterpret_cast<char*>(&_impl_.id_),
+          reinterpret_cast<char*>(&other->_impl_.id_));
 }
 
 ::google::protobuf::Metadata ActorActionCombatStateTable::GetMetadata() const {

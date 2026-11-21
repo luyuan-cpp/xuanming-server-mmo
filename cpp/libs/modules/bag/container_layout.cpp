@@ -1,5 +1,6 @@
 ﻿#include "container_layout.h"
 
+#include <optional>
 #include "engine/core/error_handling/error_handling.h"
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -304,13 +305,24 @@ bool GridLayout::PlaceAt(Guid guid, SlotId slot, Footprint footprint)
     {
         return false;
     }
-    // 若这个 guid 已经摆在别处,先摘掉再判 —— 否则它自己的格子会把自己挡住。
-    Remove(guid);
+    // 失败保持 fail-closed：先记住原位置，目标区域被占时还原原占位，不丢失物品位置。
+    std::optional<Placement> previous;
+    if (auto it = placed_.find(guid); it != placed_.end())
+    {
+        previous = it->second;
+        Remove(guid);
+    }
 
     const uint32_t x = slot % width_;
     const uint32_t y = slot / width_;
     if (!RectFree(cells_, x, y, footprint))
     {
+        if (previous)
+        {
+            Stamp(cells_, previous->anchor, previous->footprint, guid);
+            placed_[guid] = *previous;
+            anchorToGuid_[previous->anchor] = guid;
+        }
         return false;
     }
     Stamp(cells_, slot, footprint, guid);

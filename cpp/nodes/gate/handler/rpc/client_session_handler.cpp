@@ -53,6 +53,7 @@
 #include "proto/common/base/node.pb.h"
 #include "node/system/node/node_util.h"
 #include "node/system/node/node_events.h"
+#include "utils/random/random.h"
 #include "node/system/node/release_track.h"
 #include "thread_context/ecs_context.h"
 #include "thread_context/node_context_manager.h"
@@ -189,11 +190,8 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 		return std::nullopt;
 	}
 
-	// Pick a random candidate
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, candidates.size() - 1);
-	return candidates[dis(gen)];
+	// Pick a random candidate using thread-local RNG (avoid per-call random_device syscall + 2.5KB mt19937).
+	return candidates[tlsRandom.Rand<std::size_t>(0, candidates.size() - 1)];
 }
 
 // SessionDetails 是 gate 递给 Go 服务的会话身份(gRPC metadata x-session-detail-bin,
@@ -1218,18 +1216,6 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 	const SessionDetails sessionDetails =
 		BuildSessionDetails(sessionId, sessionIt->second.playerId, &sessionIt->second);
 
-	// Stress diagnostic 2026-05-24: scene_manager observed gate_id="0" in
-	// EnterScene requests during 3-zone × 15000 round 2, even though cpp
-	// gate had long since completed NodeId CAS. Logging the actual values
-	// at the SessionDetails build site to confirm whether (a) the cast
-	// drops the high bits, (b) gNode->GetNodeId() is genuinely 0 here, or
-	// (c) login overwrites the field somewhere downstream.
-	// player_id 打实际发出的值(未绑定角色为 0),不打会话里的 kInvalidGuid 哨兵。
-	LOG_INFO << "[diag] SessionDetails to login: session_id=" << sessionId
-			 << " player_id=" << sessionDetails.player_id()
-			 << " gate_node_id=" << gNode->GetNodeId()
-			 << " message_id=" << request->message_id();
-
 	if (rpcHandlerMeta.sender)
 	{
 		// 路由规则(保持向后兼容):
@@ -1280,6 +1266,13 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 			SendRequestErrorEnvelope(conn, *request, kServiceUnavailable);
 			return;
 		}
+		// 直连模式也在所有前置校验/选节点/签名全部通过、真正发出前一刻才执行会话状态转换，
+		// 与路由 lane 发出钩子口径一致，避免 Login 瞬断或坏包时提前踢掉 Scene 角色。
+		if (gate_client_entry::RejectLoginTransitionBeforeDirectSend(sessionId, sessionIt->second, *request))
+		{
+			return;
+		}
+		ApplyLoginTransition(sessionId, sessionIt->second, *request);
 		rpcHandlerMeta.sender(
 			tlsNodeContextManager.GetRegistry(rpcHandlerMeta.targetNodeType), *node, *rpcHandlerMeta.requestProto,
 			// 捕获客户端信封的请求号:回包与失败回执都回显它,客户端按 id 认领(client-rpc-callback.md §3)。
@@ -1472,13 +1465,10 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 		return;
 	}
 
-	// 客户端 LeaveGame / EnterGame 的会话状态变化在请求真正发出的那一刻生效(LoginTransitionRejectTip / ApplyLoginTransition
-	// 一节,location-release-binding.md §3.5)。路由模式下它们是 PROTOCOL_GRPC、进路由 lane,由 lane 的发出钩子按收包顺序执行;
-	// 其余情形(直连模式)收包即发出,在这里执行。直连模式行为与 2026-11-10 之前相同。
-	const bool viaRouterLane = messageInfo.protocol == PROTOCOL_GRPC && gate_router_mode::IsRouterModeEnabled();
-	if (!viaRouterLane)
+	// 客户端 LeaveGame / EnterGame 均为 PROTOCOL_GRPC：路由模式由 lane 发出钩子执行，
+	// 直连模式在 HandleGrpcNodeMessage 全部校验通过并真正发送前一刻执行。
+	if (messageInfo.protocol != PROTOCOL_GRPC)
 	{
-		// 被拒(EnterGame 换角闸):已回带请求 id 的信封,不转发、不执行会话状态变化(client_entry_admission.h)。
 		if (gate_client_entry::RejectLoginTransitionBeforeDirectSend(sessionId, session, *request))
 		{
 			return;
@@ -1616,10 +1606,15 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		return;
 	}
 
-	// gate_node_id 只在 zone 内唯一:给 zone B gate#3 的重定向票据,在 zone A 的 gate#3 上同样能过
-	// 上面那道检查。重定向票据带 target_zone_id,在这里把"不是发给本 zone 的"挡掉;
-	// 0 = 普通 AssignGate 票据(不带目标 zone),照旧放行。
-	if (payload.target_zone_id() != 0 && payload.target_zone_id() != gNode->GetNodeInfo().zone_id())
+	// gate_node_id 只在 zone 内唯一：普通 AssignGate 票据带 zone_id（target_zone_id=0），
+	// 重定向票据同时带 target_zone_id。两者非 0 时均须匹配本区，防止别区同号 gate 票据穿透本区排队/白名单。
+	const uint32_t localZoneId = gNode->GetNodeInfo().zone_id();
+	if (payload.zone_id() != 0 && payload.zone_id() != localZoneId)
+	{
+		rejectAndClose("token_zone_mismatch", "token not for this zone");
+		return;
+	}
+	if (payload.target_zone_id() != 0 && payload.target_zone_id() != localZoneId)
 	{
 		rejectAndClose("token_target_zone_mismatch", "token not for this zone");
 		return;

@@ -154,10 +154,10 @@ func TestNewWechatMinigameRejectsUnusableConfig(t *testing.T) {
 		t.Fatalf("NewWechatMinigame(good): %v", err)
 	}
 	for name, edit := range map[string]func(*WechatMinigameConfig){
-		"no app secret":                     func(c *WechatMinigameConfig) { c.AppSecret = "" },
-		"no app key":                        func(c *WechatMinigameConfig) { c.AppKey = "" },
-		"no push token":                     func(c *WechatMinigameConfig) { c.PushToken = "" },
-		"an environment other than 0 or 1":  func(c *WechatMinigameConfig) { c.Env = 2 },
+		"no app secret":                      func(c *WechatMinigameConfig) { c.AppSecret = "" },
+		"no app key":                         func(c *WechatMinigameConfig) { c.AppKey = "" },
+		"no push token":                      func(c *WechatMinigameConfig) { c.PushToken = "" },
+		"an environment other than 0 or 1":   func(c *WechatMinigameConfig) { c.Env = 2 },
 		"an EncodingAESKey of 42 characters": func(c *WechatMinigameConfig) { c.EncodingAESKey = strings.Repeat("A", 42) },
 	} {
 		bad := good
@@ -307,9 +307,9 @@ func TestWechatMinigameQueryMapsOrderStates(t *testing.T) {
 	// 没有付款人或会话密钥、会话密钥解不开:查不了,只能等发货推送。
 	other := newMiniSecrets(t).connect(t, 0, false, "", nil)
 	for name, req := range map[string]QueryRequest{
-		"no payer":                        {OutTradeNo: testOutTradeNo, Ref: request.Ref, AmountMinor: 600},
-		"no session key":                  {OutTradeNo: testOutTradeNo, PayerID: miniOpenID, AmountMinor: 600},
-		"a reference that is not sealed":  {OutTradeNo: testOutTradeNo, PayerID: miniOpenID, Ref: Ref{Value: "not-sealed"}, AmountMinor: 600},
+		"no payer":                          {OutTradeNo: testOutTradeNo, Ref: request.Ref, AmountMinor: 600},
+		"no session key":                    {OutTradeNo: testOutTradeNo, PayerID: miniOpenID, AmountMinor: 600},
+		"a reference that is not sealed":    {OutTradeNo: testOutTradeNo, PayerID: miniOpenID, Ref: Ref{Value: "not-sealed"}, AmountMinor: 600},
 		"a reference sealed by another app": {OutTradeNo: testOutTradeNo, PayerID: miniOpenID, Ref: other.queryRequest(t).Ref, AmountMinor: 600},
 	} {
 		if _, err := f.channel.Query(ctx, req); !errors.Is(err, ErrQueryUnsupported) {
@@ -324,7 +324,6 @@ func TestWechatMinigameQueryMapsOrderStates(t *testing.T) {
 	}{
 		"not paid yet":            {order: `{"errcode":0,"errmsg":"ok","pay_state":1,"out_trade_no":"` + testOutTradeNo + `"}`, state: TradeNotPaid},
 		"an unknown order number": {order: `{"errcode":90019,"errmsg":"x"}`, state: TradeNotPaid},
-		"an expired session key":  {order: `{"errcode":90016,"errmsg":"x"}`, code: "90016"},
 		"a rejected pay_sig":      {order: `{"errcode":90011,"errmsg":"x"}`, code: "90011"},
 		"another order":           {order: strings.Replace(paid, testOutTradeNo, "ffffffffffffffffffffffffffffffff", 1)},
 		"not JSON":                {order: `<html>`},
@@ -350,6 +349,10 @@ func TestWechatMinigameQueryMapsOrderStates(t *testing.T) {
 		})
 	}
 
+	expired, _ := startMini(t, 0, miniAPI{token: miniTokenOK, order: `{"errcode":90016,"errmsg":"session expired"}`})
+	if _, err := expired.channel.Query(ctx, expired.queryRequest(t)); !errors.Is(err, ErrQueryUnsupported) {
+		t.Fatalf("90016 Query err = %v, want ErrQueryUnsupported", err)
+	}
 	sandbox, _ := startMini(t, 1, miniAPI{token: miniTokenOK, order: paid})
 	if result, err := sandbox.channel.Query(ctx, sandbox.queryRequest(t)); err != nil || result.Payment == nil || !result.Payment.Test {
 		t.Fatalf("sandbox Query = %+v, %v; want a payment marked as a test", result, err)

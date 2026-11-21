@@ -24,6 +24,7 @@ message MonsterTable {
   option (cfg_sheet)       = "Monster";
   option (cfg_source_file) = "Monster.xlsx";
   option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
 
   uint32 id = 1;
   // 战斗属性与掉落。字段号抄自 generated/code/proto/monster_table.proto,纯追加,1 号未动。

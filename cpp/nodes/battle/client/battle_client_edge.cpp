@@ -135,7 +135,14 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
         oldestConnId = OldestConnectedUnauthenticated();
         if (oldestConnId)
         {
-            oldestAge = now - sessions_.at(*oldestConnId).openedAt;
+            const auto &session = sessions_.at(*oldestConnId);
+            const auto conn = session.conn.lock();
+            const std::optional<battle_connection_admission::SteadyTime::duration> halfClosedAge =
+                session.halfClosedAt
+                    ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *session.halfClosedAt)
+                    : std::nullopt;
+            oldestAge = battle_connection_admission::EffectivePreAuthEvictAge(
+                conn && conn->connected(), now - session.openedAt, halfClosedAge, admission_.CurrentPreAuthBudget());
         }
     }
     const auto verdict =
@@ -170,7 +177,9 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
 
 std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
 {
-    // 通常第一条就是;只有队头恰好是 shutdown 之后等延迟强关的那几条(至多 100ms)时才往后看几条。
+    const auto now = std::chrono::steady_clock::now();
+    const auto &budget = admission_.CurrentPreAuthBudget();
+    // 通常第一条就是;仍在短宽限期内的半关闭连接跳过,超过宽限期仍留在池内的半关闭连接允许淘汰强关。
     for (const uint64_t connId : unauthenticated_)
     {
         const auto it = sessions_.find(connId);
@@ -178,7 +187,20 @@ std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
         {
             continue;
         }
-        if (const auto conn = it->second.conn.lock(); conn && conn->connected())
+        const auto conn = it->second.conn.lock();
+        if (!conn)
+        {
+            continue;
+        }
+        if (conn->connected())
+        {
+            return connId;
+        }
+        const std::optional<battle_connection_admission::SteadyTime::duration> halfClosedAge =
+            it->second.halfClosedAt
+                ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *it->second.halfClosedAt)
+                : std::nullopt;
+        if (battle_connection_admission::IsHalfClosedPreAuthEvictable(now - it->second.openedAt, halfClosedAge, budget))
         {
             return connId;
         }
@@ -196,6 +218,7 @@ void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_
     const auto conn = it->second.conn.lock();
     if (!conn)
     {
+        unauthenticated_.erase(connId);
         return;
     }
     // 先移出池:这一刻起它不再算在池里(与 gate 先收回占位同一做法),紧接着的下一条 accept 看到的就是腾出位置之后的池。
@@ -461,7 +484,7 @@ void BattleClientEdge::OnProbeEcho(const muduo::net::TcpConnectionPtr& conn,
     receipt.set_measured_at_ms(TimeSystem::NowMillisecondsUTC());receipt.set_expires_at_ms(s->probeGrant->expires_at_ms());
     match::NetworkProbeComplete complete;auto* result=complete.mutable_receipt();result->set_payload(receipt.SerializeAsString());
     result->set_signature(network_probe::Sign(network_probe::kReceiptDomain,result->payload()));
-    Send(conn,complete);s->probeGrant.reset();conn->shutdown();
+    Send(conn,complete);s->probeGrant.reset();conn->shutdown();conn->forceCloseWithDelay(0.1);
 }
 
 void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
@@ -535,6 +558,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
         LogRejectionSampled(reason, conn);
         SendVerifyReply(conn, false, clientError, 0);
         // shutdown 立刻切到 kDisconnecting(codec 停止分发),短延迟给应答一个 flush 窗口
+        session->halfClosedAt = std::chrono::steady_clock::now();
         conn->shutdown();
         conn->forceCloseWithDelay(0.1);
     };
@@ -806,6 +830,10 @@ void BattleClientEdge::OnUnknownMessage(const muduo::net::TcpConnectionPtr &conn
     //(gate client_session_handler.cpp 刚修过同类问题);类型名不进日志,采样行有 peer 够排障。
     (void)message;
     LogRejectionSampled("unknown_message_type", conn);
+    if (DirectSession *session = FindSession(conn); session != nullptr)
+    {
+        session->halfClosedAt = std::chrono::steady_clock::now();
+    }
     conn->shutdown();
     conn->forceCloseWithDelay(0.1);
 }

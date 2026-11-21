@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <limits>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -61,12 +62,20 @@ int64_t FakeNowMs()
 }
 
 // 模拟一次落盘回调到达:把当前账本原样拷进"最后一次提交成功的玩家存档"(生产里是 go/db Save 回 COMMITTED / EQUAL 之后换上的快照)。
-void CaptureLedgerSnapshot(entt::entity player)
+void CaptureLedgerSnapshot(entt::entity player, uint64_t ownerEpoch = 0, uint64_t saveSeq = 1)
 {
-	PlayerAllData persisted;
-	persisted.mutable_player_database_data()->mutable_asset_op_ledger()->CopyFrom(
+	auto persisted = std::make_shared<PlayerAllData>();
+	persisted->set_last_save_seq(saveSeq);
+	persisted->mutable_player_database_data()->mutable_asset_op_ledger()->CopyFrom(
 		tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player));
-	tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(persisted);
+	const auto* owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+	const uint64_t effectiveEpoch = ownerEpoch != 0 ? ownerEpoch : (owner != nullptr ? owner->epoch : 0);
+	auto& comp = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player);
+	if (effectiveEpoch != 0 && saveSeq != 0)
+	{
+		comp.RememberCommit(persisted, effectiveEpoch, saveSeq);
+	}
+	comp.Replace(*persisted);
 }
 
 // 假存盘:只计数,回报"确实压了一次写",**不**更新快照
@@ -342,6 +351,59 @@ TEST_F(AssetOpSystemTest, PaymentReversalDebitsOnTradeStreamAndNeverOverdraws)
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetCurrencyInsufficient), rejected.reason().id());
 	EXPECT_EQ(40u, Gold());
+}
+
+TEST_F(AssetOpSystemTest, PaymentReversalDebitsStackableAcrossWarehouseAndNonStackableEquipment)
+{
+	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
+	GiveBags();
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	constexpr uint32_t kStackable = 10;
+	constexpr uint32_t kInstanceConfig = 1;
+
+	// 1. 堆叠物品分散在背包(1)与仓库(2),扣回 3 件须跨包扣净。
+	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kInventory], ItemCountMap{{kStackable, 1}}, TX_GM_GRANT, "seed-inv"));
+	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kWarehouse], ItemCountMap{{kStackable, 2}}, TX_GM_GRANT, "seed-wh"));
+	::AssetOpRequest stackReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 0, TX_PAYMENT_REVERSAL);
+	stackReq.mutable_bundle()->clear_currencies();
+	auto* stackItem = stackReq.mutable_bundle()->add_items();
+	stackItem->set_config_id(kStackable);
+	stackItem->set_count(3);
+	SignForTest("debit", stackReq, "trade");
+	::AssetOpResponse stackResp;
+	PlayerAssetOpSystem::Debit(stackReq, stackResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, stackResp.outcome());
+	EXPECT_EQ(0u, bags.bags[kInventory].GetTotalItemCount(kStackable));
+	EXPECT_EQ(0u, bags.bags[kWarehouse].GetTotalItemCount(kStackable));
+	CompleteFakeSave();
+
+	// 2. 非堆叠/装备官方物品落在仓库时也可按 (config_id, count) 扣回,且不够时确定性拒绝不透支。
+	ItemComp gear;
+	gear.set_item_id(950199771);
+	gear.set_config_id(kInstanceConfig);
+	gear.set_size(1);
+	ASSERT_EQ(kSuccess, bags.bags[kWarehouse].PutInstance(gear));
+	::AssetOpRequest gearReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 2, 0, TX_PAYMENT_REVERSAL);
+	gearReq.mutable_bundle()->clear_currencies();
+	auto* gearItem = gearReq.mutable_bundle()->add_items();
+	gearItem->set_config_id(kInstanceConfig);
+	gearItem->set_count(1);
+	SignForTest("debit", gearReq, "trade");
+	::AssetOpResponse gearResp;
+	PlayerAssetOpSystem::Debit(gearReq, gearResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, gearResp.outcome());
+	EXPECT_FALSE(bags.bags[kWarehouse].ContainsGuid(950199771));
+	CompleteFakeSave();
+
+	::AssetOpRequest missingReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 3, 0, TX_PAYMENT_REVERSAL);
+	missingReq.mutable_bundle()->clear_currencies();
+	auto* missingItem = missingReq.mutable_bundle()->add_items();
+	missingItem->set_config_id(kInstanceConfig);
+	missingItem->set_count(1);
+	SignForTest("debit", missingReq, "trade");
+	::AssetOpResponse missingResp;
+	PlayerAssetOpSystem::Debit(missingReq, missingResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, missingResp.outcome());
 }
 
 // ── 找人 / 闸门 ─────────────────────────────────────────────────────────────
@@ -1302,8 +1364,64 @@ TEST_F(AssetOpSystemTest, OwnerEpochZeroSeenSeqAnswersWithoutResave)
 	EXPECT_EQ(70u, Gold()) << "绝不重扣";
 
 	CompleteFakeSave();
-	const auto afterSave = CallDebit(1, 30);
-	EXPECT_TRUE(afterSave.durable()) << "durable 只看快照,与 epoch 无关";
+	const auto afterUnfencedSave = CallDebit(1, 30);
+	EXPECT_FALSE(afterUnfencedSave.durable()) << "epoch == 0 时没有受围栏提交证据,绝不能报 durable";
+
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 1;
+	CompleteFakeSave();
+	const auto afterFencedSave = CallDebit(1, 30);
+	EXPECT_TRUE(afterFencedSave.durable()) << "当前所有权代次确认提交后才报 durable";
+}
+
+// E3b:未绑定提交证据(只调用 Replace 未经 RememberCommit)或代次失配的快照,Debit 与 AckReceipt 都不能报 durable。
+TEST_F(AssetOpSystemTest, UncommittedOrStaleEpochSnapshotNeverReportsDurable)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	auto tradeReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 30, TX_TRADE);
+	SignForTest("debit", tradeReq, "trade");
+	::AssetOpResponse debitResp;
+	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
+	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
+
+	// 1) 未经 RememberCommit 的裸 Replace(committed_owner_epoch/committed_save_seq 为 0)
+	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/0, /*saveSeq=*/0);
+	debitResp.Clear();
+	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
+	EXPECT_FALSE(debitResp.durable());
+
+	// 2) 旧代次提交的快照(committed_owner_epoch != 当前 owner->epoch)
+	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/99, /*saveSeq=*/1);
+	debitResp.Clear();
+	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
+	EXPECT_FALSE(debitResp.durable());
+
+	// 3) 当前代次提交后 Debit 才报 durable
+	CompleteFakeSave();
+	debitResp.Clear();
+	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
+	EXPECT_TRUE(debitResp.durable());
+
+	// 4) AckReceipt 同样校验快照提交代次
+	SignForTest("ack_receipt", tradeReq, "trade");
+	::AssetOpResponse ackResp;
+	PlayerAssetOpSystem::AckReceipt(tradeReq, ackResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, ackResp.outcome());
+	EXPECT_FALSE(ackResp.durable());
+
+	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/99, /*saveSeq=*/2);
+	ackResp.Clear();
+	PlayerAssetOpSystem::AckReceipt(tradeReq, ackResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, ackResp.outcome());
+	EXPECT_FALSE(ackResp.durable());
+
+	CompleteFakeSave();
+	ackResp.Clear();
+	PlayerAssetOpSystem::AckReceipt(tradeReq, ackResp);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, ackResp.outcome());
+	EXPECT_TRUE(ackResp.durable());
 }
 
 // E4:闸只看当前 epoch,不留粘性状态 —— 铸造之后同一 seq 重投照常应用。

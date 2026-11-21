@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     集群外客户端入口(D76–D93)部署生成器契约测试:lib/k8s_client_entry.ps1 与它在 k8s_deploy.ps1 里的接入。
@@ -1731,7 +1731,8 @@ $script:FakeRunSeq = 0
 # 假集群里已备好部署替运维维护的内部密钥(k8s_deploy.ps1 的 $script:ManagedDomainServiceSecrets,全集群每把一个值):
 # 托管密钥的门禁(Initialize-ManagedDomainServiceSecrets)放行,写入步骤(Sync-ManagedDomainServiceSecrets)无事可做。
 # 本节测的不是这道闸,它的用例在 k8s_migrate_gate.tests.ps1;值是虚构的,只为各 namespace 齐、同值、互不相同。
-$ManagedSecretsFakeListJson = & {
+$ManagedSecretsFakeNamespaces = (@('mmorpg-infra', $TestInfraNs, $TestZoneNs) | ForEach-Object { "namespace/$_" }) -join "`n"
+$ManagedSecretFakeItemJson = & {
     $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$null)
     $assign = $ast.Find({ param($a) $a -is [Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:ManagedDomainServiceSecrets' }, $false)
     if ($null -eq $assign) { throw 'k8s_deploy.ps1 缺少 $script:ManagedDomainServiceSecrets' }
@@ -1739,8 +1740,7 @@ $ManagedSecretsFakeListJson = & {
     foreach ($row in @(& ([scriptblock]::Create($assign.Right.Extent.Text)))) {
         $data[$row.Key] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$($row.Key)-contract-fake-value-0123456789abcdef"))
     }
-    $items = @(foreach ($ns in @('mmorpg-infra', $TestInfraNs, $TestZoneNs)) { [ordered]@{ metadata = [ordered]@{ name = 'domain-service-secrets'; namespace = $ns }; data = $data } })
-    ConvertTo-Json -InputObject @{ items = $items } -Depth 6 -Compress
+    ConvertTo-Json -InputObject ([ordered]@{ metadata = [ordered]@{ name = 'domain-service-secrets' }; data = $data }) -Depth 5 -Compress
 }
 
 <#
@@ -1770,20 +1770,29 @@ function Invoke-DeployWithFakeKubectl {
     # 网关的 mmorpg 在全球权威入口上,和 Go 服务一样所有档位都要显式给(Resolve-GatewaySqlMode,在 Assert-LogicalDbPreflight 里核);
     # 本节测的不是这条闸,同 Invoke-EntryDryRun 补虚构入口。用例自己给了就用它的。
     if (-not $all.ContainsKey('GlobalAuthorityTiDBHost')) { $all.GlobalAuthorityTiDBHost = 'tidb.invalid:4000' }
-    # 托管内部密钥的门禁一次列出全集群的 domain-service-secrets:答「已备好」($ManagedSecretsFakeListJson)。用例自己的规则不匹配这条调用,放在最前不影响它们。
-    $Rules = @(@{ Pattern = '^get secrets --all-namespaces --field-selector metadata\.name=domain-service-secrets -o json$'; ExitCode = 0; Stdout = $ManagedSecretsFakeListJson }) + @($Rules)
+    # 托管内部密钥的门禁先列 namespace 再逐个读本环境的 domain-service-secrets:答「已备好」。用例自己的规则不匹配这两条调用,放在最前不影响它们。
+    $Rules = @(
+        @{ Pattern = '^get namespaces -o name$'; ExitCode = 0; Stdout = $ManagedSecretsFakeNamespaces }
+        @{ Pattern = '^get secret domain-service-secrets -n \S+ --ignore-not-found -o json$'; ExitCode = 0; Stdout = $ManagedSecretFakeItemJson }
+    ) + @($Rules)
     # 非 dev 档必须给 -PlayerRedisMasters 与 -ControlRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player 与 statefulset/redis-control
     # (Assert-RedisClusterPreflight)。本节用例测的不是这条闸:补上参数与口令,让假 kubectl 答两套集群都已在。用例自己的规则不匹配这两条调用,放在最前不影响它们。
     if ([string]$DeployArgs.ReleaseProfile -in @('staging', 'prod')) {
         $all.PlayerRedisMasters = 3
         $all.ControlRedisMasters = 3
-        # 逻辑库的闸同理(Assert-LogicalDbPreflight)。
+        # 逻辑库、Pod 间加密与 gRPC 口准入的闸同理(Assert-LogicalDbPreflight / Assert-PodNetworkEncryptionPreflight / Assert-NetworkPoliciesPreflight)。
         $all.DirectoryLogicalShards = 64
         $all.Region = 1
+        if (-not $all.ContainsKey('PlayerStoreShards')) { $all.PlayerStoreShards = 64 }
         $all.IdRegistryEtcd = 'id-registry.invalid:2379'
+        if (-not $all.ContainsKey('NetworkPolicies')) { $all.NetworkPolicies = 'on' }
+        if (-not $all.ContainsKey('PodNetworkEncryption')) { $all.PodNetworkEncryption = 'cilium-wireguard' }
         $Rules = @(
             @{ Pattern = '^get statefulset redis-player\b'; ExitCode = 0; Stdout = '6' }
             @{ Pattern = '^get statefulset redis-control\b'; ExitCode = 0; Stdout = '6' }
+            @{ Pattern = '^get configmap cilium-config -n kube-system -o jsonpath=\{\.data\.enable-wireguard\}$'; ExitCode = 0; Stdout = 'true' }
+            @{ Pattern = '^get nodes -o json$'; ExitCode = 0; Stdout = '{"items":[{"metadata":{"name":"contract-node-0"}}]}' }
+            @{ Pattern = '^get ciliumnodes\.cilium\.io -o json$'; ExitCode = 0; Stdout = '{"items":[{"metadata":{"name":"contract-node-0","annotations":{"network.cilium.io/wg-pub-key":"contract-wg-pub-key"}}}]}' }
         ) + @($Rules)
         foreach ($passwordFixture in @(
                 @{ Name = 'MMORPG_PLAYER_REDIS_PASSWORD'; Value = 'contract-player-redis-pw-01' }
@@ -2129,6 +2138,8 @@ $WrapperPairs = @(
             'LoginNppaAppId', 'LoginNppaBizId', 'LoginAntiAddictionExtraPlayDays', 'LoginNppaCheckUrl', 'LoginNppaQueryUrl', 'LoginNppaLoginoutUrl',
             # 托管内部密钥的修复开关:漏传 = 经包装入口修复不了不一致的值。
             'ResyncDomainServiceSecrets',
+            # 配置表热更分发 sidecar(table-sync):漏传 = 经包装入口部署不挂 table-sync。
+            'TableSyncImage', 'TableSyncS3Endpoint', 'TableSyncS3Bucket', 'TableSyncS3Region', 'TableSyncS3SecretName', 'TableSyncDevFixture',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
             # 连接准入覆盖变量同理:漏传 = 压测或应急调过的阈值经包装入口重新部署时落回推导缺省。
             # 其后 + 拼上 k8s-redis-wipe 的确认开关(只走这一条包装链)与两套 Redis Cluster、逻辑库的键。
@@ -2169,6 +2180,8 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
         LoginAppleTeamId = 'String'; LoginAppleKeyId = 'String'
         LoginNppaAppId = 'String'; LoginNppaBizId = 'String'; LoginAntiAddictionExtraPlayDays = 'String'; LoginNppaCheckUrl = 'String'
         LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'; ResyncDomainServiceSecrets = 'SwitchParameter'
+        TableSyncImage = 'String'; TableSyncS3Endpoint = 'String'; TableSyncS3Bucket = 'String'; TableSyncS3Region = 'String'
+        TableSyncS3SecretName = 'String'; TableSyncDevFixture = 'SwitchParameter'
         WsEdgeHost = 'String'; WsEdgeTlsSecret = 'String'; WsEdgePodCidrs = 'String'; WsEdgeReplicas = 'Int32'; WsEdgeServiceType = 'String'
         WsEdgeNodePort = 'Int32'; WsEdgeImage = 'String'; WsEdgeSourceRatePerSecond = 'Int32'
     }

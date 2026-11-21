@@ -29,14 +29,15 @@ from typing import Any
 
 from core.config_loader import ExporterConfig
 from core.file_utils import sha256_hash, write_file
-from core.schema import TableSchema
+from core.schema import TableSchema, compute_schema_digest
 
 logger = logging.getLogger(__name__)
 
 MANIFEST_FILENAME = "manifest.json"
 
-# 清单自身的格式版本。字段增删要 +1,加载端据此判断能不能解析。
-MANIFEST_SCHEMA_VERSION = 1
+# 清单自身的格式版本。v2 起包含 schema_digest 与逐表 hot_reload / ids_permanent 标记
+# (docs/design/config-table-hot-reload.md §5.1、§5.3)。
+MANIFEST_SCHEMA_VERSION = 2
 
 
 def generate_manifest(cfg: ExporterConfig, tables: list[TableSchema]) -> Path:
@@ -46,19 +47,35 @@ def generate_manifest(cfg: ExporterConfig, tables: list[TableSchema]) -> Path:
     entries = [_table_entry(cfg, table, manifest_path.parent) for table in tables]
     entries.sort(key=lambda e: e["name"])
 
+    schema_digest = compute_schema_digest(tables)
     content_digest = _content_digest(entries)
     previous = _load_previous(manifest_path)
 
-    if previous is not None and previous.get("content_digest") == content_digest:
+    if (
+        previous is not None
+        and previous.get("schema_version") == MANIFEST_SCHEMA_VERSION
+        and previous.get("schema_digest") == schema_digest
+        and previous.get("content_digest") == content_digest
+        and _table_flags(previous.get("tables")) == _table_flags(entries)
+    ):
         logger.info(
-            "Output manifest unchanged (version=%s, digest=%s); skipping rewrite",
-            previous.get("version"), content_digest[:12],
+            "Output manifest unchanged (version=%s, schema=%s, digest=%s); skipping rewrite",
+            previous.get("version"), schema_digest, content_digest[:12],
         )
         return manifest_path
 
-    version = _next_version(previous)
+    # 仅内容摘要变化才递增 version;单纯清单升级或标记变化保留当前版本号(首次从 1 起)。
+    if previous is not None and previous.get("content_digest") == content_digest:
+        try:
+            version = max(1, int(previous.get("version", 1)))
+        except (TypeError, ValueError):
+            version = 1
+    else:
+        version = _next_version(previous)
+
     manifest: dict[str, Any] = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
+        "schema_digest": schema_digest,
         "version": version,
         "content_digest": content_digest,
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -67,7 +84,8 @@ def generate_manifest(cfg: ExporterConfig, tables: list[TableSchema]) -> Path:
         "tables": entries,
     }
     write_file(manifest_path, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
-    logger.info("Generated %s (version=%d, %d tables)", MANIFEST_FILENAME, version, len(entries))
+    logger.info("Generated %s (version=%d, schema=%s, %d tables)",
+                MANIFEST_FILENAME, version, schema_digest, len(entries))
     return manifest_path
 
 
@@ -75,8 +93,22 @@ def generate_manifest(cfg: ExporterConfig, tables: list[TableSchema]) -> Path:
 # Internal
 # ---------------------------------------------------------------------------
 
+def _table_flags(entries: Any) -> list[tuple[str, bool, bool]]:
+    if not isinstance(entries, list):
+        return []
+    return [
+        (
+            str(e.get("name", "")),
+            bool(e.get("hot_reload", False)),
+            bool(e.get("ids_permanent", False)),
+        )
+        for e in entries
+        if isinstance(e, dict)
+    ]
+
+
 def _table_entry(cfg: ExporterConfig, table: TableSchema, manifest_dir: Path) -> dict[str, Any]:
-    """一张表在清单里的条目:源表指纹 + 行数 + 全部产物指纹。"""
+    """一张表在清单里的条目:源表指纹 + 行数 + 全部产物指纹 + 热更/只增不删标记。"""
     artifacts: list[dict[str, Any]] = []
 
     json_path = cfg.json_dir / f"{table.name.lower()}.json"   # 与 json_gen / .pb / 三端模板同口径
@@ -88,6 +120,8 @@ def _table_entry(cfg: ExporterConfig, table: TableSchema, manifest_dir: Path) ->
 
     return {
         "name": table.name,
+        "hot_reload": bool(table.hot_reload),
+        "ids_permanent": bool(table.ids_permanent),
         "rows": _row_count(json_path),
         "source": _source_info(table),
         "artifacts": artifacts,

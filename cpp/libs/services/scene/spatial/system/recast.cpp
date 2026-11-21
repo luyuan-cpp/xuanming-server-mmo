@@ -30,6 +30,11 @@ using StdFilePtr = std::unique_ptr<std::FILE, StdFilePtrDeleter>;
 
 bool RecastSystem::LoadNavMesh(const char* path, dtNavMesh* mesh)
 {
+	if (path == nullptr || mesh == nullptr)
+	{
+		LOG_ERROR << "load nav invalid null argument";
+		return false;
+	}
 	StdFilePtr fp(std::fopen(path, "rb"));
 	if (fp == nullptr)
 	{
@@ -55,6 +60,11 @@ bool RecastSystem::LoadNavMesh(const char* path, dtNavMesh* mesh)
 		LOG_ERROR << "load nav bin header version " << path;
 		return false;
 	}
+	if (header.numTiles < 0)
+	{
+		LOG_ERROR << "load nav bin invalid numTiles=" << header.numTiles << " path=" << path;
+		return false;
+	}
 
 	dtStatus status = mesh->init(&header.params);
 	if (dtStatusFailed(status))
@@ -67,29 +77,44 @@ bool RecastSystem::LoadNavMesh(const char* path, dtNavMesh* mesh)
 	for (int i = 0; i < header.numTiles; ++i)
 	{
 		NavMeshTileHeader tileHeader;
-		readLen = std::fread(&tileHeader, sizeof(tileHeader), 1, fp.get());
+		readLen = std::fread(&tileHeader, sizeof(NavMeshTileHeader), 1, fp.get());
 		if (readLen != 1)
 		{
 			LOG_ERROR << "load nav read tile header " << path;
 			return false;
 		}
 
+		if (tileHeader.dataSize < 0)
+		{
+			LOG_ERROR << "load nav invalid tile dataSize=" << tileHeader.dataSize << " path=" << path;
+			return false;
+		}
+
 		if (!tileHeader.tileRef || !tileHeader.dataSize)
 			break;
 
-		unsigned char* data = static_cast<unsigned char*>(dtAlloc(tileHeader.dataSize, DT_ALLOC_TEMP));
-		if (!data) break;
-		std::memset(data, 0, tileHeader.dataSize);
-		readLen = fread(data, tileHeader.dataSize, 1, fp.get());
+		unsigned char* data = static_cast<unsigned char*>(dtAlloc(tileHeader.dataSize, DT_ALLOC_PERM_TILE_DATA));
+		if (!data)
+		{
+			LOG_ERROR << "load nav alloc tile data failed size=" << tileHeader.dataSize << " path=" << path;
+			return false;
+		}
+		std::memset(data, 0, static_cast<size_t>(tileHeader.dataSize));
+		readLen = std::fread(data, static_cast<size_t>(tileHeader.dataSize), 1, fp.get());
 		if (readLen != 1)
 		{
-			dtFree(data, DT_ALLOC_TEMP);
+			dtFree(data, DT_ALLOC_PERM_TILE_DATA);
 			LOG_ERROR << "load nav read navdata " << path;
 			return false;
 		}
-		mesh->addTile(data, tileHeader.dataSize, DT_TILE_FREE_DATA, tileHeader.tileRef, 0);
+		status = mesh->addTile(data, tileHeader.dataSize, DT_TILE_FREE_DATA, tileHeader.tileRef, 0);
+		if (dtStatusFailed(status))
+		{
+			dtFree(data, DT_ALLOC_PERM_TILE_DATA);
+			LOG_ERROR << "load nav addTile failed tile=" << i << " status=" << status << " path=" << path;
+			return false;
+		}
 	}
 
 	return true;
 }
-

@@ -77,3 +77,26 @@ func (clientPlayerChatRpc) decodePullChatHistory(reply *base.MessageContent, err
 	}
 	return resp, nil
 }
+
+// ReportChat 异步调用 ClientPlayerChat.ReportChat(REQUEST),done 的契约见 ClientPlayerChat。
+func (r clientPlayerChatRpc) ReportChat(c *pkg.GameClient, req *chat.ReportChatRequest, timeout time.Duration, done func(*chat.ReportChatResponse, error)) {
+	c.Call(game.ClientPlayerChatReportChatMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeReportChat(reply, err))
+	})
+}
+
+// ReportChatSync 同步调用 ClientPlayerChat.ReportChat(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerChatRpc) ReportChatSync(ctx context.Context, c *pkg.GameClient, req *chat.ReportChatRequest, timeout time.Duration) (*chat.ReportChatResponse, error) {
+	return r.decodeReportChat(c.CallSync(ctx, game.ClientPlayerChatReportChatMessageId, req, timeout))
+}
+
+func (clientPlayerChatRpc) decodeReportChat(reply *base.MessageContent, err error) (*chat.ReportChatResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &chat.ReportChatResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerChat.ReportChat reply: %w", err)
+	}
+	return resp, nil
+}

@@ -1,6 +1,7 @@
 {# java_table_loader.java.j2 — aggregated table loader #}
 package {{ package }};
 
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -8,6 +9,18 @@ import java.util.concurrent.CountDownLatch;
  * DO NOT EDIT — regenerate from Excel via Data Table Exporter.
  */
 public class TableLoader {
+
+    public static final String SCHEMA_DIGEST = "{{ schema_digest }}";
+
+    private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
+{%- for item in hot_reload_names %}
+            "{{ item }}"{% if not loop.last %},{% endif %}
+{%- endfor %}
+    );
+
+    public static boolean isHotReloadable(String tableName) {
+        return tableName != null && HOT_RELOADABLE_TABLES.contains(tableName);
+    }
 
     private static Runnable loadSuccessCallback;
 

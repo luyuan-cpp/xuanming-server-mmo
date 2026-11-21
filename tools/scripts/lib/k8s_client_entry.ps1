@@ -732,7 +732,12 @@ function New-ClientEntryPodCommon {
 		[AllowNull()][System.Collections.IDictionary]$ConnectionAdmissionEnv = $null,
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
-		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
+		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @(),
+		# 附加的原生 sidecar / 卷 / 主容器挂点与环境变量(例如配置表热更 table-sync sidecar):默认全部留空,不改变既有生成物。
+		[AllowEmptyString()][string]$ExtraInitContainerYaml = '',
+		[AllowEmptyString()][string]$ExtraVolumeYaml = '',
+		[AllowEmptyString()][string]$ExtraMainVolumeMountYaml = '',
+		[AllowNull()][AllowEmptyCollection()][object[]]$ExtraMainEnv = @()
 	)
 
 	$given = @($SidecarContainerYaml, $SidecarVolumeYaml, $SidecarConfigHash | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
@@ -787,8 +792,12 @@ function New-ClientEntryPodCommon {
 		ReleaseTrack         = $ReleaseTrack
 		BuildLabel           = $BuildLabel
 		ClientWsBaseUrl      = $ClientWsBaseUrl
-		ConnectionAdmissionEnv = $connectionAdmissionCopy
-		SecretEnv            = $secretEnvCopy
+		ConnectionAdmissionEnv   = $connectionAdmissionCopy
+		SecretEnv                = $secretEnvCopy
+		ExtraInitContainerYaml   = $ExtraInitContainerYaml
+		ExtraVolumeYaml          = $ExtraVolumeYaml
+		ExtraMainVolumeMountYaml = $ExtraMainVolumeMountYaml
+		ExtraMainEnv             = @($ExtraMainEnv | Where-Object { $null -ne $_ })
 	}
 }
 
@@ -954,6 +963,10 @@ function Get-ClientEntryNodeBaseEnv {
 		if ($null -eq $secretEntry) { continue }
 		$entries += @{ Name = [string]$secretEntry.Name; SecretName = [string]$secretEntry.SecretName; SecretKey = [string]$secretEntry.SecretKey }
 	}
+	foreach ($extraEntry in @(Get-ClientEntryMember -Object $PodCommon -Path @('ExtraMainEnv'))) {
+		if ($null -eq $extraEntry) { continue }
+		$entries += $extraEntry
+	}
 	return ,$entries
 }
 
@@ -1016,10 +1029,15 @@ function Get-ClientEntryVolumeMountYaml {
 		[Parameter(Mandatory = $true)][string]$ItemIndent
 	)
 	$k = $ItemIndent + '  '
-	return (@(
+	$text = (@(
 		"$ItemIndent- name: node-config", "${k}mountPath: /app/bin/etc", "${k}readOnly: true",
 		"$ItemIndent- name: node-logs", "${k}mountPath: /app/bin/logs"
 	) -join "`n")
+	$extraMount = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ExtraMainVolumeMountYaml'))
+	if (-not [string]::IsNullOrWhiteSpace($extraMount)) {
+		$text += "`n" + (Add-ClientEntryIndent -Text $extraMount -Indent $ItemIndent)
+	}
+	return $text
 }
 
 function Get-ClientEntryPodVolumeYaml {
@@ -1036,6 +1054,10 @@ function Get-ClientEntryPodVolumeYaml {
 	if ($PodCommon.SidecarEnabled) {
 		$text += "`n" + (Add-ClientEntryIndent -Text $PodCommon.SidecarVolumeYaml -Indent $ItemIndent)
 	}
+	$extraVol = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ExtraVolumeYaml'))
+	if (-not [string]::IsNullOrWhiteSpace($extraVol)) {
+		$text += "`n" + (Add-ClientEntryIndent -Text $extraVol -Indent $ItemIndent)
+	}
 	return $text
 }
 
@@ -1048,11 +1070,19 @@ function Get-ClientEntrySidecarBlocks {
 		[Parameter(Mandatory = $true)]$PodCommon,
 		[Parameter(Mandatory = $true)][string]$KeyIndent
 	)
-	if (-not $PodCommon.SidecarEnabled) {
+	$initItems = @()
+	if ($PodCommon.SidecarEnabled) {
+		$initItems += (Add-ClientEntryIndent -Text $PodCommon.SidecarContainerYaml -Indent ($KeyIndent + '  '))
+	}
+	$extraInit = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ExtraInitContainerYaml'))
+	if (-not [string]::IsNullOrWhiteSpace($extraInit)) {
+		$initItems += (Add-ClientEntryIndent -Text $extraInit -Indent ($KeyIndent + '  '))
+	}
+	if ($initItems.Count -eq 0) {
 		return [pscustomobject]@{ InitBlock = '' }
 	}
 	return [pscustomobject]@{
-		InitBlock = "`n${KeyIndent}initContainers:`n" + (Add-ClientEntryIndent -Text $PodCommon.SidecarContainerYaml -Indent ($KeyIndent + '  '))
+		InitBlock = "`n${KeyIndent}initContainers:`n" + ($initItems -join "`n")
 	}
 }
 

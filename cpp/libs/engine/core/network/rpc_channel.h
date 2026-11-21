@@ -64,10 +64,6 @@ using ProtobufMessage = ::google::protobuf::Message;
 // 服务表:service full_name → 服务对象。服务对象由节点长期持有,channel 自持这张表的拷贝(不借用外部 map)。
 using RpcServiceMap = std::map<std::string, ProtobufService*>;
 
-// Temporary debug: set gDumpOversizedRpc = true to dump full oversized RPC bodies to logs/oversized_rpc.log
-extern bool gDumpOversizedRpc;
-void EnableOversizedRpcDump(bool enable);
-
 // 消息号能否派发:不越界,且注册表里该槽有服务名与方法名。空槽(如 DB 域被跳过的号)与越界号一律不可派发 ——
 // 以前只查越界,空槽会拿 nullptr 构造 std::string(UB,任何能连上节点间端口的进程发一帧就能打崩节点)。
 bool IsDispatchableMessageId(uint32_t messageId);

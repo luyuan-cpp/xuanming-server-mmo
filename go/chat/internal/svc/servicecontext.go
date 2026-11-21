@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/drainproof"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"chat/internal/config"
 
 	chatpb "proto/chat"
+	cgpb "proto/content_guard"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -27,9 +29,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config      config.Config
-	Authority   authority.Service
-	AuthorityDB *sql.DB
+	Config       config.Config
+	Authority    authority.Service
+	AuthorityDB  *sql.DB
+	ContentGuard *contentguard.Client
+	// PlatformCheck 供单测替换异步平台补审;未设置时使用 ContentGuard.CheckPlatform。
+	PlatformCheck func(context.Context, cgpb.TextScene, uint64, string) contentguard.Result
 	// directoryConn 是读角色权威状态的 data_service 连接,聊天不写资产,校验走 RPC。
 	directoryConn *grpc.ClientConn
 
@@ -67,11 +72,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	directoryConn, states, err := openDirectory(c)
+	directoryConn, states, profiles, err := openDirectory(c)
 	if err != nil {
 		panic(err)
 	}
-	db, store, err := OpenAuthorityWithPermission(ctx, c, false, authoritysql.Writer(writer), states)
+	db, store, guard, err := openAuthorityWithGuard(ctx, c, false, authoritysql.Writer(writer), states, authority.WithProfileReader(profiles))
 	if err != nil {
 		directoryConn.Close()
 		panic("chat authority SQL initialization failed: " + err.Error())
@@ -93,7 +98,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		pusher = worldPush
 	}
 	return &ServiceContext{
-		Authority: store, AuthorityDB: db, directoryConn: directoryConn,
+		Authority: store, AuthorityDB: db, ContentGuard: guard, directoryConn: directoryConn,
 		WriterConfig: writer, RootAdmission: root,
 		Config:      c,
 		Etcd:        etcdCli,
@@ -175,18 +180,22 @@ func (sc *ServiceContext) Stop() {
 
 // outcome label 取值(低基数,全集就是下面这些)。
 const (
-	OutcomeOK                 = "ok"                  // 写入成功 / 拉取成功
-	OutcomeDuplicate          = "duplicate"           // 同 request_id 重发且首发已写入,按成功回但不重复写
-	OutcomeInFlight           = "in_flight"           // 保留历史指标值；SQL实现不再产生Redis pending分支
-	OutcomeNoSession          = "no_session"          // 缺会话或会话 player_id=0
-	OutcomeBadRequest         = "bad_request"         // 缺 message / 对端非法 / 频道枚举未知 / request_id 超长
-	OutcomeChannelUnavailable = "channel_unavailable" // TEAM / SYSTEM / UNSPECIFIED
-	OutcomeTooLong            = "too_long"            // 内容超 MaxContentBytes 或 trim 后为空
-	OutcomeRateLimited        = "rate_limited"        // 超每秒条数
-	OutcomeWorldCooldown      = "world_cooldown"      // 世界频道发言间隔未到(回给客户端的仍是限流码)
-	OutcomeStorageError       = "storage_error"       // SQL依赖故障或提交未知
-	OutcomeContentRejected    = "content_rejected"    // 正文命中屏蔽词,被拒(打码后照发的记 ok)
-	OutcomeContentUnavailable = "content_unavailable" // 内容安全服务不可达,没检过的正文不发
+	OutcomeOK                 = "ok"                   // 写入成功 / 拉取成功
+	OutcomeDuplicate          = "duplicate"            // 同 request_id 重发且首发已写入,按成功回但不重复写
+	OutcomeInFlight           = "in_flight"            // 保留历史指标值；SQL实现不再产生Redis pending分支
+	OutcomeNoSession          = "no_session"           // 缺会话或会话 player_id=0
+	OutcomeBadRequest         = "bad_request"          // 缺 message / 对端非法 / 频道枚举未知 / request_id 超长
+	OutcomeChannelUnavailable = "channel_unavailable"  // TEAM / SYSTEM / UNSPECIFIED
+	OutcomeTooLong            = "too_long"             // 内容超 MaxContentBytes 或 trim 后为空
+	OutcomeRateLimited        = "rate_limited"         // 超每秒条数
+	OutcomeWorldCooldown      = "world_cooldown"       // 世界频道发言间隔未到(回给客户端的仍是限流码)
+	OutcomeStorageError       = "storage_error"        // SQL依赖故障或提交未知
+	OutcomeContentRejected    = "content_rejected"     // 正文命中屏蔽词,被拒(打码后照发的记 ok)
+	OutcomeContentUnavailable = "content_unavailable"  // 内容安全服务不可达,没检过的正文不发
+	OutcomeLevelTooLow        = "level_too_low"        // 世界频道角色等级未达门槛
+	OutcomeDuplicateSpam      = "duplicate_spam"       // 跨副本重复刷屏拒绝
+	OutcomePrivateTargetLimit = "private_target_limit" // 新账号每日私聊人数达上限
+	OutcomeContactRejected    = "contact_rejected"     // 正文命中外部联系方式推广
 )
 
 var (

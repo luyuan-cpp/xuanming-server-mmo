@@ -408,3 +408,27 @@ func TestBattleDirectPullBattleStateReportsNotSent(t *testing.T) {
 		t.Fatalf("unsent pull was counted or dispatched: %s inbox=%d", conn.summary(), inbox.count())
 	}
 }
+
+// 参战者直连投递契约由单区与跨区冒烟共用:必须收到补拉与回合帧,且不得经直连提前发个人终局。
+func TestBattleDirectVerifyFighterDelivery(t *testing.T) {
+	cases := []struct {
+		name                            string
+		stateReplies, turnResults, ends int64
+		wantErr                         bool
+	}{
+		{"ok", 1, 24, 0, false},
+		{"direct battle end rejected", 1, 24, 1, true},
+		{"missing state reply", 0, 24, 0, true},
+		{"missing turn result", 1, 0, 0, true},
+	}
+	for _, tc := range cases {
+		conn := &battleDirectConn{}
+		conn.stateReplies.Store(tc.stateReplies)
+		conn.turnResults.Store(tc.turnResults)
+		conn.battleEnds.Store(tc.ends)
+		err := conn.verifyFighterDelivery()
+		if (err != nil) != tc.wantErr {
+			t.Errorf("%s: verifyFighterDelivery() err=%v, wantErr=%t", tc.name, err, tc.wantErr)
+		}
+	}
+}

@@ -321,6 +321,25 @@ state=bootstrap
 1=PetInstance#16 optional uint32 entry_last_config_version
 1=PetInstance#17 map map<uint32,uint32> entry_last_target
 1=PetInstance#18 optional uint32 cultivation_tier
+1=CooldownTimeComp#1 optional uint64 start
+1=CooldownTimeComp#2 optional uint32 cooldown_table_id
+1=CooldownTimeListComp#1 map map<uint32,CooldownTimeComp> cooldown_list
+1=PlayerActivityLedger#3 optional bytes credited_missions
+1=PlayerProfileComp#4 optional uint64 rename_seq
+1=PlayerProfileComp#5 optional uint64 renamed_ms
+1=PlayerProfileComp#6 optional PlayerRenameOp rename_op
+1=PlayerRenameOp#1 optional uint64 seq
+1=PlayerRenameOp#2 optional string name
+1=PlayerRenameOp#3 optional uint64 hold_id
+1=PlayerRenameOp#4 optional uint32 card_item_id
+1=PlayerRenameOp#5 optional uint32 card_count
+1=PlayerRenameOp#6 optional uint64 started_ms
+1=PlayerUint64Comp#2 optional uint64 afk_pass_expires_at
+1=SavedBuffComp#1 optional uint32 buff_table_id
+1=SavedBuffComp#2 optional uint32 layer
+1=SavedBuffComp#3 optional uint64 expire_at_ms
+1=player_database#28 optional CooldownTimeListComp skill_cooldowns group=6
+1=player_database#29 repeated SavedBuffComp saved_buffs group=6
 
 retired=player_database#10
 retired=player_database#17
@@ -332,3 +351,8 @@ retired=PlayerAllData#3
 retired=PlayerAllData#4
 retired=PlayerAllData#5
 retired=PlayerAllData#6
+retired=MissionListComp#3
+retired=QuestAllData#1
+retired=QuestAllData#2
+retired=QuestAllData#4
+retired=QuestScopeData#3

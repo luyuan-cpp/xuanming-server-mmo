@@ -14,6 +14,7 @@
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
 #include "player/system/player_attribute.h"
 #include "player/system/player_level_rules.h"
+#include "player/system/player_mutability.h"
 #include "services/battle/constants/turn_battle_constants.h"
 #include "services/battle/system/class_skill_rules.h"
 #include "table/code/buff_table.h"
@@ -155,15 +156,14 @@ namespace
 		return !PlayerSkillSystem::IsClassSkill(row) || EffectiveRankOf(row, entry.rank(), playerLevel) > 0;
 	}
 
-	// 战斗 / 结算在途、跨 zone 冻结、交接已发起:技能等级是持久化数据,这几个窗口里不写
-	// (与属性加点 CheckWritable 同口径,外加交接窗口:交接标记一挂,存盘就会跳过这名玩家)
+	// 战斗 / 结算在途、跨 zone 冻结、交接已发起、退出在途或无归属围栏:技能等级是持久化数据,这些窗口里不写。
 	uint32_t CheckSkillWritable(entt::entity player)
 	{
 		if (PlayerBattleSystem::IsInBattle(player))
 		{
 			return kSkillUpgradeBusy;
 		}
-		if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp>(player))
+		if (!player_mutability::IsPlayerMutable(player))
 		{
 			return kSkillUpgradeBusy;
 		}

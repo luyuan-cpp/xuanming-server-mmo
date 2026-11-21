@@ -199,6 +199,12 @@ Spectate:
   TicketSecret: "local-dev-spectate-token-secret-a1b2c3d4e5f60718"
   OpsCallerSecret: "local-dev-match-ops-caller-secret-0f1e2d3c4b5a6978"
 
+# ---- 战报回放(docs/design/battle-report-replay.md §7.1、§11)----
+# Enabled:全局录制开关。false = 新成局一律不录(CreateBattleRequest.record_replay = false),已存战报照常能列能看;
+# 回滚时先关此开关并重启 match,等在途对局打完后再回滚 battle/match。K8s ConfigMap 从这里镜像。
+BattleReport:
+  Enabled: true
+
 # data_service gRPC 客户端(etcd 发现):领号段、查玩家昵称与展示资料、读角色护栏权威状态、读合服映射、校验入场登记。
 # 全局库只有 data_service 连,match 不再跨库读(docs/design/horizontal-scale-logical-db.md §1)。
 # NonBlock: true 是硬要求:客户端在 ServiceContext 里构造,早于节点注册与起服;阻塞建连会让

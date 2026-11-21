@@ -275,6 +275,7 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
 
     // 战斗剧本同样要等全部单位就位:按阵位给单位认领角色位、给怪物派生技能集(开局状态里就能看到)
     BindBattleScripts();
+    BindDungeonMonsterAis();
     InitializeConfiguredAbilities();
 
     initialized = true;
@@ -989,8 +990,10 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
 }
 
 void TurnBattleEngine::FillDefaultActions() {
-    // 有剧本的队先按剧本出手;剧本没给出行动的单位(没认领角色位、规则全落空)照下面的现行默认走
+    // 有剧本的队先按剧本出手;未由剧本决定的怪物若挂了副本智能 AI 则走 HFSM + 行为树 + 定点效用打分;
+    // 其余单位(无剧本/无 AI 怪物、宝宝、挂机或超时玩家)照下面的现行默认走。
     FillScriptActions();
+    FillDungeonMonsterAiActions();
 
     for (const auto& actor : actors) {
         if (!IsActorActive(actor)) {
@@ -1032,6 +1035,151 @@ void TurnBattleEngine::FillDefaultActions() {
             }
         }
         pendingActions[actor.actor_id()] = defaultAction;
+    }
+}
+
+void TurnBattleEngine::SetMonsterAiProfiles(std::map<uint32_t, DungeonMonsterAiProfile> profiles) {
+    monsterAiProfiles = std::move(profiles);
+}
+
+std::optional<BossPhaseId> TurnBattleEngine::MonsterAiPhaseOf(uint64_t actorId) const {
+    const auto it = monsterAiControllers.find(actorId);
+    if (it == monsterAiControllers.end()) {
+        return std::nullopt;
+    }
+    return it->second.CurrentPhase();
+}
+
+void TurnBattleEngine::BindDungeonMonsterAis() {
+    monsterAiControllers.clear();
+    if (monsterAiProfiles.empty()) {
+        return;
+    }
+    const auto fallbackIt = monsterAiProfiles.find(0);
+    for (auto& actor : actors) {
+        if (actor.actor_type() != BATTLE_ACTOR_TYPE_MONSTER) {
+            continue;
+        }
+        auto it = monsterAiProfiles.find(actor.monster_table_id());
+        if (it == monsterAiProfiles.end()) {
+            it = fallbackIt;
+        }
+        if (it == monsterAiProfiles.end()) {
+            continue;
+        }
+
+        const auto& profile = it->second;
+        // 与战斗剧本保持同一闸门:怪物只能携带零耗蓝且回合制可施放的老技能(升序去重)。
+        std::set<uint32_t> validSkills;
+        for (const uint32_t skillId : profile.monsterSkillIds) {
+            if (skillId == 0) {
+                continue;
+            }
+            const auto* skillRow = dataProvider->FindSkill(skillId);
+            if (skillRow == nullptr || skillRow->class_id() != 0 ||
+                !IsTurnBattleCastableSkill(*skillRow) || LegacySkillManaCost(*skillRow) != 0) {
+                continue;
+            }
+            validSkills.insert(skillId);
+        }
+        for (const uint32_t skillId : validSkills) {
+            const auto& owned = actor.skill_table_ids();
+            if (std::find(owned.begin(), owned.end(), skillId) == owned.end()) {
+                actor.add_skill_table_ids(skillId);
+            }
+        }
+        monsterAiControllers.emplace(actor.actor_id(), DungeonMonsterAiController(profile));
+    }
+}
+
+void TurnBattleEngine::FillDungeonMonsterAiActions() {
+    if (monsterAiControllers.empty()) {
+        return;
+    }
+    for (const auto& actor : actors) {
+        if (actor.actor_type() != BATTLE_ACTOR_TYPE_MONSTER) {
+            continue;
+        }
+        auto ctrlIt = monsterAiControllers.find(actor.actor_id());
+        if (ctrlIt == monsterAiControllers.end()) {
+            continue;
+        }
+        if (!IsActorActive(actor)) {
+            ctrlIt->second.NotifyDead();
+            continue;
+        }
+        if (pendingActions.find(actor.actor_id()) != pendingActions.end()) {
+            continue;
+        }
+
+        MonsterDecisionInput input;
+        input.roundIndex = roundIndex;
+        input.selfAlive = true;
+        input.selfCanDefend = true;
+        if (actor.max_health() > 0) {
+            const uint64_t clampedHp = std::min(actor.health(), actor.max_health());
+            input.selfHpPermyriad = static_cast<uint32_t>(
+                (clampedHp * static_cast<uint64_t>(combat_ai::kUtilityScale)) / actor.max_health());
+        } else {
+            input.selfHpPermyriad = 0;
+        }
+
+        const uint64_t maxEnemySpeed = std::max<uint64_t>(1, MaxAliveEnemySpeed(actor));
+        for (const auto& target : actors) {
+            if (target.team_index() == actor.team_index() || !IsActorActive(target)) {
+                continue;
+            }
+
+            int32_t missingHp = 0;
+            if (target.max_health() > 0) {
+                const uint64_t clampedHp = std::min(target.health(), target.max_health());
+                missingHp = static_cast<int32_t>(
+                    ((target.max_health() - clampedHp) * static_cast<uint64_t>(combat_ai::kUtilityScale)) /
+                    target.max_health());
+            }
+            const bool controlled = ActorHasBuffOfType(target, kBuffTypeStun) ||
+                                    ActorHasBuffOfType(target, kBuffTypeSilence) ||
+                                    ActorHasBuffOfType(target, kBuffTypeFreeze);
+            const int32_t uncontrolled = controlled ? 0 : combat_ai::kUtilityScale;
+            const int32_t threat = static_cast<int32_t>(std::min<uint64_t>(
+                static_cast<uint64_t>(combat_ai::kUtilityScale),
+                (EffectiveSpeed(target) * static_cast<uint64_t>(combat_ai::kUtilityScale)) / maxEnemySpeed));
+            const int32_t targetIsPlayer =
+                (target.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) ? combat_ai::kUtilityScale : 3000;
+
+            auto pushCandidateIfLegal = [&](const BattleAction& action, int32_t isSkillFlag) {
+                if (CheckActionPrerequisites(actor, action) != kSuccess) {
+                    return;
+                }
+                MonsterActionCandidate cand;
+                cand.action = action;
+                cand.formationSlot = target.formation_slot();
+                cand.features[kFeatureTargetMissingHp] = missingHp;
+                cand.features[kFeatureTargetUncontrolled] = uncontrolled;
+                cand.features[kFeatureTargetThreat] = threat;
+                cand.features[kFeatureIsSkill] = isSkillFlag;
+                cand.features[kFeaturePhaseUrgency] = 0; // 由行为树按当前 HFSM 阶段回填
+                cand.features[kFeatureTargetIsPlayer] = targetIsPlayer;
+                input.candidates.push_back(std::move(cand));
+            };
+
+            BattleAction attackAction;
+            attackAction.set_action_type(BATTLE_ACTION_ATTACK);
+            attackAction.set_target_id(target.actor_id());
+            pushCandidateIfLegal(attackAction, 0);
+
+            for (const uint32_t skillId : actor.skill_table_ids()) {
+                BattleAction skillAction;
+                skillAction.set_action_type(BATTLE_ACTION_SKILL);
+                skillAction.set_skill_table_id(skillId);
+                skillAction.set_target_id(target.actor_id());
+                pushCandidateIfLegal(skillAction, combat_ai::kUtilityScale);
+            }
+        }
+
+        if (auto decided = ctrlIt->second.DecideAction(input); decided.has_value()) {
+            pendingActions.emplace(actor.actor_id(), std::move(*decided));
+        }
     }
 }
 

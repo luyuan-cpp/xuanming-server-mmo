@@ -39,10 +39,10 @@ func OwnershipInterceptor(check func(context.Context) error, rejected func(error
 		}
 		if err := check(ctx); err != nil {
 			if rejected(err) {
-				entryRejectedTotal.Inc(rejectOwnershipChanged)
+				entryRejectedTotal.WithLabelValues(rejectOwnershipChanged).Inc()
 				return nil, status.Error(codes.PermissionDenied, "role no longer belongs to this session identity")
 			}
-			entryRejectedTotal.Inc(rejectOwnershipUnverified)
+			entryRejectedTotal.WithLabelValues(rejectOwnershipUnverified).Inc()
 			logx.WithContext(ctx).Infof("[online-entry] Ownership check inconclusive for %s: %v", info.FullMethod, err)
 			return nil, status.Error(codes.Aborted, "role ownership not verified, retry")
 		}

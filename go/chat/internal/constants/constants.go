@@ -67,6 +67,21 @@ const (
 	// ErrContentCheckUnavailable:内容安全服务不可达或超时,没检过的正文不发,客户端可稍后重试。
 	// fault 码:依赖故障要告警。
 	ErrContentCheckUnavailable = uint32(table.ChatError_kChatContentCheckUnavailable)
+
+	// ErrLevelTooLow:角色等级未达到世界频道发言门槛。
+	ErrLevelTooLow = uint32(table.ChatError_kChatLevelTooLow)
+
+	// ErrDuplicateSpam:短时间内多账号重复发送相同归一化内容(反刷屏广告)。
+	ErrDuplicateSpam = uint32(table.ChatError_kChatDuplicateSpam)
+
+	// ErrPrivateTargetLimit:短期内向过多不同玩家发起私聊(反私聊广告引流)。
+	ErrPrivateTargetLimit = uint32(table.ChatError_kChatPrivateTargetLimit)
+
+	// ErrContactRejected:正文命中外部联系方式/推广引流变体(QQ/微信/网址)。
+	ErrContactRejected = uint32(table.ChatError_kChatContactRejected)
+
+	// ErrMessageNotFound:待撤回的世界频道消息不存在或已过期。
+	ErrMessageNotFound = uint32(table.ChatError_kChatMessageNotFound)
 )
 
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。

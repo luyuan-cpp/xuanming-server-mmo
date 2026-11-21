@@ -204,4 +204,59 @@ class GmCommandJournalTest {
         assertEquals("UNKNOWN", status(journal.send(unknown, "operator", request -> { throw new IllegalStateException("private"); })));
         assertFalse(journal.get(unknown).toString().contains("private"));
     }
+
+    @Test void expiredPlayerDraftFailsAtomicallyWithoutTransitioningOrAuditing() {
+        String id = journal.preparePlayerCommand("operator", "expiring", "123", "工单", playerInput()).path("id").asText();
+        now.addAndGet(GmCommandJournal.PLAYER_DRAFT_TTL_MS + 1);
+        http(409, () -> journal.sendPlayerCommand(id, "operator", request -> { fail("Expired draft must not reach sender"); return null; }));
+        assertEquals("DRAFT", status(journal.get(id)));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM gm_command_audit WHERE command_id=?", Integer.class, id));
+    }
+
+    @Test void zeroIdDrawAndPrimaryKeyCollisionRetryCleanly() {
+        var draws = new AtomicInteger();
+        long[] sequence = {0L, 500L, 500L, 501L};
+        journal = new GmCommandJournal(jdbc, mapper, manager, clock, () -> sequence[draws.getAndIncrement()]);
+        ObjectNode first = prepare("k1");
+        assertEquals("500", first.path("id").asText());
+        ObjectNode second = prepare("k2");
+        assertEquals("501", second.path("id").asText());
+    }
+
+    @Test void paginationFilteringAndAuditTimelineWorkAcrossCommandTypes() {
+        String m1 = journal.prepare("operator", "m1", "1001", "r1", input()).path("id").asText();
+        now.addAndGet(1000);
+        String m2 = journal.prepare("operator", "m2", "1002", "r2", input()).path("id").asText();
+        now.addAndGet(1000);
+        String m3 = journal.prepare("operator", "m3", "1001", "r3", input()).path("id").asText();
+        journal.send(m2, "operator", request -> { throw new GameServices.CallFailure("DEADLINE_EXCEEDED", "timeout", true, 0); });
+        journal.send(m2, "operator", request -> mapper.createObjectNode().put("mailId", "777"));
+
+        ObjectNode page1 = journal.list(1, 2, null, null);
+        assertEquals(3, page1.path("total").asInt());
+        assertEquals(2, page1.path("records").size());
+        assertEquals(m3, page1.path("records").get(0).path("id").asText());
+        ObjectNode page2 = journal.list(2, 2, null, null);
+        assertEquals(1, page2.path("records").size());
+        assertEquals(m1, page2.path("records").get(0).path("id").asText());
+
+        ObjectNode filteredPlayer = journal.list(1, 10, "1001", "DRAFT");
+        assertEquals(2, filteredPlayer.path("total").asInt());
+        ObjectNode filteredDelivered = journal.list(1, 10, null, "DELIVERED");
+        assertEquals(1, filteredDelivered.path("total").asInt());
+        assertEquals(m2, filteredDelivered.path("records").get(0).path("id").asText());
+
+        http(400, () -> journal.list(0, 10, null, null));
+        http(400, () -> journal.list(1, 101, null, null));
+        http(400, () -> journal.list(1, 10, "bad-id", null));
+        http(400, () -> journal.list(1, 10, null, "EXECUTED"));
+
+        ObjectNode history = journal.auditHistory(m2, "MAIL");
+        assertEquals(m2, history.path("commandId").asText());
+        assertEquals(5, history.path("records").size());
+        assertEquals("DRAFT", history.path("records").get(0).path("event").asText());
+        assertEquals("UNKNOWN", history.path("records").get(2).path("event").asText());
+        assertEquals("DELIVERED", history.path("records").get(4).path("event").asText());
+        http(409, () -> journal.auditHistory(m2, "PLAYER"));
+    }
 }

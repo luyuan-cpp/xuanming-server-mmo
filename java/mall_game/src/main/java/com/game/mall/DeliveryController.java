@@ -1,6 +1,5 @@
 package com.game.mall;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.List;
 import org.springframework.web.bind.annotation.*;
 @RestController
 public final class DeliveryController {
@@ -29,9 +28,10 @@ public final class DeliveryController {
     }
     // 每项是要退的一笔付款与原因;适配器以这笔付款的交易号作渠道退款的幂等键(契约见 CommerceApi.PendingRefund)。
     @PostMapping("/internal/refunds/poll")
-    public List<CommerceApi.PendingRefund> refunds(HttpServletRequest request) {
+    public DeliveryApi.RefundPage refunds(HttpServletRequest request,
+            @RequestBody(required = false) DeliveryApi.RefundPoll input) {
         payment(request);
-        return store.refunds();
+        return store.refundsPage(input);
     }
     // 回执必须带 paymentTransactionId(被退的是哪一笔):一张订单可能同时有本单付款和几笔异常付款待退。
     @PostMapping("/internal/refunds/receipt")

@@ -108,23 +108,9 @@ static void ActorActionCombatStateTableCheckNarrowedField(const TSharedPtr<FJson
 static void ActorActionCombatStateTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, int32 RowIndex)
 {
 	ActorActionCombatStateTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
-	// 子消息 state[]:每个元素是一个对象,逐个元素查它的收窄列。
-	if (const TSharedPtr<FJsonValue>* StateField = RowObject->Values.Find(TEXT("state")))
-	{
-		if (StateField->IsValid() && (*StateField)->Type == EJson::Array)
-		{
-			for (const TSharedPtr<FJsonValue>& Element : (*StateField)->AsArray())
-			{
-				if (!Element.IsValid() || Element->Type != EJson::Object)
-				{
-					continue;
-				}
-				const TSharedPtr<FJsonObject>& ElementObject = Element->AsObject();
-				ActorActionCombatStateTableCheckNarrowedField(ElementObject, TEXT("state_mode"), TEXT("state[].state_mode"), RowIndex, 2147483647.0, TEXT("uint32"));
-				ActorActionCombatStateTableCheckNarrowedField(ElementObject, TEXT("state_tip"), TEXT("state[].state_tip"), RowIndex, 2147483647.0, TEXT("uint32"));
-			}
-		}
-	}
+	ActorActionCombatStateTableCheckNarrowedField(RowObject, TEXT("state_id"), TEXT("state_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ActorActionCombatStateTableCheckNarrowedField(RowObject, TEXT("state_mode"), TEXT("state_mode"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ActorActionCombatStateTableCheckNarrowedField(RowObject, TEXT("state_tip"), TEXT("state_tip"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UActorActionCombatStateTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -203,46 +189,45 @@ bool UActorActionCombatStateTable::LoadFromDir(const FString& ConfigDir, FString
 void UActorActionCombatStateTable::BuildIndices(FSnapshot& Snap)
 {
 	const int32 RowCount = Snap.Rows.Num();
-	Snap.IdIndex.Reserve(RowCount);
 	for (int32 RowIndex = 0; RowIndex < RowCount; ++RowIndex)
 	{
 		const FCfgActorActionCombatStateRow& Row = Snap.Rows[RowIndex];
-		// 重复 id 会覆盖前一行。这张表的主键**不是** (cfg_multi),重复即配置错误。
-		if (int32* Existing = Snap.IdIndex.Find(Row.id))
-		{
-			UE_LOG(LogConfigTable, Error,
-				TEXT("[ActorActionCombatState] id=%s 重复(行 %d 与行 %d);这张表没有标 (cfg_multi),后一行会覆盖前一行"),
-				*LexToString(Row.id), *Existing, RowIndex);
-		}
-		Snap.IdIndex.Add(Row.id, RowIndex);
+		Snap.IdIndex.FindOrAdd(Row.id).Add(RowIndex);
 	}
 }
 
-const FCfgActorActionCombatStateRow* UActorActionCombatStateTable::FindById(int32 Id) const
+TArray<const FCfgActorActionCombatStateRow*> UActorActionCombatStateTable::FindAllById(int32 Id) const
 {
-	const FCfgActorActionCombatStateRow* Row = FindByIdSilent(Id);
-	if (Row == nullptr)
+	TArray<const FCfgActorActionCombatStateRow*> Result;
+	const TArray<int32>& Indices = FindAllIdIndices(Id);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
 	{
-		UE_LOG(LogConfigTable, Warning, TEXT("[ActorActionCombatState] 查不到 id=%s"), *LexToString(Id));
+		Result.Add(&Snapshot->Rows[RowIndex]);
 	}
-	return Row;
+	return Result;
 }
 
-const FCfgActorActionCombatStateRow* UActorActionCombatStateTable::FindByIdSilent(int32 Id) const
+const TArray<int32>& UActorActionCombatStateTable::FindAllIdIndices(int32 Id) const
 {
-	const int32* RowIndex = Snapshot->IdIndex.Find(Id);
-	return RowIndex != nullptr ? &Snapshot->Rows[*RowIndex] : nullptr;
+	const TArray<int32>* Found = Snapshot->IdIndex.Find(Id);
+	return Found != nullptr ? *Found : GActorActionCombatStateEmptyIndices;
 }
 
-bool UActorActionCombatStateTable::K2_FindById(int32 Id, FCfgActorActionCombatStateRow& OutRow) const
+void UActorActionCombatStateTable::K2_FindAllById(int32 Id, TArray<FCfgActorActionCombatStateRow>& OutRows) const
 {
-	if (const FCfgActorActionCombatStateRow* Row = FindByIdSilent(Id))
+	OutRows.Reset();
+	const TArray<int32>& Indices = FindAllIdIndices(Id);
+	OutRows.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
 	{
-		OutRow = *Row;
-		return true;
+		OutRows.Add(Snapshot->Rows[RowIndex]);
 	}
-	OutRow = FCfgActorActionCombatStateRow();
-	return false;
+}
+
+int32 UActorActionCombatStateTable::CountById(int32 Id) const
+{
+	return FindAllIdIndices(Id).Num();
 }
 
 TArray<const FCfgActorActionCombatStateRow*> UActorActionCombatStateTable::FindByIds(const TArray<int32>& Ids) const
@@ -251,9 +236,9 @@ TArray<const FCfgActorActionCombatStateRow*> UActorActionCombatStateTable::FindB
 	Result.Reserve(Ids.Num());
 	for (const int32 Id : Ids)
 	{
-		if (const FCfgActorActionCombatStateRow* Row = FindByIdSilent(Id))
+		for (const int32 RowIndex : FindAllIdIndices(Id))
 		{
-			Result.Add(Row);
+			Result.Add(&Snapshot->Rows[RowIndex]);
 		}
 	}
 	return Result;

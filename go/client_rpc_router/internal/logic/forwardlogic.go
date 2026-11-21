@@ -168,18 +168,26 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 			nodeTypeName, request.MessageId)
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
-	target, ok := l.pickTarget(watcher, route.NodeType, in.ZoneId, sessionTrack)
+	target, ok, hadCandidates := l.pickTarget(watcher, route.NodeType, in.ZoneId, sessionTrack)
 	if !ok {
-		finish(metrics.OutcomeNoTarget)
-		sampledErrorf(metrics.OutcomeNoTarget,
-			"[forward] No available instance for target type %s zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
-			nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, sessionTrack, request.MessageId)
+		if hadCandidates {
+			finish(metrics.OutcomeCircuitOpen)
+			sampledErrorf(metrics.OutcomeCircuitOpen,
+				"[forward] All candidate instances for target type %s are circuit-open zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
+				nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, sessionTrack, request.MessageId)
+		} else {
+			finish(metrics.OutcomeNoTarget)
+			sampledErrorf(metrics.OutcomeNoTarget,
+				"[forward] No available instance for target type %s zone_scoped=%v zone_id=%d release_track=%s message_id=%d",
+				nodeTypeName, l.svcCtx.IsZoneScoped(route.NodeType), in.ZoneId, sessionTrack, request.MessageId)
+		}
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
 
 	// 4) 原始字节 Invoke,透传应用层 metadata,超时 ForwardTimeoutMs。
 	conn, err := l.svcCtx.Dial(target.Endpoint)
 	if err != nil {
+		l.svcCtx.Breakers.RecordFailure(target.Endpoint)
 		finish(metrics.OutcomeDialError)
 		logx.Errorf("[forward] Failed to dial target %s(%s) message_id=%d: %v",
 			nodeTypeName, target.Endpoint, request.MessageId, err)
@@ -197,6 +205,12 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 	err = conn.Invoke(callCtx, route.FullMethod, request.Body, &responseBytes, grpc.ForceCodec(rawcodec.Codec{}))
 	if err != nil {
 		// 5) gRPC 错误 → kServiceUnavailable;code / 目标 / 消息号进日志,不进 label。
+		// 若是上游(gate)主动取消调用上下文而非目标故障,只释放 HalfOpen 探测槽,不误伤健康实例。
+		if l.ctx.Err() != nil {
+			l.svcCtx.Breakers.ReleaseProbe(target.Endpoint)
+		} else {
+			l.svcCtx.Breakers.RecordFailure(target.Endpoint)
+		}
 		code := status.Code(err)
 		upstreamOutcome := metrics.OutcomeUpstreamError
 		if code == codes.DeadlineExceeded {
@@ -210,6 +224,7 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 		return rejected(request, constants.ErrServiceUnavailable), nil
 	}
 
+	l.svcCtx.Breakers.RecordSuccess(target.Endpoint)
 	finish(metrics.OutcomeOK)
 	return &base.MessageContent{
 		Id:                request.Id,
@@ -220,13 +235,19 @@ func (l *ForwardLogic) Forward(in *pb.ForwardRequest) (*base.MessageContent, err
 
 // pickTarget 选实例:zone-scoped 类型按 D33 只挑与发起 gate 同 zone 的实例,不看轨道
 // (一个 zone 只有一条轨道,发布轨道设计 §2.2);全局类型按会话轨道选(§2.4),
-// stable 会话永远不会被送进 canary 实例。
+// stable 会话永远不会被送进 canary 实例。优先跳过熔断打开的实例,自动切流向健康节点。
 func (l *ForwardLogic) pickTarget(watcher *discovery.NodeWatcher, nodeType base.ENodeType, zoneId uint32,
-	sessionTrack releasetrack.Track) (discovery.NodeEntry, bool) {
-	if l.svcCtx.IsZoneScoped(nodeType) {
-		return watcher.PickRandomInZone(zoneId)
+	sessionTrack releasetrack.Track) (discovery.NodeEntry, bool, bool) {
+	var allow func(discovery.NodeEntry) bool
+	if l.svcCtx.Breakers != nil {
+		allow = func(entry discovery.NodeEntry) bool {
+			return l.svcCtx.Breakers.Allow(entry.Endpoint)
+		}
 	}
-	return watcher.PickRandomForTrack(sessionTrack)
+	if l.svcCtx.IsZoneScoped(nodeType) {
+		return watcher.PickRandomInZoneMatching(zoneId, allow)
+	}
+	return watcher.PickRandomForTrackMatching(sessionTrack, allow)
 }
 
 // echoSessionHeader 把 x-session-detail-bin 原值登记进响应头。

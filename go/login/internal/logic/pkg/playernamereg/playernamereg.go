@@ -171,6 +171,16 @@ func Rules() (playername.Rules, playername.GenerateSpec, int, error) {
 	return rulesFromRow(row)
 }
 
+// ValidateRulesIn 在候选 TableSet 上校验 RoleNameRule 配表,不触碰全局单例(热更与 --validate-tables 专用)。
+func ValidateRulesIn(ts *gametable.TableSet) error {
+	if ts == nil || ts.RoleNameRule == nil {
+		return fmt.Errorf("playernamereg: TableSet missing RoleNameRule manager")
+	}
+	row, _ := ts.RoleNameRule.FindById(roleNameRuleRowID)
+	_, _, _, err := rulesFromRow(row)
+	return err
+}
+
 // rulesFromRow 是 Rules 的纯函数部分,单独抽出来只为可测(不依赖全局配表单例)。
 func rulesFromRow(row *pbtable.RoleNameRuleTable) (playername.Rules, playername.GenerateSpec, int, error) {
 	if row == nil {

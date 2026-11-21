@@ -11,9 +11,10 @@
 # k8s_deploy.ps1 的 Add-SqlWriterBootManifest 注入,svc-config 换成选中配置的 emptyDir,本文件不要手写。
 # 四把调用密钥走工作负载密钥目录($script:WorkloadSecretCatalog),env 与指纹同样由脚本注入。
 #
-# 探针用 TCP:jar 里 actuator 的 web 端点全部关闭,业务接口都要 HMAC 签名,没有可供探针访问的 HTTP 路径。
-# 端口在 Spring 上下文刷新完成之后才监听,连得上就是启动完成(含启动期的存储结构核对)。
-# 没有指标端点:jar 没带 Prometheus registry,所以不写抓取注解。
+# 探针与 Prometheus 抓取走独立管理端口 18121(k8s_deploy.ps1 在 java-svc-mall-config 写 management.server.port: 18121
+# 与 exposure.include: health,prometheus,并向 Pod 模板注入 prometheus.io/* 注解,做法同 gateway.yaml):
+# 业务 18120 线程池拥堵或 TiDB 慢查询不会拖死探针、避免把两副本同时杀掉触发 SQL 写者 exit-78。Service 不暴露 18121。
+# jar 内默认 application.yaml 仍保持单端口只暴露 health(本机开发走 HmacAuthentication 仅放行 readiness / liveness)。
 #
 # 连接数:Hikari 池上限 16(DatabaseConfiguration.poolConfig)× replicas 要算进 MySQL 连接总账(k8s_deploy.ps1 Get-MysqlConnectionLedger)。
 apiVersion: v1
@@ -57,6 +58,7 @@ spec:
         app: mall
         tier: java-svc
     spec:
+      terminationGracePeriodSeconds: 40
       affinity:
         podAntiAffinity:
           # 两个副本尽量不落同一节点;用 preferred,单节点的 dev 集群仍能调度。
@@ -74,6 +76,9 @@ spec:
           ports:
             - containerPort: 18120
               name: http
+            # actuator 独立管理端口(探针 + /actuator/prometheus,Service 不暴露),由 ConfigMap 的 management.server.port 打开。
+            - containerPort: 18121
+              name: management
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: k8s
@@ -85,20 +90,28 @@ spec:
               mountPath: /app/config
               readOnly: true
           # 冷启动在资源受限时可能超过 liveness 的失败预算:startupProbe 成功前暂停 readiness / liveness。
+          # 探针走独立管理端口 18121 的两个分组端点,不打复合 /actuator/health(含 DB 指示器),也与业务 18120 线程池隔离。
           startupProbe:
-            tcpSocket:
-              port: 18120
+            httpGet:
+              path: /actuator/health/readiness
+              port: 18121
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 60
           readinessProbe:
-            tcpSocket:
-              port: 18120
+            httpGet:
+              path: /actuator/health/readiness
+              port: 18121
             periodSeconds: 10
           livenessProbe:
-            tcpSocket:
-              port: 18120
+            httpGet:
+              path: /actuator/health/liveness
+              port: 18121
             periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: [sh, -c, "sleep 5"]
           resources:
             requests:
               cpu: 200m

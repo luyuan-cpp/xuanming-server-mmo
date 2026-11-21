@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	"math"
+	randv2 "math/rand/v2"
 	"os"
 	"path/filepath"
 	dbpb "proto/common/database"
@@ -738,6 +739,72 @@ type slotRegistration struct {
 	saveRecord func(path string, entry *dbpb.SqlWriterBootRoster_Entry) error
 	now        func() time.Time
 	random     io.Reader
+	sleep      func(context.Context, time.Duration) error
+}
+
+const (
+	registerTxRetryAttempts    = 8
+	registerTxRetryBaseBackoff = 50 * time.Millisecond
+	registerTxRetryMaxBackoff  = 1 * time.Second
+)
+
+func sleepRegisterCtx(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return ctx.Err()
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func registerRetryBackoff(attempt int) time.Duration {
+	shift := attempt
+	if shift > 6 {
+		shift = 6
+	}
+	d := registerTxRetryBaseBackoff << shift
+	if d > registerTxRetryMaxBackoff {
+		d = registerTxRetryMaxBackoff
+	}
+	// ±20% 抖动，避免并发启动的 *-sql-boot 在同一毫秒再次撞上 route_meta 锁。
+	jitter := 0.8 + randv2.Float64()*0.4
+	return time.Duration(float64(d) * jitter)
+}
+
+func (r slotRegistration) registerOne(ctx context.Context, catalog registrationCatalog, request *dbpb.SqlWriterLifecycleReceipt_Request) (*dbpb.SqlWriterLifecycleReceipt, error) {
+	sleep := r.sleep
+	if sleep == nil {
+		sleep = sleepRegisterCtx
+	}
+	var lastErr error
+	for attempt := 0; attempt < registerTxRetryAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return nil, errors.Join(lastErr, err)
+			}
+			return nil, err
+		}
+		receipt, err := catalog.Register(ctx, request)
+		if err == nil {
+			return receipt, nil
+		}
+		lastErr = err
+		if authoritysql.IsWriterFrozen(err) || !authoritysql.IsRetryableTxError(err) {
+			return nil, err
+		}
+		if attempt == registerTxRetryAttempts-1 {
+			break
+		}
+		if waitErr := sleep(ctx, registerRetryBackoff(attempt)); waitErr != nil {
+			return nil, errors.Join(lastErr, waitErr)
+		}
+	}
+	return nil, fmt.Errorf("register after %d attempts: %w", registerTxRetryAttempts, lastErr)
 }
 
 // bootRecordPath 是本 Pod 的启动记录:和 grant 在同一个私有 emptyDir,Pod 在它就在,Pod 换了它跟着没。
@@ -771,7 +838,7 @@ func (r slotRegistration) register(ctx context.Context, template *dbpb.SqlWriter
 		if err != nil {
 			return nil, nil, err
 		}
-		receipt, err := catalog.Register(ctx, request)
+		receipt, err := r.registerOne(ctx, catalog, request)
 		if authoritysql.IsWriterFrozen(err) {
 			return nil, nil, fmt.Errorf("the writer gate of %s froze during registration, nothing was written for it, retry: %w", request.AuthoritySchema, err)
 		}

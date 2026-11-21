@@ -62,6 +62,28 @@ func (a aperture) pick(intn func(int) int) int {
 	return cell / a.cellsPerTarget
 }
 
+// targetIndices 返回弧覆盖到的全部去重目标下标(按弧顺序),供建索引时预计算故障摘除的备选列表。
+func (a aperture) targetIndices() []int {
+	if a.width <= 0 || a.cells <= 0 || a.cellsPerTarget <= 0 {
+		return nil
+	}
+	var out []int
+	first := -1
+	end := a.start + a.width
+	for c := a.start; c < end; {
+		idx := (c % a.cells) / a.cellsPerTarget
+		if idx == first {
+			break
+		}
+		if first < 0 {
+			first = idx
+		}
+		out = append(out, idx)
+		c = (c/a.cellsPerTarget + 1) * a.cellsPerTarget
+	}
+	return out
+}
+
 // sortRing 把一条轨道的实例按 node_uuid 排成环。各路由服必须排出同一个顺序,弧才能互相错开;
 // node_uuid 唯一,endpoint 只在 uuid 缺失(测试里手造的条目)时让顺序仍然确定。
 func sortRing(entries []NodeEntry) {

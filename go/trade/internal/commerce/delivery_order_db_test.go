@@ -81,7 +81,6 @@ func TestRealDBRejectedBuyerUnwindsPlayerTrade(t *testing.T) {
 // 卖家所得从没发出,冻结款只退一次。
 func TestRealDBRejectedAuctionWinnerRefundsThroughTheBid(t *testing.T) {
 	e := realDBEngine(t)
-	ctx := context.Background()
 	lotID, bidID := openLotWithBid(t, e, 183, 184, "unwind-02")
 	// 结拍:截止与下次到期一起改到过去(生产里两者由同一次排期写入)。
 	_, err := e.Repo.DB.Exec("UPDATE trade_commerce SET expires_ms=1,updated_ms=1 WHERE commerce_id=?", lotID)

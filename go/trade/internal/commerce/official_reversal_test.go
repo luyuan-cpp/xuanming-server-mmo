@@ -131,3 +131,60 @@ func TestOfficialBundleIsItemsOrCurrency(t *testing.T) {
 		}
 	}
 }
+
+func TestMallAnswerVersionIsStrictlyMonotonicAcrossReversals(t *testing.T) {
+	seq := []MallOrder{
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "AWAITING_PAYMENT", PaymentRevision: 0},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "DELIVERY_PENDING", PaymentRevision: 0},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "DELIVERED", PaymentRevision: 0},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "REVERSING", PaymentRevision: 1},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "REVERSED", PaymentRevision: 1},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "REVERSING", PaymentRevision: 2},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "DELIVERED", PaymentRevision: 2},
+		{OrderID: "00112233-4455-6677-8899-aabbccddeeff", BuyerID: "7", SKU: 1, State: "MANUAL", PaymentRevision: 2},
+	}
+	var prev uint64
+	for i, o := range seq {
+		ans, err := mallAnswer(o)
+		if err != nil {
+			t.Fatalf("step %d (%s rev %d): %v", i, o.State, o.PaymentRevision, err)
+		}
+		if ans.Order.Version <= prev {
+			t.Fatalf("step %d (%s rev %d): version %d <= prev %d", i, o.State, o.PaymentRevision, ans.Order.Version, prev)
+		}
+		prev = ans.Order.Version
+	}
+}
+
+func TestPlanReissueUnblocksPaymentReversalManualContract(t *testing.T) {
+	bundle := &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: 1, Amount: 60}}}
+	r := &tradepb.TradeCommerceRecord{Kind: 1, Status: Delivering, BuyerPlayerId: 7}
+	w := &tradepb.TradeCommerceWorkflow{Stage: stageOfficialDeliver, OfficialBundle: bundle}
+	planOfficial(r, w, 1)
+	w.Legs[0].Outcome = 2 // official_credit applied
+	planOfficial(r, w, 2)
+	w.PaymentRevision, w.PaymentRevoked = 1, true
+	w.Stage, r.Status = stageOfficialDeliver, Delivering
+	planOfficial(r, w, 3)
+	w.Legs[1].Outcome = 3 // official_reverse_1 rejected -> MANUAL
+	planOfficial(r, w, 4)
+	if r.Status != Manual || w.Quarantine.GetReason() != manualReasonPaymentReversal {
+		t.Fatalf("expected payment reversal manual quarantine, got status=%d reason=%q", r.Status, w.Quarantine.GetReason())
+	}
+	var res ManualResult
+	if err := planReissue(r, w, w.Quarantine, &res); err != nil {
+		t.Fatalf("planReissue failed on payment_reversal_failed: %v", err)
+	}
+	if len(res.NewLegs) != 1 || res.NewLegs[0] != "official_reverse_1#2" || w.Stage != stageOfficialDeliver || r.Status != Delivering {
+		t.Fatalf("unexpected reissue result: %+v stage=%q status=%d", res, w.Stage, r.Status)
+	}
+	last := w.Legs[len(w.Legs)-1]
+	if last.Stream != 3 || !isOfficialReverseLeg(last.Role) {
+		t.Fatalf("reissued reversal leg must stay stream=3 reverse role: %+v", last)
+	}
+	last.Outcome = 2 // applied after player replenishes balance
+	planOfficial(r, w, 5)
+	if w.Stage != stageOfficialReversed || r.Status != Cancelled {
+		t.Fatalf("expected converged reversed state, got stage=%q status=%d", w.Stage, r.Status)
+	}
+}

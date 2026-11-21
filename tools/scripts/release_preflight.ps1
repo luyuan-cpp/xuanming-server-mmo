@@ -381,7 +381,7 @@ $rlFull = Resolve-RepoPath -Relative $rlPath
 Test-NumericFloor -Id 'ratelimit.zone.rps'   -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-rps'   -Floor 1 -Why "A rate limit <= 0 welds the gate shut; every request gets 429 at launch."
 Test-NumericFloor -Id 'ratelimit.zone.burst' -RelativePath $rlPath -KeyPath 'gate.rate-limit.zone-default-burst' -Floor 1 -Why "Same as above."
 Test-NumericFloor -Id 'ratelimit.ip.rps'     -RelativePath $rlPath -KeyPath 'gate.rate-limit.ip-rps'             -Floor 1 -Why "Same as above."
-Test-NumericFloor -Id 'ratelimit.queue.timeout' -RelativePath $rlPath -KeyPath 'gate.rate-limit.queue-timeout-ms' -Floor 1000 -Why "Too small a queue timeout kicks out players who are queueing normally."
+Test-NumericFloor -Id 'ratelimit.queue.retry.min' -RelativePath $rlPath -KeyPath 'gate.rate-limit.queue-retry-min-ms' -Floor 500 -Why "Too small a queue-retry-min-ms causes tight retry loops against the rl:zone:<id> hot key."
 
 $rps = Get-YamlScalar -Path $rlFull -KeyPath 'gate.rate-limit.zone-default-rps'
 $burst = Get-YamlScalar -Path $rlFull -KeyPath 'gate.rate-limit.zone-default-burst'

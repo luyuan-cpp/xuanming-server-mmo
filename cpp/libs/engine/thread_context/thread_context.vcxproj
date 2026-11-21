@@ -20,14 +20,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ecs_context.cpp" />
-    <ClCompile Include="lua_state.cpp" />
     <ClCompile Include="node_context_manager.cpp" />
     <ClCompile Include="redis_manager.cpp" />
     <ClCompile Include="trace_context_tls.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ecs_context.h" />
-    <ClInclude Include="lua_state.h" />
     <ClInclude Include="node_context_manager.h" />
     <ClInclude Include="redis_manager.h" />
   </ItemGroup>

@@ -26,6 +26,7 @@ const (
 	GuildService_LeaveGuild_FullMethodName              = "/guildpb.GuildService/LeaveGuild"
 	GuildService_DisbandGuild_FullMethodName            = "/guildpb.GuildService/DisbandGuild"
 	GuildService_SetAnnouncement_FullMethodName         = "/guildpb.GuildService/SetAnnouncement"
+	GuildService_RenameGuild_FullMethodName             = "/guildpb.GuildService/RenameGuild"
 	GuildService_SetGuildMemberRole_FullMethodName      = "/guildpb.GuildService/SetGuildMemberRole"
 	GuildService_KickGuildMember_FullMethodName         = "/guildpb.GuildService/KickGuildMember"
 	GuildService_TransferGuildLeader_FullMethodName     = "/guildpb.GuildService/TransferGuildLeader"
@@ -70,6 +71,7 @@ type GuildServiceClient interface {
 	LeaveGuild(ctx context.Context, in *LeaveGuildRequest, opts ...grpc.CallOption) (*LeaveGuildResponse, error)
 	DisbandGuild(ctx context.Context, in *DisbandGuildRequest, opts ...grpc.CallOption) (*DisbandGuildResponse, error)
 	SetAnnouncement(ctx context.Context, in *SetAnnouncementRequest, opts ...grpc.CallOption) (*SetAnnouncementResponse, error)
+	RenameGuild(ctx context.Context, in *RenameGuildRequest, opts ...grpc.CallOption) (*RenameGuildResponse, error)
 	// 成员管理(B2)
 	SetGuildMemberRole(ctx context.Context, in *SetGuildMemberRoleRequest, opts ...grpc.CallOption) (*SetGuildMemberRoleResponse, error)
 	KickGuildMember(ctx context.Context, in *KickGuildMemberRequest, opts ...grpc.CallOption) (*KickGuildMemberResponse, error)
@@ -166,6 +168,16 @@ func (c *guildServiceClient) SetAnnouncement(ctx context.Context, in *SetAnnounc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAnnouncementResponse)
 	err := c.cc.Invoke(ctx, GuildService_SetAnnouncement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) RenameGuild(ctx context.Context, in *RenameGuildRequest, opts ...grpc.CallOption) (*RenameGuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameGuildResponse)
+	err := c.cc.Invoke(ctx, GuildService_RenameGuild_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -412,6 +424,7 @@ type GuildServiceServer interface {
 	LeaveGuild(context.Context, *LeaveGuildRequest) (*LeaveGuildResponse, error)
 	DisbandGuild(context.Context, *DisbandGuildRequest) (*DisbandGuildResponse, error)
 	SetAnnouncement(context.Context, *SetAnnouncementRequest) (*SetAnnouncementResponse, error)
+	RenameGuild(context.Context, *RenameGuildRequest) (*RenameGuildResponse, error)
 	// 成员管理(B2)
 	SetGuildMemberRole(context.Context, *SetGuildMemberRoleRequest) (*SetGuildMemberRoleResponse, error)
 	KickGuildMember(context.Context, *KickGuildMemberRequest) (*KickGuildMemberResponse, error)
@@ -471,6 +484,9 @@ func (UnimplementedGuildServiceServer) DisbandGuild(context.Context, *DisbandGui
 }
 func (UnimplementedGuildServiceServer) SetAnnouncement(context.Context, *SetAnnouncementRequest) (*SetAnnouncementResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAnnouncement not implemented")
+}
+func (UnimplementedGuildServiceServer) RenameGuild(context.Context, *RenameGuildRequest) (*RenameGuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameGuild not implemented")
 }
 func (UnimplementedGuildServiceServer) SetGuildMemberRole(context.Context, *SetGuildMemberRoleRequest) (*SetGuildMemberRoleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetGuildMemberRole not implemented")
@@ -663,6 +679,24 @@ func _GuildService_SetAnnouncement_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GuildServiceServer).SetAnnouncement(ctx, req.(*SetAnnouncementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_RenameGuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameGuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).RenameGuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_RenameGuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).RenameGuild(ctx, req.(*RenameGuildRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1093,6 +1127,10 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetAnnouncement",
 			Handler:    _GuildService_SetAnnouncement_Handler,
+		},
+		{
+			MethodName: "RenameGuild",
+			Handler:    _GuildService_RenameGuild_Handler,
 		},
 		{
 			MethodName: "SetGuildMemberRole",

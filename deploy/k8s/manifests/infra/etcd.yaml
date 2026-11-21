@@ -91,10 +91,10 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       # 尽量把 3 个成员散到不同节点;单节点 kind / minikube 仍能调度(preferred 而非 required)。
+      # 成员两两不在同一节点:staging / prod 渲染成 required(一个节点挂了 quorum 还在;节点不够时多出的成员 Pending,不挤到一起),
+      # dev 渲染成 preferred(单节点 kind 也能起 3 个成员)。Apply-Infra 按 -ReleaseProfile 替换(Get-QuorumMemberAntiAffinityYaml)。
       affinity:
         podAntiAffinity:
-          # 成员两两不在同一节点:staging / prod 渲染成 required(一个节点挂了 quorum 还在;节点不够时多出的成员 Pending,不挤到一起),
-          # dev 渲染成 preferred(单节点 kind 也能起 3 个成员)。Apply-Infra 按 -ReleaseProfile 替换(Get-QuorumMemberAntiAffinityYaml)。
           __ETCD_MEMBER_ANTI_AFFINITY__
       # 以非 root 的 uid 1001 运行(官方镜像不要求 root;沿用 bitnami 时代的 uid,已有 PVC 里的数据属主不变)。
       # 云盘 / 本地盘挂上来的根目录是 root:root 0755,不给 fsGroup 的话进程建不了数据目录,起手就 "permission denied"。

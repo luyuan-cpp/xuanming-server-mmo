@@ -27,6 +27,7 @@
 #include "player/system/mystery_merchant_rules.h"
 #include "player/system/player_feature_snapshot.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_mutability.h"
 
 #include "rpc/service_metadata/player_mystery_merchant_service_metadata.h"
 #include "table/code/item_table.h"
@@ -556,9 +557,8 @@ uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMyster
 			break;
 		}
 	}
-	// 冻结 / 战斗两道闸与装备穿脱同口径(player_equip.cpp CheckWritable);冻结用的判定函数与
-	// BagService / CurrencySystem 内部用的是同一个,所以这里放行的请求不会在后面被它们以「冻结」拒绝。
-	if (PlayerLifecycleSystem::IsPlayerFrozen(player))
+	// 不可写窗口(冻结、交接、退出、无归属围栏)与战斗两道闸与装备穿脱同口径。
+	if (!player_mutability::IsPlayerMutable(player))
 	{
 		return kMysteryMerchantFrozen;
 	}

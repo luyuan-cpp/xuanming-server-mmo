@@ -17,6 +17,7 @@ import (
 	login_proto_common "proto/common/base"
 	login_proto_data_base "proto/common/database"
 	login_proto "proto/login"
+	"shared/accountdirectory"
 	"shared/generated/pb/table"
 	"shared/redisslot"
 	"time"
@@ -87,7 +88,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// Resolve account via auth provider
-	account, channel, err := l.resolveAccount(in)
+	account, channel, openID, err := l.resolveAccount(in)
 	if err != nil {
 		tip := authFailureTip(err)
 		logx.Errorf("Auth failed: type=%s tip=%d err=%v", in.AuthType, tip, err)
@@ -124,6 +125,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: loginDirectoryFailureTip(err)}
 			return resp, nil
 		}
+		l.recordChannelIdentity(account, channel, openID)
 		resp.AccountDeletionState = uint32(lifecycle.GetDeletionState())
 		resp.AccountDeletionExecuteAfter = int64(lifecycle.GetDeletionExecuteAfterMs() / 1000)
 		resp.PreviousAccountDeletedAt = int64(lifecycle.GetPreviousDeletedMs() / 1000)
@@ -164,6 +166,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: loginDirectoryFailureTip(err)}
 		return resp, nil
 	}
+	l.recordChannelIdentity(account, channel, openID)
 	verdict := l.svcCtx.AntiAddiction.Evaluate(channel, realNamePI, l.svcCtx.AntiAddiction.Now())
 	resp.AntiAddiction = verdict.Status
 	if verdict.RejectTip != 0 {
@@ -172,6 +175,33 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: verdict.RejectTip}
 		return resp, nil
 	}
+	deviceSetKey := redisslot.AccountDeviceSetKey(account)
+
+	// 3. 在登记防沉迷、写 login_session 和设备集之前先清理陈旧成员并检查设备数上限，
+	//    避免超限被拒的设备遗留活登录态和占位成员（已在 accountLock 下执行）。
+	loginsession.PruneStaleFromDeviceSet(l.ctx, l.svcCtx.LoginRedis, deviceSetKey)
+	if maxDevices := config.AppConfig.Account.MaxDevicesPerAccount; maxDevices > 0 {
+		count, err := l.svcCtx.LoginRedis.SCard(l.ctx, deviceSetKey).Result()
+		if err != nil {
+			logx.Errorf("SCard error: %v", err)
+			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
+			return resp, nil
+		}
+		if count >= maxDevices {
+			alreadyMember, err := l.svcCtx.LoginRedis.SIsMember(l.ctx, deviceSetKey, sessionRef.DeviceMember()).Result()
+			if err != nil {
+				logx.Errorf("SIsMember error: %v", err)
+				resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
+				return resp, nil
+			}
+			if !alreadyMember {
+				logx.Infof("Account %s exceeds device limit: %d >= %d", account, count, maxDevices)
+				resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kTooManyDevices)}
+				return resp, nil
+			}
+		}
+	}
+
 	// 写登录态之前先进防沉迷会话账本(上报上线、记未成年人的截止时刻);登记不上就不放行。
 	// 之后的步骤失败时不撤这条登记:连接还在,它断开或再登录时自然收尾。只有发现连接已断(不会再有断线通知)才当场收尾。
 	if err := beginWatchedSession(l.ctx, l.svcCtx, sessionRef, verdict); err != nil {
@@ -180,14 +210,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		return resp, nil
 	}
 
-	deviceSetKey := redisslot.AccountDeviceSetKey(account)
-
-	// 3. 登录提交分两步,登录态按连接分布、设备集按账号分布,不同槽(两步之间的结局见 loginsession 包注释)。
-	//
-	// Self-heal 在提交前做:剔除登录态已不存在的设备集条目,吸收 Gate→login.Disconnect 还在途时就重连的竞态,
-	// 否则快速重连会被陈旧条目顶到 MaxDevicesPerAccount。
-	loginsession.PruneStaleFromDeviceSet(l.ctx, l.svcCtx.LoginRedis, deviceSetKey)
-
+	// 登录提交分两步,登录态按连接分布、设备集按账号分布,不同槽(两步之间的结局见 loginsession 包注释)。
 	// 第 1 步,gate 连接会话栅栏(docs/design/client-request-ordering.md §6.2):「连接未关闭」的检查与写 login_session
 	// 在同一段脚本里。gate 合成的 Disconnect 可能抢在这条仍在途的 Login 之前执行,没有这道检查时 Login 晚落地会留下
 	// 没人清理的登录态(最长 SessionExpireMin),还可能误触设备数上限。
@@ -208,19 +231,6 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	if err := loginsession.RegisterDevice(l.ctx, l.svcCtx.LoginRedis, account, sessionRef, loginsession.TTL()); err != nil {
 		logx.Errorf("Login device set update failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
-		return resp, nil
-	}
-
-	// 4. Enforce device limit
-	count, err := l.svcCtx.LoginRedis.SCard(l.ctx, deviceSetKey).Result()
-	if err != nil {
-		logx.Errorf("SCard error: %v", err)
-		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
-		return resp, nil
-	}
-	if count > config.AppConfig.Account.MaxDevicesPerAccount {
-		logx.Infof("Account %s exceeds device limit: %d > %d", account, count, config.AppConfig.Account.MaxDevicesPerAccount)
-		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kTooManyDevices)}
 		return resp, nil
 	}
 
@@ -380,29 +390,45 @@ func authFailureTip(err error) uint32 {
 // Empty auth_type is the legacy spelling of "password" and therefore follows
 // the same fail-closed path. Third-party auth_token values use the registry.
 // channel 是凭证最初来自的渠道:access_token 取签发令牌时的 auth_type,其余就是请求的 auth_type(防沉迷按它判,§4)。
-func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, string, error) {
+func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, string, string, error) {
 	authType := in.AuthType
 	if authType == "" {
 		authType = "password"
 	}
 	if authType == "password" {
 		resolved, err := resolvePasswordAccount(l.ctx, in, auth.GetPassword())
-		return resolved, authType, err
+		return resolved, authType, "", err
 	}
 
 	provider := auth.Get(authType)
 	if provider == nil {
-		return "", "", fmt.Errorf("unknown auth type: %s", authType)
+		return "", "", "", fmt.Errorf("unknown auth type: %s", authType)
 	}
 
 	result, err := provider.Validate(l.ctx, in.AuthToken)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	if result.Channel != "" {
-		return result.Account, result.Channel, nil
+	ch := result.Channel
+	if ch == "" {
+		ch = authType
 	}
-	return result.Account, authType, nil
+	return result.Account, ch, result.OpenID, nil
+}
+
+// recordChannelIdentity 把第三方登录返回的 channel + open_id 同步到 data_service 账号分片,
+// 供 content_guard 调微信/抖音平台内容安全接口(如 msgSecCheck v2 需要 openid)。目录未装配或写入失败仅记日志,不阻断登录。
+func (l *LoginLogic) recordChannelIdentity(account, channel, openID string) {
+	if openID == "" || channel == "" {
+		return
+	}
+	updater, ok := l.svcCtx.AccountDirectory.(accountdirectory.ChannelIdentityUpdater)
+	if !ok {
+		return
+	}
+	if err := updater.UpsertChannelIdentity(l.ctx, account, channel, openID); err != nil {
+		logx.WithContext(l.ctx).Infof("[channel-identity] upsert skipped for account=%s channel=%s: %v", account, channel, err)
+	}
 }
 
 func resolvePasswordAccount(ctx context.Context, in *login_proto.LoginRequest, provider auth.PasswordAuthenticator) (string, error) {

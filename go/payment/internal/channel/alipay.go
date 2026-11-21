@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -195,12 +194,9 @@ func (a *Alipay) call(ctx context.Context, method string, biz any) ([]byte, erro
 		return nil, err
 	}
 	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	raw, err := readBody(response)
 	if err != nil {
 		return nil, err
-	}
-	if len(raw) > maxResponseBytes {
-		return nil, errors.New("payment channel: alipay answer is too large")
 	}
 	if response.StatusCode != http.StatusOK {
 		return nil, &CallError{Channel: NameAlipay, Op: method, Status: response.StatusCode}
@@ -447,7 +443,8 @@ func (a *Alipay) ParseNotification(_ *http.Request, body []byte) (Notification, 
 		if parsed, err := time.ParseInLocation(alipayTimeLayout, params["gmt_refund"], chinaZone); err == nil {
 			at = parsed
 		}
-		note.Revocations = append(note.Revocations, Revocation{TransactionID: params["trade_no"], Revoked: true, ObservedAt: at, Detail: "REFUND"})
+		note.Revocations = append(note.Revocations, Revocation{TransactionID: params["trade_no"], OutTradeNo: params["out_trade_no"],
+			Revoked: true, ObservedAt: at, Detail: "REFUND"})
 	}
 	return note, nil
 }

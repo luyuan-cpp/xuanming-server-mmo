@@ -213,7 +213,11 @@ func installEvalKeyRecorder(t *testing.T, mr *miniredis.Miniredis) *evalKeyRecor
 		rec.keys = append(rec.keys, slices.Clone(args[2:2+n]))
 		return false
 	})
-	t.Cleanup(func() { mr.Server().SetPreHook(nil) })
+	t.Cleanup(func() {
+		if s := mr.Server(); s != nil {
+			s.SetPreHook(nil)
+		}
+	})
 	return rec
 }
 

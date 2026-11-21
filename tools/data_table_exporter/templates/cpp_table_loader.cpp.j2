@@ -2,34 +2,61 @@
 #include "table_loader.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <thread>
+#include <utility>
 #include <vector>
 
 {% for item in sheetnames -%}
 #include "{{ item | lower }}_table.h"
 {% endfor %}
 
+TableSet::TableSet() = default;
+TableSet::~TableSet() = default;
+TableSet::TableSet(const TableSet&) = default;
+TableSet& TableSet::operator=(const TableSet&) = default;
+TableSet::TableSet(TableSet&&) noexcept = default;
+TableSet& TableSet::operator=(TableSet&&) noexcept = default;
+
 LoadSuccessCallback loadSuccessCallback;
-
-void LoadTables() {
-{% for item in sheetnames %}
-    {{ item }}TableManager::Instance().Load();
-{% endfor %}
-
-{% for item in sheetnames %}
-    {{ item }}TableManager::Instance().LoadSuccess();
-{% endfor %}
-
-    if (loadSuccessCallback) {
-        loadSuccessCallback();
-    }
-}
 
 namespace {
 
 constexpr std::size_t kTableCount = {{ sheetnames | length }};
+
+constexpr std::array<std::string_view, {{ sheetnames | length }}> kTableNames = {
+{%- for item in sheetnames %}
+    "{{ item }}",
+{%- endfor %}
+};
+
+{% if hot_reload_names %}
+constexpr std::array<std::string_view, {{ hot_reload_names | length }}> kHotReloadableTables = {
+{%- for item in hot_reload_names %}
+    "{{ item }}",
+{%- endfor %}
+};
+{% endif %}
+
+uint64_t tableLoadVersion = 0;
+std::shared_ptr<const TableSet> gCurrentTableSet;
+
+std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& identity) {
+    auto set = std::make_shared<TableSet>();
+    set->identity = identity;
+{% for item in sheetnames %}
+    set->{{ item[0] | lower }}{{ item[1:] }}Table = {{ item }}TableManager::Instance().CurrentSnapshot();
+{% endfor %}
+    return set;
+}
+
+void InstallTableSetIntoManagers(const TableSet& set) {
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().InstallSnapshot(set.{{ item[0] | lower }}{{ item[1:] }}Table);
+{% endfor %}
+}
 
 // 按序号加载一张表,序号与上面 LoadTables() 的顺序一致。
 void LoadTableAt(std::size_t index) {
@@ -40,7 +67,127 @@ void LoadTableAt(std::size_t index) {
     }
 }
 
+void PublishCapturedCurrentSet() {
+    TableBundleIdentity identity;
+    if (gCurrentTableSet) {
+        identity = gCurrentTableSet->identity;
+    } else {
+        identity.schemaDigest = std::string(kTableSchemaDigest);
+        identity.source = "image";
+    }
+    identity.loadSeq = tableLoadVersion;
+    gCurrentTableSet = CaptureManagersAsTableSet(identity);
+}
+
 } // namespace
+
+ScopedTableSetOverride::ScopedTableSetOverride(const std::shared_ptr<const TableSet>& staged) {
+    TableBundleIdentity prevIdentity;
+    if (gCurrentTableSet) {
+        prevIdentity = gCurrentTableSet->identity;
+    }
+    previous = CaptureManagersAsTableSet(prevIdentity);
+    if (staged) {
+        InstallTableSetIntoManagers(*staged);
+    }
+}
+
+ScopedTableSetOverride::~ScopedTableSetOverride() {
+    if (previous) {
+        InstallTableSetIntoManagers(*previous);
+    }
+}
+
+bool IsTableHotReloadable(const std::string_view tableName) {
+{% if hot_reload_names %}
+    return std::binary_search(kHotReloadableTables.begin(), kHotReloadableTables.end(), tableName);
+{% else %}
+    (void)tableName;
+    return false;
+{% endif %}
+}
+
+std::size_t GetTableCount() {
+    return kTableCount;
+}
+
+std::string_view GetTableNameAt(const std::size_t index) {
+    return index < kTableNames.size() ? kTableNames[index] : std::string_view{};
+}
+
+bool LoadTableIntoSetAt(const std::size_t index,
+                        const std::string& configDir,
+                        const bool useBinary,
+                        TableSet& target,
+                        std::string& err) {
+    switch (index) {
+{%- for item in sheetnames %}
+    case {{ loop.index0 }}:
+        return {{ item }}TableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.{{ item[0] | lower }}{{ item[1:] }}Table, err);
+{%- endfor %}
+    default:
+        err = "table index out of range";
+        return false;
+    }
+}
+
+bool PrepareTableSetSync(const std::string& configDir,
+                         const bool useBinary,
+                         std::shared_ptr<TableSet>& out,
+                         std::string& err) {
+    auto staged = std::make_shared<TableSet>();
+    for (std::size_t i = 0; i < kTableCount; ++i) {
+        if (!LoadTableIntoSetAt(i, configDir, useBinary, *staged, err)) {
+            return false;
+        }
+    }
+    out = std::move(staged);
+    return true;
+}
+
+std::shared_ptr<const TableSet> CurrentTableSet() {
+    if (!gCurrentTableSet) {
+        PublishCapturedCurrentSet();
+    }
+    return gCurrentTableSet;
+}
+
+std::shared_ptr<const TableSet> CommitTableSet(std::shared_ptr<TableSet> next) {
+    if (!next) {
+        return CurrentTableSet();
+    }
+    auto previous = CurrentTableSet();
+    next->identity.loadSeq = ++tableLoadVersion;
+    InstallTableSetIntoManagers(*next);
+    gCurrentTableSet = std::move(next);
+    return previous;
+}
+
+void SetCurrentTableBundleIdentity(const TableBundleIdentity& identity) {
+    TableBundleIdentity nextIdentity = identity;
+    nextIdentity.loadSeq = tableLoadVersion;
+    gCurrentTableSet = CaptureManagersAsTableSet(nextIdentity);
+}
+
+void InvokeTablesLoadSuccess() {
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().LoadSuccess();
+{% endfor %}
+
+    if (loadSuccessCallback) {
+        loadSuccessCallback();
+    }
+}
+
+void LoadTables() {
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().Load();
+{% endfor %}
+
+    PublishCapturedCurrentSet();
+    InvokeTablesLoadSuccess();
+}
 
 void LoadTablesAsync() {
     // 工作线程数取 CPU 核数与表数的较小者:表再多,线程数和同时在解析的表数都不超过核数。
@@ -68,23 +215,17 @@ void LoadTablesAsync() {
         }
     }
 
-{% for item in sheetnames %}
-    {{ item }}TableManager::Instance().LoadSuccess();
-{% endfor %}
-    if (loadSuccessCallback) {
-        loadSuccessCallback();
-    }
+    PublishCapturedCurrentSet();
+    InvokeTablesLoadSuccess();
 }
 
 void OnTablesLoadSuccess(const LoadSuccessCallback& callback) {
     loadSuccessCallback = callback;
 }
 
-static uint64_t tableLoadVersion = 0;
-
 void ReloadTables() {
-    LoadTables();
     ++tableLoadVersion;
+    LoadTables();
 }
 
 uint64_t GetTableLoadVersion() {

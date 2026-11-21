@@ -3,14 +3,20 @@ package logic
 import (
 	"context"
 	"errors"
+	"strings"
+	"unicode/utf8"
 
+	cgpb "proto/content_guard"
 	dspb "proto/data_service"
 	tradepb "proto/trade"
+	"shared/contentguard"
 	"shared/roleidentity"
 	"trade/internal/commerce"
 	"trade/internal/constants"
 	"trade/internal/data"
 	"trade/internal/session"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // RmbIdentityResolver 用 ctx 里 gate 签名的验签原件核角色目录;第二个参数是要核的目标角色(0 = 本角色)。
@@ -52,6 +58,14 @@ func (l *JubaozhaiLogic) CreateRmbConsignment(in *tradepb.CreateRmbConsignmentRe
 	owned, err := l.rmbIdentity(in.GetCharacterPlayerId())
 	if err != nil {
 		out.ErrorMessage = tipOf(commerceCode(err))
+		return out, nil
+	}
+	if in == nil || !utf8.ValidString(in.GetTitle()) || strings.TrimSpace(in.GetTitle()) == "" {
+		out.ErrorMessage = tipOf(constants.ErrInvalidParameter)
+		return out, nil
+	}
+	if rejectTip := l.checkTradeTitle(owned.Role.PlayerId, in.GetTitle()); rejectTip != 0 {
+		out.ErrorMessage = tipOf(rejectTip)
 		return out, nil
 	}
 	zone, err := l.deps.HomeZones.HomeZone(l.ctx, owned.Role.PlayerId)
@@ -232,4 +246,23 @@ func (l *JubaozhaiLogic) GetWithdrawal(in *tradepb.GetWithdrawalRequest) (*trade
 		return &tradepb.WithdrawalResponse{ErrorMessage: tipOf(commerceCode(err))}, nil
 	}
 	return out, nil
+}
+
+// checkTradeTitle 把全服可见的人民币寄售标题送内容安全判定;未配置 checker(单元测试)或空串交由后续参数校验挡。
+// 日志只记场景与类别,不打印被检标题原文。
+func (l *JubaozhaiLogic) checkTradeTitle(playerID uint64, title string) uint32 {
+	if l.deps.ContentGuard == nil || title == "" {
+		return 0
+	}
+	res := l.deps.ContentGuard.Check(l.ctx, cgpb.TextScene_TEXT_SCENE_TRADE_TITLE, playerID, title)
+	switch res.Verdict {
+	case contentguard.Pass:
+		return 0
+	case contentguard.Unavailable:
+		logx.Errorf("[trade] content guard unavailable, rmb consignment title refused (player=%d)", playerID)
+		return constants.ErrTextCheckUnavailable
+	default:
+		logx.Infof("[trade] rmb consignment title refused by content guard (category=%s player=%d)", res.Category, playerID)
+		return constants.ErrTitleSensitive
+	}
 }

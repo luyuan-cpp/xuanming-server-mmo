@@ -1,5 +1,8 @@
+#include <fstream>
+#include <sstream>
+#include <string>
+
 #include "google/protobuf/util/json_util.h"
-#include "core/utils/file/file2string.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/actoractioncombatstate_table.h"
@@ -7,20 +10,39 @@
 std::string GetConfigDir();
 bool UseProtoBinaryTables();
 
-void ActorActionCombatStateTableManager::Load() {
-    auto snap = std::make_unique<Snapshot>();
+bool ActorActionCombatStateTableManager::ParseSnapshotFromDir(
+    const std::string& configDir,
+    const bool useBinary,
+    std::shared_ptr<const Snapshot>& out,
+    std::string& err) {
+    std::string prefix = configDir;
+    if (!prefix.empty() && prefix.back() != '/' && prefix.back() != '\\') {
+        prefix.push_back('/');
+    }
+    const std::string path = prefix + (useBinary ? "actoractioncombatstate.pb" : "actoractioncombatstate.json");
+    std::ifstream input(path, std::ios::binary);
+    if (!input.is_open()) {
+        err = "failed to open ActorActionCombatState table file: " + path;
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    if (input.bad()) {
+        err = "failed to read ActorActionCombatState table file: " + path;
+        return false;
+    }
+    const std::string contents = buffer.str();
 
-    if (UseProtoBinaryTables()) {
-        const std::string path = GetConfigDir() + "actoractioncombatstate.pb";
-        const auto contents = File2String(path);
+    auto snap = std::make_shared<Snapshot>();
+    if (useBinary) {
         if (!snap->data.ParseFromString(contents)) {
-            LOG_FATAL << "ActorActionCombatState binary parse failed: " << path;
+            err = "ActorActionCombatState binary parse failed: " + path;
+            return false;
         }
     } else {
-        const std::string path = GetConfigDir() + "actoractioncombatstate.json";
-        const auto contents = File2String(path);
-        if (const auto result = google::protobuf::util::JsonStringToMessage(contents.data(), &snap->data); !result.ok()) {
-            LOG_FATAL << "ActorActionCombatState" << result.message().data();
+        if (const auto result = google::protobuf::util::JsonStringToMessage(contents, &snap->data); !result.ok()) {
+            err = std::string("ActorActionCombatState json parse failed: ") + std::string(result.message());
+            return false;
         }
     }
 
@@ -29,24 +51,15 @@ void ActorActionCombatStateTableManager::Load() {
         snap->idMap.emplace(row_data.id(), &row_data);
     }
 
-    snapshot = std::move(snap);
+    out = std::move(snap);
+    return true;
 }
 
-std::pair<const ActorActionCombatStateTable*, uint32_t> ActorActionCombatStateTableManager::FindById(const uint32_t tableId) {
-    const auto& snap = GetSnapshot();
-    const auto it = snap.idMap.find(tableId);
-    if (it == snap.idMap.end()) {
-        LOG_ERROR << "ActorActionCombatState table not found for ID: " << tableId;
-        return {nullptr, kInvalidTableId};
+void ActorActionCombatStateTableManager::Load() {
+    std::shared_ptr<const Snapshot> snap;
+    std::string err;
+    if (!ParseSnapshotFromDir(GetConfigDir(), UseProtoBinaryTables(), snap, err)) {
+        LOG_FATAL << err;
     }
-    return {it->second, kSuccess};
-}
-
-std::pair<const ActorActionCombatStateTable*, uint32_t> ActorActionCombatStateTableManager::FindByIdSilent(const uint32_t tableId) {
-    const auto& snap = GetSnapshot();
-    const auto it = snap.idMap.find(tableId);
-    if (it == snap.idMap.end()) {
-        return {nullptr, kInvalidTableId};
-    }
-    return {it->second, kSuccess};
+    InstallSnapshot(std::move(snap));
 }

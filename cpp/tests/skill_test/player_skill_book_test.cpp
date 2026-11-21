@@ -9,6 +9,7 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/comp/player_ownership_comp.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_skill.h"
 #include "player/system/player_support_effects.h"
@@ -64,6 +65,7 @@ protected:
     entt::entity NewPlayer(uint32_t classId, uint32_t level, uint64_t gold) {
         const auto player = tlsEcs.actorRegistry.create();
         players.push_back(player);
+        tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
         tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player);
         tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player).set_class_(classId);
         tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(level);
@@ -452,6 +454,18 @@ TEST_F(PlayerSkillBookTest, BattleOrFreezeWindowRejectsWithoutCharging) {
     ASSERT_TRUE(response.has_error_message());
     EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillUpgradeBusy));
     tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+    response = Upgrade(player, kHengGeLieYue, 0, 1);
+    ASSERT_TRUE(response.has_error_message());
+    EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillUpgradeBusy));
+    tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+
+    tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+    response = Upgrade(player, kHengGeLieYue, 0, 1);
+    ASSERT_TRUE(response.has_error_message());
+    EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillUpgradeBusy));
+    tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
 
     EXPECT_EQ(StoredRank(player, kHengGeLieYue), 0u);
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 100000u);

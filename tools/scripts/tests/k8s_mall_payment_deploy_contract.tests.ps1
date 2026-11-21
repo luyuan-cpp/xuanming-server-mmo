@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     官方商城 mall(java/mall_game)与支付 payment(go/payment)上 K8s 的部署侧契约测试
@@ -277,7 +277,10 @@ Test-Case '清单:payment 三个端口与服务 yaml 同源,回调入口 Service
 
 Test-Case '清单:mall 是两副本写者 StatefulSet + ClusterIP Service + PDB,端口与目录一致,Pod 模板带 tier: java-svc;建表 Job 建闸门表并装业务表' {
     $manifest = Read-RepoText 'deploy/k8s/manifests/java-svc/mall.yaml'
-    Assert-Equal -Expected $MallPort -Actual ((Get-ManifestContainerPorts -ManifestContent $manifest) -join ',') -Because '商城只声明内部 HTTP 口'
+    $expectedMallPorts = @(@([int]$MallPort, 18121) | Sort-Object) -join ','
+    Assert-Equal -Expected $expectedMallPorts -Actual ((Get-ManifestContainerPorts -ManifestContent $manifest) -join ',') -Because '商城声明内部 HTTP 口与独立管理口 18121(探针与 Prometheus)'
+    Assert-Match -Text $manifest -Pattern '(?m)^      terminationGracePeriodSeconds: 40\s*$' -Because 'graceful shutdown 需要足够排空预算(preStop 5s + Spring 25s)'
+    Assert-Match -Text $manifest -Pattern 'preStop:\s+exec:\s+command: \[sh, -c, "sleep 5"\]' -Because '滚动期间等 Endpoints 摘除再停机'
     Assert-Match -Text $manifest -Pattern '(?m)^kind: StatefulSet\s*$' -Because '写者是 StatefulSet:Pod 序号就是写者名册的槽位'
     Assert-NotMatch -Text $manifest -Pattern '(?m)^kind: (Deployment|Ingress)\s*$' -Because '不是 Deployment,也没有对集群外的入口'
     Assert-Match -Text $manifest -Pattern '(?m)^  replicas: 2\s*$' -Because '单副本 = 官方商城是单点'
@@ -605,6 +608,7 @@ Test-Case 'payment 的工作负载:写者 StatefulSet 两副本 + PDB;三个端�
     Assert-Match -Text $sts -Pattern ('\{name: grpc,\s*containerPort: ' + $PaymentGrpcPort + '\}') -Because 'gRPC 容器端口 == 服务 yaml 的 ListenOn'
     Assert-Match -Text $sts -Pattern ('\{name: metrics,\s*containerPort: ' + $PaymentMetricsPort + '\}') -Because 'metrics 容器端口 == 服务 yaml 的 MetricsListenAddr'
     Assert-Match -Text $sts -Pattern ('\{name: notify,\s*containerPort: ' + $PaymentNotifyPort + '\}') -Because '回调容器端口 == 服务 yaml 的 Payment.NotifyListenAddr'
+    Assert-Match -Text $sts -Pattern 'startupProbe:\s+httpGet: \{path: /healthz, port: metrics\}' -Because 'startup 探针保护冷启动期间不被 liveness 误杀'
     Assert-Match -Text $sts -Pattern 'readinessProbe:\s+httpGet: \{path: /healthz, port: metrics\}' -Because 'readiness 检查服务的健康入口'
     Assert-Match -Text $sts -Pattern 'livenessProbe:\s+httpGet: \{path: /healthz, port: metrics\}' -Because 'liveness 检查服务的健康入口'
     Assert-Match -Text $sts -Pattern 'name: POD_IP\s+valueFrom:\s+fieldRef: \{fieldPath: status\.podIP\}' -Because 'ListenOn 是 0.0.0.0,注册进 etcd 的必须是 Pod IP'
@@ -657,8 +661,10 @@ Test-Case '商城的配置模板:监听 0.0.0.0;连全球权威入口上的 mmor
     $prefix = 'data.application.yaml.'
     Assert-Equal -Expected '0.0.0.0' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'server.address')) -Because 'jar 内缺省只听 127.0.0.1,集群里别的 Pod 连不上'
     Assert-Equal -Expected $MallPort -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'server.port')) -Because '端口与目录、清单一致'
+    Assert-Equal -Expected '18121' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'management.server.port')) -Because 'K8s 探针与指标走独立管理口 18121,与业务线程池隔离'
+    Assert-Equal -Expected 'health,prometheus' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'management.endpoints.web.exposure.include')) -Because 'K8s 管理口暴露 health 与 prometheus'
     $url = Get-FlatValue -Flat $flat -KeyPath ($prefix + 'spring.datasource.url')
-    Assert-True -Condition ($url.StartsWith("jdbc:mysql://$AuthorityHost/mmorpg_mall?")) -Because "商城连的是全球权威入口上的 mmorpg_mall,实际 $url"
+    Assert-True -Condition ($url.StartsWith("jdbc:mysql://$AuthorityHost/mmorpg_mall?") -and $url.Contains('socketTimeout=6000')) -Because "商城连的是全球权威入口上的 mmorpg_mall 且 socketTimeout 与 poolConfig 对齐,实际 $url"
     Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'spring.datasource.password')) -Because '数据源口令不进模板:商城是写者,口令在运维预置的 runtimeConfigSecret 里'
     Assert-Equal -Expected 'dev/true' -Actual ('{0}/{1}' -f (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'commerce.run-mode')), (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'commerce.require-tidb'))) -Because 'dev 档的 tidb 入口:运行模式 dev(devpay 只许 dev),照常核对 TiDB'
     foreach ($role in @('gateway', 'payment', 'delivery', 'admin')) {
@@ -691,7 +697,17 @@ Test-Case '商城的工作负载:闸门表 Job 用 schema 身份、先于进程;
     Assert-Match -Text $sts -Pattern '- name: svc-config\s+emptyDir: \{medium: Memory, sizeLimit: 20Mi\}' -Because '常驻进程读 init 选中的配置,不挂配置模板'
     Assert-NotMatch -Text $sts -Pattern 'java-svc-mall-config' -Because '写者不挂部署脚本渲染的 ConfigMap'
     Assert-Match -Text $sts -Pattern '(?m)^        tier: java-svc\s*$' -Because 'Pod 模板带 tier: java-svc(容器日志按它采集)'
-    Assert-Match -Text $sts -Pattern ('startupProbe:\s+tcpSocket:\s+port: ' + $MallPort) -Because '商城没有可供探针访问的 HTTP 路径,用 TCP 探针'
+    Assert-Match -Text $sts -Pattern 'prometheus\.io/scrape: "true"' -Because '商城 Pod 模板带 Prometheus 抓取注解'
+    Assert-Match -Text $sts -Pattern 'prometheus\.io/port: "18121"' -Because '抓取端口与管理口 18121 一致'
+    Assert-Match -Text $sts -Pattern 'prometheus\.io/path: "/actuator/prometheus"' -Because '抓取路径为 /actuator/prometheus'
+    Assert-Match -Text $sts -Pattern 'startupProbe:\s+httpGet:\s+path: /actuator/health/readiness\s+port: 18121' -Because '商城 startup 探针走管理口 18121 的 readiness 分组端点'
+    Assert-Match -Text $sts -Pattern 'readinessProbe:\s+httpGet:\s+path: /actuator/health/readiness\s+port: 18121' -Because '商城 readiness 探针走管理口 18121 的 readiness 分组端点'
+    Assert-Match -Text $sts -Pattern 'livenessProbe:\s+httpGet:\s+path: /actuator/health/liveness\s+port: 18121' -Because '商城 liveness 探针走管理口 18121 的 liveness 分组端点'
+    Assert-NotMatch -Text $sts -Pattern 'path: /actuator/health\s' -Because '探针必须走 readiness / liveness 分组,不能用含 DB 指示器的聚合健康端点'
+    $mallAppYaml = Read-RepoText 'java/mall_game/src/main/resources/application.yaml'
+    Assert-Match -Text $mallAppYaml -Pattern '(?m)^\s*include:\s*health\s*$' -Because '商城 jar 内 actuator 只暴露 health'
+    Assert-Match -Text $mallAppYaml -Pattern '(?m)^\s*include:\s*livenessState\s*$' -Because '商城 liveness 分组只含进程存活态'
+    Assert-Match -Text $mallAppYaml -Pattern '(?m)^\s*include:\s*readinessState\s*$' -Because '商城 readiness 分组只含应用就绪态'
     foreach ($name in $SecretSpecs.Keys) {
         if ($SecretSpecs[$name].Consumers -contains 'mall') { Assert-SecretInjected -Doc $sts -SecretName $name -Label 'mall' }
         else { Assert-SecretAbsent -Doc $sts -SecretName $name -Label 'mall' }
@@ -722,7 +738,7 @@ Test-Case '准入策略(-NetworkPolicies on):payment 的 gRPC 口只放行路由
     Assert-Equal -Expected 'mall' -Actual ($mallPolicy.TargetApps -join ',') -Because '策略只选中商城'
     Assert-Equal -Expected 'trade,payment,trade-canary' -Actual ($mallPolicy.AllowedApps -join ',') -Because '商城的调用方只有 trade(含它的金丝雀副本)与 payment'
     Assert-Equal -Expected ([int]$MallPort) -Actual $mallPolicy.GuardedPort -Because '受保护的是内部 HTTP 口'
-    Assert-Equal -Expected '' -Actual ($mallPolicy.OpenPorts -join ',') -Because '商城没有别的端口'
+    Assert-Equal -Expected '18121' -Actual ($mallPolicy.OpenPorts -join ',') -Because '商城管理口 18121 对集群内探针与 Prometheus 抓取开放'
 
     foreach ($pair in @(@{ Policy = 'payment-grpc-allowlist'; Workload = 'payment' }, @{ Policy = 'mall-grpc-allowlist'; Workload = 'mall' })) {
         $policyAt = Get-OutputIndex -Text $devOut -Needle "name: $($pair.Policy)"

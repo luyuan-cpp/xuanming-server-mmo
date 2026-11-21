@@ -43,12 +43,16 @@ namespace prometheus_text
 		bool BeginFamily(std::string_view name, std::string_view help, MetricType type);
 		// 写一条样本到当前族(counter / gauge)。当前族是 histogram 时丢弃:直方图的样本只能用 Histogram 写。
 		void Sample(std::initializer_list<Label> labels, uint64_t value);
+		// 写一条浮点样本到当前族(counter / gauge),供秒级耗时等小数指标使用。
+		void SampleDouble(std::initializer_list<Label> labels, double value);
 		// 写一组直方图样本到当前族(BeginFamily 的类型须是 kHistogram):每个上界一条累计计数 <族名>_bucket{le="上界"},
 		// 再加 le="+Inf"、<族名>_sum 与 <族名>_count。upperBounds 严格升序;bucketCounts 是各桶自己的计数(不累计),
 		// 比 upperBounds 多一个,最后一个是大于最后一个上界的部分。labels 是这一组的公共标签,不能含 le。
 		// 任一条件不满足时整组不写,计一次 DroppedSamples。
 		void Histogram(std::initializer_list<Label> labels, std::span<const uint64_t> upperBounds,
 					   std::span<const uint64_t> bucketCounts, uint64_t sum);
+		void HistogramDouble(std::initializer_list<Label> labels, std::span<const double> upperBounds,
+							 std::span<const uint64_t> bucketCounts, double sum);
 
 		const std::string &Text() const { return text_; }
 		uint32_t DroppedSamples() const { return droppedSamples_; }
@@ -57,6 +61,8 @@ namespace prometheus_text
 		// 写一行 <族名><suffix>{labels[,extra]} value。调用方已校验族与标签。
 		void AppendSample(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
 						  uint64_t value);
+		void AppendSampleText(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
+							  std::string_view valueText);
 
 		std::string text_;
 		std::string family_;

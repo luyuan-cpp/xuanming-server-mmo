@@ -115,5 +115,9 @@ func Tables() []proto.Message {
 		//     同一玩家的 R 插入者都先持他唯一的那一行 M(uk_guild_member),所以同一 (p, 键) 至多一个在途插入者。
 		//   - 清理(asset_store.go):只持 R 一行(主键点锁 → 点删),不与任何别的表组合。
 		&pb.GuildClientRequestRecord{},
+		// 帮会改名旧名保护表(docs/design/rename-and-content-safety.md §5):锁序位置 12(全序末尾)。
+		// 只在已持 guild 行锁与 uk_guild(name_norm) 唯一索引锁之后碰本表(建帮 INSERT guild 之后、改名 UPDATE guild 之后),
+		// 与其它表永不成环。
+		&pb.GuildNameHoldRecord{},
 	}
 }

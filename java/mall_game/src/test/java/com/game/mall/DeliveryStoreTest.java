@@ -95,4 +95,39 @@ class DeliveryStoreTest {
   assertEquals(400,assertThrows(CommerceException.class,()->store.refunded(new CommerceApi.Refund(order.orderId(),"test",null,"refund-01",100,"CNY"))).status(),"回执必须指明退的是哪一笔付款");
   var refund=new CommerceApi.Refund(order.orderId(),"test","payment-refund","refund-01",100,"CNY");store.refunded(refund);store.refunded(refund);assertEquals("REFUNDED",f.store.get("1", new CommerceApi.OwnedOrder(order.orderId(), "测试账号", "1")).state());assertTrue(store.refunds().isEmpty());
  }}
+
+ @Test void 退款待办按游标分页_重放回执不比较proof_人工或撤销终态再报退款回409() {
+  try (var f = new CommerceFixture()) {
+   f.sku(1, 10, 100);
+   var order = f.store.create("1", new CommerceApi.CreateOrder("refund-page-001", 1, 1, "测试账号", "1"));
+   f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "page-own", 100, "CNY"));
+   for (int i = 1; i <= 5; i++) {
+    f.store.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "page-dup-" + i, 100, "CNY"));
+   }
+   var store = new DeliveryStore(f.jdbc, f.manager, f.props);
+   var collected = new ArrayList<String>();
+   String cursor = "";
+   int pages = 0;
+   do {
+    var page = store.refundsPage(new DeliveryApi.RefundPoll(2, cursor));
+    pages++;
+    for (var item : page.entries()) { collected.add(item.transactionId()); }
+    cursor = page.nextCursor();
+   } while (!cursor.isEmpty());
+   assertEquals(3, pages);
+   assertEquals(List.of("page-dup-1", "page-dup-2", "page-dup-3", "page-dup-4", "page-dup-5"), collected);
+   assertEquals(400, assertThrows(CommerceException.class, () -> store.refundsPage(new DeliveryApi.RefundPoll(2, "bad-cursor"))).status());
+
+   // 转人工后再报退款回执应返回 409(而非 503),通知适配器停止重试。
+   store.closeRefund(new CommerceApi.RefundClosure(order.orderId(), "test", "page-dup-1", "NO_REFUND_API"));
+   assertEquals(409, assertThrows(CommerceException.class, () -> store.refunded(
+       new CommerceApi.Refund(order.orderId(), "test", "page-dup-1", "late-refund-001", 100, "CNY"))).status());
+
+   // 交付回执幂等重放不比较 proof(设计 §8.2.5),但换合同号或状态仍回 409。
+   store.receipt(new DeliveryApi.Receipt(order.orderId(), "123", "DELIVERED", "a".repeat(64)));
+   assertDoesNotThrow(() -> store.receipt(new DeliveryApi.Receipt(order.orderId(), "123", "DELIVERED", "b".repeat(64))));
+   assertEquals(409, assertThrows(CommerceException.class, () -> store.receipt(
+       new DeliveryApi.Receipt(order.orderId(), "123", "MANUAL", "b".repeat(64)))).status());
+  }
+ }
 }
