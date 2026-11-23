@@ -298,6 +298,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
 - [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 - [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
+- [biyuan-water-palace-scene5-nav-20261123.md](design/biyuan-water-palace-scene5-nav-20261123.md) — 碧渊水宫本体（`biyuan-water-palace` / 场景 5）服务端导航与配表接入设计方案
 - [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：轻量玩法 V1、UI 规格与双机交接
 - [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象切换（10 元角色形象卡）与 1 小时免费试用设计
 - [character-background-collection-design.md](design/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计

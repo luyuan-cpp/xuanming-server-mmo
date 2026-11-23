@@ -111,6 +111,25 @@ class CurrentMapContractTest(unittest.TestCase):
                           "spawn_x": 36.73125, "spawn_y": 20.19375, "spawn_z": 0}, rows[2])
         book.close()
 
+    def test_legacy_rebake_keeps_versioned_scene_five_biyuan_binding(self):
+        biyuan_nav = "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin"
+        book = openpyxl.Workbook()
+        sheet = book.active
+        sheet.append(["id", "nav_bin_file", "spawn_x", "spawn_y", "spawn_z"])
+        for _ in range(4):
+            sheet.append([None])
+        sheet.append([1, "data/scene_nav_bin/main_scene.bin", 133, 199, 0])
+        sheet.append([2, "data/scene_nav_bin/penglai_scene.bin", 173, 195, 0])
+        sheet.append([3, YUEXI_NAV_PATH, 36.73125, 20.19375, 0])
+        sheet.append([5, biyuan_nav, 58.5, 222.5, 0])
+        contracts = {key: {"spawnWorld": {"x": x, "y": 0, "z": z}}
+                     for key, x, z in (("main", 199, 133), ("island", 195, 173), ("village", 201, 147))}
+        rows, changes = expected_rows(book, contracts)
+        self.assertEqual([], changes)
+        self.assertEqual({"id": 5, "nav_bin_file": biyuan_nav,
+                          "spawn_x": 58.5, "spawn_y": 222.5, "spawn_z": 0}, rows[3])
+        book.close()
+
 
 if __name__ == "__main__":
     unittest.main()

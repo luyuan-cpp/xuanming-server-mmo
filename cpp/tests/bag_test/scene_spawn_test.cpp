@@ -146,6 +146,53 @@ TEST_F(SceneSpawnTest, YuexiBayLoadedMapRoutesReachBothDocksAndRelocateOldInvali
     EXPECT_FALSE(NavQuerySystem::ValidateMove(*nav, spawn, sea, accepted));
 }
 
+TEST_F(SceneSpawnTest, BiyuanWaterPalaceLoadedMapRoutesReachAllKeyAreasAndBlockWater) {
+    SelectScene(5);
+    auto* nav = SceneNavManager::Instance().Get(5);
+    ASSERT_NE(nullptr, nav);
+    ASSERT_TRUE(nav->versionedMask);
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(5));
+    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(5);
+    EXPECT_NEAR(58.5, spawn.x(), 1e-9);
+    EXPECT_NEAR(222.5, spawn.y(), 1e-9);
+    EXPECT_DOUBLE_EQ(0, spawn.z());
+    // 碧渊水宫双节共享导航关键地标（主殿门、鼓亭、茶亭、东南观景台、东拱桥），服务端 Z-up 坐标。
+    for (const auto& [x, y] : {std::pair{186.0, 116.25}, std::pair{185.375, 261.25},
+                               std::pair{53.5, 80.0}, std::pair{83.5, 277.5},
+                               std::pair{124.125, 220.0}}) {
+        Location goal;
+        goal.set_x(x); goal.set_y(y);
+        std::vector<Location> route;
+        ASSERT_TRUE(NavQuerySystem::FindPath(*nav, spawn, goal, route)) << x << ',' << y;
+        ASSERT_GE(route.size(), 2U);
+        EXPECT_NEAR(spawn.x(), route.front().x(), .02);
+        EXPECT_NEAR(spawn.y(), route.front().y(), .02);
+        EXPECT_NEAR(goal.x(), route.back().x(), .02);
+        EXPECT_NEAR(goal.y(), route.back().y(), .02);
+        for (size_t i = 1; i < route.size(); ++i) {
+            Location accepted;
+            ASSERT_TRUE(NavQuerySystem::ValidateMove(*nav, route[i - 1], route[i], accepted)) << i;
+        }
+        SetPosition(goal.x(), goal.y(), 0);
+        EXPECT_FALSE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+        ExpectPosition(goal);
+    }
+    // 旧占位主城出生点在碧渊水宫内不可走，进图应回落到新出生点。
+    SetPosition(133, 199, 0);
+    EXPECT_TRUE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+    ExpectPosition(spawn);
+    // 上下 128px 留白、外湖水域、东廊边荷花池、茶亭屋檐、大殿屋顶与南桥分叉水岸必须全部阻挡。
+    for (const auto& [x, y] : {std::pair{252.0, 160.0}, std::pair{4.0, 160.0},
+                               std::pair{131.0, 25.0}, std::pair{144.75, 245.625},
+                               std::pair{74.75, 80.0}, std::pair{216.0, 112.5},
+                               std::pair{16.0, 242.5}}) {
+        Location blocked, accepted;
+        blocked.set_x(x); blocked.set_y(y);
+        EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, blocked, accepted)) << x << ',' << y;
+        EXPECT_FALSE(NavQuerySystem::ValidateMove(*nav, spawn, blocked, accepted)) << x << ',' << y;
+    }
+}
+
 TEST_F(SceneSpawnTest, NoNavigationStillHonorsDestinationSpawnAndPreservesReentry) {
     SceneNavManager::Instance().sceneNav.clear();
     SelectScene(4);

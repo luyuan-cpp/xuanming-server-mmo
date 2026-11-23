@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 320.0,
+    "height": 256.0
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 8.0,
+    "width": 320.0,
+    "height": 240.0
+  },
+  "cellSize": 1.0,
+  "imageRect": {
+    "x": 0.0,
+    "y": 128.0,
+    "width": 5120.0,
+    "height": 3840.0
+  },
+  "referenceWidth": 3200,
+  "referenceHeight": 2400,
+  "walkmaskColumns": 320,
+  "walkmaskRows": 256,
+  "spawnWorld": {
+    "x": 222.5,
+    "y": 0.0,
+    "z": 58.5
+  },
+  "schemaVersion": 2,
+  "key": "biyuan-water-palace",
+  "sceneId": 5,
+  "name": "碧渊水宫",
+  "revision": "biyuan-body-20261123",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/biyuan-water-palace/biyuan-body-20261123/spring/eb739b3889761c5ddffccd647418595b2d47d73b3f7b35fddc12957ca3979dbb/",
+  "clientOnly": false,
+  "authoritativeServerRegistered": true,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 5120,
+    "height": 4096
+  },
+  "layoutSha256": "eb739b3889761c5ddffccd647418595b2d47d73b3f7b35fddc12957ca3979dbb",
+  "sourceSelectionPath": "Docs/VerificationEvidence/biyuan-body-20261123/selection.json",
+  "sourceSelectionSha256": "e68d956db605553fa74b888d4ccc4c89419ab87600163c9113026e5bdce68bc0",
+  "sourceEvidencePath": "Docs/VerificationEvidence/biyuan-body-20261123/source-evidence/biyuan-water-palace/spring/delivery.json",
+  "sourceEvidenceSha256": "27a602fb49d9daf93b0fa27c7e5bf7e7580e9497831287d50fde79f722867259",
+  "navigationPlanPath": "Docs/VerificationEvidence/biyuan-body-20261123/navigation-plan.json",
+  "navigationPlanSha256": "2ddd109f37c3a36fd2b1287e047bad264b8d3c3aeded411e37a6253caadccc6f",
+  "navigationSha256": "0e2cdfdacedf93c44e08fba4cd67801b4800b555e1cb8768223fdc889cc890a8",
+  "walkmaskSha256": "11bab27de9e7b0bfc6ae4800c42b4355f1fdb2e9d856147aed439e6e5e98e86e",
+  "walkmaskPackedSha256": "3096b2878df33b19cfff1ffc0ad2c1fc323afcd1070c9c93ab2fabb57e7e5774",
+  "navigationStatus": "conservative_visible_ground",
+  "runtimeEngineAcceptance": false
+}

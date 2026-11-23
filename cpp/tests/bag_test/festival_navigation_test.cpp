@@ -31,12 +31,15 @@ protected:
     virtual std::string MapPath() const {
         return "data/scene_nav_bin/festival_maps/" + std::to_string(SceneId());
     }
+    virtual fs::path SourceFolder() const {
+        return fs::path(GetDataRootDir()) / "data/scene_nav_bin/festival_maps" / std::to_string(SourceSceneId());
+    }
     void SetUp() override {
         oldConfig = tlsNodeConfigManager.GetBaseDeployConfig();
         oldNav = std::move(SceneNavManager::Instance().sceneNav);
         // 从运行配置取真实已交付导航；每个失败用例只破坏自己的临时副本。
         const std::string mapPath = MapPath();
-        source = fs::path(GetDataRootDir()) / "data/scene_nav_bin/festival_maps" / std::to_string(SourceSceneId());
+        source = SourceFolder();
         ASSERT_TRUE(fs::exists(source / "scene.bin")) << source.string();
         temporary = fs::temp_directory_path() / ("festival-nav-" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -201,6 +204,50 @@ TEST_F(CurrentVillageNavigationTest, VersionedMapRegistersItsVerifiedExactMask) 
 }
 
 TEST_F(CurrentVillageNavigationTest, MissingChecksumRejectsVersionedSceneBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
+
+class CurrentBiyuanNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 5; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123";
+    }
+    fs::path SourceFolder() const override {
+        return fs::path(GetDataRootDir()) / MapPath();
+    }
+};
+
+TEST_F(CurrentBiyuanNavigationTest, VersionedBiyuanBodyRegistersExactMaskAndRejectsPadding) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    EXPECT_TRUE(nav->versionedMask);
+    EXPECT_EQ(320, nav->mask.columns);
+    EXPECT_EQ(256, nav->mask.rows);
+    EXPECT_DOUBLE_EQ(8.0, nav->mask.effectiveZ);
+    EXPECT_DOUBLE_EQ(240.0, nav->mask.effectiveHeight);
+    int count = 0;
+    for (int row = 0; row < nav->mask.rows; ++row) {
+        for (int col = 0; col < nav->mask.columns; ++col) {
+            count += nav->mask.Cell(col, row) ? 1 : 0;
+        }
+    }
+    EXPECT_EQ(9093, count);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+    Location topPadding;
+    topPadding.set_x(252.0); topPadding.set_y(160.0); topPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, topPadding, accepted));
+    Location bottomPadding;
+    bottomPadding.set_x(4.0); bottomPadding.set_y(160.0); bottomPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, bottomPadding, accepted));
+}
+
+TEST_F(CurrentBiyuanNavigationTest, MissingChecksumRejectsBiyuanBeforeEntry) {
     fs::remove(folder / "scene.bin.sha256");
     LoadAndExpectRejected();
 }

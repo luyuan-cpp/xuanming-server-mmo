@@ -30,9 +30,9 @@
   },
   {
    "id": 5,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
