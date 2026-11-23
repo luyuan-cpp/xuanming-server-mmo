@@ -59,11 +59,11 @@ struct FCfgCharacterAppearanceRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	int32 id = 0;
 
-	/** 稳定资源外观身份 ID(如 "08_alchemy_prodigy_boy") */
+	/** 稳定资源外观身份 ID(如 "00_reference_topright_boy") */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	FString appearance_id;
 
-	/** 中文展示名称(如 "炼丹童子") */
+	/** 中文展示名称(如 "金发带Q道童") */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	FString name;
 

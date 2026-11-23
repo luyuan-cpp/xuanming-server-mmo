@@ -5,9 +5,9 @@ package clientplayerloginlogic
 func validCharacterAppearance(id string) bool {
 	switch id {
 	case "", "00_reference_topright_boy", "01_ice_sword_girl", "02_fire_talisman_boy",
-		"03_lotus_healer_girl", "04_mountain_guardian_boy", "05_celestial_musician_girl",
-		"08_alchemy_prodigy_boy", "09_bamboo_archer_girl",
-		"10_crimson_spear_girl", "15_water_dragon_scholar_boy", "17_ghost_script_calligrapher_boy":
+		"03_lotus_healer_girl", "05_celestial_musician_girl",
+		"09_bamboo_archer_girl",
+		"10_crimson_spear_girl", "15_water_dragon_scholar_boy":
 		return true
 	default:
 		return false
@@ -26,5 +26,11 @@ func retiredCharacterAppearance(id string) bool {
 
 // removedCharacterAppearance is excluded from client projections and entry.
 func removedCharacterAppearance(id string) bool {
-	return id == "06_thunder_caster_boy"
+	switch id {
+	case "04_mountain_guardian_boy", "06_thunder_caster_boy",
+		"08_alchemy_prodigy_boy", "17_ghost_script_calligrapher_boy":
+		return true
+	default:
+		return false
+	}
 }

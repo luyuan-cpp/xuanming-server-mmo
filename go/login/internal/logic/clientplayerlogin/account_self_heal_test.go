@@ -22,7 +22,7 @@ func sqlHealState() enterGameSessionState {
 func sqlHealRole() *base.AccountSimplePlayer {
 	role := &base.AccountSimplePlayer{
 		PlayerId: sqlHealPlayerID, Name: "SQL原角色名", ClassId: 3,
-		AppearanceId: "04_mountain_guardian_boy", Gender: 1,
+		AppearanceId: "05_celestial_musician_girl", Gender: 1,
 	}
 	role.ProtoReflect().SetUnknown(protowire.AppendBytes(protowire.AppendTag(nil, 91, protowire.BytesType), []byte("未来人物字段")))
 	return role
@@ -56,7 +56,7 @@ func TestHealAccountRole_SQLReadPreservesIdentityUnknownFieldsAndOtherRoles(t *t
 	directory := newTestDirectory()
 	state := sqlHealState()
 	role := sqlHealRole()
-	directory.seed(state.account, role, &base.AccountSimplePlayer{PlayerId: 7002, Name: "并发建角", AppearanceId: "08_alchemy_prodigy_boy"})
+	directory.seed(state.account, role, &base.AccountSimplePlayer{PlayerId: 7002, Name: "并发建角", AppearanceId: "00_reference_topright_boy"})
 	before := snapshotHealOwners(directory)
 	// 不装配 Redis，SQL 原归属是唯一授权来源；传入的注册表名不能覆盖已存名字。
 	logic := NewEnterGameLogic(context.Background(), &svc.ServiceContext{AccountDirectory: directory})

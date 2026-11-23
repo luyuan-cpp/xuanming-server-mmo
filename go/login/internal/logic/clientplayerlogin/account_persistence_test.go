@@ -40,7 +40,7 @@ func TestAccountInitializationIsIndependentOfRedisAndPreservesRoleBytes(t *testi
 	if err != nil || len(roles.Players) != 0 {
 		t.Fatal(roles, err)
 	}
-	role := &pbbase.AccountSimplePlayer{PlayerId: 42, AppearanceId: "04_mountain_guardian_boy"}
+	role := &pbbase.AccountSimplePlayer{PlayerId: 42, AppearanceId: "05_celestial_musician_girl"}
 	role.ProtoReflect().SetUnknown(protowire.AppendBytes(protowire.AppendTag(nil, 91, protowire.BytesType), []byte("future-field")))
 	if _, err = d.Create(ctx, "persistent-init", role); err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestLoginPersistsLegacyAccountAndKeepsAppearanceAcrossOldExpiry(t *testing.
 			accountName := "account-persistence"
 			key := constants.GetAccountDataKey(accountName)
 			wanted := &pbbase.AccountSimplePlayer{PlayerId: 42, ClassId: 3, Gender: 1,
-				Name: "山岳守卫", AppearanceId: "04_mountain_guardian_boy"}
+				Name: "天音少女", AppearanceId: "05_celestial_musician_girl"}
 			raw, err := proto.Marshal(&dbpb.UserAccounts{SimplePlayers: &pbbase.AccountSimplePlayerList{Players: []*pbbase.AccountSimplePlayer{wanted}}})
 			if err != nil {
 				t.Fatal(err)

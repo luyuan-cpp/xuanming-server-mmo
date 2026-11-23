@@ -3,7 +3,7 @@
 """角色形象切换（10 元角色形象卡）与一小时免费试用（bit 存储）的 xlsx 幂等补丁脚本。
 
 改动范围(全部幂等,重复执行无副作用,发现现状与预期冲突则中止且绝不覆盖已有数据):
-  1. new-tables:       新建 CharacterAppearance.xlsx(11 个现役形象,id 1..11)与 AppearanceRule.xlsx(单行规则)
+  1. new-tables:       新建 CharacterAppearance.xlsx(8 个现役形象,保留原永久 id 2..5,7..10)与 AppearanceRule.xlsx(单行规则)
   2. card-item-row:    Item.xlsx 追加 3402 角色形象卡
   3. tip-codes:        Tip.xlsx 文末新开 //appearance_error base=33000 width=1000(7 个提示码)
 
@@ -50,17 +50,14 @@ except ImportError as exc:
 
 APPEARANCE_SHEET = "CharacterAppearance"
 APPEARANCE_ROWS = [
-    dict(id=1, appearance_id="08_alchemy_prodigy_boy", name="炼丹童子", enabled=1, sort_order=1, desc="丹炉紫气绕身，灵药随行"),
-    dict(id=2, appearance_id="00_reference_topright_boy", name="金发带Q道童", enabled=1, sort_order=2, desc="金冠束发，葫芦傍身的青玉小道童"),
-    dict(id=3, appearance_id="01_ice_sword_girl", name="冰剑少女", enabled=1, sort_order=3, desc="寒霜凝刃，清冷出尘"),
-    dict(id=4, appearance_id="02_fire_talisman_boy", name="火符少年", enabled=1, sort_order=4, desc="朱砂赤符，烈焰破邪"),
-    dict(id=5, appearance_id="03_lotus_healer_girl", name="莲花医者", enabled=1, sort_order=5, desc="青莲济世，妙手回春"),
-    dict(id=6, appearance_id="04_mountain_guardian_boy", name="山岳守卫", enabled=1, sort_order=6, desc="玄甲镇岳，稳如磐石"),
-    dict(id=7, appearance_id="05_celestial_musician_girl", name="天音少女", enabled=1, sort_order=7, desc="瑶琴仙乐，清音涤尘"),
-    dict(id=8, appearance_id="09_bamboo_archer_girl", name="竹弓少女", enabled=1, sort_order=8, desc="青竹穿云，百步穿杨"),
-    dict(id=9, appearance_id="10_crimson_spear_girl", name="赤枪少女", enabled=1, sort_order=9, desc="红缨长枪，飒爽凌云"),
-    dict(id=10, appearance_id="15_water_dragon_scholar_boy", name="水龙书生", enabled=1, sort_order=10, desc="沧澜化龙，文武兼修"),
-    dict(id=11, appearance_id="17_ghost_script_calligrapher_boy", name="灵篆书生", enabled=1, sort_order=11, desc="墨笔天篆，镇妖驱魔"),
+    dict(id=2, appearance_id="00_reference_topright_boy", name="金发带Q道童", enabled=1, sort_order=1, desc="金冠束发，葫芦傍身的青玉小道童"),
+    dict(id=3, appearance_id="01_ice_sword_girl", name="冰剑少女", enabled=1, sort_order=2, desc="寒霜凝刃，清冷出尘"),
+    dict(id=4, appearance_id="02_fire_talisman_boy", name="火符少年", enabled=1, sort_order=3, desc="朱砂赤符，烈焰破邪"),
+    dict(id=5, appearance_id="03_lotus_healer_girl", name="莲花医者", enabled=1, sort_order=4, desc="青莲济世，妙手回春"),
+    dict(id=7, appearance_id="05_celestial_musician_girl", name="天音少女", enabled=1, sort_order=5, desc="瑶琴仙乐，清音涤尘"),
+    dict(id=8, appearance_id="09_bamboo_archer_girl", name="竹弓少女", enabled=1, sort_order=6, desc="青竹穿云，百步穿杨"),
+    dict(id=9, appearance_id="10_crimson_spear_girl", name="赤枪少女", enabled=1, sort_order=7, desc="红缨长枪，飒爽凌云"),
+    dict(id=10, appearance_id="15_water_dragon_scholar_boy", name="水龙书生", enabled=1, sort_order=8, desc="沧澜化龙，文武兼修"),
 ]
 
 RULE_SHEET = "AppearanceRule"

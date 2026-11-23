@@ -174,7 +174,7 @@ func TestTiDBAccountDirectoryCapReplayRepairAndRemoval(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, "UPDATE account_role SET role_proto=? WHERE player_id=?", raw, id)
 	require.NoError(t, err)
-	_, err = s.Repair(ctx, "Account", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: id, ClassId: 3, AppearanceId: "04_mountain_guardian_boy"}, 1)
+	_, err = s.Repair(ctx, "Account", &base.AccountSimplePlayer{ZoneId: 1, PlayerId: id, ClassId: 3, AppearanceId: "05_celestial_musician_girl"}, 1)
 	require.NoError(t, err)
 	owned, err = s.Lookup(ctx, id)
 	require.NoError(t, err)

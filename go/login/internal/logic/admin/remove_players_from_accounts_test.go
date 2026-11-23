@@ -121,7 +121,7 @@ func outcomesOf(out *RemovePlayersFromAccountsResp) map[uint64]loginpb.RemovePla
 func TestRemovePlayersFromAccounts_RemovesOrphanKeepsOthersAndReplays(t *testing.T) {
 	kept := adminOwned("admin-retention", 2, 11, "06_thunder_caster_boy")
 	directory := &adminDirectoryFake{roles: map[uint64]*dspb.AccountRoleOwnership{
-		1: adminOwned("admin-retention", 1, 7, "04_mountain_guardian_boy"),
+		1: adminOwned("admin-retention", 1, 7, "05_celestial_musician_girl"),
 		2: proto.Clone(kept).(*dspb.AccountRoleOwnership),
 	}}
 	sc := &svc.ServiceContext{AccountDirectory: directory, DataServiceClient: &storeProbeFake{}}

@@ -170,7 +170,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 88 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
-| **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 6 | 6 | 11 | — | — | — | — | `id` | — | — |
+| **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 6 | 6 | 8 | — | — | — | — | `id` | — | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |

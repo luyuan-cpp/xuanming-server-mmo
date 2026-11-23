@@ -22,9 +22,9 @@ message CharacterAppearanceTable {
 
   // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用位图下标)
   uint32 id = 1 [(cfg_bit_index) = true];
-  // 稳定资源外观身份 ID(如 "08_alchemy_prodigy_boy")
+  // 稳定资源外观身份 ID(如 "00_reference_topright_boy")
   string appearance_id = 2;
-  // 中文展示名称(如 "炼丹童子")
+  // 中文展示名称(如 "金发带Q道童")
   string name = 3;
   // 是否开放切换与试用:1 = 开放,0 = 下架(历史已持有该外观的玩家照常展示)
   uint32 enabled = 4;

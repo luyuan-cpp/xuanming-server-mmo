@@ -1,20 +1,12 @@
 {
  "data": [
   {
-   "appearance_id": "08_alchemy_prodigy_boy",
-   "desc": "丹炉紫气绕身，灵药随行",
-   "enabled": 1,
-   "id": 1,
-   "name": "炼丹童子",
-   "sort_order": 1
-  },
-  {
    "appearance_id": "00_reference_topright_boy",
    "desc": "金冠束发，葫芦傍身的青玉小道童",
    "enabled": 1,
    "id": 2,
    "name": "金发带Q道童",
-   "sort_order": 2
+   "sort_order": 1
   },
   {
    "appearance_id": "01_ice_sword_girl",
@@ -22,7 +14,7 @@
    "enabled": 1,
    "id": 3,
    "name": "冰剑少女",
-   "sort_order": 3
+   "sort_order": 2
   },
   {
    "appearance_id": "02_fire_talisman_boy",
@@ -30,7 +22,7 @@
    "enabled": 1,
    "id": 4,
    "name": "火符少年",
-   "sort_order": 4
+   "sort_order": 3
   },
   {
    "appearance_id": "03_lotus_healer_girl",
@@ -38,15 +30,7 @@
    "enabled": 1,
    "id": 5,
    "name": "莲花医者",
-   "sort_order": 5
-  },
-  {
-   "appearance_id": "04_mountain_guardian_boy",
-   "desc": "玄甲镇岳，稳如磐石",
-   "enabled": 1,
-   "id": 6,
-   "name": "山岳守卫",
-   "sort_order": 6
+   "sort_order": 4
   },
   {
    "appearance_id": "05_celestial_musician_girl",
@@ -54,7 +38,7 @@
    "enabled": 1,
    "id": 7,
    "name": "天音少女",
-   "sort_order": 7
+   "sort_order": 5
   },
   {
    "appearance_id": "09_bamboo_archer_girl",
@@ -62,7 +46,7 @@
    "enabled": 1,
    "id": 8,
    "name": "竹弓少女",
-   "sort_order": 8
+   "sort_order": 6
   },
   {
    "appearance_id": "10_crimson_spear_girl",
@@ -70,7 +54,7 @@
    "enabled": 1,
    "id": 9,
    "name": "赤枪少女",
-   "sort_order": 9
+   "sort_order": 7
   },
   {
    "appearance_id": "15_water_dragon_scholar_boy",
@@ -78,15 +62,7 @@
    "enabled": 1,
    "id": 10,
    "name": "水龙书生",
-   "sort_order": 10
-  },
-  {
-   "appearance_id": "17_ghost_script_calligrapher_boy",
-   "desc": "墨笔天篆，镇妖驱魔",
-   "enabled": 1,
-   "id": 11,
-   "name": "灵篆书生",
-   "sort_order": 11
+   "sort_order": 8
   }
  ]
 }

@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "schema_digest": "ece0013ccbb6f3b0",
-  "version": 50,
-  "content_digest": "66676843696f85f6a0d14f81b2232021b347809caaad4c268f2ca5a4601beb82",
+  "version": 51,
+  "content_digest": "abea959312ba67eda6576ecf4bc60fcb6e9e77a0f307222771a372d4f37a19d4",
   "generated_at": "2026-11-23T15:45:46Z",
   "source_rev": {
     "commit": "5c0a518a679106dc302a719eaf3ab3caefc547c8",
@@ -364,24 +364,24 @@
       "name": "CharacterAppearance",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 11,
+      "rows": 8,
       "source": {
         "file": "CharacterAppearance.xlsx",
-        "size": 6051,
-        "sha256": "328e6395054ca5fc040f60c80997b6c6c47d4f2c3fbf16bbe466dfd3d85955cc"
+        "size": 5832,
+        "sha256": "511192a26557e597e86e68ce60714484f351463a411f68fe2397459db8a9095e"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "characterappearance.json",
-          "size": 1953,
-          "sha256": "308a2a191cb707cfe0d986ed9494364b853372ac48f8863753dd10c6a56a4640"
+          "size": 1416,
+          "sha256": "ab06a3a29cc26ac02f128bf7bd7209a1d5c3a966669dd43e108aff9e8ed3648a"
         },
         {
           "kind": "binary",
           "file": "characterappearance.pb",
-          "size": 866,
-          "sha256": "1680512092b0c3004830c370512ccd0536b6bec8211dfc567a1bd108de6ce639"
+          "size": 623,
+          "sha256": "9b815e4d84a6ff11ba66aef6de41aa201b370938960782037b08120a1da698ca"
         }
       ]
     },

@@ -12,24 +12,30 @@ import (
 func TestCharacterAppearanceRejectsRemovedAndMalformedIDs(t *testing.T) {
 	for _, id := range []string{
 		"", "00_reference_topright_boy", "01_ice_sword_girl", "02_fire_talisman_boy",
-		"03_lotus_healer_girl", "04_mountain_guardian_boy", "05_celestial_musician_girl",
-		"08_alchemy_prodigy_boy", "09_bamboo_archer_girl",
-		"10_crimson_spear_girl", "15_water_dragon_scholar_boy", "17_ghost_script_calligrapher_boy",
+		"03_lotus_healer_girl", "05_celestial_musician_girl",
+		"09_bamboo_archer_girl",
+		"10_crimson_spear_girl", "15_water_dragon_scholar_boy",
 	} {
 		if !validCharacterAppearance(id) {
 			t.Fatalf("保留身份被拒绝: %q", id)
 		}
 	}
 	for _, id := range []string{
-		"06_thunder_caster_boy", "07_moon_shadow_assassin_girl", "14_short_hair_snow_summoner_girl", "20_star_formation_master_girl",
-		"11_removed", "04", "04_mountain_guardian_boy/../other", " 04_mountain_guardian_boy",
+		"04_mountain_guardian_boy", "06_thunder_caster_boy", "08_alchemy_prodigy_boy", "17_ghost_script_calligrapher_boy",
+		"07_moon_shadow_assassin_girl", "14_short_hair_snow_summoner_girl", "20_star_formation_master_girl",
+		"11_removed", "04", "05_celestial_musician_girl/../other", " 05_celestial_musician_girl",
 	} {
 		if validCharacterAppearance(id) {
 			t.Fatalf("非法或删除身份被放行: %q", id)
 		}
 	}
-	if retiredCharacterAppearance("06_thunder_caster_boy") {
-		t.Fatal("彻底删除的外观不能通过退役角色重试入口恢复")
+	for _, removed := range []string{
+		"04_mountain_guardian_boy", "06_thunder_caster_boy",
+		"08_alchemy_prodigy_boy", "17_ghost_script_calligrapher_boy",
+	} {
+		if retiredCharacterAppearance(removed) {
+			t.Fatalf("彻底删除的外观不能通过退役角色重试入口恢复: %q", removed)
+		}
 	}
 }
 
@@ -79,8 +85,8 @@ func TestRetiredAppearanceOnlyReturnsExistingExactRetry(t *testing.T) {
 }
 
 func TestCreateRetryRequiresSameAppearance(t *testing.T) {
-	players := []*pbbase.AccountSimplePlayer{{PlayerId: 1, ClassId: 3, Gender: 1, AppearanceId: "04_mountain_guardian_boy"}}
-	if !isLostResponseRetry(players, 1, 3, 1, "04_mountain_guardian_boy") {
+	players := []*pbbase.AccountSimplePlayer{{PlayerId: 1, ClassId: 3, Gender: 1, AppearanceId: "05_celestial_musician_girl"}}
+	if !isLostResponseRetry(players, 1, 3, 1, "05_celestial_musician_girl") {
 		t.Fatal("同一次建角重试应保留已创建身份")
 	}
 	if isLostResponseRetry(players, 1, 3, 1, "06_thunder_caster_boy") || isLostResponseRetry(players, 1, 3, 1, "") {
@@ -91,12 +97,12 @@ func TestCreateRetryRequiresSameAppearance(t *testing.T) {
 func TestCreatePlayerAppearanceIsSavedInAccountAndResponse(t *testing.T) {
 	fake := &fakeRegisterClient{}
 	h := newCreatePlayerHarnessWithNames(t, homezone.New(fake, 0, 0, 0), fake)
-	response, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{AppearanceId: "04_mountain_guardian_boy"})
+	response, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{AppearanceId: "05_celestial_musician_girl"})
 	if err != nil || response.GetErrorMessage().GetId() != 0 {
 		t.Fatalf("建角失败: %v %v", err, response.GetErrorMessage())
 	}
 	players := storedPlayers(t, h.ctx, h.rdb)
-	if len(players) != 1 || players[0].GetAppearanceId() != "04_mountain_guardian_boy" {
+	if len(players) != 1 || players[0].GetAppearanceId() != "05_celestial_musician_girl" {
 		t.Fatalf("账号持久化丢失外观: %v", players)
 	}
 	if len(response.GetPlayers()) != 1 || response.GetPlayers()[0].GetPlayer().GetAppearanceId() != players[0].GetAppearanceId() {

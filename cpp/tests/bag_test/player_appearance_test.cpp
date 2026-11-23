@@ -203,11 +203,14 @@ TEST_F(PlayerAppearanceSystemTest, SwitchConsumesCardIsIdempotentAndSyncsDirecto
 	sameReq.set_appearance_id("01_ice_sword_girl");
 	EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, sameReq, kNowSec + 3, resp),
 			  static_cast<uint32_t>(kAppearanceAlreadyCurrent));
-	SwitchAppearanceRequest invalidReq;
-	invalidReq.set_client_request_id(1003);
-	invalidReq.set_appearance_id("30_han_xiangzi");
-	EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, invalidReq, kNowSec + 3, resp),
-			  static_cast<uint32_t>(kAppearanceInvalid));
+	for (const char *removedId : {"30_han_xiangzi", "08_alchemy_prodigy_boy", "04_mountain_guardian_boy", "17_ghost_script_calligrapher_boy"})
+	{
+		SwitchAppearanceRequest invalidReq;
+		invalidReq.set_client_request_id(1003);
+		invalidReq.set_appearance_id(removedId);
+		EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, invalidReq, kNowSec + 3, resp),
+				  static_cast<uint32_t>(kAppearanceInvalid));
+	}
 
 	// 存盘提交后触发选角目录外观同步;瞬时失败由 Tick 退避重试。
 	acceptDirectorySend = false;
@@ -227,21 +230,21 @@ TEST_F(PlayerAppearanceSystemTest, TrialBitStorageOverwriteExpiryAndCancel)
 {
 	StartAppearanceTrialRequest req;
 	req.set_client_request_id(2001);
-	req.set_appearance_id("08_alchemy_prodigy_boy");
+	req.set_appearance_id("02_fire_talisman_boy");
 	StartAppearanceTrialResponse resp;
 	ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, req, kNowSec, resp), kSuccess);
 	EXPECT_FALSE(resp.replayed());
 	EXPECT_EQ(resp.info().permanent_appearance_id(), "00_reference_topright_boy");
-	EXPECT_EQ(resp.info().active_appearance_id(), "08_alchemy_prodigy_boy");
-	EXPECT_EQ(resp.info().trial_appearance_id(), "08_alchemy_prodigy_boy");
+	EXPECT_EQ(resp.info().active_appearance_id(), "02_fire_talisman_boy");
+	EXPECT_EQ(resp.info().trial_appearance_id(), "02_fire_talisman_boy");
 	EXPECT_EQ(resp.info().trial_expires_at(), kNowSec + trialDurationSec);
-	EXPECT_EQ(PlayerAppearanceSystem::EffectiveAppearanceId(player, kNowSec + 10), "08_alchemy_prodigy_boy");
+	EXPECT_EQ(PlayerAppearanceSystem::EffectiveAppearanceId(player, kNowSec + 10), "02_fire_talisman_boy");
 	EXPECT_EQ(CardCountInBag(), 2u); // 免费试用不扣卡
 
 	// 同一形象不可二次试用(新请求键)。
 	StartAppearanceTrialRequest secondReq;
 	secondReq.set_client_request_id(2002);
-	secondReq.set_appearance_id("08_alchemy_prodigy_boy");
+	secondReq.set_appearance_id("02_fire_talisman_boy");
 	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, secondReq, kNowSec + 20, resp),
 			  static_cast<uint32_t>(kAppearanceTrialAlreadyUsed));
 
@@ -274,7 +277,7 @@ TEST_F(PlayerAppearanceSystemTest, RejectsWhenNoCardOrFrozen)
 	bags.bags[kInventory].RemoveItems({{cardItemId, 2}});
 	SwitchAppearanceRequest req;
 	req.set_client_request_id(3001);
-	req.set_appearance_id("04_mountain_guardian_boy");
+	req.set_appearance_id("05_celestial_musician_girl");
 	SwitchAppearanceResponse resp;
 	EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, req, kNowSec, resp),
 			  static_cast<uint32_t>(kAppearanceNoCard));
@@ -283,7 +286,7 @@ TEST_F(PlayerAppearanceSystemTest, RejectsWhenNoCardOrFrozen)
 	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	StartAppearanceTrialRequest trialReq;
 	trialReq.set_client_request_id(3002);
-	trialReq.set_appearance_id("04_mountain_guardian_boy");
+	trialReq.set_appearance_id("05_celestial_musician_girl");
 	StartAppearanceTrialResponse trialResp;
 	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, trialReq, kNowSec, trialResp),
 			  static_cast<uint32_t>(kAppearanceFrozen));

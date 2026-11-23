@@ -69,7 +69,7 @@ func TestUpdateRoleAppearanceAuthValidationAndDelegation(t *testing.T) {
 				signUpdateRoleAppearance(t, req, caller, uint64(time.Now().UnixMilli()))
 			}
 			if mode == "body-changed" {
-				req.AppearanceId = "08_alchemy_prodigy_boy"
+				req.AppearanceId = "00_reference_topright_boy"
 			}
 			_, err := s.UpdateRoleAppearance(context.Background(), req)
 			if status.Code(err) != codes.PermissionDenied || fake.calls != 0 {
@@ -92,10 +92,10 @@ func TestUpdateRoleAppearanceAuthValidationAndDelegation(t *testing.T) {
 	t.Run("ok-and-error-propagation", func(t *testing.T) {
 		fake := &roleAppearanceUpdaterFake{updated: true}
 		s := NewDataServiceServer(&svc.ServiceContext{RoleAppearances: fake, RoleAdmissionAuth: roleAdmissionVerifier(t)})
-		req := &dspb.UpdateRoleAppearanceRequest{PlayerId: 2002, AppearanceId: "08_alchemy_prodigy_boy"}
+		req := &dspb.UpdateRoleAppearanceRequest{PlayerId: 2002, AppearanceId: "00_reference_topright_boy"}
 		signUpdateRoleAppearance(t, req, "scene", uint64(time.Now().UnixMilli()))
 		resp, err := s.UpdateRoleAppearance(context.Background(), req)
-		if err != nil || !resp.GetUpdated() || fake.playerID != 2002 || fake.appearanceID != "08_alchemy_prodigy_boy" {
+		if err != nil || !resp.GetUpdated() || fake.playerID != 2002 || fake.appearanceID != "00_reference_topright_boy" {
 			t.Fatalf("unexpected success outcome: resp=%v err=%v fake=%+v", resp, err, fake)
 		}
 
