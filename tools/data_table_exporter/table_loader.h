@@ -1,0 +1,110 @@
+
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <string_view>
+
+struct MissionTableSnapshot;
+struct RewardTableSnapshot;
+
+
+using LoadSuccessCallback = std::function<void()>;
+
+// 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
+// 运行期只加载 schema_digest 与本常量一致的表包。
+inline constexpr std::string_view kTableSchemaDigest = "db59930c8d215166";
+
+// 一次加载或热更表包的身份元数据。
+struct TableBundleIdentity {
+    std::string schemaDigest;
+    std::string contentDigest;
+    uint64_t version = 0;
+    uint64_t loadSeq = 0;
+    std::string source; // "image" 或 "bundle"
+};
+
+// 一整套不可变配置表快照集合:提交时整体替换现役管理器,战斗房间可显式持有保活至终局。
+struct TableSet {
+    TableBundleIdentity identity;
+
+    std::shared_ptr<const MissionTableSnapshot> missionTable;
+
+    std::shared_ptr<const RewardTableSnapshot> rewardTable;
+
+
+    TableSet();
+    ~TableSet();
+    TableSet(const TableSet&);
+    TableSet& operator=(const TableSet&);
+    TableSet(TableSet&&) noexcept;
+    TableSet& operator=(TableSet&&) noexcept;
+};
+
+// 主循环单线程校验作用域:在构造期间把 staged 快照临时装入各表管理器以便复用现有校验函数,
+// 析构时无条件还原先前的现役快照。
+class ScopedTableSetOverride {
+public:
+    explicit ScopedTableSetOverride(const std::shared_ptr<const TableSet>& staged);
+    ~ScopedTableSetOverride();
+
+    ScopedTableSetOverride(const ScopedTableSetOverride&) = delete;
+    ScopedTableSetOverride& operator=(const ScopedTableSetOverride&) = delete;
+    ScopedTableSetOverride(ScopedTableSetOverride&&) = delete;
+    ScopedTableSetOverride& operator=(ScopedTableSetOverride&&) = delete;
+
+private:
+    std::shared_ptr<const TableSet> previous;
+};
+
+void LoadTables();
+
+/// 并行加载全部表:工作线程数不超过 CPU 核数,阻塞到全部加载完、LoadSuccess 与回调都跑完才返回,
+/// 返回时工作线程已全部退出。名字里的 Async 指并行,不是「返回后还在后台加载」。
+/// 可以重复调用;加载会整批换掉各表的快照,调用期间不能有别的线程读表。
+void LoadTablesAsync();
+
+void OnTablesLoadSuccess(const LoadSuccessCallback& callback);
+
+/// 显式触发首次表加载完成后的全部单表 LoadSuccess 与全局 OnTablesLoadSuccess 回调(供表包启动路径调用)。
+void InvokeTablesLoadSuccess();
+
+/// 返回按本二进制编译期名单判定该表是否允许运行期热更(cfg_hot_reload)。
+bool IsTableHotReloadable(std::string_view tableName);
+
+std::size_t GetTableCount();
+std::string_view GetTableNameAt(std::size_t index);
+
+/// 分片准备接口:解析第 index 张表写入 target,不触碰现役表也不 LOG_FATAL。
+bool LoadTableIntoSetAt(std::size_t index,
+                        const std::string& configDir,
+                        bool useBinary,
+                        TableSet& target,
+                        std::string& err);
+
+/// 同步准备一整套 TableSet(供 --validate-tables 与单测使用)。
+bool PrepareTableSetSync(const std::string& configDir,
+                         bool useBinary,
+                         std::shared_ptr<TableSet>& out,
+                         std::string& err);
+
+/// 获取当前现役的整套不可变 TableSet。
+std::shared_ptr<const TableSet> CurrentTableSet();
+
+/// 整批提交新 TableSet,返回先前现役的 TableSet 供调用方放入延迟退役列表。
+std::shared_ptr<const TableSet> CommitTableSet(std::shared_ptr<TableSet> next);
+
+/// 更新当前 TableSet 身份元数据(供启动期解析完 manifest 后补齐摘要/版本/来源)。
+void SetCurrentTableBundleIdentity(const TableBundleIdentity& identity);
+
+/// Reload all tables and bump the version counter.
+/// WARNING: after reload, any string_view/span components built from old
+///          proto data are INVALID.  Rebuild all components immediately.
+void ReloadTables();
+
+/// Monotonically-increasing version; incremented by CommitTableSet() / ReloadTables().
+/// Use to detect stale cached components.
+uint64_t GetTableLoadVersion();
