@@ -1,0 +1,38 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "RankedRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message RankedRuleTable {
+	uint32 id = 1;
+	uint32 rule_version = 2;
+	uint32 battle_config_id = 3;
+	uint32 reference_class_id = 4;
+	uint32 competitive_level = 5;
+	uint32 default_character_preset_id = 6;
+	uint32 default_pet_preset_id = 7;
+	uint32 season_duration_days = 8;
+	uint32 wait_prompt_seconds = 9;
+	uint32 spread_tier1_seconds = 10;
+	uint32 spread_tier1_points = 11;
+	uint32 spread_tier2_seconds = 12;
+	uint32 spread_tier2_points = 13;
+	uint32 spread_tier3_points = 14;
+	uint32 milestone_avatar_matches = 15;
+	uint32 milestone_card_matches = 16;
+	uint32 milestone_talisman_matches = 17;
+	uint32 tier_qingfeng_centi = 18;
+	uint32 tier_yunzhang_centi = 19;
+	uint32 tier_tianshu_centi = 20;
+	uint32 tier_wushuang_centi = 21;
+	string desc = 22;
+}
+
+message RankedRuleTableData {
+	repeated RankedRuleTable data = 1;
+}

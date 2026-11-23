@@ -1,0 +1,31 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "RankedPresetTableOuterClass";
+option java_multiple_files = true;
+
+
+message RankedPresetTable {
+	uint32 id = 1;
+	uint32 role_kind = 2;
+	string code = 3;
+	string name = 4;
+	string role_tag = 5;
+	uint32 pet_table_id = 6;
+	uint32 weight_con = 7;
+	uint32 weight_spi = 8;
+	uint32 weight_str = 9;
+	uint32 weight_agi = 10;
+	repeated uint32 skill_ids = 11;
+	repeated uint32 pet_entry_ids = 12;
+	repeated uint32 pet_entry_points = 13;
+	uint32 sort = 14;
+	string desc = 15;
+}
+
+message RankedPresetTableData {
+	repeated RankedPresetTable data = 1;
+}

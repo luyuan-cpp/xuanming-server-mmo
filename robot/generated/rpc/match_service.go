@@ -400,3 +400,95 @@ func (matchServiceRpc) decodeSetBattleScriptLoadout(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// GetRankedProfile 异步调用 MatchService.GetRankedProfile(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetRankedProfile(c *pkg.GameClient, req *match.GetRankedProfileRequest, timeout time.Duration, done func(*match.GetRankedProfileResponse, error)) {
+	c.Call(game.MatchServiceGetRankedProfileMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetRankedProfile(reply, err))
+	})
+}
+
+// GetRankedProfileSync 同步调用 MatchService.GetRankedProfile(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetRankedProfileSync(ctx context.Context, c *pkg.GameClient, req *match.GetRankedProfileRequest, timeout time.Duration) (*match.GetRankedProfileResponse, error) {
+	return r.decodeGetRankedProfile(c.CallSync(ctx, game.MatchServiceGetRankedProfileMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetRankedProfile(reply *base.MessageContent, err error) (*match.GetRankedProfileResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetRankedProfileResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetRankedProfile reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SaveRankedPreset 异步调用 MatchService.SaveRankedPreset(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) SaveRankedPreset(c *pkg.GameClient, req *match.SaveRankedPresetRequest, timeout time.Duration, done func(*match.SaveRankedPresetResponse, error)) {
+	c.Call(game.MatchServiceSaveRankedPresetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSaveRankedPreset(reply, err))
+	})
+}
+
+// SaveRankedPresetSync 同步调用 MatchService.SaveRankedPreset(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) SaveRankedPresetSync(ctx context.Context, c *pkg.GameClient, req *match.SaveRankedPresetRequest, timeout time.Duration) (*match.SaveRankedPresetResponse, error) {
+	return r.decodeSaveRankedPreset(c.CallSync(ctx, game.MatchServiceSaveRankedPresetMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeSaveRankedPreset(reply *base.MessageContent, err error) (*match.SaveRankedPresetResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.SaveRankedPresetResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.SaveRankedPreset reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UpdateRankedCosmetic 异步调用 MatchService.UpdateRankedCosmetic(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) UpdateRankedCosmetic(c *pkg.GameClient, req *match.UpdateRankedCosmeticRequest, timeout time.Duration, done func(*match.UpdateRankedCosmeticResponse, error)) {
+	c.Call(game.MatchServiceUpdateRankedCosmeticMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUpdateRankedCosmetic(reply, err))
+	})
+}
+
+// UpdateRankedCosmeticSync 同步调用 MatchService.UpdateRankedCosmetic(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) UpdateRankedCosmeticSync(ctx context.Context, c *pkg.GameClient, req *match.UpdateRankedCosmeticRequest, timeout time.Duration) (*match.UpdateRankedCosmeticResponse, error) {
+	return r.decodeUpdateRankedCosmetic(c.CallSync(ctx, game.MatchServiceUpdateRankedCosmeticMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeUpdateRankedCosmetic(reply *base.MessageContent, err error) (*match.UpdateRankedCosmeticResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.UpdateRankedCosmeticResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.UpdateRankedCosmetic reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetRankedBattleResult 异步调用 MatchService.GetRankedBattleResult(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetRankedBattleResult(c *pkg.GameClient, req *match.GetRankedBattleResultRequest, timeout time.Duration, done func(*match.GetRankedBattleResultResponse, error)) {
+	c.Call(game.MatchServiceGetRankedBattleResultMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetRankedBattleResult(reply, err))
+	})
+}
+
+// GetRankedBattleResultSync 同步调用 MatchService.GetRankedBattleResult(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetRankedBattleResultSync(ctx context.Context, c *pkg.GameClient, req *match.GetRankedBattleResultRequest, timeout time.Duration) (*match.GetRankedBattleResultResponse, error) {
+	return r.decodeGetRankedBattleResult(c.CallSync(ctx, game.MatchServiceGetRankedBattleResultMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetRankedBattleResult(reply *base.MessageContent, err error) (*match.GetRankedBattleResultResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetRankedBattleResultResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetRankedBattleResult reply: %w", err)
+	}
+	return resp, nil
+}

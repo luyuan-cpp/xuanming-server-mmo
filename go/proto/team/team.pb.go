@@ -95,6 +95,7 @@ const (
 	TeamChangeReason_TEAM_CHANGE_REASON_HEALED                     TeamChangeReason = 14 // 服务端自愈(索引/记录矛盾修复)
 	TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUED               TeamChangeReason = 15 // 整队进队列等补位;actor_id = 队长
 	TeamChangeReason_TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED       TeamChangeReason = 16 // 整队退出补位队列;actor_id = 主动取消者(0 = 系统撤单,原因在 tip)
+	TeamChangeReason_TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED    TeamChangeReason = 17 // 队员确认排位预设;actor_id = 确认者
 )
 
 // Enum value maps for TeamChangeReason.
@@ -117,6 +118,7 @@ var (
 		14: "TEAM_CHANGE_REASON_HEALED",
 		15: "TEAM_CHANGE_REASON_MATCH_QUEUED",
 		16: "TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED",
+		17: "TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED",
 	}
 	TeamChangeReason_value = map[string]int32{
 		"TEAM_CHANGE_REASON_UNSPECIFIED":                0,
@@ -136,6 +138,7 @@ var (
 		"TEAM_CHANGE_REASON_HEALED":                     14,
 		"TEAM_CHANGE_REASON_MATCH_QUEUED":               15,
 		"TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED":       16,
+		"TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED":    17,
 	}
 )
 
@@ -834,9 +837,11 @@ type StartTeamMatchRequest struct {
 	TargetTeamSize uint32 `protobuf:"varint,4,opt,name=target_team_size,json=targetTeamSize,proto3" json:"target_team_size,omitempty"`
 	// 0或PVE_TEAM：当前人数直接PVE，显式更大目标仍可补位；PVP_TEAM：每侧目标人数，0取当前人数。
 	// PVP始终等待真人对手，队伍作为不可拆单位；其余模式明确拒绝。
-	MatchMode     match.MatchMode `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MatchMode match.MatchMode `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"`
+	// 排位规则版本号(PVP_TEAM 排位必填或由服务端按当前赛季核验;版本不符拒绝开局)。
+	RankedRuleVersion uint32 `protobuf:"varint,6,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *StartTeamMatchRequest) Reset() {
@@ -904,6 +909,89 @@ func (x *StartTeamMatchRequest) GetMatchMode() match.MatchMode {
 	return match.MatchMode(0)
 }
 
+func (x *StartTeamMatchRequest) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
+type ConfirmRankedPresetRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ExpectedTeamId    uint64                 `protobuf:"varint,1,opt,name=expected_team_id,json=expectedTeamId,proto3" json:"expected_team_id,omitempty"`
+	CharacterPresetId uint32                 `protobuf:"varint,2,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"` // RankedPreset.id(role_kind=1): 101/102/103
+	PetPresetId       uint32                 `protobuf:"varint,3,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`                   // RankedPreset.id(role_kind=2): 201/202/203
+	RuleVersion       uint32                 `protobuf:"varint,4,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`                     // 当前赛季规则版本
+	RequestId         string                 `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ConfirmRankedPresetRequest) Reset() {
+	*x = ConfirmRankedPresetRequest{}
+	mi := &file_proto_team_team_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmRankedPresetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmRankedPresetRequest) ProtoMessage() {}
+
+func (x *ConfirmRankedPresetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_team_team_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmRankedPresetRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmRankedPresetRequest) Descriptor() ([]byte, []int) {
+	return file_proto_team_team_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ConfirmRankedPresetRequest) GetExpectedTeamId() uint64 {
+	if x != nil {
+		return x.ExpectedTeamId
+	}
+	return 0
+}
+
+func (x *ConfirmRankedPresetRequest) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *ConfirmRankedPresetRequest) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *ConfirmRankedPresetRequest) GetRuleVersion() uint32 {
+	if x != nil {
+		return x.RuleVersion
+	}
+	return 0
+}
+
+func (x *ConfirmRankedPresetRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type TeamResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // id=0 成功;非 0 时 team 仍可能携带调用者当前视图(取自同一次 S_READ,照常按 §H.3 应用)
@@ -915,7 +1003,7 @@ type TeamResponse struct {
 
 func (x *TeamResponse) Reset() {
 	*x = TeamResponse{}
-	mi := &file_proto_team_team_proto_msgTypes[12]
+	mi := &file_proto_team_team_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -927,7 +1015,7 @@ func (x *TeamResponse) String() string {
 func (*TeamResponse) ProtoMessage() {}
 
 func (x *TeamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[12]
+	mi := &file_proto_team_team_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -940,7 +1028,7 @@ func (x *TeamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamResponse.ProtoReflect.Descriptor instead.
 func (*TeamResponse) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{12}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TeamResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -980,7 +1068,7 @@ type TeamMatchIntent struct {
 
 func (x *TeamMatchIntent) Reset() {
 	*x = TeamMatchIntent{}
-	mi := &file_proto_team_team_proto_msgTypes[13]
+	mi := &file_proto_team_team_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -992,7 +1080,7 @@ func (x *TeamMatchIntent) String() string {
 func (*TeamMatchIntent) ProtoMessage() {}
 
 func (x *TeamMatchIntent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[13]
+	mi := &file_proto_team_team_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1005,7 +1093,7 @@ func (x *TeamMatchIntent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamMatchIntent.ProtoReflect.Descriptor instead.
 func (*TeamMatchIntent) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{13}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TeamMatchIntent) GetRequestId() string {
@@ -1040,7 +1128,7 @@ type ListMyInvitesResponse struct {
 
 func (x *ListMyInvitesResponse) Reset() {
 	*x = ListMyInvitesResponse{}
-	mi := &file_proto_team_team_proto_msgTypes[14]
+	mi := &file_proto_team_team_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1052,7 +1140,7 @@ func (x *ListMyInvitesResponse) String() string {
 func (*ListMyInvitesResponse) ProtoMessage() {}
 
 func (x *ListMyInvitesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[14]
+	mi := &file_proto_team_team_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1065,7 +1153,7 @@ func (x *ListMyInvitesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMyInvitesResponse.ProtoReflect.Descriptor instead.
 func (*ListMyInvitesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{14}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListMyInvitesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1090,25 +1178,29 @@ func (x *ListMyInvitesResponse) GetServerTimeMs() uint64 {
 }
 
 type TeamMemberView struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                       // 从玩家存档资料(PlayerProfileComp.name)读取;未取名 / 旧存档为 "",由客户端兜底显示
-	Level         uint32                 `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`                    // 尽力而为,0 = 未知
-	ClassId       uint32                 `protobuf:"varint,4,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 尽力而为,0 = 未知
-	Gender        uint32                 `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                  // 从玩家存档资料读取；旧存档未补齐时为 0。
-	IsLeader      bool                   `protobuf:"varint,6,opt,name=is_leader,json=isLeader,proto3" json:"is_leader,omitempty"`
-	IsOnline      bool                   `protobuf:"varint,7,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"`             // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
-	InBattle      bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`             // 读时由 battle:lock 算(咨询性)
-	ZoneId        uint32                 `protobuf:"varint,9,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                   // 玩家 home zone
-	JoinSeq       uint32                 `protobuf:"varint,10,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`               // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
-	AppearanceId  string                 `protobuf:"bytes,11,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"` // 从玩家存档资料读取，空值保留旧身份映射。
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId                uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Name                    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                       // 从玩家存档资料(PlayerProfileComp.name)读取;未取名 / 旧存档为 "",由客户端兜底显示
+	Level                   uint32                 `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`                    // 尽力而为,0 = 未知
+	ClassId                 uint32                 `protobuf:"varint,4,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 尽力而为,0 = 未知
+	Gender                  uint32                 `protobuf:"varint,5,opt,name=gender,proto3" json:"gender,omitempty"`                  // 从玩家存档资料读取；旧存档未补齐时为 0。
+	IsLeader                bool                   `protobuf:"varint,6,opt,name=is_leader,json=isLeader,proto3" json:"is_leader,omitempty"`
+	IsOnline                bool                   `protobuf:"varint,7,opt,name=is_online,json=isOnline,proto3" json:"is_online,omitempty"`                                                   // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
+	InBattle                bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`                                                   // 读时由 battle:lock 算(咨询性)
+	ZoneId                  uint32                 `protobuf:"varint,9,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                                                         // 玩家 home zone
+	JoinSeq                 uint32                 `protobuf:"varint,10,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`                                                     // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
+	AppearanceId            string                 `protobuf:"bytes,11,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`                                       // 从玩家存档资料读取，空值保留旧身份映射。
+	RankedCharacterPresetId uint32                 `protobuf:"varint,12,opt,name=ranked_character_preset_id,json=rankedCharacterPresetId,proto3" json:"ranked_character_preset_id,omitempty"` // 该队员确认的排位人物预设(未确认或旧版本时为 0 或上次选择)
+	RankedPetPresetId       uint32                 `protobuf:"varint,13,opt,name=ranked_pet_preset_id,json=rankedPetPresetId,proto3" json:"ranked_pet_preset_id,omitempty"`                   // 该队员确认的排位宝宝预设
+	RankedRuleVersion       uint32                 `protobuf:"varint,14,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`                     // 确认时的排位规则版本
+	RankedPresetConfirmed   bool                   `protobuf:"varint,15,opt,name=ranked_preset_confirmed,json=rankedPresetConfirmed,proto3" json:"ranked_preset_confirmed,omitempty"`         // 是否已按当前名单与当前规则版本完成确认
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *TeamMemberView) Reset() {
 	*x = TeamMemberView{}
-	mi := &file_proto_team_team_proto_msgTypes[15]
+	mi := &file_proto_team_team_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1212,7 @@ func (x *TeamMemberView) String() string {
 func (*TeamMemberView) ProtoMessage() {}
 
 func (x *TeamMemberView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[15]
+	mi := &file_proto_team_team_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1225,7 @@ func (x *TeamMemberView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamMemberView.ProtoReflect.Descriptor instead.
 func (*TeamMemberView) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{15}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TeamMemberView) GetPlayerId() uint64 {
@@ -1213,6 +1305,34 @@ func (x *TeamMemberView) GetAppearanceId() string {
 	return ""
 }
 
+func (x *TeamMemberView) GetRankedCharacterPresetId() uint32 {
+	if x != nil {
+		return x.RankedCharacterPresetId
+	}
+	return 0
+}
+
+func (x *TeamMemberView) GetRankedPetPresetId() uint32 {
+	if x != nil {
+		return x.RankedPetPresetId
+	}
+	return 0
+}
+
+func (x *TeamMemberView) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
+func (x *TeamMemberView) GetRankedPresetConfirmed() bool {
+	if x != nil {
+		return x.RankedPresetConfirmed
+	}
+	return false
+}
+
 type TeamApplicationView struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Player        *TeamMemberView        `protobuf:"bytes,1,opt,name=player,proto3" json:"player,omitempty"`
@@ -1224,7 +1344,7 @@ type TeamApplicationView struct {
 
 func (x *TeamApplicationView) Reset() {
 	*x = TeamApplicationView{}
-	mi := &file_proto_team_team_proto_msgTypes[16]
+	mi := &file_proto_team_team_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1236,7 +1356,7 @@ func (x *TeamApplicationView) String() string {
 func (*TeamApplicationView) ProtoMessage() {}
 
 func (x *TeamApplicationView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[16]
+	mi := &file_proto_team_team_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1249,7 +1369,7 @@ func (x *TeamApplicationView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamApplicationView.ProtoReflect.Descriptor instead.
 func (*TeamApplicationView) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{16}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TeamApplicationView) GetPlayer() *TeamMemberView {
@@ -1284,7 +1404,7 @@ type TeamOutgoingInviteView struct {
 
 func (x *TeamOutgoingInviteView) Reset() {
 	*x = TeamOutgoingInviteView{}
-	mi := &file_proto_team_team_proto_msgTypes[17]
+	mi := &file_proto_team_team_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1296,7 +1416,7 @@ func (x *TeamOutgoingInviteView) String() string {
 func (*TeamOutgoingInviteView) ProtoMessage() {}
 
 func (x *TeamOutgoingInviteView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[17]
+	mi := &file_proto_team_team_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1309,7 +1429,7 @@ func (x *TeamOutgoingInviteView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamOutgoingInviteView.ProtoReflect.Descriptor instead.
 func (*TeamOutgoingInviteView) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{17}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TeamOutgoingInviteView) GetInvitee() *TeamMemberView {
@@ -1341,7 +1461,7 @@ type TeamIncomingInviteView struct {
 
 func (x *TeamIncomingInviteView) Reset() {
 	*x = TeamIncomingInviteView{}
-	mi := &file_proto_team_team_proto_msgTypes[18]
+	mi := &file_proto_team_team_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1353,7 +1473,7 @@ func (x *TeamIncomingInviteView) String() string {
 func (*TeamIncomingInviteView) ProtoMessage() {}
 
 func (x *TeamIncomingInviteView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[18]
+	mi := &file_proto_team_team_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1366,7 +1486,7 @@ func (x *TeamIncomingInviteView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamIncomingInviteView.ProtoReflect.Descriptor instead.
 func (*TeamIncomingInviteView) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{18}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TeamIncomingInviteView) GetTeamId() uint64 {
@@ -1438,13 +1558,17 @@ type TeamView struct {
 	MatchMode          match.MatchMode `protobuf:"varint,17,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"` // 本次排队模式；空闲时为0。
 	// 不支持新字段的服务端会忽略PVP意图，客户端必须见到此能力才允许整队PVP。
 	PvpMatchSupported bool `protobuf:"varint,18,opt,name=pvp_match_supported,json=pvpMatchSupported,proto3" json:"pvp_match_supported,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 队内全部成员是否均已按当前名单与当前规则版本确认排位预设。
+	RankedPresetsAllConfirmed bool   `protobuf:"varint,19,opt,name=ranked_presets_all_confirmed,json=rankedPresetsAllConfirmed,proto3" json:"ranked_presets_all_confirmed,omitempty"`
+	RankedSeasonId            uint32 `protobuf:"varint,20,opt,name=ranked_season_id,json=rankedSeasonId,proto3" json:"ranked_season_id,omitempty"`
+	RankedRuleVersion         uint32 `protobuf:"varint,21,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *TeamView) Reset() {
 	*x = TeamView{}
-	mi := &file_proto_team_team_proto_msgTypes[19]
+	mi := &file_proto_team_team_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1456,7 +1580,7 @@ func (x *TeamView) String() string {
 func (*TeamView) ProtoMessage() {}
 
 func (x *TeamView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[19]
+	mi := &file_proto_team_team_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1469,7 +1593,7 @@ func (x *TeamView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamView.ProtoReflect.Descriptor instead.
 func (*TeamView) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{19}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *TeamView) GetTeamId() uint64 {
@@ -1598,6 +1722,27 @@ func (x *TeamView) GetPvpMatchSupported() bool {
 	return false
 }
 
+func (x *TeamView) GetRankedPresetsAllConfirmed() bool {
+	if x != nil {
+		return x.RankedPresetsAllConfirmed
+	}
+	return false
+}
+
+func (x *TeamView) GetRankedSeasonId() uint32 {
+	if x != nil {
+		return x.RankedSeasonId
+	}
+	return 0
+}
+
+func (x *TeamView) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
 type TeamSnapshotS2C struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Team          *TeamView              `protobuf:"bytes,1,opt,name=team,proto3" json:"team,omitempty"`
@@ -1610,7 +1755,7 @@ type TeamSnapshotS2C struct {
 
 func (x *TeamSnapshotS2C) Reset() {
 	*x = TeamSnapshotS2C{}
-	mi := &file_proto_team_team_proto_msgTypes[20]
+	mi := &file_proto_team_team_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1622,7 +1767,7 @@ func (x *TeamSnapshotS2C) String() string {
 func (*TeamSnapshotS2C) ProtoMessage() {}
 
 func (x *TeamSnapshotS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[20]
+	mi := &file_proto_team_team_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1635,7 +1780,7 @@ func (x *TeamSnapshotS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamSnapshotS2C.ProtoReflect.Descriptor instead.
 func (*TeamSnapshotS2C) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{20}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *TeamSnapshotS2C) GetTeam() *TeamView {
@@ -1676,7 +1821,7 @@ type TeamInviteS2C struct {
 
 func (x *TeamInviteS2C) Reset() {
 	*x = TeamInviteS2C{}
-	mi := &file_proto_team_team_proto_msgTypes[21]
+	mi := &file_proto_team_team_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1688,7 +1833,7 @@ func (x *TeamInviteS2C) String() string {
 func (*TeamInviteS2C) ProtoMessage() {}
 
 func (x *TeamInviteS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[21]
+	mi := &file_proto_team_team_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1701,7 +1846,7 @@ func (x *TeamInviteS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamInviteS2C.ProtoReflect.Descriptor instead.
 func (*TeamInviteS2C) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{21}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *TeamInviteS2C) GetInvite() *TeamIncomingInviteView {
@@ -1730,7 +1875,7 @@ type TeamEventS2C struct {
 
 func (x *TeamEventS2C) Reset() {
 	*x = TeamEventS2C{}
-	mi := &file_proto_team_team_proto_msgTypes[22]
+	mi := &file_proto_team_team_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1887,7 @@ func (x *TeamEventS2C) String() string {
 func (*TeamEventS2C) ProtoMessage() {}
 
 func (x *TeamEventS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[22]
+	mi := &file_proto_team_team_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1900,7 @@ func (x *TeamEventS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamEventS2C.ProtoReflect.Descriptor instead.
 func (*TeamEventS2C) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{22}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *TeamEventS2C) GetType() TeamEventType {
@@ -1798,7 +1943,7 @@ type TeamRecord struct {
 
 func (x *TeamRecord) Reset() {
 	*x = TeamRecord{}
-	mi := &file_proto_team_team_proto_msgTypes[23]
+	mi := &file_proto_team_team_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1810,7 +1955,7 @@ func (x *TeamRecord) String() string {
 func (*TeamRecord) ProtoMessage() {}
 
 func (x *TeamRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[23]
+	mi := &file_proto_team_team_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1823,7 +1968,7 @@ func (x *TeamRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamRecord.ProtoReflect.Descriptor instead.
 func (*TeamRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{23}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *TeamRecord) GetTeamId() uint64 {
@@ -1904,18 +2049,22 @@ func (x *TeamRecord) GetMatchLockRoster() []uint64 {
 }
 
 type TeamMemberRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	ZoneId        uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
-	JoinedAtMs    uint64                 `protobuf:"varint,3,opt,name=joined_at_ms,json=joinedAtMs,proto3" json:"joined_at_ms,omitempty"`
-	JoinSeq       uint32                 `protobuf:"varint,4,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId                uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ZoneId                  uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	JoinedAtMs              uint64                 `protobuf:"varint,3,opt,name=joined_at_ms,json=joinedAtMs,proto3" json:"joined_at_ms,omitempty"`
+	JoinSeq                 uint32                 `protobuf:"varint,4,opt,name=join_seq,json=joinSeq,proto3" json:"join_seq,omitempty"`
+	RankedCharacterPresetId uint32                 `protobuf:"varint,5,opt,name=ranked_character_preset_id,json=rankedCharacterPresetId,proto3" json:"ranked_character_preset_id,omitempty"`
+	RankedPetPresetId       uint32                 `protobuf:"varint,6,opt,name=ranked_pet_preset_id,json=rankedPetPresetId,proto3" json:"ranked_pet_preset_id,omitempty"`
+	RankedRuleVersion       uint32                 `protobuf:"varint,7,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	RankedPresetConfirmed   bool                   `protobuf:"varint,8,opt,name=ranked_preset_confirmed,json=rankedPresetConfirmed,proto3" json:"ranked_preset_confirmed,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *TeamMemberRecord) Reset() {
 	*x = TeamMemberRecord{}
-	mi := &file_proto_team_team_proto_msgTypes[24]
+	mi := &file_proto_team_team_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1927,7 +2076,7 @@ func (x *TeamMemberRecord) String() string {
 func (*TeamMemberRecord) ProtoMessage() {}
 
 func (x *TeamMemberRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[24]
+	mi := &file_proto_team_team_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1940,7 +2089,7 @@ func (x *TeamMemberRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamMemberRecord.ProtoReflect.Descriptor instead.
 func (*TeamMemberRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{24}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *TeamMemberRecord) GetPlayerId() uint64 {
@@ -1971,6 +2120,34 @@ func (x *TeamMemberRecord) GetJoinSeq() uint32 {
 	return 0
 }
 
+func (x *TeamMemberRecord) GetRankedCharacterPresetId() uint32 {
+	if x != nil {
+		return x.RankedCharacterPresetId
+	}
+	return 0
+}
+
+func (x *TeamMemberRecord) GetRankedPetPresetId() uint32 {
+	if x != nil {
+		return x.RankedPetPresetId
+	}
+	return 0
+}
+
+func (x *TeamMemberRecord) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
+func (x *TeamMemberRecord) GetRankedPresetConfirmed() bool {
+	if x != nil {
+		return x.RankedPresetConfirmed
+	}
+	return false
+}
+
 type TeamApplicationRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -1983,7 +2160,7 @@ type TeamApplicationRecord struct {
 
 func (x *TeamApplicationRecord) Reset() {
 	*x = TeamApplicationRecord{}
-	mi := &file_proto_team_team_proto_msgTypes[25]
+	mi := &file_proto_team_team_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1995,7 +2172,7 @@ func (x *TeamApplicationRecord) String() string {
 func (*TeamApplicationRecord) ProtoMessage() {}
 
 func (x *TeamApplicationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[25]
+	mi := &file_proto_team_team_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +2185,7 @@ func (x *TeamApplicationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamApplicationRecord.ProtoReflect.Descriptor instead.
 func (*TeamApplicationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{25}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *TeamApplicationRecord) GetPlayerId() uint64 {
@@ -2052,7 +2229,7 @@ type TeamInviteRecord struct {
 
 func (x *TeamInviteRecord) Reset() {
 	*x = TeamInviteRecord{}
-	mi := &file_proto_team_team_proto_msgTypes[26]
+	mi := &file_proto_team_team_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2064,7 +2241,7 @@ func (x *TeamInviteRecord) String() string {
 func (*TeamInviteRecord) ProtoMessage() {}
 
 func (x *TeamInviteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_team_team_proto_msgTypes[26]
+	mi := &file_proto_team_team_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2077,7 +2254,7 @@ func (x *TeamInviteRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TeamInviteRecord.ProtoReflect.Descriptor instead.
 func (*TeamInviteRecord) Descriptor() ([]byte, []int) {
-	return file_proto_team_team_proto_rawDescGZIP(), []int{26}
+	return file_proto_team_team_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *TeamInviteRecord) GetInviteeId() uint64 {
@@ -2165,7 +2342,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x12DisbandTeamRequest\x12(\n" +
 	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"\xe5\x01\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\x95\x02\n" +
 	"\x15StartTeamMatchRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12(\n" +
 	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
@@ -2173,7 +2350,15 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"request_id\x18\x03 \x01(\tR\trequestId\x12(\n" +
 	"\x10target_team_size\x18\x04 \x01(\rR\x0etargetTeamSize\x12/\n" +
 	"\n" +
-	"match_mode\x18\x05 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\"\xa6\x01\n" +
+	"match_mode\x18\x05 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\x12.\n" +
+	"\x13ranked_rule_version\x18\x06 \x01(\rR\x11rankedRuleVersion\"\xdc\x01\n" +
+	"\x1aConfirmRankedPresetRequest\x12(\n" +
+	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12.\n" +
+	"\x13character_preset_id\x18\x02 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x03 \x01(\rR\vpetPresetId\x12!\n" +
+	"\frule_version\x18\x04 \x01(\rR\vruleVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x05 \x01(\tR\trequestId\"\xa6\x01\n" +
 	"\fTeamResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12$\n" +
 	"\x04team\x18\x02 \x01(\v2\x10.teampb.TeamViewR\x04team\x12:\n" +
@@ -2186,7 +2371,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x15ListMyInvitesResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\ainvites\x18\x02 \x03(\v2\x1e.teampb.TeamIncomingInviteViewR\ainvites\x12$\n" +
-	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\"\xba\x02\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\"\x90\x04\n" +
 	"\x0eTeamMemberView\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -2199,7 +2384,11 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\azone_id\x18\t \x01(\rR\x06zoneId\x12\x19\n" +
 	"\bjoin_seq\x18\n" +
 	" \x01(\rR\ajoinSeq\x12#\n" +
-	"\rappearance_id\x18\v \x01(\tR\fappearanceId\"\x8b\x01\n" +
+	"\rappearance_id\x18\v \x01(\tR\fappearanceId\x12;\n" +
+	"\x1aranked_character_preset_id\x18\f \x01(\rR\x17rankedCharacterPresetId\x12/\n" +
+	"\x14ranked_pet_preset_id\x18\r \x01(\rR\x11rankedPetPresetId\x12.\n" +
+	"\x13ranked_rule_version\x18\x0e \x01(\rR\x11rankedRuleVersion\x126\n" +
+	"\x17ranked_preset_confirmed\x18\x0f \x01(\bR\x15rankedPresetConfirmed\"\x8b\x01\n" +
 	"\x13TeamApplicationView\x12.\n" +
 	"\x06player\x18\x01 \x01(\v2\x16.teampb.TeamMemberViewR\x06player\x12\"\n" +
 	"\rapplied_at_ms\x18\x02 \x01(\x04R\vappliedAtMs\x12 \n" +
@@ -2216,7 +2405,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\fmember_count\x18\x04 \x01(\rR\vmemberCount\x12\x17\n" +
 	"\azone_id\x18\x05 \x01(\rR\x06zoneId\x12 \n" +
 	"\fexpire_at_ms\x18\x06 \x01(\x04R\n" +
-	"expireAtMs\"\xa3\x06\n" +
+	"expireAtMs\"\xbe\a\n" +
 	"\bTeamView\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\x12\x1b\n" +
 	"\tleader_id\x18\x02 \x01(\x04R\bleaderId\x12\x1a\n" +
@@ -2238,7 +2427,10 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x14match_fill_supported\x18\x10 \x01(\bR\x12matchFillSupported\x12/\n" +
 	"\n" +
 	"match_mode\x18\x11 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\x12.\n" +
-	"\x13pvp_match_supported\x18\x12 \x01(\bR\x11pvpMatchSupported\"\xa7\x01\n" +
+	"\x13pvp_match_supported\x18\x12 \x01(\bR\x11pvpMatchSupported\x12?\n" +
+	"\x1cranked_presets_all_confirmed\x18\x13 \x01(\bR\x19rankedPresetsAllConfirmed\x12(\n" +
+	"\x10ranked_season_id\x18\x14 \x01(\rR\x0erankedSeasonId\x12.\n" +
+	"\x13ranked_rule_version\x18\x15 \x01(\rR\x11rankedRuleVersion\"\xa7\x01\n" +
 	"\x0fTeamSnapshotS2C\x12$\n" +
 	"\x04team\x18\x01 \x01(\v2\x10.teampb.TeamViewR\x04team\x120\n" +
 	"\x06reason\x18\x02 \x01(\x0e2\x18.teampb.TeamChangeReasonR\x06reason\x12\x19\n" +
@@ -2264,13 +2456,17 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x10match_lock_token\x18\t \x01(\tR\x0ematchLockToken\x124\n" +
 	"\x17match_lock_expire_at_ms\x18\n" +
 	" \x01(\x04R\x13matchLockExpireAtMs\x12*\n" +
-	"\x11match_lock_roster\x18\v \x03(\x04R\x0fmatchLockRoster\"\x85\x01\n" +
+	"\x11match_lock_roster\x18\v \x03(\x04R\x0fmatchLockRoster\"\xdb\x02\n" +
 	"\x10TeamMemberRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12 \n" +
 	"\fjoined_at_ms\x18\x03 \x01(\x04R\n" +
 	"joinedAtMs\x12\x19\n" +
-	"\bjoin_seq\x18\x04 \x01(\rR\ajoinSeq\"\x93\x01\n" +
+	"\bjoin_seq\x18\x04 \x01(\rR\ajoinSeq\x12;\n" +
+	"\x1aranked_character_preset_id\x18\x05 \x01(\rR\x17rankedCharacterPresetId\x12/\n" +
+	"\x14ranked_pet_preset_id\x18\x06 \x01(\rR\x11rankedPetPresetId\x12.\n" +
+	"\x13ranked_rule_version\x18\a \x01(\rR\x11rankedRuleVersion\x126\n" +
+	"\x17ranked_preset_confirmed\x18\b \x01(\bR\x15rankedPresetConfirmed\"\x93\x01\n" +
 	"\x15TeamApplicationRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12\"\n" +
@@ -2289,7 +2485,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x0eTeamMatchState\x12\x19\n" +
 	"\x15TEAM_MATCH_STATE_IDLE\x10\x00\x12\x1d\n" +
 	"\x19TEAM_MATCH_STATE_STARTING\x10\x01\x12\x1b\n" +
-	"\x17TEAM_MATCH_STATE_QUEUED\x10\x02*\x9f\x05\n" +
+	"\x17TEAM_MATCH_STATE_QUEUED\x10\x02*\xcf\x05\n" +
 	"\x10TeamChangeReason\x12\"\n" +
 	"\x1eTEAM_CHANGE_REASON_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aTEAM_CHANGE_REASON_CREATED\x10\x01\x12$\n" +
@@ -2308,11 +2504,12 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x1fTEAM_CHANGE_REASON_MATCH_FAILED\x10\r\x12\x1d\n" +
 	"\x19TEAM_CHANGE_REASON_HEALED\x10\x0e\x12#\n" +
 	"\x1fTEAM_CHANGE_REASON_MATCH_QUEUED\x10\x0f\x12+\n" +
-	"'TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED\x10\x10*~\n" +
+	"'TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED\x10\x10\x12.\n" +
+	"*TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED\x10\x11*~\n" +
 	"\rTeamEventType\x12\x1f\n" +
 	"\x1bTEAM_EVENT_TYPE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$TEAM_EVENT_TYPE_APPLICATION_REJECTED\x10\x01\x12\"\n" +
-	"\x1eTEAM_EVENT_TYPE_INVITE_REVOKED\x10\x022\x90\b\n" +
+	"\x1eTEAM_EVENT_TYPE_INVITE_REVOKED\x10\x022\xe3\b\n" +
 	"\x10ClientPlayerTeam\x12?\n" +
 	"\n" +
 	"CreateTeam\x12\x19.teampb.CreateTeamRequest\x1a\x14.teampb.TeamResponse\"\x00\x12=\n" +
@@ -2330,7 +2527,8 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x0eStartTeamMatch\x12\x1d.teampb.StartTeamMatchRequest\x1a\x14.teampb.TeamResponse\"\x00\x12<\n" +
 	"\x12NotifyTeamSnapshot\x12\x17.teampb.TeamSnapshotS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x128\n" +
 	"\x10NotifyTeamInvite\x12\x15.teampb.TeamInviteS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x126\n" +
-	"\x0fNotifyTeamEvent\x12\x14.teampb.TeamEventS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0fZ\n" +
+	"\x0fNotifyTeamEvent\x12\x14.teampb.TeamEventS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12Q\n" +
+	"\x13ConfirmRankedPreset\x12\".teampb.ConfirmRankedPresetRequest\x1a\x14.teampb.TeamResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0fZ\n" +
 	"proto/team\x80\x01\x00b\x06proto3"
 
 var (
@@ -2346,65 +2544,66 @@ func file_proto_team_team_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_team_team_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_team_team_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_proto_team_team_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_team_team_proto_goTypes = []any{
-	(TeamMatchState)(0),              // 0: teampb.TeamMatchState
-	(TeamChangeReason)(0),            // 1: teampb.TeamChangeReason
-	(TeamEventType)(0),               // 2: teampb.TeamEventType
-	(*CreateTeamRequest)(nil),        // 3: teampb.CreateTeamRequest
-	(*GetMyTeamRequest)(nil),         // 4: teampb.GetMyTeamRequest
-	(*ApplyJoinTeamRequest)(nil),     // 5: teampb.ApplyJoinTeamRequest
-	(*HandleApplicationRequest)(nil), // 6: teampb.HandleApplicationRequest
-	(*InviteToTeamRequest)(nil),      // 7: teampb.InviteToTeamRequest
-	(*RespondInviteRequest)(nil),     // 8: teampb.RespondInviteRequest
-	(*ListMyInvitesRequest)(nil),     // 9: teampb.ListMyInvitesRequest
-	(*LeaveTeamRequest)(nil),         // 10: teampb.LeaveTeamRequest
-	(*KickMemberRequest)(nil),        // 11: teampb.KickMemberRequest
-	(*TransferLeaderRequest)(nil),    // 12: teampb.TransferLeaderRequest
-	(*DisbandTeamRequest)(nil),       // 13: teampb.DisbandTeamRequest
-	(*StartTeamMatchRequest)(nil),    // 14: teampb.StartTeamMatchRequest
-	(*TeamResponse)(nil),             // 15: teampb.TeamResponse
-	(*TeamMatchIntent)(nil),          // 16: teampb.TeamMatchIntent
-	(*ListMyInvitesResponse)(nil),    // 17: teampb.ListMyInvitesResponse
-	(*TeamMemberView)(nil),           // 18: teampb.TeamMemberView
-	(*TeamApplicationView)(nil),      // 19: teampb.TeamApplicationView
-	(*TeamOutgoingInviteView)(nil),   // 20: teampb.TeamOutgoingInviteView
-	(*TeamIncomingInviteView)(nil),   // 21: teampb.TeamIncomingInviteView
-	(*TeamView)(nil),                 // 22: teampb.TeamView
-	(*TeamSnapshotS2C)(nil),          // 23: teampb.TeamSnapshotS2C
-	(*TeamInviteS2C)(nil),            // 24: teampb.TeamInviteS2C
-	(*TeamEventS2C)(nil),             // 25: teampb.TeamEventS2C
-	(*TeamRecord)(nil),               // 26: teampb.TeamRecord
-	(*TeamMemberRecord)(nil),         // 27: teampb.TeamMemberRecord
-	(*TeamApplicationRecord)(nil),    // 28: teampb.TeamApplicationRecord
-	(*TeamInviteRecord)(nil),         // 29: teampb.TeamInviteRecord
-	(match.MatchMode)(0),             // 30: match.MatchMode
-	(*base.TipInfoMessage)(nil),      // 31: TipInfoMessage
-	(*base.Empty)(nil),               // 32: Empty
+	(TeamMatchState)(0),                // 0: teampb.TeamMatchState
+	(TeamChangeReason)(0),              // 1: teampb.TeamChangeReason
+	(TeamEventType)(0),                 // 2: teampb.TeamEventType
+	(*CreateTeamRequest)(nil),          // 3: teampb.CreateTeamRequest
+	(*GetMyTeamRequest)(nil),           // 4: teampb.GetMyTeamRequest
+	(*ApplyJoinTeamRequest)(nil),       // 5: teampb.ApplyJoinTeamRequest
+	(*HandleApplicationRequest)(nil),   // 6: teampb.HandleApplicationRequest
+	(*InviteToTeamRequest)(nil),        // 7: teampb.InviteToTeamRequest
+	(*RespondInviteRequest)(nil),       // 8: teampb.RespondInviteRequest
+	(*ListMyInvitesRequest)(nil),       // 9: teampb.ListMyInvitesRequest
+	(*LeaveTeamRequest)(nil),           // 10: teampb.LeaveTeamRequest
+	(*KickMemberRequest)(nil),          // 11: teampb.KickMemberRequest
+	(*TransferLeaderRequest)(nil),      // 12: teampb.TransferLeaderRequest
+	(*DisbandTeamRequest)(nil),         // 13: teampb.DisbandTeamRequest
+	(*StartTeamMatchRequest)(nil),      // 14: teampb.StartTeamMatchRequest
+	(*ConfirmRankedPresetRequest)(nil), // 15: teampb.ConfirmRankedPresetRequest
+	(*TeamResponse)(nil),               // 16: teampb.TeamResponse
+	(*TeamMatchIntent)(nil),            // 17: teampb.TeamMatchIntent
+	(*ListMyInvitesResponse)(nil),      // 18: teampb.ListMyInvitesResponse
+	(*TeamMemberView)(nil),             // 19: teampb.TeamMemberView
+	(*TeamApplicationView)(nil),        // 20: teampb.TeamApplicationView
+	(*TeamOutgoingInviteView)(nil),     // 21: teampb.TeamOutgoingInviteView
+	(*TeamIncomingInviteView)(nil),     // 22: teampb.TeamIncomingInviteView
+	(*TeamView)(nil),                   // 23: teampb.TeamView
+	(*TeamSnapshotS2C)(nil),            // 24: teampb.TeamSnapshotS2C
+	(*TeamInviteS2C)(nil),              // 25: teampb.TeamInviteS2C
+	(*TeamEventS2C)(nil),               // 26: teampb.TeamEventS2C
+	(*TeamRecord)(nil),                 // 27: teampb.TeamRecord
+	(*TeamMemberRecord)(nil),           // 28: teampb.TeamMemberRecord
+	(*TeamApplicationRecord)(nil),      // 29: teampb.TeamApplicationRecord
+	(*TeamInviteRecord)(nil),           // 30: teampb.TeamInviteRecord
+	(match.MatchMode)(0),               // 31: match.MatchMode
+	(*base.TipInfoMessage)(nil),        // 32: TipInfoMessage
+	(*base.Empty)(nil),                 // 33: Empty
 }
 var file_proto_team_team_proto_depIdxs = []int32{
-	30, // 0: teampb.StartTeamMatchRequest.match_mode:type_name -> match.MatchMode
-	31, // 1: teampb.TeamResponse.error_message:type_name -> TipInfoMessage
-	22, // 2: teampb.TeamResponse.team:type_name -> teampb.TeamView
-	16, // 3: teampb.TeamResponse.match_intent:type_name -> teampb.TeamMatchIntent
-	31, // 4: teampb.ListMyInvitesResponse.error_message:type_name -> TipInfoMessage
-	21, // 5: teampb.ListMyInvitesResponse.invites:type_name -> teampb.TeamIncomingInviteView
-	18, // 6: teampb.TeamApplicationView.player:type_name -> teampb.TeamMemberView
-	18, // 7: teampb.TeamOutgoingInviteView.invitee:type_name -> teampb.TeamMemberView
-	18, // 8: teampb.TeamIncomingInviteView.inviter:type_name -> teampb.TeamMemberView
+	31, // 0: teampb.StartTeamMatchRequest.match_mode:type_name -> match.MatchMode
+	32, // 1: teampb.TeamResponse.error_message:type_name -> TipInfoMessage
+	23, // 2: teampb.TeamResponse.team:type_name -> teampb.TeamView
+	17, // 3: teampb.TeamResponse.match_intent:type_name -> teampb.TeamMatchIntent
+	32, // 4: teampb.ListMyInvitesResponse.error_message:type_name -> TipInfoMessage
+	22, // 5: teampb.ListMyInvitesResponse.invites:type_name -> teampb.TeamIncomingInviteView
+	19, // 6: teampb.TeamApplicationView.player:type_name -> teampb.TeamMemberView
+	19, // 7: teampb.TeamOutgoingInviteView.invitee:type_name -> teampb.TeamMemberView
+	19, // 8: teampb.TeamIncomingInviteView.inviter:type_name -> teampb.TeamMemberView
 	0,  // 9: teampb.TeamView.match_state:type_name -> teampb.TeamMatchState
-	18, // 10: teampb.TeamView.members:type_name -> teampb.TeamMemberView
-	19, // 11: teampb.TeamView.applications:type_name -> teampb.TeamApplicationView
-	20, // 12: teampb.TeamView.pending_invites:type_name -> teampb.TeamOutgoingInviteView
-	30, // 13: teampb.TeamView.match_mode:type_name -> match.MatchMode
-	22, // 14: teampb.TeamSnapshotS2C.team:type_name -> teampb.TeamView
+	19, // 10: teampb.TeamView.members:type_name -> teampb.TeamMemberView
+	20, // 11: teampb.TeamView.applications:type_name -> teampb.TeamApplicationView
+	21, // 12: teampb.TeamView.pending_invites:type_name -> teampb.TeamOutgoingInviteView
+	31, // 13: teampb.TeamView.match_mode:type_name -> match.MatchMode
+	23, // 14: teampb.TeamSnapshotS2C.team:type_name -> teampb.TeamView
 	1,  // 15: teampb.TeamSnapshotS2C.reason:type_name -> teampb.TeamChangeReason
-	31, // 16: teampb.TeamSnapshotS2C.tip:type_name -> TipInfoMessage
-	21, // 17: teampb.TeamInviteS2C.invite:type_name -> teampb.TeamIncomingInviteView
+	32, // 16: teampb.TeamSnapshotS2C.tip:type_name -> TipInfoMessage
+	22, // 17: teampb.TeamInviteS2C.invite:type_name -> teampb.TeamIncomingInviteView
 	2,  // 18: teampb.TeamEventS2C.type:type_name -> teampb.TeamEventType
-	27, // 19: teampb.TeamRecord.members:type_name -> teampb.TeamMemberRecord
-	28, // 20: teampb.TeamRecord.applications:type_name -> teampb.TeamApplicationRecord
-	29, // 21: teampb.TeamRecord.invites:type_name -> teampb.TeamInviteRecord
+	28, // 19: teampb.TeamRecord.members:type_name -> teampb.TeamMemberRecord
+	29, // 20: teampb.TeamRecord.applications:type_name -> teampb.TeamApplicationRecord
+	30, // 21: teampb.TeamRecord.invites:type_name -> teampb.TeamInviteRecord
 	3,  // 22: teampb.ClientPlayerTeam.CreateTeam:input_type -> teampb.CreateTeamRequest
 	4,  // 23: teampb.ClientPlayerTeam.GetMyTeam:input_type -> teampb.GetMyTeamRequest
 	5,  // 24: teampb.ClientPlayerTeam.ApplyJoinTeam:input_type -> teampb.ApplyJoinTeamRequest
@@ -2417,26 +2616,28 @@ var file_proto_team_team_proto_depIdxs = []int32{
 	12, // 31: teampb.ClientPlayerTeam.TransferLeader:input_type -> teampb.TransferLeaderRequest
 	13, // 32: teampb.ClientPlayerTeam.DisbandTeam:input_type -> teampb.DisbandTeamRequest
 	14, // 33: teampb.ClientPlayerTeam.StartTeamMatch:input_type -> teampb.StartTeamMatchRequest
-	23, // 34: teampb.ClientPlayerTeam.NotifyTeamSnapshot:input_type -> teampb.TeamSnapshotS2C
-	24, // 35: teampb.ClientPlayerTeam.NotifyTeamInvite:input_type -> teampb.TeamInviteS2C
-	25, // 36: teampb.ClientPlayerTeam.NotifyTeamEvent:input_type -> teampb.TeamEventS2C
-	15, // 37: teampb.ClientPlayerTeam.CreateTeam:output_type -> teampb.TeamResponse
-	15, // 38: teampb.ClientPlayerTeam.GetMyTeam:output_type -> teampb.TeamResponse
-	15, // 39: teampb.ClientPlayerTeam.ApplyJoinTeam:output_type -> teampb.TeamResponse
-	15, // 40: teampb.ClientPlayerTeam.HandleApplication:output_type -> teampb.TeamResponse
-	15, // 41: teampb.ClientPlayerTeam.InviteToTeam:output_type -> teampb.TeamResponse
-	15, // 42: teampb.ClientPlayerTeam.RespondInvite:output_type -> teampb.TeamResponse
-	17, // 43: teampb.ClientPlayerTeam.ListMyInvites:output_type -> teampb.ListMyInvitesResponse
-	15, // 44: teampb.ClientPlayerTeam.LeaveTeam:output_type -> teampb.TeamResponse
-	15, // 45: teampb.ClientPlayerTeam.KickMember:output_type -> teampb.TeamResponse
-	15, // 46: teampb.ClientPlayerTeam.TransferLeader:output_type -> teampb.TeamResponse
-	15, // 47: teampb.ClientPlayerTeam.DisbandTeam:output_type -> teampb.TeamResponse
-	15, // 48: teampb.ClientPlayerTeam.StartTeamMatch:output_type -> teampb.TeamResponse
-	32, // 49: teampb.ClientPlayerTeam.NotifyTeamSnapshot:output_type -> Empty
-	32, // 50: teampb.ClientPlayerTeam.NotifyTeamInvite:output_type -> Empty
-	32, // 51: teampb.ClientPlayerTeam.NotifyTeamEvent:output_type -> Empty
-	37, // [37:52] is the sub-list for method output_type
-	22, // [22:37] is the sub-list for method input_type
+	24, // 34: teampb.ClientPlayerTeam.NotifyTeamSnapshot:input_type -> teampb.TeamSnapshotS2C
+	25, // 35: teampb.ClientPlayerTeam.NotifyTeamInvite:input_type -> teampb.TeamInviteS2C
+	26, // 36: teampb.ClientPlayerTeam.NotifyTeamEvent:input_type -> teampb.TeamEventS2C
+	15, // 37: teampb.ClientPlayerTeam.ConfirmRankedPreset:input_type -> teampb.ConfirmRankedPresetRequest
+	16, // 38: teampb.ClientPlayerTeam.CreateTeam:output_type -> teampb.TeamResponse
+	16, // 39: teampb.ClientPlayerTeam.GetMyTeam:output_type -> teampb.TeamResponse
+	16, // 40: teampb.ClientPlayerTeam.ApplyJoinTeam:output_type -> teampb.TeamResponse
+	16, // 41: teampb.ClientPlayerTeam.HandleApplication:output_type -> teampb.TeamResponse
+	16, // 42: teampb.ClientPlayerTeam.InviteToTeam:output_type -> teampb.TeamResponse
+	16, // 43: teampb.ClientPlayerTeam.RespondInvite:output_type -> teampb.TeamResponse
+	18, // 44: teampb.ClientPlayerTeam.ListMyInvites:output_type -> teampb.ListMyInvitesResponse
+	16, // 45: teampb.ClientPlayerTeam.LeaveTeam:output_type -> teampb.TeamResponse
+	16, // 46: teampb.ClientPlayerTeam.KickMember:output_type -> teampb.TeamResponse
+	16, // 47: teampb.ClientPlayerTeam.TransferLeader:output_type -> teampb.TeamResponse
+	16, // 48: teampb.ClientPlayerTeam.DisbandTeam:output_type -> teampb.TeamResponse
+	16, // 49: teampb.ClientPlayerTeam.StartTeamMatch:output_type -> teampb.TeamResponse
+	33, // 50: teampb.ClientPlayerTeam.NotifyTeamSnapshot:output_type -> Empty
+	33, // 51: teampb.ClientPlayerTeam.NotifyTeamInvite:output_type -> Empty
+	33, // 52: teampb.ClientPlayerTeam.NotifyTeamEvent:output_type -> Empty
+	16, // 53: teampb.ClientPlayerTeam.ConfirmRankedPreset:output_type -> teampb.TeamResponse
+	38, // [38:54] is the sub-list for method output_type
+	22, // [22:38] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name
 	22, // [22:22] is the sub-list for extension extendee
 	0,  // [0:22] is the sub-list for field type_name
@@ -2453,7 +2654,7 @@ func file_proto_team_team_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_team_team_proto_rawDesc), len(file_proto_team_team_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

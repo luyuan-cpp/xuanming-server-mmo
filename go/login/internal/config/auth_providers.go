@@ -140,6 +140,11 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 				"AuthProviders.Google.ClientId must be an OAuth client ID ending in %q", googleClientIdSuffix)
 		}
 	}
+	if p := cfg.Passport; p != nil {
+		if err := checkPassportProvider(p, relaxed); err != nil {
+			return AuthProviderSecrets{}, warnings, err
+		}
+	}
 
 	return out, warnings, nil
 }

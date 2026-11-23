@@ -3037,12 +3037,12 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_._has_bits_),
       0, // no _extensions_
-      17, 248,  // max_field_number, fast_idx_mask
+      18, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294836224,  // skipmap
+      4294705152,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      17,  // num_field_entries
-      3,  // num_aux_entries
+      18,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -3053,32 +3053,32 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 battle_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.battle_id_), 6>(),
-       {8, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.battle_id_), 7>(),
+       {8, 7, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_id_)}},
       // uint32 battle_config_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.battle_config_id_), 7>(),
-       {16, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.battle_config_id_), 8>(),
+       {16, 8, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_config_id_)}},
       // repeated .BattlePlayerSnapshot players = 3;
       {::_pbi::TcParser::FastMtR1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.players_)}},
       // uint64 seed = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.seed_), 9>(),
-       {32, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.seed_), 10>(),
+       {32, 10, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.seed_)}},
       // uint32 match_mode = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.match_mode_), 8>(),
-       {40, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.match_mode_), 9>(),
+       {40, 9, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.match_mode_)}},
       // uint64 created_at_ms = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.created_at_ms_), 10>(),
-       {48, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.created_at_ms_), 11>(),
+       {48, 11, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.created_at_ms_)}},
       // uint64 deadline_ms = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.deadline_ms_), 11>(),
-       {56, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.deadline_ms_), 12>(),
+       {56, 12, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.deadline_ms_)}},
       // string table_fingerprint = 8;
       {::_pbi::TcParser::FastUS1,
@@ -3089,8 +3089,8 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
        {74, 5, 1,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.activity_context_)}},
       // uint32 required_physical_region = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.required_physical_region_), 12>(),
-       {80, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.required_physical_region_), 13>(),
+       {80, 13, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.required_physical_region_)}},
       // string placement_operation_id = 11;
       {::_pbi::TcParser::FastUS1,
@@ -3101,26 +3101,29 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
        {98, 4, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.target_instance_id_)}},
       // uint64 admit_before_ms = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.admit_before_ms_), 14>(),
-       {104, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CreateBattleRequest, _impl_.admit_before_ms_), 15>(),
+       {104, 15, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.admit_before_ms_)}},
       // uint32 outcome_protocol_version = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.outcome_protocol_version_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.outcome_protocol_version_), 14>(),
+       {112, 14, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.outcome_protocol_version_)}},
       // .eSpectateVisibility spectate_visibility = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.spectate_visibility_), 15>(),
-       {120, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CreateBattleRequest, _impl_.spectate_visibility_), 16>(),
+       {120, 16, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.spectate_visibility_)}},
       // bool record_replay = 16;
       {::_pbi::TcParser::FastV8S2,
-       {384, 16, 0,
+       {384, 17, 0,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.record_replay_)}},
       // repeated .BattleTeamScript team_scripts = 17;
       {::_pbi::TcParser::FastMtR2,
        {394, 1, 2,
         PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.team_scripts_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .RankedMatchContext ranked_context = 18;
+      {::_pbi::TcParser::FastMtS2,
+       {402, 6, 3,
+        PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.ranked_context_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -3138,39 +3141,41 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
       65535, 65535
     }}, {{
       // uint64 battle_id = 1;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 battle_config_id = 2;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .BattlePlayerSnapshot players = 3;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.players_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 seed = 4;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.seed_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.seed_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 match_mode = 5;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.match_mode_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.match_mode_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 created_at_ms = 6;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 deadline_ms = 7;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string table_fingerprint = 8;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.table_fingerprint_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .BattleActivityContext activity_context = 9;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.activity_context_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 required_physical_region = 10;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.required_physical_region_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.required_physical_region_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string placement_operation_id = 11;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.placement_operation_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string target_instance_id = 12;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.target_instance_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 admit_before_ms = 13;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.admit_before_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.admit_before_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 outcome_protocol_version = 14;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.outcome_protocol_version_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.outcome_protocol_version_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .eSpectateVisibility spectate_visibility = 15;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.spectate_visibility_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.spectate_visibility_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // bool record_replay = 16;
-      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.record_replay_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.record_replay_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // repeated .BattleTeamScript team_scripts = 17;
       {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.team_scripts_), _Internal::kHasBitsOffset + 1, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .RankedMatchContext ranked_context = 18;
+      {PROTOBUF_FIELD_OFFSET(CreateBattleRequest, _impl_.ranked_context_), _Internal::kHasBitsOffset + 6, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3187,6 +3192,11 @@ constexpr CreateBattleRequest::ParseTableT_ CreateBattleRequest::InternalGenerat
         {::_pbi::TcParser::GetTable<::BattleTeamScript>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::BattleTeamScript_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::RankedMatchContext>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::RankedMatchContext_globals_},
         #endif
     }},
     {{
@@ -3224,6 +3234,7 @@ inline constexpr CreateBattleRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         activity_context_{nullptr},
+        ranked_context_{nullptr},
         battle_id_{::uint64_t{0u}},
         battle_config_id_{0u},
         match_mode_{0u},
@@ -3360,7 +3371,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_._has_bits_),
-        20, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.battle_config_id_),
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.players_),
@@ -3378,23 +3389,25 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.spectate_visibility_),
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.record_replay_),
         PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.team_scripts_),
-        6,
+        PROTOBUF_FIELD_OFFSET(::CreateBattleRequest, _impl_.ranked_context_),
         7,
-        0,
-        9,
         8,
+        0,
         10,
+        9,
         11,
+        12,
         2,
         5,
-        12,
+        13,
         3,
         4,
-        14,
-        13,
         15,
+        14,
         16,
+        17,
         1,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CreateBattleResponse, _impl_._has_bits_),
         8, // hasbit index offset
@@ -3569,22 +3582,22 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ObserverExitOriginal)},
         {23, sizeof(::CreateBattleRequest)},
-        {60, sizeof(::CreateBattleResponse)},
-        {73, sizeof(::DestroyBattleRequest)},
-        {84, sizeof(::QueryBattleCreationRequest)},
-        {93, sizeof(::QueryBattleCreationResponse)},
-        {106, sizeof(::AddObserverRequest)},
-        {123, sizeof(::AddObserverResponse)},
-        {128, sizeof(::RemoveObserverRequest)},
-        {143, sizeof(::RemoveObserverResponse)},
-        {152, sizeof(::QueryObserverRequest)},
-        {163, sizeof(::QueryObserverResponse)},
-        {172, sizeof(::IssueBattleTicketRequest)},
-        {183, sizeof(::IssueBattleTicketResponse)},
-        {190, sizeof(::AttachRelayGateRequest)},
-        {201, sizeof(::AttachRelayGateResponse)},
-        {212, sizeof(::PromoteSpectateBroadcastRequest)},
-        {219, sizeof(::PromoteSpectateBroadcastResponse)},
+        {62, sizeof(::CreateBattleResponse)},
+        {75, sizeof(::DestroyBattleRequest)},
+        {86, sizeof(::QueryBattleCreationRequest)},
+        {95, sizeof(::QueryBattleCreationResponse)},
+        {108, sizeof(::AddObserverRequest)},
+        {125, sizeof(::AddObserverResponse)},
+        {130, sizeof(::RemoveObserverRequest)},
+        {145, sizeof(::RemoveObserverResponse)},
+        {154, sizeof(::QueryObserverRequest)},
+        {165, sizeof(::QueryObserverResponse)},
+        {174, sizeof(::IssueBattleTicketRequest)},
+        {185, sizeof(::IssueBattleTicketResponse)},
+        {192, sizeof(::AttachRelayGateRequest)},
+        {203, sizeof(::AttachRelayGateResponse)},
+        {214, sizeof(::PromoteSpectateBroadcastRequest)},
+        {221, sizeof(::PromoteSpectateBroadcastResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3620,7 +3633,7 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fnode_2eproto[] AB
     "ation_id\030\004 \001(\t\022\027\n\017head_request_id\030\005 \001(\t\022"
     " \n\003add\030\006 \001(\0132\023.AddObserverRequest\022\020\n\010rpc"
     "_host\030\007 \001(\t\022\020\n\010rpc_port\030\010 \001(\r\022\017\n\007node_id"
-    "\030\t \001(\r\022\023\n\013instance_id\030\n \001(\t\"\221\004\n\023CreateBa"
+    "\030\t \001(\r\022\023\n\013instance_id\030\n \001(\t\"\276\004\n\023CreateBa"
     "ttleRequest\022\021\n\tbattle_id\030\001 \001(\004\022\030\n\020battle"
     "_config_id\030\002 \001(\r\022&\n\007players\030\003 \003(\0132\025.Batt"
     "lePlayerSnapshot\022\014\n\004seed\030\004 \001(\004\022\022\n\nmatch_"
@@ -3633,84 +3646,85 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fnode_2eproto[] AB
     "e_ms\030\r \001(\004\022 \n\030outcome_protocol_version\030\016"
     " \001(\r\0221\n\023spectate_visibility\030\017 \001(\0162\024.eSpe"
     "ctateVisibility\022\025\n\rrecord_replay\030\020 \001(\010\022\'"
-    "\n\014team_scripts\030\021 \003(\0132\021.BattleTeamScript\""
-    "\253\001\n\024CreateBattleResponse\022\021\n\tbattle_id\030\001 "
-    "\001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMess"
-    "age\022(\n adopted_outcome_protocol_version\030"
-    "\003 \001(\r\022\032\n\022target_instance_id\030\004 \001(\t\022\022\n\nroo"
-    "m_count\030\005 \001(\r\"u\n\024DestroyBattleRequest\022\021\n"
-    "\tbattle_id\030\001 \001(\004\022\016\n\006reason\030\002 \001(\t\022\036\n\026plac"
-    "ement_operation_id\030\003 \001(\t\022\032\n\022target_insta"
-    "nce_id\030\004 \001(\t\"k\n\032QueryBattleCreationReque"
-    "st\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\026placement_opera"
-    "tion_id\030\002 \001(\t\022\032\n\022target_instance_id\030\003 \001("
-    "\t\"\321\001\n\033QueryBattleCreationResponse\022#\n\005sta"
-    "te\030\001 \001(\0162\024.BattleCreationState\022\032\n\022target"
-    "_instance_id\030\002 \001(\t\022*\n\"supported_outcome_"
-    "protocol_version\030\003 \001(\r\022(\n adopted_outcom"
-    "e_protocol_version\030\004 \001(\r\022\033\n\023rejects_new_"
-    "battles\030\005 \001(\010\"\320\001\n\022AddObserverRequest\022\021\n\t"
-    "battle_id\030\001 \001(\004\022\032\n\022observer_player_id\030\002 "
-    "\001(\004\022\037\n\007routing\030\003 \001(\0132\016.BattleRouting\022\025\n\r"
-    "observer_name\030\004 \001(\t\022\036\n\026spectator_operati"
-    "on_id\030\005 \001(\t\022\027\n\017admit_before_ms\030\006 \001(\004\022\032\n\022"
-    "target_instance_id\030\007 \001(\t\"=\n\023AddObserverR"
-    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\"\253\001\n\025RemoveObserverRequest\022\021\n\tbat"
-    "tle_id\030\001 \001(\004\022\032\n\022observer_player_id\030\002 \001(\004"
-    "\022\016\n\006reason\030\003 \001(\t\022\036\n\026spectator_operation_"
-    "id\030\004 \001(\t\022\027\n\017admit_before_ms\030\005 \001(\004\022\032\n\022tar"
-    "get_instance_id\030\006 \001(\t\"g\n\026RemoveObserverR"
-    "esponse\022\021\n\tcancelled\030\001 \001(\010\022\036\n\026spectator_"
+    "\n\014team_scripts\030\021 \003(\0132\021.BattleTeamScript\022"
+    "+\n\016ranked_context\030\022 \001(\0132\023.RankedMatchCon"
+    "text\"\253\001\n\024CreateBattleResponse\022\021\n\tbattle_"
+    "id\030\001 \001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInf"
+    "oMessage\022(\n adopted_outcome_protocol_ver"
+    "sion\030\003 \001(\r\022\032\n\022target_instance_id\030\004 \001(\t\022\022"
+    "\n\nroom_count\030\005 \001(\r\"u\n\024DestroyBattleReque"
+    "st\022\021\n\tbattle_id\030\001 \001(\004\022\016\n\006reason\030\002 \001(\t\022\036\n"
+    "\026placement_operation_id\030\003 \001(\t\022\032\n\022target_"
+    "instance_id\030\004 \001(\t\"k\n\032QueryBattleCreation"
+    "Request\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\026placement_"
     "operation_id\030\002 \001(\t\022\032\n\022target_instance_id"
-    "\030\003 \001(\t\"\201\001\n\024QueryObserverRequest\022\021\n\tbattl"
-    "e_id\030\001 \001(\004\022\032\n\022observer_player_id\030\002 \001(\004\022\036"
-    "\n\026spectator_operation_id\030\003 \001(\t\022\032\n\022target"
-    "_instance_id\030\004 \001(\t\"{\n\025QueryObserverRespo"
-    "nse\022&\n\005state\030\001 \001(\0162\027.ObserverAdmissionSt"
-    "ate\022\036\n\026spectator_operation_id\030\002 \001(\t\022\032\n\022t"
-    "arget_instance_id\030\003 \001(\t\"|\n\030IssueBattleTi"
-    "cketRequest\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer"
-    "_id\030\002 \001(\004\022\036\n\026spectator_operation_id\030\003 \001("
-    "\t\022\032\n\022target_instance_id\030\004 \001(\t\"k\n\031IssueBa"
-    "ttleTicketResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022&\n\nassignment\030\002 \001(\0132\022"
-    ".BattleAssignedS2C\"w\n\026AttachRelayGateReq"
-    "uest\022\021\n\tbattle_id\030\001 \001(\004\022\024\n\014gate_node_id\030"
-    "\002 \001(\r\022\030\n\020gate_instance_id\030\003 \001(\t\022\032\n\022targe"
-    "t_instance_id\030\004 \001(\t\"\205\001\n\027AttachRelayGateR"
-    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\032\n\022battle_instance_id\030\002 \001(\t\022\023\n\013d"
-    "eadline_ms\030\003 \001(\004\022\021\n\tbroadcast\030\004 \001(\010\"P\n\037P"
-    "romoteSpectateBroadcastRequest\022\021\n\tbattle"
-    "_id\030\001 \001(\004\022\032\n\022target_instance_id\030\002 \001(\t\"{\n"
-    " PromoteSpectateBroadcastResponse\022&\n\rerr"
-    "or_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\022bat"
-    "tle_instance_id\030\002 \001(\t\022\023\n\013deadline_ms\030\003 \001"
-    "(\004*\210\001\n\023BattleCreationState\022\033\n\027BATTLE_CRE"
-    "ATION_UNKNOWN\020\000\022\033\n\027BATTLE_CREATION_PRESE"
-    "NT\020\001\022\032\n\026BATTLE_CREATION_ABSENT\020\002\022\033\n\027BATT"
-    "LE_CREATION_ABORTED\020\003*v\n\026ObserverAdmissi"
-    "onState\022\036\n\032OBSERVER_ADMISSION_UNKNOWN\020\000\022"
-    "\035\n\031OBSERVER_ADMISSION_ACTIVE\020\001\022\035\n\031OBSERV"
-    "ER_ADMISSION_ABSENT\020\0022\373\004\n\nBattleNode\022>\n\r"
-    "QueryObserver\022\025.QueryObserverRequest\032\026.Q"
-    "ueryObserverResponse\022P\n\023QueryBattleCreat"
-    "ion\022\033.QueryBattleCreationRequest\032\034.Query"
-    "BattleCreationResponse\022;\n\014CreateBattle\022\024"
-    ".CreateBattleRequest\032\025.CreateBattleRespo"
-    "nse\022.\n\rDestroyBattle\022\025.DestroyBattleRequ"
-    "est\032\006.Empty\0228\n\013AddObserver\022\023.AddObserver"
-    "Request\032\024.AddObserverResponse\022A\n\016RemoveO"
-    "bserver\022\026.RemoveObserverRequest\032\027.Remove"
-    "ObserverResponse\022J\n\021IssueBattleTicket\022\031."
-    "IssueBattleTicketRequest\032\032.IssueBattleTi"
-    "cketResponse\022D\n\017AttachRelayGate\022\027.Attach"
-    "RelayGateRequest\032\030.AttachRelayGateRespon"
-    "se\022_\n\030PromoteSpectateBroadcast\022 .Promote"
-    "SpectateBroadcastRequest\032!.PromoteSpecta"
-    "teBroadcastResponseB\014Z\006battle\230\324a\036b\006proto"
-    "3"
+    "\030\003 \001(\t\"\321\001\n\033QueryBattleCreationResponse\022#"
+    "\n\005state\030\001 \001(\0162\024.BattleCreationState\022\032\n\022t"
+    "arget_instance_id\030\002 \001(\t\022*\n\"supported_out"
+    "come_protocol_version\030\003 \001(\r\022(\n adopted_o"
+    "utcome_protocol_version\030\004 \001(\r\022\033\n\023rejects"
+    "_new_battles\030\005 \001(\010\"\320\001\n\022AddObserverReques"
+    "t\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022observer_player_"
+    "id\030\002 \001(\004\022\037\n\007routing\030\003 \001(\0132\016.BattleRoutin"
+    "g\022\025\n\robserver_name\030\004 \001(\t\022\036\n\026spectator_op"
+    "eration_id\030\005 \001(\t\022\027\n\017admit_before_ms\030\006 \001("
+    "\004\022\032\n\022target_instance_id\030\007 \001(\t\"=\n\023AddObse"
+    "rverResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\"\253\001\n\025RemoveObserverRequest\022\021"
+    "\n\tbattle_id\030\001 \001(\004\022\032\n\022observer_player_id\030"
+    "\002 \001(\004\022\016\n\006reason\030\003 \001(\t\022\036\n\026spectator_opera"
+    "tion_id\030\004 \001(\t\022\027\n\017admit_before_ms\030\005 \001(\004\022\032"
+    "\n\022target_instance_id\030\006 \001(\t\"g\n\026RemoveObse"
+    "rverResponse\022\021\n\tcancelled\030\001 \001(\010\022\036\n\026spect"
+    "ator_operation_id\030\002 \001(\t\022\032\n\022target_instan"
+    "ce_id\030\003 \001(\t\"\201\001\n\024QueryObserverRequest\022\021\n\t"
+    "battle_id\030\001 \001(\004\022\032\n\022observer_player_id\030\002 "
+    "\001(\004\022\036\n\026spectator_operation_id\030\003 \001(\t\022\032\n\022t"
+    "arget_instance_id\030\004 \001(\t\"{\n\025QueryObserver"
+    "Response\022&\n\005state\030\001 \001(\0162\027.ObserverAdmiss"
+    "ionState\022\036\n\026spectator_operation_id\030\002 \001(\t"
+    "\022\032\n\022target_instance_id\030\003 \001(\t\"|\n\030IssueBat"
+    "tleTicketRequest\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tp"
+    "layer_id\030\002 \001(\004\022\036\n\026spectator_operation_id"
+    "\030\003 \001(\t\022\032\n\022target_instance_id\030\004 \001(\t\"k\n\031Is"
+    "sueBattleTicketResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\022&\n\nassignment\030\002 "
+    "\001(\0132\022.BattleAssignedS2C\"w\n\026AttachRelayGa"
+    "teRequest\022\021\n\tbattle_id\030\001 \001(\004\022\024\n\014gate_nod"
+    "e_id\030\002 \001(\r\022\030\n\020gate_instance_id\030\003 \001(\t\022\032\n\022"
+    "target_instance_id\030\004 \001(\t\"\205\001\n\027AttachRelay"
+    "GateResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\032\n\022battle_instance_id\030\002 \001(\t"
+    "\022\023\n\013deadline_ms\030\003 \001(\004\022\021\n\tbroadcast\030\004 \001(\010"
+    "\"P\n\037PromoteSpectateBroadcastRequest\022\021\n\tb"
+    "attle_id\030\001 \001(\004\022\032\n\022target_instance_id\030\002 \001"
+    "(\t\"{\n PromoteSpectateBroadcastResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032"
+    "\n\022battle_instance_id\030\002 \001(\t\022\023\n\013deadline_m"
+    "s\030\003 \001(\004*\210\001\n\023BattleCreationState\022\033\n\027BATTL"
+    "E_CREATION_UNKNOWN\020\000\022\033\n\027BATTLE_CREATION_"
+    "PRESENT\020\001\022\032\n\026BATTLE_CREATION_ABSENT\020\002\022\033\n"
+    "\027BATTLE_CREATION_ABORTED\020\003*v\n\026ObserverAd"
+    "missionState\022\036\n\032OBSERVER_ADMISSION_UNKNO"
+    "WN\020\000\022\035\n\031OBSERVER_ADMISSION_ACTIVE\020\001\022\035\n\031O"
+    "BSERVER_ADMISSION_ABSENT\020\0022\373\004\n\nBattleNod"
+    "e\022>\n\rQueryObserver\022\025.QueryObserverReques"
+    "t\032\026.QueryObserverResponse\022P\n\023QueryBattle"
+    "Creation\022\033.QueryBattleCreationRequest\032\034."
+    "QueryBattleCreationResponse\022;\n\014CreateBat"
+    "tle\022\024.CreateBattleRequest\032\025.CreateBattle"
+    "Response\022.\n\rDestroyBattle\022\025.DestroyBattl"
+    "eRequest\032\006.Empty\0228\n\013AddObserver\022\023.AddObs"
+    "erverRequest\032\024.AddObserverResponse\022A\n\016Re"
+    "moveObserver\022\026.RemoveObserverRequest\032\027.R"
+    "emoveObserverResponse\022J\n\021IssueBattleTick"
+    "et\022\031.IssueBattleTicketRequest\032\032.IssueBat"
+    "tleTicketResponse\022D\n\017AttachRelayGate\022\027.A"
+    "ttachRelayGateRequest\032\030.AttachRelayGateR"
+    "esponse\022_\n\030PromoteSpectateBroadcast\022 .Pr"
+    "omoteSpectateBroadcastRequest\032!.PromoteS"
+    "pectateBroadcastResponseB\014Z\006battle\230\324a\036b\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto_deps[6] = {
@@ -3725,7 +3739,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto = {
     false,
     false,
-    4041,
+    4086,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fnode_2eproto,
     "proto/battle/battle_node.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto_once,
@@ -4267,6 +4281,11 @@ void CreateBattleRequest::clear_team_scripts() {
   _impl_.team_scripts_.Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
+void CreateBattleRequest::clear_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.ranked_context_ != nullptr) _impl_.ranked_context_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
 CreateBattleRequest::CreateBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, CreateBattleRequest_get_class_data()) {
@@ -4317,6 +4336,9 @@ CreateBattleRequest::CreateBattleRequest(
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
   _impl_.activity_context_ = (CheckHasBit(cached_has_bits, 0x00000020U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.activity_context_)
+                : nullptr;
+  _impl_.ranked_context_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.ranked_context_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, battle_id_),
@@ -4370,6 +4392,7 @@ inline void CreateBattleRequest::SharedDtor(MessageLite& self) {
   this_._impl_.placement_operation_id_.Destroy();
   this_._impl_.target_instance_id_.Destroy();
   delete this_._impl_.activity_context_;
+  delete this_._impl_.ranked_context_;
   this_._impl_.~Impl_();
 }
 
@@ -4407,7 +4430,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.players_.Clear();
     }
@@ -4427,18 +4450,22 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
       ABSL_DCHECK(_impl_.activity_context_ != nullptr);
       _impl_.activity_context_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(_impl_.ranked_context_ != nullptr);
+      _impl_.ranked_context_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
-    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_config_id_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.battle_config_id_));
-  }
+  _impl_.battle_id_ = ::uint64_t{0u};
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.match_mode_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.spectate_visibility_) -
-        reinterpret_cast<char*>(&_impl_.match_mode_)) + sizeof(_impl_.spectate_visibility_));
+    ::memset(&_impl_.battle_config_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.admit_before_ms_) -
+        reinterpret_cast<char*>(&_impl_.battle_config_id_)) + sizeof(_impl_.admit_before_ms_));
   }
-  _impl_.record_replay_ = false;
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    ::memset(&_impl_.spectate_visibility_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.record_replay_) -
+        reinterpret_cast<char*>(&_impl_.spectate_visibility_)) + sizeof(_impl_.record_replay_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4463,7 +4490,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 battle_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4472,7 +4499,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint32 battle_config_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_battle_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4494,7 +4521,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint64 seed = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_seed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4503,7 +4530,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint32 match_mode = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_match_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4512,7 +4539,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint64 created_at_ms = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_created_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4521,7 +4548,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint64 deadline_ms = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_deadline_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4547,7 +4574,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint32 required_physical_region = 10;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_required_physical_region() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4576,7 +4603,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint64 admit_before_ms = 13;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_admit_before_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4585,7 +4612,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // uint32 outcome_protocol_version = 14;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_outcome_protocol_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4594,7 +4621,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // .eSpectateVisibility spectate_visibility = 15;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_spectate_visibility() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -4603,7 +4630,7 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
   }
 
   // bool record_replay = 16;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_record_replay() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -4622,6 +4649,13 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
               17, repfield, repfield.GetCachedSize(),
               target, stream);
     }
+  }
+
+  // .RankedMatchContext ranked_context = 18;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        18, *this_._impl_.ranked_context_, this_._impl_.ranked_context_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -4690,82 +4724,87 @@ PROTOBUF_NOINLINE void CreateBattleRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.activity_context_);
     }
-    // uint64 battle_id = 1;
+    // .RankedMatchContext ranked_context = 18;
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.ranked_context_);
+    }
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 battle_config_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_battle_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_config_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 match_mode = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_match_mode() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_match_mode());
       }
     }
     // uint64 seed = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_seed() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_seed());
       }
     }
     // uint64 created_at_ms = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_created_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_created_at_ms());
       }
     }
     // uint64 deadline_ms = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_deadline_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_deadline_ms());
       }
     }
     // uint32 required_physical_region = 10;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_required_physical_region() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_required_physical_region());
       }
     }
     // uint32 outcome_protocol_version = 14;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_outcome_protocol_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_outcome_protocol_version());
       }
     }
     // uint64 admit_before_ms = 13;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_admit_before_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_admit_before_ms());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     // .eSpectateVisibility spectate_visibility = 15;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_spectate_visibility() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_spectate_visibility());
       }
     }
-  }
-   {
     // bool record_replay = 16;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_record_replay() != 0) {
         total_size += 3;
       }
@@ -4836,61 +4875,71 @@ void CreateBattleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_battle_id() != 0) {
-        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      ABSL_DCHECK(from._impl_.ranked_context_ != nullptr);
+      if (_this->_impl_.ranked_context_ == nullptr) {
+        _this->_impl_.ranked_context_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.ranked_context_);
+      } else {
+        _this->_impl_.ranked_context_->MergeFrom(*from._impl_.ranked_context_);
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_battle_config_id() != 0) {
-        _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_battle_config_id() != 0) {
+        _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_match_mode() != 0) {
         _this->_impl_.match_mode_ = from._impl_.match_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_seed() != 0) {
         _this->_impl_.seed_ = from._impl_.seed_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_created_at_ms() != 0) {
         _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_deadline_ms() != 0) {
         _this->_impl_.deadline_ms_ = from._impl_.deadline_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_required_physical_region() != 0) {
         _this->_impl_.required_physical_region_ = from._impl_.required_physical_region_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_outcome_protocol_version() != 0) {
         _this->_impl_.outcome_protocol_version_ = from._impl_.outcome_protocol_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_admit_before_ms() != 0) {
         _this->_impl_.admit_before_ms_ = from._impl_.admit_before_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_spectate_visibility() != 0) {
         _this->_impl_.spectate_visibility_ = from._impl_.spectate_visibility_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (from._internal_record_replay() != 0) {
-      _this->_impl_.record_replay_ = from._impl_.record_replay_;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_record_replay() != 0) {
+        _this->_impl_.record_replay_ = from._impl_.record_replay_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;

@@ -1,0 +1,28 @@
+{
+ "data": [
+  {
+   "battle_config_id": 5,
+   "competitive_level": 30,
+   "default_character_preset_id": 101,
+   "default_pet_preset_id": 203,
+   "desc": "论剑排位首发V1全局规则(单行)",
+   "id": 1,
+   "milestone_avatar_matches": 4,
+   "milestone_card_matches": 8,
+   "milestone_talisman_matches": 12,
+   "reference_class_id": 1,
+   "rule_version": 1,
+   "season_duration_days": 56,
+   "spread_tier1_points": 100,
+   "spread_tier1_seconds": 30,
+   "spread_tier2_points": 200,
+   "spread_tier2_seconds": 90,
+   "spread_tier3_points": 300,
+   "tier_qingfeng_centi": 140000,
+   "tier_tianshu_centi": 170000,
+   "tier_wushuang_centi": 185000,
+   "tier_yunzhang_centi": 155000,
+   "wait_prompt_seconds": 120
+  }
+ ]
+}

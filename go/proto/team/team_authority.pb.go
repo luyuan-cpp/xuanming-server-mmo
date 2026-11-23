@@ -726,12 +726,15 @@ func (x *TeamActionReceiptRecord) GetCreatedMs() uint64 {
 }
 
 type TeamLaunchMember struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Original      *TeamOriginalRole      `protobuf:"bytes,1,opt,name=original,proto3" json:"original,omitempty"`
-	RosterOrder   uint32                 `protobuf:"varint,2,opt,name=roster_order,json=rosterOrder,proto3" json:"roster_order,omitempty"` // 显式站位顺序，不以repeated下标承载。
-	Ticket        string                 `protobuf:"bytes,3,opt,name=ticket,proto3" json:"ticket,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Original          *TeamOriginalRole      `protobuf:"bytes,1,opt,name=original,proto3" json:"original,omitempty"`
+	RosterOrder       uint32                 `protobuf:"varint,2,opt,name=roster_order,json=rosterOrder,proto3" json:"roster_order,omitempty"` // 显式站位顺序，不以repeated下标承载。
+	Ticket            string                 `protobuf:"bytes,3,opt,name=ticket,proto3" json:"ticket,omitempty"`
+	CharacterPresetId uint32                 `protobuf:"varint,4,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`
+	PetPresetId       uint32                 `protobuf:"varint,5,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`
+	RankedRuleVersion uint32                 `protobuf:"varint,6,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TeamLaunchMember) Reset() {
@@ -785,22 +788,45 @@ func (x *TeamLaunchMember) GetTicket() string {
 	return ""
 }
 
+func (x *TeamLaunchMember) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *TeamLaunchMember) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *TeamLaunchMember) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
 // 两版Team向Match提交同一份锁内原件；Match在同事务锁P、Team、launch、票并逐项核验。
 type TeamLaunchOriginal struct {
-	state          protoimpl.MessageState         `protogen:"open.v1"`
-	Actor          *TeamOriginalRole              `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
-	TeamId         uint64                         `protobuf:"varint,2,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
-	TeamVersion    uint64                         `protobuf:"varint,3,opt,name=team_version,json=teamVersion,proto3" json:"team_version,omitempty"`
-	LockToken      string                         `protobuf:"bytes,4,opt,name=lock_token,json=lockToken,proto3" json:"lock_token,omitempty"`
-	Request        *StartTeamMatchRequest         `protobuf:"bytes,5,opt,name=request,proto3" json:"request,omitempty"`
-	Members        []*TeamLaunchMember            `protobuf:"bytes,6,rep,name=members,proto3" json:"members,omitempty"`
-	Zones          map[uint64]uint32              `protobuf:"bytes,7,rep,name=zones,proto3" json:"zones,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	LockTtlSeconds uint32                         `protobuf:"varint,8,opt,name=lock_ttl_seconds,json=lockTtlSeconds,proto3" json:"lock_ttl_seconds,omitempty"`
-	EnqueuedMs     uint64                         `protobuf:"varint,9,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
-	NotBeforeMs    uint64                         `protobuf:"varint,10,opt,name=not_before_ms,json=notBeforeMs,proto3" json:"not_before_ms,omitempty"`
-	ObserverExits  []*battle.ObserverExitOriginal `protobuf:"bytes,11,rep,name=observer_exits,json=observerExits,proto3" json:"observer_exits,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState         `protogen:"open.v1"`
+	Actor             *TeamOriginalRole              `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
+	TeamId            uint64                         `protobuf:"varint,2,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	TeamVersion       uint64                         `protobuf:"varint,3,opt,name=team_version,json=teamVersion,proto3" json:"team_version,omitempty"`
+	LockToken         string                         `protobuf:"bytes,4,opt,name=lock_token,json=lockToken,proto3" json:"lock_token,omitempty"`
+	Request           *StartTeamMatchRequest         `protobuf:"bytes,5,opt,name=request,proto3" json:"request,omitempty"`
+	Members           []*TeamLaunchMember            `protobuf:"bytes,6,rep,name=members,proto3" json:"members,omitempty"`
+	Zones             map[uint64]uint32              `protobuf:"bytes,7,rep,name=zones,proto3" json:"zones,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	LockTtlSeconds    uint32                         `protobuf:"varint,8,opt,name=lock_ttl_seconds,json=lockTtlSeconds,proto3" json:"lock_ttl_seconds,omitempty"`
+	EnqueuedMs        uint64                         `protobuf:"varint,9,opt,name=enqueued_ms,json=enqueuedMs,proto3" json:"enqueued_ms,omitempty"`
+	NotBeforeMs       uint64                         `protobuf:"varint,10,opt,name=not_before_ms,json=notBeforeMs,proto3" json:"not_before_ms,omitempty"`
+	ObserverExits     []*battle.ObserverExitOriginal `protobuf:"bytes,11,rep,name=observer_exits,json=observerExits,proto3" json:"observer_exits,omitempty"`
+	RankedSeasonId    uint32                         `protobuf:"varint,12,opt,name=ranked_season_id,json=rankedSeasonId,proto3" json:"ranked_season_id,omitempty"`
+	RankedRuleVersion uint32                         `protobuf:"varint,13,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TeamLaunchOriginal) Reset() {
@@ -908,6 +934,20 @@ func (x *TeamLaunchOriginal) GetObserverExits() []*battle.ObserverExitOriginal {
 		return x.ObserverExits
 	}
 	return nil
+}
+
+func (x *TeamLaunchOriginal) GetRankedSeasonId() uint32 {
+	if x != nil {
+		return x.RankedSeasonId
+	}
+	return 0
+}
+
+func (x *TeamLaunchOriginal) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
 }
 
 type TeamLaunchData struct {
@@ -1309,11 +1349,14 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12\x16\n" +
 	"\x06result\x18\b \x01(\fR\x06result\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\t \x01(\x04R\tcreatedMs:>\x8a\x92\xf4\x01\x13team_action_receipt\x92\x92\xf4\x01!actor_id,request_high,request_low\"\x83\x01\n" +
+	"created_ms\x18\t \x01(\x04R\tcreatedMs:>\x8a\x92\xf4\x01\x13team_action_receipt\x92\x92\xf4\x01!actor_id,request_high,request_low\"\x87\x02\n" +
 	"\x10TeamLaunchMember\x124\n" +
 	"\boriginal\x18\x01 \x01(\v2\x18.teampb.TeamOriginalRoleR\boriginal\x12!\n" +
 	"\froster_order\x18\x02 \x01(\rR\vrosterOrder\x12\x16\n" +
-	"\x06ticket\x18\x03 \x01(\tR\x06ticket\"\xb0\x04\n" +
+	"\x06ticket\x18\x03 \x01(\tR\x06ticket\x12.\n" +
+	"\x13character_preset_id\x18\x04 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x05 \x01(\rR\vpetPresetId\x12.\n" +
+	"\x13ranked_rule_version\x18\x06 \x01(\rR\x11rankedRuleVersion\"\x8a\x05\n" +
 	"\x12TeamLaunchOriginal\x12.\n" +
 	"\x05actor\x18\x01 \x01(\v2\x18.teampb.TeamOriginalRoleR\x05actor\x12\x17\n" +
 	"\ateam_id\x18\x02 \x01(\x04R\x06teamId\x12!\n" +
@@ -1328,7 +1371,9 @@ const file_proto_team_team_authority_proto_rawDesc = "" +
 	"enqueuedMs\x12\"\n" +
 	"\rnot_before_ms\x18\n" +
 	" \x01(\x04R\vnotBeforeMs\x12<\n" +
-	"\x0eobserver_exits\x18\v \x03(\v2\x15.ObserverExitOriginalR\robserverExits\x1a8\n" +
+	"\x0eobserver_exits\x18\v \x03(\v2\x15.ObserverExitOriginalR\robserverExits\x12(\n" +
+	"\x10ranked_season_id\x18\f \x01(\rR\x0erankedSeasonId\x12.\n" +
+	"\x13ranked_rule_version\x18\r \x01(\rR\x11rankedRuleVersion\x1a8\n" +
 	"\n" +
 	"ZonesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +

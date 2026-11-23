@@ -19,17 +19,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-
+    <ClInclude Include="code\activityvitalityreward_table_comp.h" />
+    <ClInclude Include="code\activityvitalityrule_table_comp.h" />
+    <ClInclude Include="code\rankedpreset_table.h" />
+    <ClInclude Include="code\rankedpreset_table_comp.h" />
+    <ClInclude Include="code\rankedpreset_table_fk.h" />
+    <ClInclude Include="code\rankedrule_table.h" />
+    <ClInclude Include="code\rankedrule_table_comp.h" />
+    <ClInclude Include="code\rankedrule_table_fk.h" />
     <ClInclude Include="proto\pettier_table.pb.h" />
-
     <ClInclude Include="code\pettier_table_comp.h" />
-
     <ClInclude Include="code\pettier_table.h" />
-
     <ClInclude Include="proto\petentry_table.pb.h" />
-
     <ClInclude Include="code\petentry_table_comp.h" />
-
     <ClInclude Include="code\petentry_table.h" />
     <ClInclude Include="code\actoractioncombatstate_table.h" />
     <ClInclude Include="code\actoractioncombatstate_table_comp.h" />
@@ -77,6 +79,8 @@
     <ClInclude Include="proto\playmode_table.pb.h" />
     <ClInclude Include="code\zonegroup_table.h" />
     <ClInclude Include="code\zonegroup_table_comp.h" />
+    <ClInclude Include="proto\rankedpreset_table.pb.h" />
+    <ClInclude Include="proto\rankedrule_table.pb.h" />
     <ClInclude Include="proto\zonegroup_table.pb.h" />
     <ClInclude Include="code\equipslot_table_comp.h" />
     <ClInclude Include="code\item_table_comp.h" />
@@ -239,13 +243,13 @@
     <ClInclude Include="proto\world_table.pb.h" />
   </ItemGroup>
   <ItemGroup>
-
+    <ClCompile Include="code\rankedpreset_table.cpp" />
+    <ClCompile Include="code\rankedpreset_table_fk.cpp" />
+    <ClCompile Include="code\rankedrule_table.cpp" />
+    <ClCompile Include="code\rankedrule_table_fk.cpp" />
     <ClCompile Include="proto\pettier_table.pb.cc" />
-
     <ClCompile Include="code\pettier_table.cpp" />
-
     <ClCompile Include="proto\petentry_table.pb.cc" />
-
     <ClCompile Include="code\petentry_table.cpp" />
     <ClCompile Include="code\actoractioncombatstate_table.cpp" />
     <ClCompile Include="code\actoractionstate_table.cpp" />
@@ -271,6 +275,8 @@
     <ClCompile Include="code\playmode_table_fk.cpp" />
     <ClCompile Include="proto\playmode_table.pb.cc" />
     <ClCompile Include="code\zonegroup_table.cpp" />
+    <ClCompile Include="proto\rankedpreset_table.pb.cc" />
+    <ClCompile Include="proto\rankedrule_table.pb.cc" />
     <ClCompile Include="proto\zonegroup_table.pb.cc" />
     <ClCompile Include="code\messagelimiter_table.cpp" />
     <ClCompile Include="code\mirror_table.cpp" />

@@ -108,6 +108,8 @@ message MatchAuthorityTicketRecord {
   // 所以始终等于撮合与提交点现算的值。它不是上面退役的字段 17：那一列只喂两张投影表。
   // 只对 team_id=0 的单排票有意义（整队按 team_launch.pool_region 读）；Go 侧 ticketColumns 不读它，也不进占用判定。
   uint32 pool_region = 20;
+  // 单排排位票冻结的 RankedMatchContext(仅单人预设/赛季/规则版本);非排位为空。
+  bytes ranked_context = 21;
 }
 
 // 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。写者都先持本库 role_fence 行锁，
@@ -207,7 +209,7 @@ message MatchFormationMember {
 message MatchFormationRecord {
   option (OptionTableName) = "match_formation";
   option (OptionPrimaryKey) = "battle_id";
-  option (OptionIndex) = "state,retry_at_ms";
+  option (OptionIndex) = "state,retry_at_ms;ranked_season_id,state,battle_id";
   uint64 battle_id = 1;
   string operation_id = 2;
   uint32 state = 3; // 1待备战、2已持久化创建请求、3结果未知、4成功、5已安全中止。
@@ -233,6 +235,10 @@ message MatchFormationRecord {
   // 这局所在 battle 节点的发布轨道（"stable" / "canary"），选点时按选中节点记下，之后不变（docs/design/release-track-gray-canary.md §2.6）。
   // 观战入口、观战列表与随机选场按它判 stable 观众能不能看，不看实时节点镜像。空串（本字段之前的原件，迁移补列后读出 NULL）按 stable。
   string release_track = 23;
+  // 论剑排位在成局提交点冻结的完整 RankedMatchContext(赛季/规则版本/规模/指纹/全员预设);非排位为空。
+  bytes ranked_context = 24;
+  // 论剑排位赛季编号(索引列,供换季排空查询本季已接纳对局;非排位为 0)。
+  uint32 ranked_season_id = 25;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -459,4 +465,87 @@ message MatchBattleScriptLoadoutRecord {
   uint32 official_script_id = 5;   // origin = 官方
   uint64 player_script_id = 6;     // origin = 玩家:只能是本人的剧本
   uint64 updated_ms = 7;
+}
+
+// ---- 论剑排位首发 V1 权威表(docs/design/ranked-play-season-ui-candidate.md) ----
+
+// 赛季周期与可恢复换季状态机(单赛季一行)。
+message MatchRankedSeasonRecord {
+  option (OptionTableName) = "match_ranked_season";
+  option (OptionPrimaryKey) = "season_id";
+  option (OptionIndex) = "state,season_id";
+  uint32 season_id = 1;
+  string season_key = 2;            // 如 "s1"
+  string season_name = 3;
+  uint64 rank_generation = 4;       // 排行榜 generation(=season_id)
+  uint64 source_epoch = 5;          // match_rank_source / match_rank_outbox 的 source_epoch(=season_id)
+  uint32 rule_version = 6;
+  uint32 state = 7;                 // RankedSeasonState: 1 ACTIVE / 2 SETTLING / 3 CLOSED
+  uint32 rollover_stage = 8;        // 0 NONE / 1 ADMISSION_STOPPED / 2 FORMATIONS_DRAINED / 3 RATINGS_DRAINED / 4 RANK_STOPPED / 5 RANK_DRAINED / 6 BOARD_SEALED / 7 HONORS_SNAPSHOT / 8 DONE
+  uint64 start_ms = 9;              // [start_ms, end_ms) 左闭右开 UTC 毫秒
+  uint64 end_ms = 10;
+  uint64 rank_board_id = 11;
+  uint64 expected_rank_cursor = 12; // StopRankSource 返回的本季各片游标之和
+  uint64 champion_player_id = 13;   // 封榜第 1 且终分达到无双的玩家;空缺为 0
+  string champion_name = 14;
+  int64 champion_rating_centi = 15;
+  uint64 updated_ms = 16;
+}
+
+// 玩家排位默认预设与展示权益佩戴偏好。
+message MatchRankedPlayerPrefsRecord {
+  option (OptionTableName) = "match_ranked_player_prefs";
+  option (OptionPrimaryKey) = "player_id";
+  uint64 player_id = 1;
+  uint32 character_preset_id = 2; // 默认 101 破阵
+  uint32 pet_preset_id = 3;       // 默认 203 护主
+  uint32 rule_version = 4;
+  bytes cosmetic_loadout = 5;     // 确定性序列化 RankedCosmeticLoadout
+  uint64 updated_ms = 6;
+}
+
+// 玩家单赛季进度(亮段/有效场次/胜负平/最高段位/封榜名次)。跨季新季不继承本表行,Elo 仍在 match_rating 继承。
+message MatchRankedPlayerSeasonRecord {
+  option (OptionTableName) = "match_ranked_player_season";
+  option (OptionPrimaryKey) = "season_id,player_id";
+  option (OptionIndex) = "player_id,season_id";
+  uint32 season_id = 1;
+  uint64 player_id = 2;
+  bool qualified = 3;
+  uint64 qualified_at_ms = 4;
+  int64 rating_centi = 5;
+  int64 peak_rating_centi = 6;
+  uint32 peak_tier = 7;
+  uint32 valid_matches = 8;
+  uint32 wins = 9;
+  uint32 losses = 10;
+  uint32 draws = 11;
+  uint32 milestone_bits = 12; // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+  uint32 honor_bits = 13;     // bit0=天枢/无双徽章, bit1=赛季称号, bit2=榜首题名
+  uint64 final_rank = 14;
+  uint64 updated_ms = 15;
+}
+
+// 玩家排位展示权益账(主键去重,跨季永久留存)。
+message MatchRankedRewardRecord {
+  option (OptionTableName) = "match_ranked_reward";
+  option (OptionPrimaryKey) = "player_id,season_id,reward_kind";
+  uint64 player_id = 1;
+  uint32 season_id = 2;
+  uint32 reward_kind = 3; // RankedRewardKind
+  uint32 tier_value = 4;
+  string item_code = 5;
+  uint64 granted_at_ms = 6;
+}
+
+// 单局排位权威结算摘要(与 ApplyRating / commitAbortTx 同一事务提交,供结算屏与重登查询)。
+message MatchRankedBattleRecord {
+  option (OptionTableName) = "match_ranked_battle";
+  option (OptionPrimaryKey) = "battle_id,player_id";
+  option (OptionIndex) = "player_id,settled_at_ms,battle_id";
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+  uint32 season_id = 3;
+  uint64 settled_at_ms = 4;
+  bytes summary = 5; // 确定性序列化 RankedBattleSettlementView
 }

@@ -81,6 +81,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	PetRuleTable = NewObject<UPetRuleTable>(this);
 	PetTierTable = NewObject<UPetTierTable>(this);
 	PlayModeTable = NewObject<UPlayModeTable>(this);
+	RankedPresetTable = NewObject<URankedPresetTable>(this);
+	RankedRuleTable = NewObject<URankedRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
 	RoleNameRuleTable = NewObject<URoleNameRuleTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
@@ -141,6 +143,8 @@ void UConfigSubsystem::Deinitialize()
 	PetRuleTable = nullptr;
 	PetTierTable = nullptr;
 	PlayModeTable = nullptr;
+	RankedPresetTable = nullptr;
+	RankedRuleTable = nullptr;
 	RewardTable = nullptr;
 	RoleNameRuleTable = nullptr;
 	SkillTable = nullptr;
@@ -206,6 +210,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UPetRuleTable::FileName(),
 		UPetTierTable::FileName(),
 		UPlayModeTable::FileName(),
+		URankedPresetTable::FileName(),
+		URankedRuleTable::FileName(),
 		URewardTable::FileName(),
 		URoleNameRuleTable::FileName(),
 		USkillTable::FileName(),
@@ -889,6 +895,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!PlayModeTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (RankedPresetTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedPreset] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!RankedPresetTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (RankedRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!RankedRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1994,6 +2028,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!PlayModeTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (RankedPresetTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedPreset] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(URankedPresetTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedPreset] 取不到 %s"), URankedPresetTable::FileName());
+		bAllOk = false;
+	}
+	else if (!RankedPresetTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (RankedRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(URankedRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RankedRule] 取不到 %s"), URankedRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!RankedRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

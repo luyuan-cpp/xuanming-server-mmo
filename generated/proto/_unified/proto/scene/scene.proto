@@ -121,6 +121,8 @@ message PrepareBattleRequest
   uint32 battle_node_id = 3;  // 写进 InBattleComp(日志/排障用)
   uint64 deadline_ms = 4;     // 战斗作废期限(Unix 毫秒),scene reaper 依据
   uint64 prepare_deadline_ms = 5; // 备战作废期限(Unix 毫秒):CreateBattle 确认前 reaper 按它解冻(二期,设计 cross-zone-matchmaking.md §10);0 = 沿用 deadline_ms
+  // 论剑排位冻结上下文(非排位留空)。season_id != 0 时 scene 从空数据构建竞技快照并跳过背包预留,校验失败一律拒开局。
+  RankedMatchContext ranked_context = 6;
 }
 
 message PrepareBattleResponse

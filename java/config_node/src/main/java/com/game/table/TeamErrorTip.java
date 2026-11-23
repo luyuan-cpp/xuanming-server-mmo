@@ -167,6 +167,14 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTeamRatingGapTooLarge = 4032;</code>
      */
     kTeamRatingGapTooLarge(4032),
+    /**
+     * <code>kTeamRankedPresetUnconfirmed = 4033;</code>
+     */
+    kTeamRankedPresetUnconfirmed(4033),
+    /**
+     * <code>kTeamRankedPresetInvalid = 4034;</code>
+     */
+    kTeamRankedPresetInvalid(4034),
     UNRECOGNIZED(-1),
     ;
 
@@ -315,6 +323,14 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTeamRatingGapTooLarge = 4032;</code>
      */
     public static final int kTeamRatingGapTooLarge_VALUE = 4032;
+    /**
+     * <code>kTeamRankedPresetUnconfirmed = 4033;</code>
+     */
+    public static final int kTeamRankedPresetUnconfirmed_VALUE = 4033;
+    /**
+     * <code>kTeamRankedPresetInvalid = 4034;</code>
+     */
+    public static final int kTeamRankedPresetInvalid_VALUE = 4034;
 
 
     public final int getNumber() {
@@ -375,6 +391,8 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
         case 4030: return kTeamInternal;
         case 4031: return kTeamPvpPartySizeNotAllowed;
         case 4032: return kTeamRatingGapTooLarge;
+        case 4033: return kTeamRankedPresetUnconfirmed;
+        case 4034: return kTeamRankedPresetInvalid;
         default: return null;
       }
     }
@@ -440,7 +458,7 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\024team_error_tip.proto*\342\006\n\nteam_error\022\021\n" +
+      "\n\024team_error_tip.proto*\244\007\n\nteam_error\022\021\n" +
       "\rkTeam_errorOK\020\000\022\031\n\024kTeamNotInApplicants" +
       "\020\240\037\022\022\n\rkTeamPlayerId\020\241\037\022\025\n\020kTeamMembersF" +
       "ull\020\242\037\022\026\n\021kTeamMemberInTeam\020\243\037\022\031\n\024kTeamM" +
@@ -462,8 +480,10 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
       "\022\026\n\021kTeamSizeExceeded\020\274\037\022\026\n\021kTeamStateCh" +
       "anged\020\275\037\022\022\n\rkTeamInternal\020\276\037\022 \n\033kTeamPvp" +
       "PartySizeNotAllowed\020\277\037\022\033\n\026kTeamRatingGap" +
-      "TooLarge\020\300\037B$\n\016com.game.tableZ\022generated" +
-      "/pb/tableb\006proto3"
+      "TooLarge\020\300\037\022!\n\034kTeamRankedPresetUnconfir" +
+      "med\020\301\037\022\035\n\030kTeamRankedPresetInvalid\020\302\037B$\n" +
+      "\016com.game.tableZ\022generated/pb/tableb\006pro" +
+      "to3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

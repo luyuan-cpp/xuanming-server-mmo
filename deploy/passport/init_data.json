@@ -1,0 +1,69 @@
+{
+  "organizations": [
+    {
+      "owner": "admin",
+      "name": "xuanming",
+      "displayName": "Xuanming Passport",
+      "passwordType": "bcrypt",
+      "passwordOptions": [
+        "AtLeast8"
+      ],
+      "initScore": 0,
+      "enableSoftDeletion": false
+    }
+  ],
+  "applications": [
+    {
+      "owner": "admin",
+      "name": "app-xuanming-game",
+      "displayName": "Xuanming MMO",
+      "organization": "xuanming",
+      "clientId": "xuanming-game-client",
+      "cert": "cert-built-in",
+      "enablePassword": true,
+      "enableSignUp": true,
+      "enableSigninSession": false,
+      "enableCodeSignin": true,
+      "tokenFormat": "JWT-Standard",
+      "expireInHours": 1,
+      "refreshExpireInHours": 24,
+      "grantTypes": [
+        "authorization_code"
+      ],
+      "redirectUris": [
+        "http://127.0.0.1:18765/passport/callback",
+        "xuanming://passport/callback"
+      ],
+      "signupItems": [
+        {
+          "name": "Username",
+          "visible": true,
+          "required": true,
+          "prompted": false,
+          "rule": "None"
+        },
+        {
+          "name": "Email",
+          "visible": true,
+          "required": true,
+          "prompted": false,
+          "rule": "No verification"
+        },
+        {
+          "name": "Password",
+          "visible": true,
+          "required": true,
+          "prompted": false,
+          "rule": "None"
+        },
+        {
+          "name": "Confirm password",
+          "visible": true,
+          "required": true,
+          "prompted": false,
+          "rule": "None"
+        }
+      ]
+    }
+  ]
+}

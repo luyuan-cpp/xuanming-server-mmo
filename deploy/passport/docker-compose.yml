@@ -1,0 +1,65 @@
+# ────────────────────────────────────────────────────────────────
+# 独立官方通行证栈（Casdoor OIDC + 专属 MySQL 8.0）。
+# 架构与安全边界见 docs/design/official-passport-registration.md。
+#
+# 设计原则：
+#   - 完全独立于游戏主库与全局账号库，零跨库 SQL，只输出标准 OIDC RS256 id_token。
+#   - 所有数据库口令强制经环境变量注入，禁止写入 git 跟踪文件。
+#   - 强制注入 origin 防止 Host 头投毒伪造 iss；initDataNewOnly=true 避免重启覆盖运行时配置。
+#
+# 本地启动示例（PowerShell）：
+#   $env:PASSPORT_DB_ROOT_PASSWORD = "<local-root-password>"
+#   $env:PASSPORT_DB_PASSWORD      = "<local-casdoor-password>"
+#   $env:PASSPORT_ORIGIN           = "http://127.0.0.1:8000"
+#   docker compose -f deploy/passport/docker-compose.yml up -d
+#
+# 本地停服：
+#   docker compose -f deploy/passport/docker-compose.yml down
+# ────────────────────────────────────────────────────────────────
+
+services:
+  passport-db:
+    image: mysql:8.0
+    container_name: mmorpg-passport-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${PASSPORT_DB_ROOT_PASSWORD:?set PASSPORT_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: casdoor
+      MYSQL_USER: casdoor
+      MYSQL_PASSWORD: ${PASSPORT_DB_PASSWORD:?set PASSPORT_DB_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - passport_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  casdoor:
+    image: ${CASDOOR_IMAGE:-casbin/casdoor:v4.27.1}
+    container_name: mmorpg-passport-casdoor
+    restart: unless-stopped
+    depends_on:
+      passport-db:
+        condition: service_healthy
+    ports:
+      - "${PASSPORT_PORT:-8000}:8000"
+    environment:
+      RUNNING_IN_DOCKER: "true"
+      driverName: mysql
+      dataSourceName: "casdoor:${PASSPORT_DB_PASSWORD:?set PASSPORT_DB_PASSWORD}@tcp(passport-db:3306)/"
+      dbName: casdoor
+      origin: ${PASSPORT_ORIGIN:-http://127.0.0.1:8000}
+      runmode: ${PASSPORT_RUNMODE:-dev}
+      initDataFile: "./init_data.json"
+      initDataNewOnly: "true"
+    volumes:
+      - ./conf/app.conf:/conf/app.conf:ro
+      - ./init_data.json:/init_data.json:ro
+
+volumes:
+  passport_mysql_data:

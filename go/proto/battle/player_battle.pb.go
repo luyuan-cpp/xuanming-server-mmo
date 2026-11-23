@@ -461,7 +461,11 @@ type BattleEndS2C struct {
 	Settlement *BattleSettlementData  `protobuf:"bytes,3,opt,name=settlement,proto3" json:"settlement,omitempty"` // 收信玩家本人视角
 	// 本局掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md):结算屏提示去邮箱领取。
 	// 与 PlayerBattleResult.items_mailed 同一个事实,取自这一局的近期结果。
-	ItemsMailed   bool `protobuf:"varint,4,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
+	ItemsMailed bool `protobuf:"varint,4,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
+	// 本局实际新增的装备材料可领额度(0 或 10;日额度已满或不合格局为 0),与 PlayerBattleResult.material_credit_units_added 同源。
+	MaterialCreditUnitsAdded uint32 `protobuf:"varint,5,opt,name=material_credit_units_added,json=materialCreditUnitsAdded,proto3" json:"material_credit_units_added,omitempty"`
+	// 论剑排位赛季编号(非排位为 0)。
+	SeasonId      uint32 `protobuf:"varint,6,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -522,6 +526,20 @@ func (x *BattleEndS2C) GetItemsMailed() bool {
 		return x.ItemsMailed
 	}
 	return false
+}
+
+func (x *BattleEndS2C) GetMaterialCreditUnitsAdded() uint32 {
+	if x != nil {
+		return x.MaterialCreditUnitsAdded
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;
@@ -1700,14 +1718,16 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"roundIndex\x12(\n" +
 	"\x06events\x18\x03 \x03(\v2\x10.BattleEventItemR\x06events\x12%\n" +
 	"\x05state\x18\x04 \x01(\v2\x0f.BattleStateS2CR\x05state\x12!\n" +
-	"\faction_order\x18\x05 \x03(\x04R\vactionOrder\"\xb0\x01\n" +
+	"\faction_order\x18\x05 \x03(\x04R\vactionOrder\"\x8c\x02\n" +
 	"\fBattleEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x125\n" +
 	"\n" +
 	"settlement\x18\x03 \x01(\v2\x15.BattleSettlementDataR\n" +
 	"settlement\x12!\n" +
-	"\fitems_mailed\x18\x04 \x01(\bR\vitemsMailed\"1\n" +
+	"\fitems_mailed\x18\x04 \x01(\bR\vitemsMailed\x12=\n" +
+	"\x1bmaterial_credit_units_added\x18\x05 \x01(\rR\x18materialCreditUnitsAdded\x12\x1b\n" +
+	"\tseason_id\x18\x06 \x01(\rR\bseasonId\"1\n" +
 	"\x12BattleReconnectS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"`\n" +
 	"\x10SpectateStateS2C\x12%\n" +

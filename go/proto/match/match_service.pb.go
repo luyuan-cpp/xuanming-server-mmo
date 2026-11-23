@@ -250,6 +250,232 @@ func (BattleScriptReviewState) EnumDescriptor() ([]byte, []int) {
 	return file_proto_match_match_service_proto_rawDescGZIP(), []int{3}
 }
 
+type RankedTier int32
+
+const (
+	RankedTier_RANKED_TIER_UNSPECIFIED RankedTier = 0 // 本季未亮段
+	RankedTier_RANKED_TIER_CHUSHI      RankedTier = 1 // 初试: [0, 1400)
+	RankedTier_RANKED_TIER_QINGFENG    RankedTier = 2 // 青锋: [1400, 1550)
+	RankedTier_RANKED_TIER_YUNZHANG    RankedTier = 3 // 云章: [1550, 1700)
+	RankedTier_RANKED_TIER_TIANSHU     RankedTier = 4 // 天枢: [1700, 1850)
+	RankedTier_RANKED_TIER_WUSHUANG    RankedTier = 5 // 无双: [1850, +∞)
+)
+
+// Enum value maps for RankedTier.
+var (
+	RankedTier_name = map[int32]string{
+		0: "RANKED_TIER_UNSPECIFIED",
+		1: "RANKED_TIER_CHUSHI",
+		2: "RANKED_TIER_QINGFENG",
+		3: "RANKED_TIER_YUNZHANG",
+		4: "RANKED_TIER_TIANSHU",
+		5: "RANKED_TIER_WUSHUANG",
+	}
+	RankedTier_value = map[string]int32{
+		"RANKED_TIER_UNSPECIFIED": 0,
+		"RANKED_TIER_CHUSHI":      1,
+		"RANKED_TIER_QINGFENG":    2,
+		"RANKED_TIER_YUNZHANG":    3,
+		"RANKED_TIER_TIANSHU":     4,
+		"RANKED_TIER_WUSHUANG":    5,
+	}
+)
+
+func (x RankedTier) Enum() *RankedTier {
+	p := new(RankedTier)
+	*p = x
+	return p
+}
+
+func (x RankedTier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RankedTier) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_service_proto_enumTypes[4].Descriptor()
+}
+
+func (RankedTier) Type() protoreflect.EnumType {
+	return &file_proto_match_match_service_proto_enumTypes[4]
+}
+
+func (x RankedTier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RankedTier.Descriptor instead.
+func (RankedTier) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{4}
+}
+
+type RankedSeasonState int32
+
+const (
+	RankedSeasonState_RANKED_SEASON_STATE_UNSPECIFIED RankedSeasonState = 0
+	RankedSeasonState_RANKED_SEASON_STATE_ACTIVE      RankedSeasonState = 1 // 赛季进行中
+	RankedSeasonState_RANKED_SEASON_STATE_SETTLING    RankedSeasonState = 2 // 上季结算中(停招/排空/封榜/落奖)
+	RankedSeasonState_RANKED_SEASON_STATE_CLOSED      RankedSeasonState = 3 // 已封榜结案
+)
+
+// Enum value maps for RankedSeasonState.
+var (
+	RankedSeasonState_name = map[int32]string{
+		0: "RANKED_SEASON_STATE_UNSPECIFIED",
+		1: "RANKED_SEASON_STATE_ACTIVE",
+		2: "RANKED_SEASON_STATE_SETTLING",
+		3: "RANKED_SEASON_STATE_CLOSED",
+	}
+	RankedSeasonState_value = map[string]int32{
+		"RANKED_SEASON_STATE_UNSPECIFIED": 0,
+		"RANKED_SEASON_STATE_ACTIVE":      1,
+		"RANKED_SEASON_STATE_SETTLING":    2,
+		"RANKED_SEASON_STATE_CLOSED":      3,
+	}
+)
+
+func (x RankedSeasonState) Enum() *RankedSeasonState {
+	p := new(RankedSeasonState)
+	*p = x
+	return p
+}
+
+func (x RankedSeasonState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RankedSeasonState) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_service_proto_enumTypes[5].Descriptor()
+}
+
+func (RankedSeasonState) Type() protoreflect.EnumType {
+	return &file_proto_match_match_service_proto_enumTypes[5]
+}
+
+func (x RankedSeasonState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RankedSeasonState.Descriptor instead.
+func (RankedSeasonState) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{5}
+}
+
+type RankedRewardKind int32
+
+const (
+	RankedRewardKind_RANKED_REWARD_KIND_UNSPECIFIED     RankedRewardKind = 0
+	RankedRewardKind_RANKED_REWARD_AVATAR_PATTERN       RankedRewardKind = 1 // 累计 4 场: 主题头像纹样
+	RankedRewardKind_RANKED_REWARD_CARD_BACKGROUND      RankedRewardKind = 2 // 累计 8 场: 名片底纹
+	RankedRewardKind_RANKED_REWARD_TALISMAN             RankedRewardKind = 3 // 累计 12 场: 永久青云玉符
+	RankedRewardKind_RANKED_REWARD_TIER_BADGE           RankedRewardKind = 4 // 最高段位徽章(天枢/无双)
+	RankedRewardKind_RANKED_REWARD_TIER_TITLE           RankedRewardKind = 5 // 赛季称号(天枢/无双)
+	RankedRewardKind_RANKED_REWARD_CHAMPION_INSCRIPTION RankedRewardKind = 6 // 封榜第 1 且终分达到无双: 榜首题名
+)
+
+// Enum value maps for RankedRewardKind.
+var (
+	RankedRewardKind_name = map[int32]string{
+		0: "RANKED_REWARD_KIND_UNSPECIFIED",
+		1: "RANKED_REWARD_AVATAR_PATTERN",
+		2: "RANKED_REWARD_CARD_BACKGROUND",
+		3: "RANKED_REWARD_TALISMAN",
+		4: "RANKED_REWARD_TIER_BADGE",
+		5: "RANKED_REWARD_TIER_TITLE",
+		6: "RANKED_REWARD_CHAMPION_INSCRIPTION",
+	}
+	RankedRewardKind_value = map[string]int32{
+		"RANKED_REWARD_KIND_UNSPECIFIED":     0,
+		"RANKED_REWARD_AVATAR_PATTERN":       1,
+		"RANKED_REWARD_CARD_BACKGROUND":      2,
+		"RANKED_REWARD_TALISMAN":             3,
+		"RANKED_REWARD_TIER_BADGE":           4,
+		"RANKED_REWARD_TIER_TITLE":           5,
+		"RANKED_REWARD_CHAMPION_INSCRIPTION": 6,
+	}
+)
+
+func (x RankedRewardKind) Enum() *RankedRewardKind {
+	p := new(RankedRewardKind)
+	*p = x
+	return p
+}
+
+func (x RankedRewardKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RankedRewardKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_service_proto_enumTypes[6].Descriptor()
+}
+
+func (RankedRewardKind) Type() protoreflect.EnumType {
+	return &file_proto_match_match_service_proto_enumTypes[6]
+}
+
+func (x RankedRewardKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RankedRewardKind.Descriptor instead.
+func (RankedRewardKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{6}
+}
+
+type RankedMatchRatingStatus int32
+
+const (
+	RankedMatchRatingStatus_RANKED_MATCH_RATING_UNSPECIFIED RankedMatchRatingStatus = 0
+	RankedMatchRatingStatus_RANKED_MATCH_RATING_PENDING     RankedMatchRatingStatus = 1 // 评分、场次与权益仍在异步权威落账
+	RankedMatchRatingStatus_RANKED_MATCH_RATING_CONFIRMED   RankedMatchRatingStatus = 2 // 已在 match SQL 权威落账完成
+	RankedMatchRatingStatus_RANKED_MATCH_RATING_VOID        RankedMatchRatingStatus = 3 // 本局作废(ABORT/VOID),无评分与场次变化
+	RankedMatchRatingStatus_RANKED_MATCH_RATING_ZERO_ROUND  RankedMatchRatingStatus = 4 // 0 回合结束,无评分与场次变化
+)
+
+// Enum value maps for RankedMatchRatingStatus.
+var (
+	RankedMatchRatingStatus_name = map[int32]string{
+		0: "RANKED_MATCH_RATING_UNSPECIFIED",
+		1: "RANKED_MATCH_RATING_PENDING",
+		2: "RANKED_MATCH_RATING_CONFIRMED",
+		3: "RANKED_MATCH_RATING_VOID",
+		4: "RANKED_MATCH_RATING_ZERO_ROUND",
+	}
+	RankedMatchRatingStatus_value = map[string]int32{
+		"RANKED_MATCH_RATING_UNSPECIFIED": 0,
+		"RANKED_MATCH_RATING_PENDING":     1,
+		"RANKED_MATCH_RATING_CONFIRMED":   2,
+		"RANKED_MATCH_RATING_VOID":        3,
+		"RANKED_MATCH_RATING_ZERO_ROUND":  4,
+	}
+)
+
+func (x RankedMatchRatingStatus) Enum() *RankedMatchRatingStatus {
+	p := new(RankedMatchRatingStatus)
+	*p = x
+	return p
+}
+
+func (x RankedMatchRatingStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RankedMatchRatingStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_match_match_service_proto_enumTypes[7].Descriptor()
+}
+
+func (RankedMatchRatingStatus) Type() protoreflect.EnumType {
+	return &file_proto_match_match_service_proto_enumTypes[7]
+}
+
+func (x RankedMatchRatingStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RankedMatchRatingStatus.Descriptor instead.
+func (RankedMatchRatingStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{7}
+}
+
 type JoinQueueRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId    uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`            // Initiating player
@@ -275,8 +501,13 @@ type JoinQueueRequest struct {
 	// 同一玩家意图重放必须复用；为空只允许未启用全球权威的开发兼容模式。
 	RequestId     string `protobuf:"bytes,8,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	NetworkPlanId string `protobuf:"bytes,9,opt,name=network_plan_id,json=networkPlanId,proto3" json:"network_plan_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 论剑排位单排预设(PVP_TEAM 时有效;0 = 使用已保存的个人预设或官方默认破阵 101 / 护主 203)。
+	CharacterPresetId uint32 `protobuf:"varint,10,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`
+	PetPresetId       uint32 `protobuf:"varint,11,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`
+	// 排位规则版本号(非 0 时与当前赛季规则版本比对,不符回 kMatchRankedRuleVersionMismatch)。
+	RankedRuleVersion uint32 `protobuf:"varint,12,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *JoinQueueRequest) Reset() {
@@ -371,6 +602,27 @@ func (x *JoinQueueRequest) GetNetworkPlanId() string {
 		return x.NetworkPlanId
 	}
 	return ""
+}
+
+func (x *JoinQueueRequest) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *JoinQueueRequest) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *JoinQueueRequest) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
 }
 
 type JoinQueueResponse struct {
@@ -558,8 +810,16 @@ type GetQueueStatusResponse struct {
 	// 上述 request_id 不会再入队：它的 SQL 撤销墓碑已提交，或它的原件属于角色此前的归属（过户前留下，现主人不能沿它入队）。
 	// NOT_QUEUED 单独不构成此证据。
 	RequestCancelled bool `protobuf:"varint,8,opt,name=request_cancelled,json=requestCancelled,proto3" json:"request_cancelled,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 论剑排位等待提示阈值秒数(首测=120,客户端排队超过此值弹出继续等或取消提示)。
+	WaitPromptSeconds uint32 `protobuf:"varint,9,opt,name=wait_prompt_seconds,json=waitPromptSeconds,proto3" json:"wait_prompt_seconds,omitempty"`
+	// 当前等待时间对应的排位分差窗口(评分点:100/200/300;非排位为 0)。
+	CurrentRatingSpread uint32 `protobuf:"varint,10,opt,name=current_rating_spread,json=currentRatingSpread,proto3" json:"current_rating_spread,omitempty"`
+	// 当前排队每侧人数档(1..5;未排队或非人数档为 0)。
+	TeamSize uint32 `protobuf:"varint,11,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	// 当前排位票所属赛季号(非排位为 0)。
+	SeasonId      uint32 `protobuf:"varint,12,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetQueueStatusResponse) Reset() {
@@ -646,6 +906,34 @@ func (x *GetQueueStatusResponse) GetRequestCancelled() bool {
 		return x.RequestCancelled
 	}
 	return false
+}
+
+func (x *GetQueueStatusResponse) GetWaitPromptSeconds() uint32 {
+	if x != nil {
+		return x.WaitPromptSeconds
+	}
+	return 0
+}
+
+func (x *GetQueueStatusResponse) GetCurrentRatingSpread() uint32 {
+	if x != nil {
+		return x.CurrentRatingSpread
+	}
+	return 0
+}
+
+func (x *GetQueueStatusResponse) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *GetQueueStatusResponse) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
 }
 
 type ChallengePlayerRequest struct {
@@ -2519,11 +2807,1307 @@ func (x *SetBattleScriptLoadoutResponse) GetLoadout() []*BattleScriptLoadoutEntr
 	return nil
 }
 
+type RankedPresetView struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PresetId       uint32                 `protobuf:"varint,1,opt,name=preset_id,json=presetId,proto3" json:"preset_id,omitempty"`
+	RoleKind       uint32                 `protobuf:"varint,2,opt,name=role_kind,json=roleKind,proto3" json:"role_kind,omitempty"` // 1 人物 / 2 宝宝
+	Code           string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
+	Name           string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	RoleTag        string                 `protobuf:"bytes,5,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`
+	PetTableId     uint32                 `protobuf:"varint,6,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"` // 仅宝宝预设非 0 (3 金猊 / 1 灵狐 / 2 石灵)
+	Weights        []uint32               `protobuf:"varint,7,rep,packed,name=weights,proto3" json:"weights,omitempty"`                    // [体质, 灵力, 力量, 敏捷]
+	SkillIds       []uint32               `protobuf:"varint,8,rep,packed,name=skill_ids,json=skillIds,proto3" json:"skill_ids,omitempty"`
+	PetEntryIds    []uint32               `protobuf:"varint,9,rep,packed,name=pet_entry_ids,json=petEntryIds,proto3" json:"pet_entry_ids,omitempty"`
+	PetEntryPoints []uint32               `protobuf:"varint,10,rep,packed,name=pet_entry_points,json=petEntryPoints,proto3" json:"pet_entry_points,omitempty"`
+	Sort           uint32                 `protobuf:"varint,11,opt,name=sort,proto3" json:"sort,omitempty"`
+	Desc           string                 `protobuf:"bytes,12,opt,name=desc,proto3" json:"desc,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RankedPresetView) Reset() {
+	*x = RankedPresetView{}
+	mi := &file_proto_match_match_service_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedPresetView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedPresetView) ProtoMessage() {}
+
+func (x *RankedPresetView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedPresetView.ProtoReflect.Descriptor instead.
+func (*RankedPresetView) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *RankedPresetView) GetPresetId() uint32 {
+	if x != nil {
+		return x.PresetId
+	}
+	return 0
+}
+
+func (x *RankedPresetView) GetRoleKind() uint32 {
+	if x != nil {
+		return x.RoleKind
+	}
+	return 0
+}
+
+func (x *RankedPresetView) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *RankedPresetView) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RankedPresetView) GetRoleTag() string {
+	if x != nil {
+		return x.RoleTag
+	}
+	return ""
+}
+
+func (x *RankedPresetView) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
+func (x *RankedPresetView) GetWeights() []uint32 {
+	if x != nil {
+		return x.Weights
+	}
+	return nil
+}
+
+func (x *RankedPresetView) GetSkillIds() []uint32 {
+	if x != nil {
+		return x.SkillIds
+	}
+	return nil
+}
+
+func (x *RankedPresetView) GetPetEntryIds() []uint32 {
+	if x != nil {
+		return x.PetEntryIds
+	}
+	return nil
+}
+
+func (x *RankedPresetView) GetPetEntryPoints() []uint32 {
+	if x != nil {
+		return x.PetEntryPoints
+	}
+	return nil
+}
+
+func (x *RankedPresetView) GetSort() uint32 {
+	if x != nil {
+		return x.Sort
+	}
+	return 0
+}
+
+func (x *RankedPresetView) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
+type RankedRewardEntitlement struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId      uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	Kind          RankedRewardKind       `protobuf:"varint,2,opt,name=kind,proto3,enum=match.RankedRewardKind" json:"kind,omitempty"`
+	TierValue     uint32                 `protobuf:"varint,3,opt,name=tier_value,json=tierValue,proto3" json:"tier_value,omitempty"` // 里程碑场次(4/8/12)或 RankedTier(4=天枢,5=无双)
+	ItemCode      string                 `protobuf:"bytes,4,opt,name=item_code,json=itemCode,proto3" json:"item_code,omitempty"`     // 稳定展示资源代号(如 "s1_qingyun_talisman")
+	GrantedAtMs   uint64                 `protobuf:"varint,5,opt,name=granted_at_ms,json=grantedAtMs,proto3" json:"granted_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankedRewardEntitlement) Reset() {
+	*x = RankedRewardEntitlement{}
+	mi := &file_proto_match_match_service_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedRewardEntitlement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedRewardEntitlement) ProtoMessage() {}
+
+func (x *RankedRewardEntitlement) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedRewardEntitlement.ProtoReflect.Descriptor instead.
+func (*RankedRewardEntitlement) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *RankedRewardEntitlement) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *RankedRewardEntitlement) GetKind() RankedRewardKind {
+	if x != nil {
+		return x.Kind
+	}
+	return RankedRewardKind_RANKED_REWARD_KIND_UNSPECIFIED
+}
+
+func (x *RankedRewardEntitlement) GetTierValue() uint32 {
+	if x != nil {
+		return x.TierValue
+	}
+	return 0
+}
+
+func (x *RankedRewardEntitlement) GetItemCode() string {
+	if x != nil {
+		return x.ItemCode
+	}
+	return ""
+}
+
+func (x *RankedRewardEntitlement) GetGrantedAtMs() uint64 {
+	if x != nil {
+		return x.GrantedAtMs
+	}
+	return 0
+}
+
+type RankedCosmeticLoadout struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	EquippedTalismanCode      string                 `protobuf:"bytes,1,opt,name=equipped_talisman_code,json=equippedTalismanCode,proto3" json:"equipped_talisman_code,omitempty"`                  // "" = 隐藏或未拥有;默认佩戴最新已解锁玉符
+	EquippedAvatarPatternCode string                 `protobuf:"bytes,2,opt,name=equipped_avatar_pattern_code,json=equippedAvatarPatternCode,proto3" json:"equipped_avatar_pattern_code,omitempty"` // "" = 不佩戴
+	EquippedCardBgCode        string                 `protobuf:"bytes,3,opt,name=equipped_card_bg_code,json=equippedCardBgCode,proto3" json:"equipped_card_bg_code,omitempty"`                      // "" = 不佩戴
+	EquippedTitleCode         string                 `protobuf:"bytes,4,opt,name=equipped_title_code,json=equippedTitleCode,proto3" json:"equipped_title_code,omitempty"`                           // "" = 不佩戴
+	HideTalisman              bool                   `protobuf:"varint,5,opt,name=hide_talisman,json=hideTalisman,proto3" json:"hide_talisman,omitempty"`                                           // true = 显式隐藏玉符
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *RankedCosmeticLoadout) Reset() {
+	*x = RankedCosmeticLoadout{}
+	mi := &file_proto_match_match_service_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedCosmeticLoadout) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedCosmeticLoadout) ProtoMessage() {}
+
+func (x *RankedCosmeticLoadout) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedCosmeticLoadout.ProtoReflect.Descriptor instead.
+func (*RankedCosmeticLoadout) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *RankedCosmeticLoadout) GetEquippedTalismanCode() string {
+	if x != nil {
+		return x.EquippedTalismanCode
+	}
+	return ""
+}
+
+func (x *RankedCosmeticLoadout) GetEquippedAvatarPatternCode() string {
+	if x != nil {
+		return x.EquippedAvatarPatternCode
+	}
+	return ""
+}
+
+func (x *RankedCosmeticLoadout) GetEquippedCardBgCode() string {
+	if x != nil {
+		return x.EquippedCardBgCode
+	}
+	return ""
+}
+
+func (x *RankedCosmeticLoadout) GetEquippedTitleCode() string {
+	if x != nil {
+		return x.EquippedTitleCode
+	}
+	return ""
+}
+
+func (x *RankedCosmeticLoadout) GetHideTalisman() bool {
+	if x != nil {
+		return x.HideTalisman
+	}
+	return false
+}
+
+type RankedSeasonInfo struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId            uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SeasonKey           string                 `protobuf:"bytes,2,opt,name=season_key,json=seasonKey,proto3" json:"season_key,omitempty"` // 排行榜 RankBoardKey.period(如 "s1")
+	SeasonName          string                 `protobuf:"bytes,3,opt,name=season_name,json=seasonName,proto3" json:"season_name,omitempty"`
+	RankGeneration      uint64                 `protobuf:"varint,4,opt,name=rank_generation,json=rankGeneration,proto3" json:"rank_generation,omitempty"` // 排行榜 RankBoardKey.generation
+	RuleVersion         uint32                 `protobuf:"varint,5,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`
+	State               RankedSeasonState      `protobuf:"varint,6,opt,name=state,proto3,enum=match.RankedSeasonState" json:"state,omitempty"`
+	StartMs             uint64                 `protobuf:"varint,7,opt,name=start_ms,json=startMs,proto3" json:"start_ms,omitempty"` // [start_ms, end_ms) 左闭右开 UTC 毫秒
+	EndMs               uint64                 `protobuf:"varint,8,opt,name=end_ms,json=endMs,proto3" json:"end_ms,omitempty"`
+	BattleConfigId      uint32                 `protobuf:"varint,9,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`              // 排位专用模板 Dungeon.id(=5, time_limit=720)
+	WaitPromptSeconds   uint32                 `protobuf:"varint,10,opt,name=wait_prompt_seconds,json=waitPromptSeconds,proto3" json:"wait_prompt_seconds,omitempty"`    // 120
+	SpreadTier1Seconds  uint32                 `protobuf:"varint,11,opt,name=spread_tier1_seconds,json=spreadTier1Seconds,proto3" json:"spread_tier1_seconds,omitempty"` // 30
+	SpreadTier1Points   uint32                 `protobuf:"varint,12,opt,name=spread_tier1_points,json=spreadTier1Points,proto3" json:"spread_tier1_points,omitempty"`    // 100
+	SpreadTier2Seconds  uint32                 `protobuf:"varint,13,opt,name=spread_tier2_seconds,json=spreadTier2Seconds,proto3" json:"spread_tier2_seconds,omitempty"` // 90
+	SpreadTier2Points   uint32                 `protobuf:"varint,14,opt,name=spread_tier2_points,json=spreadTier2Points,proto3" json:"spread_tier2_points,omitempty"`    // 200
+	SpreadTier3Points   uint32                 `protobuf:"varint,15,opt,name=spread_tier3_points,json=spreadTier3Points,proto3" json:"spread_tier3_points,omitempty"`    // 300
+	ChampionPlayerId    uint64                 `protobuf:"varint,16,opt,name=champion_player_id,json=championPlayerId,proto3" json:"champion_player_id,omitempty"`       // 封榜后填;无达标者为 0(空缺)
+	ChampionName        string                 `protobuf:"bytes,17,opt,name=champion_name,json=championName,proto3" json:"champion_name,omitempty"`
+	ChampionRatingCenti int64                  `protobuf:"varint,18,opt,name=champion_rating_centi,json=championRatingCenti,proto3" json:"champion_rating_centi,omitempty"`
+	RankBoardSealed     bool                   `protobuf:"varint,19,opt,name=rank_board_sealed,json=rankBoardSealed,proto3" json:"rank_board_sealed,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *RankedSeasonInfo) Reset() {
+	*x = RankedSeasonInfo{}
+	mi := &file_proto_match_match_service_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedSeasonInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedSeasonInfo) ProtoMessage() {}
+
+func (x *RankedSeasonInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedSeasonInfo.ProtoReflect.Descriptor instead.
+func (*RankedSeasonInfo) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *RankedSeasonInfo) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSeasonKey() string {
+	if x != nil {
+		return x.SeasonKey
+	}
+	return ""
+}
+
+func (x *RankedSeasonInfo) GetSeasonName() string {
+	if x != nil {
+		return x.SeasonName
+	}
+	return ""
+}
+
+func (x *RankedSeasonInfo) GetRankGeneration() uint64 {
+	if x != nil {
+		return x.RankGeneration
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetRuleVersion() uint32 {
+	if x != nil {
+		return x.RuleVersion
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetState() RankedSeasonState {
+	if x != nil {
+		return x.State
+	}
+	return RankedSeasonState_RANKED_SEASON_STATE_UNSPECIFIED
+}
+
+func (x *RankedSeasonInfo) GetStartMs() uint64 {
+	if x != nil {
+		return x.StartMs
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetEndMs() uint64 {
+	if x != nil {
+		return x.EndMs
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetWaitPromptSeconds() uint32 {
+	if x != nil {
+		return x.WaitPromptSeconds
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSpreadTier1Seconds() uint32 {
+	if x != nil {
+		return x.SpreadTier1Seconds
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSpreadTier1Points() uint32 {
+	if x != nil {
+		return x.SpreadTier1Points
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSpreadTier2Seconds() uint32 {
+	if x != nil {
+		return x.SpreadTier2Seconds
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSpreadTier2Points() uint32 {
+	if x != nil {
+		return x.SpreadTier2Points
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetSpreadTier3Points() uint32 {
+	if x != nil {
+		return x.SpreadTier3Points
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetChampionPlayerId() uint64 {
+	if x != nil {
+		return x.ChampionPlayerId
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetChampionName() string {
+	if x != nil {
+		return x.ChampionName
+	}
+	return ""
+}
+
+func (x *RankedSeasonInfo) GetChampionRatingCenti() int64 {
+	if x != nil {
+		return x.ChampionRatingCenti
+	}
+	return 0
+}
+
+func (x *RankedSeasonInfo) GetRankBoardSealed() bool {
+	if x != nil {
+		return x.RankBoardSealed
+	}
+	return false
+}
+
+type RankedPlayerSeasonSummary struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId        uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SeasonKey       string                 `protobuf:"bytes,2,opt,name=season_key,json=seasonKey,proto3" json:"season_key,omitempty"`
+	Qualified       bool                   `protobuf:"varint,3,opt,name=qualified,proto3" json:"qualified,omitempty"`                                              // 本季是否已完成首场有效参与(亮段且上榜)
+	RatingCenti     int64                  `protobuf:"varint,4,opt,name=rating_centi,json=ratingCenti,proto3" json:"rating_centi,omitempty"`                       // 当前或终局分(×100;前端按 floor(rating_centi/100) 展示)
+	CurrentTier     RankedTier             `protobuf:"varint,5,opt,name=current_tier,json=currentTier,proto3,enum=match.RankedTier" json:"current_tier,omitempty"` // 未亮段为 UNSPECIFIED
+	PeakRatingCenti int64                  `protobuf:"varint,6,opt,name=peak_rating_centi,json=peakRatingCenti,proto3" json:"peak_rating_centi,omitempty"`         // 本季最高有效分(×100)
+	PeakTier        RankedTier             `protobuf:"varint,7,opt,name=peak_tier,json=peakTier,proto3,enum=match.RankedTier" json:"peak_tier,omitempty"`          // 本季最高段位
+	ValidMatches    uint32                 `protobuf:"varint,8,opt,name=valid_matches,json=validMatches,proto3" json:"valid_matches,omitempty"`                    // 本季跨规模有效参与场次
+	Wins            uint32                 `protobuf:"varint,9,opt,name=wins,proto3" json:"wins,omitempty"`
+	Losses          uint32                 `protobuf:"varint,10,opt,name=losses,proto3" json:"losses,omitempty"`
+	Draws           uint32                 `protobuf:"varint,11,opt,name=draws,proto3" json:"draws,omitempty"`
+	QualifiedAtMs   uint64                 `protobuf:"varint,12,opt,name=qualified_at_ms,json=qualifiedAtMs,proto3" json:"qualified_at_ms,omitempty"`     // 本季首次亮段时刻
+	MilestoneBits   uint32                 `protobuf:"varint,13,opt,name=milestone_bits,json=milestoneBits,proto3" json:"milestone_bits,omitempty"`       // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+	FinalRank       uint64                 `protobuf:"varint,14,opt,name=final_rank,json=finalRank,proto3" json:"final_rank,omitempty"`                   // 封榜后最终名次;0=未上榜或未封榜
+	ChampionAwarded bool                   `protobuf:"varint,15,opt,name=champion_awarded,json=championAwarded,proto3" json:"champion_awarded,omitempty"` // 封榜第 1 且终分达到无双
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RankedPlayerSeasonSummary) Reset() {
+	*x = RankedPlayerSeasonSummary{}
+	mi := &file_proto_match_match_service_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedPlayerSeasonSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedPlayerSeasonSummary) ProtoMessage() {}
+
+func (x *RankedPlayerSeasonSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedPlayerSeasonSummary.ProtoReflect.Descriptor instead.
+func (*RankedPlayerSeasonSummary) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *RankedPlayerSeasonSummary) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetSeasonKey() string {
+	if x != nil {
+		return x.SeasonKey
+	}
+	return ""
+}
+
+func (x *RankedPlayerSeasonSummary) GetQualified() bool {
+	if x != nil {
+		return x.Qualified
+	}
+	return false
+}
+
+func (x *RankedPlayerSeasonSummary) GetRatingCenti() int64 {
+	if x != nil {
+		return x.RatingCenti
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetCurrentTier() RankedTier {
+	if x != nil {
+		return x.CurrentTier
+	}
+	return RankedTier_RANKED_TIER_UNSPECIFIED
+}
+
+func (x *RankedPlayerSeasonSummary) GetPeakRatingCenti() int64 {
+	if x != nil {
+		return x.PeakRatingCenti
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetPeakTier() RankedTier {
+	if x != nil {
+		return x.PeakTier
+	}
+	return RankedTier_RANKED_TIER_UNSPECIFIED
+}
+
+func (x *RankedPlayerSeasonSummary) GetValidMatches() uint32 {
+	if x != nil {
+		return x.ValidMatches
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetWins() uint32 {
+	if x != nil {
+		return x.Wins
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetLosses() uint32 {
+	if x != nil {
+		return x.Losses
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetDraws() uint32 {
+	if x != nil {
+		return x.Draws
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetQualifiedAtMs() uint64 {
+	if x != nil {
+		return x.QualifiedAtMs
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetMilestoneBits() uint32 {
+	if x != nil {
+		return x.MilestoneBits
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetFinalRank() uint64 {
+	if x != nil {
+		return x.FinalRank
+	}
+	return 0
+}
+
+func (x *RankedPlayerSeasonSummary) GetChampionAwarded() bool {
+	if x != nil {
+		return x.ChampionAwarded
+	}
+	return false
+}
+
+type RankedBattleSettlementView struct {
+	state                   protoimpl.MessageState     `protogen:"open.v1"`
+	BattleId                uint64                     `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	SeasonId                uint32                     `protobuf:"varint,2,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	TeamSize                uint32                     `protobuf:"varint,3,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	Status                  RankedMatchRatingStatus    `protobuf:"varint,4,opt,name=status,proto3,enum=match.RankedMatchRatingStatus" json:"status,omitempty"`
+	Outcome                 battle.EBattleOutcome      `protobuf:"varint,5,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
+	PlayerTeamIndex         uint32                     `protobuf:"varint,6,opt,name=player_team_index,json=playerTeamIndex,proto3" json:"player_team_index,omitempty"`
+	TotalRounds             uint32                     `protobuf:"varint,7,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	Participated            bool                       `protobuf:"varint,8,opt,name=participated,proto3" json:"participated,omitempty"` // 本人是否达成有效参与
+	Fled                    bool                       `protobuf:"varint,9,opt,name=fled,proto3" json:"fled,omitempty"`
+	RatingBeforeCenti       int64                      `protobuf:"varint,10,opt,name=rating_before_centi,json=ratingBeforeCenti,proto3" json:"rating_before_centi,omitempty"`
+	RatingAfterCenti        int64                      `protobuf:"varint,11,opt,name=rating_after_centi,json=ratingAfterCenti,proto3" json:"rating_after_centi,omitempty"`
+	RatingDeltaCenti        int64                      `protobuf:"zigzag64,12,opt,name=rating_delta_centi,json=ratingDeltaCenti,proto3" json:"rating_delta_centi,omitempty"`
+	TierBefore              RankedTier                 `protobuf:"varint,13,opt,name=tier_before,json=tierBefore,proto3,enum=match.RankedTier" json:"tier_before,omitempty"` // 本季首场亮段前为 UNSPECIFIED
+	TierAfter               RankedTier                 `protobuf:"varint,14,opt,name=tier_after,json=tierAfter,proto3,enum=match.RankedTier" json:"tier_after,omitempty"`
+	NewlyQualified          bool                       `protobuf:"varint,15,opt,name=newly_qualified,json=newlyQualified,proto3" json:"newly_qualified,omitempty"` // 本局是否首次完成本季亮段
+	SeasonValidMatchesAfter uint32                     `protobuf:"varint,16,opt,name=season_valid_matches_after,json=seasonValidMatchesAfter,proto3" json:"season_valid_matches_after,omitempty"`
+	NewlyUnlockedRewards    []*RankedRewardEntitlement `protobuf:"bytes,17,rep,name=newly_unlocked_rewards,json=newlyUnlockedRewards,proto3" json:"newly_unlocked_rewards,omitempty"`
+	SettledAtMs             uint64                     `protobuf:"varint,18,opt,name=settled_at_ms,json=settledAtMs,proto3" json:"settled_at_ms,omitempty"`
+	CharacterPresetId       uint32                     `protobuf:"varint,19,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`
+	PetPresetId             uint32                     `protobuf:"varint,20,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *RankedBattleSettlementView) Reset() {
+	*x = RankedBattleSettlementView{}
+	mi := &file_proto_match_match_service_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedBattleSettlementView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedBattleSettlementView) ProtoMessage() {}
+
+func (x *RankedBattleSettlementView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedBattleSettlementView.ProtoReflect.Descriptor instead.
+func (*RankedBattleSettlementView) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *RankedBattleSettlementView) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetStatus() RankedMatchRatingStatus {
+	if x != nil {
+		return x.Status
+	}
+	return RankedMatchRatingStatus_RANKED_MATCH_RATING_UNSPECIFIED
+}
+
+func (x *RankedBattleSettlementView) GetOutcome() battle.EBattleOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return battle.EBattleOutcome(0)
+}
+
+func (x *RankedBattleSettlementView) GetPlayerTeamIndex() uint32 {
+	if x != nil {
+		return x.PlayerTeamIndex
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetParticipated() bool {
+	if x != nil {
+		return x.Participated
+	}
+	return false
+}
+
+func (x *RankedBattleSettlementView) GetFled() bool {
+	if x != nil {
+		return x.Fled
+	}
+	return false
+}
+
+func (x *RankedBattleSettlementView) GetRatingBeforeCenti() int64 {
+	if x != nil {
+		return x.RatingBeforeCenti
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetRatingAfterCenti() int64 {
+	if x != nil {
+		return x.RatingAfterCenti
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetRatingDeltaCenti() int64 {
+	if x != nil {
+		return x.RatingDeltaCenti
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetTierBefore() RankedTier {
+	if x != nil {
+		return x.TierBefore
+	}
+	return RankedTier_RANKED_TIER_UNSPECIFIED
+}
+
+func (x *RankedBattleSettlementView) GetTierAfter() RankedTier {
+	if x != nil {
+		return x.TierAfter
+	}
+	return RankedTier_RANKED_TIER_UNSPECIFIED
+}
+
+func (x *RankedBattleSettlementView) GetNewlyQualified() bool {
+	if x != nil {
+		return x.NewlyQualified
+	}
+	return false
+}
+
+func (x *RankedBattleSettlementView) GetSeasonValidMatchesAfter() uint32 {
+	if x != nil {
+		return x.SeasonValidMatchesAfter
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetNewlyUnlockedRewards() []*RankedRewardEntitlement {
+	if x != nil {
+		return x.NewlyUnlockedRewards
+	}
+	return nil
+}
+
+func (x *RankedBattleSettlementView) GetSettledAtMs() uint64 {
+	if x != nil {
+		return x.SettledAtMs
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *RankedBattleSettlementView) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+type GetRankedProfileRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	IncludeHistory bool                   `protobuf:"varint,1,opt,name=include_history,json=includeHistory,proto3" json:"include_history,omitempty"` // true 同时返回往季记录与已解锁权益
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetRankedProfileRequest) Reset() {
+	*x = GetRankedProfileRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRankedProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRankedProfileRequest) ProtoMessage() {}
+
+func (x *GetRankedProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRankedProfileRequest.ProtoReflect.Descriptor instead.
+func (*GetRankedProfileRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *GetRankedProfileRequest) GetIncludeHistory() bool {
+	if x != nil {
+		return x.IncludeHistory
+	}
+	return false
+}
+
+type GetRankedProfileResponse struct {
+	state           protoimpl.MessageState        `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage          `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	CurrentSeason   *RankedSeasonInfo             `protobuf:"bytes,2,opt,name=current_season,json=currentSeason,proto3" json:"current_season,omitempty"`
+	CurrentProgress *RankedPlayerSeasonSummary    `protobuf:"bytes,3,opt,name=current_progress,json=currentProgress,proto3" json:"current_progress,omitempty"`
+	SelectedPresets *battle.RankedPresetSelection `protobuf:"bytes,4,opt,name=selected_presets,json=selectedPresets,proto3" json:"selected_presets,omitempty"` // 单排默认预设(默认 101 破阵 + 203 护主)
+	CosmeticLoadout *RankedCosmeticLoadout        `protobuf:"bytes,5,opt,name=cosmetic_loadout,json=cosmeticLoadout,proto3" json:"cosmetic_loadout,omitempty"`
+	Presets         []*RankedPresetView           `protobuf:"bytes,6,rep,name=presets,proto3" json:"presets,omitempty"`                            // 当前生效的 6 套正式预设
+	Entitlements    []*RankedRewardEntitlement    `protobuf:"bytes,7,rep,name=entitlements,proto3" json:"entitlements,omitempty"`                  // 全部永久/赛季展示权益
+	History         []*RankedPlayerSeasonSummary  `protobuf:"bytes,8,rep,name=history,proto3" json:"history,omitempty"`                            // 往季记录(season_id 降序)
+	PastSeasons     []*RankedSeasonInfo           `protobuf:"bytes,9,rep,name=past_seasons,json=pastSeasons,proto3" json:"past_seasons,omitempty"` // 往季赛季摘要(含封榜/榜首题名)
+	ServerTimeMs    uint64                        `protobuf:"varint,10,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GetRankedProfileResponse) Reset() {
+	*x = GetRankedProfileResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRankedProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRankedProfileResponse) ProtoMessage() {}
+
+func (x *GetRankedProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRankedProfileResponse.ProtoReflect.Descriptor instead.
+func (*GetRankedProfileResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *GetRankedProfileResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetCurrentSeason() *RankedSeasonInfo {
+	if x != nil {
+		return x.CurrentSeason
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetCurrentProgress() *RankedPlayerSeasonSummary {
+	if x != nil {
+		return x.CurrentProgress
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetSelectedPresets() *battle.RankedPresetSelection {
+	if x != nil {
+		return x.SelectedPresets
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetCosmeticLoadout() *RankedCosmeticLoadout {
+	if x != nil {
+		return x.CosmeticLoadout
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetPresets() []*RankedPresetView {
+	if x != nil {
+		return x.Presets
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetEntitlements() []*RankedRewardEntitlement {
+	if x != nil {
+		return x.Entitlements
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetHistory() []*RankedPlayerSeasonSummary {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetPastSeasons() []*RankedSeasonInfo {
+	if x != nil {
+		return x.PastSeasons
+	}
+	return nil
+}
+
+func (x *GetRankedProfileResponse) GetServerTimeMs() uint64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+type SaveRankedPresetRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CharacterPresetId uint32                 `protobuf:"varint,1,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`
+	PetPresetId       uint32                 `protobuf:"varint,2,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`
+	RuleVersion       uint32                 `protobuf:"varint,3,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *SaveRankedPresetRequest) Reset() {
+	*x = SaveRankedPresetRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveRankedPresetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRankedPresetRequest) ProtoMessage() {}
+
+func (x *SaveRankedPresetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRankedPresetRequest.ProtoReflect.Descriptor instead.
+func (*SaveRankedPresetRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *SaveRankedPresetRequest) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *SaveRankedPresetRequest) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *SaveRankedPresetRequest) GetRuleVersion() uint32 {
+	if x != nil {
+		return x.RuleVersion
+	}
+	return 0
+}
+
+type SaveRankedPresetResponse struct {
+	state           protoimpl.MessageState        `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage          `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	SelectedPresets *battle.RankedPresetSelection `protobuf:"bytes,2,opt,name=selected_presets,json=selectedPresets,proto3" json:"selected_presets,omitempty"`
+	RuleVersion     uint32                        `protobuf:"varint,3,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SaveRankedPresetResponse) Reset() {
+	*x = SaveRankedPresetResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveRankedPresetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveRankedPresetResponse) ProtoMessage() {}
+
+func (x *SaveRankedPresetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveRankedPresetResponse.ProtoReflect.Descriptor instead.
+func (*SaveRankedPresetResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *SaveRankedPresetResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SaveRankedPresetResponse) GetSelectedPresets() *battle.RankedPresetSelection {
+	if x != nil {
+		return x.SelectedPresets
+	}
+	return nil
+}
+
+func (x *SaveRankedPresetResponse) GetRuleVersion() uint32 {
+	if x != nil {
+		return x.RuleVersion
+	}
+	return 0
+}
+
+type UpdateRankedCosmeticRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Loadout       *RankedCosmeticLoadout `protobuf:"bytes,1,opt,name=loadout,proto3" json:"loadout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateRankedCosmeticRequest) Reset() {
+	*x = UpdateRankedCosmeticRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateRankedCosmeticRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateRankedCosmeticRequest) ProtoMessage() {}
+
+func (x *UpdateRankedCosmeticRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateRankedCosmeticRequest.ProtoReflect.Descriptor instead.
+func (*UpdateRankedCosmeticRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *UpdateRankedCosmeticRequest) GetLoadout() *RankedCosmeticLoadout {
+	if x != nil {
+		return x.Loadout
+	}
+	return nil
+}
+
+type UpdateRankedCosmeticResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Loadout       *RankedCosmeticLoadout `protobuf:"bytes,2,opt,name=loadout,proto3" json:"loadout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateRankedCosmeticResponse) Reset() {
+	*x = UpdateRankedCosmeticResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateRankedCosmeticResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateRankedCosmeticResponse) ProtoMessage() {}
+
+func (x *UpdateRankedCosmeticResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateRankedCosmeticResponse.ProtoReflect.Descriptor instead.
+func (*UpdateRankedCosmeticResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *UpdateRankedCosmeticResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *UpdateRankedCosmeticResponse) GetLoadout() *RankedCosmeticLoadout {
+	if x != nil {
+		return x.Loadout
+	}
+	return nil
+}
+
+type GetRankedBattleResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 0 = 查询本人最近一局排位结果
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRankedBattleResultRequest) Reset() {
+	*x = GetRankedBattleResultRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRankedBattleResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRankedBattleResultRequest) ProtoMessage() {}
+
+func (x *GetRankedBattleResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRankedBattleResultRequest.ProtoReflect.Descriptor instead.
+func (*GetRankedBattleResultRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *GetRankedBattleResultRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type GetRankedBattleResultResponse struct {
+	state         protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Result        *RankedBattleSettlementView `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRankedBattleResultResponse) Reset() {
+	*x = GetRankedBattleResultResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRankedBattleResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRankedBattleResultResponse) ProtoMessage() {}
+
+func (x *GetRankedBattleResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRankedBattleResultResponse.ProtoReflect.Descriptor instead.
+func (*GetRankedBattleResultResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *GetRankedBattleResultResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetRankedBattleResultResponse) GetResult() *RankedBattleSettlementView {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 var File_proto_match_match_service_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a\x1fproto/match/match_network.proto\"\xce\x02\n" +
+	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a\x1fproto/match/match_network.proto\"\xd2\x03\n" +
 	"\x10JoinQueueRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12\"\n" +
@@ -2534,7 +4118,11 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tteam_size\x18\a \x01(\rR\bteamSize\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\b \x01(\tR\trequestId\x12&\n" +
-	"\x0fnetwork_plan_id\x18\t \x01(\tR\rnetworkPlanId\"\x8b\x01\n" +
+	"\x0fnetwork_plan_id\x18\t \x01(\tR\rnetworkPlanId\x12.\n" +
+	"\x13character_preset_id\x18\n" +
+	" \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\v \x01(\rR\vpetPresetId\x12.\n" +
+	"\x13ranked_rule_version\x18\f \x01(\rR\x11rankedRuleVersion\"\x8b\x01\n" +
 	"\x11JoinQueueResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12!\n" +
@@ -2548,7 +4136,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x15GetQueueStatusRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"\xda\x02\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xf8\x03\n" +
 	"\x16GetQueueStatusResponse\x12'\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x11.match.QueueStateR\x05state\x124\n" +
 	"\x16estimated_wait_seconds\x18\x02 \x01(\rR\x14estimatedWaitSeconds\x12%\n" +
@@ -2557,7 +4145,12 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tbattle_id\x18\x05 \x01(\x04R\bbattleId\x12'\n" +
 	"\x0fselected_region\x18\x06 \x01(\rR\x0eselectedRegion\x12$\n" +
 	"\x0eretry_after_ms\x18\a \x01(\rR\fretryAfterMs\x12+\n" +
-	"\x11request_cancelled\x18\b \x01(\bR\x10requestCancelled\"\x89\x01\n" +
+	"\x11request_cancelled\x18\b \x01(\bR\x10requestCancelled\x12.\n" +
+	"\x13wait_prompt_seconds\x18\t \x01(\rR\x11waitPromptSeconds\x122\n" +
+	"\x15current_rating_spread\x18\n" +
+	" \x01(\rR\x13currentRatingSpread\x12\x1b\n" +
+	"\tteam_size\x18\v \x01(\rR\bteamSize\x12\x1b\n" +
+	"\tseason_id\x18\f \x01(\rR\bseasonId\"\x89\x01\n" +
 	"\x16ChallengePlayerRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
 	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x12(\n" +
@@ -2695,7 +4288,133 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x05entry\x18\x01 \x01(\v2\x1f.match.BattleScriptLoadoutEntryR\x05entry\"\x91\x01\n" +
 	"\x1eSetBattleScriptLoadoutResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x129\n" +
-	"\aloadout\x18\x02 \x03(\v2\x1f.match.BattleScriptLoadoutEntryR\aloadout*\xcc\x01\n" +
+	"\aloadout\x18\x02 \x03(\v2\x1f.match.BattleScriptLoadoutEntryR\aloadout\"\xde\x02\n" +
+	"\x10RankedPresetView\x12\x1b\n" +
+	"\tpreset_id\x18\x01 \x01(\rR\bpresetId\x12\x1b\n" +
+	"\trole_kind\x18\x02 \x01(\rR\broleKind\x12\x12\n" +
+	"\x04code\x18\x03 \x01(\tR\x04code\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x19\n" +
+	"\brole_tag\x18\x05 \x01(\tR\aroleTag\x12 \n" +
+	"\fpet_table_id\x18\x06 \x01(\rR\n" +
+	"petTableId\x12\x18\n" +
+	"\aweights\x18\a \x03(\rR\aweights\x12\x1b\n" +
+	"\tskill_ids\x18\b \x03(\rR\bskillIds\x12\"\n" +
+	"\rpet_entry_ids\x18\t \x03(\rR\vpetEntryIds\x12(\n" +
+	"\x10pet_entry_points\x18\n" +
+	" \x03(\rR\x0epetEntryPoints\x12\x12\n" +
+	"\x04sort\x18\v \x01(\rR\x04sort\x12\x12\n" +
+	"\x04desc\x18\f \x01(\tR\x04desc\"\xc3\x01\n" +
+	"\x17RankedRewardEntitlement\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12+\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x17.match.RankedRewardKindR\x04kind\x12\x1d\n" +
+	"\n" +
+	"tier_value\x18\x03 \x01(\rR\ttierValue\x12\x1b\n" +
+	"\titem_code\x18\x04 \x01(\tR\bitemCode\x12\"\n" +
+	"\rgranted_at_ms\x18\x05 \x01(\x04R\vgrantedAtMs\"\x96\x02\n" +
+	"\x15RankedCosmeticLoadout\x124\n" +
+	"\x16equipped_talisman_code\x18\x01 \x01(\tR\x14equippedTalismanCode\x12?\n" +
+	"\x1cequipped_avatar_pattern_code\x18\x02 \x01(\tR\x19equippedAvatarPatternCode\x121\n" +
+	"\x15equipped_card_bg_code\x18\x03 \x01(\tR\x12equippedCardBgCode\x12.\n" +
+	"\x13equipped_title_code\x18\x04 \x01(\tR\x11equippedTitleCode\x12#\n" +
+	"\rhide_talisman\x18\x05 \x01(\bR\fhideTalisman\"\x9e\x06\n" +
+	"\x10RankedSeasonInfo\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
+	"\n" +
+	"season_key\x18\x02 \x01(\tR\tseasonKey\x12\x1f\n" +
+	"\vseason_name\x18\x03 \x01(\tR\n" +
+	"seasonName\x12'\n" +
+	"\x0frank_generation\x18\x04 \x01(\x04R\x0erankGeneration\x12!\n" +
+	"\frule_version\x18\x05 \x01(\rR\vruleVersion\x12.\n" +
+	"\x05state\x18\x06 \x01(\x0e2\x18.match.RankedSeasonStateR\x05state\x12\x19\n" +
+	"\bstart_ms\x18\a \x01(\x04R\astartMs\x12\x15\n" +
+	"\x06end_ms\x18\b \x01(\x04R\x05endMs\x12(\n" +
+	"\x10battle_config_id\x18\t \x01(\rR\x0ebattleConfigId\x12.\n" +
+	"\x13wait_prompt_seconds\x18\n" +
+	" \x01(\rR\x11waitPromptSeconds\x120\n" +
+	"\x14spread_tier1_seconds\x18\v \x01(\rR\x12spreadTier1Seconds\x12.\n" +
+	"\x13spread_tier1_points\x18\f \x01(\rR\x11spreadTier1Points\x120\n" +
+	"\x14spread_tier2_seconds\x18\r \x01(\rR\x12spreadTier2Seconds\x12.\n" +
+	"\x13spread_tier2_points\x18\x0e \x01(\rR\x11spreadTier2Points\x12.\n" +
+	"\x13spread_tier3_points\x18\x0f \x01(\rR\x11spreadTier3Points\x12,\n" +
+	"\x12champion_player_id\x18\x10 \x01(\x04R\x10championPlayerId\x12#\n" +
+	"\rchampion_name\x18\x11 \x01(\tR\fchampionName\x122\n" +
+	"\x15champion_rating_centi\x18\x12 \x01(\x03R\x13championRatingCenti\x12*\n" +
+	"\x11rank_board_sealed\x18\x13 \x01(\bR\x0frankBoardSealed\"\xaa\x04\n" +
+	"\x19RankedPlayerSeasonSummary\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
+	"\n" +
+	"season_key\x18\x02 \x01(\tR\tseasonKey\x12\x1c\n" +
+	"\tqualified\x18\x03 \x01(\bR\tqualified\x12!\n" +
+	"\frating_centi\x18\x04 \x01(\x03R\vratingCenti\x124\n" +
+	"\fcurrent_tier\x18\x05 \x01(\x0e2\x11.match.RankedTierR\vcurrentTier\x12*\n" +
+	"\x11peak_rating_centi\x18\x06 \x01(\x03R\x0fpeakRatingCenti\x12.\n" +
+	"\tpeak_tier\x18\a \x01(\x0e2\x11.match.RankedTierR\bpeakTier\x12#\n" +
+	"\rvalid_matches\x18\b \x01(\rR\fvalidMatches\x12\x12\n" +
+	"\x04wins\x18\t \x01(\rR\x04wins\x12\x16\n" +
+	"\x06losses\x18\n" +
+	" \x01(\rR\x06losses\x12\x14\n" +
+	"\x05draws\x18\v \x01(\rR\x05draws\x12&\n" +
+	"\x0fqualified_at_ms\x18\f \x01(\x04R\rqualifiedAtMs\x12%\n" +
+	"\x0emilestone_bits\x18\r \x01(\rR\rmilestoneBits\x12\x1d\n" +
+	"\n" +
+	"final_rank\x18\x0e \x01(\x04R\tfinalRank\x12)\n" +
+	"\x10champion_awarded\x18\x0f \x01(\bR\x0fchampionAwarded\"\x83\a\n" +
+	"\x1aRankedBattleSettlementView\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
+	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x12\x1b\n" +
+	"\tteam_size\x18\x03 \x01(\rR\bteamSize\x126\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x1e.match.RankedMatchRatingStatusR\x06status\x12)\n" +
+	"\aoutcome\x18\x05 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x12*\n" +
+	"\x11player_team_index\x18\x06 \x01(\rR\x0fplayerTeamIndex\x12!\n" +
+	"\ftotal_rounds\x18\a \x01(\rR\vtotalRounds\x12\"\n" +
+	"\fparticipated\x18\b \x01(\bR\fparticipated\x12\x12\n" +
+	"\x04fled\x18\t \x01(\bR\x04fled\x12.\n" +
+	"\x13rating_before_centi\x18\n" +
+	" \x01(\x03R\x11ratingBeforeCenti\x12,\n" +
+	"\x12rating_after_centi\x18\v \x01(\x03R\x10ratingAfterCenti\x12,\n" +
+	"\x12rating_delta_centi\x18\f \x01(\x12R\x10ratingDeltaCenti\x122\n" +
+	"\vtier_before\x18\r \x01(\x0e2\x11.match.RankedTierR\n" +
+	"tierBefore\x120\n" +
+	"\n" +
+	"tier_after\x18\x0e \x01(\x0e2\x11.match.RankedTierR\ttierAfter\x12'\n" +
+	"\x0fnewly_qualified\x18\x0f \x01(\bR\x0enewlyQualified\x12;\n" +
+	"\x1aseason_valid_matches_after\x18\x10 \x01(\rR\x17seasonValidMatchesAfter\x12T\n" +
+	"\x16newly_unlocked_rewards\x18\x11 \x03(\v2\x1e.match.RankedRewardEntitlementR\x14newlyUnlockedRewards\x12\"\n" +
+	"\rsettled_at_ms\x18\x12 \x01(\x04R\vsettledAtMs\x12.\n" +
+	"\x13character_preset_id\x18\x13 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x14 \x01(\rR\vpetPresetId\"B\n" +
+	"\x17GetRankedProfileRequest\x12'\n" +
+	"\x0finclude_history\x18\x01 \x01(\bR\x0eincludeHistory\"\xfe\x04\n" +
+	"\x18GetRankedProfileResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12>\n" +
+	"\x0ecurrent_season\x18\x02 \x01(\v2\x17.match.RankedSeasonInfoR\rcurrentSeason\x12K\n" +
+	"\x10current_progress\x18\x03 \x01(\v2 .match.RankedPlayerSeasonSummaryR\x0fcurrentProgress\x12A\n" +
+	"\x10selected_presets\x18\x04 \x01(\v2\x16.RankedPresetSelectionR\x0fselectedPresets\x12G\n" +
+	"\x10cosmetic_loadout\x18\x05 \x01(\v2\x1c.match.RankedCosmeticLoadoutR\x0fcosmeticLoadout\x121\n" +
+	"\apresets\x18\x06 \x03(\v2\x17.match.RankedPresetViewR\apresets\x12B\n" +
+	"\fentitlements\x18\a \x03(\v2\x1e.match.RankedRewardEntitlementR\fentitlements\x12:\n" +
+	"\ahistory\x18\b \x03(\v2 .match.RankedPlayerSeasonSummaryR\ahistory\x12:\n" +
+	"\fpast_seasons\x18\t \x03(\v2\x17.match.RankedSeasonInfoR\vpastSeasons\x12$\n" +
+	"\x0eserver_time_ms\x18\n" +
+	" \x01(\x04R\fserverTimeMs\"\x90\x01\n" +
+	"\x17SaveRankedPresetRequest\x12.\n" +
+	"\x13character_preset_id\x18\x01 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x02 \x01(\rR\vpetPresetId\x12!\n" +
+	"\frule_version\x18\x03 \x01(\rR\vruleVersion\"\xb6\x01\n" +
+	"\x18SaveRankedPresetResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12A\n" +
+	"\x10selected_presets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\x0fselectedPresets\x12!\n" +
+	"\frule_version\x18\x03 \x01(\rR\vruleVersion\"U\n" +
+	"\x1bUpdateRankedCosmeticRequest\x126\n" +
+	"\aloadout\x18\x01 \x01(\v2\x1c.match.RankedCosmeticLoadoutR\aloadout\"\x8c\x01\n" +
+	"\x1cUpdateRankedCosmeticResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x126\n" +
+	"\aloadout\x18\x02 \x01(\v2\x1c.match.RankedCosmeticLoadoutR\aloadout\";\n" +
+	"\x1cGetRankedBattleResultRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\x90\x01\n" +
+	"\x1dGetRankedBattleResultResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x129\n" +
+	"\x06result\x18\x02 \x01(\v2!.match.RankedBattleSettlementViewR\x06result*\xcc\x01\n" +
 	"\tMatchMode\x12\x1a\n" +
 	"\x16MATCH_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eMATCH_MODE_5V5\x10\x01\x12\x12\n" +
@@ -2721,7 +4440,34 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	" BATTLE_SCRIPT_REVIEW_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cBATTLE_SCRIPT_REVIEW_PENDING\x10\x01\x12!\n" +
 	"\x1dBATTLE_SCRIPT_REVIEW_APPROVED\x10\x02\x12!\n" +
-	"\x1dBATTLE_SCRIPT_REVIEW_REJECTED\x10\x032\xf4\v\n" +
+	"\x1dBATTLE_SCRIPT_REVIEW_REJECTED\x10\x03*\xa8\x01\n" +
+	"\n" +
+	"RankedTier\x12\x1b\n" +
+	"\x17RANKED_TIER_UNSPECIFIED\x10\x00\x12\x16\n" +
+	"\x12RANKED_TIER_CHUSHI\x10\x01\x12\x18\n" +
+	"\x14RANKED_TIER_QINGFENG\x10\x02\x12\x18\n" +
+	"\x14RANKED_TIER_YUNZHANG\x10\x03\x12\x17\n" +
+	"\x13RANKED_TIER_TIANSHU\x10\x04\x12\x18\n" +
+	"\x14RANKED_TIER_WUSHUANG\x10\x05*\x9a\x01\n" +
+	"\x11RankedSeasonState\x12#\n" +
+	"\x1fRANKED_SEASON_STATE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aRANKED_SEASON_STATE_ACTIVE\x10\x01\x12 \n" +
+	"\x1cRANKED_SEASON_STATE_SETTLING\x10\x02\x12\x1e\n" +
+	"\x1aRANKED_SEASON_STATE_CLOSED\x10\x03*\xfb\x01\n" +
+	"\x10RankedRewardKind\x12\"\n" +
+	"\x1eRANKED_REWARD_KIND_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cRANKED_REWARD_AVATAR_PATTERN\x10\x01\x12!\n" +
+	"\x1dRANKED_REWARD_CARD_BACKGROUND\x10\x02\x12\x1a\n" +
+	"\x16RANKED_REWARD_TALISMAN\x10\x03\x12\x1c\n" +
+	"\x18RANKED_REWARD_TIER_BADGE\x10\x04\x12\x1c\n" +
+	"\x18RANKED_REWARD_TIER_TITLE\x10\x05\x12&\n" +
+	"\"RANKED_REWARD_CHAMPION_INSCRIPTION\x10\x06*\xc4\x01\n" +
+	"\x17RankedMatchRatingStatus\x12#\n" +
+	"\x1fRANKED_MATCH_RATING_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bRANKED_MATCH_RATING_PENDING\x10\x01\x12!\n" +
+	"\x1dRANKED_MATCH_RATING_CONFIRMED\x10\x02\x12\x1c\n" +
+	"\x18RANKED_MATCH_RATING_VOID\x10\x03\x12\"\n" +
+	"\x1eRANKED_MATCH_RATING_ZERO_ROUND\x10\x042\xeb\x0e\n" +
 	"\fMatchService\x12^\n" +
 	"\x13GetNetworkProbePlan\x12!.match.GetNetworkProbePlanRequest\x1a\".match.GetNetworkProbePlanResponse\"\x00\x12[\n" +
 	"\x12CommitNetworkProbe\x12 .match.CommitNetworkProbeRequest\x1a!.match.CommitNetworkProbeResponse\"\x00\x12@\n" +
@@ -2740,7 +4486,11 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x11ListBattleScripts\x12\x1f.match.ListBattleScriptsRequest\x1a .match.ListBattleScriptsResponse\"\x00\x12[\n" +
 	"\x12SubmitBattleScript\x12 .match.SubmitBattleScriptRequest\x1a!.match.SubmitBattleScriptResponse\"\x00\x12[\n" +
 	"\x12DeleteBattleScript\x12 .match.DeleteBattleScriptRequest\x1a!.match.DeleteBattleScriptResponse\"\x00\x12g\n" +
-	"\x16SetBattleScriptLoadout\x12$.match.SetBattleScriptLoadoutRequest\x1a%.match.SetBattleScriptLoadoutResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
+	"\x16SetBattleScriptLoadout\x12$.match.SetBattleScriptLoadoutRequest\x1a%.match.SetBattleScriptLoadoutResponse\"\x00\x12U\n" +
+	"\x10GetRankedProfile\x12\x1e.match.GetRankedProfileRequest\x1a\x1f.match.GetRankedProfileResponse\"\x00\x12U\n" +
+	"\x10SaveRankedPreset\x12\x1e.match.SaveRankedPresetRequest\x1a\x1f.match.SaveRankedPresetResponse\"\x00\x12a\n" +
+	"\x14UpdateRankedCosmetic\x12\".match.UpdateRankedCosmeticRequest\x1a#.match.UpdateRankedCosmeticResponse\"\x00\x12d\n" +
+	"\x15GetRankedBattleResult\x12#.match.GetRankedBattleResultRequest\x1a$.match.GetRankedBattleResultResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_service_proto_rawDescOnce sync.Once
@@ -2754,140 +4504,192 @@ func file_proto_match_match_service_proto_rawDescGZIP() []byte {
 	return file_proto_match_match_service_proto_rawDescData
 }
 
-var file_proto_match_match_service_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
+var file_proto_match_match_service_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
 var file_proto_match_match_service_proto_goTypes = []any{
 	(MatchMode)(0),                             // 0: match.MatchMode
 	(QueueState)(0),                            // 1: match.QueueState
 	(ESpectateDelivery)(0),                     // 2: match.eSpectateDelivery
 	(BattleScriptReviewState)(0),               // 3: match.BattleScriptReviewState
-	(*JoinQueueRequest)(nil),                   // 4: match.JoinQueueRequest
-	(*JoinQueueResponse)(nil),                  // 5: match.JoinQueueResponse
-	(*CancelQueueRequest)(nil),                 // 6: match.CancelQueueRequest
-	(*GetQueueStatusRequest)(nil),              // 7: match.GetQueueStatusRequest
-	(*GetQueueStatusResponse)(nil),             // 8: match.GetQueueStatusResponse
-	(*ChallengePlayerRequest)(nil),             // 9: match.ChallengePlayerRequest
-	(*ChallengePlayerResponse)(nil),            // 10: match.ChallengePlayerResponse
-	(*RespondChallengeRequest)(nil),            // 11: match.RespondChallengeRequest
-	(*RespondChallengeResponse)(nil),           // 12: match.RespondChallengeResponse
-	(*ChallengeInviteS2C)(nil),                 // 13: match.ChallengeInviteS2C
-	(*ChallengeResultS2C)(nil),                 // 14: match.ChallengeResultS2C
-	(*WatchBattleRequest)(nil),                 // 15: match.WatchBattleRequest
-	(*WatchBattleResponse)(nil),                // 16: match.WatchBattleResponse
-	(*ListWatchableBattlesRequest)(nil),        // 17: match.ListWatchableBattlesRequest
-	(*ListWatchableBattlesResponse)(nil),       // 18: match.ListWatchableBattlesResponse
-	(*BattleWatchSummary)(nil),                 // 19: match.BattleWatchSummary
-	(*SpectateBattleRecord)(nil),               // 20: match.SpectateBattleRecord
-	(*MatchResult)(nil),                        // 21: match.MatchResult
-	(*MatchTeam)(nil),                          // 22: match.MatchTeam
-	(*BattleReportMember)(nil),                 // 23: match.BattleReportMember
-	(*BattleReportSummary)(nil),                // 24: match.BattleReportSummary
-	(*ListBattleReportsRequest)(nil),           // 25: match.ListBattleReportsRequest
-	(*ListBattleReportsResponse)(nil),          // 26: match.ListBattleReportsResponse
-	(*GetBattleReportRequest)(nil),             // 27: match.GetBattleReportRequest
-	(*GetBattleReportResponse)(nil),            // 28: match.GetBattleReportResponse
-	(*PlayerBattleScriptView)(nil),             // 29: match.PlayerBattleScriptView
-	(*BattleScriptLoadoutEntry)(nil),           // 30: match.BattleScriptLoadoutEntry
-	(*ListBattleScriptsRequest)(nil),           // 31: match.ListBattleScriptsRequest
-	(*ListBattleScriptsResponse)(nil),          // 32: match.ListBattleScriptsResponse
-	(*SubmitBattleScriptRequest)(nil),          // 33: match.SubmitBattleScriptRequest
-	(*SubmitBattleScriptResponse)(nil),         // 34: match.SubmitBattleScriptResponse
-	(*DeleteBattleScriptRequest)(nil),          // 35: match.DeleteBattleScriptRequest
-	(*DeleteBattleScriptResponse)(nil),         // 36: match.DeleteBattleScriptResponse
-	(*SetBattleScriptLoadoutRequest)(nil),      // 37: match.SetBattleScriptLoadoutRequest
-	(*SetBattleScriptLoadoutResponse)(nil),     // 38: match.SetBattleScriptLoadoutResponse
-	(*base.TipInfoMessage)(nil),                // 39: TipInfoMessage
-	(battle.ESpectateVisibility)(0),            // 40: eSpectateVisibility
-	(battle.ESpectateTier)(0),                  // 41: eSpectateTier
-	(battle.EBattleOutcome)(0),                 // 42: eBattleOutcome
-	(*battle.BattleReplayEnvelope)(nil),        // 43: BattleReplayEnvelope
-	(*battle.BattleScript)(nil),                // 44: BattleScript
-	(battle.EBattleScriptOrigin)(0),            // 45: eBattleScriptOrigin
-	(*GetNetworkProbePlanRequest)(nil),         // 46: match.GetNetworkProbePlanRequest
-	(*CommitNetworkProbeRequest)(nil),          // 47: match.CommitNetworkProbeRequest
-	(*battle.RequestBattleTicketRequest)(nil),  // 48: RequestBattleTicketRequest
-	(*GetNetworkProbePlanResponse)(nil),        // 49: match.GetNetworkProbePlanResponse
-	(*CommitNetworkProbeResponse)(nil),         // 50: match.CommitNetworkProbeResponse
-	(*base.Empty)(nil),                         // 51: Empty
-	(*battle.RequestBattleTicketResponse)(nil), // 52: RequestBattleTicketResponse
+	(RankedTier)(0),                            // 4: match.RankedTier
+	(RankedSeasonState)(0),                     // 5: match.RankedSeasonState
+	(RankedRewardKind)(0),                      // 6: match.RankedRewardKind
+	(RankedMatchRatingStatus)(0),               // 7: match.RankedMatchRatingStatus
+	(*JoinQueueRequest)(nil),                   // 8: match.JoinQueueRequest
+	(*JoinQueueResponse)(nil),                  // 9: match.JoinQueueResponse
+	(*CancelQueueRequest)(nil),                 // 10: match.CancelQueueRequest
+	(*GetQueueStatusRequest)(nil),              // 11: match.GetQueueStatusRequest
+	(*GetQueueStatusResponse)(nil),             // 12: match.GetQueueStatusResponse
+	(*ChallengePlayerRequest)(nil),             // 13: match.ChallengePlayerRequest
+	(*ChallengePlayerResponse)(nil),            // 14: match.ChallengePlayerResponse
+	(*RespondChallengeRequest)(nil),            // 15: match.RespondChallengeRequest
+	(*RespondChallengeResponse)(nil),           // 16: match.RespondChallengeResponse
+	(*ChallengeInviteS2C)(nil),                 // 17: match.ChallengeInviteS2C
+	(*ChallengeResultS2C)(nil),                 // 18: match.ChallengeResultS2C
+	(*WatchBattleRequest)(nil),                 // 19: match.WatchBattleRequest
+	(*WatchBattleResponse)(nil),                // 20: match.WatchBattleResponse
+	(*ListWatchableBattlesRequest)(nil),        // 21: match.ListWatchableBattlesRequest
+	(*ListWatchableBattlesResponse)(nil),       // 22: match.ListWatchableBattlesResponse
+	(*BattleWatchSummary)(nil),                 // 23: match.BattleWatchSummary
+	(*SpectateBattleRecord)(nil),               // 24: match.SpectateBattleRecord
+	(*MatchResult)(nil),                        // 25: match.MatchResult
+	(*MatchTeam)(nil),                          // 26: match.MatchTeam
+	(*BattleReportMember)(nil),                 // 27: match.BattleReportMember
+	(*BattleReportSummary)(nil),                // 28: match.BattleReportSummary
+	(*ListBattleReportsRequest)(nil),           // 29: match.ListBattleReportsRequest
+	(*ListBattleReportsResponse)(nil),          // 30: match.ListBattleReportsResponse
+	(*GetBattleReportRequest)(nil),             // 31: match.GetBattleReportRequest
+	(*GetBattleReportResponse)(nil),            // 32: match.GetBattleReportResponse
+	(*PlayerBattleScriptView)(nil),             // 33: match.PlayerBattleScriptView
+	(*BattleScriptLoadoutEntry)(nil),           // 34: match.BattleScriptLoadoutEntry
+	(*ListBattleScriptsRequest)(nil),           // 35: match.ListBattleScriptsRequest
+	(*ListBattleScriptsResponse)(nil),          // 36: match.ListBattleScriptsResponse
+	(*SubmitBattleScriptRequest)(nil),          // 37: match.SubmitBattleScriptRequest
+	(*SubmitBattleScriptResponse)(nil),         // 38: match.SubmitBattleScriptResponse
+	(*DeleteBattleScriptRequest)(nil),          // 39: match.DeleteBattleScriptRequest
+	(*DeleteBattleScriptResponse)(nil),         // 40: match.DeleteBattleScriptResponse
+	(*SetBattleScriptLoadoutRequest)(nil),      // 41: match.SetBattleScriptLoadoutRequest
+	(*SetBattleScriptLoadoutResponse)(nil),     // 42: match.SetBattleScriptLoadoutResponse
+	(*RankedPresetView)(nil),                   // 43: match.RankedPresetView
+	(*RankedRewardEntitlement)(nil),            // 44: match.RankedRewardEntitlement
+	(*RankedCosmeticLoadout)(nil),              // 45: match.RankedCosmeticLoadout
+	(*RankedSeasonInfo)(nil),                   // 46: match.RankedSeasonInfo
+	(*RankedPlayerSeasonSummary)(nil),          // 47: match.RankedPlayerSeasonSummary
+	(*RankedBattleSettlementView)(nil),         // 48: match.RankedBattleSettlementView
+	(*GetRankedProfileRequest)(nil),            // 49: match.GetRankedProfileRequest
+	(*GetRankedProfileResponse)(nil),           // 50: match.GetRankedProfileResponse
+	(*SaveRankedPresetRequest)(nil),            // 51: match.SaveRankedPresetRequest
+	(*SaveRankedPresetResponse)(nil),           // 52: match.SaveRankedPresetResponse
+	(*UpdateRankedCosmeticRequest)(nil),        // 53: match.UpdateRankedCosmeticRequest
+	(*UpdateRankedCosmeticResponse)(nil),       // 54: match.UpdateRankedCosmeticResponse
+	(*GetRankedBattleResultRequest)(nil),       // 55: match.GetRankedBattleResultRequest
+	(*GetRankedBattleResultResponse)(nil),      // 56: match.GetRankedBattleResultResponse
+	(*base.TipInfoMessage)(nil),                // 57: TipInfoMessage
+	(battle.ESpectateVisibility)(0),            // 58: eSpectateVisibility
+	(battle.ESpectateTier)(0),                  // 59: eSpectateTier
+	(battle.EBattleOutcome)(0),                 // 60: eBattleOutcome
+	(*battle.BattleReplayEnvelope)(nil),        // 61: BattleReplayEnvelope
+	(*battle.BattleScript)(nil),                // 62: BattleScript
+	(battle.EBattleScriptOrigin)(0),            // 63: eBattleScriptOrigin
+	(*battle.RankedPresetSelection)(nil),       // 64: RankedPresetSelection
+	(*GetNetworkProbePlanRequest)(nil),         // 65: match.GetNetworkProbePlanRequest
+	(*CommitNetworkProbeRequest)(nil),          // 66: match.CommitNetworkProbeRequest
+	(*battle.RequestBattleTicketRequest)(nil),  // 67: RequestBattleTicketRequest
+	(*GetNetworkProbePlanResponse)(nil),        // 68: match.GetNetworkProbePlanResponse
+	(*CommitNetworkProbeResponse)(nil),         // 69: match.CommitNetworkProbeResponse
+	(*base.Empty)(nil),                         // 70: Empty
+	(*battle.RequestBattleTicketResponse)(nil), // 71: RequestBattleTicketResponse
 }
 var file_proto_match_match_service_proto_depIdxs = []int32{
 	0,  // 0: match.JoinQueueRequest.mode:type_name -> match.MatchMode
-	39, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
+	57, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
 	1,  // 2: match.GetQueueStatusResponse.state:type_name -> match.QueueState
-	39, // 3: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
-	39, // 4: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
-	39, // 5: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
+	57, // 3: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
+	57, // 4: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
+	57, // 5: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
 	2,  // 6: match.WatchBattleResponse.delivery:type_name -> match.eSpectateDelivery
-	19, // 7: match.ListWatchableBattlesResponse.battles:type_name -> match.BattleWatchSummary
+	23, // 7: match.ListWatchableBattlesResponse.battles:type_name -> match.BattleWatchSummary
 	0,  // 8: match.BattleWatchSummary.mode:type_name -> match.MatchMode
-	19, // 9: match.SpectateBattleRecord.summary:type_name -> match.BattleWatchSummary
-	40, // 10: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
-	41, // 11: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
+	23, // 9: match.SpectateBattleRecord.summary:type_name -> match.BattleWatchSummary
+	58, // 10: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
+	59, // 11: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
 	0,  // 12: match.MatchResult.mode:type_name -> match.MatchMode
-	22, // 13: match.MatchResult.teams:type_name -> match.MatchTeam
+	26, // 13: match.MatchResult.teams:type_name -> match.MatchTeam
 	0,  // 14: match.BattleReportSummary.mode:type_name -> match.MatchMode
-	42, // 15: match.BattleReportSummary.outcome:type_name -> eBattleOutcome
-	23, // 16: match.BattleReportSummary.members:type_name -> match.BattleReportMember
-	39, // 17: match.ListBattleReportsResponse.error_message:type_name -> TipInfoMessage
-	24, // 18: match.ListBattleReportsResponse.reports:type_name -> match.BattleReportSummary
-	39, // 19: match.GetBattleReportResponse.error_message:type_name -> TipInfoMessage
-	43, // 20: match.GetBattleReportResponse.replay:type_name -> BattleReplayEnvelope
-	44, // 21: match.PlayerBattleScriptView.content:type_name -> BattleScript
+	60, // 15: match.BattleReportSummary.outcome:type_name -> eBattleOutcome
+	27, // 16: match.BattleReportSummary.members:type_name -> match.BattleReportMember
+	57, // 17: match.ListBattleReportsResponse.error_message:type_name -> TipInfoMessage
+	28, // 18: match.ListBattleReportsResponse.reports:type_name -> match.BattleReportSummary
+	57, // 19: match.GetBattleReportResponse.error_message:type_name -> TipInfoMessage
+	61, // 20: match.GetBattleReportResponse.replay:type_name -> BattleReplayEnvelope
+	62, // 21: match.PlayerBattleScriptView.content:type_name -> BattleScript
 	3,  // 22: match.PlayerBattleScriptView.review_state:type_name -> match.BattleScriptReviewState
-	45, // 23: match.BattleScriptLoadoutEntry.origin:type_name -> eBattleScriptOrigin
-	39, // 24: match.ListBattleScriptsResponse.error_message:type_name -> TipInfoMessage
-	44, // 25: match.ListBattleScriptsResponse.official_scripts:type_name -> BattleScript
-	29, // 26: match.ListBattleScriptsResponse.my_scripts:type_name -> match.PlayerBattleScriptView
-	30, // 27: match.ListBattleScriptsResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
-	44, // 28: match.SubmitBattleScriptRequest.script:type_name -> BattleScript
-	39, // 29: match.SubmitBattleScriptResponse.error_message:type_name -> TipInfoMessage
-	29, // 30: match.SubmitBattleScriptResponse.script:type_name -> match.PlayerBattleScriptView
-	39, // 31: match.DeleteBattleScriptResponse.error_message:type_name -> TipInfoMessage
-	30, // 32: match.SetBattleScriptLoadoutRequest.entry:type_name -> match.BattleScriptLoadoutEntry
-	39, // 33: match.SetBattleScriptLoadoutResponse.error_message:type_name -> TipInfoMessage
-	30, // 34: match.SetBattleScriptLoadoutResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
-	46, // 35: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
-	47, // 36: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
-	4,  // 37: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
-	6,  // 38: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
-	7,  // 39: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
-	9,  // 40: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
-	11, // 41: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
-	13, // 42: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
-	14, // 43: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
-	15, // 44: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
-	48, // 45: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
-	17, // 46: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
-	25, // 47: match.MatchService.ListBattleReports:input_type -> match.ListBattleReportsRequest
-	27, // 48: match.MatchService.GetBattleReport:input_type -> match.GetBattleReportRequest
-	31, // 49: match.MatchService.ListBattleScripts:input_type -> match.ListBattleScriptsRequest
-	33, // 50: match.MatchService.SubmitBattleScript:input_type -> match.SubmitBattleScriptRequest
-	35, // 51: match.MatchService.DeleteBattleScript:input_type -> match.DeleteBattleScriptRequest
-	37, // 52: match.MatchService.SetBattleScriptLoadout:input_type -> match.SetBattleScriptLoadoutRequest
-	49, // 53: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
-	50, // 54: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
-	5,  // 55: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
-	51, // 56: match.MatchService.CancelQueue:output_type -> Empty
-	8,  // 57: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
-	10, // 58: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
-	12, // 59: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
-	51, // 60: match.MatchService.NotifyChallengeInvite:output_type -> Empty
-	51, // 61: match.MatchService.NotifyChallengeResult:output_type -> Empty
-	16, // 62: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
-	52, // 63: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
-	18, // 64: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
-	26, // 65: match.MatchService.ListBattleReports:output_type -> match.ListBattleReportsResponse
-	28, // 66: match.MatchService.GetBattleReport:output_type -> match.GetBattleReportResponse
-	32, // 67: match.MatchService.ListBattleScripts:output_type -> match.ListBattleScriptsResponse
-	34, // 68: match.MatchService.SubmitBattleScript:output_type -> match.SubmitBattleScriptResponse
-	36, // 69: match.MatchService.DeleteBattleScript:output_type -> match.DeleteBattleScriptResponse
-	38, // 70: match.MatchService.SetBattleScriptLoadout:output_type -> match.SetBattleScriptLoadoutResponse
-	53, // [53:71] is the sub-list for method output_type
-	35, // [35:53] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	63, // 23: match.BattleScriptLoadoutEntry.origin:type_name -> eBattleScriptOrigin
+	57, // 24: match.ListBattleScriptsResponse.error_message:type_name -> TipInfoMessage
+	62, // 25: match.ListBattleScriptsResponse.official_scripts:type_name -> BattleScript
+	33, // 26: match.ListBattleScriptsResponse.my_scripts:type_name -> match.PlayerBattleScriptView
+	34, // 27: match.ListBattleScriptsResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
+	62, // 28: match.SubmitBattleScriptRequest.script:type_name -> BattleScript
+	57, // 29: match.SubmitBattleScriptResponse.error_message:type_name -> TipInfoMessage
+	33, // 30: match.SubmitBattleScriptResponse.script:type_name -> match.PlayerBattleScriptView
+	57, // 31: match.DeleteBattleScriptResponse.error_message:type_name -> TipInfoMessage
+	34, // 32: match.SetBattleScriptLoadoutRequest.entry:type_name -> match.BattleScriptLoadoutEntry
+	57, // 33: match.SetBattleScriptLoadoutResponse.error_message:type_name -> TipInfoMessage
+	34, // 34: match.SetBattleScriptLoadoutResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
+	6,  // 35: match.RankedRewardEntitlement.kind:type_name -> match.RankedRewardKind
+	5,  // 36: match.RankedSeasonInfo.state:type_name -> match.RankedSeasonState
+	4,  // 37: match.RankedPlayerSeasonSummary.current_tier:type_name -> match.RankedTier
+	4,  // 38: match.RankedPlayerSeasonSummary.peak_tier:type_name -> match.RankedTier
+	7,  // 39: match.RankedBattleSettlementView.status:type_name -> match.RankedMatchRatingStatus
+	60, // 40: match.RankedBattleSettlementView.outcome:type_name -> eBattleOutcome
+	4,  // 41: match.RankedBattleSettlementView.tier_before:type_name -> match.RankedTier
+	4,  // 42: match.RankedBattleSettlementView.tier_after:type_name -> match.RankedTier
+	44, // 43: match.RankedBattleSettlementView.newly_unlocked_rewards:type_name -> match.RankedRewardEntitlement
+	57, // 44: match.GetRankedProfileResponse.error_message:type_name -> TipInfoMessage
+	46, // 45: match.GetRankedProfileResponse.current_season:type_name -> match.RankedSeasonInfo
+	47, // 46: match.GetRankedProfileResponse.current_progress:type_name -> match.RankedPlayerSeasonSummary
+	64, // 47: match.GetRankedProfileResponse.selected_presets:type_name -> RankedPresetSelection
+	45, // 48: match.GetRankedProfileResponse.cosmetic_loadout:type_name -> match.RankedCosmeticLoadout
+	43, // 49: match.GetRankedProfileResponse.presets:type_name -> match.RankedPresetView
+	44, // 50: match.GetRankedProfileResponse.entitlements:type_name -> match.RankedRewardEntitlement
+	47, // 51: match.GetRankedProfileResponse.history:type_name -> match.RankedPlayerSeasonSummary
+	46, // 52: match.GetRankedProfileResponse.past_seasons:type_name -> match.RankedSeasonInfo
+	57, // 53: match.SaveRankedPresetResponse.error_message:type_name -> TipInfoMessage
+	64, // 54: match.SaveRankedPresetResponse.selected_presets:type_name -> RankedPresetSelection
+	45, // 55: match.UpdateRankedCosmeticRequest.loadout:type_name -> match.RankedCosmeticLoadout
+	57, // 56: match.UpdateRankedCosmeticResponse.error_message:type_name -> TipInfoMessage
+	45, // 57: match.UpdateRankedCosmeticResponse.loadout:type_name -> match.RankedCosmeticLoadout
+	57, // 58: match.GetRankedBattleResultResponse.error_message:type_name -> TipInfoMessage
+	48, // 59: match.GetRankedBattleResultResponse.result:type_name -> match.RankedBattleSettlementView
+	65, // 60: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
+	66, // 61: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
+	8,  // 62: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
+	10, // 63: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
+	11, // 64: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
+	13, // 65: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
+	15, // 66: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
+	17, // 67: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
+	18, // 68: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
+	19, // 69: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
+	67, // 70: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
+	21, // 71: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
+	29, // 72: match.MatchService.ListBattleReports:input_type -> match.ListBattleReportsRequest
+	31, // 73: match.MatchService.GetBattleReport:input_type -> match.GetBattleReportRequest
+	35, // 74: match.MatchService.ListBattleScripts:input_type -> match.ListBattleScriptsRequest
+	37, // 75: match.MatchService.SubmitBattleScript:input_type -> match.SubmitBattleScriptRequest
+	39, // 76: match.MatchService.DeleteBattleScript:input_type -> match.DeleteBattleScriptRequest
+	41, // 77: match.MatchService.SetBattleScriptLoadout:input_type -> match.SetBattleScriptLoadoutRequest
+	49, // 78: match.MatchService.GetRankedProfile:input_type -> match.GetRankedProfileRequest
+	51, // 79: match.MatchService.SaveRankedPreset:input_type -> match.SaveRankedPresetRequest
+	53, // 80: match.MatchService.UpdateRankedCosmetic:input_type -> match.UpdateRankedCosmeticRequest
+	55, // 81: match.MatchService.GetRankedBattleResult:input_type -> match.GetRankedBattleResultRequest
+	68, // 82: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
+	69, // 83: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
+	9,  // 84: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
+	70, // 85: match.MatchService.CancelQueue:output_type -> Empty
+	12, // 86: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
+	14, // 87: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
+	16, // 88: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
+	70, // 89: match.MatchService.NotifyChallengeInvite:output_type -> Empty
+	70, // 90: match.MatchService.NotifyChallengeResult:output_type -> Empty
+	20, // 91: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
+	71, // 92: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
+	22, // 93: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
+	30, // 94: match.MatchService.ListBattleReports:output_type -> match.ListBattleReportsResponse
+	32, // 95: match.MatchService.GetBattleReport:output_type -> match.GetBattleReportResponse
+	36, // 96: match.MatchService.ListBattleScripts:output_type -> match.ListBattleScriptsResponse
+	38, // 97: match.MatchService.SubmitBattleScript:output_type -> match.SubmitBattleScriptResponse
+	40, // 98: match.MatchService.DeleteBattleScript:output_type -> match.DeleteBattleScriptResponse
+	42, // 99: match.MatchService.SetBattleScriptLoadout:output_type -> match.SetBattleScriptLoadoutResponse
+	50, // 100: match.MatchService.GetRankedProfile:output_type -> match.GetRankedProfileResponse
+	52, // 101: match.MatchService.SaveRankedPreset:output_type -> match.SaveRankedPresetResponse
+	54, // 102: match.MatchService.UpdateRankedCosmetic:output_type -> match.UpdateRankedCosmeticResponse
+	56, // 103: match.MatchService.GetRankedBattleResult:output_type -> match.GetRankedBattleResultResponse
+	82, // [82:104] is the sub-list for method output_type
+	60, // [60:82] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_service_proto_init() }
@@ -2901,8 +4703,8 @@ func file_proto_match_match_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_service_proto_rawDesc), len(file_proto_match_match_service_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   35,
+			NumEnums:      8,
+			NumMessages:   49,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

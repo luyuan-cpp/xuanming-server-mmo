@@ -59,6 +59,9 @@ const (
 	MatchError_kMatchBattleScriptTooLarge         MatchError = 16031
 	MatchError_kMatchBattleScriptLoadoutInvalid   MatchError = 16032
 	MatchError_kMatchBattleScriptLoadoutFull      MatchError = 16033
+	MatchError_kMatchRankedSeasonSettling         MatchError = 16034
+	MatchError_kMatchRankedPresetInvalid          MatchError = 16035
+	MatchError_kMatchRankedRuleVersionMismatch    MatchError = 16036
 )
 
 // Enum value maps for MatchError.
@@ -99,6 +102,9 @@ var (
 		16031: "kMatchBattleScriptTooLarge",
 		16032: "kMatchBattleScriptLoadoutInvalid",
 		16033: "kMatchBattleScriptLoadoutFull",
+		16034: "kMatchRankedSeasonSettling",
+		16035: "kMatchRankedPresetInvalid",
+		16036: "kMatchRankedRuleVersionMismatch",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":                     0,
@@ -136,6 +142,9 @@ var (
 		"kMatchBattleScriptTooLarge":         16031,
 		"kMatchBattleScriptLoadoutInvalid":   16032,
 		"kMatchBattleScriptLoadoutFull":      16033,
+		"kMatchRankedSeasonSettling":         16034,
+		"kMatchRankedPresetInvalid":          16035,
+		"kMatchRankedRuleVersionMismatch":    16036,
 	}
 )
 
@@ -170,7 +179,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xad\b\n" +
+	"\x15match_error_tip.proto*\x94\t\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -206,7 +215,10 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1dkMatchBattleScriptNotApproved\x10\x9e}\x12\x1f\n" +
 	"\x1akMatchBattleScriptTooLarge\x10\x9f}\x12%\n" +
 	" kMatchBattleScriptLoadoutInvalid\x10\xa0}\x12\"\n" +
-	"\x1dkMatchBattleScriptLoadoutFull\x10\xa1}B$\n" +
+	"\x1dkMatchBattleScriptLoadoutFull\x10\xa1}\x12\x1f\n" +
+	"\x1akMatchRankedSeasonSettling\x10\xa2}\x12\x1e\n" +
+	"\x19kMatchRankedPresetInvalid\x10\xa3}\x12$\n" +
+	"\x1fkMatchRankedRuleVersionMismatch\x10\xa4}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

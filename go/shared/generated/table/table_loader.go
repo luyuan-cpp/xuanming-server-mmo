@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "df34cab01b3439aa"
+const SchemaDigest = "ece0013ccbb6f3b0"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -76,6 +76,8 @@ var allTableNames = []string{
 	"PetRule",
 	"PetTier",
 	"PlayMode",
+	"RankedPreset",
+	"RankedRule",
 	"Reward",
 	"RoleNameRule",
 	"Skill",
@@ -158,6 +160,8 @@ type TableSet struct {
 	PetRule *PetRuleTableManager
 	PetTier *PetTierTableManager
 	PlayMode *PlayModeTableManager
+	RankedPreset *RankedPresetTableManager
+	RankedRule *RankedRuleTableManager
 	Reward *RewardTableManager
 	RoleNameRule *RoleNameRuleTableManager
 	Skill *SkillTableManager
@@ -236,6 +240,8 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
 		PlayMode: NewPlayModeTableManager(),
+		RankedPreset: NewRankedPresetTableManager(),
+		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
 		Skill: NewSkillTableManager(),
@@ -388,6 +394,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare PlayMode table failed: %w", err)
+	}
+	if err := ts.RankedPreset.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare RankedPreset table failed: %w", err)
+	}
+	if err := ts.RankedRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare RankedRule table failed: %w", err)
 	}
 	if err := ts.Reward.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Reward table failed: %w", err)
@@ -567,6 +579,12 @@ func Commit(ts *TableSet) {
 	if ts.PlayMode != nil {
 		PlayModeTableManagerInstance.swapSnapshot(ts.PlayMode.snap.Load())
 	}
+	if ts.RankedPreset != nil {
+		RankedPresetTableManagerInstance.swapSnapshot(ts.RankedPreset.snap.Load())
+	}
+	if ts.RankedRule != nil {
+		RankedRuleTableManagerInstance.swapSnapshot(ts.RankedRule.snap.Load())
+	}
 	if ts.Reward != nil {
 		RewardTableManagerInstance.swapSnapshot(ts.Reward.snap.Load())
 	}
@@ -683,6 +701,8 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
 		PlayMode: NewPlayModeTableManager(),
+		RankedPreset: NewRankedPresetTableManager(),
+		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
 		Skill: NewSkillTableManager(),
@@ -693,7 +713,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(56)
+	wg.Add(58)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -980,6 +1000,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load PlayMode table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.RankedPreset.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load RankedPreset table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.RankedRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load RankedRule table: %v", err)
 		}
 	}()
 	go func() {

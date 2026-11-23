@@ -307,3 +307,26 @@ func (clientPlayerTeamRpc) decodeStartTeamMatch(reply *base.MessageContent, err 
 	}
 	return resp, nil
 }
+
+// ConfirmRankedPreset 异步调用 ClientPlayerTeam.ConfirmRankedPreset(REQUEST),done 的契约见 ClientPlayerTeam。
+func (r clientPlayerTeamRpc) ConfirmRankedPreset(c *pkg.GameClient, req *team.ConfirmRankedPresetRequest, timeout time.Duration, done func(*team.TeamResponse, error)) {
+	c.Call(game.ClientPlayerTeamConfirmRankedPresetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeConfirmRankedPreset(reply, err))
+	})
+}
+
+// ConfirmRankedPresetSync 同步调用 ClientPlayerTeam.ConfirmRankedPreset(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerTeamRpc) ConfirmRankedPresetSync(ctx context.Context, c *pkg.GameClient, req *team.ConfirmRankedPresetRequest, timeout time.Duration) (*team.TeamResponse, error) {
+	return r.decodeConfirmRankedPreset(c.CallSync(ctx, game.ClientPlayerTeamConfirmRankedPresetMessageId, req, timeout))
+}
+
+func (clientPlayerTeamRpc) decodeConfirmRankedPreset(reply *base.MessageContent, err error) (*team.TeamResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &team.TeamResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerTeam.ConfirmRankedPreset reply: %w", err)
+	}
+	return resp, nil
+}

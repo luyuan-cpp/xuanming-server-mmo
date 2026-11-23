@@ -236,6 +236,46 @@ extern const ::google::protobuf::internal::ClassDataFull MatchRankSourceRecord_c
 #else
 extern const MatchRankSourceRecordGlobalsTypeInternal MatchRankSourceRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchRankedBattleRecord;
+struct MatchRankedBattleRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchRankedBattleRecordGlobalsTypeInternal MatchRankedBattleRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchRankedBattleRecord_class_data_;
+#else
+extern const MatchRankedBattleRecordGlobalsTypeInternal MatchRankedBattleRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchRankedPlayerPrefsRecord;
+struct MatchRankedPlayerPrefsRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchRankedPlayerPrefsRecordGlobalsTypeInternal MatchRankedPlayerPrefsRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchRankedPlayerPrefsRecord_class_data_;
+#else
+extern const MatchRankedPlayerPrefsRecordGlobalsTypeInternal MatchRankedPlayerPrefsRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchRankedPlayerSeasonRecord;
+struct MatchRankedPlayerSeasonRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchRankedPlayerSeasonRecordGlobalsTypeInternal MatchRankedPlayerSeasonRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchRankedPlayerSeasonRecord_class_data_;
+#else
+extern const MatchRankedPlayerSeasonRecordGlobalsTypeInternal MatchRankedPlayerSeasonRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchRankedRewardRecord;
+struct MatchRankedRewardRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchRankedRewardRecordGlobalsTypeInternal MatchRankedRewardRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchRankedRewardRecord_class_data_;
+#else
+extern const MatchRankedRewardRecordGlobalsTypeInternal MatchRankedRewardRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchRankedSeasonRecord;
+struct MatchRankedSeasonRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchRankedSeasonRecordGlobalsTypeInternal MatchRankedSeasonRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchRankedSeasonRecord_class_data_;
+#else
+extern const MatchRankedSeasonRecordGlobalsTypeInternal MatchRankedSeasonRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MatchRatingAppliedRecord;
 struct MatchRatingAppliedRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2027,6 +2067,1557 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRatingAppliedRecord final : pu
     ::google::protobuf::internal::ArenaStringPtr payload_digest_;
     ::uint64_t battle_id_;
     ::uint64_t applied_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedSeasonRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchRankedSeasonRecord) */ {
+ public:
+  inline MatchRankedSeasonRecord() : MatchRankedSeasonRecord(nullptr) {}
+  ~MatchRankedSeasonRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchRankedSeasonRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchRankedSeasonRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchRankedSeasonRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchRankedSeasonRecord(const MatchRankedSeasonRecord& from) : MatchRankedSeasonRecord(nullptr, from) {}
+  inline MatchRankedSeasonRecord(MatchRankedSeasonRecord&& from) noexcept : MatchRankedSeasonRecord(nullptr, ::std::move(from)) {}
+  inline MatchRankedSeasonRecord& operator=(const MatchRankedSeasonRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchRankedSeasonRecord& operator=(MatchRankedSeasonRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchRankedSeasonRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankedSeasonRecord>(&MatchRankedSeasonRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(MatchRankedSeasonRecord& a, MatchRankedSeasonRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchRankedSeasonRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchRankedSeasonRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchRankedSeasonRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchRankedSeasonRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchRankedSeasonRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchRankedSeasonRecord& from) { MatchRankedSeasonRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchRankedSeasonRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchRankedSeasonRecord"; }
+
+  explicit MatchRankedSeasonRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchRankedSeasonRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankedSeasonRecord& from);
+  MatchRankedSeasonRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchRankedSeasonRecord&& from) noexcept
+      : MatchRankedSeasonRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonKeyFieldNumber = 2,
+    kSeasonNameFieldNumber = 3,
+    kChampionNameFieldNumber = 14,
+    kSeasonIdFieldNumber = 1,
+    kRuleVersionFieldNumber = 6,
+    kRankGenerationFieldNumber = 4,
+    kSourceEpochFieldNumber = 5,
+    kStateFieldNumber = 7,
+    kRolloverStageFieldNumber = 8,
+    kStartMsFieldNumber = 9,
+    kEndMsFieldNumber = 10,
+    kRankBoardIdFieldNumber = 11,
+    kExpectedRankCursorFieldNumber = 12,
+    kChampionPlayerIdFieldNumber = 13,
+    kChampionRatingCentiFieldNumber = 15,
+    kUpdatedMsFieldNumber = 16,
+  };
+  // string season_key = 2;
+  void clear_season_key() ;
+  [[nodiscard]] const ::std::string& season_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_key();
+  void set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_key();
+
+  public:
+  // string season_name = 3;
+  void clear_season_name() ;
+  [[nodiscard]] const ::std::string& season_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_name();
+  void set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_name();
+
+  public:
+  // string champion_name = 14;
+  void clear_champion_name() ;
+  [[nodiscard]] const ::std::string& champion_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_champion_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_champion_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_champion_name();
+  void set_allocated_champion_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_champion_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_champion_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_champion_name();
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 rule_version = 6;
+  void clear_rule_version() ;
+  [[nodiscard]] ::uint32_t rule_version() const;
+  void set_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rule_version() const;
+  void _internal_set_rule_version(::uint32_t value);
+
+  public:
+  // uint64 rank_generation = 4;
+  void clear_rank_generation() ;
+  [[nodiscard]] ::uint64_t rank_generation() const;
+  void set_rank_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rank_generation() const;
+  void _internal_set_rank_generation(::uint64_t value);
+
+  public:
+  // uint64 source_epoch = 5;
+  void clear_source_epoch() ;
+  [[nodiscard]] ::uint64_t source_epoch() const;
+  void set_source_epoch(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_epoch() const;
+  void _internal_set_source_epoch(::uint64_t value);
+
+  public:
+  // uint32 state = 7;
+  void clear_state() ;
+  [[nodiscard]] ::uint32_t state() const;
+  void set_state(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state() const;
+  void _internal_set_state(::uint32_t value);
+
+  public:
+  // uint32 rollover_stage = 8;
+  void clear_rollover_stage() ;
+  [[nodiscard]] ::uint32_t rollover_stage() const;
+  void set_rollover_stage(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rollover_stage() const;
+  void _internal_set_rollover_stage(::uint32_t value);
+
+  public:
+  // uint64 start_ms = 9;
+  void clear_start_ms() ;
+  [[nodiscard]] ::uint64_t start_ms() const;
+  void set_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_start_ms() const;
+  void _internal_set_start_ms(::uint64_t value);
+
+  public:
+  // uint64 end_ms = 10;
+  void clear_end_ms() ;
+  [[nodiscard]] ::uint64_t end_ms() const;
+  void set_end_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_end_ms() const;
+  void _internal_set_end_ms(::uint64_t value);
+
+  public:
+  // uint64 rank_board_id = 11;
+  void clear_rank_board_id() ;
+  [[nodiscard]] ::uint64_t rank_board_id() const;
+  void set_rank_board_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rank_board_id() const;
+  void _internal_set_rank_board_id(::uint64_t value);
+
+  public:
+  // uint64 expected_rank_cursor = 12;
+  void clear_expected_rank_cursor() ;
+  [[nodiscard]] ::uint64_t expected_rank_cursor() const;
+  void set_expected_rank_cursor(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_rank_cursor() const;
+  void _internal_set_expected_rank_cursor(::uint64_t value);
+
+  public:
+  // uint64 champion_player_id = 13;
+  void clear_champion_player_id() ;
+  [[nodiscard]] ::uint64_t champion_player_id() const;
+  void set_champion_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_champion_player_id() const;
+  void _internal_set_champion_player_id(::uint64_t value);
+
+  public:
+  // int64 champion_rating_centi = 15;
+  void clear_champion_rating_centi() ;
+  [[nodiscard]] ::int64_t champion_rating_centi() const;
+  void set_champion_rating_centi(::int64_t value);
+
+  private:
+  ::int64_t _internal_champion_rating_centi() const;
+  void _internal_set_champion_rating_centi(::int64_t value);
+
+  public:
+  // uint64 updated_ms = 16;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchRankedSeasonRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 88,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchRankedSeasonRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr season_key_;
+    ::google::protobuf::internal::ArenaStringPtr season_name_;
+    ::google::protobuf::internal::ArenaStringPtr champion_name_;
+    ::uint32_t season_id_;
+    ::uint32_t rule_version_;
+    ::uint64_t rank_generation_;
+    ::uint64_t source_epoch_;
+    ::uint32_t state_;
+    ::uint32_t rollover_stage_;
+    ::uint64_t start_ms_;
+    ::uint64_t end_ms_;
+    ::uint64_t rank_board_id_;
+    ::uint64_t expected_rank_cursor_;
+    ::uint64_t champion_player_id_;
+    ::int64_t champion_rating_centi_;
+    ::uint64_t updated_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedRewardRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchRankedRewardRecord) */ {
+ public:
+  inline MatchRankedRewardRecord() : MatchRankedRewardRecord(nullptr) {}
+  ~MatchRankedRewardRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchRankedRewardRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchRankedRewardRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchRankedRewardRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchRankedRewardRecord(const MatchRankedRewardRecord& from) : MatchRankedRewardRecord(nullptr, from) {}
+  inline MatchRankedRewardRecord(MatchRankedRewardRecord&& from) noexcept : MatchRankedRewardRecord(nullptr, ::std::move(from)) {}
+  inline MatchRankedRewardRecord& operator=(const MatchRankedRewardRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchRankedRewardRecord& operator=(MatchRankedRewardRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchRankedRewardRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankedRewardRecord>(&MatchRankedRewardRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(MatchRankedRewardRecord& a, MatchRankedRewardRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchRankedRewardRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchRankedRewardRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchRankedRewardRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchRankedRewardRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchRankedRewardRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchRankedRewardRecord& from) { MatchRankedRewardRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchRankedRewardRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchRankedRewardRecord"; }
+
+  explicit MatchRankedRewardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchRankedRewardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankedRewardRecord& from);
+  MatchRankedRewardRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchRankedRewardRecord&& from) noexcept
+      : MatchRankedRewardRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemCodeFieldNumber = 5,
+    kPlayerIdFieldNumber = 1,
+    kSeasonIdFieldNumber = 2,
+    kRewardKindFieldNumber = 3,
+    kGrantedAtMsFieldNumber = 6,
+    kTierValueFieldNumber = 4,
+  };
+  // string item_code = 5;
+  void clear_item_code() ;
+  [[nodiscard]] const ::std::string& item_code() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_item_code(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_item_code();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_item_code();
+  void set_allocated_item_code(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_item_code() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_item_code(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_item_code();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 2;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 reward_kind = 3;
+  void clear_reward_kind() ;
+  [[nodiscard]] ::uint32_t reward_kind() const;
+  void set_reward_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_kind() const;
+  void _internal_set_reward_kind(::uint32_t value);
+
+  public:
+  // uint64 granted_at_ms = 6;
+  void clear_granted_at_ms() ;
+  [[nodiscard]] ::uint64_t granted_at_ms() const;
+  void set_granted_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_granted_at_ms() const;
+  void _internal_set_granted_at_ms(::uint64_t value);
+
+  public:
+  // uint32 tier_value = 4;
+  void clear_tier_value() ;
+  [[nodiscard]] ::uint32_t tier_value() const;
+  void set_tier_value(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_value() const;
+  void _internal_set_tier_value(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchRankedRewardRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 47,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchRankedRewardRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr item_code_;
+    ::uint64_t player_id_;
+    ::uint32_t season_id_;
+    ::uint32_t reward_kind_;
+    ::uint64_t granted_at_ms_;
+    ::uint32_t tier_value_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedPlayerSeasonRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchRankedPlayerSeasonRecord) */ {
+ public:
+  inline MatchRankedPlayerSeasonRecord() : MatchRankedPlayerSeasonRecord(nullptr) {}
+  ~MatchRankedPlayerSeasonRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchRankedPlayerSeasonRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchRankedPlayerSeasonRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchRankedPlayerSeasonRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchRankedPlayerSeasonRecord(const MatchRankedPlayerSeasonRecord& from) : MatchRankedPlayerSeasonRecord(nullptr, from) {}
+  inline MatchRankedPlayerSeasonRecord(MatchRankedPlayerSeasonRecord&& from) noexcept : MatchRankedPlayerSeasonRecord(nullptr, ::std::move(from)) {}
+  inline MatchRankedPlayerSeasonRecord& operator=(const MatchRankedPlayerSeasonRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchRankedPlayerSeasonRecord& operator=(MatchRankedPlayerSeasonRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchRankedPlayerSeasonRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankedPlayerSeasonRecord>(&MatchRankedPlayerSeasonRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(MatchRankedPlayerSeasonRecord& a, MatchRankedPlayerSeasonRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchRankedPlayerSeasonRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchRankedPlayerSeasonRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchRankedPlayerSeasonRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchRankedPlayerSeasonRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchRankedPlayerSeasonRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchRankedPlayerSeasonRecord& from) { MatchRankedPlayerSeasonRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchRankedPlayerSeasonRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchRankedPlayerSeasonRecord"; }
+
+  explicit MatchRankedPlayerSeasonRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchRankedPlayerSeasonRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankedPlayerSeasonRecord& from);
+  MatchRankedPlayerSeasonRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchRankedPlayerSeasonRecord&& from) noexcept
+      : MatchRankedPlayerSeasonRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 2,
+    kSeasonIdFieldNumber = 1,
+    kQualifiedFieldNumber = 3,
+    kQualifiedAtMsFieldNumber = 4,
+    kRatingCentiFieldNumber = 5,
+    kPeakRatingCentiFieldNumber = 6,
+    kPeakTierFieldNumber = 7,
+    kValidMatchesFieldNumber = 8,
+    kWinsFieldNumber = 9,
+    kLossesFieldNumber = 10,
+    kDrawsFieldNumber = 11,
+    kMilestoneBitsFieldNumber = 12,
+    kFinalRankFieldNumber = 14,
+    kUpdatedMsFieldNumber = 15,
+    kHonorBitsFieldNumber = 13,
+  };
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // bool qualified = 3;
+  void clear_qualified() ;
+  [[nodiscard]] bool qualified() const;
+  void set_qualified(bool value);
+
+  private:
+  bool _internal_qualified() const;
+  void _internal_set_qualified(bool value);
+
+  public:
+  // uint64 qualified_at_ms = 4;
+  void clear_qualified_at_ms() ;
+  [[nodiscard]] ::uint64_t qualified_at_ms() const;
+  void set_qualified_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_qualified_at_ms() const;
+  void _internal_set_qualified_at_ms(::uint64_t value);
+
+  public:
+  // int64 rating_centi = 5;
+  void clear_rating_centi() ;
+  [[nodiscard]] ::int64_t rating_centi() const;
+  void set_rating_centi(::int64_t value);
+
+  private:
+  ::int64_t _internal_rating_centi() const;
+  void _internal_set_rating_centi(::int64_t value);
+
+  public:
+  // int64 peak_rating_centi = 6;
+  void clear_peak_rating_centi() ;
+  [[nodiscard]] ::int64_t peak_rating_centi() const;
+  void set_peak_rating_centi(::int64_t value);
+
+  private:
+  ::int64_t _internal_peak_rating_centi() const;
+  void _internal_set_peak_rating_centi(::int64_t value);
+
+  public:
+  // uint32 peak_tier = 7;
+  void clear_peak_tier() ;
+  [[nodiscard]] ::uint32_t peak_tier() const;
+  void set_peak_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_peak_tier() const;
+  void _internal_set_peak_tier(::uint32_t value);
+
+  public:
+  // uint32 valid_matches = 8;
+  void clear_valid_matches() ;
+  [[nodiscard]] ::uint32_t valid_matches() const;
+  void set_valid_matches(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_valid_matches() const;
+  void _internal_set_valid_matches(::uint32_t value);
+
+  public:
+  // uint32 wins = 9;
+  void clear_wins() ;
+  [[nodiscard]] ::uint32_t wins() const;
+  void set_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_wins() const;
+  void _internal_set_wins(::uint32_t value);
+
+  public:
+  // uint32 losses = 10;
+  void clear_losses() ;
+  [[nodiscard]] ::uint32_t losses() const;
+  void set_losses(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_losses() const;
+  void _internal_set_losses(::uint32_t value);
+
+  public:
+  // uint32 draws = 11;
+  void clear_draws() ;
+  [[nodiscard]] ::uint32_t draws() const;
+  void set_draws(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_draws() const;
+  void _internal_set_draws(::uint32_t value);
+
+  public:
+  // uint32 milestone_bits = 12;
+  void clear_milestone_bits() ;
+  [[nodiscard]] ::uint32_t milestone_bits() const;
+  void set_milestone_bits(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_milestone_bits() const;
+  void _internal_set_milestone_bits(::uint32_t value);
+
+  public:
+  // uint64 final_rank = 14;
+  void clear_final_rank() ;
+  [[nodiscard]] ::uint64_t final_rank() const;
+  void set_final_rank(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_final_rank() const;
+  void _internal_set_final_rank(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 15;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // uint32 honor_bits = 13;
+  void clear_honor_bits() ;
+  [[nodiscard]] ::uint32_t honor_bits() const;
+  void set_honor_bits(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_honor_bits() const;
+  void _internal_set_honor_bits(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchRankedPlayerSeasonRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchRankedPlayerSeasonRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    ::uint32_t season_id_;
+    bool qualified_;
+    ::uint64_t qualified_at_ms_;
+    ::int64_t rating_centi_;
+    ::int64_t peak_rating_centi_;
+    ::uint32_t peak_tier_;
+    ::uint32_t valid_matches_;
+    ::uint32_t wins_;
+    ::uint32_t losses_;
+    ::uint32_t draws_;
+    ::uint32_t milestone_bits_;
+    ::uint64_t final_rank_;
+    ::uint64_t updated_ms_;
+    ::uint32_t honor_bits_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedPlayerPrefsRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchRankedPlayerPrefsRecord) */ {
+ public:
+  inline MatchRankedPlayerPrefsRecord() : MatchRankedPlayerPrefsRecord(nullptr) {}
+  ~MatchRankedPlayerPrefsRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchRankedPlayerPrefsRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchRankedPlayerPrefsRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchRankedPlayerPrefsRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchRankedPlayerPrefsRecord(const MatchRankedPlayerPrefsRecord& from) : MatchRankedPlayerPrefsRecord(nullptr, from) {}
+  inline MatchRankedPlayerPrefsRecord(MatchRankedPlayerPrefsRecord&& from) noexcept : MatchRankedPlayerPrefsRecord(nullptr, ::std::move(from)) {}
+  inline MatchRankedPlayerPrefsRecord& operator=(const MatchRankedPlayerPrefsRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchRankedPlayerPrefsRecord& operator=(MatchRankedPlayerPrefsRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchRankedPlayerPrefsRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankedPlayerPrefsRecord>(&MatchRankedPlayerPrefsRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(MatchRankedPlayerPrefsRecord& a, MatchRankedPlayerPrefsRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchRankedPlayerPrefsRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchRankedPlayerPrefsRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchRankedPlayerPrefsRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchRankedPlayerPrefsRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchRankedPlayerPrefsRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchRankedPlayerPrefsRecord& from) { MatchRankedPlayerPrefsRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchRankedPlayerPrefsRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchRankedPlayerPrefsRecord"; }
+
+  explicit MatchRankedPlayerPrefsRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchRankedPlayerPrefsRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankedPlayerPrefsRecord& from);
+  MatchRankedPlayerPrefsRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchRankedPlayerPrefsRecord&& from) noexcept
+      : MatchRankedPlayerPrefsRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCosmeticLoadoutFieldNumber = 5,
+    kPlayerIdFieldNumber = 1,
+    kCharacterPresetIdFieldNumber = 2,
+    kPetPresetIdFieldNumber = 3,
+    kUpdatedMsFieldNumber = 6,
+    kRuleVersionFieldNumber = 4,
+  };
+  // bytes cosmetic_loadout = 5;
+  void clear_cosmetic_loadout() ;
+  [[nodiscard]] const ::std::string& cosmetic_loadout() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cosmetic_loadout(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cosmetic_loadout();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cosmetic_loadout();
+  void set_allocated_cosmetic_loadout(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cosmetic_loadout() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cosmetic_loadout(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cosmetic_loadout();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 character_preset_id = 2;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 3;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
+  // uint64 updated_ms = 6;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // uint32 rule_version = 4;
+  void clear_rule_version() ;
+  [[nodiscard]] ::uint32_t rule_version() const;
+  void set_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rule_version() const;
+  void _internal_set_rule_version(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchRankedPlayerPrefsRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchRankedPlayerPrefsRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr cosmetic_loadout_;
+    ::uint64_t player_id_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    ::uint64_t updated_ms_;
+    ::uint32_t rule_version_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedBattleRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchRankedBattleRecord) */ {
+ public:
+  inline MatchRankedBattleRecord() : MatchRankedBattleRecord(nullptr) {}
+  ~MatchRankedBattleRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchRankedBattleRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchRankedBattleRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchRankedBattleRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchRankedBattleRecord(const MatchRankedBattleRecord& from) : MatchRankedBattleRecord(nullptr, from) {}
+  inline MatchRankedBattleRecord(MatchRankedBattleRecord&& from) noexcept : MatchRankedBattleRecord(nullptr, ::std::move(from)) {}
+  inline MatchRankedBattleRecord& operator=(const MatchRankedBattleRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchRankedBattleRecord& operator=(MatchRankedBattleRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchRankedBattleRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchRankedBattleRecord>(&MatchRankedBattleRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 32;
+  friend void swap(MatchRankedBattleRecord& a, MatchRankedBattleRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchRankedBattleRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchRankedBattleRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchRankedBattleRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchRankedBattleRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchRankedBattleRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchRankedBattleRecord& from) { MatchRankedBattleRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchRankedBattleRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchRankedBattleRecord"; }
+
+  explicit MatchRankedBattleRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchRankedBattleRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankedBattleRecord& from);
+  MatchRankedBattleRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchRankedBattleRecord&& from) noexcept
+      : MatchRankedBattleRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSummaryFieldNumber = 5,
+    kBattleIdFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+    kSettledAtMsFieldNumber = 4,
+    kSeasonIdFieldNumber = 3,
+  };
+  // bytes summary = 5;
+  void clear_summary() ;
+  [[nodiscard]] const ::std::string& summary() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_summary(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_summary();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_summary();
+  void set_allocated_summary(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_summary() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_summary(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_summary();
+
+  public:
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 settled_at_ms = 4;
+  void clear_settled_at_ms() ;
+  [[nodiscard]] ::uint64_t settled_at_ms() const;
+  void set_settled_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_settled_at_ms() const;
+  void _internal_set_settled_at_ms(::uint64_t value);
+
+  public:
+  // uint32 season_id = 3;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchRankedBattleRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchRankedBattleRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr summary_;
+    ::uint64_t battle_id_;
+    ::uint64_t player_id_;
+    ::uint64_t settled_at_ms_;
+    ::uint32_t season_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6723,6 +8314,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     kRequestIdFieldNumber = 3,
     kNetworkProfileFieldNumber = 14,
     kOwnerAccountFieldNumber = 18,
+    kRankedContextFieldNumber = 21,
     kPlayerIdFieldNumber = 1,
     kModeFieldNumber = 4,
     kConfigIdFieldNumber = 5,
@@ -6797,6 +8389,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
   const ::std::string& _internal_owner_account() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_owner_account(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_owner_account();
+
+  public:
+  // bytes ranked_context = 21;
+  void clear_ranked_context() ;
+  [[nodiscard]] const ::std::string& ranked_context() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ranked_context(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ranked_context();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ranked_context();
+  void set_allocated_ranked_context(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ranked_context() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ranked_context(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ranked_context();
 
   public:
   // uint64 player_id = 1;
@@ -6953,7 +8560,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
+      ::google::protobuf::internal::TcParseTable<5, 20,
                           0, 86,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6986,6 +8593,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchAuthorityTicketRecord final : 
     ::google::protobuf::internal::ArenaStringPtr request_id_;
     ::google::protobuf::internal::ArenaStringPtr network_profile_;
     ::google::protobuf::internal::ArenaStringPtr owner_account_;
+    ::google::protobuf::internal::ArenaStringPtr ranked_context_;
     ::uint64_t player_id_;
     ::uint32_t mode_;
     ::uint32_t config_id_;
@@ -7539,6 +9147,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     kActivityContextFieldNumber = 15,
     kPreflightInstanceIdFieldNumber = 20,
     kReleaseTrackFieldNumber = 23,
+    kRankedContextFieldNumber = 24,
     kBattleIdFieldNumber = 1,
     kStateFieldNumber = 3,
     kPhysicalRegionFieldNumber = 4,
@@ -7553,6 +9162,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     kRequeueOnFailureFieldNumber = 16,
     kAdoptedOutcomeObservedFieldNumber = 22,
     kAdoptedOutcomeProtocolVersionFieldNumber = 21,
+    kRankedSeasonIdFieldNumber = 25,
   };
   // repeated .match.MatchFormationMember members = 10;
   [[nodiscard]] int members_size()
@@ -7701,6 +9311,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
   ::std::string* PROTOBUF_NONNULL _internal_mutable_release_track();
 
   public:
+  // bytes ranked_context = 24;
+  void clear_ranked_context() ;
+  [[nodiscard]] const ::std::string& ranked_context() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ranked_context(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ranked_context();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ranked_context();
+  void set_allocated_ranked_context(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ranked_context() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ranked_context(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ranked_context();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -7841,12 +9466,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
   void _internal_set_adopted_outcome_protocol_version(::uint32_t value);
 
   public:
+  // uint32 ranked_season_id = 25;
+  void clear_ranked_season_id() ;
+  [[nodiscard]] ::uint32_t ranked_season_id() const;
+  void set_ranked_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_season_id() const;
+  void _internal_set_ranked_season_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.MatchFormationRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          2, 130,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          2, 138,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7883,6 +9518,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     ::google::protobuf::internal::ArenaStringPtr activity_context_;
     ::google::protobuf::internal::ArenaStringPtr preflight_instance_id_;
     ::google::protobuf::internal::ArenaStringPtr release_track_;
+    ::google::protobuf::internal::ArenaStringPtr ranked_context_;
     ::uint64_t battle_id_;
     ::uint32_t state_;
     ::uint32_t physical_region_;
@@ -7897,6 +9533,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     bool requeue_on_failure_;
     bool adopted_outcome_observed_;
     ::uint32_t adopted_outcome_protocol_version_;
+    ::uint32_t ranked_season_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10290,7 +11927,7 @@ inline void MatchNetworkProfileRecord::_internal_set_expires_ms(::uint64_t value
 inline void MatchAuthorityTicketRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::player_id() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.player_id)
@@ -10298,7 +11935,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::player_id() const {
 }
 inline void MatchAuthorityTicketRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.player_id)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_player_id() const {
@@ -10442,7 +12079,7 @@ inline void MatchAuthorityTicketRecord::set_allocated_request_id(::std::string* 
 inline void MatchAuthorityTicketRecord::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::mode() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.mode)
@@ -10450,7 +12087,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::mode() const {
 }
 inline void MatchAuthorityTicketRecord::set_mode(::uint32_t value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.mode)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_mode() const {
@@ -10466,7 +12103,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_mode(::uint32_t value) {
 inline void MatchAuthorityTicketRecord::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::config_id() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.config_id)
@@ -10474,7 +12111,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::config_id() const {
 }
 inline void MatchAuthorityTicketRecord::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.config_id)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_config_id() const {
@@ -10490,7 +12127,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_config_id(::uint32_t value
 inline void MatchAuthorityTicketRecord::clear_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::team_size() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.team_size)
@@ -10498,7 +12135,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::team_size() const {
 }
 inline void MatchAuthorityTicketRecord::set_team_size(::uint32_t value) {
   _internal_set_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.team_size)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_team_size() const {
@@ -10514,7 +12151,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_team_size(::uint32_t value
 inline void MatchAuthorityTicketRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::state() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.state)
@@ -10522,7 +12159,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::state() const {
 }
 inline void MatchAuthorityTicketRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.state)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_state() const {
@@ -10538,7 +12175,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_state(::uint32_t value) {
 inline void MatchAuthorityTicketRecord::clear_enqueued_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enqueued_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::enqueued_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.enqueued_ms)
@@ -10546,7 +12183,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::enqueued_ms() const {
 }
 inline void MatchAuthorityTicketRecord::set_enqueued_ms(::uint64_t value) {
   _internal_set_enqueued_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.enqueued_ms)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_enqueued_ms() const {
@@ -10562,7 +12199,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_enqueued_ms(::uint64_t val
 inline void MatchAuthorityTicketRecord::clear_not_before_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.not_before_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::not_before_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.not_before_ms)
@@ -10570,7 +12207,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::not_before_ms() const {
 }
 inline void MatchAuthorityTicketRecord::set_not_before_ms(::uint64_t value) {
   _internal_set_not_before_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.not_before_ms)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_not_before_ms() const {
@@ -10586,7 +12223,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_not_before_ms(::uint64_t v
 inline void MatchAuthorityTicketRecord::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::zone_id() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.zone_id)
@@ -10594,7 +12231,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::zone_id() const {
 }
 inline void MatchAuthorityTicketRecord::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.zone_id)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_zone_id() const {
@@ -10610,7 +12247,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_zone_id(::uint32_t value) 
 inline void MatchAuthorityTicketRecord::clear_rating_centi() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rating_centi_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::int64_t MatchAuthorityTicketRecord::rating_centi() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.rating_centi)
@@ -10618,7 +12255,7 @@ inline ::int64_t MatchAuthorityTicketRecord::rating_centi() const {
 }
 inline void MatchAuthorityTicketRecord::set_rating_centi(::int64_t value) {
   _internal_set_rating_centi(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.rating_centi)
 }
 inline ::int64_t MatchAuthorityTicketRecord::_internal_rating_centi() const {
@@ -10634,7 +12271,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_rating_centi(::int64_t val
 inline void MatchAuthorityTicketRecord::clear_formation_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.formation_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::formation_id() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.formation_id)
@@ -10642,7 +12279,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::formation_id() const {
 }
 inline void MatchAuthorityTicketRecord::set_formation_id(::uint64_t value) {
   _internal_set_formation_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.formation_id)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_formation_id() const {
@@ -10658,7 +12295,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_formation_id(::uint64_t va
 inline void MatchAuthorityTicketRecord::clear_team_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::team_id() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.team_id)
@@ -10666,7 +12303,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::team_id() const {
 }
 inline void MatchAuthorityTicketRecord::set_team_id(::uint64_t value) {
   _internal_set_team_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.team_id)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_team_id() const {
@@ -10746,7 +12383,7 @@ inline void MatchAuthorityTicketRecord::set_allocated_network_profile(::std::str
 inline void MatchAuthorityTicketRecord::clear_expires_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expires_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::expires_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.expires_ms)
@@ -10754,7 +12391,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::expires_ms() const {
 }
 inline void MatchAuthorityTicketRecord::set_expires_ms(::uint64_t value) {
   _internal_set_expires_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.expires_ms)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_expires_ms() const {
@@ -10770,7 +12407,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_expires_ms(::uint64_t valu
 inline void MatchAuthorityTicketRecord::clear_selected_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.selected_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::selected_region() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.selected_region)
@@ -10778,7 +12415,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::selected_region() const {
 }
 inline void MatchAuthorityTicketRecord::set_selected_region(::uint32_t value) {
   _internal_set_selected_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.selected_region)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_selected_region() const {
@@ -10858,7 +12495,7 @@ inline void MatchAuthorityTicketRecord::set_allocated_owner_account(::std::strin
 inline void MatchAuthorityTicketRecord::clear_owner_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t MatchAuthorityTicketRecord::owner_revision() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.owner_revision)
@@ -10866,7 +12503,7 @@ inline ::uint64_t MatchAuthorityTicketRecord::owner_revision() const {
 }
 inline void MatchAuthorityTicketRecord::set_owner_revision(::uint64_t value) {
   _internal_set_owner_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.owner_revision)
 }
 inline ::uint64_t MatchAuthorityTicketRecord::_internal_owner_revision() const {
@@ -10882,7 +12519,7 @@ inline void MatchAuthorityTicketRecord::_internal_set_owner_revision(::uint64_t 
 inline void MatchAuthorityTicketRecord::clear_pool_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pool_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t MatchAuthorityTicketRecord::pool_region() const {
   // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.pool_region)
@@ -10890,7 +12527,7 @@ inline ::uint32_t MatchAuthorityTicketRecord::pool_region() const {
 }
 inline void MatchAuthorityTicketRecord::set_pool_region(::uint32_t value) {
   _internal_set_pool_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.pool_region)
 }
 inline ::uint32_t MatchAuthorityTicketRecord::_internal_pool_region() const {
@@ -10900,6 +12537,70 @@ inline ::uint32_t MatchAuthorityTicketRecord::_internal_pool_region() const {
 inline void MatchAuthorityTicketRecord::_internal_set_pool_region(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pool_region_ = value;
+}
+
+// bytes ranked_context = 21;
+inline void MatchAuthorityTicketRecord::clear_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_context_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& MatchAuthorityTicketRecord::ranked_context() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchAuthorityTicketRecord.ranked_context)
+  return _internal_ranked_context();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchAuthorityTicketRecord::set_ranked_context(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.ranked_context_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchAuthorityTicketRecord.ranked_context)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchAuthorityTicketRecord::mutable_ranked_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_ranked_context();
+  // @@protoc_insertion_point(field_mutable:match.MatchAuthorityTicketRecord.ranked_context)
+  return _s;
+}
+inline const ::std::string& MatchAuthorityTicketRecord::_internal_ranked_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_context_.Get();
+}
+inline void MatchAuthorityTicketRecord::_internal_set_ranked_context(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_context_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchAuthorityTicketRecord::_internal_mutable_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ranked_context_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchAuthorityTicketRecord::release_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchAuthorityTicketRecord.ranked_context)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.ranked_context_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ranked_context_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchAuthorityTicketRecord::set_allocated_ranked_context(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.ranked_context_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ranked_context_.IsDefault()) {
+    _impl_.ranked_context_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchAuthorityTicketRecord.ranked_context)
 }
 
 // -------------------------------------------------------------------
@@ -12794,7 +14495,7 @@ inline void MatchFormationMember::_internal_set_captain(bool value) {
 inline void MatchFormationRecord::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t MatchFormationRecord::battle_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.battle_id)
@@ -12802,7 +14503,7 @@ inline ::uint64_t MatchFormationRecord::battle_id() const {
 }
 inline void MatchFormationRecord::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.battle_id)
 }
 inline ::uint64_t MatchFormationRecord::_internal_battle_id() const {
@@ -12882,7 +14583,7 @@ inline void MatchFormationRecord::set_allocated_operation_id(::std::string* PROT
 inline void MatchFormationRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t MatchFormationRecord::state() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.state)
@@ -12890,7 +14591,7 @@ inline ::uint32_t MatchFormationRecord::state() const {
 }
 inline void MatchFormationRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.state)
 }
 inline ::uint32_t MatchFormationRecord::_internal_state() const {
@@ -12906,7 +14607,7 @@ inline void MatchFormationRecord::_internal_set_state(::uint32_t value) {
 inline void MatchFormationRecord::clear_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t MatchFormationRecord::physical_region() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.physical_region)
@@ -12914,7 +14615,7 @@ inline ::uint32_t MatchFormationRecord::physical_region() const {
 }
 inline void MatchFormationRecord::set_physical_region(::uint32_t value) {
   _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.physical_region)
 }
 inline ::uint32_t MatchFormationRecord::_internal_physical_region() const {
@@ -12930,7 +14631,7 @@ inline void MatchFormationRecord::_internal_set_physical_region(::uint32_t value
 inline void MatchFormationRecord::clear_target_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t MatchFormationRecord::target_node_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.target_node_id)
@@ -12938,7 +14639,7 @@ inline ::uint32_t MatchFormationRecord::target_node_id() const {
 }
 inline void MatchFormationRecord::set_target_node_id(::uint32_t value) {
   _internal_set_target_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.target_node_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_target_node_id() const {
@@ -13082,7 +14783,7 @@ inline void MatchFormationRecord::set_allocated_target_endpoint(::std::string* P
 inline void MatchFormationRecord::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t MatchFormationRecord::mode() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.mode)
@@ -13090,7 +14791,7 @@ inline ::uint32_t MatchFormationRecord::mode() const {
 }
 inline void MatchFormationRecord::set_mode(::uint32_t value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.mode)
 }
 inline ::uint32_t MatchFormationRecord::_internal_mode() const {
@@ -13106,7 +14807,7 @@ inline void MatchFormationRecord::_internal_set_mode(::uint32_t value) {
 inline void MatchFormationRecord::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t MatchFormationRecord::config_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.config_id)
@@ -13114,7 +14815,7 @@ inline ::uint32_t MatchFormationRecord::config_id() const {
 }
 inline void MatchFormationRecord::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.config_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_config_id() const {
@@ -13249,7 +14950,7 @@ inline void MatchFormationRecord::set_allocated_create_request(::std::string* PR
 inline void MatchFormationRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t MatchFormationRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.created_ms)
@@ -13257,7 +14958,7 @@ inline ::uint64_t MatchFormationRecord::created_ms() const {
 }
 inline void MatchFormationRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.created_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_created_ms() const {
@@ -13273,7 +14974,7 @@ inline void MatchFormationRecord::_internal_set_created_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t MatchFormationRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.deadline_ms)
@@ -13281,7 +14982,7 @@ inline ::uint64_t MatchFormationRecord::deadline_ms() const {
 }
 inline void MatchFormationRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.deadline_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_deadline_ms() const {
@@ -13297,7 +14998,7 @@ inline void MatchFormationRecord::_internal_set_deadline_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_retry_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.retry_at_ms)
@@ -13305,7 +15006,7 @@ inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
 }
 inline void MatchFormationRecord::set_retry_at_ms(::uint64_t value) {
   _internal_set_retry_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.retry_at_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_retry_at_ms() const {
@@ -13385,7 +15086,7 @@ inline void MatchFormationRecord::set_allocated_activity_context(::std::string* 
 inline void MatchFormationRecord::clear_requeue_on_failure() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.requeue_on_failure_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool MatchFormationRecord::requeue_on_failure() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.requeue_on_failure)
@@ -13393,7 +15094,7 @@ inline bool MatchFormationRecord::requeue_on_failure() const {
 }
 inline void MatchFormationRecord::set_requeue_on_failure(bool value) {
   _internal_set_requeue_on_failure(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.requeue_on_failure)
 }
 inline bool MatchFormationRecord::_internal_requeue_on_failure() const {
@@ -13464,7 +15165,7 @@ MatchFormationRecord::_internal_mutable_prepared() {
 inline void MatchFormationRecord::clear_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.outcome_protocol_version)
@@ -13472,7 +15173,7 @@ inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
 }
 inline void MatchFormationRecord::set_outcome_protocol_version(::uint32_t value) {
   _internal_set_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_outcome_protocol_version() const {
@@ -13488,7 +15189,7 @@ inline void MatchFormationRecord::_internal_set_outcome_protocol_version(::uint3
 inline void MatchFormationRecord::clear_preflight_supported_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.preflight_supported_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.preflight_supported_version)
@@ -13496,7 +15197,7 @@ inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
 }
 inline void MatchFormationRecord::set_preflight_supported_version(::uint32_t value) {
   _internal_set_preflight_supported_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.preflight_supported_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_preflight_supported_version() const {
@@ -13576,7 +15277,7 @@ inline void MatchFormationRecord::set_allocated_preflight_instance_id(::std::str
 inline void MatchFormationRecord::clear_adopted_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_protocol_version)
@@ -13584,7 +15285,7 @@ inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const
 }
 inline void MatchFormationRecord::set_adopted_outcome_protocol_version(::uint32_t value) {
   _internal_set_adopted_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_adopted_outcome_protocol_version() const {
@@ -13600,7 +15301,7 @@ inline void MatchFormationRecord::_internal_set_adopted_outcome_protocol_version
 inline void MatchFormationRecord::clear_adopted_outcome_observed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_observed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline bool MatchFormationRecord::adopted_outcome_observed() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_observed)
@@ -13608,7 +15309,7 @@ inline bool MatchFormationRecord::adopted_outcome_observed() const {
 }
 inline void MatchFormationRecord::set_adopted_outcome_observed(bool value) {
   _internal_set_adopted_outcome_observed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_observed)
 }
 inline bool MatchFormationRecord::_internal_adopted_outcome_observed() const {
@@ -13682,6 +15383,94 @@ inline void MatchFormationRecord::set_allocated_release_track(::std::string* PRO
     _impl_.release_track_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:match.MatchFormationRecord.release_track)
+}
+
+// bytes ranked_context = 24;
+inline void MatchFormationRecord::clear_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_context_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline const ::std::string& MatchFormationRecord::ranked_context() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchFormationRecord.ranked_context)
+  return _internal_ranked_context();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchFormationRecord::set_ranked_context(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  _impl_.ranked_context_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchFormationRecord.ranked_context)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::mutable_ranked_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::std::string* _s = _internal_mutable_ranked_context();
+  // @@protoc_insertion_point(field_mutable:match.MatchFormationRecord.ranked_context)
+  return _s;
+}
+inline const ::std::string& MatchFormationRecord::_internal_ranked_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_context_.Get();
+}
+inline void MatchFormationRecord::_internal_set_ranked_context(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_context_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::_internal_mutable_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ranked_context_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchFormationRecord::release_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchFormationRecord.ranked_context)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  auto* released = _impl_.ranked_context_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ranked_context_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchFormationRecord::set_allocated_ranked_context(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+  _impl_.ranked_context_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ranked_context_.IsDefault()) {
+    _impl_.ranked_context_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchFormationRecord.ranked_context)
+}
+
+// uint32 ranked_season_id = 25;
+inline void MatchFormationRecord::clear_ranked_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t MatchFormationRecord::ranked_season_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchFormationRecord.ranked_season_id)
+  return _internal_ranked_season_id();
+}
+inline void MatchFormationRecord::set_ranked_season_id(::uint32_t value) {
+  _internal_set_ranked_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:match.MatchFormationRecord.ranked_season_id)
+}
+inline ::uint32_t MatchFormationRecord::_internal_ranked_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_season_id_;
+}
+inline void MatchFormationRecord::_internal_set_ranked_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_season_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -17257,6 +19046,1418 @@ inline ::uint64_t MatchBattleScriptLoadoutRecord::_internal_updated_ms() const {
 inline void MatchBattleScriptLoadoutRecord::_internal_set_updated_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchRankedSeasonRecord
+
+// uint32 season_id = 1;
+inline void MatchRankedSeasonRecord::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t MatchRankedSeasonRecord::season_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.season_id)
+  return _internal_season_id();
+}
+inline void MatchRankedSeasonRecord::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.season_id)
+}
+inline ::uint32_t MatchRankedSeasonRecord::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string season_key = 2;
+inline void MatchRankedSeasonRecord::clear_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& MatchRankedSeasonRecord::season_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.season_key)
+  return _internal_season_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedSeasonRecord::set_season_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.season_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.season_key)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::mutable_season_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_season_key();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedSeasonRecord.season_key)
+  return _s;
+}
+inline const ::std::string& MatchRankedSeasonRecord::_internal_season_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_key_.Get();
+}
+inline void MatchRankedSeasonRecord::_internal_set_season_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::_internal_mutable_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedSeasonRecord::release_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedSeasonRecord.season_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.season_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedSeasonRecord::set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.season_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_key_.IsDefault()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedSeasonRecord.season_key)
+}
+
+// string season_name = 3;
+inline void MatchRankedSeasonRecord::clear_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& MatchRankedSeasonRecord::season_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.season_name)
+  return _internal_season_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedSeasonRecord::set_season_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.season_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.season_name)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::mutable_season_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_season_name();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedSeasonRecord.season_name)
+  return _s;
+}
+inline const ::std::string& MatchRankedSeasonRecord::_internal_season_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_name_.Get();
+}
+inline void MatchRankedSeasonRecord::_internal_set_season_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::_internal_mutable_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedSeasonRecord::release_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedSeasonRecord.season_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.season_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedSeasonRecord::set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.season_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_name_.IsDefault()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedSeasonRecord.season_name)
+}
+
+// uint64 rank_generation = 4;
+inline void MatchRankedSeasonRecord::clear_rank_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::rank_generation() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.rank_generation)
+  return _internal_rank_generation();
+}
+inline void MatchRankedSeasonRecord::set_rank_generation(::uint64_t value) {
+  _internal_set_rank_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.rank_generation)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_rank_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_generation_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_rank_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_generation_ = value;
+}
+
+// uint64 source_epoch = 5;
+inline void MatchRankedSeasonRecord::clear_source_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_epoch_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::source_epoch() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.source_epoch)
+  return _internal_source_epoch();
+}
+inline void MatchRankedSeasonRecord::set_source_epoch(::uint64_t value) {
+  _internal_set_source_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.source_epoch)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_source_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_epoch_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_source_epoch(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_epoch_ = value;
+}
+
+// uint32 rule_version = 6;
+inline void MatchRankedSeasonRecord::clear_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t MatchRankedSeasonRecord::rule_version() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.rule_version)
+  return _internal_rule_version();
+}
+inline void MatchRankedSeasonRecord::set_rule_version(::uint32_t value) {
+  _internal_set_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.rule_version)
+}
+inline ::uint32_t MatchRankedSeasonRecord::_internal_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rule_version_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = value;
+}
+
+// uint32 state = 7;
+inline void MatchRankedSeasonRecord::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t MatchRankedSeasonRecord::state() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.state)
+  return _internal_state();
+}
+inline void MatchRankedSeasonRecord::set_state(::uint32_t value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.state)
+}
+inline ::uint32_t MatchRankedSeasonRecord::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_state(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint32 rollover_stage = 8;
+inline void MatchRankedSeasonRecord::clear_rollover_stage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rollover_stage_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t MatchRankedSeasonRecord::rollover_stage() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.rollover_stage)
+  return _internal_rollover_stage();
+}
+inline void MatchRankedSeasonRecord::set_rollover_stage(::uint32_t value) {
+  _internal_set_rollover_stage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.rollover_stage)
+}
+inline ::uint32_t MatchRankedSeasonRecord::_internal_rollover_stage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rollover_stage_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_rollover_stage(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rollover_stage_ = value;
+}
+
+// uint64 start_ms = 9;
+inline void MatchRankedSeasonRecord::clear_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::start_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.start_ms)
+  return _internal_start_ms();
+}
+inline void MatchRankedSeasonRecord::set_start_ms(::uint64_t value) {
+  _internal_set_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.start_ms)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.start_ms_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_ms_ = value;
+}
+
+// uint64 end_ms = 10;
+inline void MatchRankedSeasonRecord::clear_end_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::end_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.end_ms)
+  return _internal_end_ms();
+}
+inline void MatchRankedSeasonRecord::set_end_ms(::uint64_t value) {
+  _internal_set_end_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.end_ms)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_end_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.end_ms_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_end_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_ms_ = value;
+}
+
+// uint64 rank_board_id = 11;
+inline void MatchRankedSeasonRecord::clear_rank_board_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_board_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::rank_board_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.rank_board_id)
+  return _internal_rank_board_id();
+}
+inline void MatchRankedSeasonRecord::set_rank_board_id(::uint64_t value) {
+  _internal_set_rank_board_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.rank_board_id)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_rank_board_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_board_id_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_rank_board_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_board_id_ = value;
+}
+
+// uint64 expected_rank_cursor = 12;
+inline void MatchRankedSeasonRecord::clear_expected_rank_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_rank_cursor_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::expected_rank_cursor() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.expected_rank_cursor)
+  return _internal_expected_rank_cursor();
+}
+inline void MatchRankedSeasonRecord::set_expected_rank_cursor(::uint64_t value) {
+  _internal_set_expected_rank_cursor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.expected_rank_cursor)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_expected_rank_cursor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_rank_cursor_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_expected_rank_cursor(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_rank_cursor_ = value;
+}
+
+// uint64 champion_player_id = 13;
+inline void MatchRankedSeasonRecord::clear_champion_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::champion_player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.champion_player_id)
+  return _internal_champion_player_id();
+}
+inline void MatchRankedSeasonRecord::set_champion_player_id(::uint64_t value) {
+  _internal_set_champion_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.champion_player_id)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_champion_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_player_id_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_champion_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_player_id_ = value;
+}
+
+// string champion_name = 14;
+inline void MatchRankedSeasonRecord::clear_champion_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& MatchRankedSeasonRecord::champion_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.champion_name)
+  return _internal_champion_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedSeasonRecord::set_champion_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.champion_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.champion_name)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::mutable_champion_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_champion_name();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedSeasonRecord.champion_name)
+  return _s;
+}
+inline const ::std::string& MatchRankedSeasonRecord::_internal_champion_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_name_.Get();
+}
+inline void MatchRankedSeasonRecord::_internal_set_champion_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedSeasonRecord::_internal_mutable_champion_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.champion_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedSeasonRecord::release_champion_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedSeasonRecord.champion_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.champion_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.champion_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedSeasonRecord::set_allocated_champion_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.champion_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.champion_name_.IsDefault()) {
+    _impl_.champion_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedSeasonRecord.champion_name)
+}
+
+// int64 champion_rating_centi = 15;
+inline void MatchRankedSeasonRecord::clear_champion_rating_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_rating_centi_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::int64_t MatchRankedSeasonRecord::champion_rating_centi() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.champion_rating_centi)
+  return _internal_champion_rating_centi();
+}
+inline void MatchRankedSeasonRecord::set_champion_rating_centi(::int64_t value) {
+  _internal_set_champion_rating_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.champion_rating_centi)
+}
+inline ::int64_t MatchRankedSeasonRecord::_internal_champion_rating_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_rating_centi_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_champion_rating_centi(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_rating_centi_ = value;
+}
+
+// uint64 updated_ms = 16;
+inline void MatchRankedSeasonRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t MatchRankedSeasonRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedSeasonRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void MatchRankedSeasonRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedSeasonRecord.updated_ms)
+}
+inline ::uint64_t MatchRankedSeasonRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void MatchRankedSeasonRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchRankedPlayerPrefsRecord
+
+// uint64 player_id = 1;
+inline void MatchRankedPlayerPrefsRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MatchRankedPlayerPrefsRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchRankedPlayerPrefsRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.player_id)
+}
+inline ::uint64_t MatchRankedPlayerPrefsRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 character_preset_id = 2;
+inline void MatchRankedPlayerPrefsRecord::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void MatchRankedPlayerPrefsRecord::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.character_preset_id)
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 3;
+inline void MatchRankedPlayerPrefsRecord::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void MatchRankedPlayerPrefsRecord::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.pet_preset_id)
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
+
+// uint32 rule_version = 4;
+inline void MatchRankedPlayerPrefsRecord::clear_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::rule_version() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.rule_version)
+  return _internal_rule_version();
+}
+inline void MatchRankedPlayerPrefsRecord::set_rule_version(::uint32_t value) {
+  _internal_set_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.rule_version)
+}
+inline ::uint32_t MatchRankedPlayerPrefsRecord::_internal_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rule_version_;
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = value;
+}
+
+// bytes cosmetic_loadout = 5;
+inline void MatchRankedPlayerPrefsRecord::clear_cosmetic_loadout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_loadout_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& MatchRankedPlayerPrefsRecord::cosmetic_loadout() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.cosmetic_loadout)
+  return _internal_cosmetic_loadout();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedPlayerPrefsRecord::set_cosmetic_loadout(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.cosmetic_loadout_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.cosmetic_loadout)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedPlayerPrefsRecord::mutable_cosmetic_loadout()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_cosmetic_loadout();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedPlayerPrefsRecord.cosmetic_loadout)
+  return _s;
+}
+inline const ::std::string& MatchRankedPlayerPrefsRecord::_internal_cosmetic_loadout() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cosmetic_loadout_.Get();
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_cosmetic_loadout(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_loadout_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedPlayerPrefsRecord::_internal_mutable_cosmetic_loadout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cosmetic_loadout_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedPlayerPrefsRecord::release_cosmetic_loadout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedPlayerPrefsRecord.cosmetic_loadout)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.cosmetic_loadout_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cosmetic_loadout_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedPlayerPrefsRecord::set_allocated_cosmetic_loadout(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.cosmetic_loadout_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cosmetic_loadout_.IsDefault()) {
+    _impl_.cosmetic_loadout_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedPlayerPrefsRecord.cosmetic_loadout)
+}
+
+// uint64 updated_ms = 6;
+inline void MatchRankedPlayerPrefsRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t MatchRankedPlayerPrefsRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerPrefsRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void MatchRankedPlayerPrefsRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerPrefsRecord.updated_ms)
+}
+inline ::uint64_t MatchRankedPlayerPrefsRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void MatchRankedPlayerPrefsRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchRankedPlayerSeasonRecord
+
+// uint32 season_id = 1;
+inline void MatchRankedPlayerSeasonRecord::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::season_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.season_id)
+  return _internal_season_id();
+}
+inline void MatchRankedPlayerSeasonRecord::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.season_id)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint64 player_id = 2;
+inline void MatchRankedPlayerSeasonRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchRankedPlayerSeasonRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.player_id)
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// bool qualified = 3;
+inline void MatchRankedPlayerSeasonRecord::clear_qualified() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualified_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool MatchRankedPlayerSeasonRecord::qualified() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.qualified)
+  return _internal_qualified();
+}
+inline void MatchRankedPlayerSeasonRecord::set_qualified(bool value) {
+  _internal_set_qualified(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.qualified)
+}
+inline bool MatchRankedPlayerSeasonRecord::_internal_qualified() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualified_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_qualified(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualified_ = value;
+}
+
+// uint64 qualified_at_ms = 4;
+inline void MatchRankedPlayerSeasonRecord::clear_qualified_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualified_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::qualified_at_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.qualified_at_ms)
+  return _internal_qualified_at_ms();
+}
+inline void MatchRankedPlayerSeasonRecord::set_qualified_at_ms(::uint64_t value) {
+  _internal_set_qualified_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.qualified_at_ms)
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::_internal_qualified_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualified_at_ms_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_qualified_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualified_at_ms_ = value;
+}
+
+// int64 rating_centi = 5;
+inline void MatchRankedPlayerSeasonRecord::clear_rating_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_centi_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::int64_t MatchRankedPlayerSeasonRecord::rating_centi() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.rating_centi)
+  return _internal_rating_centi();
+}
+inline void MatchRankedPlayerSeasonRecord::set_rating_centi(::int64_t value) {
+  _internal_set_rating_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.rating_centi)
+}
+inline ::int64_t MatchRankedPlayerSeasonRecord::_internal_rating_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rating_centi_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_rating_centi(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rating_centi_ = value;
+}
+
+// int64 peak_rating_centi = 6;
+inline void MatchRankedPlayerSeasonRecord::clear_peak_rating_centi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peak_rating_centi_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::int64_t MatchRankedPlayerSeasonRecord::peak_rating_centi() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.peak_rating_centi)
+  return _internal_peak_rating_centi();
+}
+inline void MatchRankedPlayerSeasonRecord::set_peak_rating_centi(::int64_t value) {
+  _internal_set_peak_rating_centi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.peak_rating_centi)
+}
+inline ::int64_t MatchRankedPlayerSeasonRecord::_internal_peak_rating_centi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.peak_rating_centi_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_peak_rating_centi(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peak_rating_centi_ = value;
+}
+
+// uint32 peak_tier = 7;
+inline void MatchRankedPlayerSeasonRecord::clear_peak_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peak_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::peak_tier() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.peak_tier)
+  return _internal_peak_tier();
+}
+inline void MatchRankedPlayerSeasonRecord::set_peak_tier(::uint32_t value) {
+  _internal_set_peak_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.peak_tier)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_peak_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.peak_tier_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_peak_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.peak_tier_ = value;
+}
+
+// uint32 valid_matches = 8;
+inline void MatchRankedPlayerSeasonRecord::clear_valid_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.valid_matches_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::valid_matches() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.valid_matches)
+  return _internal_valid_matches();
+}
+inline void MatchRankedPlayerSeasonRecord::set_valid_matches(::uint32_t value) {
+  _internal_set_valid_matches(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.valid_matches)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_valid_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.valid_matches_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_valid_matches(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.valid_matches_ = value;
+}
+
+// uint32 wins = 9;
+inline void MatchRankedPlayerSeasonRecord::clear_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::wins() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.wins)
+  return _internal_wins();
+}
+inline void MatchRankedPlayerSeasonRecord::set_wins(::uint32_t value) {
+  _internal_set_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.wins)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.wins_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.wins_ = value;
+}
+
+// uint32 losses = 10;
+inline void MatchRankedPlayerSeasonRecord::clear_losses() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.losses_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::losses() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.losses)
+  return _internal_losses();
+}
+inline void MatchRankedPlayerSeasonRecord::set_losses(::uint32_t value) {
+  _internal_set_losses(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.losses)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_losses() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.losses_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_losses(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.losses_ = value;
+}
+
+// uint32 draws = 11;
+inline void MatchRankedPlayerSeasonRecord::clear_draws() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.draws_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::draws() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.draws)
+  return _internal_draws();
+}
+inline void MatchRankedPlayerSeasonRecord::set_draws(::uint32_t value) {
+  _internal_set_draws(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.draws)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_draws() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.draws_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_draws(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.draws_ = value;
+}
+
+// uint32 milestone_bits = 12;
+inline void MatchRankedPlayerSeasonRecord::clear_milestone_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_bits_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::milestone_bits() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.milestone_bits)
+  return _internal_milestone_bits();
+}
+inline void MatchRankedPlayerSeasonRecord::set_milestone_bits(::uint32_t value) {
+  _internal_set_milestone_bits(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.milestone_bits)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_milestone_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.milestone_bits_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_milestone_bits(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.milestone_bits_ = value;
+}
+
+// uint32 honor_bits = 13;
+inline void MatchRankedPlayerSeasonRecord::clear_honor_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_bits_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::honor_bits() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.honor_bits)
+  return _internal_honor_bits();
+}
+inline void MatchRankedPlayerSeasonRecord::set_honor_bits(::uint32_t value) {
+  _internal_set_honor_bits(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.honor_bits)
+}
+inline ::uint32_t MatchRankedPlayerSeasonRecord::_internal_honor_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_bits_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_honor_bits(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_bits_ = value;
+}
+
+// uint64 final_rank = 14;
+inline void MatchRankedPlayerSeasonRecord::clear_final_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::final_rank() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.final_rank)
+  return _internal_final_rank();
+}
+inline void MatchRankedPlayerSeasonRecord::set_final_rank(::uint64_t value) {
+  _internal_set_final_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.final_rank)
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::_internal_final_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.final_rank_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_final_rank(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = value;
+}
+
+// uint64 updated_ms = 15;
+inline void MatchRankedPlayerSeasonRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedPlayerSeasonRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void MatchRankedPlayerSeasonRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedPlayerSeasonRecord.updated_ms)
+}
+inline ::uint64_t MatchRankedPlayerSeasonRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void MatchRankedPlayerSeasonRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchRankedRewardRecord
+
+// uint64 player_id = 1;
+inline void MatchRankedRewardRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MatchRankedRewardRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchRankedRewardRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.player_id)
+}
+inline ::uint64_t MatchRankedRewardRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchRankedRewardRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 season_id = 2;
+inline void MatchRankedRewardRecord::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t MatchRankedRewardRecord::season_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.season_id)
+  return _internal_season_id();
+}
+inline void MatchRankedRewardRecord::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.season_id)
+}
+inline ::uint32_t MatchRankedRewardRecord::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void MatchRankedRewardRecord::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint32 reward_kind = 3;
+inline void MatchRankedRewardRecord::clear_reward_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t MatchRankedRewardRecord::reward_kind() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.reward_kind)
+  return _internal_reward_kind();
+}
+inline void MatchRankedRewardRecord::set_reward_kind(::uint32_t value) {
+  _internal_set_reward_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.reward_kind)
+}
+inline ::uint32_t MatchRankedRewardRecord::_internal_reward_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_kind_;
+}
+inline void MatchRankedRewardRecord::_internal_set_reward_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = value;
+}
+
+// uint32 tier_value = 4;
+inline void MatchRankedRewardRecord::clear_tier_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_value_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t MatchRankedRewardRecord::tier_value() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.tier_value)
+  return _internal_tier_value();
+}
+inline void MatchRankedRewardRecord::set_tier_value(::uint32_t value) {
+  _internal_set_tier_value(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.tier_value)
+}
+inline ::uint32_t MatchRankedRewardRecord::_internal_tier_value() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_value_;
+}
+inline void MatchRankedRewardRecord::_internal_set_tier_value(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_value_ = value;
+}
+
+// string item_code = 5;
+inline void MatchRankedRewardRecord::clear_item_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_code_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& MatchRankedRewardRecord::item_code() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.item_code)
+  return _internal_item_code();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedRewardRecord::set_item_code(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.item_code_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.item_code)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedRewardRecord::mutable_item_code()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_item_code();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedRewardRecord.item_code)
+  return _s;
+}
+inline const ::std::string& MatchRankedRewardRecord::_internal_item_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_code_.Get();
+}
+inline void MatchRankedRewardRecord::_internal_set_item_code(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_code_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedRewardRecord::_internal_mutable_item_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.item_code_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedRewardRecord::release_item_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedRewardRecord.item_code)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.item_code_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.item_code_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedRewardRecord::set_allocated_item_code(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.item_code_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.item_code_.IsDefault()) {
+    _impl_.item_code_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedRewardRecord.item_code)
+}
+
+// uint64 granted_at_ms = 6;
+inline void MatchRankedRewardRecord::clear_granted_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t MatchRankedRewardRecord::granted_at_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedRewardRecord.granted_at_ms)
+  return _internal_granted_at_ms();
+}
+inline void MatchRankedRewardRecord::set_granted_at_ms(::uint64_t value) {
+  _internal_set_granted_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedRewardRecord.granted_at_ms)
+}
+inline ::uint64_t MatchRankedRewardRecord::_internal_granted_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.granted_at_ms_;
+}
+inline void MatchRankedRewardRecord::_internal_set_granted_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchRankedBattleRecord
+
+// uint64 battle_id = 1;
+inline void MatchRankedBattleRecord::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MatchRankedBattleRecord::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedBattleRecord.battle_id)
+  return _internal_battle_id();
+}
+inline void MatchRankedBattleRecord::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedBattleRecord.battle_id)
+}
+inline ::uint64_t MatchRankedBattleRecord::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void MatchRankedBattleRecord::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint64 player_id = 2;
+inline void MatchRankedBattleRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t MatchRankedBattleRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedBattleRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchRankedBattleRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedBattleRecord.player_id)
+}
+inline ::uint64_t MatchRankedBattleRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchRankedBattleRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 season_id = 3;
+inline void MatchRankedBattleRecord::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t MatchRankedBattleRecord::season_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedBattleRecord.season_id)
+  return _internal_season_id();
+}
+inline void MatchRankedBattleRecord::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedBattleRecord.season_id)
+}
+inline ::uint32_t MatchRankedBattleRecord::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void MatchRankedBattleRecord::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint64 settled_at_ms = 4;
+inline void MatchRankedBattleRecord::clear_settled_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settled_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t MatchRankedBattleRecord::settled_at_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedBattleRecord.settled_at_ms)
+  return _internal_settled_at_ms();
+}
+inline void MatchRankedBattleRecord::set_settled_at_ms(::uint64_t value) {
+  _internal_set_settled_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedBattleRecord.settled_at_ms)
+}
+inline ::uint64_t MatchRankedBattleRecord::_internal_settled_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.settled_at_ms_;
+}
+inline void MatchRankedBattleRecord::_internal_set_settled_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settled_at_ms_ = value;
+}
+
+// bytes summary = 5;
+inline void MatchRankedBattleRecord::clear_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.summary_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& MatchRankedBattleRecord::summary() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchRankedBattleRecord.summary)
+  return _internal_summary();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchRankedBattleRecord::set_summary(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.summary_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchRankedBattleRecord.summary)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedBattleRecord::mutable_summary()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_summary();
+  // @@protoc_insertion_point(field_mutable:match.MatchRankedBattleRecord.summary)
+  return _s;
+}
+inline const ::std::string& MatchRankedBattleRecord::_internal_summary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.summary_.Get();
+}
+inline void MatchRankedBattleRecord::_internal_set_summary(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.summary_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchRankedBattleRecord::_internal_mutable_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.summary_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchRankedBattleRecord::release_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchRankedBattleRecord.summary)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.summary_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.summary_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchRankedBattleRecord::set_allocated_summary(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.summary_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.summary_.IsDefault()) {
+    _impl_.summary_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchRankedBattleRecord.summary)
 }
 
 #ifdef __GNUC__

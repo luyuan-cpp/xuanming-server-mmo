@@ -99,6 +99,9 @@ message TeamLaunchMember {
   TeamOriginalRole original = 1;
   uint32 roster_order = 2; // 显式站位顺序，不以repeated下标承载。
   string ticket = 3;
+  uint32 character_preset_id = 4;
+  uint32 pet_preset_id = 5;
+  uint32 ranked_rule_version = 6;
 }
 // 两版Team向Match提交同一份锁内原件；Match在同事务锁P、Team、launch、票并逐项核验。
 message TeamLaunchOriginal {
@@ -113,6 +116,8 @@ message TeamLaunchOriginal {
   uint64 enqueued_ms = 9;
   uint64 not_before_ms = 10;
   repeated ObserverExitOriginal observer_exits = 11;
+  uint32 ranked_season_id = 12;
+  uint32 ranked_rule_version = 13;
 }
 message TeamLaunchData {
   repeated TeamLaunchMember members = 1;

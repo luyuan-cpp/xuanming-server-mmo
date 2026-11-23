@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "df34cab01b3439aa",
-  "version": 48,
-  "content_digest": "0037938128a92d7ee82eeaa05e945f0155fb15ae825c5fdf7ab41a31f69fe191",
-  "generated_at": "2026-11-21T08:13:57Z",
+  "schema_digest": "ece0013ccbb6f3b0",
+  "version": 49,
+  "content_digest": "70f884dc75e527d03378b9721fe666dbaa5a0487a53a2874486ab8a5bd25002f",
+  "generated_at": "2026-11-23T11:47:45Z",
   "source_rev": {
-    "commit": "345cc559f891b6c9a023a11d92d74ab6aea33e6d",
-    "data_dirty": true
+    "commit": "a687f1914485b768bed39da091ce5c4a5e2c2bdd",
+    "data_dirty": false
   },
-  "table_count": 56,
+  "table_count": 58,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -464,24 +464,24 @@
       "name": "Dungeon",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 4,
+      "rows": 5,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 5215,
-        "sha256": "53c59163d8b145f2c954fbd90d505181bd36ae018e01bd415d0c4284a93b5f4c"
+        "size": 5242,
+        "sha256": "5ba55ff36dc27a88f4542000990971c90c72b0e5f8f7b37e11cc2a79c147b530"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "dungeon.json",
-          "size": 614,
-          "sha256": "48d11fdc69829e6bbbaea33c2d3049ad5fac6e05f7d16d43d3a75a10975077ab"
+          "size": 725,
+          "sha256": "711108897fc013838748a4dcbc4249ca8b49f5c49de0ee13a5ab7fac18e07d92"
         },
         {
           "kind": "binary",
           "file": "dungeon.pb",
-          "size": 63,
-          "sha256": "9735605f35a6f2b271a71ac0afa34cf2e58ee38543f4bbbd12c250b3e27970ec"
+          "size": 74,
+          "sha256": "2dcd3dcf1b769c485a1b1812f2b60822e5211975fa139ad1abae541be3585038"
         }
       ]
     },
@@ -1192,21 +1192,71 @@
       "rows": 7,
       "source": {
         "file": "PlayMode.xlsx",
-        "size": 5540,
-        "sha256": "9ac32701b05111d0981e53360ebb89ebd14c3511d25717a25c98fc617aa49d8c"
+        "size": 5539,
+        "sha256": "172c879c38c35cf98ce809bc1479950a1954b75e01fdb704f608b2a63bd23d2d"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "playmode.json",
           "size": 779,
-          "sha256": "8b491d1d846af7a02cdf82e9727b967647f295448ecabc60d4024518dfa9b28c"
+          "sha256": "5c97614add664afd9f748b9c4f1e3511c12ce22d418bd8fa87978a64adcd81b7"
         },
         {
           "kind": "binary",
           "file": "playmode.pb",
           "size": 76,
-          "sha256": "605c9fd2d62ece61118cd0c2d4af61d3b145ada1f58f964744d5c7b0fc0235bf"
+          "sha256": "eabee5d2f7b9c1eeab84aa7a6f9f48bf116178cd89737dd7ab565c4523b37dea"
+        }
+      ]
+    },
+    {
+      "name": "RankedPreset",
+      "hot_reload": false,
+      "ids_permanent": false,
+      "rows": 6,
+      "source": {
+        "file": "RankedPreset.xlsx",
+        "size": 6059,
+        "sha256": "764e8bb801aedbfa22626b097b085d88052e376cb7ee54da81ae17ce1a019c70"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "rankedpreset.json",
+          "size": 2450,
+          "sha256": "56b6d577aaef9f99088eeeaa7eacbec100be37f6b1dd118806d999b0d7ed3d61"
+        },
+        {
+          "kind": "binary",
+          "file": "rankedpreset.pb",
+          "size": 724,
+          "sha256": "d809fc7da84dd65ebc79265cb9f8b32e88ca98f41c1128a9552307eab25b1bb5"
+        }
+      ]
+    },
+    {
+      "name": "RankedRule",
+      "hot_reload": false,
+      "ids_permanent": false,
+      "rows": 1,
+      "source": {
+        "file": "RankedRule.xlsx",
+        "size": 5666,
+        "sha256": "c27d010604a1a61732012ba72b290e844afaa1be5c638d522e04fadc6314e58b"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "rankedrule.json",
+          "size": 722,
+          "sha256": "1cc0a561163b6d2203dc4329e886a38dea6115b5ec7d259253a835141aaa065a"
+        },
+        {
+          "kind": "binary",
+          "file": "rankedrule.pb",
+          "size": 104,
+          "sha256": "662d09cfe172e224772db58015f0c2846cafe07d5cbde0a5552e9452e4e30da1"
         }
       ]
     },

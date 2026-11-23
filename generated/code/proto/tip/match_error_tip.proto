@@ -77,4 +77,10 @@ enum match_error {
 
   kMatchBattleScriptLoadoutFull = 16033;
 
+  kMatchRankedSeasonSettling = 16034;
+
+  kMatchRankedPresetInvalid = 16035;
+
+  kMatchRankedRuleVersionMismatch = 16036;
+
 };

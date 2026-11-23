@@ -505,6 +505,8 @@ type AuthConfig struct {
 	// 服务端用渠道公布的公钥验签,不需要应用密钥(pkg/auth/idtoken.go)。
 	Apple  *IdTokenAuthConf `json:"Apple,optional"`
 	Google *IdTokenAuthConf `json:"Google,optional"`
+	// 官方通行证(独立部署的 Casdoor OIDC,auth_type="passport",见 docs/design/official-passport-registration.md)。
+	Passport *PassportAuthConf `json:"Passport,optional"`
 }
 
 // PasswordAuthConf 配置生产口令认证。DSN 含凭证，只允许通过命名的

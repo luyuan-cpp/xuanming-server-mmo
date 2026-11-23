@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "df34cab01b3439aa";
+    public static final String SCHEMA_DIGEST = "ece0013ccbb6f3b0";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -136,6 +136,10 @@ public class TableLoader {
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
 
+        RankedPresetTableManager.getInstance().load(configDir, useBinary);
+
+        RankedRuleTableManager.getInstance().load(configDir, useBinary);
+
         RewardTableManager.getInstance().load(configDir, useBinary);
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
@@ -167,7 +171,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(56);
+        CountDownLatch latch = new CountDownLatch(58);
 
         new Thread(() -> {
             try {
@@ -651,6 +655,26 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                RankedPresetTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load RankedPreset table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                RankedRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load RankedRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 RewardTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Reward table", e);
@@ -844,6 +868,10 @@ public class TableLoader {
         PetTierTableManager.getInstance().load(configDir, useBinary);
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
+
+        RankedPresetTableManager.getInstance().load(configDir, useBinary);
+
+        RankedRuleTableManager.getInstance().load(configDir, useBinary);
 
         RewardTableManager.getInstance().load(configDir, useBinary);
 

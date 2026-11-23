@@ -183,6 +183,14 @@ extern const ::google::protobuf::internal::ClassDataFull BattleMonsterDefeat_cla
 #else
 extern const BattleMonsterDefeatGlobalsTypeInternal BattleMonsterDefeat_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleParticipationFact;
+struct BattleParticipationFactGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleParticipationFactGlobalsTypeInternal BattleParticipationFact_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleParticipationFact_class_data_;
+#else
+extern const BattleParticipationFactGlobalsTypeInternal BattleParticipationFact_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattlePetSettlementData;
 struct BattlePetSettlementDataGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -262,6 +270,30 @@ extern BattleSettlementDataGlobalsTypeInternal BattleSettlementData_globals_;
 extern const ::google::protobuf::internal::ClassDataFull BattleSettlementData_class_data_;
 #else
 extern const BattleSettlementDataGlobalsTypeInternal BattleSettlementData_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RankedMatchContext;
+struct RankedMatchContextGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RankedMatchContextGlobalsTypeInternal RankedMatchContext_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RankedMatchContext_class_data_;
+#else
+extern const RankedMatchContextGlobalsTypeInternal RankedMatchContext_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RankedMemberLoadout;
+struct RankedMemberLoadoutGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RankedMemberLoadoutGlobalsTypeInternal RankedMemberLoadout_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RankedMemberLoadout_class_data_;
+#else
+extern const RankedMemberLoadoutGlobalsTypeInternal RankedMemberLoadout_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RankedPresetSelection;
+struct RankedPresetSelectionGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RankedPresetSelectionGlobalsTypeInternal RankedPresetSelection_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RankedPresetSelection_class_data_;
+#else
+extern const RankedPresetSelectionGlobalsTypeInternal RankedPresetSelection_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
@@ -655,6 +687,219 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedPresetSelection final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RankedPresetSelection) */ {
+ public:
+  inline RankedPresetSelection() : RankedPresetSelection(nullptr) {}
+  ~RankedPresetSelection() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RankedPresetSelection* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RankedPresetSelection));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RankedPresetSelection(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RankedPresetSelection(const RankedPresetSelection& from) : RankedPresetSelection(nullptr, from) {}
+  inline RankedPresetSelection(RankedPresetSelection&& from) noexcept : RankedPresetSelection(nullptr, ::std::move(from)) {}
+  inline RankedPresetSelection& operator=(const RankedPresetSelection& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RankedPresetSelection& operator=(RankedPresetSelection&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RankedPresetSelection& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedPresetSelection>(&RankedPresetSelection_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 23;
+  friend void swap(RankedPresetSelection& a, RankedPresetSelection& b) { a.Swap(&b); }
+  inline void Swap(RankedPresetSelection* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RankedPresetSelection* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RankedPresetSelection* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RankedPresetSelection>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RankedPresetSelection& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RankedPresetSelection& from) { RankedPresetSelection::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RankedPresetSelection* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "RankedPresetSelection"; }
+
+  explicit RankedPresetSelection(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RankedPresetSelection(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RankedPresetSelection& from);
+  RankedPresetSelection(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RankedPresetSelection&& from) noexcept
+      : RankedPresetSelection(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCharacterPresetIdFieldNumber = 1,
+    kPetPresetIdFieldNumber = 2,
+  };
+  // uint32 character_preset_id = 1;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 2;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:RankedPresetSelection)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RankedPresetSelection& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRouting final : public ::google::protobuf::Message
@@ -1481,6 +1726,255 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSettlementData final : pub
     ::uint64_t health_;
     ::uint64_t mana_;
     bool is_dead_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleParticipationFact final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattleParticipationFact) */ {
+ public:
+  inline BattleParticipationFact() : BattleParticipationFact(nullptr) {}
+  ~BattleParticipationFact() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleParticipationFact* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleParticipationFact));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleParticipationFact(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleParticipationFact(const BattleParticipationFact& from) : BattleParticipationFact(nullptr, from) {}
+  inline BattleParticipationFact(BattleParticipationFact&& from) noexcept : BattleParticipationFact(nullptr, ::std::move(from)) {}
+  inline BattleParticipationFact& operator=(const BattleParticipationFact& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleParticipationFact& operator=(BattleParticipationFact&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleParticipationFact& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleParticipationFact>(&BattleParticipationFact_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(BattleParticipationFact& a, BattleParticipationFact& b) { a.Swap(&b); }
+  inline void Swap(BattleParticipationFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleParticipationFact* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleParticipationFact* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleParticipationFact>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleParticipationFact& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleParticipationFact& from) { BattleParticipationFact::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleParticipationFact* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattleParticipationFact"; }
+
+  explicit BattleParticipationFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleParticipationFact(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleParticipationFact& from);
+  BattleParticipationFact(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleParticipationFact&& from) noexcept
+      : BattleParticipationFact(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerIdFieldNumber = 1,
+    kEnteredRoomFieldNumber = 2,
+    kManualActionAcceptedFieldNumber = 3,
+    kExplicitAutoEnabledFieldNumber = 4,
+    kNoActionOpportunityFieldNumber = 5,
+  };
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // bool entered_room = 2;
+  void clear_entered_room() ;
+  [[nodiscard]] bool entered_room() const;
+  void set_entered_room(bool value);
+
+  private:
+  bool _internal_entered_room() const;
+  void _internal_set_entered_room(bool value);
+
+  public:
+  // bool manual_action_accepted = 3;
+  void clear_manual_action_accepted() ;
+  [[nodiscard]] bool manual_action_accepted() const;
+  void set_manual_action_accepted(bool value);
+
+  private:
+  bool _internal_manual_action_accepted() const;
+  void _internal_set_manual_action_accepted(bool value);
+
+  public:
+  // bool explicit_auto_enabled = 4;
+  void clear_explicit_auto_enabled() ;
+  [[nodiscard]] bool explicit_auto_enabled() const;
+  void set_explicit_auto_enabled(bool value);
+
+  private:
+  bool _internal_explicit_auto_enabled() const;
+  void _internal_set_explicit_auto_enabled(bool value);
+
+  public:
+  // bool no_action_opportunity = 5;
+  void clear_no_action_opportunity() ;
+  [[nodiscard]] bool no_action_opportunity() const;
+  void set_no_action_opportunity(bool value);
+
+  private:
+  bool _internal_no_action_opportunity() const;
+  void _internal_set_no_action_opportunity(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattleParticipationFact)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleParticipationFact& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t player_id_;
+    bool entered_room_;
+    bool manual_action_accepted_;
+    bool explicit_auto_enabled_;
+    bool no_action_opportunity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3992,6 +4486,225 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAction final : public ::googl
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMemberLoadout final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RankedMemberLoadout) */ {
+ public:
+  inline RankedMemberLoadout() : RankedMemberLoadout(nullptr) {}
+  ~RankedMemberLoadout() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RankedMemberLoadout* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RankedMemberLoadout));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RankedMemberLoadout(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RankedMemberLoadout(const RankedMemberLoadout& from) : RankedMemberLoadout(nullptr, from) {}
+  inline RankedMemberLoadout(RankedMemberLoadout&& from) noexcept : RankedMemberLoadout(nullptr, ::std::move(from)) {}
+  inline RankedMemberLoadout& operator=(const RankedMemberLoadout& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RankedMemberLoadout& operator=(RankedMemberLoadout&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RankedMemberLoadout& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedMemberLoadout>(&RankedMemberLoadout_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(RankedMemberLoadout& a, RankedMemberLoadout& b) { a.Swap(&b); }
+  inline void Swap(RankedMemberLoadout* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RankedMemberLoadout* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RankedMemberLoadout* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RankedMemberLoadout>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RankedMemberLoadout& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RankedMemberLoadout& from) { RankedMemberLoadout::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RankedMemberLoadout* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "RankedMemberLoadout"; }
+
+  explicit RankedMemberLoadout(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RankedMemberLoadout(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RankedMemberLoadout& from);
+  RankedMemberLoadout(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RankedMemberLoadout&& from) noexcept
+      : RankedMemberLoadout(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPresetsFieldNumber = 2,
+    kPlayerIdFieldNumber = 1,
+  };
+  // .RankedPresetSelection presets = 2;
+  [[nodiscard]] bool has_presets()
+      const;
+  void clear_presets() ;
+  [[nodiscard]] const ::RankedPresetSelection& presets() const;
+  [[nodiscard]] ::RankedPresetSelection* PROTOBUF_NULLABLE release_presets();
+  ::RankedPresetSelection* PROTOBUF_NONNULL mutable_presets();
+  void set_allocated_presets(::RankedPresetSelection* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_presets(::RankedPresetSelection* PROTOBUF_NULLABLE value);
+  ::RankedPresetSelection* PROTOBUF_NULLABLE unsafe_arena_release_presets();
+
+  private:
+  const ::RankedPresetSelection& _internal_presets() const;
+  ::RankedPresetSelection* PROTOBUF_NONNULL _internal_mutable_presets();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:RankedMemberLoadout)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RankedMemberLoadout& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::RankedPresetSelection* PROTOBUF_NULLABLE presets_;
+    ::uint64_t player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:BattleSettlementData) */ {
  public:
@@ -4154,12 +4867,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kManaFieldNumber = 6,
     kExpGainFieldNumber = 7,
     kGoldGainFieldNumber = 8,
+    kTotalRoundsFieldNumber = 13,
     kIsDeadFieldNumber = 11,
     kFledFieldNumber = 12,
-    kTotalRoundsFieldNumber = 13,
+    kCompetitiveRankedFieldNumber = 21,
+    kParticipatedFieldNumber = 24,
     kFinishedAtMsFieldNumber = 17,
     kMatchModeFieldNumber = 18,
     kBattleConfigIdFieldNumber = 19,
+    kSeasonIdFieldNumber = 22,
+    kRankedRuleVersionFieldNumber = 23,
   };
   // repeated .BattleItemEntry items_consumed = 9;
   [[nodiscard]] int items_consumed_size()
@@ -4366,6 +5083,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_gold_gain(::uint64_t value);
 
   public:
+  // uint32 total_rounds = 13;
+  void clear_total_rounds() ;
+  [[nodiscard]] ::uint32_t total_rounds() const;
+  void set_total_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_rounds() const;
+  void _internal_set_total_rounds(::uint32_t value);
+
+  public:
   // bool is_dead = 11;
   void clear_is_dead() ;
   [[nodiscard]] bool is_dead() const;
@@ -4386,14 +5113,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_fled(bool value);
 
   public:
-  // uint32 total_rounds = 13;
-  void clear_total_rounds() ;
-  [[nodiscard]] ::uint32_t total_rounds() const;
-  void set_total_rounds(::uint32_t value);
+  // bool competitive_ranked = 21;
+  void clear_competitive_ranked() ;
+  [[nodiscard]] bool competitive_ranked() const;
+  void set_competitive_ranked(bool value);
 
   private:
-  ::uint32_t _internal_total_rounds() const;
-  void _internal_set_total_rounds(::uint32_t value);
+  bool _internal_competitive_ranked() const;
+  void _internal_set_competitive_ranked(bool value);
+
+  public:
+  // bool participated = 24;
+  void clear_participated() ;
+  [[nodiscard]] bool participated() const;
+  void set_participated(bool value);
+
+  private:
+  bool _internal_participated() const;
+  void _internal_set_participated(bool value);
 
   public:
   // uint64 finished_at_ms = 17;
@@ -4426,11 +5163,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_battle_config_id(::uint32_t value);
 
   public:
+  // uint32 season_id = 22;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 ranked_rule_version = 23;
+  void clear_ranked_rule_version() ;
+  [[nodiscard]] ::uint32_t ranked_rule_version() const;
+  void set_ranked_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_rule_version() const;
+  void _internal_set_ranked_rule_version(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleSettlementData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
+      ::google::protobuf::internal::TcParseTable<5, 24,
                           5, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4474,12 +5231,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     ::uint64_t mana_;
     ::uint64_t exp_gain_;
     ::uint64_t gold_gain_;
+    ::uint32_t total_rounds_;
     bool is_dead_;
     bool fled_;
-    ::uint32_t total_rounds_;
+    bool competitive_ranked_;
+    bool participated_;
     ::uint64_t finished_at_ms_;
     ::uint32_t match_mode_;
     ::uint32_t battle_config_id_;
+    ::uint32_t season_id_;
+    ::uint32_t ranked_rule_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4768,6 +5529,300 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardProfile final : public 
     ::uint64_t exp_gain_;
     ::uint32_t battle_config_id_;
     ::uint32_t item_draws_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RankedMatchContext) */ {
+ public:
+  inline RankedMatchContext() : RankedMatchContext(nullptr) {}
+  ~RankedMatchContext() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RankedMatchContext* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RankedMatchContext));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RankedMatchContext(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RankedMatchContext(const RankedMatchContext& from) : RankedMatchContext(nullptr, from) {}
+  inline RankedMatchContext(RankedMatchContext&& from) noexcept : RankedMatchContext(nullptr, ::std::move(from)) {}
+  inline RankedMatchContext& operator=(const RankedMatchContext& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RankedMatchContext& operator=(RankedMatchContext&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RankedMatchContext& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedMatchContext>(&RankedMatchContext_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 25;
+  friend void swap(RankedMatchContext& a, RankedMatchContext& b) { a.Swap(&b); }
+  inline void Swap(RankedMatchContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RankedMatchContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RankedMatchContext* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RankedMatchContext>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RankedMatchContext& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RankedMatchContext& from) { RankedMatchContext::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RankedMatchContext* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "RankedMatchContext"; }
+
+  explicit RankedMatchContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RankedMatchContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RankedMatchContext& from);
+  RankedMatchContext(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RankedMatchContext&& from) noexcept
+      : RankedMatchContext(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMembersFieldNumber = 7,
+    kSeasonKeyFieldNumber = 2,
+    kConfigFingerprintFieldNumber = 6,
+    kSeasonIdFieldNumber = 1,
+    kRuleVersionFieldNumber = 4,
+    kRankGenerationFieldNumber = 3,
+    kTeamSizeFieldNumber = 5,
+  };
+  // repeated .RankedMemberLoadout members = 7;
+  [[nodiscard]] int members_size()
+      const;
+  private:
+  int _internal_members_size() const;
+
+  public:
+  void clear_members() ;
+  [[nodiscard]] const ::RankedMemberLoadout& members(int index) const;
+  [[nodiscard]] ::RankedMemberLoadout* PROTOBUF_NONNULL mutable_members(int index);
+  ::RankedMemberLoadout* PROTOBUF_NONNULL add_members();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>&
+  members() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>* PROTOBUF_NONNULL
+  mutable_members();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>& _internal_members() const;
+  ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>* PROTOBUF_NONNULL _internal_mutable_members();
+
+  public:
+  // string season_key = 2;
+  void clear_season_key() ;
+  [[nodiscard]] const ::std::string& season_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_key();
+  void set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_key();
+
+  public:
+  // string config_fingerprint = 6;
+  void clear_config_fingerprint() ;
+  [[nodiscard]] const ::std::string& config_fingerprint() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_config_fingerprint(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_config_fingerprint();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_config_fingerprint();
+  void set_allocated_config_fingerprint(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_config_fingerprint() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_config_fingerprint(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_config_fingerprint();
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 rule_version = 4;
+  void clear_rule_version() ;
+  [[nodiscard]] ::uint32_t rule_version() const;
+  void set_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rule_version() const;
+  void _internal_set_rule_version(::uint32_t value);
+
+  public:
+  // uint64 rank_generation = 3;
+  void clear_rank_generation() ;
+  [[nodiscard]] ::uint64_t rank_generation() const;
+  void set_rank_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rank_generation() const;
+  void _internal_set_rank_generation(::uint64_t value);
+
+  public:
+  // uint32 team_size = 5;
+  void clear_team_size() ;
+  [[nodiscard]] ::uint32_t team_size() const;
+  void set_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_size() const;
+  void _internal_set_team_size(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:RankedMatchContext)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 55,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RankedMatchContext& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::RankedMemberLoadout > members_;
+    ::google::protobuf::internal::ArenaStringPtr season_key_;
+    ::google::protobuf::internal::ArenaStringPtr config_fingerprint_;
+    ::uint32_t season_id_;
+    ::uint32_t rule_version_;
+    ::uint64_t rank_generation_;
+    ::uint32_t team_size_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5148,6 +6203,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::
     kPhysicalAttackFieldNumber = 9,
     kMagicAttackFieldNumber = 10,
     kDefenseFieldNumber = 11,
+    kCompetitiveTemporaryFieldNumber = 15,
+    kCombatPetTableIdFieldNumber = 16,
     kSkillRanksFieldNumber = 13,
   };
   // repeated uint32 skill_table_ids = 12;
@@ -5307,6 +6364,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::
   void _internal_set_defense(::uint64_t value);
 
   public:
+  // bool competitive_temporary = 15;
+  void clear_competitive_temporary() ;
+  [[nodiscard]] bool competitive_temporary() const;
+  void set_competitive_temporary(bool value);
+
+  private:
+  bool _internal_competitive_temporary() const;
+  void _internal_set_competitive_temporary(bool value);
+
+  public:
+  // uint32 combat_pet_table_id = 16;
+  void clear_combat_pet_table_id() ;
+  [[nodiscard]] ::uint32_t combat_pet_table_id() const;
+  void set_combat_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_combat_pet_table_id() const;
+  void _internal_set_combat_pet_table_id(::uint32_t value);
+
+  public:
   // map<uint32, uint32> skill_ranks = 13;
   [[nodiscard]] int skill_ranks_size()
       const;
@@ -5327,8 +6404,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          3, 42,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          3, 50,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5370,6 +6447,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::
     ::uint64_t physical_attack_;
     ::uint64_t magic_attack_;
     ::uint64_t defense_;
+    bool competitive_temporary_;
+    ::uint32_t combat_pet_table_id_;
     ::google::protobuf::internal::MapField<BattlePetSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6119,8 +7198,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kSupportEffectsFieldNumber = 40,
     kPetCultivationFieldNumber = 41,
     kEntryMaxHealthFieldNumber = 38,
-    kEntryMaxManaFieldNumber = 39,
     kWithdrawUntilRoundFieldNumber = 34,
+    kCompetitiveTemporaryFieldNumber = 42,
+    kEntryMaxManaFieldNumber = 39,
   };
   // repeated .BattleBuffEntry buffs = 12;
   [[nodiscard]] int buffs_size()
@@ -6618,16 +7698,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_entry_max_health(::uint64_t value);
 
   public:
-  // uint64 entry_max_mana = 39;
-  void clear_entry_max_mana() ;
-  [[nodiscard]] ::uint64_t entry_max_mana() const;
-  void set_entry_max_mana(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_entry_max_mana() const;
-  void _internal_set_entry_max_mana(::uint64_t value);
-
-  public:
   // uint32 withdraw_until_round = 34;
   void clear_withdraw_until_round() ;
   [[nodiscard]] ::uint32_t withdraw_until_round() const;
@@ -6638,11 +7708,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_withdraw_until_round(::uint32_t value);
 
   public:
+  // bool competitive_temporary = 42;
+  void clear_competitive_temporary() ;
+  [[nodiscard]] bool competitive_temporary() const;
+  void set_competitive_temporary(bool value);
+
+  private:
+  bool _internal_competitive_temporary() const;
+  void _internal_set_competitive_temporary(bool value);
+
+  public:
+  // uint64 entry_max_mana = 39;
+  void clear_entry_max_mana() ;
+  [[nodiscard]] ::uint64_t entry_max_mana() const;
+  void set_entry_max_mana(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_entry_max_mana() const;
+  void _internal_set_entry_max_mana(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleActorState)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 41,
+      ::google::protobuf::internal::TcParseTable<5, 42,
                           11, 82,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6712,8 +7802,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     ::SupportEffectSummary* PROTOBUF_NULLABLE support_effects_;
     ::PetCultivationEffects* PROTOBUF_NULLABLE pet_cultivation_;
     ::uint64_t entry_max_health_;
-    ::uint64_t entry_max_mana_;
     ::uint32_t withdraw_until_round_;
+    bool competitive_temporary_;
+    ::uint64_t entry_max_mana_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9026,7 +10117,7 @@ inline int BattlePetSnapshot::skill_ranks_size() const {
 inline void BattlePetSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePetSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -9042,7 +10133,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePetSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePetSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -9138,6 +10229,54 @@ inline void BattlePetSnapshot::set_allocated_pet_cultivation(::PetCultivationEff
 
   _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
   // @@protoc_insertion_point(field_set_allocated:BattlePetSnapshot.pet_cultivation)
+}
+
+// bool competitive_temporary = 15;
+inline void BattlePetSnapshot::clear_competitive_temporary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_temporary_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool BattlePetSnapshot::competitive_temporary() const {
+  // @@protoc_insertion_point(field_get:BattlePetSnapshot.competitive_temporary)
+  return _internal_competitive_temporary();
+}
+inline void BattlePetSnapshot::set_competitive_temporary(bool value) {
+  _internal_set_competitive_temporary(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:BattlePetSnapshot.competitive_temporary)
+}
+inline bool BattlePetSnapshot::_internal_competitive_temporary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.competitive_temporary_;
+}
+inline void BattlePetSnapshot::_internal_set_competitive_temporary(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_temporary_ = value;
+}
+
+// uint32 combat_pet_table_id = 16;
+inline void BattlePetSnapshot::clear_combat_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t BattlePetSnapshot::combat_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:BattlePetSnapshot.combat_pet_table_id)
+  return _internal_combat_pet_table_id();
+}
+inline void BattlePetSnapshot::set_combat_pet_table_id(::uint32_t value) {
+  _internal_set_combat_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:BattlePetSnapshot.combat_pet_table_id)
+}
+inline ::uint32_t BattlePetSnapshot::_internal_combat_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.combat_pet_table_id_;
+}
+inline void BattlePetSnapshot::_internal_set_combat_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_pet_table_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -10272,7 +11411,7 @@ BattleActorState::_internal_mutable_runtime_skills() {
 inline void BattleActorState::clear_withdraw_until_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.withdraw_until_round_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint32_t BattleActorState::withdraw_until_round() const {
   // @@protoc_insertion_point(field_get:BattleActorState.withdraw_until_round)
@@ -10280,7 +11419,7 @@ inline ::uint32_t BattleActorState::withdraw_until_round() const {
 }
 inline void BattleActorState::set_withdraw_until_round(::uint32_t value) {
   _internal_set_withdraw_until_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleActorState.withdraw_until_round)
 }
 inline ::uint32_t BattleActorState::_internal_withdraw_until_round() const {
@@ -10499,7 +11638,7 @@ inline void BattleActorState::_internal_set_entry_max_health(::uint64_t value) {
 inline void BattleActorState::clear_entry_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
 }
 inline ::uint64_t BattleActorState::entry_max_mana() const {
   // @@protoc_insertion_point(field_get:BattleActorState.entry_max_mana)
@@ -10507,7 +11646,7 @@ inline ::uint64_t BattleActorState::entry_max_mana() const {
 }
 inline void BattleActorState::set_entry_max_mana(::uint64_t value) {
   _internal_set_entry_max_mana(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleActorState.entry_max_mana)
 }
 inline ::uint64_t BattleActorState::_internal_entry_max_mana() const {
@@ -10703,6 +11842,30 @@ inline void BattleActorState::set_allocated_support_effects(::SupportEffectSumma
 
   _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
   // @@protoc_insertion_point(field_set_allocated:BattleActorState.support_effects)
+}
+
+// bool competitive_temporary = 42;
+inline void BattleActorState::clear_competitive_temporary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_temporary_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+}
+inline bool BattleActorState::competitive_temporary() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.competitive_temporary)
+  return _internal_competitive_temporary();
+}
+inline void BattleActorState::set_competitive_temporary(bool value) {
+  _internal_set_competitive_temporary(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  // @@protoc_insertion_point(field_set:BattleActorState.competitive_temporary)
+}
+inline bool BattleActorState::_internal_competitive_temporary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.competitive_temporary_;
+}
+inline void BattleActorState::_internal_set_competitive_temporary(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_temporary_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -12312,7 +13475,7 @@ BattleSettlementData::_internal_mutable_items_gained() {
 inline void BattleSettlementData::clear_is_dead() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_dead_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool BattleSettlementData::is_dead() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.is_dead)
@@ -12320,7 +13483,7 @@ inline bool BattleSettlementData::is_dead() const {
 }
 inline void BattleSettlementData::set_is_dead(bool value) {
   _internal_set_is_dead(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.is_dead)
 }
 inline bool BattleSettlementData::_internal_is_dead() const {
@@ -12336,7 +13499,7 @@ inline void BattleSettlementData::_internal_set_is_dead(bool value) {
 inline void BattleSettlementData::clear_fled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.fled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline bool BattleSettlementData::fled() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.fled)
@@ -12344,7 +13507,7 @@ inline bool BattleSettlementData::fled() const {
 }
 inline void BattleSettlementData::set_fled(bool value) {
   _internal_set_fled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.fled)
 }
 inline bool BattleSettlementData::_internal_fled() const {
@@ -12360,7 +13523,7 @@ inline void BattleSettlementData::_internal_set_fled(bool value) {
 inline void BattleSettlementData::clear_total_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BattleSettlementData::total_rounds() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_rounds)
@@ -12368,7 +13531,7 @@ inline ::uint32_t BattleSettlementData::total_rounds() const {
 }
 inline void BattleSettlementData::set_total_rounds(::uint32_t value) {
   _internal_set_total_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_rounds)
 }
 inline ::uint32_t BattleSettlementData::_internal_total_rounds() const {
@@ -12549,7 +13712,7 @@ BattleSettlementData::_internal_mutable_currency_gains() {
 inline void BattleSettlementData::clear_finished_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t BattleSettlementData::finished_at_ms() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.finished_at_ms)
@@ -12557,7 +13720,7 @@ inline ::uint64_t BattleSettlementData::finished_at_ms() const {
 }
 inline void BattleSettlementData::set_finished_at_ms(::uint64_t value) {
   _internal_set_finished_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.finished_at_ms)
 }
 inline ::uint64_t BattleSettlementData::_internal_finished_at_ms() const {
@@ -12573,7 +13736,7 @@ inline void BattleSettlementData::_internal_set_finished_at_ms(::uint64_t value)
 inline void BattleSettlementData::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t BattleSettlementData::match_mode() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.match_mode)
@@ -12581,7 +13744,7 @@ inline ::uint32_t BattleSettlementData::match_mode() const {
 }
 inline void BattleSettlementData::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.match_mode)
 }
 inline ::uint32_t BattleSettlementData::_internal_match_mode() const {
@@ -12597,7 +13760,7 @@ inline void BattleSettlementData::_internal_set_match_mode(::uint32_t value) {
 inline void BattleSettlementData::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t BattleSettlementData::battle_config_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.battle_config_id)
@@ -12605,7 +13768,7 @@ inline ::uint32_t BattleSettlementData::battle_config_id() const {
 }
 inline void BattleSettlementData::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.battle_config_id)
 }
 inline ::uint32_t BattleSettlementData::_internal_battle_config_id() const {
@@ -12666,6 +13829,102 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 BattleSettlementData::_internal_mutable_captured_pet_table_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.captured_pet_table_ids_;
+}
+
+// bool competitive_ranked = 21;
+inline void BattleSettlementData::clear_competitive_ranked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_ranked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline bool BattleSettlementData::competitive_ranked() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.competitive_ranked)
+  return _internal_competitive_ranked();
+}
+inline void BattleSettlementData::set_competitive_ranked(bool value) {
+  _internal_set_competitive_ranked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.competitive_ranked)
+}
+inline bool BattleSettlementData::_internal_competitive_ranked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.competitive_ranked_;
+}
+inline void BattleSettlementData::_internal_set_competitive_ranked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.competitive_ranked_ = value;
+}
+
+// uint32 season_id = 22;
+inline void BattleSettlementData::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t BattleSettlementData::season_id() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.season_id)
+  return _internal_season_id();
+}
+inline void BattleSettlementData::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.season_id)
+}
+inline ::uint32_t BattleSettlementData::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void BattleSettlementData::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint32 ranked_rule_version = 23;
+inline void BattleSettlementData::clear_ranked_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t BattleSettlementData::ranked_rule_version() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.ranked_rule_version)
+  return _internal_ranked_rule_version();
+}
+inline void BattleSettlementData::set_ranked_rule_version(::uint32_t value) {
+  _internal_set_ranked_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.ranked_rule_version)
+}
+inline ::uint32_t BattleSettlementData::_internal_ranked_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_rule_version_;
+}
+inline void BattleSettlementData::_internal_set_ranked_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = value;
+}
+
+// bool participated = 24;
+inline void BattleSettlementData::clear_participated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.participated_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline bool BattleSettlementData::participated() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.participated)
+  return _internal_participated();
+}
+inline void BattleSettlementData::set_participated(bool value) {
+  _internal_set_participated(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.participated)
+}
+inline bool BattleSettlementData::_internal_participated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.participated_;
+}
+inline void BattleSettlementData::_internal_set_participated(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.participated_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -12938,6 +14197,591 @@ inline ::uint64_t BattleActivityContext::_internal_launch_request_id() const {
 inline void BattleActivityContext::_internal_set_launch_request_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.launch_request_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RankedPresetSelection
+
+// uint32 character_preset_id = 1;
+inline void RankedPresetSelection::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t RankedPresetSelection::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:RankedPresetSelection.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void RankedPresetSelection::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:RankedPresetSelection.character_preset_id)
+}
+inline ::uint32_t RankedPresetSelection::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void RankedPresetSelection::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 2;
+inline void RankedPresetSelection::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t RankedPresetSelection::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:RankedPresetSelection.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void RankedPresetSelection::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:RankedPresetSelection.pet_preset_id)
+}
+inline ::uint32_t RankedPresetSelection::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void RankedPresetSelection::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RankedMemberLoadout
+
+// uint64 player_id = 1;
+inline void RankedMemberLoadout::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t RankedMemberLoadout::player_id() const {
+  // @@protoc_insertion_point(field_get:RankedMemberLoadout.player_id)
+  return _internal_player_id();
+}
+inline void RankedMemberLoadout::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:RankedMemberLoadout.player_id)
+}
+inline ::uint64_t RankedMemberLoadout::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void RankedMemberLoadout::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// .RankedPresetSelection presets = 2;
+inline bool RankedMemberLoadout::has_presets() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.presets_ != nullptr);
+  return value;
+}
+inline void RankedMemberLoadout::clear_presets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.presets_ != nullptr) _impl_.presets_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::RankedPresetSelection& RankedMemberLoadout::_internal_presets() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::RankedPresetSelection* p = _impl_.presets_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::RankedPresetSelection>(&::RankedPresetSelection_globals_);
+}
+inline const ::RankedPresetSelection& RankedMemberLoadout::presets() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RankedMemberLoadout.presets)
+  return _internal_presets();
+}
+inline void RankedMemberLoadout::unsafe_arena_set_allocated_presets(
+    ::RankedPresetSelection* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.presets_);
+  }
+  _impl_.presets_ = reinterpret_cast<::RankedPresetSelection*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:RankedMemberLoadout.presets)
+}
+inline ::RankedPresetSelection* PROTOBUF_NULLABLE RankedMemberLoadout::release_presets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::RankedPresetSelection* released = _impl_.presets_;
+  _impl_.presets_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::RankedPresetSelection* PROTOBUF_NULLABLE RankedMemberLoadout::unsafe_arena_release_presets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:RankedMemberLoadout.presets)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::RankedPresetSelection* temp = _impl_.presets_;
+  _impl_.presets_ = nullptr;
+  return temp;
+}
+inline ::RankedPresetSelection* PROTOBUF_NONNULL RankedMemberLoadout::_internal_mutable_presets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.presets_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::RankedPresetSelection>(GetArena());
+    _impl_.presets_ = reinterpret_cast<::RankedPresetSelection*>(p);
+  }
+  return _impl_.presets_;
+}
+inline ::RankedPresetSelection* PROTOBUF_NONNULL RankedMemberLoadout::mutable_presets()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::RankedPresetSelection* _msg = _internal_mutable_presets();
+  // @@protoc_insertion_point(field_mutable:RankedMemberLoadout.presets)
+  return _msg;
+}
+inline void RankedMemberLoadout::set_allocated_presets(::RankedPresetSelection* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.presets_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.presets_ = reinterpret_cast<::RankedPresetSelection*>(value);
+  // @@protoc_insertion_point(field_set_allocated:RankedMemberLoadout.presets)
+}
+
+// -------------------------------------------------------------------
+
+// RankedMatchContext
+
+// uint32 season_id = 1;
+inline void RankedMatchContext::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t RankedMatchContext::season_id() const {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.season_id)
+  return _internal_season_id();
+}
+inline void RankedMatchContext::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:RankedMatchContext.season_id)
+}
+inline ::uint32_t RankedMatchContext::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void RankedMatchContext::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string season_key = 2;
+inline void RankedMatchContext::clear_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& RankedMatchContext::season_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.season_key)
+  return _internal_season_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RankedMatchContext::set_season_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.season_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:RankedMatchContext.season_key)
+}
+inline ::std::string* PROTOBUF_NONNULL RankedMatchContext::mutable_season_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_season_key();
+  // @@protoc_insertion_point(field_mutable:RankedMatchContext.season_key)
+  return _s;
+}
+inline const ::std::string& RankedMatchContext::_internal_season_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_key_.Get();
+}
+inline void RankedMatchContext::_internal_set_season_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RankedMatchContext::_internal_mutable_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RankedMatchContext::release_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:RankedMatchContext.season_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.season_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RankedMatchContext::set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.season_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_key_.IsDefault()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:RankedMatchContext.season_key)
+}
+
+// uint64 rank_generation = 3;
+inline void RankedMatchContext::clear_rank_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t RankedMatchContext::rank_generation() const {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.rank_generation)
+  return _internal_rank_generation();
+}
+inline void RankedMatchContext::set_rank_generation(::uint64_t value) {
+  _internal_set_rank_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:RankedMatchContext.rank_generation)
+}
+inline ::uint64_t RankedMatchContext::_internal_rank_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rank_generation_;
+}
+inline void RankedMatchContext::_internal_set_rank_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rank_generation_ = value;
+}
+
+// uint32 rule_version = 4;
+inline void RankedMatchContext::clear_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t RankedMatchContext::rule_version() const {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.rule_version)
+  return _internal_rule_version();
+}
+inline void RankedMatchContext::set_rule_version(::uint32_t value) {
+  _internal_set_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:RankedMatchContext.rule_version)
+}
+inline ::uint32_t RankedMatchContext::_internal_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rule_version_;
+}
+inline void RankedMatchContext::_internal_set_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = value;
+}
+
+// uint32 team_size = 5;
+inline void RankedMatchContext::clear_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t RankedMatchContext::team_size() const {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.team_size)
+  return _internal_team_size();
+}
+inline void RankedMatchContext::set_team_size(::uint32_t value) {
+  _internal_set_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:RankedMatchContext.team_size)
+}
+inline ::uint32_t RankedMatchContext::_internal_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_size_;
+}
+inline void RankedMatchContext::_internal_set_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_size_ = value;
+}
+
+// string config_fingerprint = 6;
+inline void RankedMatchContext::clear_config_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_fingerprint_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& RankedMatchContext::config_fingerprint() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.config_fingerprint)
+  return _internal_config_fingerprint();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RankedMatchContext::set_config_fingerprint(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.config_fingerprint_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:RankedMatchContext.config_fingerprint)
+}
+inline ::std::string* PROTOBUF_NONNULL RankedMatchContext::mutable_config_fingerprint()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_config_fingerprint();
+  // @@protoc_insertion_point(field_mutable:RankedMatchContext.config_fingerprint)
+  return _s;
+}
+inline const ::std::string& RankedMatchContext::_internal_config_fingerprint() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_fingerprint_.Get();
+}
+inline void RankedMatchContext::_internal_set_config_fingerprint(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_fingerprint_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RankedMatchContext::_internal_mutable_config_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.config_fingerprint_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RankedMatchContext::release_config_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:RankedMatchContext.config_fingerprint)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.config_fingerprint_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.config_fingerprint_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RankedMatchContext::set_allocated_config_fingerprint(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.config_fingerprint_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.config_fingerprint_.IsDefault()) {
+    _impl_.config_fingerprint_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:RankedMatchContext.config_fingerprint)
+}
+
+// repeated .RankedMemberLoadout members = 7;
+inline int RankedMatchContext::_internal_members_size() const {
+  return _internal_members().size();
+}
+inline int RankedMatchContext::members_size() const {
+  return _internal_members_size();
+}
+inline void RankedMatchContext::clear_members() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.members_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::RankedMemberLoadout& RankedMatchContext::members(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.members)
+  return _internal_members().Get(index);
+}
+inline ::RankedMemberLoadout* PROTOBUF_NONNULL RankedMatchContext::mutable_members(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:RankedMatchContext.members)
+  return _internal_mutable_members()->Mutable(index);
+}
+inline ::RankedMemberLoadout* PROTOBUF_NONNULL RankedMatchContext::add_members()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::RankedMemberLoadout* _add =
+      _internal_mutable_members()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:RankedMatchContext.members)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>& RankedMatchContext::members() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:RankedMatchContext.members)
+  return _internal_members();
+}
+inline ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>* PROTOBUF_NONNULL
+RankedMatchContext::mutable_members() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:RankedMatchContext.members)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_members();
+}
+inline const ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>&
+RankedMatchContext::_internal_members() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.members_;
+}
+inline ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>* PROTOBUF_NONNULL
+RankedMatchContext::_internal_mutable_members() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.members_;
+}
+
+// -------------------------------------------------------------------
+
+// BattleParticipationFact
+
+// uint64 player_id = 1;
+inline void BattleParticipationFact::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BattleParticipationFact::player_id() const {
+  // @@protoc_insertion_point(field_get:BattleParticipationFact.player_id)
+  return _internal_player_id();
+}
+inline void BattleParticipationFact::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:BattleParticipationFact.player_id)
+}
+inline ::uint64_t BattleParticipationFact::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BattleParticipationFact::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// bool entered_room = 2;
+inline void BattleParticipationFact::clear_entered_room() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entered_room_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool BattleParticipationFact::entered_room() const {
+  // @@protoc_insertion_point(field_get:BattleParticipationFact.entered_room)
+  return _internal_entered_room();
+}
+inline void BattleParticipationFact::set_entered_room(bool value) {
+  _internal_set_entered_room(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BattleParticipationFact.entered_room)
+}
+inline bool BattleParticipationFact::_internal_entered_room() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entered_room_;
+}
+inline void BattleParticipationFact::_internal_set_entered_room(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entered_room_ = value;
+}
+
+// bool manual_action_accepted = 3;
+inline void BattleParticipationFact::clear_manual_action_accepted() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.manual_action_accepted_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool BattleParticipationFact::manual_action_accepted() const {
+  // @@protoc_insertion_point(field_get:BattleParticipationFact.manual_action_accepted)
+  return _internal_manual_action_accepted();
+}
+inline void BattleParticipationFact::set_manual_action_accepted(bool value) {
+  _internal_set_manual_action_accepted(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattleParticipationFact.manual_action_accepted)
+}
+inline bool BattleParticipationFact::_internal_manual_action_accepted() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.manual_action_accepted_;
+}
+inline void BattleParticipationFact::_internal_set_manual_action_accepted(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.manual_action_accepted_ = value;
+}
+
+// bool explicit_auto_enabled = 4;
+inline void BattleParticipationFact::clear_explicit_auto_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.explicit_auto_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool BattleParticipationFact::explicit_auto_enabled() const {
+  // @@protoc_insertion_point(field_get:BattleParticipationFact.explicit_auto_enabled)
+  return _internal_explicit_auto_enabled();
+}
+inline void BattleParticipationFact::set_explicit_auto_enabled(bool value) {
+  _internal_set_explicit_auto_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattleParticipationFact.explicit_auto_enabled)
+}
+inline bool BattleParticipationFact::_internal_explicit_auto_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.explicit_auto_enabled_;
+}
+inline void BattleParticipationFact::_internal_set_explicit_auto_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.explicit_auto_enabled_ = value;
+}
+
+// bool no_action_opportunity = 5;
+inline void BattleParticipationFact::clear_no_action_opportunity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.no_action_opportunity_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool BattleParticipationFact::no_action_opportunity() const {
+  // @@protoc_insertion_point(field_get:BattleParticipationFact.no_action_opportunity)
+  return _internal_no_action_opportunity();
+}
+inline void BattleParticipationFact::set_no_action_opportunity(bool value) {
+  _internal_set_no_action_opportunity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattleParticipationFact.no_action_opportunity)
+}
+inline bool BattleParticipationFact::_internal_no_action_opportunity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.no_action_opportunity_;
+}
+inline void BattleParticipationFact::_internal_set_no_action_opportunity(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.no_action_opportunity_ = value;
 }
 
 #ifdef __GNUC__

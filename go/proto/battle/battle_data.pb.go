@@ -1113,8 +1113,12 @@ type BattlePetSnapshot struct {
 	SkillTableIds  []uint32                         `protobuf:"varint,12,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
 	SkillRanks     map[uint32]uint32                `protobuf:"bytes,13,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共原型的已学等级，开局再次校验宝宝资格。
 	PetCultivation *component.PetCultivationEffects `protobuf:"bytes,14,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// true = 论剑排位竞技临时宝宝(pet_id 恒为 0),仅在校验通过的排位规则下生成局内单位,不写回场外宠物。
+	CompetitiveTemporary bool `protobuf:"varint,15,opt,name=competitive_temporary,json=competitiveTemporary,proto3" json:"competitive_temporary,omitempty"`
+	// 排位竞技战斗物种(Pet.id);展示外观仍看 pet_table_id(有出战宝宝时沿用其外观,零宠时与本字段相同)。
+	CombatPetTableId uint32 `protobuf:"varint,16,opt,name=combat_pet_table_id,json=combatPetTableId,proto3" json:"combat_pet_table_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BattlePetSnapshot) Reset() {
@@ -1245,6 +1249,20 @@ func (x *BattlePetSnapshot) GetPetCultivation() *component.PetCultivationEffects
 	return nil
 }
 
+func (x *BattlePetSnapshot) GetCompetitiveTemporary() bool {
+	if x != nil {
+		return x.CompetitiveTemporary
+	}
+	return false
+}
+
+func (x *BattlePetSnapshot) GetCombatPetTableId() uint32 {
+	if x != nil {
+		return x.CombatPetTableId
+	}
+	return 0
+}
+
 type BattleActorState struct {
 	state               protoimpl.MessageState        `protogen:"open.v1"`
 	ActorId             uint64                        `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // 玩家 = player_id;怪物 / 宝宝 = 引擎局内序号(bit63 打标,见 kEngineLocalActorIdFlag)
@@ -1277,22 +1295,23 @@ type BattleActorState struct {
 	// 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
 	Combat *component.CombatAttributes `protobuf:"bytes,27,opt,name=combat,proto3" json:"combat,omitempty"`
 	// 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
-	SkillRanks         map[uint32]uint32                `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	CapturePetTableId  uint32                           `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
-	CapturedByPlayerId uint64                           `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
-	CaptureMinLevel    uint32                           `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
-	AbilityUseCounts   map[uint32]uint32                `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
-	RuntimeSkills      []uint32                         `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
-	WithdrawUntilRound uint32                           `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
-	RoundEffectUsage   map[uint32]uint64                `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
-	EquipmentEffects   *component.EquipmentEffects      `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
-	ArtifactStates     []*BattleArtifactState           `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
-	EntryMaxHealth     uint64                           `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
-	EntryMaxMana       uint64                           `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
-	PetCultivation     *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"` // 宝宝独立条目贡献，开局快照冻结。
-	SupportEffects     *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"` // 仅本人可见；来源及中立预览由本轮真实状态生成。
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	SkillRanks           map[uint32]uint32                `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CapturePetTableId    uint32                           `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+	CapturedByPlayerId   uint64                           `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
+	CaptureMinLevel      uint32                           `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
+	AbilityUseCounts     map[uint32]uint32                `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
+	RuntimeSkills        []uint32                         `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
+	WithdrawUntilRound   uint32                           `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
+	RoundEffectUsage     map[uint32]uint64                `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
+	EquipmentEffects     *component.EquipmentEffects      `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
+	ArtifactStates       []*BattleArtifactState           `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
+	EntryMaxHealth       uint64                           `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
+	EntryMaxMana         uint64                           `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
+	PetCultivation       *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`                    // 宝宝独立条目贡献，开局快照冻结。
+	SupportEffects       *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                    // 仅本人可见；来源及中立预览由本轮真实状态生成。
+	CompetitiveTemporary bool                             `protobuf:"varint,42,opt,name=competitive_temporary,json=competitiveTemporary,proto3" json:"competitive_temporary,omitempty"` // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BattleActorState) Reset() {
@@ -1610,6 +1629,13 @@ func (x *BattleActorState) GetSupportEffects() *component.SupportEffectSummary {
 		return x.SupportEffects
 	}
 	return nil
+}
+
+func (x *BattleActorState) GetCompetitiveTemporary() bool {
+	if x != nil {
+		return x.CompetitiveTemporary
+	}
+	return false
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
@@ -2312,8 +2338,15 @@ type BattleSettlementData struct {
 	MatchMode           uint32   `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
 	BattleConfigId      uint32   `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
 	CapturedPetTableIds []uint32 `protobuf:"varint,20,rep,packed,name=captured_pet_table_ids,json=capturedPetTableIds,proto3" json:"captured_pet_table_ids,omitempty"` // 本人捕捉的宠物种类，随整笔结算原子落库和去重。
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// true = 校验通过的论剑排位竞技局:scene 严禁写回血蓝、复活、宠物、经验、货币、道具消耗、掉落或捕捉,
+	// 仅放行装备材料日额度与战绩历史(docs/design/ranked-play-season-ui-candidate.md §6/§9)。
+	CompetitiveRanked bool   `protobuf:"varint,21,opt,name=competitive_ranked,json=competitiveRanked,proto3" json:"competitive_ranked,omitempty"`
+	SeasonId          uint32 `protobuf:"varint,22,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                              // 冻结的赛季编号(非排位为 0)
+	RankedRuleVersion uint32 `protobuf:"varint,23,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"` // 冻结的排位规则版本(非排位为 0)
+	// 本人是否达成排位有效参与(由 battle 房间在终局前按统一参与事实冻结,非排位恒为 false)。
+	Participated  bool `protobuf:"varint,24,opt,name=participated,proto3" json:"participated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -2486,6 +2519,34 @@ func (x *BattleSettlementData) GetCapturedPetTableIds() []uint32 {
 	return nil
 }
 
+func (x *BattleSettlementData) GetCompetitiveRanked() bool {
+	if x != nil {
+		return x.CompetitiveRanked
+	}
+	return false
+}
+
+func (x *BattleSettlementData) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetRankedRuleVersion() uint32 {
+	if x != nil {
+		return x.RankedRuleVersion
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetParticipated() bool {
+	if x != nil {
+		return x.Participated
+	}
+	return false
+}
+
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
 type BattlePetSettlementData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2647,6 +2708,281 @@ func (x *BattleActivityContext) GetLaunchRequestId() uint64 {
 	return 0
 }
 
+// ---- 论剑排位上下文(docs/design/ranked-play-season-ui-candidate.md) ----
+// 由 match 在成局提交点冻结,依次透传至 PrepareBattle / CreateBattle / battle 房间 / BattleResultEvent。
+type RankedPresetSelection struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CharacterPresetId uint32                 `protobuf:"varint,1,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"` // RankedPreset.id(role_kind=1): 101 破阵 / 102 控场 / 103 守心
+	PetPresetId       uint32                 `protobuf:"varint,2,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`                   // RankedPreset.id(role_kind=2): 201 破甲 / 202 灵咒 / 203 护主
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RankedPresetSelection) Reset() {
+	*x = RankedPresetSelection{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedPresetSelection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedPresetSelection) ProtoMessage() {}
+
+func (x *RankedPresetSelection) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedPresetSelection.ProtoReflect.Descriptor instead.
+func (*RankedPresetSelection) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RankedPresetSelection) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *RankedPresetSelection) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+type RankedMemberLoadout struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Presets       *RankedPresetSelection `protobuf:"bytes,2,opt,name=presets,proto3" json:"presets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RankedMemberLoadout) Reset() {
+	*x = RankedMemberLoadout{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedMemberLoadout) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedMemberLoadout) ProtoMessage() {}
+
+func (x *RankedMemberLoadout) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedMemberLoadout.ProtoReflect.Descriptor instead.
+func (*RankedMemberLoadout) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *RankedMemberLoadout) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RankedMemberLoadout) GetPresets() *RankedPresetSelection {
+	if x != nil {
+		return x.Presets
+	}
+	return nil
+}
+
+type RankedMatchContext struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId          uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                           // 赛季编号(从 1 起递增)
+	SeasonKey         string                 `protobuf:"bytes,2,opt,name=season_key,json=seasonKey,proto3" json:"season_key,omitempty"`                         // 榜 period 键(如 "s1")
+	RankGeneration    uint64                 `protobuf:"varint,3,opt,name=rank_generation,json=rankGeneration,proto3" json:"rank_generation,omitempty"`         // 排行榜代次(与 season_id 同频递增)
+	RuleVersion       uint32                 `protobuf:"varint,4,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`                  // RankedRule.rule_version
+	TeamSize          uint32                 `protobuf:"varint,5,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`                           // 每侧玩家人数(1..5)
+	ConfigFingerprint string                 `protobuf:"bytes,6,opt,name=config_fingerprint,json=configFingerprint,proto3" json:"config_fingerprint,omitempty"` // 竞技规则与预设依赖表指纹
+	Members           []*RankedMemberLoadout `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`                                              // 本局全员冻结预设(PrepareBattle 可只含本人,CreateBattle 含全员)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *RankedMatchContext) Reset() {
+	*x = RankedMatchContext{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedMatchContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedMatchContext) ProtoMessage() {}
+
+func (x *RankedMatchContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedMatchContext.ProtoReflect.Descriptor instead.
+func (*RankedMatchContext) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *RankedMatchContext) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *RankedMatchContext) GetSeasonKey() string {
+	if x != nil {
+		return x.SeasonKey
+	}
+	return ""
+}
+
+func (x *RankedMatchContext) GetRankGeneration() uint64 {
+	if x != nil {
+		return x.RankGeneration
+	}
+	return 0
+}
+
+func (x *RankedMatchContext) GetRuleVersion() uint32 {
+	if x != nil {
+		return x.RuleVersion
+	}
+	return 0
+}
+
+func (x *RankedMatchContext) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *RankedMatchContext) GetConfigFingerprint() string {
+	if x != nil {
+		return x.ConfigFingerprint
+	}
+	return ""
+}
+
+func (x *RankedMatchContext) GetMembers() []*RankedMemberLoadout {
+	if x != nil {
+		return x.Members
+	}
+	return nil
+}
+
+// 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
+type BattleParticipationFact struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId             uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	EnteredRoom          bool                   `protobuf:"varint,2,opt,name=entered_room,json=enteredRoom,proto3" json:"entered_room,omitempty"`                              // 至少完成一次参战直连握手或 GetBattleState
+	ManualActionAccepted bool                   `protobuf:"varint,3,opt,name=manual_action_accepted,json=manualActionAccepted,proto3" json:"manual_action_accepted,omitempty"` // 服务端至少接受过一次本人人物或宝宝有效手动指令
+	ExplicitAutoEnabled  bool                   `protobuf:"varint,4,opt,name=explicit_auto_enabled,json=explicitAutoEnabled,proto3" json:"explicit_auto_enabled,omitempty"`    // 进房后玩家显式开启过合法自动战斗
+	NoActionOpportunity  bool                   `protobuf:"varint,5,opt,name=no_action_opportunity,json=noActionOpportunity,proto3" json:"no_action_opportunity,omitempty"`    // 进房后在首次可操作机会前即阵亡/被全控/对局结束
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *BattleParticipationFact) Reset() {
+	*x = BattleParticipationFact{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleParticipationFact) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleParticipationFact) ProtoMessage() {}
+
+func (x *BattleParticipationFact) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleParticipationFact.ProtoReflect.Descriptor instead.
+func (*BattleParticipationFact) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *BattleParticipationFact) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *BattleParticipationFact) GetEnteredRoom() bool {
+	if x != nil {
+		return x.EnteredRoom
+	}
+	return false
+}
+
+func (x *BattleParticipationFact) GetManualActionAccepted() bool {
+	if x != nil {
+		return x.ManualActionAccepted
+	}
+	return false
+}
+
+func (x *BattleParticipationFact) GetExplicitAutoEnabled() bool {
+	if x != nil {
+		return x.ExplicitAutoEnabled
+	}
+	return false
+}
+
+func (x *BattleParticipationFact) GetNoActionOpportunity() bool {
+	if x != nil {
+		return x.NoActionOpportunity
+	}
+	return false
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -2720,7 +3056,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11equipment_effects\x18\x17 \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xf0\x04\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xd4\x05\n" +
 	"\x11BattlePetSnapshot\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
@@ -2739,10 +3075,12 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\x12C\n" +
 	"\vskill_ranks\x18\r \x03(\v2\".BattlePetSnapshot.SkillRanksEntryR\n" +
 	"skillRanks\x12?\n" +
-	"\x0fpet_cultivation\x18\x0e \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x1a=\n" +
+	"\x0fpet_cultivation\x18\x0e \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x123\n" +
+	"\x15competitive_temporary\x18\x0f \x01(\bR\x14competitiveTemporary\x12-\n" +
+	"\x13combat_pet_table_id\x18\x10 \x01(\rR\x10combatPetTableId\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x87\x10\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xbc\x10\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -2792,7 +3130,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x10entry_max_health\x18& \x01(\x04R\x0eentryMaxHealth\x12$\n" +
 	"\x0eentry_max_mana\x18' \x01(\x04R\fentryMaxMana\x12?\n" +
 	"\x0fpet_cultivation\x18) \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x12>\n" +
-	"\x0fsupport_effects\x18( \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\x1aF\n" +
+	"\x0fsupport_effects\x18( \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\x123\n" +
+	"\x15competitive_temporary\x18* \x01(\bR\x14competitiveTemporary\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
@@ -2869,7 +3208,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\x9a\x06\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xba\a\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -2892,7 +3231,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\n" +
 	"match_mode\x18\x12 \x01(\rR\tmatchMode\x12(\n" +
 	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\x123\n" +
-	"\x16captured_pet_table_ids\x18\x14 \x03(\rR\x13capturedPetTableIds\"u\n" +
+	"\x16captured_pet_table_ids\x18\x14 \x03(\rR\x13capturedPetTableIds\x12-\n" +
+	"\x12competitive_ranked\x18\x15 \x01(\bR\x11competitiveRanked\x12\x1b\n" +
+	"\tseason_id\x18\x16 \x01(\rR\bseasonId\x12.\n" +
+	"\x13ranked_rule_version\x18\x17 \x01(\rR\x11rankedRuleVersion\x12\"\n" +
+	"\fparticipated\x18\x18 \x01(\bR\fparticipated\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -2907,7 +3250,28 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"period_key\x18\x04 \x01(\rR\tperiodKey\x12.\n" +
 	"\x13initiator_player_id\x18\x05 \x01(\x04R\x11initiatorPlayerId\x12(\n" +
 	"\x10guild_period_key\x18\x06 \x01(\rR\x0eguildPeriodKey\x12*\n" +
-	"\x11launch_request_id\x18\a \x01(\x04R\x0flaunchRequestId*\x86\x01\n" +
+	"\x11launch_request_id\x18\a \x01(\x04R\x0flaunchRequestId\"k\n" +
+	"\x15RankedPresetSelection\x12.\n" +
+	"\x13character_preset_id\x18\x01 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x02 \x01(\rR\vpetPresetId\"d\n" +
+	"\x13RankedMemberLoadout\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
+	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\x98\x02\n" +
+	"\x12RankedMatchContext\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
+	"\n" +
+	"season_key\x18\x02 \x01(\tR\tseasonKey\x12'\n" +
+	"\x0frank_generation\x18\x03 \x01(\x04R\x0erankGeneration\x12!\n" +
+	"\frule_version\x18\x04 \x01(\rR\vruleVersion\x12\x1b\n" +
+	"\tteam_size\x18\x05 \x01(\rR\bteamSize\x12-\n" +
+	"\x12config_fingerprint\x18\x06 \x01(\tR\x11configFingerprint\x12.\n" +
+	"\amembers\x18\a \x03(\v2\x14.RankedMemberLoadoutR\amembers\"\xf7\x01\n" +
+	"\x17BattleParticipationFact\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
+	"\fentered_room\x18\x02 \x01(\bR\venteredRoom\x124\n" +
+	"\x16manual_action_accepted\x18\x03 \x01(\bR\x14manualActionAccepted\x122\n" +
+	"\x15explicit_auto_enabled\x18\x04 \x01(\bR\x13explicitAutoEnabled\x122\n" +
+	"\x15no_action_opportunity\x18\x05 \x01(\bR\x13noActionOpportunity*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
@@ -2984,7 +3348,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                   // 0: eBattleActorType
 	(EBattleActionType)(0),                  // 1: eBattleActionType
@@ -3011,42 +3375,46 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*BattleSettlementData)(nil),            // 22: BattleSettlementData
 	(*BattlePetSettlementData)(nil),         // 23: BattlePetSettlementData
 	(*BattleActivityContext)(nil),           // 24: BattleActivityContext
-	nil,                                     // 25: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                     // 26: BattlePetSnapshot.SkillRanksEntry
-	nil,                                     // 27: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                     // 28: BattleActorState.SkillRanksEntry
-	nil,                                     // 29: BattleActorState.AbilityUseCountsEntry
-	nil,                                     // 30: BattleActorState.RoundEffectUsageEntry
-	(*component.BaseAttributesComp)(nil),    // 31: BaseAttributesComp
-	(*component.CombatAttributes)(nil),      // 32: CombatAttributes
-	(*component.EquipmentEffects)(nil),      // 33: EquipmentEffects
-	(*component.PetCultivationEffects)(nil), // 34: PetCultivationEffects
-	(*component.SupportEffectSummary)(nil),  // 35: SupportEffectSummary
+	(*RankedPresetSelection)(nil),           // 25: RankedPresetSelection
+	(*RankedMemberLoadout)(nil),             // 26: RankedMemberLoadout
+	(*RankedMatchContext)(nil),              // 27: RankedMatchContext
+	(*BattleParticipationFact)(nil),         // 28: BattleParticipationFact
+	nil,                                     // 29: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                     // 30: BattlePetSnapshot.SkillRanksEntry
+	nil,                                     // 31: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                     // 32: BattleActorState.SkillRanksEntry
+	nil,                                     // 33: BattleActorState.AbilityUseCountsEntry
+	nil,                                     // 34: BattleActorState.RoundEffectUsageEntry
+	(*component.BaseAttributesComp)(nil),    // 35: BaseAttributesComp
+	(*component.CombatAttributes)(nil),      // 36: CombatAttributes
+	(*component.EquipmentEffects)(nil),      // 37: EquipmentEffects
+	(*component.PetCultivationEffects)(nil), // 38: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 39: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	31, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	35, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	9,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	10, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	8,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
 	12, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	32, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	25, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	33, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
-	31, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	26, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	34, // 10: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	36, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	29, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	37, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
+	35, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	30, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	38, // 10: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
 	0,  // 11: BattleActorState.actor_type:type_name -> eBattleActorType
-	31, // 12: BattleActorState.attributes:type_name -> BaseAttributesComp
+	35, // 12: BattleActorState.attributes:type_name -> BaseAttributesComp
 	9,  // 13: BattleActorState.buffs:type_name -> BattleBuffEntry
-	27, // 14: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	32, // 15: BattleActorState.combat:type_name -> CombatAttributes
-	28, // 16: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	29, // 17: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	30, // 18: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	33, // 19: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	31, // 14: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	36, // 15: BattleActorState.combat:type_name -> CombatAttributes
+	32, // 16: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	33, // 17: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	34, // 18: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	37, // 19: BattleActorState.equipment_effects:type_name -> EquipmentEffects
 	14, // 20: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	34, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
-	35, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	38, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	39, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
 	1,  // 23: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 24: BattleEventItem.event_type:type_name -> eBattleEventType
 	3,  // 25: BattleEventItem.hit_kind:type_name -> eBattleHitKind
@@ -3060,11 +3428,13 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	17, // 33: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
 	18, // 34: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
 	5,  // 35: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	36, // [36:36] is the sub-list for method output_type
-	36, // [36:36] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	25, // 36: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	26, // 37: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	38, // [38:38] is the sub-list for method output_type
+	38, // [38:38] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -3080,7 +3450,7 @@ func file_proto_battle_battle_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   23,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

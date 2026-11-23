@@ -39,6 +39,10 @@ const (
 	MatchService_SubmitBattleScript_FullMethodName     = "/match.MatchService/SubmitBattleScript"
 	MatchService_DeleteBattleScript_FullMethodName     = "/match.MatchService/DeleteBattleScript"
 	MatchService_SetBattleScriptLoadout_FullMethodName = "/match.MatchService/SetBattleScriptLoadout"
+	MatchService_GetRankedProfile_FullMethodName       = "/match.MatchService/GetRankedProfile"
+	MatchService_SaveRankedPreset_FullMethodName       = "/match.MatchService/SaveRankedPreset"
+	MatchService_UpdateRankedCosmetic_FullMethodName   = "/match.MatchService/UpdateRankedCosmetic"
+	MatchService_GetRankedBattleResult_FullMethodName  = "/match.MatchService/GetRankedBattleResult"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -90,6 +94,11 @@ type MatchServiceClient interface {
 	DeleteBattleScript(ctx context.Context, in *DeleteBattleScriptRequest, opts ...grpc.CallOption) (*DeleteBattleScriptResponse, error)
 	// 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
 	SetBattleScriptLoadout(ctx context.Context, in *SetBattleScriptLoadoutRequest, opts ...grpc.CallOption) (*SetBattleScriptLoadoutResponse, error)
+	// ---- 论剑排位首发 V1(docs/design/ranked-play-season-ui-candidate.md):请求只认会话本人 ----
+	GetRankedProfile(ctx context.Context, in *GetRankedProfileRequest, opts ...grpc.CallOption) (*GetRankedProfileResponse, error)
+	SaveRankedPreset(ctx context.Context, in *SaveRankedPresetRequest, opts ...grpc.CallOption) (*SaveRankedPresetResponse, error)
+	UpdateRankedCosmetic(ctx context.Context, in *UpdateRankedCosmeticRequest, opts ...grpc.CallOption) (*UpdateRankedCosmeticResponse, error)
+	GetRankedBattleResult(ctx context.Context, in *GetRankedBattleResultRequest, opts ...grpc.CallOption) (*GetRankedBattleResultResponse, error)
 }
 
 type matchServiceClient struct {
@@ -280,6 +289,46 @@ func (c *matchServiceClient) SetBattleScriptLoadout(ctx context.Context, in *Set
 	return out, nil
 }
 
+func (c *matchServiceClient) GetRankedProfile(ctx context.Context, in *GetRankedProfileRequest, opts ...grpc.CallOption) (*GetRankedProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRankedProfileResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetRankedProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) SaveRankedPreset(ctx context.Context, in *SaveRankedPresetRequest, opts ...grpc.CallOption) (*SaveRankedPresetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveRankedPresetResponse)
+	err := c.cc.Invoke(ctx, MatchService_SaveRankedPreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) UpdateRankedCosmetic(ctx context.Context, in *UpdateRankedCosmeticRequest, opts ...grpc.CallOption) (*UpdateRankedCosmeticResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateRankedCosmeticResponse)
+	err := c.cc.Invoke(ctx, MatchService_UpdateRankedCosmetic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetRankedBattleResult(ctx context.Context, in *GetRankedBattleResultRequest, opts ...grpc.CallOption) (*GetRankedBattleResultResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRankedBattleResultResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetRankedBattleResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -329,6 +378,11 @@ type MatchServiceServer interface {
 	DeleteBattleScript(context.Context, *DeleteBattleScriptRequest) (*DeleteBattleScriptResponse, error)
 	// 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
 	SetBattleScriptLoadout(context.Context, *SetBattleScriptLoadoutRequest) (*SetBattleScriptLoadoutResponse, error)
+	// ---- 论剑排位首发 V1(docs/design/ranked-play-season-ui-candidate.md):请求只认会话本人 ----
+	GetRankedProfile(context.Context, *GetRankedProfileRequest) (*GetRankedProfileResponse, error)
+	SaveRankedPreset(context.Context, *SaveRankedPresetRequest) (*SaveRankedPresetResponse, error)
+	UpdateRankedCosmetic(context.Context, *UpdateRankedCosmeticRequest) (*UpdateRankedCosmeticResponse, error)
+	GetRankedBattleResult(context.Context, *GetRankedBattleResultRequest) (*GetRankedBattleResultResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -392,6 +446,18 @@ func (UnimplementedMatchServiceServer) DeleteBattleScript(context.Context, *Dele
 }
 func (UnimplementedMatchServiceServer) SetBattleScriptLoadout(context.Context, *SetBattleScriptLoadoutRequest) (*SetBattleScriptLoadoutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetBattleScriptLoadout not implemented")
+}
+func (UnimplementedMatchServiceServer) GetRankedProfile(context.Context, *GetRankedProfileRequest) (*GetRankedProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRankedProfile not implemented")
+}
+func (UnimplementedMatchServiceServer) SaveRankedPreset(context.Context, *SaveRankedPresetRequest) (*SaveRankedPresetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveRankedPreset not implemented")
+}
+func (UnimplementedMatchServiceServer) UpdateRankedCosmetic(context.Context, *UpdateRankedCosmeticRequest) (*UpdateRankedCosmeticResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRankedCosmetic not implemented")
+}
+func (UnimplementedMatchServiceServer) GetRankedBattleResult(context.Context, *GetRankedBattleResultRequest) (*GetRankedBattleResultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRankedBattleResult not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -738,6 +804,78 @@ func _MatchService_SetBattleScriptLoadout_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_GetRankedProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRankedProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetRankedProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetRankedProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetRankedProfile(ctx, req.(*GetRankedProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_SaveRankedPreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveRankedPresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).SaveRankedPreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_SaveRankedPreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).SaveRankedPreset(ctx, req.(*SaveRankedPresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_UpdateRankedCosmetic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRankedCosmeticRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).UpdateRankedCosmetic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_UpdateRankedCosmetic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).UpdateRankedCosmetic(ctx, req.(*UpdateRankedCosmeticRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetRankedBattleResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRankedBattleResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetRankedBattleResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetRankedBattleResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetRankedBattleResult(ctx, req.(*GetRankedBattleResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -816,6 +954,22 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetBattleScriptLoadout",
 			Handler:    _MatchService_SetBattleScriptLoadout_Handler,
+		},
+		{
+			MethodName: "GetRankedProfile",
+			Handler:    _MatchService_GetRankedProfile_Handler,
+		},
+		{
+			MethodName: "SaveRankedPreset",
+			Handler:    _MatchService_SaveRankedPreset_Handler,
+		},
+		{
+			MethodName: "UpdateRankedCosmetic",
+			Handler:    _MatchService_UpdateRankedCosmetic_Handler,
+		},
+		{
+			MethodName: "GetRankedBattleResult",
+			Handler:    _MatchService_GetRankedBattleResult_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

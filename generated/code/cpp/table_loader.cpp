@@ -57,6 +57,8 @@
 #include "petrule_table.h"
 #include "pettier_table.h"
 #include "playmode_table.h"
+#include "rankedpreset_table.h"
+#include "rankedrule_table.h"
 #include "reward_table.h"
 #include "rolenamerule_table.h"
 #include "skill_table.h"
@@ -78,9 +80,9 @@ LoadSuccessCallback loadSuccessCallback;
 
 namespace {
 
-constexpr std::size_t kTableCount = 56;
+constexpr std::size_t kTableCount = 58;
 
-constexpr std::array<std::string_view, 56> kTableNames = {
+constexpr std::array<std::string_view, 58> kTableNames = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -129,6 +131,8 @@ constexpr std::array<std::string_view, 56> kTableNames = {
     "PetRule",
     "PetTier",
     "PlayMode",
+    "RankedPreset",
+    "RankedRule",
     "Reward",
     "RoleNameRule",
     "Skill",
@@ -260,6 +264,10 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
 
     set->playModeTable = PlayModeTableManager::Instance().CurrentSnapshot();
 
+    set->rankedPresetTable = RankedPresetTableManager::Instance().CurrentSnapshot();
+
+    set->rankedRuleTable = RankedRuleTableManager::Instance().CurrentSnapshot();
+
     set->rewardTable = RewardTableManager::Instance().CurrentSnapshot();
 
     set->roleNameRuleTable = RoleNameRuleTableManager::Instance().CurrentSnapshot();
@@ -377,6 +385,10 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     PlayModeTableManager::Instance().InstallSnapshot(set.playModeTable);
 
+    RankedPresetTableManager::Instance().InstallSnapshot(set.rankedPresetTable);
+
+    RankedRuleTableManager::Instance().InstallSnapshot(set.rankedRuleTable);
+
     RewardTableManager::Instance().InstallSnapshot(set.rewardTable);
 
     RoleNameRuleTableManager::Instance().InstallSnapshot(set.roleNameRuleTable);
@@ -446,14 +458,16 @@ void LoadTableAt(std::size_t index) {
     case 45: PetRuleTableManager::Instance().Load(); break;
     case 46: PetTierTableManager::Instance().Load(); break;
     case 47: PlayModeTableManager::Instance().Load(); break;
-    case 48: RewardTableManager::Instance().Load(); break;
-    case 49: RoleNameRuleTableManager::Instance().Load(); break;
-    case 50: SkillTableManager::Instance().Load(); break;
-    case 51: SkillPermissionTableManager::Instance().Load(); break;
-    case 52: TestTableManager::Instance().Load(); break;
-    case 53: TestMultiKeyTableManager::Instance().Load(); break;
-    case 54: WorldTableManager::Instance().Load(); break;
-    case 55: ZoneGroupTableManager::Instance().Load(); break;
+    case 48: RankedPresetTableManager::Instance().Load(); break;
+    case 49: RankedRuleTableManager::Instance().Load(); break;
+    case 50: RewardTableManager::Instance().Load(); break;
+    case 51: RoleNameRuleTableManager::Instance().Load(); break;
+    case 52: SkillTableManager::Instance().Load(); break;
+    case 53: SkillPermissionTableManager::Instance().Load(); break;
+    case 54: TestTableManager::Instance().Load(); break;
+    case 55: TestMultiKeyTableManager::Instance().Load(); break;
+    case 56: WorldTableManager::Instance().Load(); break;
+    case 57: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -653,27 +667,33 @@ bool LoadTableIntoSetAt(const std::size_t index,
         return PlayModeTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.playModeTable, err);
     case 48:
+        return RankedPresetTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.rankedPresetTable, err);
+    case 49:
+        return RankedRuleTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.rankedRuleTable, err);
+    case 50:
         return RewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rewardTable, err);
-    case 49:
+    case 51:
         return RoleNameRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.roleNameRuleTable, err);
-    case 50:
+    case 52:
         return SkillTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillTable, err);
-    case 51:
+    case 53:
         return SkillPermissionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillPermissionTable, err);
-    case 52:
+    case 54:
         return TestTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testTable, err);
-    case 53:
+    case 55:
         return TestMultiKeyTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testMultiKeyTable, err);
-    case 54:
+    case 56:
         return WorldTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.worldTable, err);
-    case 55:
+    case 57:
         return ZoneGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.zoneGroupTable, err);
     default:
@@ -818,6 +838,10 @@ void InvokeTablesLoadSuccess() {
 
     PlayModeTableManager::Instance().LoadSuccess();
 
+    RankedPresetTableManager::Instance().LoadSuccess();
+
+    RankedRuleTableManager::Instance().LoadSuccess();
+
     RewardTableManager::Instance().LoadSuccess();
 
     RoleNameRuleTableManager::Instance().LoadSuccess();
@@ -937,6 +961,10 @@ void LoadTables() {
     PetTierTableManager::Instance().Load();
 
     PlayModeTableManager::Instance().Load();
+
+    RankedPresetTableManager::Instance().Load();
+
+    RankedRuleTableManager::Instance().Load();
 
     RewardTableManager::Instance().Load();
 

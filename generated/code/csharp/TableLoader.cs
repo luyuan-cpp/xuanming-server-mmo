@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 56;
+        public const int TableCount = 58;
 
         private static Action s_loadSuccessCallback;
 
@@ -86,6 +86,8 @@ namespace MmorpgClient.Table
                 PetRuleTableManager.FileName(useBinary),
                 PetTierTableManager.FileName(useBinary),
                 PlayModeTableManager.FileName(useBinary),
+                RankedPresetTableManager.FileName(useBinary),
+                RankedRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
                 RoleNameRuleTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
@@ -149,6 +151,8 @@ namespace MmorpgClient.Table
             PetRuleTableManager.Instance.Load(configDir, useBinary);
             PetTierTableManager.Instance.Load(configDir, useBinary);
             PlayModeTableManager.Instance.Load(configDir, useBinary);
+            RankedPresetTableManager.Instance.Load(configDir, useBinary);
+            RankedRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
             RoleNameRuleTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
@@ -277,6 +281,10 @@ namespace MmorpgClient.Table
                 PetTierTableManager.Instance.LoadFromBytes, PetTierTableManager.Instance.LoadFromJson);
             LoadOne(PlayModeTableManager.FileName(useBinary), byteProvider, useBinary,
                 PlayModeTableManager.Instance.LoadFromBytes, PlayModeTableManager.Instance.LoadFromJson);
+            LoadOne(RankedPresetTableManager.FileName(useBinary), byteProvider, useBinary,
+                RankedPresetTableManager.Instance.LoadFromBytes, RankedPresetTableManager.Instance.LoadFromJson);
+            LoadOne(RankedRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                RankedRuleTableManager.Instance.LoadFromBytes, RankedRuleTableManager.Instance.LoadFromJson);
             LoadOne(RewardTableManager.FileName(useBinary), byteProvider, useBinary,
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
             LoadOne(RoleNameRuleTableManager.FileName(useBinary), byteProvider, useBinary,

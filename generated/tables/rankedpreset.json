@@ -1,0 +1,141 @@
+{
+ "data": [
+  {
+   "code": "pozhen",
+   "desc": "偏物理群体与爆发输出，适合破防后收割",
+   "id": 101,
+   "name": "破阵",
+   "pet_table_id": 0,
+   "role_kind": 1,
+   "role_tag": "爆发输出",
+   "skill_ids": [
+    10002,
+    10039,
+    10025
+   ],
+   "sort": 1,
+   "weight_agi": 1,
+   "weight_con": 1,
+   "weight_spi": 0,
+   "weight_str": 3
+  },
+  {
+   "code": "kongchang",
+   "desc": "偏速度与法术控场，先手封法并驱散增益",
+   "id": 102,
+   "name": "控场",
+   "pet_table_id": 0,
+   "role_kind": 1,
+   "role_tag": "先手封控",
+   "skill_ids": [
+    10006,
+    10021,
+    10034
+   ],
+   "sort": 2,
+   "weight_agi": 2,
+   "weight_con": 1,
+   "weight_spi": 2,
+   "weight_str": 0
+  },
+  {
+   "code": "shouxin",
+   "desc": "偏生存、治疗、净化与独立护盾，稳定团队血线",
+   "id": 103,
+   "name": "守心",
+   "pet_table_id": 0,
+   "role_kind": 1,
+   "role_tag": "治疗护盾",
+   "skill_ids": [
+    10010,
+    10033,
+    10040
+   ],
+   "sort": 3,
+   "weight_agi": 1,
+   "weight_con": 2,
+   "weight_spi": 2,
+   "weight_str": 0
+  },
+  {
+   "code": "pojia",
+   "desc": "金猊破防物理宝宝，碎甲击降防并触发乘胜追击",
+   "id": 201,
+   "name": "破甲",
+   "pet_entry_ids": [
+    501
+   ],
+   "pet_entry_points": [
+    20
+   ],
+   "pet_table_id": 3,
+   "role_kind": 2,
+   "role_tag": "破防追击",
+   "skill_ids": [
+    10002,
+    10018,
+    13001
+   ],
+   "sort": 1,
+   "weight_agi": 1,
+   "weight_con": 1,
+   "weight_spi": 0,
+   "weight_str": 3
+  },
+  {
+   "code": "lingzhou",
+   "desc": "灵狐群法施毒宝宝，持续压血并驱散敌方增益",
+   "id": 202,
+   "name": "灵咒",
+   "pet_entry_ids": [
+    502,
+    531
+   ],
+   "pet_entry_points": [
+    10,
+    10
+   ],
+   "pet_table_id": 1,
+   "role_kind": 2,
+   "role_tag": "群法施毒",
+   "skill_ids": [
+    10006,
+    10019,
+    10034
+   ],
+   "sort": 2,
+   "weight_agi": 2,
+   "weight_con": 1,
+   "weight_spi": 2,
+   "weight_str": 0
+  },
+  {
+   "code": "huzhu",
+   "desc": "石灵护主治疗宝宝，强化双防、治疗与物理护盾",
+   "id": 203,
+   "name": "护主",
+   "pet_entry_ids": [
+    503,
+    504
+   ],
+   "pet_entry_points": [
+    10,
+    10
+   ],
+   "pet_table_id": 2,
+   "role_kind": 2,
+   "role_tag": "减伤护主",
+   "skill_ids": [
+    10014,
+    10010,
+    11006,
+    12004
+   ],
+   "sort": 3,
+   "weight_agi": 1,
+   "weight_con": 2,
+   "weight_spi": 2,
+   "weight_str": 0
+  }
+ ]
+}

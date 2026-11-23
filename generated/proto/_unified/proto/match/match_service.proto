@@ -67,6 +67,12 @@ service MatchService {
   rpc DeleteBattleScript(DeleteBattleScriptRequest) returns (DeleteBattleScriptResponse) {}
   // 为某种对局选用剧本(官方剧本或本人已通过审核的剧本),或清除这条选用。
   rpc SetBattleScriptLoadout(SetBattleScriptLoadoutRequest) returns (SetBattleScriptLoadoutResponse) {}
+
+  // ---- 论剑排位首发 V1(docs/design/ranked-play-season-ui-candidate.md):请求只认会话本人 ----
+  rpc GetRankedProfile(GetRankedProfileRequest) returns (GetRankedProfileResponse) {}
+  rpc SaveRankedPreset(SaveRankedPresetRequest) returns (SaveRankedPresetResponse) {}
+  rpc UpdateRankedCosmetic(UpdateRankedCosmeticRequest) returns (UpdateRankedCosmeticResponse) {}
+  rpc GetRankedBattleResult(GetRankedBattleResultRequest) returns (GetRankedBattleResultResponse) {}
 }
 
 // ----- Match mode config -----
@@ -107,6 +113,11 @@ message JoinQueueRequest {
   // 同一玩家意图重放必须复用；为空只允许未启用全球权威的开发兼容模式。
   string request_id = 8;
   string network_plan_id = 9;
+  // 论剑排位单排预设(PVP_TEAM 时有效;0 = 使用已保存的个人预设或官方默认破阵 101 / 护主 203)。
+  uint32 character_preset_id = 10;
+  uint32 pet_preset_id = 11;
+  // 排位规则版本号(非 0 时与当前赛季规则版本比对,不符回 kMatchRankedRuleVersionMismatch)。
+  uint32 ranked_rule_version = 12;
 }
 
 message JoinQueueResponse {
@@ -142,6 +153,14 @@ message GetQueueStatusResponse {
   // 上述 request_id 不会再入队：它的 SQL 撤销墓碑已提交，或它的原件属于角色此前的归属（过户前留下，现主人不能沿它入队）。
   // NOT_QUEUED 单独不构成此证据。
   bool request_cancelled = 8;
+  // 论剑排位等待提示阈值秒数(首测=120,客户端排队超过此值弹出继续等或取消提示)。
+  uint32 wait_prompt_seconds = 9;
+  // 当前等待时间对应的排位分差窗口(评分点:100/200/300;非排位为 0)。
+  uint32 current_rating_spread = 10;
+  // 当前排队每侧人数档(1..5;未排队或非人数档为 0)。
+  uint32 team_size = 11;
+  // 当前排位票所属赛季号(非排位为 0)。
+  uint32 season_id = 12;
 }
 
 enum QueueState {
@@ -383,4 +402,177 @@ message SetBattleScriptLoadoutRequest {
 message SetBattleScriptLoadoutResponse {
   TipInfoMessage error_message = 1;
   repeated BattleScriptLoadoutEntry loadout = 2;  // 改完之后本人的全部选用
+}
+
+// ----- 论剑排位首发 V1(docs/design/ranked-play-season-ui-candidate.md) -----
+
+enum RankedTier {
+  RANKED_TIER_UNSPECIFIED = 0; // 本季未亮段
+  RANKED_TIER_CHUSHI = 1;      // 初试: [0, 1400)
+  RANKED_TIER_QINGFENG = 2;    // 青锋: [1400, 1550)
+  RANKED_TIER_YUNZHANG = 3;    // 云章: [1550, 1700)
+  RANKED_TIER_TIANSHU = 4;     // 天枢: [1700, 1850)
+  RANKED_TIER_WUSHUANG = 5;    // 无双: [1850, +∞)
+}
+
+enum RankedSeasonState {
+  RANKED_SEASON_STATE_UNSPECIFIED = 0;
+  RANKED_SEASON_STATE_ACTIVE = 1;    // 赛季进行中
+  RANKED_SEASON_STATE_SETTLING = 2;  // 上季结算中(停招/排空/封榜/落奖)
+  RANKED_SEASON_STATE_CLOSED = 3;    // 已封榜结案
+}
+
+enum RankedRewardKind {
+  RANKED_REWARD_KIND_UNSPECIFIED = 0;
+  RANKED_REWARD_AVATAR_PATTERN = 1;       // 累计 4 场: 主题头像纹样
+  RANKED_REWARD_CARD_BACKGROUND = 2;      // 累计 8 场: 名片底纹
+  RANKED_REWARD_TALISMAN = 3;             // 累计 12 场: 永久青云玉符
+  RANKED_REWARD_TIER_BADGE = 4;           // 最高段位徽章(天枢/无双)
+  RANKED_REWARD_TIER_TITLE = 5;           // 赛季称号(天枢/无双)
+  RANKED_REWARD_CHAMPION_INSCRIPTION = 6; // 封榜第 1 且终分达到无双: 榜首题名
+}
+
+enum RankedMatchRatingStatus {
+  RANKED_MATCH_RATING_UNSPECIFIED = 0;
+  RANKED_MATCH_RATING_PENDING = 1;    // 评分、场次与权益仍在异步权威落账
+  RANKED_MATCH_RATING_CONFIRMED = 2;  // 已在 match SQL 权威落账完成
+  RANKED_MATCH_RATING_VOID = 3;       // 本局作废(ABORT/VOID),无评分与场次变化
+  RANKED_MATCH_RATING_ZERO_ROUND = 4; // 0 回合结束,无评分与场次变化
+}
+
+message RankedPresetView {
+  uint32 preset_id = 1;
+  uint32 role_kind = 2;            // 1 人物 / 2 宝宝
+  string code = 3;
+  string name = 4;
+  string role_tag = 5;
+  uint32 pet_table_id = 6;         // 仅宝宝预设非 0 (3 金猊 / 1 灵狐 / 2 石灵)
+  repeated uint32 weights = 7;     // [体质, 灵力, 力量, 敏捷]
+  repeated uint32 skill_ids = 8;
+  repeated uint32 pet_entry_ids = 9;
+  repeated uint32 pet_entry_points = 10;
+  uint32 sort = 11;
+  string desc = 12;
+}
+
+message RankedRewardEntitlement {
+  uint32 season_id = 1;
+  RankedRewardKind kind = 2;
+  uint32 tier_value = 3;   // 里程碑场次(4/8/12)或 RankedTier(4=天枢,5=无双)
+  string item_code = 4;    // 稳定展示资源代号(如 "s1_qingyun_talisman")
+  uint64 granted_at_ms = 5;
+}
+
+message RankedCosmeticLoadout {
+  string equipped_talisman_code = 1;       // "" = 隐藏或未拥有;默认佩戴最新已解锁玉符
+  string equipped_avatar_pattern_code = 2; // "" = 不佩戴
+  string equipped_card_bg_code = 3;        // "" = 不佩戴
+  string equipped_title_code = 4;          // "" = 不佩戴
+  bool hide_talisman = 5;                  // true = 显式隐藏玉符
+}
+
+message RankedSeasonInfo {
+  uint32 season_id = 1;
+  string season_key = 2;            // 排行榜 RankBoardKey.period(如 "s1")
+  string season_name = 3;
+  uint64 rank_generation = 4;       // 排行榜 RankBoardKey.generation
+  uint32 rule_version = 5;
+  RankedSeasonState state = 6;
+  uint64 start_ms = 7;              // [start_ms, end_ms) 左闭右开 UTC 毫秒
+  uint64 end_ms = 8;
+  uint32 battle_config_id = 9;      // 排位专用模板 Dungeon.id(=5, time_limit=720)
+  uint32 wait_prompt_seconds = 10;  // 120
+  uint32 spread_tier1_seconds = 11; // 30
+  uint32 spread_tier1_points = 12;  // 100
+  uint32 spread_tier2_seconds = 13; // 90
+  uint32 spread_tier2_points = 14;  // 200
+  uint32 spread_tier3_points = 15;  // 300
+  uint64 champion_player_id = 16;   // 封榜后填;无达标者为 0(空缺)
+  string champion_name = 17;
+  int64 champion_rating_centi = 18;
+  bool rank_board_sealed = 19;
+}
+
+message RankedPlayerSeasonSummary {
+  uint32 season_id = 1;
+  string season_key = 2;
+  bool qualified = 3;              // 本季是否已完成首场有效参与(亮段且上榜)
+  int64 rating_centi = 4;          // 当前或终局分(×100;前端按 floor(rating_centi/100) 展示)
+  RankedTier current_tier = 5;     // 未亮段为 UNSPECIFIED
+  int64 peak_rating_centi = 6;     // 本季最高有效分(×100)
+  RankedTier peak_tier = 7;        // 本季最高段位
+  uint32 valid_matches = 8;        // 本季跨规模有效参与场次
+  uint32 wins = 9;
+  uint32 losses = 10;
+  uint32 draws = 11;
+  uint64 qualified_at_ms = 12;     // 本季首次亮段时刻
+  uint32 milestone_bits = 13;      // bit0=4场头像纹样, bit1=8场名片底纹, bit2=12场青云玉符
+  uint64 final_rank = 14;          // 封榜后最终名次;0=未上榜或未封榜
+  bool champion_awarded = 15;      // 封榜第 1 且终分达到无双
+}
+
+message RankedBattleSettlementView {
+  uint64 battle_id = 1;
+  uint32 season_id = 2;
+  uint32 team_size = 3;
+  RankedMatchRatingStatus status = 4;
+  eBattleOutcome outcome = 5;
+  uint32 player_team_index = 6;
+  uint32 total_rounds = 7;
+  bool participated = 8;           // 本人是否达成有效参与
+  bool fled = 9;
+  int64 rating_before_centi = 10;
+  int64 rating_after_centi = 11;
+  sint64 rating_delta_centi = 12;
+  RankedTier tier_before = 13;     // 本季首场亮段前为 UNSPECIFIED
+  RankedTier tier_after = 14;
+  bool newly_qualified = 15;       // 本局是否首次完成本季亮段
+  uint32 season_valid_matches_after = 16;
+  repeated RankedRewardEntitlement newly_unlocked_rewards = 17;
+  uint64 settled_at_ms = 18;
+  uint32 character_preset_id = 19;
+  uint32 pet_preset_id = 20;
+}
+
+message GetRankedProfileRequest {
+  bool include_history = 1; // true 同时返回往季记录与已解锁权益
+}
+message GetRankedProfileResponse {
+  TipInfoMessage error_message = 1;
+  RankedSeasonInfo current_season = 2;
+  RankedPlayerSeasonSummary current_progress = 3;
+  RankedPresetSelection selected_presets = 4;        // 单排默认预设(默认 101 破阵 + 203 护主)
+  RankedCosmeticLoadout cosmetic_loadout = 5;
+  repeated RankedPresetView presets = 6;             // 当前生效的 6 套正式预设
+  repeated RankedRewardEntitlement entitlements = 7; // 全部永久/赛季展示权益
+  repeated RankedPlayerSeasonSummary history = 8;    // 往季记录(season_id 降序)
+  repeated RankedSeasonInfo past_seasons = 9;        // 往季赛季摘要(含封榜/榜首题名)
+  uint64 server_time_ms = 10;
+}
+
+message SaveRankedPresetRequest {
+  uint32 character_preset_id = 1;
+  uint32 pet_preset_id = 2;
+  uint32 rule_version = 3;
+}
+message SaveRankedPresetResponse {
+  TipInfoMessage error_message = 1;
+  RankedPresetSelection selected_presets = 2;
+  uint32 rule_version = 3;
+}
+
+message UpdateRankedCosmeticRequest {
+  RankedCosmeticLoadout loadout = 1;
+}
+message UpdateRankedCosmeticResponse {
+  TipInfoMessage error_message = 1;
+  RankedCosmeticLoadout loadout = 2;
+}
+
+message GetRankedBattleResultRequest {
+  uint64 battle_id = 1; // 0 = 查询本人最近一局排位结果
+}
+message GetRankedBattleResultResponse {
+  TipInfoMessage error_message = 1;
+  RankedBattleSettlementView result = 2;
 }

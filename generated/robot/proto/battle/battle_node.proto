@@ -64,6 +64,8 @@ message CreateBattleRequest {
   // 没有 = 该队出手走现行默认。battle 开局按自己的配表再校验,不合法整份忽略并记 ERROR(剧本只影响出招,不碰资产,
   // 按 AGENTS §11.3 选 fail-open);校验通过的剧本整场不变,回放与按指令流重算的输入都在本原件里。
   repeated BattleTeamScript team_scripts = 17;
+  // 论剑排位冻结上下文(非排位留空)。season_id != 0 时启用排位引擎规则:临时竞技宝宝、同速确定性随机、回合上限判平与参与事实冻结。
+  RankedMatchContext ranked_context = 18;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

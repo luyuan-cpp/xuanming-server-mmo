@@ -103,8 +103,12 @@ type BattleResultEvent struct {
 	// 0是没有完整个人原件的历史结果；1要求成员集合与settlements严格一一对应。
 	// 未知版本拒绝推进消费位点，不能把默认0冒充完整原件。
 	SettlementFormatVersion uint32 `protobuf:"varint,13,opt,name=settlement_format_version,json=settlementFormatVersion,proto3" json:"settlement_format_version,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 开局 CreateBattleRequest.ranked_context 的原样回显(非排位留空)。
+	RankedContext *battle.RankedMatchContext `protobuf:"bytes,14,opt,name=ranked_context,json=rankedContext,proto3" json:"ranked_context,omitempty"`
+	// 玩家本局有效参与事实(按 player_id 升序),battle 在提交终局前冻结,重放不重算。
+	ParticipationFacts []*battle.BattleParticipationFact `protobuf:"bytes,15,rep,name=participation_facts,json=participationFacts,proto3" json:"participation_facts,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *BattleResultEvent) Reset() {
@@ -228,6 +232,20 @@ func (x *BattleResultEvent) GetSettlementFormatVersion() uint32 {
 	return 0
 }
 
+func (x *BattleResultEvent) GetRankedContext() *battle.RankedMatchContext {
+	if x != nil {
+		return x.RankedContext
+	}
+	return nil
+}
+
+func (x *BattleResultEvent) GetParticipationFacts() []*battle.BattleParticipationFact {
+	if x != nil {
+		return x.ParticipationFacts
+	}
+	return nil
+}
+
 var File_proto_contracts_kafka_match_event_proto protoreflect.FileDescriptor
 
 const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
@@ -237,7 +255,7 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	"\n" +
 	"team_index\x18\x01 \x01(\rR\tteamIndex\x12\x1d\n" +
 	"\n" +
-	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xda\x04\n" +
+	"player_ids\x18\x02 \x03(\x04R\tplayerIds\"\xe1\x05\n" +
 	"\x11BattleResultEvent\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
 	"\n" +
@@ -253,7 +271,9 @@ const file_proto_contracts_kafka_match_event_proto_rawDesc = "" +
 	" \x03(\x04R\rfledPlayerIds\x12&\n" +
 	"\x0fdead_player_ids\x18\v \x03(\x04R\rdeadPlayerIds\x127\n" +
 	"\vsettlements\x18\f \x03(\v2\x15.BattleSettlementDataR\vsettlements\x12:\n" +
-	"\x19settlement_format_version\x18\r \x01(\rR\x17settlementFormatVersionB\x17Z\x15proto/contracts/kafkab\x06proto3"
+	"\x19settlement_format_version\x18\r \x01(\rR\x17settlementFormatVersion\x12:\n" +
+	"\x0eranked_context\x18\x0e \x01(\v2\x13.RankedMatchContextR\rrankedContext\x12I\n" +
+	"\x13participation_facts\x18\x0f \x03(\v2\x18.BattleParticipationFactR\x12participationFactsB\x17Z\x15proto/contracts/kafkab\x06proto3"
 
 var (
 	file_proto_contracts_kafka_match_event_proto_rawDescOnce sync.Once
@@ -269,22 +289,26 @@ func file_proto_contracts_kafka_match_event_proto_rawDescGZIP() []byte {
 
 var file_proto_contracts_kafka_match_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_contracts_kafka_match_event_proto_goTypes = []any{
-	(*BattleResultTeam)(nil),             // 0: contracts.kafka.BattleResultTeam
-	(*BattleResultEvent)(nil),            // 1: contracts.kafka.BattleResultEvent
-	(battle.EBattleOutcome)(0),           // 2: eBattleOutcome
-	(*battle.BattleActivityContext)(nil), // 3: BattleActivityContext
-	(*battle.BattleSettlementData)(nil),  // 4: BattleSettlementData
+	(*BattleResultTeam)(nil),               // 0: contracts.kafka.BattleResultTeam
+	(*BattleResultEvent)(nil),              // 1: contracts.kafka.BattleResultEvent
+	(battle.EBattleOutcome)(0),             // 2: eBattleOutcome
+	(*battle.BattleActivityContext)(nil),   // 3: BattleActivityContext
+	(*battle.BattleSettlementData)(nil),    // 4: BattleSettlementData
+	(*battle.RankedMatchContext)(nil),      // 5: RankedMatchContext
+	(*battle.BattleParticipationFact)(nil), // 6: BattleParticipationFact
 }
 var file_proto_contracts_kafka_match_event_proto_depIdxs = []int32{
 	2, // 0: contracts.kafka.BattleResultEvent.outcome:type_name -> eBattleOutcome
 	0, // 1: contracts.kafka.BattleResultEvent.teams:type_name -> contracts.kafka.BattleResultTeam
 	3, // 2: contracts.kafka.BattleResultEvent.activity_context:type_name -> BattleActivityContext
 	4, // 3: contracts.kafka.BattleResultEvent.settlements:type_name -> BattleSettlementData
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 4: contracts.kafka.BattleResultEvent.ranked_context:type_name -> RankedMatchContext
+	6, // 5: contracts.kafka.BattleResultEvent.participation_facts:type_name -> BattleParticipationFact
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_contracts_kafka_match_event_proto_init() }

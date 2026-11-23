@@ -77,6 +77,8 @@
 #include "PetRuleTable.h"
 #include "PetTierTable.h"
 #include "PlayModeTable.h"
+#include "RankedPresetTable.h"
+#include "RankedRuleTable.h"
 #include "RewardTable.h"
 #include "RoleNameRuleTable.h"
 #include "SkillTable.h"
@@ -123,7 +125,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 56;
+	static constexpr int32 TableCount = 58;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -319,6 +321,12 @@ public:
 	UPlayModeTable* GetPlayModeTable() const { return PlayModeTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	URankedPresetTable* GetRankedPresetTable() const { return RankedPresetTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	URankedRuleTable* GetRankedRuleTable() const { return RankedRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URewardTable* GetRewardTable() const { return RewardTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -439,6 +447,10 @@ private:
 	TObjectPtr<UPetTierTable> PetTierTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UPlayModeTable> PlayModeTable;
+	UPROPERTY(Transient)
+	TObjectPtr<URankedPresetTable> RankedPresetTable;
+	UPROPERTY(Transient)
+	TObjectPtr<URankedRuleTable> RankedRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URewardTable> RewardTable;
 	UPROPERTY(Transient)

@@ -169,15 +169,24 @@ func RegisterIdTokenProviders(loginRedis redis.UniversalClient) {
 		logx.Infof("Auth provider registered: %s (client_id=%q endpoint_override=%q)",
 			auth.GoogleAuthType, cfg.Google.ClientId, cfg.Google.Endpoint)
 	}
+	if cfg.Passport != nil {
+		auth.Register(auth.PassportAuthType, passportProviderFromConfig(cfg.Passport).WithReplayGuard(guard))
+		logx.Infof("Auth provider registered: %s (issuer=%q client_id=%q endpoint_override=%q)",
+			auth.PassportAuthType, cfg.Passport.Issuer, cfg.Passport.ClientId, cfg.Passport.Endpoint)
+	}
 }
 
-// appleProviderFromConfig / googleProviderFromConfig 只组装不注册(同 weChatProviderFromConfig);用默认的 5s HTTP 客户端取公钥。
+// appleProviderFromConfig / googleProviderFromConfig / passportProviderFromConfig 只组装不注册(同 weChatProviderFromConfig);用默认的 5s HTTP 客户端取公钥。
 func appleProviderFromConfig(conf *config.IdTokenAuthConf) *auth.IdTokenProvider {
 	return auth.NewAppleProvider(conf.ClientId, conf.Endpoint, nil)
 }
 
 func googleProviderFromConfig(conf *config.IdTokenAuthConf) *auth.IdTokenProvider {
 	return auth.NewGoogleProvider(conf.ClientId, conf.Endpoint, nil)
+}
+
+func passportProviderFromConfig(conf *config.PassportAuthConf) *auth.PassportProvider {
+	return auth.NewPassportProvider(conf.Issuer, conf.ClientId, conf.Endpoint, nil)
 }
 
 // passwordQuotaRedisPoolSize 是口令失败配额专用小池的每节点连接上限。K8s 部署的 Redis 连接总账按这个数给每个 login 副本记账

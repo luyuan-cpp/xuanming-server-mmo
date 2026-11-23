@@ -74,3 +74,19 @@ constexpr uint32_t MatchServiceDeleteBattleScriptIndex = 16;
 constexpr uint32_t MatchServiceSetBattleScriptLoadoutMessageId = 392;
 constexpr uint32_t MatchServiceSetBattleScriptLoadoutIndex = 17;
 #define MatchServiceSetBattleScriptLoadoutMethod  ::MatchService_Stub::descriptor()->method(17)
+
+constexpr uint32_t MatchServiceGetRankedProfileMessageId = 448;
+constexpr uint32_t MatchServiceGetRankedProfileIndex = 18;
+#define MatchServiceGetRankedProfileMethod  ::MatchService_Stub::descriptor()->method(18)
+
+constexpr uint32_t MatchServiceSaveRankedPresetMessageId = 449;
+constexpr uint32_t MatchServiceSaveRankedPresetIndex = 19;
+#define MatchServiceSaveRankedPresetMethod  ::MatchService_Stub::descriptor()->method(19)
+
+constexpr uint32_t MatchServiceUpdateRankedCosmeticMessageId = 450;
+constexpr uint32_t MatchServiceUpdateRankedCosmeticIndex = 20;
+#define MatchServiceUpdateRankedCosmeticMethod  ::MatchService_Stub::descriptor()->method(20)
+
+constexpr uint32_t MatchServiceGetRankedBattleResultMessageId = 451;
+constexpr uint32_t MatchServiceGetRankedBattleResultIndex = 21;
+#define MatchServiceGetRankedBattleResultMethod  ::MatchService_Stub::descriptor()->method(21)

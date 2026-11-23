@@ -2545,6 +2545,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchMember final : public ::g
     kTicketFieldNumber = 3,
     kOriginalFieldNumber = 1,
     kRosterOrderFieldNumber = 2,
+    kCharacterPresetIdFieldNumber = 4,
+    kPetPresetIdFieldNumber = 5,
+    kRankedRuleVersionFieldNumber = 6,
   };
   // string ticket = 3;
   void clear_ticket() ;
@@ -2587,11 +2590,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchMember final : public ::g
   void _internal_set_roster_order(::uint32_t value);
 
   public:
+  // uint32 character_preset_id = 4;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 5;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
+  // uint32 ranked_rule_version = 6;
+  void clear_ranked_rule_version() ;
+  [[nodiscard]] ::uint32_t ranked_rule_version() const;
+  void set_ranked_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_rule_version() const;
+  void _internal_set_ranked_rule_version(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:teampb.TeamLaunchMember)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           1, 38,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2623,6 +2656,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchMember final : public ::g
     ::google::protobuf::internal::ArenaStringPtr ticket_;
     ::teampb::TeamOriginalRole* PROTOBUF_NULLABLE original_;
     ::uint32_t roster_order_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    ::uint32_t ranked_rule_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3816,6 +3852,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchOriginal final : public :
     kEnqueuedMsFieldNumber = 9,
     kNotBeforeMsFieldNumber = 10,
     kLockTtlSecondsFieldNumber = 8,
+    kRankedSeasonIdFieldNumber = 12,
+    kRankedRuleVersionFieldNumber = 13,
     kZonesFieldNumber = 7,
   };
   // repeated .teampb.TeamLaunchMember members = 6;
@@ -3957,6 +3995,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchOriginal final : public :
   void _internal_set_lock_ttl_seconds(::uint32_t value);
 
   public:
+  // uint32 ranked_season_id = 12;
+  void clear_ranked_season_id() ;
+  [[nodiscard]] ::uint32_t ranked_season_id() const;
+  void set_ranked_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_season_id() const;
+  void _internal_set_ranked_season_id(::uint32_t value);
+
+  public:
+  // uint32 ranked_rule_version = 13;
+  void clear_ranked_rule_version() ;
+  [[nodiscard]] ::uint32_t ranked_rule_version() const;
+  void set_ranked_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_rule_version() const;
+  void _internal_set_ranked_rule_version(::uint32_t value);
+
+  public:
   // map<uint64, uint32> zones = 7;
   [[nodiscard]] int zones_size()
       const;
@@ -3977,7 +4035,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchOriginal final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           5, 52,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4016,6 +4074,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamLaunchOriginal final : public :
     ::uint64_t enqueued_ms_;
     ::uint64_t not_before_ms_;
     ::uint32_t lock_ttl_seconds_;
+    ::uint32_t ranked_season_id_;
+    ::uint32_t ranked_rule_version_;
     ::google::protobuf::internal::MapField<TeamLaunchOriginal_ZonesEntry_DoNotUse, ::uint64_t, ::uint32_t> zones_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6387,6 +6447,78 @@ inline void TeamLaunchMember::set_allocated_ticket(::std::string* PROTOBUF_NULLA
   // @@protoc_insertion_point(field_set_allocated:teampb.TeamLaunchMember.ticket)
 }
 
+// uint32 character_preset_id = 4;
+inline void TeamLaunchMember::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TeamLaunchMember::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchMember.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void TeamLaunchMember::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchMember.character_preset_id)
+}
+inline ::uint32_t TeamLaunchMember::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void TeamLaunchMember::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 5;
+inline void TeamLaunchMember::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TeamLaunchMember::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchMember.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void TeamLaunchMember::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchMember.pet_preset_id)
+}
+inline ::uint32_t TeamLaunchMember::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void TeamLaunchMember::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
+
+// uint32 ranked_rule_version = 6;
+inline void TeamLaunchMember::clear_ranked_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TeamLaunchMember::ranked_rule_version() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchMember.ranked_rule_version)
+  return _internal_ranked_rule_version();
+}
+inline void TeamLaunchMember::set_ranked_rule_version(::uint32_t value) {
+  _internal_set_ranked_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchMember.ranked_rule_version)
+}
+inline ::uint32_t TeamLaunchMember::_internal_ranked_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_rule_version_;
+}
+inline void TeamLaunchMember::_internal_set_ranked_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -6761,7 +6893,7 @@ inline int TeamLaunchOriginal::zones_size() const {
 inline void TeamLaunchOriginal::clear_zones() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zones_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline const ::google::protobuf::Map<::uint64_t, ::uint32_t>& TeamLaunchOriginal::_internal_zones() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -6777,7 +6909,7 @@ inline ::google::protobuf::Map<::uint64_t, ::uint32_t>* PROTOBUF_NONNULL TeamLau
 }
 inline ::google::protobuf::Map<::uint64_t, ::uint32_t>* PROTOBUF_NONNULL TeamLaunchOriginal::mutable_zones()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_mutable_map:teampb.TeamLaunchOriginal.zones)
   return _internal_mutable_zones();
 }
@@ -6902,6 +7034,54 @@ inline ::google::protobuf::RepeatedPtrField<::ObserverExitOriginal>* PROTOBUF_NO
 TeamLaunchOriginal::_internal_mutable_observer_exits() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.observer_exits_;
+}
+
+// uint32 ranked_season_id = 12;
+inline void TeamLaunchOriginal::clear_ranked_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TeamLaunchOriginal::ranked_season_id() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchOriginal.ranked_season_id)
+  return _internal_ranked_season_id();
+}
+inline void TeamLaunchOriginal::set_ranked_season_id(::uint32_t value) {
+  _internal_set_ranked_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchOriginal.ranked_season_id)
+}
+inline ::uint32_t TeamLaunchOriginal::_internal_ranked_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_season_id_;
+}
+inline void TeamLaunchOriginal::_internal_set_ranked_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_season_id_ = value;
+}
+
+// uint32 ranked_rule_version = 13;
+inline void TeamLaunchOriginal::clear_ranked_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t TeamLaunchOriginal::ranked_rule_version() const {
+  // @@protoc_insertion_point(field_get:teampb.TeamLaunchOriginal.ranked_rule_version)
+  return _internal_ranked_rule_version();
+}
+inline void TeamLaunchOriginal::set_ranked_rule_version(::uint32_t value) {
+  _internal_set_ranked_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:teampb.TeamLaunchOriginal.ranked_rule_version)
+}
+inline ::uint32_t TeamLaunchOriginal::_internal_ranked_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ranked_rule_version_;
+}
+inline void TeamLaunchOriginal::_internal_set_ranked_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ranked_rule_version_ = value;
 }
 
 // -------------------------------------------------------------------

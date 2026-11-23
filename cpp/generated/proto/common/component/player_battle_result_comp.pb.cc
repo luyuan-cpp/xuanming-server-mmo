@@ -348,11 +348,11 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_._has_bits_),
       0, // no _extensions_
-      18, 248,  // max_field_number, fast_idx_mask
+      20, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294705152,  // skipmap
+      4293918720,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      18,  // num_field_entries
+      20,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -435,8 +435,14 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {::_pbi::TcParser::FastV64S2,
        {400, 16, 0,
         PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.exp_gain_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 material_credit_units_added = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_credit_units_added_)}},
+      // uint32 season_id = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 19, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.season_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -487,6 +493,10 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.items_mailed_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 exp_gain = 18;
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.exp_gain_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 material_credit_units_added = 19;
+      {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_credit_units_added_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_id = 20;
+      {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.season_id_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -544,7 +554,9 @@ inline constexpr PlayerBattleResult::Impl_::Impl_(
         match_mode_{0u},
         battle_config_id_{0u},
         exp_gain_{::uint64_t{0u}},
-        items_mailed_{false} {}
+        items_mailed_{false},
+        material_credit_units_added_{0u},
+        season_id_{0u} {}
 
 template <typename>
 constexpr PlayerBattleResult::PlayerBattleResult(::_pbi::ConstantInitialized,
@@ -819,7 +831,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_._has_bits_),
-        21, // hasbit index offset
+        23, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.result_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.outcome_),
@@ -838,6 +850,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.battle_config_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.items_mailed_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.exp_gain_),
+        PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.material_credit_units_added_),
+        PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.season_id_),
         3,
         4,
         5,
@@ -856,6 +870,8 @@ const ::uint32_t
         15,
         17,
         16,
+        18,
+        19,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResultComp, _impl_._has_bits_),
         5, // hasbit index offset
@@ -870,7 +886,7 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::PlayerBattleResultCurrency)},
         {7, sizeof(::PlayerBattleResultItem)},
         {14, sizeof(::PlayerBattleResult)},
-        {53, sizeof(::PlayerBattleResultComp)},
+        {57, sizeof(::PlayerBattleResultComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -885,7 +901,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "esult_comp.proto\"C\n\032PlayerBattleResultCu"
     "rrency\022\025\n\rcurrency_type\030\001 \001(\r\022\016\n\006amount\030"
     "\002 \001(\004\">\n\026PlayerBattleResultItem\022\025\n\ritem_"
-    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\322\003\n\022Player"
+    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\212\004\n\022Player"
     "BattleResult\022\022\n\nresult_seq\030\001 \001(\004\022\021\n\tbatt"
     "le_id\030\002 \001(\004\022\017\n\007outcome\030\003 \001(\r\022\022\n\nteam_ind"
     "ex\030\004 \001(\r\022\017\n\007is_dead\030\005 \001(\010\022\014\n\004fled\030\006 \001(\010\022"
@@ -897,16 +913,17 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "tleResultItem\022\027\n\017lines_truncated\030\r \001(\010\022\014"
     "\n\004seen\030\016 \001(\010\022\022\n\nmatch_mode\030\017 \001(\r\022\030\n\020batt"
     "le_config_id\030\020 \001(\r\022\024\n\014items_mailed\030\021 \001(\010"
-    "\022\020\n\010exp_gain\030\022 \001(\004\"W\n\026PlayerBattleResult"
-    "Comp\022\027\n\017last_result_seq\030\001 \001(\004\022$\n\007entries"
-    "\030\002 \003(\0132\023.PlayerBattleResultB\022Z\020common/co"
-    "mponentb\006proto3"
+    "\022\020\n\010exp_gain\030\022 \001(\004\022#\n\033material_credit_un"
+    "its_added\030\023 \001(\r\022\021\n\tseason_id\030\024 \001(\r\"W\n\026Pl"
+    "ayerBattleResultComp\022\027\n\017last_result_seq\030"
+    "\001 \001(\004\022$\n\007entries\030\002 \003(\0132\023.PlayerBattleRes"
+    "ultB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto = {
     false,
     false,
-    775,
+    831,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto,
     "proto/common/component/player_battle_result_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once,
@@ -1432,9 +1449,9 @@ PlayerBattleResult::PlayerBattleResult(
                offsetof(Impl_, result_seq_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, result_seq_),
-           offsetof(Impl_, items_mailed_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::items_mailed_));
+               sizeof(Impl_::season_id_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerBattleResult)
 }
@@ -1463,9 +1480,9 @@ inline void PlayerBattleResult::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, result_seq_),
            0,
-           offsetof(Impl_, items_mailed_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::items_mailed_));
+               sizeof(Impl_::season_id_));
 }
 PlayerBattleResult::~PlayerBattleResult() {
   // @@protoc_insertion_point(destructor:PlayerBattleResult)
@@ -1536,10 +1553,10 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
         reinterpret_cast<char*>(&_impl_.battle_config_id_) -
         reinterpret_cast<char*>(&_impl_.settled_at_ms_)) + sizeof(_impl_.battle_config_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
     ::memset(&_impl_.exp_gain_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.items_mailed_) -
-        reinterpret_cast<char*>(&_impl_.exp_gain_)) + sizeof(_impl_.items_mailed_));
+        reinterpret_cast<char*>(&_impl_.season_id_) -
+        reinterpret_cast<char*>(&_impl_.exp_gain_)) + sizeof(_impl_.season_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1738,6 +1755,24 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
     }
   }
 
+  // uint32 material_credit_units_added = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_material_credit_units_added() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_material_credit_units_added(), target);
+    }
+  }
+
+  // uint32 season_id = 20;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_season_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1875,7 +1910,7 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
     // uint64 exp_gain = 18;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_exp_gain() != 0) {
@@ -1887,6 +1922,20 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_items_mailed() != 0) {
         total_size += 3;
+      }
+    }
+    // uint32 material_credit_units_added = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_material_credit_units_added() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_material_credit_units_added());
+      }
+    }
+    // uint32 season_id = 20;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_id());
       }
     }
   }
@@ -1992,7 +2041,7 @@ void PlayerBattleResult::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_exp_gain() != 0) {
         _this->_impl_.exp_gain_ = from._impl_.exp_gain_;
@@ -2001,6 +2050,16 @@ void PlayerBattleResult::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_items_mailed() != 0) {
         _this->_impl_.items_mailed_ = from._impl_.items_mailed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_material_credit_units_added() != 0) {
+        _this->_impl_.material_credit_units_added_ = from._impl_.material_credit_units_added_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
       }
     }
   }
@@ -2025,8 +2084,8 @@ void PlayerBattleResult::InternalSwap(PlayerBattleResult* PROTOBUF_RESTRICT PROT
   _impl_.items_gained_.InternalSwap(&other->_impl_.items_gained_);
   _impl_.items_consumed_.InternalSwap(&other->_impl_.items_consumed_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.items_mailed_)
-      + sizeof(PlayerBattleResult::_impl_.items_mailed_)
+      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.season_id_)
+      + sizeof(PlayerBattleResult::_impl_.season_id_)
       - PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.result_seq_)>(
           reinterpret_cast<char*>(&_impl_.result_seq_),
           reinterpret_cast<char*>(&other->_impl_.result_seq_));

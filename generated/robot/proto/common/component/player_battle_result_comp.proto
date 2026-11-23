@@ -48,6 +48,8 @@ message PlayerBattleResult {
   // (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
   bool items_mailed = 17;
   uint64 exp_gain = 18;       // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
+  uint32 material_credit_units_added = 19; // 本局实际新增的装备材料可领额度(0 或 10)
+  uint32 season_id = 20;      // 论剑排位赛季编号(非排位为 0)
 }
 
 message PlayerBattleResultComp {

@@ -161,7 +161,9 @@
         "TeamStateChanged": 4029,
         "TeamInternal": 4030,
         "TeamPvpPartySizeNotAllowed": 4031,
-        "TeamRatingGapTooLarge": 4032
+        "TeamRatingGapTooLarge": 4032,
+        "TeamRankedPresetUnconfirmed": 4033,
+        "TeamRankedPresetInvalid": 4034
       }
     },
     "mission_error": {
@@ -372,7 +374,10 @@
         "MatchBattleScriptNotApproved": 16030,
         "MatchBattleScriptTooLarge": 16031,
         "MatchBattleScriptLoadoutInvalid": 16032,
-        "MatchBattleScriptLoadoutFull": 16033
+        "MatchBattleScriptLoadoutFull": 16033,
+        "MatchRankedSeasonSettling": 16034,
+        "MatchRankedPresetInvalid": 16035,
+        "MatchRankedRuleVersionMismatch": 16036
       }
     },
     "attribute_error": {

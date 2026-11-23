@@ -1664,6 +1664,370 @@ void SendMatchServiceSetBattleScriptLoadoutErased(entt::registry& registry, entt
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::SetBattleScriptLoadoutResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region MatchServiceGetRankedProfile
+namespace {
+void QueueLocalMatchServiceGetRankedProfileFailure(GrpcDone<::match::GetRankedProfileResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetRankedProfileGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetRankedProfileCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedProfileRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetRankedProfileResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetRankedProfile requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetRankedProfileGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetRankedProfileFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetRankedProfileFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetRankedProfileResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetRankedProfile response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetRankedProfile(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedProfileRequest& request,
+                                            GrpcDone<::match::GetRankedProfileResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetRankedProfileCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetRankedProfileErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetRankedProfile requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetRankedProfileRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetRankedProfile: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetRankedProfileGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetRankedProfileRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetRankedProfile: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetRankedProfileGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetRankedProfileCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetRankedProfileResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceSaveRankedPreset
+namespace {
+void QueueLocalMatchServiceSaveRankedPresetFailure(GrpcDone<::match::SaveRankedPresetResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceSaveRankedPresetGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceSaveRankedPresetCall(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveRankedPresetRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::SaveRankedPresetResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.SaveRankedPreset requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceSaveRankedPresetGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceSaveRankedPresetFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceSaveRankedPresetFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::SaveRankedPresetResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.SaveRankedPreset response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceSaveRankedPreset(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveRankedPresetRequest& request,
+                                            GrpcDone<::match::SaveRankedPresetResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceSaveRankedPresetCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceSaveRankedPresetErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.SaveRankedPreset requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::SaveRankedPresetRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.SaveRankedPreset: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceSaveRankedPresetGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::SaveRankedPresetRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.SaveRankedPreset: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceSaveRankedPresetGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceSaveRankedPresetCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::SaveRankedPresetResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceUpdateRankedCosmetic
+namespace {
+void QueueLocalMatchServiceUpdateRankedCosmeticFailure(GrpcDone<::match::UpdateRankedCosmeticResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceUpdateRankedCosmeticGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceUpdateRankedCosmeticCall(entt::registry& registry, entt::entity nodeEntity, const ::match::UpdateRankedCosmeticRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::UpdateRankedCosmeticResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.UpdateRankedCosmetic requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceUpdateRankedCosmeticGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceUpdateRankedCosmeticFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceUpdateRankedCosmeticFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::UpdateRankedCosmeticResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.UpdateRankedCosmetic response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceUpdateRankedCosmetic(entt::registry& registry, entt::entity nodeEntity, const ::match::UpdateRankedCosmeticRequest& request,
+                                            GrpcDone<::match::UpdateRankedCosmeticResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceUpdateRankedCosmeticCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceUpdateRankedCosmeticErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.UpdateRankedCosmetic requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::UpdateRankedCosmeticRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.UpdateRankedCosmetic: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceUpdateRankedCosmeticGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::UpdateRankedCosmeticRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.UpdateRankedCosmetic: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceUpdateRankedCosmeticGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceUpdateRankedCosmeticCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::UpdateRankedCosmeticResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceGetRankedBattleResult
+namespace {
+void QueueLocalMatchServiceGetRankedBattleResultFailure(GrpcDone<::match::GetRankedBattleResultResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetRankedBattleResultGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetRankedBattleResultCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedBattleResultRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetRankedBattleResultResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetRankedBattleResult requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetRankedBattleResultGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetRankedBattleResultFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetRankedBattleResultFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetRankedBattleResultResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetRankedBattleResult response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetRankedBattleResult(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedBattleResultRequest& request,
+                                            GrpcDone<::match::GetRankedBattleResultResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetRankedBattleResultCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetRankedBattleResultErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetRankedBattleResult requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetRankedBattleResultRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetRankedBattleResult: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetRankedBattleResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetRankedBattleResultRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetRankedBattleResult: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetRankedBattleResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetRankedBattleResultCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetRankedBattleResultResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

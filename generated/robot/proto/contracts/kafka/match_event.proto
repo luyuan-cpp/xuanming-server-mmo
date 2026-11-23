@@ -37,5 +37,9 @@ message BattleResultEvent {
   // 0是没有完整个人原件的历史结果；1要求成员集合与settlements严格一一对应。
   // 未知版本拒绝推进消费位点，不能把默认0冒充完整原件。
   uint32 settlement_format_version = 13;
+  // 开局 CreateBattleRequest.ranked_context 的原样回显(非排位留空)。
+  RankedMatchContext ranked_context = 14;
+  // 玩家本局有效参与事实(按 player_id 升序),battle 在提交终局前冻结,重放不重算。
+  repeated BattleParticipationFact participation_facts = 15;
 }
 

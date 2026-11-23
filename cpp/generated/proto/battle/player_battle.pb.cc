@@ -2611,11 +2611,11 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2625,10 +2625,7 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::BattleEndS2C>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bool items_mailed = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.items_mailed_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 battle_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleEndS2C, _impl_.battle_id_), 1>(),
        {8, 1, 0,
@@ -2641,6 +2638,19 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
       {::_pbi::TcParser::FastMtS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_)}},
+      // bool items_mailed = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.items_mailed_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_)}},
+      // uint32 material_credit_units_added = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.material_credit_units_added_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_credit_units_added_)}},
+      // uint32 season_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_id_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2652,6 +2662,10 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool items_mailed = 4;
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 material_credit_units_added = 5;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_credit_units_added_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_id = 6;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2673,7 +2687,9 @@ inline constexpr BattleEndS2C::Impl_::Impl_(
         settlement_{nullptr},
         battle_id_{::uint64_t{0u}},
         outcome_{static_cast< ::eBattleOutcome >(0)},
-        items_mailed_{false} {}
+        items_mailed_{false},
+        material_credit_units_added_{0u},
+        season_id_{0u} {}
 
 template <typename>
 constexpr BattleEndS2C::BattleEndS2C(::_pbi::ConstantInitialized,
@@ -3774,15 +3790,19 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_._has_bits_),
-        7, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.outcome_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.settlement_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.items_mailed_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.material_credit_units_added_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.season_id_),
         1,
         2,
         0,
         3,
+        4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleReconnectS2C, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3963,24 +3983,24 @@ static const ::_pbi::MigrationSchema
         {17, sizeof(::BattleStartS2C)},
         {24, sizeof(::TurnResultS2C)},
         {37, sizeof(::BattleEndS2C)},
-        {48, sizeof(::BattleReconnectS2C)},
-        {53, sizeof(::SpectateStateS2C)},
-        {60, sizeof(::SpectateEndS2C)},
-        {69, sizeof(::SubmitBattleActionRequest)},
-        {80, sizeof(::SubmitBattleActionResponse)},
-        {85, sizeof(::GetBattleStateRequest)},
-        {90, sizeof(::StopWatchBattleRequest)},
-        {95, sizeof(::StopWatchBattleResponse)},
-        {100, sizeof(::SetAutoBattleRequest)},
-        {107, sizeof(::SetAutoBattleResponse)},
-        {112, sizeof(::BattleTicketPayload)},
-        {129, sizeof(::BattleTokenVerifyRequest)},
-        {136, sizeof(::BattleTokenVerifyResponse)},
-        {149, sizeof(::BattleAssignedS2C)},
-        {168, sizeof(::RequestBattleTicketRequest)},
-        {173, sizeof(::RequestBattleTicketResponse)},
-        {180, sizeof(::BattleReplay)},
-        {209, sizeof(::BattleReplayEnvelope)},
+        {52, sizeof(::BattleReconnectS2C)},
+        {57, sizeof(::SpectateStateS2C)},
+        {64, sizeof(::SpectateEndS2C)},
+        {73, sizeof(::SubmitBattleActionRequest)},
+        {84, sizeof(::SubmitBattleActionResponse)},
+        {89, sizeof(::GetBattleStateRequest)},
+        {94, sizeof(::StopWatchBattleRequest)},
+        {99, sizeof(::StopWatchBattleResponse)},
+        {104, sizeof(::SetAutoBattleRequest)},
+        {111, sizeof(::SetAutoBattleResponse)},
+        {116, sizeof(::BattleTicketPayload)},
+        {133, sizeof(::BattleTokenVerifyRequest)},
+        {140, sizeof(::BattleTokenVerifyResponse)},
+        {153, sizeof(::BattleAssignedS2C)},
+        {172, sizeof(::RequestBattleTicketRequest)},
+        {177, sizeof(::RequestBattleTicketResponse)},
+        {184, sizeof(::BattleReplay)},
+        {213, sizeof(::BattleReplayEnvelope)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4023,91 +4043,93 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "teS2C\"\217\001\n\rTurnResultS2C\022\021\n\tbattle_id\030\001 \001"
     "(\004\022\023\n\013round_index\030\002 \001(\r\022 \n\006events\030\003 \003(\0132"
     "\020.BattleEventItem\022\036\n\005state\030\004 \001(\0132\017.Battl"
-    "eStateS2C\022\024\n\014action_order\030\005 \003(\004\"\204\001\n\014Batt"
+    "eStateS2C\022\024\n\014action_order\030\005 \003(\004\"\274\001\n\014Batt"
     "leEndS2C\022\021\n\tbattle_id\030\001 \001(\004\022 \n\007outcome\030\002"
     " \001(\0162\017.eBattleOutcome\022)\n\nsettlement\030\003 \001("
     "\0132\025.BattleSettlementData\022\024\n\014items_mailed"
-    "\030\004 \001(\010\"\'\n\022BattleReconnectS2C\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\"J\n\020SpectateStateS2C\022\036\n\005state\030\001 \001"
-    "(\0132\017.BattleStateS2C\022\026\n\016observer_count\030\002 "
-    "\001(\r\"j\n\016SpectateEndS2C\022\021\n\tbattle_id\030\001 \001(\004"
-    "\022 \n\007outcome\030\002 \001(\0162\017.eBattleOutcome\022#\n\006re"
-    "ason\030\003 \001(\0162\023.eSpectateEndReason\"t\n\031Submi"
-    "tBattleActionRequest\022\021\n\tbattle_id\030\001 \001(\004\022"
-    "\035\n\006action\030\002 \001(\0132\r.BattleAction\022\020\n\010actor_"
-    "id\030\003 \001(\004\022\023\n\013round_index\030\004 \001(\r\"D\n\032SubmitB"
-    "attleActionResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\"*\n\025GetBattleStateReq"
-    "uest\022\021\n\tbattle_id\030\001 \001(\004\"+\n\026StopWatchBatt"
-    "leRequest\022\021\n\tbattle_id\030\001 \001(\004\"A\n\027StopWatc"
-    "hBattleResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\":\n\024SetAutoBattleRequest\022"
-    "\021\n\tbattle_id\030\001 \001(\004\022\017\n\007enabled\030\002 \001(\010\"\?\n\025S"
-    "etAutoBattleResponse\022&\n\rerror_message\030\001 "
-    "\001(\0132\017.TipInfoMessage\"\307\001\n\023BattleTicketPay"
-    "load\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001"
-    "(\004\022\026\n\016battle_node_id\030\003 \001(\r\022\032\n\022battle_ins"
-    "tance_id\030\004 \001(\t\022\024\n\014expire_at_ms\030\005 \001(\004\022 \n\004"
-    "role\030\006 \001(\0162\022.eBattleTicketRole\022\036\n\026specta"
-    "tor_operation_id\030\007 \001(\t\">\n\030BattleTokenVer"
-    "ifyRequest\022\017\n\007payload\030\001 \001(\014\022\021\n\tsignature"
-    "\030\002 \001(\014\"\213\001\n\031BattleTokenVerifyResponse\022\017\n\007"
-    "success\030\001 \001(\010\022\r\n\005error\030\002 \001(\t\022\021\n\tbattle_i"
-    "d\030\003 \001(\004\022\035\n\025heartbeat_interval_ms\030\004 \001(\r\022\034"
-    "\n\024heartbeat_timeout_ms\030\005 \001(\r\"\272\001\n\021BattleA"
-    "ssignedS2C\022\021\n\tbattle_id\030\001 \001(\004\022\014\n\004host\030\002 "
-    "\001(\t\022\014\n\004port\030\003 \001(\r\022\025\n\rtoken_payload\030\004 \001(\014"
-    "\022\027\n\017token_signature\030\005 \001(\014\022\024\n\014expire_at_m"
-    "s\030\006 \001(\004\022 \n\004role\030\007 \001(\0162\022.eBattleTicketRol"
-    "e\022\016\n\006ws_url\030\010 \001(\t\"/\n\032RequestBattleTicket"
-    "Request\022\021\n\tbattle_id\030\001 \001(\004\"m\n\033RequestBat"
-    "tleTicketResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022&\n\nassignment\030\002 \001(\0132\022."
-    "BattleAssignedS2C\"\375\002\n\014BattleReplay\022\021\n\tba"
-    "ttle_id\030\001 \001(\004\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020bat"
-    "tle_config_id\030\003 \001(\r\022\025\n\rstarted_at_ms\030\004 \001"
-    "(\004\022\026\n\016finished_at_ms\030\005 \001(\004\022 \n\007outcome\030\006 "
-    "\001(\0162\017.eBattleOutcome\022+\n\nend_reason\030\007 \001(\016"
-    "2\027.eBattleReplayEndReason\022\024\n\014total_round"
-    "s\030\010 \001(\r\022\031\n\021table_fingerprint\030\t \001(\t\022$\n\013st"
-    "art_state\030\n \001(\0132\017.BattleStateS2C\022\036\n\006roun"
-    "ds\030\013 \003(\0132\016.TurnResultS2C\022$\n\013final_state\030"
-    "\014 \001(\0132\017.BattleStateS2C\022\021\n\ttruncated\030\r \001("
-    "\010\"v\n\024BattleReplayEnvelope\022\026\n\016format_vers"
-    "ion\030\001 \001(\r\022\"\n\005codec\030\002 \001(\0162\023.eBattleReplay"
-    "Codec\022\021\n\traw_bytes\030\003 \001(\r\022\017\n\007payload\030\004 \001("
-    "\014*\246\001\n\022eSpectateEndReason\022\025\n\021SPECTATE_END"
-    "_NONE\020\000\022 \n\034SPECTATE_END_BATTLE_FINISHED\020"
-    "\001\022\037\n\033SPECTATE_END_BATTLE_ABORTED\020\002\022\030\n\024SP"
-    "ECTATE_END_REMOVED\020\003\022\034\n\030SPECTATE_END_SOU"
-    "RCE_LOST\020\004*u\n\021eBattleTicketRole\022\033\n\027BATTL"
-    "E_TICKET_ROLE_NONE\020\000\022\"\n\036BATTLE_TICKET_RO"
-    "LE_PARTICIPANT\020\001\022\037\n\033BATTLE_TICKET_ROLE_O"
-    "BSERVER\020\002*P\n\022eBattleReplayCodec\022\034\n\030BATTL"
-    "E_REPLAY_CODEC_NONE\020\000\022\034\n\030BATTLE_REPLAY_C"
-    "ODEC_GZIP\020\001*\200\001\n\026eBattleReplayEndReason\022!"
-    "\n\035BATTLE_REPLAY_END_UNSPECIFIED\020\000\022\036\n\032BAT"
-    "TLE_REPLAY_END_FINISHED\020\001\022#\n\037BATTLE_REPL"
-    "AY_END_DEADLINE_DRAW\020\0022\345\005\n\022BattleClientP"
-    "layer\022M\n\022SubmitBattleAction\022\032.SubmitBatt"
-    "leActionRequest\032\033.SubmitBattleActionResp"
-    "onse\0229\n\016GetBattleState\022\026.GetBattleStateR"
-    "equest\032\017.BattleStateS2C\0223\n\021NotifyBattleS"
-    "tart\022\017.BattleStartS2C\032\006.Empty\"\005\210\231\310\001\002\0221\n\020"
-    "NotifyTurnResult\022\016.TurnResultS2C\032\006.Empty"
-    "\"\005\210\231\310\001\002\022/\n\017NotifyBattleEnd\022\r.BattleEndS2"
-    "C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025NotifyBattleReconnec"
-    "t\022\023.BattleReconnectS2C\032\006.Empty\"\005\210\231\310\001\002\022D\n"
-    "\017StopWatchBattle\022\027.StopWatchBattleReques"
-    "t\032\030.StopWatchBattleResponse\022>\n\rSetAutoBa"
-    "ttle\022\025.SetAutoBattleRequest\032\026.SetAutoBat"
-    "tleResponse\0227\n\023NotifySpectateState\022\021.Spe"
-    "ctateStateS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\030NotifySp"
-    "ectateTurnResult\022\016.TurnResultS2C\032\006.Empty"
-    "\"\005\210\231\310\001\002\0223\n\021NotifySpectateEnd\022\017.SpectateE"
-    "ndS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\024NotifyBattleAssi"
-    "gned\022\022.BattleAssignedS2C\032\006.Empty\"\005\210\231\310\001\002\032"
-    "\005\210\250\303\001\001B\014Z\006battle\230\324a\036b\006proto3"
+    "\030\004 \001(\010\022#\n\033material_credit_units_added\030\005 "
+    "\001(\r\022\021\n\tseason_id\030\006 \001(\r\"\'\n\022BattleReconnec"
+    "tS2C\022\021\n\tbattle_id\030\001 \001(\004\"J\n\020SpectateState"
+    "S2C\022\036\n\005state\030\001 \001(\0132\017.BattleStateS2C\022\026\n\016o"
+    "bserver_count\030\002 \001(\r\"j\n\016SpectateEndS2C\022\021\n"
+    "\tbattle_id\030\001 \001(\004\022 \n\007outcome\030\002 \001(\0162\017.eBat"
+    "tleOutcome\022#\n\006reason\030\003 \001(\0162\023.eSpectateEn"
+    "dReason\"t\n\031SubmitBattleActionRequest\022\021\n\t"
+    "battle_id\030\001 \001(\004\022\035\n\006action\030\002 \001(\0132\r.Battle"
+    "Action\022\020\n\010actor_id\030\003 \001(\004\022\023\n\013round_index\030"
+    "\004 \001(\r\"D\n\032SubmitBattleActionResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\"*\n\025G"
+    "etBattleStateRequest\022\021\n\tbattle_id\030\001 \001(\004\""
+    "+\n\026StopWatchBattleRequest\022\021\n\tbattle_id\030\001"
+    " \001(\004\"A\n\027StopWatchBattleResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\":\n\024SetAu"
+    "toBattleRequest\022\021\n\tbattle_id\030\001 \001(\004\022\017\n\007en"
+    "abled\030\002 \001(\010\"\?\n\025SetAutoBattleResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\"\307\001\n"
+    "\023BattleTicketPayload\022\021\n\tbattle_id\030\001 \001(\004\022"
+    "\021\n\tplayer_id\030\002 \001(\004\022\026\n\016battle_node_id\030\003 \001"
+    "(\r\022\032\n\022battle_instance_id\030\004 \001(\t\022\024\n\014expire"
+    "_at_ms\030\005 \001(\004\022 \n\004role\030\006 \001(\0162\022.eBattleTick"
+    "etRole\022\036\n\026spectator_operation_id\030\007 \001(\t\">"
+    "\n\030BattleTokenVerifyRequest\022\017\n\007payload\030\001 "
+    "\001(\014\022\021\n\tsignature\030\002 \001(\014\"\213\001\n\031BattleTokenVe"
+    "rifyResponse\022\017\n\007success\030\001 \001(\010\022\r\n\005error\030\002"
+    " \001(\t\022\021\n\tbattle_id\030\003 \001(\004\022\035\n\025heartbeat_int"
+    "erval_ms\030\004 \001(\r\022\034\n\024heartbeat_timeout_ms\030\005"
+    " \001(\r\"\272\001\n\021BattleAssignedS2C\022\021\n\tbattle_id\030"
+    "\001 \001(\004\022\014\n\004host\030\002 \001(\t\022\014\n\004port\030\003 \001(\r\022\025\n\rtok"
+    "en_payload\030\004 \001(\014\022\027\n\017token_signature\030\005 \001("
+    "\014\022\024\n\014expire_at_ms\030\006 \001(\004\022 \n\004role\030\007 \001(\0162\022."
+    "eBattleTicketRole\022\016\n\006ws_url\030\010 \001(\t\"/\n\032Req"
+    "uestBattleTicketRequest\022\021\n\tbattle_id\030\001 \001"
+    "(\004\"m\n\033RequestBattleTicketResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022&\n\nass"
+    "ignment\030\002 \001(\0132\022.BattleAssignedS2C\"\375\002\n\014Ba"
+    "ttleReplay\022\021\n\tbattle_id\030\001 \001(\004\022\022\n\nmatch_m"
+    "ode\030\002 \001(\r\022\030\n\020battle_config_id\030\003 \001(\r\022\025\n\rs"
+    "tarted_at_ms\030\004 \001(\004\022\026\n\016finished_at_ms\030\005 \001"
+    "(\004\022 \n\007outcome\030\006 \001(\0162\017.eBattleOutcome\022+\n\n"
+    "end_reason\030\007 \001(\0162\027.eBattleReplayEndReaso"
+    "n\022\024\n\014total_rounds\030\010 \001(\r\022\031\n\021table_fingerp"
+    "rint\030\t \001(\t\022$\n\013start_state\030\n \001(\0132\017.Battle"
+    "StateS2C\022\036\n\006rounds\030\013 \003(\0132\016.TurnResultS2C"
+    "\022$\n\013final_state\030\014 \001(\0132\017.BattleStateS2C\022\021"
+    "\n\ttruncated\030\r \001(\010\"v\n\024BattleReplayEnvelop"
+    "e\022\026\n\016format_version\030\001 \001(\r\022\"\n\005codec\030\002 \001(\016"
+    "2\023.eBattleReplayCodec\022\021\n\traw_bytes\030\003 \001(\r"
+    "\022\017\n\007payload\030\004 \001(\014*\246\001\n\022eSpectateEndReason"
+    "\022\025\n\021SPECTATE_END_NONE\020\000\022 \n\034SPECTATE_END_"
+    "BATTLE_FINISHED\020\001\022\037\n\033SPECTATE_END_BATTLE"
+    "_ABORTED\020\002\022\030\n\024SPECTATE_END_REMOVED\020\003\022\034\n\030"
+    "SPECTATE_END_SOURCE_LOST\020\004*u\n\021eBattleTic"
+    "ketRole\022\033\n\027BATTLE_TICKET_ROLE_NONE\020\000\022\"\n\036"
+    "BATTLE_TICKET_ROLE_PARTICIPANT\020\001\022\037\n\033BATT"
+    "LE_TICKET_ROLE_OBSERVER\020\002*P\n\022eBattleRepl"
+    "ayCodec\022\034\n\030BATTLE_REPLAY_CODEC_NONE\020\000\022\034\n"
+    "\030BATTLE_REPLAY_CODEC_GZIP\020\001*\200\001\n\026eBattleR"
+    "eplayEndReason\022!\n\035BATTLE_REPLAY_END_UNSP"
+    "ECIFIED\020\000\022\036\n\032BATTLE_REPLAY_END_FINISHED\020"
+    "\001\022#\n\037BATTLE_REPLAY_END_DEADLINE_DRAW\020\0022\345"
+    "\005\n\022BattleClientPlayer\022M\n\022SubmitBattleAct"
+    "ion\022\032.SubmitBattleActionRequest\032\033.Submit"
+    "BattleActionResponse\0229\n\016GetBattleState\022\026"
+    ".GetBattleStateRequest\032\017.BattleStateS2C\022"
+    "3\n\021NotifyBattleStart\022\017.BattleStartS2C\032\006."
+    "Empty\"\005\210\231\310\001\002\0221\n\020NotifyTurnResult\022\016.TurnR"
+    "esultS2C\032\006.Empty\"\005\210\231\310\001\002\022/\n\017NotifyBattleE"
+    "nd\022\r.BattleEndS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025Noti"
+    "fyBattleReconnect\022\023.BattleReconnectS2C\032\006"
+    ".Empty\"\005\210\231\310\001\002\022D\n\017StopWatchBattle\022\027.StopW"
+    "atchBattleRequest\032\030.StopWatchBattleRespo"
+    "nse\022>\n\rSetAutoBattle\022\025.SetAutoBattleRequ"
+    "est\032\026.SetAutoBattleResponse\0227\n\023NotifySpe"
+    "ctateState\022\021.SpectateStateS2C\032\006.Empty\"\005\210"
+    "\231\310\001\002\0229\n\030NotifySpectateTurnResult\022\016.TurnR"
+    "esultS2C\032\006.Empty\"\005\210\231\310\001\002\0223\n\021NotifySpectat"
+    "eEnd\022\017.SpectateEndS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\024"
+    "NotifyBattleAssigned\022\022.BattleAssignedS2C"
+    "\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\014Z\006battle\230\324a\036b\006pr"
+    "oto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_deps[4] = {
@@ -4120,7 +4142,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fplayer_5fbattle_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto = {
     false,
     false,
-    3948,
+    4004,
     descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto,
     "proto/battle/player_battle.proto",
     &descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_once,
@@ -5242,9 +5264,9 @@ BattleEndS2C::BattleEndS2C(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, items_mailed_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::items_mailed_));
+               sizeof(Impl_::season_id_));
 
   // @@protoc_insertion_point(copy_constructor:BattleEndS2C)
 }
@@ -5258,9 +5280,9 @@ inline void BattleEndS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, settlement_),
            0,
-           offsetof(Impl_, items_mailed_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, settlement_) +
-               sizeof(Impl_::items_mailed_));
+               sizeof(Impl_::season_id_));
 }
 BattleEndS2C::~BattleEndS2C() {
   // @@protoc_insertion_point(destructor:BattleEndS2C)
@@ -5315,10 +5337,10 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
     ABSL_DCHECK(_impl_.settlement_ != nullptr);
     _impl_.settlement_->Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.items_mailed_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.items_mailed_));
+        reinterpret_cast<char*>(&_impl_.season_id_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.season_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5377,6 +5399,24 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
     }
   }
 
+  // uint32 material_credit_units_added = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_material_credit_units_added() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_material_credit_units_added(), target);
+    }
+  }
+
+  // uint32 season_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_season_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -5402,7 +5442,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // .BattleSettlementData settlement = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -5428,6 +5468,20 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
         total_size += 2;
       }
     }
+    // uint32 material_credit_units_added = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_material_credit_units_added() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_material_credit_units_added());
+      }
+    }
+    // uint32 season_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -5447,7 +5501,7 @@ void BattleEndS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.settlement_ != nullptr);
       if (_this->_impl_.settlement_ == nullptr) {
@@ -5471,6 +5525,16 @@ void BattleEndS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.items_mailed_ = from._impl_.items_mailed_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_material_credit_units_added() != 0) {
+        _this->_impl_.material_credit_units_added_ = from._impl_.material_credit_units_added_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -5490,8 +5554,8 @@ void BattleEndS2C::InternalSwap(BattleEndS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_)
-      + sizeof(BattleEndS2C::_impl_.items_mailed_)
+      PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_id_)
+      + sizeof(BattleEndS2C::_impl_.season_id_)
       - PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_)>(
           reinterpret_cast<char*>(&_impl_.settlement_),
           reinterpret_cast<char*>(&other->_impl_.settlement_));

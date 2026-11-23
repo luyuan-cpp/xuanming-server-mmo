@@ -151,6 +151,38 @@ void SendMatchServiceSetBattleScriptLoadout(entt::registry& registry, entt::enti
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendMatchServiceSetBattleScriptLoadoutErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region MatchServiceGetRankedProfile
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetRankedProfileGrpcPath = "/match.MatchService/GetRankedProfile";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetRankedProfile(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedProfileRequest& request, GrpcDone<::match::GetRankedProfileResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetRankedProfileErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceSaveRankedPreset
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceSaveRankedPresetGrpcPath = "/match.MatchService/SaveRankedPreset";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceSaveRankedPreset(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveRankedPresetRequest& request, GrpcDone<::match::SaveRankedPresetResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceSaveRankedPresetErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceUpdateRankedCosmetic
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceUpdateRankedCosmeticGrpcPath = "/match.MatchService/UpdateRankedCosmetic";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceUpdateRankedCosmetic(entt::registry& registry, entt::entity nodeEntity, const ::match::UpdateRankedCosmeticRequest& request, GrpcDone<::match::UpdateRankedCosmeticResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceUpdateRankedCosmeticErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetRankedBattleResult
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetRankedBattleResultGrpcPath = "/match.MatchService/GetRankedBattleResult";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetRankedBattleResult(entt::registry& registry, entt::entity nodeEntity, const ::match::GetRankedBattleResultRequest& request, GrpcDone<::match::GetRankedBattleResultResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetRankedBattleResultErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
 

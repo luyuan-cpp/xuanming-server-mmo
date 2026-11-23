@@ -203,12 +203,12 @@ constexpr BattleResultEvent::ParseTableT_ BattleResultEvent::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
-      3,  // num_aux_entries
+      15,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -219,40 +219,40 @@ constexpr BattleResultEvent::ParseTableT_ BattleResultEvent::InternalGeneratePar
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 battle_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleResultEvent, _impl_.battle_id_), 5>(),
-       {8, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleResultEvent, _impl_.battle_id_), 7>(),
+       {8, 7, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_id_)}},
       // uint32 match_mode = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.match_mode_), 6>(),
-       {16, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.match_mode_), 8>(),
+       {16, 8, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.match_mode_)}},
       // uint32 battle_config_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.battle_config_id_), 7>(),
-       {24, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.battle_config_id_), 9>(),
+       {24, 9, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_config_id_)}},
       // .eBattleOutcome outcome = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.outcome_), 8>(),
-       {32, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.outcome_), 10>(),
+       {32, 10, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.outcome_)}},
       // uint32 winner_team_index = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.winner_team_index_), 9>(),
-       {40, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.winner_team_index_), 11>(),
+       {40, 11, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.winner_team_index_)}},
       // repeated .contracts.kafka.BattleResultTeam teams = 6;
       {::_pbi::TcParser::FastMtR1,
        {50, 0, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.teams_)}},
       // uint32 total_rounds = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.total_rounds_), 11>(),
-       {56, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.total_rounds_), 13>(),
+       {56, 13, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.total_rounds_)}},
       // uint64 finished_at_ms = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleResultEvent, _impl_.finished_at_ms_), 10>(),
-       {64, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleResultEvent, _impl_.finished_at_ms_), 12>(),
+       {64, 12, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.finished_at_ms_)}},
       // .BattleActivityContext activity_context = 9;
       {::_pbi::TcParser::FastMtS1,
-       {74, 4, 1,
+       {74, 5, 1,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.activity_context_)}},
       // repeated uint64 fled_player_ids = 10;
       {::_pbi::TcParser::FastV64P1,
@@ -267,32 +267,38 @@ constexpr BattleResultEvent::ParseTableT_ BattleResultEvent::InternalGeneratePar
        {98, 3, 2,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlements_)}},
       // uint32 settlement_format_version = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.settlement_format_version_), 12>(),
-       {104, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleResultEvent, _impl_.settlement_format_version_), 14>(),
+       {104, 14, 0,
         PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlement_format_version_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .RankedMatchContext ranked_context = 14;
+      {::_pbi::TcParser::FastMtS1,
+       {114, 6, 3,
+        PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.ranked_context_)}},
+      // repeated .BattleParticipationFact participation_facts = 15;
+      {::_pbi::TcParser::FastMtR1,
+       {122, 4, 4,
+        PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.participation_facts_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 battle_id = 1;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 match_mode = 2;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.match_mode_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.match_mode_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_config_id = 3;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .eBattleOutcome outcome = 4;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.outcome_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.outcome_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint32 winner_team_index = 5;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.winner_team_index_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.winner_team_index_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .contracts.kafka.BattleResultTeam teams = 6;
       {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.teams_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 total_rounds = 7;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.total_rounds_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.total_rounds_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 finished_at_ms = 8;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.finished_at_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.finished_at_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .BattleActivityContext activity_context = 9;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.activity_context_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.activity_context_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated uint64 fled_player_ids = 10;
       {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.fled_player_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
       // repeated uint64 dead_player_ids = 11;
@@ -300,7 +306,11 @@ constexpr BattleResultEvent::ParseTableT_ BattleResultEvent::InternalGeneratePar
       // repeated .BattleSettlementData settlements = 12;
       {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlements_), _Internal::kHasBitsOffset + 3, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 settlement_format_version = 13;
-      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlement_format_version_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlement_format_version_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .RankedMatchContext ranked_context = 14;
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.ranked_context_), _Internal::kHasBitsOffset + 6, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .BattleParticipationFact participation_facts = 15;
+      {PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.participation_facts_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -317,6 +327,16 @@ constexpr BattleResultEvent::ParseTableT_ BattleResultEvent::InternalGeneratePar
         {::_pbi::TcParser::GetTable<::BattleSettlementData>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::BattleSettlementData_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::RankedMatchContext>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::RankedMatchContext_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BattleParticipationFact>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BattleParticipationFact_globals_},
         #endif
     }},
     {{
@@ -351,7 +371,13 @@ inline constexpr BattleResultEvent::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.settlements_)>()
          }
         ,
+        participation_facts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::contracts::kafka::BattleResultEvent,
+            PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.participation_facts_)>()
+         }
+        ,
         activity_context_{nullptr},
+        ranked_context_{nullptr},
         battle_id_{::uint64_t{0u}},
         match_mode_{0u},
         battle_config_id_{0u},
@@ -471,7 +497,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_._has_bits_),
-        16, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.match_mode_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.battle_config_id_),
@@ -485,19 +511,23 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.dead_player_ids_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.settlements_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.settlement_format_version_),
-        5,
-        6,
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.ranked_context_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.participation_facts_),
         7,
         8,
         9,
-        0,
-        11,
         10,
-        4,
+        11,
+        0,
+        13,
+        12,
+        5,
         1,
         2,
         3,
-        12,
+        14,
+        6,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
@@ -515,7 +545,7 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fmatch_5fevent_2
     "\n\'proto/contracts/kafka/match_event.prot"
     "o\022\017contracts.kafka\032\036proto/battle/battle_"
     "data.proto\":\n\020BattleResultTeam\022\022\n\nteam_i"
-    "ndex\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004\"\244\003\n\021Battl"
+    "ndex\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004\"\210\004\n\021Battl"
     "eResultEvent\022\021\n\tbattle_id\030\001 \001(\004\022\022\n\nmatch"
     "_mode\030\002 \001(\r\022\030\n\020battle_config_id\030\003 \001(\r\022 \n"
     "\007outcome\030\004 \001(\0162\017.eBattleOutcome\022\031\n\021winne"
@@ -526,7 +556,10 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fmatch_5fevent_2
     "text\022\027\n\017fled_player_ids\030\n \003(\004\022\027\n\017dead_pl"
     "ayer_ids\030\013 \003(\004\022*\n\013settlements\030\014 \003(\0132\025.Ba"
     "ttleSettlementData\022!\n\031settlement_format_"
-    "version\030\r \001(\rB\021Z\017contracts/kafkab\006proto3"
+    "version\030\r \001(\r\022+\n\016ranked_context\030\016 \001(\0132\023."
+    "RankedMatchContext\0225\n\023participation_fact"
+    "s\030\017 \003(\0132\030.BattleParticipationFactB\021Z\017con"
+    "tracts/kafkab\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fmatch_5fevent_2eproto_deps[1] = {
@@ -536,7 +569,7 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fmatch_5fev
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fmatch_5fevent_2eproto = {
     false,
     false,
-    600,
+    700,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fmatch_5fevent_2eproto,
     "proto/contracts/kafka/match_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fmatch_5fevent_2eproto_once,
@@ -802,12 +835,22 @@ void BattleResultTeam::InternalSwap(BattleResultTeam* PROTOBUF_RESTRICT PROTOBUF
 void BattleResultEvent::clear_activity_context() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.activity_context_ != nullptr) _impl_.activity_context_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 void BattleResultEvent::clear_settlements() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.settlements_.Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+void BattleResultEvent::clear_ranked_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.ranked_context_ != nullptr) _impl_.ranked_context_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+void BattleResultEvent::clear_participation_facts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.participation_facts_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 BattleResultEvent::BattleResultEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -853,6 +896,13 @@ PROTOBUF_NDEBUG_INLINE BattleResultEvent::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.settlements_)>()
           , from.settlements_
         }
+        ,
+        participation_facts_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::contracts::kafka::BattleResultEvent,
+              PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.participation_facts_)>()
+          , from.participation_facts_
+        }
      {}
 
 BattleResultEvent::BattleResultEvent(
@@ -870,8 +920,11 @@ BattleResultEvent::BattleResultEvent(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.activity_context_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+  _impl_.activity_context_ = (CheckHasBit(cached_has_bits, 0x00000020U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.activity_context_)
+                : nullptr;
+  _impl_.ranked_context_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.ranked_context_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, battle_id_),
@@ -908,6 +961,11 @@ PROTOBUF_NDEBUG_INLINE BattleResultEvent::Impl_::Impl_(
             ::contracts::kafka::BattleResultEvent,
             PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.settlements_)>()
          }
+        ,
+        participation_facts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::contracts::kafka::BattleResultEvent,
+            PROTOBUF_FIELD_OFFSET(::contracts::kafka::BattleResultEvent, _impl_.participation_facts_)>()
+         }
      {}
 
 inline void BattleResultEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
@@ -931,6 +989,7 @@ inline void BattleResultEvent::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.activity_context_;
+  delete this_._impl_.ranked_context_;
   this_._impl_.~Impl_();
 }
 
@@ -968,7 +1027,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.teams_.Clear();
     }
@@ -982,19 +1041,22 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
       _impl_.settlements_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.participation_facts_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       ABSL_DCHECK(_impl_.activity_context_ != nullptr);
       _impl_.activity_context_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(_impl_.ranked_context_ != nullptr);
+      _impl_.ranked_context_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
-    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_config_id_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.battle_config_id_));
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    ::memset(&_impl_.outcome_, 0, static_cast<::size_t>(
+  _impl_.battle_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.match_mode_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.settlement_format_version_) -
-        reinterpret_cast<char*>(&_impl_.outcome_)) + sizeof(_impl_.settlement_format_version_));
+        reinterpret_cast<char*>(&_impl_.match_mode_)) + sizeof(_impl_.settlement_format_version_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1020,7 +1082,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 battle_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1029,7 +1091,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint32 match_mode = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_match_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1038,7 +1100,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint32 battle_config_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_battle_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1047,7 +1109,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // .eBattleOutcome outcome = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_outcome() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1056,7 +1118,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint32 winner_team_index = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_winner_team_index() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1078,7 +1140,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint32 total_rounds = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_total_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1087,7 +1149,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint64 finished_at_ms = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_finished_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1096,7 +1158,7 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // .BattleActivityContext activity_context = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         9, *this_._impl_.activity_context_, this_._impl_.activity_context_->GetCachedSize(), target,
         stream);
@@ -1138,11 +1200,31 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
   }
 
   // uint32 settlement_format_version = 13;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_settlement_format_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           13, this_._internal_settlement_format_version(), target);
+    }
+  }
+
+  // .RankedMatchContext ranked_context = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        14, *this_._impl_.ranked_context_, this_._impl_.ranked_context_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .BattleParticipationFact participation_facts = 15;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_participation_facts_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_participation_facts().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              15, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -1200,64 +1282,76 @@ PROTOBUF_NOINLINE void BattleResultEvent::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .BattleActivityContext activity_context = 9;
+    // repeated .BattleParticipationFact participation_facts = 15;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1UL * this_._internal_participation_facts_size();
+      for (const auto& msg : this_._internal_participation_facts()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .BattleActivityContext activity_context = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.activity_context_);
     }
+    // .RankedMatchContext ranked_context = 14;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.ranked_context_);
+    }
     // uint64 battle_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint32 match_mode = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_match_mode() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_match_mode());
       }
     }
     // uint32 battle_config_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_battle_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_config_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // .eBattleOutcome outcome = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_outcome() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
       }
     }
     // uint32 winner_team_index = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_winner_team_index() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_winner_team_index());
       }
     }
     // uint64 finished_at_ms = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_finished_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_finished_at_ms());
       }
     }
     // uint32 total_rounds = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_total_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_total_rounds());
       }
     }
     // uint32 settlement_format_version = 13;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_settlement_format_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_settlement_format_version());
@@ -1300,6 +1394,11 @@ void BattleResultEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_settlements());
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _this->_internal_mutable_participation_facts()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_participation_facts());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       ABSL_DCHECK(from._impl_.activity_context_ != nullptr);
       if (_this->_impl_.activity_context_ == nullptr) {
         _this->_impl_.activity_context_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.activity_context_);
@@ -1307,44 +1406,52 @@ void BattleResultEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.activity_context_->MergeFrom(*from._impl_.activity_context_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(from._impl_.ranked_context_ != nullptr);
+      if (_this->_impl_.ranked_context_ == nullptr) {
+        _this->_impl_.ranked_context_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.ranked_context_);
+      } else {
+        _this->_impl_.ranked_context_->MergeFrom(*from._impl_.ranked_context_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_match_mode() != 0) {
         _this->_impl_.match_mode_ = from._impl_.match_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_battle_config_id() != 0) {
         _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_outcome() != 0) {
         _this->_impl_.outcome_ = from._impl_.outcome_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_winner_team_index() != 0) {
         _this->_impl_.winner_team_index_ = from._impl_.winner_team_index_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_finished_at_ms() != 0) {
         _this->_impl_.finished_at_ms_ = from._impl_.finished_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_total_rounds() != 0) {
         _this->_impl_.total_rounds_ = from._impl_.total_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_settlement_format_version() != 0) {
         _this->_impl_.settlement_format_version_ = from._impl_.settlement_format_version_;
       }
@@ -1371,6 +1478,7 @@ void BattleResultEvent::InternalSwap(BattleResultEvent* PROTOBUF_RESTRICT PROTOB
   _impl_.fled_player_ids_.InternalSwap(&other->_impl_.fled_player_ids_);
   _impl_.dead_player_ids_.InternalSwap(&other->_impl_.dead_player_ids_);
   _impl_.settlements_.InternalSwap(&other->_impl_.settlements_);
+  _impl_.participation_facts_.InternalSwap(&other->_impl_.participation_facts_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(BattleResultEvent, _impl_.settlement_format_version_)
       + sizeof(BattleResultEvent::_impl_.settlement_format_version_)

@@ -344,6 +344,8 @@ state=bootstrap
 1=PlayerProfileComp#8 optional string trial_appearance_id
 1=PlayerProfileComp#9 optional uint64 trial_expires_at
 1=PlayerProfileComp#10 optional uint64 appearance_switch_seq
+1=PlayerBattleResult#19 optional uint32 material_credit_units_added
+1=PlayerBattleResult#20 optional uint32 season_id
 
 retired=player_database#10
 retired=player_database#17

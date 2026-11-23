@@ -44,6 +44,9 @@ service ClientPlayerTeam {
   rpc NotifyTeamSnapshot(TeamSnapshotS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc NotifyTeamInvite(TeamInviteS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc NotifyTeamEvent(TeamEventS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // 队员确认本人在本队排位中的人物与宝宝预设(仅追加在末尾,不改变既有方法号)。
+  rpc ConfirmRankedPreset(ConfirmRankedPresetRequest) returns (TeamResponse) {}
 }
 
 // ---------------- 请求 ----------------
@@ -123,6 +126,16 @@ message StartTeamMatchRequest {
   // 0或PVE_TEAM：当前人数直接PVE，显式更大目标仍可补位；PVP_TEAM：每侧目标人数，0取当前人数。
   // PVP始终等待真人对手，队伍作为不可拆单位；其余模式明确拒绝。
   match.MatchMode match_mode = 5;
+  // 排位规则版本号(PVP_TEAM 排位必填或由服务端按当前赛季核验;版本不符拒绝开局)。
+  uint32 ranked_rule_version = 6;
+}
+
+message ConfirmRankedPresetRequest {
+  uint64 expected_team_id = 1;
+  uint32 character_preset_id = 2; // RankedPreset.id(role_kind=1): 101/102/103
+  uint32 pet_preset_id = 3;       // RankedPreset.id(role_kind=2): 201/202/203
+  uint32 rule_version = 4;        // 当前赛季规则版本
+  string request_id = 5;
 }
 
 // ---------------- 回包 / 显示层视图(AGENTS §11.6:在线态只出现在这里) ----------------
@@ -170,6 +183,10 @@ message TeamMemberView {
   uint32 zone_id = 9;    // 玩家 home zone
   uint32 join_seq = 10;  // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
   string appearance_id = 11; // 从玩家存档资料读取，空值保留旧身份映射。
+  uint32 ranked_character_preset_id = 12; // 该队员确认的排位人物预设(未确认或旧版本时为 0 或上次选择)
+  uint32 ranked_pet_preset_id = 13;       // 该队员确认的排位宝宝预设
+  uint32 ranked_rule_version = 14;        // 确认时的排位规则版本
+  bool ranked_preset_confirmed = 15;      // 是否已按当前名单与当前规则版本完成确认
 }
 
 message TeamApplicationView {
@@ -220,6 +237,10 @@ message TeamView {
   match.MatchMode match_mode = 17; // 本次排队模式；空闲时为0。
   // 不支持新字段的服务端会忽略PVP意图，客户端必须见到此能力才允许整队PVP。
   bool pvp_match_supported = 18;
+  // 队内全部成员是否均已按当前名单与当前规则版本确认排位预设。
+  bool ranked_presets_all_confirmed = 19;
+  uint32 ranked_season_id = 20;
+  uint32 ranked_rule_version = 21;
 }
 
 enum TeamChangeReason {
@@ -240,6 +261,7 @@ enum TeamChangeReason {
   TEAM_CHANGE_REASON_HEALED = 14;                    // 服务端自愈(索引/记录矛盾修复)
   TEAM_CHANGE_REASON_MATCH_QUEUED = 15;              // 整队进队列等补位;actor_id = 队长
   TEAM_CHANGE_REASON_MATCH_QUEUE_CANCELED = 16;      // 整队退出补位队列;actor_id = 主动取消者(0 = 系统撤单,原因在 tip)
+  TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED = 17;   // 队员确认排位预设;actor_id = 确认者
 }
 
 message TeamSnapshotS2C {
@@ -291,6 +313,10 @@ message TeamMemberRecord {
   uint32 zone_id = 2;
   uint64 joined_at_ms = 3;
   uint32 join_seq = 4;
+  uint32 ranked_character_preset_id = 5;
+  uint32 ranked_pet_preset_id = 6;
+  uint32 ranked_rule_version = 7;
+  bool ranked_preset_confirmed = 8;
 }
 
 message TeamApplicationRecord {

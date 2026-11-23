@@ -90,8 +90,8 @@ func main() {
 	log.Printf("  /oauth2.0/me              (QQ)     — access_token 'INVALID' returns error response")
 	log.Printf("  /sns/jscode2session       (WeChat mini game) — js_code starting with 'U' returns unionid, js_code 'EXPIRED' returns errcode 40029")
 	log.Printf("  /mgplatform/api/apps/jscode2session (Douyin mini game) — code 'EXPIRED' returns an error response")
-	log.Printf("  /auth/keys, /oauth2/v3/certs (Apple / Google signing keys)")
-	log.Printf("  /mock/apple/id_token, /mock/google/id_token?user=<seed>&aud=<ClientId> — mint an identity token; user 'EXPIRED' mints an expired one")
+	log.Printf("  /auth/keys, /oauth2/v3/certs, /.well-known/jwks (Apple / Google / Passport signing keys)")
+	log.Printf("  /mock/apple/id_token, /mock/google/id_token, /mock/passport/id_token?user=<seed>&aud=<ClientId>[&iss=<Issuer>] — mint an identity token; user 'EXPIRED' mints an expired one")
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -118,8 +118,10 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/mgplatform/api/apps/jscode2session", handleDouyinMiniGameCode2Session)
 	mux.HandleFunc("/auth/keys", issuer.handleJWKS)
 	mux.HandleFunc("/oauth2/v3/certs", issuer.handleJWKS)
+	mux.HandleFunc("/.well-known/jwks", issuer.handleJWKS)
 	mux.HandleFunc("/mock/apple/id_token", issuer.mintHandler(sandboxAppleIssuer, sandboxAppleTokenTTL, "apple-sub"))
 	mux.HandleFunc("/mock/google/id_token", issuer.mintHandler(sandboxGoogleIssuer, sandboxGoogleTokenTTL, "google-sub"))
+	mux.HandleFunc("/mock/passport/id_token", issuer.passportMintHandler())
 	// Apple 的换票与撤销(账号注销用,apple_revoke.go)。
 	apple := newAppleTokenStub()
 	mux.HandleFunc("/auth/token", apple.handleToken)

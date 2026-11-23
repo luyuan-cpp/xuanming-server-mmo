@@ -171,6 +171,18 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleScriptLoadoutFull = 16033;</code>
      */
     kMatchBattleScriptLoadoutFull(16033),
+    /**
+     * <code>kMatchRankedSeasonSettling = 16034;</code>
+     */
+    kMatchRankedSeasonSettling(16034),
+    /**
+     * <code>kMatchRankedPresetInvalid = 16035;</code>
+     */
+    kMatchRankedPresetInvalid(16035),
+    /**
+     * <code>kMatchRankedRuleVersionMismatch = 16036;</code>
+     */
+    kMatchRankedRuleVersionMismatch(16036),
     UNRECOGNIZED(-1),
     ;
 
@@ -323,6 +335,18 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchBattleScriptLoadoutFull = 16033;</code>
      */
     public static final int kMatchBattleScriptLoadoutFull_VALUE = 16033;
+    /**
+     * <code>kMatchRankedSeasonSettling = 16034;</code>
+     */
+    public static final int kMatchRankedSeasonSettling_VALUE = 16034;
+    /**
+     * <code>kMatchRankedPresetInvalid = 16035;</code>
+     */
+    public static final int kMatchRankedPresetInvalid_VALUE = 16035;
+    /**
+     * <code>kMatchRankedRuleVersionMismatch = 16036;</code>
+     */
+    public static final int kMatchRankedRuleVersionMismatch_VALUE = 16036;
 
 
     public final int getNumber() {
@@ -384,6 +408,9 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16031: return kMatchBattleScriptTooLarge;
         case 16032: return kMatchBattleScriptLoadoutInvalid;
         case 16033: return kMatchBattleScriptLoadoutFull;
+        case 16034: return kMatchRankedSeasonSettling;
+        case 16035: return kMatchRankedPresetInvalid;
+        case 16036: return kMatchRankedRuleVersionMismatch;
         default: return null;
       }
     }
@@ -449,7 +476,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\255\010\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\224\t\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -476,8 +503,11 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "hBattleScriptNotApproved\020\236}\022\037\n\032kMatchBat" +
       "tleScriptTooLarge\020\237}\022%\n kMatchBattleScri" +
       "ptLoadoutInvalid\020\240}\022\"\n\035kMatchBattleScrip" +
-      "tLoadoutFull\020\241}B$\n\016com.game.tableZ\022gener" +
-      "ated/pb/tableb\006proto3"
+      "tLoadoutFull\020\241}\022\037\n\032kMatchRankedSeasonSet" +
+      "tling\020\242}\022\036\n\031kMatchRankedPresetInvalid\020\243}" +
+      "\022$\n\037kMatchRankedRuleVersionMismatch\020\244}B$" +
+      "\n\016com.game.tableZ\022generated/pb/tableb\006pr" +
+      "oto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

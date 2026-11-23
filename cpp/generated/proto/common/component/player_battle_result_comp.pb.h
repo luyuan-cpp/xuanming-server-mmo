@@ -688,6 +688,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     kBattleConfigIdFieldNumber = 16,
     kExpGainFieldNumber = 18,
     kItemsMailedFieldNumber = 17,
+    kMaterialCreditUnitsAddedFieldNumber = 19,
+    kSeasonIdFieldNumber = 20,
   };
   // repeated .PlayerBattleResultCurrency currencies = 10;
   [[nodiscard]] int currencies_size()
@@ -902,11 +904,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_items_mailed(bool value);
 
   public:
+  // uint32 material_credit_units_added = 19;
+  void clear_material_credit_units_added() ;
+  [[nodiscard]] ::uint32_t material_credit_units_added() const;
+  void set_material_credit_units_added(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_material_credit_units_added() const;
+  void _internal_set_material_credit_units_added(::uint32_t value);
+
+  public:
+  // uint32 season_id = 20;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerBattleResult)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
+      ::google::protobuf::internal::TcParseTable<5, 20,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -953,6 +975,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     ::uint32_t battle_config_id_;
     ::uint64_t exp_gain_;
     bool items_mailed_;
+    ::uint32_t material_credit_units_added_;
+    ::uint32_t season_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1826,6 +1850,54 @@ inline ::uint64_t PlayerBattleResult::_internal_exp_gain() const {
 inline void PlayerBattleResult::_internal_set_exp_gain(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_gain_ = value;
+}
+
+// uint32 material_credit_units_added = 19;
+inline void PlayerBattleResult::clear_material_credit_units_added() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_credit_units_added_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t PlayerBattleResult::material_credit_units_added() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.material_credit_units_added)
+  return _internal_material_credit_units_added();
+}
+inline void PlayerBattleResult::set_material_credit_units_added(::uint32_t value) {
+  _internal_set_material_credit_units_added(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.material_credit_units_added)
+}
+inline ::uint32_t PlayerBattleResult::_internal_material_credit_units_added() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.material_credit_units_added_;
+}
+inline void PlayerBattleResult::_internal_set_material_credit_units_added(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_credit_units_added_ = value;
+}
+
+// uint32 season_id = 20;
+inline void PlayerBattleResult::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t PlayerBattleResult::season_id() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.season_id)
+  return _internal_season_id();
+}
+inline void PlayerBattleResult::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.season_id)
+}
+inline ::uint32_t PlayerBattleResult::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void PlayerBattleResult::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
 }
 
 // -------------------------------------------------------------------

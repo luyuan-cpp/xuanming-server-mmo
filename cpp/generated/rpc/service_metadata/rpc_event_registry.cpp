@@ -297,6 +297,10 @@ namespace match{void SendMatchServiceListBattleScriptsErased(entt::registry& , e
 namespace match{void SendMatchServiceSubmitBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceDeleteBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceSetBattleScriptLoadoutErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetRankedProfileErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSaveRankedPresetErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceUpdateRankedCosmeticErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetRankedBattleResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -358,6 +362,7 @@ namespace teampb{void SendClientPlayerTeamStartTeamMatchErased(entt::registry& ,
 namespace teampb{void SendClientPlayerTeamNotifyTeamSnapshotErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamNotifyTeamInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamNotifyTeamEventErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace teampb{void SendClientPlayerTeamConfirmRankedPresetErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendTeamAuthorityReadMembershipErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiBrowseListingsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiGetListingDetailErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -401,7 +406,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 448,
+static_assert(kMaxRpcMethodCount == 453,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1433,6 +1438,26 @@ void InitMessageInfo()
         std::make_unique<::match::SetBattleScriptLoadoutRequest>(),
         std::make_unique<::match::SetBattleScriptLoadoutResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSetBattleScriptLoadoutErased, "/match.MatchService/SetBattleScriptLoadout"};
+    gRpcMethodRegistry[MatchServiceGetRankedProfileMessageId] = RpcMethodMeta{
+        "MatchService", "GetRankedProfile",
+        std::make_unique<::match::GetRankedProfileRequest>(),
+        std::make_unique<::match::GetRankedProfileResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetRankedProfileErased, "/match.MatchService/GetRankedProfile"};
+    gRpcMethodRegistry[MatchServiceSaveRankedPresetMessageId] = RpcMethodMeta{
+        "MatchService", "SaveRankedPreset",
+        std::make_unique<::match::SaveRankedPresetRequest>(),
+        std::make_unique<::match::SaveRankedPresetResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSaveRankedPresetErased, "/match.MatchService/SaveRankedPreset"};
+    gRpcMethodRegistry[MatchServiceUpdateRankedCosmeticMessageId] = RpcMethodMeta{
+        "MatchService", "UpdateRankedCosmetic",
+        std::make_unique<::match::UpdateRankedCosmeticRequest>(),
+        std::make_unique<::match::UpdateRankedCosmeticResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceUpdateRankedCosmeticErased, "/match.MatchService/UpdateRankedCosmetic"};
+    gRpcMethodRegistry[MatchServiceGetRankedBattleResultMessageId] = RpcMethodMeta{
+        "MatchService", "GetRankedBattleResult",
+        std::make_unique<::match::GetRankedBattleResultRequest>(),
+        std::make_unique<::match::GetRankedBattleResultResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetRankedBattleResultErased, "/match.MatchService/GetRankedBattleResult"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -2371,6 +2396,11 @@ void InitMessageInfo()
         std::make_unique<::teampb::TeamEventS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamNotifyTeamEventErased, "/teampb.ClientPlayerTeam/NotifyTeamEvent"};
+    gRpcMethodRegistry[ClientPlayerTeamConfirmRankedPresetMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "ConfirmRankedPreset",
+        std::make_unique<::teampb::ConfirmRankedPresetRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamConfirmRankedPresetErased, "/teampb.ClientPlayerTeam/ConfirmRankedPreset"};
 
     // --- TeamAuthority ---
     gRpcMethodRegistry[TeamAuthorityReadMembershipMessageId] = RpcMethodMeta{
@@ -2649,6 +2679,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceSubmitBattleScriptMessageId:
 	case MatchServiceDeleteBattleScriptMessageId:
 	case MatchServiceSetBattleScriptLoadoutMessageId:
+	case MatchServiceGetRankedProfileMessageId:
+	case MatchServiceSaveRankedPresetMessageId:
+	case MatchServiceUpdateRankedCosmeticMessageId:
+	case MatchServiceGetRankedBattleResultMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -2736,6 +2770,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerTeamTransferLeaderMessageId:
 	case ClientPlayerTeamDisbandTeamMessageId:
 	case ClientPlayerTeamStartTeamMatchMessageId:
+	case ClientPlayerTeamConfirmRankedPresetMessageId:
 	case ClientPlayerJubaozhaiBrowseListingsMessageId:
 	case ClientPlayerJubaozhaiGetListingDetailMessageId:
 	case ClientPlayerJubaozhaiSetFavoriteMessageId:

@@ -62,3 +62,7 @@ constexpr uint32_t ClientPlayerTeamNotifyTeamInviteIndex = 13;
 constexpr uint32_t ClientPlayerTeamNotifyTeamEventMessageId = 203;
 constexpr uint32_t ClientPlayerTeamNotifyTeamEventIndex = 14;
 #define ClientPlayerTeamNotifyTeamEventMethod  ::ClientPlayerTeam_Stub::descriptor()->method(14)
+
+constexpr uint32_t ClientPlayerTeamConfirmRankedPresetMessageId = 452;
+constexpr uint32_t ClientPlayerTeamConfirmRankedPresetIndex = 15;
+#define ClientPlayerTeamConfirmRankedPresetMethod  ::ClientPlayerTeam_Stub::descriptor()->method(15)
