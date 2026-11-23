@@ -329,6 +329,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
 - [official-passport-registration.md](design/official-passport-registration.md) — 官方通行证与账号注册接入设计（Casdoor OIDC）
 - [official-passport-ui-handoff.md](design/official-passport-ui-handoff.md) — 官方通行证与账号注册 · 道家 Q 版 Unity UI 异机交接
+- [pc-original-static-backgrounds-20261123.md](design/pc-original-static-backgrounds-20261123.md) — 端游原图静态背景服务端核实与双端 ID 对账设计（2026-11-23）
 - [pet-memory-minigame-v1.md](design/pet-memory-minigame-v1.md) — 灵宠翻牌 V1 设计与双机交接
 - [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
 - [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处

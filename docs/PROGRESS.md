@@ -4817,3 +4817,10 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 
 - [地图顺手拾取首版](design/world-map-play-v1.md)的八仙岛本图战斗入口明确为现有战斗面板里的可选项，不设圆庭定点交互，因此服务端需核世界场景配置、队伍权威名单／准备状态与同图同线，客户端地图 ID 不能充当资格。风眼引风候选收窄为每局一次、首回合预告第二回合，风眼倒下不取消已锁定风击；同一 battle_id 只记一次合格 PVE 基础奖励。
 - 上一条进度称 Dungeon.scene_id“指战斗副本场景”过强。schema 只证实它关联 BaseScene 模板，现有 Dungeon 1 的值为 17；本次未核实生产代码按该字段创建副本。它不能当玩家当前八仙岛世界场景 2，正式文档已按此口径更正。本轮仍只修改策划文档，未改或测试游戏逻辑。
+
+## 2026-11-23 端游原图静态背景（36 张）客户端本地预览接入与服务端 ID 对账
+
+- 按交接 `D:/work/image/.codex-artifacts/pc-original-static-backgrounds-20261123/GEMINI_CLIENT_SERVER_INTEGRATION_HANDOFF.md` 完成双端接入与对账，设计落盘至[端游原图静态背景服务端对账设计](design/pc-original-static-backgrounds-20261123.md)。
+- **服务端核实与约束**：核对当前权威 `BaseScene.xlsx`（1–21）、`World.xlsx`（1–16）、`festival_maps_20261109.json`（9 图）与 `authored_maps_20261112.json`（2 图），本次 40 个端游目标 ID 与现有服务端 ID 重叠为 0；严禁从静态背景 PNG 推断碰撞、导航、出生点或传送入口。新增对账清单 `data/scene_nav_bin/pc_original_static_backgrounds_20261123.json`、核验工具 `tools/navmesh_baker/verify_pc_original_map_parity.py` 与单测 `tools/navmesh_baker/test_pc_original_map_parity.py`，单独登记 36 张 ready 本地预览图、4 个缺口 ID（`29005`、`11005`、`41049`、`50024`）及 2 个特殊 HOLD 备选（`15000` 8000×8000 `source_valid_visual_hold`、`50024` 4000×3000 `viewport_unconfirmed`），均保持 `productionTravelEnabled=false`。
+- **客户端接入**：`mmorpg-client` 新增 `Assets/Resources/World/PcOriginalPreview20261123/`（36 图、1,025 块 `<=1024` 原尺寸无重采样分片与 36 张等比总览图，3 张含透明通道图保留无损 RGBA PNG）、数据驱动可替换契约 `PcOriginalMapCatalogContract.cs`、按需流式查看器 `PcOriginalMapPreviewViewer.cs`、独立预览场景 `PcOriginalMapPreview.unity` 及菜单入口 `MMORPG > Maps > 端游原图静态背景预览 (36图)`。
+- **Java 版（AGENTS §12）**：本轮未改协议、表 schema 或在线玩法逻辑；Java 仓同样未注册这 40 个 ID 的场景与导航，待后续道家 Q 版改绘和正式导航定稿后再双端同步。
