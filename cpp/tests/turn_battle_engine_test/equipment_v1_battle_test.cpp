@@ -556,6 +556,21 @@ TEST_F(EquipmentV1BattleTest, MissingOrInconsistentSupportProvenanceRemainsUnkno
     EXPECT_EQ(1080, EventSum(result, BATTLE_EVENT_HEAL, kSelf, kAlly));
 }
 
+TEST_F(EquipmentV1BattleTest, OnlyRetiredMissingSkillRanksHaveKnownZeroSupport) {
+    Skill(901, BattleEffectOp::Heal, 2); Learn(kSelf, 901);
+    Player(kSelf).mutable_equipment_effects()->set_support_sources_complete(true);
+    (*Player(kSelf).mutable_skill_ranks())[13003] = 3;
+    auto state = Start()->BuildStateSnapshot();
+    const auto& archived = Unit(state, kSelf);
+    EXPECT_TRUE(archived.support_effects().healing().complete());
+    EXPECT_TRUE(archived.support_effects().shield().complete());
+    EXPECT_FALSE(archived.skill_ranks().contains(13003));
+    (*Player(kSelf).mutable_skill_ranks())[999999999] = 1;
+    state = Start()->BuildStateSnapshot();
+    EXPECT_FALSE(Unit(state, kSelf).support_effects().healing().complete());
+    EXPECT_FALSE(Unit(state, kSelf).support_effects().shield().complete());
+}
+
 TEST_F(EquipmentV1BattleTest, SupportShieldPreviewMatchesAppliedCapacityAndActualAbsorption) {
     Skill(902, BattleEffectOp::Shield, 3); Learn(kSelf, 902);
     auto& shield = data->AddBuff(9020); shield.set_duration_rounds(2); shield.set_tick_on_apply(1);

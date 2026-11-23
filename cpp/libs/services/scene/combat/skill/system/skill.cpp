@@ -338,7 +338,7 @@ void SkillSystem::RestoreCooldowns(const entt::entity caster, const CooldownTime
 		return;
 	}
 	// 加载链上的创建点:整份拷贝,未知字段(更新版本加的)随记录带回、存盘原样写出。
-	auto& cooldowns = tlsEcs.actorRegistry.emplace<CooldownTimeListComp>(caster, saved);
+	auto& cooldowns = tlsEcs.actorRegistry.emplace_or_replace<CooldownTimeListComp>(caster, saved);
 	const uint64_t nowMs = TimeSystem::NowMilliseconds();
 	for (auto& [cooldownId, cooldown] : *cooldowns.mutable_cooldown_list()) {
 		if (cooldown.start() > nowMs) {

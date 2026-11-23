@@ -795,9 +795,15 @@ TEST_F(PlayerSkillBookTest, SupportPreviewUsesAuthoritativeLevelCurvePassiveAndM
     for (const auto& row : book.catalog()) if (row.skill_table_id() == 10010) {
         ASSERT_TRUE(row.has_support_preview()); EXPECT_EQ(1380, row.support_preview().reference_value());
     }
+    Own(player, 10007, 3);
+    PlayerSupportEffectSystem::Build(player, summary);
+    EXPECT_TRUE(summary.healing().complete()); EXPECT_TRUE(summary.shield().complete());
+    EXPECT_DOUBLE_EQ(1500, summary.healing().total_bonus_bps());
+    EXPECT_EQ(3u, StoredRank(player, 10007));
     Own(player, 999999999, 1);
     PlayerSupportEffectSystem::Build(player, summary);
     EXPECT_FALSE(summary.healing().complete()) << "未知已学技能不可冒充完整零贡献";
+    EXPECT_FALSE(summary.shield().complete());
     tlsEcs.actorRegistry.remove<PlayerBagsComp>(player);
     PlayerSupportEffectSystem::Build(player, summary);
     EXPECT_FALSE(summary.healing().complete());

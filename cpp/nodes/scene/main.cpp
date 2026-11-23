@@ -39,6 +39,7 @@
 #include "combat/skill/system/skill.h"
 #include "combat_state/system/combat_state.h"
 #include "player/system/team_follow_system.h"
+#include "player/system/afk_pass.h"
 #include "player/system/player_appearance.h"
 #include "player/system/player_rename.h"
 
@@ -127,6 +128,11 @@ namespace
                     err = "scene AppearanceRule / CharacterAppearance table validation failed";
                     return false;
                 }
+                if (!AfkPassSystem::ValidateTables())
+                {
+                    err = "scene AfkPassRule table validation failed";
+                    return false;
+                }
                 return true;
             }
 
@@ -138,6 +144,7 @@ namespace
                 PlayerMysteryMerchantSystem::ValidateTables();
                 PlayerRenameSystem::ValidateTables();
                 PlayerAppearanceSystem::ValidateTables();
+                AfkPassSystem::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

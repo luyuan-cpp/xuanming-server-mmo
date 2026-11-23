@@ -40,10 +40,11 @@ func writeFakeBundle(t *testing.T, dir string, schemaDigest string, version uint
 		h := sha256Hex(raw)
 		digestInput += tbl + ":" + h + "\n"
 		entries[tbl] = ManifestTableEntry{
+			Name:      tbl,
 			HotReload: hotReload[tbl],
 			Rows:      1,
 			Artifacts: []ManifestArtifact{{
-				Kind:   "data",
+				Kind:   "json",
 				File:   fileName,
 				Size:   int64(len(raw)),
 				SHA256: h,
@@ -96,6 +97,39 @@ func TestVerifyTableDirManifest(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "Skill.json"), []byte(`{"data":[1]}`), 0o644))
 	_, err = VerifyTableDirManifest(dir, false, testSchemaDigest)
 	require.Error(t, err)
+}
+
+func TestVerifyTableDirManifestRejectsInvalidArrayEntries(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"object_tables", `{"schema_version":2,"schema_digest":"0123456789abcdef","version":1,"content_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tables":{"Skill":{}}}`},
+		{"missing_name", `{"schema_version":2,"schema_digest":"0123456789abcdef","version":1,"content_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tables":[{"hot_reload":true,"artifacts":[]}]}`},
+		{"duplicate_name", `{"schema_version":2,"schema_digest":"0123456789abcdef","version":1,"content_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tables":[{"name":"Skill","artifacts":[]},{"name":"Skill","artifacts":[]}]}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var m BundleManifest
+			require.Error(t, json.Unmarshal([]byte(tc.raw), &m))
+		})
+	}
+}
+
+func TestVerifyTableDirManifestMatchesRealRepoTables(t *testing.T) {
+	// 直接核对仓库真实导出的 generated/tables/manifest.json(数组格式)与当前 table.SchemaDigest。
+	repoTables := filepath.Join("..", "..", "..", "generated", "tables")
+	if _, err := os.Stat(filepath.Join(repoTables, ManifestFilename)); err != nil {
+		t.Skipf("real generated/tables/manifest.json unavailable: %v", err)
+	}
+	for _, useBinary := range []bool{false, true} {
+		m, err := VerifyTableDirManifest(repoTables, useBinary, table.SchemaDigest)
+		require.NoError(t, err, "useBinary=%v", useBinary)
+		require.NotEmpty(t, m.Tables)
+	}
+	m, err := ValidateTablesDir(repoTables, false, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, m.Tables)
 }
 
 func TestManagerStartupFallsBackToImageAndHotReloadsScheduled(t *testing.T) {

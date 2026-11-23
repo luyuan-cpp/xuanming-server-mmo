@@ -1,0 +1,34 @@
+#!/bin/sh
+# 提交前门禁：仅检查暂存区中改动的 C++ 源码是否声明了裸指针成员（与 CI 规则一致）。
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 非 C++ 提交直接放行，避免启动 Python 解释器。
+STAGED_CPP="$(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR -- cpp/)"
+if [ -z "$STAGED_CPP" ]; then
+    exit 0
+fi
+
+CHECKER="$REPO_ROOT/tools/scripts/tests/test_cpp_no_raw_pointer_member.py"
+if [ ! -f "$CHECKER" ]; then
+    echo "[pre-commit] ERROR: checker script not found: $CHECKER" >&2
+    exit 1
+fi
+
+PYTHON_CMD=""
+for candidate in python python3; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import sys; sys.exit(0 if sys.version_info[0] >= 3 else 1)" >/dev/null 2>&1; then
+        PYTHON_CMD="$candidate"
+        break
+    fi
+done
+
+if [ -n "$PYTHON_CMD" ]; then
+    exec "$PYTHON_CMD" -X utf8 -B "$CHECKER" --staged
+elif command -v py >/dev/null 2>&1 && py -3 -c "import sys; sys.exit(0)" >/dev/null 2>&1; then
+    exec py -3 -X utf8 -B "$CHECKER" --staged
+else
+    echo "[pre-commit] ERROR: Python 3 not found; cannot run no-raw-pointer-member check." >&2
+    exit 1
+fi

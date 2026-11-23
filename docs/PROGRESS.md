@@ -4585,3 +4585,224 @@
   3. **部署契约测试与静态门禁**：`k8s_mall_payment_deploy_contract` **22/22**、`sql_boot_catalog_local` **51/51**、`logical_db_deploy_contract` **46/46**、`redis_player_cluster_contract` **47/47**、`start_game_java` **5/5**、`check_log_text_english.py` exit `0`；`k8s_deploy_contract` **363/364**（本线 `mysql-connection-alerts.yaml` 已转绿，仅剩 1 条非本线 `chat ConfigMap` 的 `ReportChat` 既有失败）；`k8s_migrate_gate` **76/78**（2 条非本线既有测试夹具问题，未改动他线）。
   4. **Unity 客户端原生复测**：`tools/client_compile_check.ps1` 原生 **exit `0`（`files=567 errors=0`）**。
 - **尚未覆盖/需负责人决策项**：本机未安装 `kind` 且 `kubectl` 无可用集群上下文（未做 `kind` 活集群冒烟）；真实渠道商户号/证书/回调域名/真机沙盒验单需负责人与真机操作；独立 Java 全服务仓 `D:\luyuan\xuanming-server-mmo`（30+ 文件且当前有并发会话未提交改动）仍留 `PARITY.md` TODO 待确认是否启动移植。
+
+
+## 2026-11-22 组队跟随 / 离线托管 / 挂机月卡 / 实时冷却与 Buff 跨重登：全链路标准审计与服务端/客户端代码收口（未编译、未运行单测与冒烟，交 Codex）
+
+- **范围与约束**：全部在 `main` 工作区落码（无分支/worktree、未 `git commit`/`git push`、未改 `.proto`/配表/`generated/`）；Java 独立服按要求仅登记 `../xuanming-server-mmo/PARITY.md` TODO，不写 Java 代码；协议生成、编译、单测执行与 robot 冒烟交 Codex。
+- **服务端（C++ Scene）修复（14 个文件，含单测）**：
+  1. **跨节点离线托管丢跟随意图与托管队长 15s 刷读修复**（`cpp/libs/services/scene/player/system/player_team.{h,cpp}`）：
+     - 根因：跨节点托管落点（`EnterHostedHold` → `AfkHostingSystem::Probe` → `loop->queueInLoop`）在目标节点新建实体时，异步 `TeamAuthority/ReadMembership` 尚未回包，实体尚无 `TeamId` 组件；原 `OnOfflineHostingStarted` 与 `NeedsFollowRecheck` 遇到 `team == nullptr` 直接返回，导致跨节点托管队员永久丢失 `TeamFollowIntentComp` 且 15 秒兜底心跳也不补查；同时原逻辑给在线/离线托管队长挂了意图但未识别队长身份，导致托管队长每 15 秒重复发 `ReadMembership`。
+     - 修复：在 `TeamSnapshotVersion` 记录 `isLeader`；`OnOfflineHostingStarted` 与 `NeedsFollowRecheck` 仅对已确认无队墓碑（`team != nullptr && team->team_id() == 0`）跳过，对 `team == nullptr`（跨节点新实体）提前挂意图并在首跳失败时允许兜底重查，对已确认队长跳过 15 秒周期重查（同时保留意图以便离线惰性转让队长后立刻切到跟随新队长）。
+  2. **挂机月卡强一致写围栏、Redis 投影失败自愈与热更配表校验**（`cpp/libs/services/scene/player/system/afk_pass.{h,cpp}`、`afk_hosting.cpp`、`cpp/nodes/scene/main.cpp`）：
+     - `AfkPassSystem::GmSet` 补齐 `player_mutability::IsPlayerMutable(player)` 写围栏（不可写返回 `kAfkPassFrozen`），与 `Buy` 同口径。
+     - `AfkPassCommittedComp` 新增单调序列 `projectionSeq` / `confirmedSeq`，仅在玩家域 Redis 回复成功且序列匹配时推进 `confirmedSeq`；`OnSaveCommitted` 在值变化或上次写出未确认时重发，`RefreshProjection` 同时支持活跃 `SET` 续写与未确认 `DEL` 清脏键自愈；`AfkHostingSystem::ApplyProbeResult` 在托管首次启动时立即触发一次 `AfkPassSystem::RefreshProjection`，不等最多 20 秒错峰心跳。
+     - 新增 `AfkPassSystem::ValidateTables()` 并接入 `SceneNodeHooks::TableLoadHandler::Validate` 与 `OnCommitted`，热更异常 `AfkPassRule` 表 fail-closed 拒绝。
+  3. **空队形 20Hz 空转回收与大规模 50m AOI 离线托管广播优化**（`cpp/libs/services/scene/player/system/team_follow_system.cpp`、`spatial/system/aoi.cpp`、`cpp/libs/engine/core/network/client_message_sender.cpp`、`combat/skill/system/skill.cpp`）：
+     - 最后一名随从离开/暂离或首个随从严格导航落位失败后，于 `TeamFollowSystem::Update` 末及 `TryAttach` 失败分支回收空 `TeamFollowFormationComp`，消除 0 队员队长持续 20Hz 轨迹更新与导航射线开销。
+     - `AoiSystem::SendVisibilityChanges` 跳过已显式摘除会话（`gate_session_id == kInvalidSessionId`）的离线托管观察者（覆盖创建/移除与进视野补发移动）；`client_message_sender.cpp` 静默跳过无活跃会话实体（`nullptr` / `0` / `kInvalidSessionId`）并在无有效收件人时提前返回，避免 50m AOI 下大规模离线托管触发 `LOG_ERROR` 日志风暴与无效 protobuf 序列化。
+     - `SkillSystem::RestoreCooldowns` 改为 `emplace_or_replace<CooldownTimeListComp>` 防止重复调用断言崩溃。
+- **Unity 客户端（`../mmorpg-client`）修复（6 个文件，含 EditMode 单测）**：
+  1. **托管重登接回竞态修复**（`Assets/Scripts/Game/Team/TeamFollowDriver.cs`、`Assets/Scripts/UI/Ugui/Team/TeamFollowUiRoot.cs`）：
+     - `TeamFollowUiRoot` 传入 `allowed = _available`（不再与 `trusted` 耦合）；`TeamFollowDriver.Tick` 在 `snapshot == null && allowed` 且服务器已推 `TeamFollowDriven == true` 时立即显示 `TeamFollowStatus.Following`（放开「暂离」按钮）并支持立即发 `TeamFollowC2S{follow=false}` 撤回；首次收到非 0 队伍快照时保留用户在无快照窗口里点下的暂离选择，换角（`PlayerId` 变更）或换队/离队时正确复位。
+  2. **挂机月卡客户端状态同步与文案修正**（`Assets/Scripts/Game/AfkPass/AfkPassClient.cs`、`Assets/Scripts/UI/Ugui/Gameplay/AfkPassUiRoot.cs`）：
+     - `ObserveConnection()` 返回是否复位，在 `Tick()` / `RequestInfo()` / `HandleSceneEntered()` 发生静默切连接时触发 `Changed` 通知 UI 清旧状态；
+     - `AfkPassModels.DescribeTip(tipId, currencyType)` 按实际配置币种输出余额不足提示（保留单参重载兼容）；
+     - `AfkPassUiRoot` 续费时确认与进行中按钮文案改为「确认续费（…）」/「续费中…」。
+- **新增单元测试**：
+  - C++ `bag_test`：`AfkPassSystemTest.{GmSetRespectsPlayerMutabilityGuard,ValidateTablesAcceptsExportedRule,FailedProjectionSetAndDelSelfHealOnLaterCommitOrRefresh}`
+  - C++ `cross_zone_test`：`ConnectionLostHoldAfkPassEcs.{HostingStartOnFreshCrossNodeEntityWithoutTeamIdTurnsOnFollowAndRefreshesProjection,HostingStartDoesNotTurnOnFollowForConfirmedSoloPlayer}`、`TeamFollowDriveTest.{HostedLeaderAndUnknownTeamRecheckRules,EmptyFormationIsReclaimedOnNextUpdate}`
+  - C++ `aoi_delivery_test`：扩展 `AoiDeliveryTest.BroadcastsSkipObserversWhoseSessionWasInvalidated` 覆盖离线托管观察者不收进视野创建与补发移动。
+  - Unity EditMode：`AfkPassClientTests.{SilentConnectionSwap_ResetsStateAndNotifiesChanged,DescribeTip_UsesConfiguredCurrencyNameForNonDiamond}`、`ActorWorldFoundationTests.FollowDriver_ShowsFollowingBeforeTeamSnapshotArrives_AndPreservesPreSnapshotAway`。
+- **只读静态预检（2026-11-22 已跑）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：**13/13 OK**
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：**5/5 OK**
+  - `python tools/scripts/check_log_text_english.py`：**0 违规**
+- **交 Codex 验证（本次未改 `.proto`/表，但若合并他人协议改动仍请按需先导表/proto-gen）**：
+  1. C++ Windows 整解（串行）：`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`
+  2. C++ 定向测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter <aoi_test|aoi_delivery_test|bag_test|buff_test|skill_test|cross_zone_test|currency_test|turn_battle_engine_test|kafka_command_test> -LogDir build/verification/team-follow-afk-hosting-20261122`（重点验证上述全部新增用例）
+  3. Linux GCC 编链：`python tools/scripts/build_docker_cpp_debug.py`（或 `tools/scripts/build_linux.sh`）
+  4. Unity 客户端（`D:\luyuan\mmorpg-client`）：`pwsh -File tools/client_compile_check.ps1 -ShowErrors 40` + Unity EditMode 6 套件（`TeamFollowDeclarationTests|TeamRegroupPolicyTests|ActorWorldFoundationTests|AfkPassClientTests|WorldHudNavigationLifecycleTests|MysteryMerchantClientTests`）
+  5. Go 回归与本地全套 robot 冒烟（清数据后）：`team-follow-smoke`（`TEAM_FOLLOW_SMOKE_OK`）与 `afk-pass-follow-smoke`（`AFK_PASS_FOLLOW_SMOKE_OK`，覆盖同节点 + 跨节点离线托管跟随与重登接回）。
+
+## 2026-11-22 《五行奇谈》四位人物档案与收藏设计
+
+新增[人物志与角色收藏设计](design/character-background-collection-design.md)，收录归元城留灯院四位候选人物的档案、片段、台词、关系、获取方向与美术交接。首批复用客户端易容窗口做只读人物志，正式永久拥有、免费切换与全服发放待旧形象卡权益定案。已核对两端现有身份链及 Java 对账本的旧易容条目。本条记录设计落盘，代码和运行验收另记。
+
+## 2026-11-22 Codex：论剑排位首发 V1 与 Gemini 实现交接
+
+- 按负责人要求把讨论稿收成首发规格。1V1 至 5V5 全部支持真人匹配，沿用 PVP_TEAM 一条综合 Elo，首测五个段位，首季保留存量评分，换季保留 Elo、重开赛季参与和榜代。首次有效局亮段，奖励按全季有效场次累计。
+- 竞技配置为三个人物打法和三种宝宝战法，分别任选，同档同数值。核对六套配置的正式技能 ID、施法资格及等级、宝宝种类和条目点合计。明确公共技能和宝宝仅对局临时生效，展示外观与战斗数据分离，结算和重连不得把临时数据写回永久资产。
+- 首测八周，累计 4／8／12 场有效局可得头像、名片和青云玉符，胜负平都计参与。日常走既有 PVE/PVP 共用材料账，每日合计 20 份。小额消费沿用现有 10 元易容卡。本季最高段荣誉和榜首展示均为纯展示权益。
+- 更新既有文档和索引，附 Gemini 实现指令、两版服务端与 Unity 的交付顺序、关键验收及可独立复制的美术指令。Java 版所用现代战斗效果有待对齐。本轮完成方案及静态核对，两版与客户端实现、战斗时长及平衡实测待进行。
+
+## 2026-11-22 四位人物志客户端首批已派发，Gemini 命令权限阻断
+
+Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-background-collection-design.md)及首批客户端范围。CLI 退出码为 0，结果正文为空，命令权限在无交互模式自动拒绝。本次未落码，编译、EditMode 与界面验收均未执行。人物原 ID 与立绘回退、翻页资源加载两项已补入验收。
+
+## 2026-11-22 人物志本轮以设计交付
+
+负责人选择“先交设计，暂不继续代码”。本轮交付[完整人物设计](design/character-background-collection-design.md)。Gemini 首批代码未改，本次执行结束，无需后续命令授权。
+
+## 2026-11-22 人物志 UI 与业务逻辑分工
+
+负责人明确由另一台电脑的 Codex 制作人物志 UI、页面布局、美术素材与交互表现。Gemini 后续负责收藏业务的数据、权威状态、接口和测试。已更正[人物志设计与交接](design/character-background-collection-design.md)；本轮仍只交设计，未恢复代码执行。
+
+## 2026-11-22 Codex：论剑首发按两台电脑拆分交接
+
+- 按负责人指定，在既有论剑 V1 规格中分开 Gemini 的两版服务端、协议和联机逻辑任务，以及另一台电脑 Codex 的美术和 Unity UI 任务。Gemini 交可调用接口、状态与样例，异机可先用明确标记的演示数据制作，接口就绪后接权威数据。
+- 两条交接各有可单独复制的指令和验收。区分结算增加的日常材料可领额度与领取后的资产到账。首发玩法、预设、积分、赛季奖励及易容规则沿用同稿前四节。本轮完成文档与静态校验。
+
+## 2026-11-22 Codex：论剑首发对局联调规则
+
+在[论剑排位首发 V1](design/ranked-play-season-ui-candidate.md)第八节补齐队员预设确认、取消原意图核对、人宠共用行动窗口、同速、掉线与最后一回合判定，两台电脑的工单均引用此节。复用既有人宠分单位提交和场景材料额度账。按当日技能表区分单人冷却后重施和多人接力封法。已静态核对相对链接、表格、工单、差异格式及文档索引。本轮只交设计，C++/Go、Java 与 Unity 的论剑专属接入、真实局长和平衡均待实施或实测。
+
+
+## 2026-11-22 Codex：长期养成首发试炼手记与双机交接
+
+- 新增 docs/design/long-term-progression-v1.md，按负责人简单好玩、不肝、小额付费的要求收敛为一个入口、通关印记与单人纪录两个页签；首发四个有效格，盖印与最少回合来自正式试炼权威结算，不新增材料、领奖、日常或付费系统。
+- 核对最新装备300打造材料加300强化石、同档首套30有效日、免费宝宝20条目点和既有每日20份共享账；小游戏首发产扣均0，材料领取只兑现已有余额。记录并行核心循环20与赛季PVP胜局额外5的跨线分歧，手记不激活额外收益，综合经济发布须先统一。
+- 给Gemini的逻辑交接明确开局冻结试炼身份、按本人及入场人数判定、与既有结算同次持久确认、只读查询和现有个人战果补可选试炼标记；给异机Codex的UI章节独立包含美术方向、样例、按钮、加载/空/未开放/错误/断线状态和验收，无需先拉取仓库制作演示。
+- 独立静态复核后修正普通试炼危险动作错峰、已确认战果定向跳转所需格标记，以及目录退役后的行数/分母一致性。文档链接与预算算术检查通过；按现有生成器更新索引，保留并行会话新增条目，本进度纯追加。
+- 本轮只交设计，未改游戏代码、协议、正式表、客户端或运行服务；未编译、未进行战斗平衡与联机验收，未提交或推送。C++/Go与Java的新增手记均待实现，Java宝宝能力差异按现有专线记录，不据此宣称双版功能已齐。
+
+
+## 2026-11-22 Codex：灵宠翻牌首发 V1 与逻辑/UI 双机交接
+
+- 按负责人要求完成简单、不肝、小额付费整体定位下的小游戏设计，保存至 docs/design/pet-memory-minigame-v1.md。首发仅灵宠翻牌：12 张六对、无倒计时和次数失败、失配明牌保留到下次合法点击、只记录本机最佳；单局 1—2 分钟是待试玩目标。
+- 本线全免费、无材料或其他资产发放，不增减既有全游戏每日 20 份材料额度，小额提速仍由装备线维护。因零经济权益、无排行及云成绩，采用 Unity 本地纯 C# 规则，不新增服务端 RPC、proto、存档或 C++/Java 模块；未来收益接入须另审服务器权威判定，不能用本地成绩领奖。
+- Gemini 负责规则、洗牌、只读快照、本机最佳存储适配与测试；另一台 Codex 负责历练入口、UI/素材、触控布局和生命周期绑定。文档含明确状态表、显式槽号、固定联调盘、异常与平台验收及两段可复制任务指令。临时关闭或同会话重连保留内存盘，登出/换角/切服或进程结束清盘，不暂停联网世界。
+- 只读核对客户端现有 QdaoPetCatalog、HUD 入口与六份真实头像。文档链接、空白和固定盘样例核对完成。索引预检因其他会话并发生成/新增条目在写入前停止，读取最新索引后按正式生成器更新，保留并行内容；本进度仅追加。
+- 本轮只交设计，没有实施客户端或服务端代码、生成美术、启动 Gemini、发送异机任务或运行游戏构建/测试。两版服务端本次均无实施项；客户端实际接入、平台存储与体验验收待指定实现者完成。未提交或推送，另一台电脑须接收同一版本文档与后续逻辑制品。
+
+
+## 2026-11-22 Codex：旧装回收与玩家交易简化 V1，交 Gemini 逻辑与异机 Codex UI
+
+- 依据负责人“简单最好玩、不肝、小小氪金”的最新要求及项目设定，在 docs/design/equipment-recycling-trade-economy-v1.md 收成一版实施推荐；旧候选稿只增加后继入口，原文保留，不并行采用16+4、旧器砂和调灵符路线。新增方案的18自用+2可交易、每件基础旧装2重铸砂、每次1砂+20银两定向改已装词条均注明首测设计参数，未冒称已有实现或实测平衡。
+- 沿既有两场各10份、每天共20份自选和300打造+300百炼石预算，每10份内9绑定+1可交易；全部自用30有效日、每天净卖2则34有效日仅为正确缺口下的预算。已赚未领额度跨日保留；新旧领取、可交易来源、混料继承、单件拆解与首饰改配边界、流通旧装10/20日冷启动和真实买家供需均写清，不增日常任务或保底利润。
+- 小额付费复用既有300灵石/30天断线跟队月卡及已存在外观消费；本方案不加第二月卡、自动领料、产料翻倍或官方直售核心料。省成装进度可来自实际玩家售料，银两、人民币、手续费及经营风险分别核算；真人寄售和实际出款不以既有devpay充值冒烟代替验收。
+- 保留当面交易，列同场距离、空邀请/赠送、双方修订锁定与确认、唯一交割决定、分别持久到账及原单恢复。三主页面复用弹窗与抽屉，第11节为可复制Gemini逻辑任务，第12节为自包含异机Codex UI任务，明示动态文字分离、领取数量与币种、变化提醒、未知恢复、收益/提现及端用途/渠道能力。未向其他聊天派发任务。
+- 按规范最高档设计代理撰稿及独立只读审阅，五项实质意见均已修订复核。静态核实现托管引用格式仍有跨端不兼容，而支付撤销收益冻结/人工解冻没收已有后续进展，不沿旧稿误报冻结全缺。链接25/25、提示词围栏、空白与文档索引检查通过；证据位于忽略目录build/verification/simple-economy-v1-20261122。总索引保留并行聊天的新条目，进度纯追加并核验原字节保留。
+- 本轮仅交设计，未改业务源码、正式表、协议或客户端，未生成图/启动Unity/服务/支付/提现，未运行编译、游戏测试或压测。两版新玩法均待Gemini依当前代码实现及对齐，本轮未改独立Java仓或登记功能完成。未提交或推送。
+
+
+## 2026-11-22 Codex：帮会会武首发 V1 与 Gemini／异机 Codex 交接
+
+- 按负责人简单好玩、不肝、小额付费的要求，新增 [帮会玩法首发 V1](design/guild-play-v1.md) 和 [Unity UI 异机交接](design/guild-play-ui-handoff.md)。首发采用同归属区异帮双人队匿名会武，每人一只局内宝宝、一场定胜负；6–10 分钟是待试玩目标，复用已有 2–5 人同道历练与单人普通 PVE 入口。
+- 会武免费共用待实现的论剑公共人物／宝宝预设，独立非评级，不计论剑 Elo、赛季次数和玉符进度。正常合资格胜负平均增加 10 份可领材料额度，与原玩法共享每日 20；领取才进包，不新设帮会货币、必做周常、付费次数或战力商品。
+- 本帮首次权威提交的合格胜局永久并列题名两名队员，近 20 场仅裁展示。补齐成员确认、取消／成局竞态、固定 2+2 分边、对称平局、退帮归属、逐局材料证据、永久去重及本人战报权限，明确公共预设与新模式尚待实现。
+- Gemini 后续负责 C++/Go 与 Java 业务、协议、表和客户端非 UI 适配；另一台电脑 Codex 负责最多四个 UI 视图、Prefab、表现及最终 UI 联机。两份文档均含可直接交接的任务和验收；未派发任务、启动 Gemini 或修改其他仓。
+- 设计交叉复核和本地引用静态核验完成，正式文档索引 --check 通过；索引已由并行会话生成并包含两份新稿，本轮不重复改写。本进度仅追加。本轮未改游戏代码、协议或正式表，未生成美术、启动服务、编译或实测玩法；平衡、时长与双版联机留待实施验收。未提交或推送。
+
+
+## 2026-11-22 Codex：破阵之季简化设计与 Gemini／异机 Codex 交接
+
+- 新增[首季玩法与 Gemini 逻辑交接](design/battle-season-one-simple-design.md)及[异机 Codex UI 制作单](design/battle-season-one-ui-handoff.md)。首季八周，两条常规入口加一个轮换活动位；人宠会武保留真实养成、每侧 1～5 位真人及现有 PVP_TEAM 评分，首领支持单人／未满小队立即开局。
+- 非正规活动依次为护卫救援、物法易势，共用免费临时人宠配置。明确首领预告与回合节奏、救援同组死亡判定、试用配置与永久资产隔离，不启用另一份论剑草案的统一配装正规排位规则。
+- 主要材料仍走同一日账，前两次合格结算各 10 份，其中本季真人 PVP 胜局各加 5 份，全天合计 20／25／30。补齐参与资格、5 份领取尾数、跨日跨季、重复结算和开局规则版本要求。材料直购保留既定方向，价格与限额尚未定案，不在本季新设购买入口。
+- Gemini 后续负责两版服务端、协议与联机逻辑；另一台电脑 Codex 负责 UI、美术和交互表现，按本稿接权威数据。两份文档的链接、表格、收益算例及索引已做静态检查。本次仅交设计，未修改玩法实现、未编译或运行战斗测试；C++／Go 与 Java 实装、Unity 接入、局长和体验平衡均待后续验证。未提交或推送。
+
+
+## 2026-11-22 核心玩法循环首发 V1 与双机交接
+
+- 新增[核心玩法循环](design/core-gameplay-loop.md)。从零资产起步、普通灵狐与两场单人试炼，到材料自选、打造首件武器和重登，给出新老玩家含加载、匹配与结算的半小时试玩流程。零氪起步首宠与时长通过门槛为本轮设计，尚待实现和真人计时。
+- 明确首季推荐常规会武用本人养成、轮换活动用免费人宠；前两次合格局各得基础 10，首季真人 PVP 胜再加 5 自用，20／25／30 来自同两次资格，基础每场 9 自用＋1 可交易。保留旧余额、跨日与幂等；并列说明同期论剑稿在同一匹配池的冲突，线上接入须先统一版本，普通 PVE 可独立打通。
+- Gemini 负责双版服务端、规则与协议生成及非 UI 适配，异机 Codex 负责 Unity 界面、演示与最终联机。文档含独立可复制任务、通过条件和异常样例；本轮仅交设计，无代码、配表、联网、真人试玩改动或运行证据。
+- 本轮静态核对：设计内 21 个本地链接均存在，Markdown 围栏与行尾空白检查通过；正式文档索引已运行生成及检查。未执行游戏编译、单元测试、联机或真人计时；两版服务端的本轮新规则均待接入，未据此登记为已实施版本。
+
+- 上述「轮换活动用免费人宠」仅指后四周的非计分「物法易势」；前四周「护卫救援」沿用本人真实养成，不借用竞技预设。两份实现指令同步明确这一边界。
+
+
+## 2026-11-22 Codex：首领试炼轻量 V1 与 Gemini／异机 Codex 双机交接
+
+- 按负责人“简单、好玩、不肝、小小氪金”的要求，更新[首领试炼策划](design/boss-trial-planning-ui.md)。首发一个首领、两种护卫二选一、普通／困难、1～5 人与各自宝宝；普通目标 5～8 分钟、困难 8～10 分钟，仍待实际试玩。
+- 普通、困难均沿既有合格胜局 10 份／全游戏每日 20 份共享材料账，替代旧稿困难额外收益设想；明确 UTC+8 05:00 换日、已赚未领跨日保留、额度与领取入包分开、小额消费沿现有易容而不新增试炼收费点。
+- 设计首发试炼独立临时血蓝与状态、无真实消耗、无额外刷取收益；预告重劈为普通行动之后的慢动作，退出确定带走本人及所属宝宝。以上均标明待实现能力，保留通用玩法既有规则。
+- UI 合并为挑战、战斗、结算三个主界面，附机制、退出和材料自选弹层；补齐按钮、状态、恢复契约、22 项演示／联调验收，以及可分别复制给 Gemini 代码逻辑和另一台电脑 Codex UI 的任务。已纠正旧稿“宝宝无手动字段”“材料账尚无实现”“倒地无材料资格”等静态事实。
+- 只读复核修正受控误判团灭、回合末复生、服务端退出定序及宝宝三分类；本稿与最新技能、装备和易容口径对齐。文档通过本地引用及表格结构检查；写回前核对策划原字节，索引读取并保留并行更新，仅替换本稿条目；进度以追加方式写入。
+- 本轮只交设计，未改代码、协议、正式表或客户端，未启动 Gemini、未向其他聊天派任务，未运行构建、战斗、UI 渲染或双版联机；两版实现与时长平衡待后续执行。未提交或推送。
+
+- 最终快照核对：上一条关于「护卫救援」使用实装的补充来自稍早的并行稿，已被当轮赛季更新覆盖。交付时的赛季主稿与 UI 稿均为：常规会武／首领使用本人养成，护卫救援／物法易势两项轮换均借用免费人宠。核心设计文件 SHA256 为 19F6F4311513537A2E243AE68FA331CFF5C274021F002F2E53AAFEEA8FD639E7，以该版与其引用专线核对接入。
+
+
+## 2026-11-22 Codex：瑞兽迎春活动 V1 与 Gemini／UI Codex 分工交接
+
+- 按负责人“简单好玩、不肝、小小氪金，设计完交 Gemini 实现逻辑、另一台电脑 Codex 做 UI”收口活动线。新增 battle-festival-beast-v1.md、battle-festival-beast-logic-handoff.md、battle-festival-beast-ui-handoff.md，规则以玩法总稿为唯一来源。本次采用的三胜等参数属于受托设计默认值，不冒称用户逐项指定或平衡已验证。
+- 首发一只神兽、一个难度、单人携本人宝宝、14天全时段，累计三胜免费领取固定种类；替代本聊天旧六胜/双难度建议，常驻首领试炼设计不改。预告单体重击在本轮人宠正常动作后执行，仅局内补满血蓝、禁道具/捕捉，不修改局外资产与自然计时；三胜12～18分钟为待试玩目标。
+- 材料沿现有每胜10份、全来源每日20份额度与UTC+8 05:00换日，不额外发阶段材料；经验、银两、普通掉落关闭。小额消费复用已有10元人物易容卡，无新SKU、神兽抽奖、付费重试或通行证。
+- 补齐永久待领取资格、冻结奖励版本、每角色同神兽终身一次、额外1只专属赠送容量、单宠禁止转移、整角色合法交易保留原身份、历史/跨设备请求恢复与开局快照复核宝宝。明确现有活动目录、帮会开局、宠物发放不能直接冒充新活动已支持。
+- 两路只读复核完成；按发现修正材料当日可赚与跨日待领余额、复刻主按钮优先级、旧资格版本、无本机UUID的恢复、整角色过户和预检后换宠竞态。三篇链接、表格、空白、索引和差异检查通过；已执行索引生成器及--check。本条纯追加，未覆盖已有进度或修改他人代码。
+- 本轮仅设计交付，未派发Gemini、未读取/修改客户端、未改协议/配表/游戏代码、未运行游戏构建/战斗/支付测试或部署。C++/Go、独立Java与Unity新活动均待实现，无新增已实施Java版本；未提交或推送。
+
+## 2026-11-22 人物退役技能旧档与宝宝、人物辅助联机验收
+
+- 11 月 21 日正式目录保留 61 个技能和 62 条 Buff。场景来源投影和战斗入场快照把明确退役、当前缺行的技能视为零贡献。旧重数原样存储，其他未知技能、缺 Buff 与异常装备继续标为来源未同步。
+- C++ Debug/x64 重新构建场景、战斗和用例。新二进制跑过技能与宝宝条目 35 项、战斗及正式目录 32 项，全部通过。退役正重与真未知技能都有回归。目录校验通过。
+- 本机 Docker 从先前运行镜像的封存源码应用本批定向补丁。gate、scene、battle 已切到新镜像，配置、数据卷和另外 28 个容器的身份经核对。启动预检通过。真实联网测试验证人物和宝宝习得、重登、战斗写锁与两端施放，人物 A10 实际回血 13，A40 实际吸收 64。证据见 build/verification/retired-skill-support-20261122。
+- Unity 正式 Bootstrap 连新镜像，以隔离测试角色完成两个分辨率。207 项操作，63 张原生 PNG，标准审核 116/116，专项审核 91/91，运行期错误为 0。证据见 mmorpg-client/.codex-artifacts/character-pet-ui-50fdfb/live-isolated-1122-r3。
+- 独立 Java 版 0.1.0-SNAPSHOT 的同批代码和验收以 PARITY.md 为准。Java 的真实双客户端 TCP 房间用例已验证人物和宝宝提交、护盾结算及来源裁剪。
+
+
+## 2026-11-23 人物志 UI 跨电脑制作任务书
+
+[人物志与角色收藏设计](design/character-background-collection-design.md)新增可独立复制给另一台电脑 Codex 的 UI 任务书，附四位候选人物的上屏正文、既有易容与只读预览的交互边界、未来收藏的隔离样例、异常态和点击验收。本轮交付任务说明，未修改客户端或运行 Gemini。
+
+
+## 2026-11-23 核心玩法稿收口为纯策划，技术方案交 Gemini
+
+- 按负责人分工将[核心玩法循环](design/core-gameplay-loop.md)改为纯产品策划。保留首宠、人宠配合、新老玩家半小时路线、零对手单人备选、主要免费预算与 PVP 胜奖，并从玩家视角说明取消、断线、跨日、重复领取与背包满的结果。
+- Gemini 按玩法目标自行决定逻辑代码、协议、数据与技术设计。异机 Codex 按入口、准备、战斗、战果及材料选择的界面需求制作 UI。本次仅调整策划交接，正式会武两份方案的取舍仍由策划统一，时长与手感待真人试玩。
+- 移除实现接口、字段、服务划分、存储方案、代码路径和构建命令；14 个文档链接与行尾空白检查通过。仅修改策划并纯追加进度，未改游戏代码、协议、配表或客户端，未启动 Gemini、未运行游戏测试或部署。
+
+## 2026-11-23 恢复人物业务代码实施授权
+
+负责人将人物业务逻辑交给 Gemini，由 Gemini 自主分析框架、实现并验证。本机 Codex 仅负责玩法与委派协调，另一台电脑的 Codex 继续负责 UI；[人物设计与当前交接](design/character-background-collection-design.md)已同步更新。现行易容与试用规则继续有效，永久收藏与旧卡如何衔接待定。本条记录分工和授权，实施结果另记。
+
+## 2026-11-23 Gemini 人物逻辑任务已派发，工作区状态读取受阻
+
+已用 Gemini 4 Neon Extra（`gemini-4-neon-xhigh`）派发[人物业务逻辑任务](design/character-background-collection-design.md)，会话 `bf93c58c-5503-4bf1-8665-f0b3c2902bb5`。Gemini 已开始读取规范，在执行 `git status -sb` 时被自动拒绝。此次许可包含 `git status --short`，未覆盖 `-sb`。进程退出码 0，返回正文为空，`denied_actions` 记录命令被拒。本次没有修改代码或运行验证。人物逻辑实施授权仍有效，已就补充该条只读许可并继续执行询问负责人，等待回复。
+
+
+## 2026-11-23 核心循环改为永久奖励，有空再玩
+
+- 按负责人“有空再玩、漏几天不用补作业”重做[首发核心循环](design/core-gameplay-loop.md)。首套仍需 300 打造材料＋300 百炼石；本次首测推荐每角色一次、永久有效的 660 份战果奖励，无每日、每周或换季重置，常驻会武有效胜负平按 15／10／10，普通试炼胜 10。每个完整基础 10 最多 1 份可交易，所有角色共享每账号一次性的 60 份新流通来源，旧材料与待选资格保留。
+- 文内两份独立可复制稿分别交 Gemini 自定逻辑、异机 Codex 制作界面。覆盖一场即走、跨月回归、连续三场、封顶尾奖与更多玩法的荣誉；普通路线 60 次胜局、全胜 PVP 40 次可够首套，计时为测算。旧赛季和经济稿的日额度口径需要同步，本轮仅完成设计和文档静态核验，未实施或真人试玩。
+- 两稿一致性、首套与尾奖算术、空白及具体技术指令排除核对完成；文档索引已更新。首次差异打印因终端编码失败，改用 ASCII 转义输出核对；未改断言或游戏规则。进度纯追加并保留原字节，未修改游戏代码、协议、配表或客户端，未执行游戏构建、联机测试或部署。新增奖励规则两版均待实现。
+
+## 2026-11-23 易容已有交付，人物志范围收窄为增量
+
+美术仓 `designs/appearance-ui-v1/` 已交付 14 张易容成品和 4 张透明预览。该包 11 月 22 日的 `RUNTIME-DELIVERY.md` 记载另一份客户端检出有 11 人预览及离线编译证据，Unity 导入前因授权退出。本机当前客户端与 C++ 服务端另有试用、恢复、扣卡切换接线，本次只读核对，未验证该美术包的实机或联机结果。已更正[人物设计交接](design/character-background-collection-design.md)：UI 只补人物志入口、四人的短传与故事、返回跳过及防误扣卡；Gemini 核对实际缺口后实施，避免重复开发易容。
+
+## 2026-11-23 地图玩法首版与新图切场景交接
+
+- 新增[地图玩法首版](design/world-map-play-v1.md)：主城聚人、八仙岛圆庭观阵与可选首领、海岸择码头探索；只有一个公共热点轮换，常驻内容可单人随到随玩，不开同时多图组队活动。写明低在线／低峰／高峰、奖励共用额度、线路／组队、UI 字段、异机出图说明和双版验收。
+- 只读核对地图口径：BaseScene 21 个模板、World 16 个主世界配置不等于独立可达地图；客户端地图窗可点正常传送的旧 1／2／3 与 9 个资源占位、1 个未开放占位分开。八景岛、月汐湾是场景 2／3 的未发布新资源，节庆九图／十五外观及手绘导航仍为开发交付。
+- 当前服务端场景 3 已用月汐湾导航和出生点，普通客户端却仍用东海渔村旧图，首测第三图必须先同版修复并正常联机。新图作为独立地点须用独立场景配置；若替换旧地点则同 ID 同批切画面、导航和出生。现有独立 Unity 场景只作预览基础，是否一图一 Unity 场景待客户端接线核定。
+- 本轮仅策划与静态核对，未改游戏代码、协议、正式配表或客户端，未构建或运行联机；当前材料代码仍是每日 20，11 月 23 日永久 660／账号可交易额度为尚未实装的最新候选，两版均未实现本稿地图玩法。文档索引已更新，未提交或推送。
+
+## 2026-11-23 地图玩法修订为个人拾取与在线慢产出
+
+- 负责人明确地图不做探索、解谜、巡图或专门活动；玩家顺手拾取可提速，不拾取则在线慢产出。已重写[地图自然产出首版](design/world-map-play-v1.md)，此前同日“观阵／码头探索”的地图玩法记录由本条取代。
+- 首测候选以普通 PVE 每场 10 份、目标 5～8 分钟为参照：在线停留每 300 秒 1 份、个人拾取每 150 秒至多 1 份，合计账号任意滚动 60 分钟至多 36 份，约为 8 分钟战斗速度的 48%；战斗若更慢则相应下调。首次产出要满各自计时，不登录即领，跨角色／图／线／重连不重启速率。
+- 与已定核心循环对齐：地图来源全仅自用，与战斗共用每角色永久 660 份，不新增每日材料额度；账号可交易来源总量 60 仍由核心循环约束，地图不增加可交易资格。个人灵光不公共争抢，一两人在线也能获得；主城与八仙岛先试，场景 3 新旧资源失配修复后再接。
+- 现有材料账仍是每日 20 且校验 10 的整批，物品来源绑定、跨角色账号速率与地图事件持久去重也未接入。资产首测前须与核心循环规则同版改账、协议和客户端材料自选页；本轮只完成策划与静态核对，未改游戏代码、协议、配表或客户端，未运行构建或联机，也未提交或推送。
+
+## 2026-11-23 地图材料收入风险复核
+
+- 按负责人担心独立开发收入，对[地图自然产出首版](design/world-map-play-v1.md)补商业风险与分阶段首测。首套 600／免费永久 660 下，地图若能独自填满 660，会削弱材料直售及战斗产生的可交易份额；不能将现有 10 元形象卡、30 元托管月卡与尚未闭环的 5% 寄售手续费当成已验证的稳定收入。
+- 材料每小时不超过战斗一半的方案仍作为候选；先验主城／八仙岛正常切场景与无资产灵光，再测战斗及真实小额付费意愿，最后决定是否投入地图逐份入账、绑定、跨角色速率与双端 UI。若选择外观作收入主线，现有形象卡覆盖旧永久形象的问题须先审视；若材料提速要作主要收入，则须重新审视免费总量与地图独自填满额度的取舍。未擅自改已定 660 免费额度或正式付费价格。
+- 本轮只改策划文档，未改游戏代码、协议、配表或客户端，未测试支付、地图或收入，也未提交或推送。
+
+## 2026-11-23 地图收益收窄为野外本人拾取
+
+- 负责人决定取消地图在线挂机产料，希望玩家确实在玩。已修订[地图顺手拾取首版](design/world-map-play-v1.md)：主城只作集散，不掉材料；已验收野外图在玩家实际移动时于视野近处出现本人灵光，靠近点击后才入账，未捡、站桩和离线均不自动补给。没有全图寻物、每日清单、固定刷新倒计时或公共抢点。
+- 首测候选保留每账号两次领取至少间隔 150 秒、任意滚动 60 分钟至多 24 份，以普通 PVE 8 分钟 10 份为参照约为战斗速度的 32%，低于此前要求的一半上限。半小时理论拾取最多约 12 份，站桩为 0；真实出率待试玩。地图所得仍仅自用、占角色永久 660 份，纯拾取理论最快约 25 小时够首套 600 份，收入风险提示保留。
+- 产出候选仅场景 2 八仙岛；场景 3 新旧图导航失配修复后再开放，主城 1 不产出。个人拾取、逐份同账、绑定和账号速率仍需开发；先做正常切图及无资产灵光演示的商业门禁未变。本轮只改策划文档与索引，未改游戏代码、协议、配表或客户端，未运行构建或联机，也未提交或推送。
+
+## 2026-11-23 新增人物背景与故事阅读，剩余人物业务由 Gemini 自主接入
+
+[人物设计第 7、8 节](design/character-background-collection-design.md)分别整理为可复制的交接。另一台电脑的 Codex 复用 11 人易容列表、立绘和 14 张成品及 4 张透明预览，仅增加四人背景摘要、阅读、跳过和重读。Gemini 自行分析并接入已确认的剩余业务缺口；新任务已启动，仅使用授权的原生文件工具，启动前快照作为带采集时间的历史背景，不重新查询 Git 状态。具体代码与验证结果另记。
+
+## 2026-11-23 人物逻辑派发在 Antigravity 登录阶段超时
+
+本次人物逻辑任务等待 Antigravity 登录授权 60 秒后退出，退出码 1，结果为 ERROR，报错 authentication failed or timed out。模型轮数与用量均为 0，会话 ID 为空。本轮未调用模型、未修改代码，未重试先前受限的 Git 状态查询，也没有新的命令权限拒绝。人物业务尚未接入；Gemini 自主实施授权继续有效，待用户在本机恢复 Antigravity 登录后才可执行。

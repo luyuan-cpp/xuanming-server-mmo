@@ -91,8 +91,9 @@ class ShortWorkspaceTests(unittest.TestCase):
             root = Path(directory)
             java = root / 'java'
             java.mkdir()
+            modules_xml = ''.join(f'<module>{module}</module>' for module in builder.REACTOR_MODULES)
             (java / 'pom.xml').write_text('<project xmlns="http://maven.apache.org/POM/4.0.0"><modules>'
-                                        '<module>authority_jdbc</module><module>gateway_node</module></modules></project>')
+                                        + modules_xml + '</modules></project>')
             for module in builder.REACTOR_MODULES:
                 source = java / module / 'src/main/java/Example.java'
                 source.parent.mkdir(parents=True)
@@ -117,6 +118,28 @@ class ShortWorkspaceTests(unittest.TestCase):
                     builder.assert_inputs(before, snapshot)
                 self.assertTrue(snapshot.exists())
                 self.assertTrue((output / 'workspace.json').exists())
+
+    def test_repo_reactor_sources_include_all_gateway_reactor_dependencies(self):
+        import xml.etree.ElementTree as ET
+        ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+        reactor_root = builder.REPO_ROOT / 'java'
+        by_coord = {}
+        for item in ET.parse(reactor_root / 'pom.xml').findall('m:modules/m:module', ns):
+            module = item.text
+            pom = ET.parse(reactor_root / module / 'pom.xml').getroot()
+            by_coord[(pom.findtext('m:groupId', default='', namespaces=ns),
+                      pom.findtext('m:artifactId', default='', namespaces=ns))] = module
+        gateway_pom = ET.parse(reactor_root / 'gateway_node/pom.xml').getroot()
+        required = {'gateway_node'}
+        for dep in gateway_pom.findall('m:dependencies/m:dependency', ns):
+            coord = (dep.findtext('m:groupId', default='', namespaces=ns),
+                     dep.findtext('m:artifactId', default='', namespaces=ns))
+            if coord in by_coord:
+                required.add(by_coord[coord])
+        self.assertTrue(required <= set(builder.REACTOR_MODULES),
+                        f'Missing gateway reactor modules in REACTOR_MODULES: {sorted(required - set(builder.REACTOR_MODULES))}')
+        files = builder.source_files()
+        self.assertIn('java/server_startup/src/main/java/com/game/startup/ClockCheck.java', files)
 
 
 if __name__ == '__main__':

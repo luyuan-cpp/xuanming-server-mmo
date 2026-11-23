@@ -206,7 +206,8 @@ def _occupied_subnets(environment):
 
 
 def _subnet(environment):
-    occupied = _occupied_subnets(environment)
+    # 始终避开 TiDB fixture 的专用 10.254.254.0/24 网段，即使 TiDB fixture 尚未创建。
+    occupied = [*_occupied_subnets(environment), ipaddress.ip_network('10.254.254.0/24')]
     # 临时范围与现有 TiDB fixture 均显式排重；随机起点只用于选择，不重试创建。
     start = secrets.randbelow(4096)
     base = int(ipaddress.IPv4Address('10.254.0.0'))

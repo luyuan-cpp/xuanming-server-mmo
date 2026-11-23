@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"protogen/logger"
@@ -12,16 +13,37 @@ import (
 	"go.uber.org/zap"
 )
 
-// protocCommands 统一限制序列化编译子进程，避免各阶段的 goroutine 同时启动大量 protoc。
-// 进程退出并收完输出后才交出名额；现有命令、输出与失败语义保持。
-var protocCommands = newProtocExecutionGate()
+const maxProtocConcurrency = 8
+
+// protocCommands 统一限制并发编译子进程数：低核受限环境下退回串行（避免同时拉起大量 protoc 过载），
+// 高核机器上按核数有界并发加速；进程退出并收完输出后才交出名额，现有命令、输出与失败语义保持。
+var protocCommands = newProtocExecutionGate(defaultProtocConcurrency(runtime.GOMAXPROCS(0)))
 
 type protocExecutionGate struct {
 	active chan struct{}
 }
 
-func newProtocExecutionGate() *protocExecutionGate {
-	return &protocExecutionGate{active: make(chan struct{}, 1)}
+func defaultProtocConcurrency(gomaxprocs int) int {
+	limit := gomaxprocs / 2
+	if limit < 1 {
+		return 1
+	}
+	if limit > maxProtocConcurrency {
+		return maxProtocConcurrency
+	}
+	return limit
+}
+
+func newProtocExecutionGate(limit int) *protocExecutionGate {
+	if limit < 1 {
+		limit = 1
+	}
+	return &protocExecutionGate{active: make(chan struct{}, limit)}
+}
+
+// ProtocConcurrency 返回当前允许并发执行的 protoc 子进程上限。
+func ProtocConcurrency() int {
+	return cap(protocCommands.active)
 }
 
 func (g *protocExecutionGate) run(command func() error) error {

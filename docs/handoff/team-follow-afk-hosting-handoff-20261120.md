@@ -1,4 +1,12 @@
-# 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini)
+# 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Codex)
+
+> **2026-11-22 状态更新（先勿删本交接单，待 Codex 跑完编译、单测与两条 robot 冒烟后再清理）**：
+> - 第 1–4 步（xlsx / 导表 / proto 生成）与 2026-11-21 的编译/测试修复（6 处）已落盘在 `main`（Go / Linux GCC / Unity 105/105 与 C++ 9 个定向套件曾于 11-21 全部通过）。
+> - **2026-11-22 深度标准审计并完成全部服务端 + 客户端代码收口（`main` 工作区，未编译、未运行单测/冒烟，详见 `docs/PROGRESS.md` 文末 2026-11-22 条目）**：
+>   - 修复跨节点托管落点 `OnOfflineHostingStarted` 早于 `ReadMembership` 导致丢跟随意图、托管队长 15s 周期刷读、`AfkPassSystem::GmSet` 缺可写围栏、`AfkPassCommittedComp` Redis SET/DEL 写失败自愈与托管启动立即补投影、`AfkPassRule` 缺热更校验、空队形 20Hz 空转、50m AOI 离线托管广播刷屏/无效序列化、`RestoreCooldowns` 改 `emplace_or_replace`；
+>   - 修复 Unity 客户端托管重登无快照窗口不显示跟随与丢失暂离选择、换角状态残留、`AfkPassClient` 静默切连接未通知 `Changed`、非灵石币种错误文案与续费确认按钮文案；
+>   - 已补齐 C++ 与 Unity EditMode 单测，C++ 静态预检（裸指针 13/13、线程 5/5、英文日志 0 违规）全部通过；Java 版已继续登记在 `../xuanming-server-mmo/PARITY.md` TODO。
+> - **剩余交 Codex**：重跑第 5、7、8（含 11-22 新增用例）、9、10、11（两条 robot 冒烟）与按需第 12/13 步；全部验收通过后再删除本文。
 
 ## 0. 现状
 

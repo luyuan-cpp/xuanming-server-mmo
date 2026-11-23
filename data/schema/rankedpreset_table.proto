@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+// RankedPreset 表的权威 schema。源表 data/RankedPreset.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message RankedPresetTable {
+  option (cfg_sheet)       = "RankedPreset";
+  option (cfg_source_file) = "RankedPreset.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 预设ID
+  uint32 id = 1;
+  // 1人物/2宝宝
+  uint32 role_kind = 2;
+  // 内部代号
+  string code = 3;
+  // 名称
+  string name = 4;
+  // 定位
+  string role_tag = 5;
+  // 宝宝物种ID
+  uint32 pet_table_id = 6 [(cfg_fk) = "Pet"];
+  // 体质权重
+  uint32 weight_con = 7;
+  // 灵力权重
+  uint32 weight_spi = 8;
+  // 力量权重
+  uint32 weight_str = 9;
+  // 敏捷权重
+  uint32 weight_agi = 10;
+  // 正式技能ID(4格)
+  repeated uint32 skill_ids = 11 [(cfg_slots) = 4, (cfg_fk) = "Skill"];
+  // 宝宝条目ID(2格)
+  repeated uint32 pet_entry_ids = 12 [(cfg_slots) = 2, (cfg_fk) = "PetEntry"];
+  // 宝宝条目点数(2格)
+  repeated uint32 pet_entry_points = 13 [(cfg_slots) = 2];
+  // 排序
+  uint32 sort = 14;
+  // 说明
+  string desc = 15;
+}

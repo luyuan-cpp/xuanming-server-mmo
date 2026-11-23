@@ -43,6 +43,13 @@
   - **仅在确实无法替代的极少数场景才允许写宏**：① 头文件卫士（优先 `#pragma once`）；② 平台 / 编译器条件编译；③ 必须捕获 `__FILE__` / `__LINE__` 的日志与断言（C++20 优先 `std::source_location`）；④ **必须往调用方注入控制流**（`return` / `continue` / `break`）因而函数写不出来的守卫宏（例如 `cpp/libs/engine/core/macros/return_define.h` 的 `ECS_GET_OR_RETURN` 系列）。
   - 判据：**如果不用宏也能写，就绝不写宏；非写不可的宏必须写明理由。**
   - 枚举显式写出底层类型，宽度按**枚举项个数**选，不要跟着“被编号对象”的位宽走。典型误判：`GuidKind : uint8_t` 数的是 GUID 的**种类数**（现 3 种），与 guid 值本身是 `uint64` 毫无关系；真要放宽时先问一句：**这个数字最大能到多少？**
+- **裸指针 / 原始指针使用约束（C++ 强制）**：避免悬垂指针、野指针与隐式所有权模糊，严格区分“持有”与“瞬时借用”：
+  - **严格禁止**：① 类 / 结构体 / 联合体的**非静态成员**放裸指针（含 `const char*`、函数内局部结构体及测试夹具成员）；② **容器元素**存裸指针（如 `std::vector<T*>`、`std::unordered_map<K, T*>`）；③ 裸 `new` / `delete`（所有权一律走 RAII 与 `std::make_unique` / `std::make_shared`）；④ **业务函数主动返回裸指针**（改用值、引用、`std::optional<...>` 或智能指针）。
+  - **允许的有限场景（仅瞬时借用，严禁持有）**：
+    - **函数参数**：允许传指针（如表达可空参数或对接既有/生成接口；只借用不转移所有权，非空场景优先用引用，严禁存入类成员或容器）。
+    - **局部变量与唯一边界例外**：允许用局部原始指针接收外部返回，但**仅限**接收 **ECS 组件指针**（如 `entt::registry::try_get<T>()`）、**配置表行指针**（如 `*TableManager::Instance().FindById*(...).first`），以及调用无法改签名的外部/框架/生成代码/C API（如 Protobuf 生成的 `mutable_*()` 与 RPC 回调签名、muduo / 系统 C 接口）的返回值；**只允许在调用接缝处就地判空使用或立即转为引用/值，严禁存入类成员/容器，也不得继续向外层业务接口传递**。
+  - **替代写法**：只读字符串用 `std::string_view`；连续数组视图用 `std::span`；非空借用用引用（`T&` / `const T&`）；可空借用成员用 `std::optional<std::reference_wrapper<T>>`；独占/共享/弱引用所有权用 `std::unique_ptr` / `std::shared_ptr` / `std::weak_ptr`。
+  - **门禁与预检**：`.githooks/pre-commit` + CI `test_cpp_no_raw_pointer_member.py` 机械强制拦截**类/结构体/联合体非静态成员**（MSBuild 全量 Clang AST 门禁按需传 `/p:RunNoRawPointerMemberCheck=true` 触发，首错即停），其余条目由本规范与代码评审约束；交付前须跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`，门禁口径、排除边界与拼接注意见 [cpp-runtime-and-build.md](cpp-runtime-and-build.md#c-类成员不放裸指针no-raw-pointer-member-门禁)。
 - 改动保持小而完整、可独立审阅和回滚；不在功能改动中夹带无关格式化、重命名或顺手重构。
 
 ## 3. 正确性与生产质量（§11.3）
@@ -100,4 +107,29 @@
 - **节点摘除只在 `queueInLoop` 里做**，不在连接自己的回调栈上。
 - **关机先排空再 `quit()`**：`quit()` 经**两跳 `queueInLoop`** 排到队列末尾，靠 FIFO 让排队的 `forceCloseInLoop`（第一趟）与 `connectDestroyed`（第二趟）都跑完；少一趟就是 `TcpConnection.cc:71` 或 `Channel.cc:43` 的 assert。关闭完成标记和通知必须在最后一跳的 `quit()` 之后、完成锁内发出，解锁后不再访问 Node，保证析构等待与 fallback 不会提前结束。**不要用定时器**：Windows 的 loop 是 `poll → handleEvents → timerQueue_->loop() → doPendingFunctors`，定时器恰在 N+1 趟到期时 `quit_` 先置位、只剩一趟——它“通常”能跑完，不是“必然”。
 
-新写或修改任何持有连接、绑进回调的类时只问两句：**「我存的是 weak 吗？」「我绑的是 weak 吗？」** 两个都是，这一类问题与你无关。参考实现：`RpcChannel`、`RpcClient::connect()`、`RpcSession`、`RpcDoneCallback`、`BattleClientEdge::DirectSession`、`muduo_grpc::Server`、`muduo_grpc::ServerCall`。回归测试：`cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`、`rpc_channel_loopback_test.cpp`、`cpp/tests/muduo_grpc_test/server_test.cpp`。
+新写或修改任何持有连接、绑进回调的类时只问两句：**「我存的是 weak 吗？」「我绑的是 weak 吗？」** 两个都是，这一类问题与你无关。参考实现：`RpcChannel`、`RpcClient::connect()`、`RpcSession`、`RpcDoneCallback`、`BattleClientEdge::DirectSession`、`muduo_grpc::Server`、`muduo_grpc::ServerCall`、`TimerTaskComp`、`LoopTaskScope`。回归测试：`cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`、`rpc_channel_loopback_test.cpp`、`cpp/tests/muduo_grpc_test/server_test.cpp`。
+
+### 新代码异步回调标准（冷热分离，强制）
+
+凡新增或改造涉及**回调、定时器、`queueInLoop`、RPC 回包、Redis/Kafka 异步响应**的 C++ 代码，必须按以下四类形态选型（禁止自造第 5 种），遵守 5 条捕获红线并配套生命周期测试：
+
+#### 1. 选型标准（冷热分离，四选一）
+
+| 场景 | 唯一允许的标准形态 | Cache / 生命周期特性 |
+|---|---|---|
+| **ECS 实体异步 / 定时器 / 回包**（业务最常见） | 按值捕获 `entt::entity`（MSVC 注意用初始化捕获 `[entity = entity]` 防 C3495）+ 业务身份（`player_id` / `seq`），回调回 loop 后 `registry.valid(entity)` + 核对身份 + `try_get<Comp>()` | **零 `shared_ptr`、零堆分配、100% 保住 ECS 连续内存与 CPU Cache Line**（`entt::entity` 自带 generation 版本号，销毁/复用自动失效） |
+| **多步异步业务流**（发请求 → 等结果 → 继续执行） | 协程 + `LoopTaskScope` / `loop_async::AwaitCallback`（跨 `co_await` 同样只带值语义身份，不跨挂起持组件指针） | 宿主析构时 `LoopTaskScope` 自动 `Stop()` 截断挂起，热路径组件无侵入 |
+| **独立长生命周期基础设施对象**（Client / Session / Channel / Edge） | 继承 `std::enable_shared_from_this<T>` + **私有构造函数 + `static Create(...)` 工厂** + `Start()` 中捕获 `weak_from_this()` | 冷路径连接级对象（非紧循环数组扫描），工厂杜绝栈上 / `unique_ptr` 误建 |
+| **极少数冷路径非共享句柄壳**（如 `TimerTaskComp`、`LoopTaskScope`） | 内部 `struct State` 由 `std::shared_ptr<State>` 持有，回调只捕 `std::weak_ptr<State>` | **硬红线：仅限冷路径调度句柄，严禁把热路径 ECS 业务数据塞进 `State`**（避免破坏连续内存、触发随机跳指针 cache miss 与原子计数开销） |
+
+#### 2. 回调捕获硬红线（新代码 5 条铁律）
+
+1. **禁止默认捕获 `[=]` 和 `[&]`**：成员函数里的 `[=]` 会隐式捕获裸指针 `this`，`[&]` 会捕获悬垂局部引用；所有异步 lambda 必须显式列出每个捕获变量。
+2. **禁止捕获裸 `this`、裸指针与外部对象引用 `&obj`**：唯一例外是与宿主严格同寿命的内部成员（如 `RpcServer` 持有的 `tcpServer`），且必须加注释写明寿命绑定关系（宿主若须保地址稳定须显式禁移动）。
+3. **禁止用 `std::bind` 绑异步回调**：既禁止 `std::bind(..., this, ...)`（UAF），也禁止 `std::bind(..., shared_from_this(), ...)`（与连接/回调形成强引用循环，泄漏内存与 fd 并破坏 `~TcpClient` 判定）；统一写显式捕获 `weak_ptr` 或值语义身份的 lambda。
+4. **不在构造函数里绑回调**：`enable_shared_from_this` 构造期控制块尚未就绪，一律挪到 `Start()` / `connect()`，入口首行 fail-fast 断言 `if (weak_from_this().expired()) LOG_FATAL`（参考 `RpcClient::connect()`），回调首行固定写 `auto self = weakSelf.lock(); if (!self) return;`。
+5. **跨异步边界只携带值语义身份与自有结果**：不把 ECS 组件指针/引用或配置表行指针带过回调或 `co_await` 边界，回调回到 EventLoop 后重新 `valid()` + `try_get` 查当前状态。
+
+#### 3. 必补生命周期测试（缺一条不合入）
+
+- 新增或改造含异步回调 / 定时器 / 连接的类时，必须附带一条**「先析构再触发回调（Destroy-Before-Callback）」**回归测试：挂上回调 / 投递 `queueInLoop` / 设短定时器 → **立刻销毁对象** → 跑完 EventLoop 让滞后回调真正触发 → 断言**不崩、无状态副作用、无连接泄漏**（参考 `cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`）。

@@ -88,18 +88,20 @@ public:
 	static void OnClientFollowRequest(entt::entity player, bool follow);
 
 	// 离线托管开始(开通了挂机的玩家下线,角色留在世界里):由服务器开启跟随,不等客户端声明(用户 2026-11-06 要求)。
-	// 不在队伍里什么都不做;已经接在队长身后只挂意图;否则挂意图并走一遍刷新与跟随检查,同场景里接到队长身后。
+	// 已确认不在队伍里(TeamId 墓碑为 0)什么都不做;跨节点托管落点刚建出、尚未拉回首次组队快照(缺 TeamId)或已在队里时,
+	// 均挂上跟随意图,避免跨节点到达后 Probe 先于 ReadMembership 回包导致丢意图;已确认自己是队长时不发冗余读。
 	// 下线前点过「暂离」的,托管期间照样跟;重连后客户端按自己当前的选择重新声明(team-follow-server-trail.md §5)。
 	// 调用点:AfkHostingSystem::ApplyProbeResult(第一次确认挂机月卡有效,含托管落点到了新节点之后重建的那次)。
 	static void OnOfflineHostingStarted(entt::entity player);
 
-	// 离线托管期间的兜底:在队伍里、想跟却没接在队长身后时,替他重新走一遍刷新与跟随检查 —— 相当于在线客户端
-	// 没被驱动时每隔几秒重新声明一次跟随(team-follow-server-trail.md §3.7)。已接在队长身后、不在队伍里、没有跟随意图的
-	// 什么都不做,不发读(判据见 NeedsFollowRecheck)。调用点:PlayerLifecycleSystem::ExpireConnectionLostHolds,每名托管角色每
-	// connection_lost_hold::kHostedFollowRecheckPeriod 一次(按玩家号错开到不同的秒)。
+	// 离线托管期间的兜底:在队伍里(或跨节点到达后尚未同步到首次组队快照)、想跟却没接在队长身后且非已确认队长时,
+	// 替他重新走一遍刷新与跟随检查 —— 相当于在线客户端没被驱动时每隔几秒重新声明一次跟随(team-follow-server-trail.md §3.7)。
+	// 已接在队长身后、已确认不在队伍里、已确认是队长、没有跟随意图的什么都不做,不发读(判据见 NeedsFollowRecheck)。
+	// 调用点:PlayerLifecycleSystem::ExpireConnectionLostHolds,每名托管角色每 connection_lost_hold::kHostedFollowRecheckPeriod
+	// 一次(按玩家号错开到不同的秒)。
 	static void OnOfflineHostingHeartbeat(entt::entity player);
 
-	// 只读:这名玩家在队伍里、有跟随意图、却没接在队长身后 —— 值得再走一遍跟随检查。不看会话与战斗
+	// 只读:这名玩家有跟随意图、没接在队长身后,且不是已确认无队或已确认队长 —— 值得再走一遍跟随检查。不看会话与战斗
 	// (战斗、交接、换图在途由跟随链自己的守卫挡)。OnOfflineHostingHeartbeat 的判据,单测直接验。
 	static bool NeedsFollowRecheck(entt::entity player);
 
@@ -151,4 +153,7 @@ private:
 	// 否则按 ShouldRegroup 判定,需要时把 player 瞬移到队长脚下。
 	// 只由 CheckFollowLeader 在全部守卫通过后调用;队长实体不在本节点 / 不在同一场景 / 归属交接在途时不动。
 	static void RegroupToLeader(entt::entity player, uint64_t leaderId);
+
+	// 单测通过 PlayerTeamFollowTestAccess 设定最近一次组队权威快照里的队长身份标记。
+	static void SetLeadershipSnapshotForTest(entt::entity player, bool isLeader);
 };

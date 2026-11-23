@@ -29,14 +29,21 @@ class PlayerAllData;
 // 最近一次已提交(加载,或存盘提交回来)的月卡到期时刻。派生运行时数据(ecs-component-access-rules.md):
 // 加载进场时由 AfkPassSystem::OnPlayerLoaded 创建,只由 AfkPassSystem 读写,不落库、不序列化。
 // 没有它 = 实体不是经加载链建出来的(单测夹具),投影一律不写。
+// projectionSeq / confirmedSeq 追踪最近一次投影写出是否已收到玩家域 Redis 成功回包:
+// 若某次 SET 或 DEL 因 Redis 抖动失败,后续存盘提交、托管开始与心跳都会自动重发自愈,既不丢投影也不留脏键。
 struct AfkPassCommittedComp
 {
 	uint64_t expiresAtSec{0};
+	uint64_t projectionSeq{0};
+	uint64_t confirmedSeq{0};
 };
 
 class AfkPassSystem
 {
 public:
+	// 配表启动 / 热更校验(SceneNodeHooks::TableLoadHandler::Validate):校验失败拒绝热更。
+	static bool ValidateTables();
+
 	// 本实体内存里的到期时刻(事实源的那一份,加载后只由本类改);缺 PlayerUint64Comp 或实体无效返回 0。只读。
 	static uint64_t ExpiresAt(entt::entity player);
 
@@ -48,7 +55,7 @@ public:
 	static uint32_t Buy(entt::entity player, const BuyAfkPassRequest &request, uint64_t nowUnixSec, BuyAfkPassResponse &response);
 
 	// GM 设定剩余时长(设计 §4.3):到期 = now + remainingSeconds,0 = 清除;超过 366 天回 kInvalidParameter。
-	// 调用方负责 GM 闸(scene_gm_guard::RejectGmClientRpc)。成功返回 kSuccess 并填 info。
+	// 调用方负责 GM 闸(scene_gm_guard::RejectGmClientRpc);与 Buy 共用 player_mutability 写围栏。成功返回 kSuccess 并填 info。
 	static uint32_t GmSet(entt::entity player, uint32_t remainingSeconds, uint64_t nowUnixSec, AfkPassInfo &info);
 
 	// ── 投影(设计 §5.2)──
@@ -60,4 +67,6 @@ public:
 	// 单测注入:取代真实的 Redis 写出,收到 (玩家, 到期, true = SET / false = DEL)。生产恒为空。
 	using ProjectionSender = std::function<void(Guid playerId, uint64_t expiresAtSec, bool set)>;
 	static void SetProjectionSenderForTest(ProjectionSender sender);
+	// 单测辅助:控制 SetProjectionSenderForTest 路径是否模拟 Redis 写失败(未确认),用于验证失败自愈重试。生产恒为 false。
+	static void SetProjectionFailForTest(bool fail);
 };

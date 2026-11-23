@@ -362,10 +362,22 @@ def main() -> int:
     if not running:
         print("Image updated in .env; the next compose up uses it.")
         return 0
-    targets = [name for s in running for name in ((s + "-sql-boot", s) if s in SQL_WRITERS else (s,))]
+    sql_boots = [s + "-sql-boot" for s in running if s in SQL_WRITERS]
     with (root / "recreate.log").open("x", encoding="utf-8") as log:
+        if sql_boots:
+            result = subprocess.run(COMPOSE + ["up", "-d", "--no-build", "--pull", "never", "--no-deps",
+                "--force-recreate", *sql_boots], cwd=REPO,
+                stdout=log, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+            if result.returncode:
+                print("Container update failed; configuration and state were kept. Check " + str(root / "recreate.log"))
+                return result.returncode
+            boot_ids = execute(COMPOSE + ["ps", "-aq", *sql_boots]).split()
+            codes = execute(DOCKER + ["container", "wait", *boot_ids], timeout=180).split()
+            if len(codes) != len(sql_boots) or any(code != "0" for code in codes):
+                print("Writer registration failed; configuration and state were kept. Check " + str(root / "recreate.log"))
+                return 1
         result = subprocess.run(COMPOSE + ["up", "-d", "--no-build", "--pull", "never", "--no-deps",
-            "--force-recreate", "--wait", "--wait-timeout", "180", *targets], cwd=REPO,
+            "--force-recreate", "--wait", "--wait-timeout", "180", *running], cwd=REPO,
             stdout=log, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     if result.returncode:
         print("Container update failed; configuration and state were kept. Check " + str(root / "recreate.log"))

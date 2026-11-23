@@ -169,7 +169,7 @@ void TestScenario() {
         tlsEcs.actorRegistry.destroy(targetEntity);
 
         entt::entity newEntity = tlsEcs.actorRegistry.create();
-        tlsEcs.actorRegistry.get_or_emplace<CastingTimerCompTest>(newEntity);
+        tlsEcs.actorRegistry.emplace<CastingTimerCompTest>(newEntity);
     };
 
     t.timer.RunEvery(0.1, fn);

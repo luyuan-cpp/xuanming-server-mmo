@@ -25,7 +25,7 @@ END = "<!-- END GENERATED INDEX -->"
 DESIGN_RULES = [
     ("总览与入门", [
         "ARCH.md", "onboarding.md", "architecture-current-state-vs-gaps-*", "ecs*.md",
-        "table-api-reference*",
+        "project-vision.md", "table-api-reference*",
         "capacity-model-*",
     ]),
     ("构建、部署与发布", [

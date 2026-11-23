@@ -48,11 +48,13 @@
   </ItemDefinitionGroup>
 
   <!--
-    裸指针成员检查只管本仓库自己的代码。按完整目录边界排除第三方工程，
+    裸指针成员 Clang AST 检查默认不在日常编译时自动运行（避免改单个文件触发全工程串行重扫）；
+    日常提交与 PR 门禁由 .githooks/pre-commit 与 CI（test_cpp_no_raw_pointer_member.py）负责。
+    需要全量 AST 核验时显式传入 /p:RunNoRawPointerMemberCheck=true；按完整目录边界排除第三方工程，
     包括内嵌的 cpp\libs\engine\muduo_windows，兼容路径大小写和两种分隔符。
   -->
   <Target Name="NoRawPointerMemberCheck" BeforeTargets="PreBuildEvent"
-          Condition="'$(MSBuildProjectExtension)' == '.vcxproj' and '$(SkipNoRawPointerMemberCheck)' != 'true' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(MSBuildProjectDirectory)', '(?i)(^|[\\/])(third_party|cpp[\\/]libs[\\/]engine[\\/]muduo_windows)([\\/]|$)'))">
+          Condition="'$(MSBuildProjectExtension)' == '.vcxproj' and '$(RunNoRawPointerMemberCheck)' == 'true' and '$(SkipNoRawPointerMemberCheck)' != 'true' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(MSBuildProjectDirectory)', '(?i)(^|[\\/])(third_party|cpp[\\/]libs[\\/]engine[\\/]muduo_windows)([\\/]|$)'))">
     <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)tools\scripts\check_no_raw_pointer_member.ps1&quot; -ProjectDir &quot;$(MSBuildProjectDirectory)&quot; -ProjectName &quot;$(ProjectName)&quot; -ProjectFile &quot;$(MSBuildProjectFullPath)&quot; -Configuration &quot;$(Configuration)&quot; -Platform &quot;$(Platform)&quot; -MSBuildPath &quot;$(MSBuildBinPath)\MSBuild.exe&quot;" />
   </Target>
   <!-- 独立 Protobuf 35.1 的编译器依赖与静态 zlib，由手写及生成工程共同继承。 -->
@@ -60,6 +62,10 @@
     <IndependentSdkRepositoryRoot Condition="'$(IndependentSdkRepositoryRoot)' == ''">$(MSBuildThisFileDirectory)</IndependentSdkRepositoryRoot>
     <IndependentSdkProjectRelativePath>$([MSBuild]::MakeRelative('$(IndependentSdkRepositoryRoot)', '$(MSBuildProjectDirectory)'))</IndependentSdkProjectRelativePath>
     <IndependentSdkOwnCppProject>$([System.Text.RegularExpressions.Regex]::IsMatch('$(IndependentSdkProjectRelativePath)', '(?i)^cpp[\\/](generated|libs|nodes|tests)([\\/]|$)'))</IndependentSdkOwnCppProject>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(IndependentSdkOwnCppProject)' == 'true'">
+    <!-- 跳过 third_party 的 VS 代码分析（消除 absl / protobuf 头文件 C26495/C26439 等噪音）。 -->
+    <CAExcludePath>$(MSBuildThisFileDirectory)third_party\;$(CAExcludePath)</CAExcludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(IndependentSdkOwnCppProject)' == 'true' and ('$(Configuration)' == 'Debug' or '$(Configuration)' == 'Release')">
     <IndependentSdkArchitectureSuffix Condition="'$(Platform)' == 'Win32'">_x86</IndependentSdkArchitectureSuffix>
@@ -69,6 +75,11 @@
     <IndependentSdkZlibRoot>$(IndependentSdkRepositoryRoot)build/third_party/zlib-v1.3.2$(IndependentSdkArchitectureSuffix)-$(IndependentSdkConfigurationSuffix)/install/</IndependentSdkZlibRoot>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(IndependentSdkOwnCppProject)' == 'true' and ('$(Configuration)' == 'Debug' or '$(Configuration)' == 'Release') and ('$(Platform)' == 'x64' or '$(Platform)' == 'Win32')">
+    <ClCompile>
+      <!-- 仅将 third_party 标为 MSVC 外部头文件并静音其警告（/external:I 递归覆盖子目录），自家业务/测试代码保留全部警告。 -->
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/external:I "$(MSBuildThisFileDirectory)third_party" %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <Link>
       <!-- 不让 bin 里的历史 zlib DLL 或公共 lib 中的旧归档替代本轮 SDK。 -->
       <AdditionalLibraryDirectories>$(IndependentSdkZlibRoot)lib/;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -76,6 +87,13 @@
       <AdditionalDependencies>$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*zlib(?:static)?d?\.lib(?=;|$)', '$1zlibstatic$(IndependentSdkLibraryPostfix).lib'))))</AdditionalDependencies>
       <AdditionalDependencies>$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)', '$1libupb$(IndependentSdkLibraryPostfix).lib'))))</AdditionalDependencies>
       <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libprotocd?\.lib(?=;|$)')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*libupbd?\.lib(?=;|$)'))">libupb$(IndependentSdkLibraryPostfix).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- infra.lib 已内编 librdkafka C++ 包装层；移除旧 /MT Release DLL 导入库 rdkafka++.lib 并补齐底层 C 库 rdkafka.lib。 -->
+      <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*infra\.lib(?=;|$)'))">$([MSBuild]::Unescape($([System.Text.RegularExpressions.Regex]::Replace('%(AdditionalDependencies)', '(?i)(?:^\s*rdkafka\+\+\.lib(?:;|$)|;\s*rdkafka\+\+\.lib(?=;|$))', ''))))</AdditionalDependencies>
+      <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*infra\.lib(?=;|$)')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*rdkafka\.lib(?=;|$)'))">rdkafka.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- scene.lib 中的 PlayerBattleSystem 调用 battle.lib 的 BattleTableFingerprint::Current。 -->
+      <AdditionalDependencies Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*scene\.lib(?=;|$)')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalDependencies)', '(?i)(^|;)\s*battle\.lib(?=;|$)'))">battle.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <!-- 第三方静态库（yaml-cpp / zlib / nghttp2）未随包分发 PDB，与主节点统一忽略 LNK4099。 -->
+      <AdditionalOptions Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(AdditionalOptions)', '(?i)/ignore:4099\b'))">/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
 

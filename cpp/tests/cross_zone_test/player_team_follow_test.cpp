@@ -58,6 +58,11 @@ public:
     {
         PlayerTeamSystem::CheckFollowLeader(player, leaderId);
     }
+
+    static void SetLeadership(entt::entity player, bool isLeader)
+    {
+        PlayerTeamSystem::SetLeadershipSnapshotForTest(player, isLeader);
+    }
 };
 
 namespace
@@ -981,6 +986,34 @@ TEST_F(TeamFollowDriveTest, OnlyADetachedMemberWhoWantsToFollowNeedsARecheck)
 
     TeamFollowSystem::SetFollowIntent(follower_, false);
     EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "暂离:不替他跟";
+}
+
+TEST_F(TeamFollowDriveTest, HostedLeaderAndUnknownTeamRecheckRules)
+{
+    // 已确认是队长:即使托管开始挂了跟随意图(防惰性转让后漏跟),周期心跳也不应对队长发冗余读。
+    TeamFollowSystem::SetFollowIntent(leader_, true);
+    PlayerTeamFollowTestAccess::SetLeadership(leader_, true);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader_)) << "已确认队长不触发 15s 兜底重查";
+
+    // 队长职务转走后(isLeader=false):立刻允许补查跟随新队长。
+    PlayerTeamFollowTestAccess::SetLeadership(leader_, false);
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(leader_));
+
+    // 跨节点新实体尚未同步 TeamId:挂了意图但缺 TeamId 时仍应补查。
+    TeamFollowSystem::Detach(follower_, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
+    tlsEcs.actorRegistry.remove<TeamId>(follower_);
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "缺 TeamId = 尚未同步到组队权威,仍需补查";
+}
+
+TEST_F(TeamFollowDriveTest, EmptyFormationIsReclaimedOnNextUpdate)
+{
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_));
+    TeamFollowSystem::SetFollowIntent(follower_, false);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
+
+    TeamFollowSystem::Update(0.05);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_))
+        << "最后一名随从离开后,空队形组件在下一拍回收,不再以 20Hz 空转轨迹与导航射线";
 }
 
 TEST_F(TeamFollowDriveTest, LeaderJumpDoesNotTeleportFollowerInBattle)

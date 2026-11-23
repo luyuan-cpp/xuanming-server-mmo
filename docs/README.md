@@ -11,6 +11,8 @@
 
 脚本归属见[脚本主说明](../tools/scripts/README.md)；C++ 串行构建与 scene 编译器 PDB 隔离见[C++ 主说明](../cpp/README.md)。
 
+各玩法共用的设计原则见[项目设定](design/project-vision.md)。
+
 技能制作策划入口见 [自由技能体系分类总览](design/skill-planning/README.md)：人物/宝宝主动、被动、追击、开场、公用战斗规则、流派搭配及实施清单；同效果合并与最新目标数、持续时间以该目录为准，尚未按新策划落码或改正式表。
 
 [策略技能待定方案](design/skill-planning/strategy-skills.md)另列14个人物、2个宝宝新技能候选；[率土式候选](design/skill-planning/stzb-inspired.md)暂缓，等待负责人研究具体机制后再讨论。
@@ -67,6 +69,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [ecs-component-access-rules.md](design/ecs-component-access-rules.md) — ECS Component Access Rules
 - [ecs-entt-misuse-audit-20261015.md](design/ecs-entt-misuse-audit-20261015.md) — entt 误用审计（2026-10-15）
 - [onboarding.md](design/onboarding.md) — 开发者上手指南 — MMO Server
+- [project-vision.md](design/project-vision.md) — 项目设定
 - [table-api-reference.md](design/table-api-reference.md) — Configuration Table API Reference · [中文](design/table-api-reference-zh.md)
 
 #### 接入层:网关、gate 与登录
@@ -124,12 +127,17 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-festival-beast-logic-handoff.md](design/battle-festival-beast-logic-handoff.md) — 瑞兽迎春：Gemini 逻辑实现交接
+- [battle-festival-beast-ui-handoff.md](design/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
+- [battle-festival-beast-v1.md](design/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
 - [battle-instance-loss-early-abort.md](design/battle-instance-loss-early-abort.md) — 战斗进程失效的提前作废与作废通知
 - [battle-item-reservation.md](design/battle-item-reservation.md) — 战斗道具预留(两阶段:先预留,再扣减或作废)
 - [battle-overflow-mail.md](design/battle-overflow-mail.md) — 战斗掉落两包都放不下时改投邮件
 - [battle-report-replay.md](design/battle-report-replay.md) — 回合制战斗战报回放
 - [battle-result-recovery.md](design/battle-result-recovery.md) — 战斗结果重登恢复:近期战斗结果
 - [battle-script.md](design/battle-script.md) — 战斗剧本(battle script)
+- [battle-season-one-simple-design.md](design/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
+- [battle-season-one-ui-handoff.md](design/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
@@ -153,12 +161,15 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [equipment-eight-slot-planning.md](design/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
 - [equipment-recycling-trade-economy-candidate.md](design/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
+- [equipment-recycling-trade-economy-v1.md](design/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
 - [equipment-v1-affixes-artifacts.md](design/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
 - [exploit_loss_prevention.md](design/exploit_loss_prevention.md) — Exploit & Loss Prevention Systems (漏洞止损与回收系统) · [EN](design/exploit_loss_prevention_en.md) · [中文](design/exploit_loss_prevention_zh.md)
 - [friend-client-spec-20260920.md](design/friend-client-spec-20260920.md) — friend 客户端任务规格(Unity,2026-09-20)
 - [friend-persistence-architecture.md](design/friend-persistence-architecture.md) — Friend Service Persistence Architecture
 - [friend-port-20260918.md](design/friend-port-20260918.md) — friend:移植为全局服务 + 客户端经路由服可达
 - [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
+- [guild-play-ui-handoff.md](design/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
+- [guild-play-v1.md](design/guild-play-v1.md) — 帮会玩法首发 V1 · 帮会会武与同道历练
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
 - [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构 · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
@@ -287,8 +298,9 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [aoi-directed-interest.md](design/aoi-directed-interest.md) — AOI 单向关注与范围外同步
 - [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 - [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
-- [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：玩法规则与 UI 制作交接
+- [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：轻量玩法 V1、UI 规格与双机交接
 - [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象切换（10 元角色形象卡）与 1 小时免费试用设计
+- [character-background-collection-design.md](design/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计
 - [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
 - [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
@@ -298,6 +310,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
 - [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:路由服确定性子集、每类节点只发现自己用到的(2026-11-06)
 - [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化与控制域 Redis 按 zone 分片(2026-11-05)
+- [core-gameplay-loop.md](design/core-gameplay-loop.md) — 《五行奇谈》核心循环 V1｜有空就玩
 - [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对（2026-10-20）
 - [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
 - [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
@@ -309,16 +322,19 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [jeecg-gm-administration.md](design/jeecg-gm-administration.md) — 独立 JeecgBoot GM 管理系统
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
 - [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
+- [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
 - [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
 - [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 - [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
 - [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
+- [pet-memory-minigame-v1.md](design/pet-memory-minigame-v1.md) — 灵宠翻牌 V1 设计与双机交接
 - [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
 - [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处
 - [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
 - [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
 - [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
-- [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md) — 论剑排位、段位奖励与 UI 交接候选
+- [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md) — 论剑排位首发 V1 实施规格
+- [ranked-play-v1-implementation.md](design/ranked-play-v1-implementation.md) — 《论剑排位首发 V1》工程落盘设计
 - [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷
 - [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
 - [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)
@@ -328,6 +344,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
 - [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(2026-11-06 服务端源码已写;2026-11-10 补入场后补推、客户端已写,补跨节点与离线托管的跨场景跟随;均未编译未测试)
 - [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret(2026-11-10)
+- [world-map-play-v1.md](design/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先
 - [writer-roster-exhaustion-20261106.md](design/writer-roster-exhaustion-20261106.md) — 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 - [zone-full-handling.md](design/zone-full-handling.md) — 区服满员处理（保留选区）
 - [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计
@@ -405,6 +422,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [stress-1zone-45k-2026-06-04-round18.md](stress/stress-1zone-45k-2026-06-04-round18.md) — Stress Test — 1 Zone × 45k Robots — Round 18 (2026-06-04)
 - [stress-3zone-2026-05-23-postmortem.md](stress/stress-3zone-2026-05-23-postmortem.md) — 3 Zone × 15000 压测 — 复盘(2026-05-23)
 - [stress-gap-items-verification-20261111.md](stress/stress-gap-items-verification-20261111.md) — 缺口清单压测项的复核方案(2026-11-11,未运行)
+- [stress-spectate-fanout-20261121.md](stress/stress-spectate-fanout-20261121.md) — 观战分级扇出：Linux 帧大小与 Gate 单线程容量实测报告（2026-11-21）
 - [stress-test-2026-05-ephemeral-port.md](stress/stress-test-2026-05-ephemeral-port.md) — 压测复盘: ephemeral port 扩容前后对比 (2026-05)
 - [stress-test-2026-05-http-login.md](stress/stress-test-2026-05-http-login.md) — 端到端阶梯压测: HTTP /api/login 路径 (2026-05-09)
 - [stress-test-progress.md](stress/stress-test-progress.md) — 1000-Robot Stress Test Progress
@@ -417,7 +435,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
-- [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini)
+- [spectate-tiered-fanout-followup-20261121.md](handoff/spectate-tiered-fanout-followup-20261121.md) — 观战分级扩容（L0 / L1 / L2）：环境受限后续验证交接（2026-11-21）
+- [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Codex)
 
 ### 笔记(`notes/`)
 

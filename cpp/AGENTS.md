@@ -55,6 +55,8 @@ cpp/
 - Editing generated protobuf/codegen outputs directly.
 - Broad edits in vendored engine trees when a node/service-layer fix is enough.
 - 组件访问中的反例与审查清单统一见上述权威规则，避免在此复制另一套判据。
+- 在类 / 结构体 / 联合体非静态成员、容器元素（如 `std::vector<T*>`）或业务返回值中使用裸指针，或手写裸 `new`/`delete`（函数参数可借用，局部变量仅限接 ECS 组件、配置表行及无法改签名的外部/Protobuf/C API 接缝指针并就地判空使用、严禁持有或向外传播）；权威规则见 [engineering-principles.md](../docs/rules/engineering-principles.md#2-简单标准可读112)，类成员门禁与预检见 [cpp-runtime-and-build.md](../docs/rules/cpp-runtime-and-build.md#c-类成员不放裸指针no-raw-pointer-member-门禁)。
+- 在异步回调 / 定时器 / `queueInLoop` 中使用 `[=]`、`[&]`、裸 `this` 或 `std::bind(..., this/shared_from_this())`，或将热路径 ECS 业务数据塞进 `std::shared_ptr<State>` 破坏 CPU Cache Line；冷热分离四选一标准、捕获红线与必测要求见 [engineering-principles.md §11.7](../docs/rules/engineering-principles.md#7-连接与回调生命周期117muduo强制)。
 
 ## COMMANDS
 ```bash

@@ -43,11 +43,12 @@ func resolveProtoc(protobufSrcDir string) (string, error) {
 	return chooseProtoc(want, protocCandidates(protobufSrcDir), protocVersionOf)
 }
 
-// protocCandidates 按优先级列出本机的 protoc:SDK 的 Debug、Release,最后是 PATH。
+// protocCandidates 按优先级列出本机的 protoc:SDK 的 Release、Debug,最后是 PATH。
+// protoc 只生成源码文本不参与目标链接,同版本 Release 与 Debug 产物等价,但 Release 速度快一个数量级。
 func protocCandidates(protobufSrcDir string) []string {
 	protobufRoot := filepath.Dir(filepath.Clean(protobufSrcDir))
 	var candidates []string
-	for _, sdk := range []string{"install_vs2026_dbg", "install_vs2026_rel"} {
+	for _, sdk := range []string{"install_vs2026_rel", "install_vs2026_dbg"} {
 		path := filepath.Join(protobufRoot, sdk, "bin", "protoc.exe")
 		if _, err := os.Stat(path); err == nil {
 			candidates = append(candidates, path)

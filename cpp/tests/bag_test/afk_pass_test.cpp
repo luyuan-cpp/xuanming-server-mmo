@@ -309,6 +309,34 @@ TEST_F(AfkPassSystemTest, GmSetsRemainingTimeAndClears)
 	EXPECT_EQ(Expiry(), 0u);
 }
 
+TEST_F(AfkPassSystemTest, GmSetRespectsPlayerMutabilityGuard)
+{
+	::AfkPassInfo info;
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+	EXPECT_EQ(AfkPassSystem::GmSet(player, 120, kNow, info), kAfkPassFrozen);
+	EXPECT_EQ(Expiry(), 0u);
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+
+	tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+	EXPECT_EQ(AfkPassSystem::GmSet(player, 120, kNow, info), kAfkPassFrozen);
+	EXPECT_EQ(Expiry(), 0u);
+	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(player);
+
+	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
+	EXPECT_EQ(AfkPassSystem::GmSet(player, 120, kNow, info), kAfkPassFrozen);
+	EXPECT_EQ(Expiry(), 0u);
+	tlsEcs.actorRegistry.remove<UnregisterPlayer>(player);
+
+	tlsEcs.actorRegistry.remove<PlayerOwnerEpochComp>(player);
+	EXPECT_EQ(AfkPassSystem::GmSet(player, 120, kNow, info), kAfkPassFrozen);
+	EXPECT_EQ(Expiry(), 0u);
+}
+
+TEST_F(AfkPassSystemTest, ValidateTablesAcceptsExportedRule)
+{
+	EXPECT_TRUE(AfkPassSystem::ValidateTables());
+}
+
 TEST_F(AfkPassSystemTest, InfoCarriesPriceAndServerTime)
 {
 	SetExpiry(kNow + 3600);
@@ -384,4 +412,41 @@ TEST_F(AfkPassSystemTest, EntitiesNotBuiltByTheLoadChainWriteNoProjection)
 
 	AfkPassSystem::OnSaveCommitted(kPlayerGuid + 1, committed, kNow); // 本节点没有这名玩家
 	EXPECT_TRUE(projections.empty());
+}
+
+TEST_F(AfkPassSystemTest, FailedProjectionSetAndDelSelfHealOnLaterCommitOrRefresh)
+{
+	AfkPassSystem::OnPlayerLoaded(player, kNow);
+	ASSERT_EQ(projections.size(), 1u);
+
+	// 1) 开通提交那一次 Redis 写失败(未确认):下一次存盘即便月卡到期值未变,仍补发 SET 自愈。
+	PlayerAllData committed;
+	committed.mutable_player_database_data()->mutable_uint64_pb_component()->set_afk_pass_expires_at(kNow + Period());
+	AfkPassSystem::SetProjectionFailForTest(true);
+	AfkPassSystem::OnSaveCommitted(kPlayerGuid, committed, kNow + 1);
+	ASSERT_EQ(projections.size(), 2u);
+	EXPECT_TRUE(projections[1].set);
+
+	AfkPassSystem::SetProjectionFailForTest(false);
+	AfkPassSystem::OnSaveCommitted(kPlayerGuid, committed, kNow + 2);
+	ASSERT_EQ(projections.size(), 3u) << "上次 SET 未确认:相同值也必须重试自愈";
+	EXPECT_TRUE(projections[2].set);
+
+	AfkPassSystem::OnSaveCommitted(kPlayerGuid, committed, kNow + 3);
+	EXPECT_EQ(projections.size(), 3u) << "已确认后相同值不再重复写 Redis";
+
+	// 2) 清除(DEL)写失败:后续 RefreshProjection 也会补发 DEL 清掉 Redis 脏键,确认后停止。
+	committed.mutable_player_database_data()->mutable_uint64_pb_component()->set_afk_pass_expires_at(0);
+	AfkPassSystem::SetProjectionFailForTest(true);
+	AfkPassSystem::OnSaveCommitted(kPlayerGuid, committed, kNow + 4);
+	ASSERT_EQ(projections.size(), 4u);
+	EXPECT_FALSE(projections[3].set);
+
+	AfkPassSystem::SetProjectionFailForTest(false);
+	AfkPassSystem::RefreshProjection(player, kNow + 5);
+	ASSERT_EQ(projections.size(), 5u) << "未确认的 DEL 必须通过 RefreshProjection 自愈,不能残留旧键";
+	EXPECT_FALSE(projections[4].set);
+
+	AfkPassSystem::RefreshProjection(player, kNow + 6);
+	EXPECT_EQ(projections.size(), 5u) << "DEL 确认后不再重复发";
 }

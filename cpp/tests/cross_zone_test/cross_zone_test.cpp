@@ -32,6 +32,8 @@
 #include "spatial/system/aoi.h"
 #include "spatial/comp/grid_comp.h"
 #include "player/system/player_scene.h"
+#include "player/system/afk_pass.h"
+#include "player/system/player_team.h"
 #include "proto/scene/scene.pb.h"
 #include "world/scene_lifecycle.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -1916,6 +1918,52 @@ TEST(ConnectionLostHoldAfkPassEcs, HostingStartTurnsOnTeamFollowWithoutTheClient
     const uint64_t now = TimeSystem::NowSecondsUTC();
     AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
     EXPECT_TRUE(TeamFollowSystem::WantsFollow(player)) << "托管开始:服务器替他开启跟随,不等客户端声明";
+}
+
+// 跨节点托管落点建出新实体时,EnterHostedHold 触发的 Probe 排在 queueInLoop 里,先于 EnterScene 发起的异步 ReadMembership
+// 完成 —— 此时实体还没有 TeamId 组件。托管开始必须先挂上跟随意图,同时立即补写一次已提交的月卡投影。
+TEST(ConnectionLostHoldAfkPassEcs, HostingStartOnFreshCrossNodeEntityWithoutTeamIdTurnsOnFollowAndRefreshesProjection)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    ASSERT_FALSE(tlsEcs.actorRegistry.any_of<TeamId>(player)) << "前置:模拟跨节点新建实体尚未同步到组队权威";
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    tlsEcs.actorRegistry.get<PlayerUint64Comp>(player).set_afk_pass_expires_at(now + 3600);
+
+    int projectionSets = 0;
+    struct ResetProjectionSender
+    {
+        ~ResetProjectionSender() { AfkPassSystem::SetProjectionSenderForTest(nullptr); }
+    } resetProjectionSender;
+    AfkPassSystem::SetProjectionSenderForTest([&projectionSets](Guid, uint64_t, bool set) {
+        if (set) ++projectionSets;
+    });
+    AfkPassSystem::OnPlayerLoaded(player, now);
+    ASSERT_EQ(projectionSets, 1);
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now + 1);
+
+    EXPECT_TRUE(TeamFollowSystem::WantsFollow(player)) << "跨节点新实体缺 TeamId 时也必须挂跟随意图,等待 ReadMembership 回包即刻接上";
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(player)) << "ReadMembership 若首跳失败,15s 兜底心跳仍会补查";
+    EXPECT_EQ(projectionSets, 2) << "托管开始立即补写一次已提交投影,不等最多 20s 错峰心跳";
+}
+
+TEST(ConnectionLostHoldAfkPassEcs, HostingStartDoesNotTurnOnFollowForConfirmedSoloPlayer)
+{
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    auto& team = tlsEcs.actorRegistry.emplace<TeamId>(player);
+    team.set_team_id(0); // 已有组队权威墓碑:确认无队
+    team.set_membership_epoch(1);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, std::to_string(now + 3600), now);
+    EXPECT_FALSE(TeamFollowSystem::WantsFollow(player)) << "已确认无队的单人托管角色不挂跟随意图,不浪费心跳读";
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(player));
 }
 
 // ── 严格屏障覆盖世代校验 C3 的结局分派(docs/design/mixed-version-persist-field-protection.md §5.2、§10)──────────

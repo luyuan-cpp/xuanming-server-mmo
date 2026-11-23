@@ -1,5 +1,6 @@
 #include "aoi.h"
 #include "actor/actor_net_id.h"
+#include "engine/core/type_define/type_define.h"  // kInvalidSessionId
 
 #include <algorithm>
 #include <utility>
@@ -246,6 +247,15 @@ void RebuildNearbyObservers(entt::entity target, AoiVisibilityChanges& changes)
         TryAddSpatialSource(other, target, changes);
     });
 }
+// 断线保留 / 离线托管中的角色已主动摘除网关会话(gate_session_id == kInvalidSessionId),没有客户端可接收推送;
+// 在视野下发前过滤掉,避免大规模 50m AOI 下为离线托管角色做无效组包、拆组和发送层空转。
+// 注意:单测夹具(aoi_delivery_test)对测试实体可能不挂 PlayerSessionSnapshotComp 或默认保留 gate_session_id == 0,
+// 故仅过滤显式置为 kInvalidSessionId 的已摘除会话。
+bool HasDetachedClientSession(entt::entity entity)
+{
+    const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(entity);
+    return session != nullptr && session->gate_session_id() == kInvalidSessionId;
+}
 } // namespace
 
 void AoiSystem::Update(double delta) {
@@ -417,6 +427,10 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
         }
         if (((j - i) & 1u) != 0u) {
             const entt::entity watcher = sorted[i].watcher;
+            if (HasDetachedClientSession(watcher)) {
+                i = j;
+                continue;
+            }
             const entt::entity target = sorted[i].target;
             const bool shown = sorted[j - 1].shown;
             if (!shown && target == departed) {
@@ -516,7 +530,11 @@ void AoiSystem::SendVisibilityChanges(const AoiVisibilityChanges& changes, entt:
     static thread_local ActorMoveListS2C moveListMsg;
     static thread_local ActorMoveS2C moveMsg;
     for (const auto& delta : byWatcher) {
-        if (delta.created.empty() || !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(delta.watcher)) continue;
+        const auto* watcherSession = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(delta.watcher);
+        if (delta.created.empty() || watcherSession == nullptr ||
+            watcherSession->gate_session_id() == kInvalidSessionId) {
+            continue;
+        }
         advancing.clear();
         for (const auto target : delta.created) {
             if (actor_motion::IsAdvancing(tlsEcs.actorRegistry, target)) advancing.push_back(target);

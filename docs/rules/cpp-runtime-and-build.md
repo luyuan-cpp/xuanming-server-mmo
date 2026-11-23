@@ -21,10 +21,12 @@
 - **规避方法**：一律使用初始化捕获语法：`[entity = entity]()`，不要写 `[entity]()`。
 
 ### C++ 类成员不放裸指针（no-raw-pointer-member 门禁）
-- MSBuild 编译每个 C++ 工程前先跑 `tools/scripts/check_no_raw_pointer_member.ps1`（`Directory.Build.targets` 的 `NoRawPointerMemberCheck`），规则在 `cpp/plugin/no_raw_ptr_matcher.cq`：类 / 结构体 / 联合体的非静态成员不得是指针类型。`const char *` 算，函数里的局部结构体（含测试夹具）也算；静态成员、指针数组、`std::vector<T*>` 这类容器、函数参数与局部变量不算。`third_party`、`generated`、`cpp/libs/engine/muduo_windows` 不查。
-- 门禁逐个翻译单元检查，首个违例就让整个工程失败：后面的单元不再检查，这个工程的用例一条都跑不到。
-- 写法：名字用 `std::string_view`；非空借用用引用成员；可空借用用 `std::optional<std::reference_wrapper<T>>`；拥有用智能指针。`std::string + std::string_view` 要到 C++26 才有，拼接时包一层 `std::string(...)`。
-- 交付前的文本预检：仓库根 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（只读、几秒、Linux 也能跑，CI 的 `test_cpp*` 一步会跑它）。它靠文本识别，结论以门禁为准；误报或漏报时改识别规则并补它的自测用例。
+- 规则口径：类 / 结构体 / 联合体的非静态成员不得是指针类型。`const char *` 算，函数里的局部结构体（含测试夹具）也算；静态成员、指针数组、`std::vector<T*>` 这类容器、函数参数与局部变量不算（注：此处仅说明当前机械门禁的检查范围，不代表规范允许容器存裸指针或随意使用裸指针；完整禁止/例外口径见 [engineering-principles.md](engineering-principles.md#2-简单标准可读112)）。`third_party`、`generated`、`cpp/libs/engine/muduo_windows`、`cpp/plugin` 不查。
+- **三层门禁（编译零阻塞）**：
+  1. **日常编译默认不跑**：`Directory.Build.targets` 的 `NoRawPointerMemberCheck` 默认关闭，避免改单个文件触发全工程串行 `clang-query` 解析拖慢增量编译；需要全量 Clang AST 复核（捕获 `typedef`/`using` 指针别名或宏拼成员，规则在 `cpp/plugin/no_raw_ptr_matcher.cq`）时显式传 `/p:RunNoRawPointerMemberCheck=true`（逐翻译单元检查，首错即停）。
+  2. **本地提交秒级拦截**：`.githooks/pre-commit` 自动执行 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py --staged`，仅扫描暂存区改动的 C++ 源码（毫秒级）。新拉仓库执行一次 `git config core.hooksPath .githooks` 启用。
+  3. **远端 CI 与交付前全仓检查**：CI（`.github/workflows/cpp-build-ci.yml` 的 `test_cpp*`）与交付前命令 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（只读、几秒、Linux 也能跑）全仓扫描 `cpp/`。误报或漏报时改识别规则并补 `RecognitionTest` 自测用例，争议情形以 Clang AST 门禁为准。
+- 写法：名字用 `std::string_view`；非空借用用引用成员；可空借用用 `std::optional<std::reference_wrapper<T>>`（`std::optional<T&>` 要到 C++26 才有，待办见 [todo_zh.md](../notes/todo_zh.md) #294）；拥有用智能指针。`std::string + std::string_view` 也要到 C++26 才有，拼接时包一层 `std::string(...)`。
 
 ### `TimerTaskComp` 生命周期与 `EventLoop` 析构顺序
 - `TimerTaskComp::Cancel()` 在调用 `loop->cancel()` 之前必须判空 `GetThreadEventLoop()`。`EventLoop` 析构函数会在 entt registry 清理并销毁实体组件**之前**将 `t_loopInThisThread` 置为 `NULL`。

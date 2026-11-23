@@ -25,6 +25,7 @@ type NamedTask struct {
 
 // ExecutionRunner centralizes timing, grouping and execution orchestration for pipeline stages.
 type ExecutionRunner struct {
+	mu           sync.Mutex
 	groupRecords []WaitTimeRecord
 	taskRecords  []WaitTimeRecord
 }
@@ -38,7 +39,10 @@ func (r *ExecutionRunner) RunTask(name string, fn func()) {
 	fn()
 	elapsed := time.Since(start)
 
+	r.mu.Lock()
 	r.taskRecords = append(r.taskRecords, WaitTimeRecord{Name: name, Duration: elapsed})
+	r.mu.Unlock()
+
 	logger.Global.Info("Function execution time",
 		zap.String("funcName", name),
 		zap.Duration("elapsed", elapsed),
@@ -63,7 +67,9 @@ func (r *ExecutionRunner) RunParallelGroup(groupName string, tasks []NamedTask) 
 		go func() {
 			defer groupWg.Done()
 			r.RunTask(task.Name, func() {
-				task.Run(&groupWg)
+				var taskWg sync.WaitGroup
+				task.Run(&taskWg)
+				taskWg.Wait()
 			})
 		}()
 	}
@@ -73,15 +79,14 @@ func (r *ExecutionRunner) RunParallelGroup(groupName string, tasks []NamedTask) 
 }
 
 func (r *ExecutionRunner) RunSerialGroup(groupName string, tasks []NamedTask) {
-	var groupWg sync.WaitGroup
 	start := time.Now()
 
 	for _, task := range tasks {
 		task := task
 		r.RunTask(task.Name, func() {
-			task.Run(&groupWg)
-			groupWg.Wait()
-			groupWg = sync.WaitGroup{}
+			var taskWg sync.WaitGroup
+			task.Run(&taskWg)
+			taskWg.Wait()
 		})
 	}
 
@@ -90,10 +95,12 @@ func (r *ExecutionRunner) RunSerialGroup(groupName string, tasks []NamedTask) {
 
 func (r *ExecutionRunner) recordGroup(groupName string, start time.Time, logMessage string) {
 	elapsed := time.Since(start)
+	r.mu.Lock()
 	r.groupRecords = append(r.groupRecords, WaitTimeRecord{
 		Name:     "Group: " + groupName,
 		Duration: elapsed,
 	})
+	r.mu.Unlock()
 
 	logger.Global.Info(logMessage,
 		zap.String("groupName", groupName),

@@ -689,6 +689,27 @@ def unchanged_before_apply(config, baseline, environment):
                 'A base image reference changed during builds')
 
 
+def wait_sql_boots(sql_boots, baseline, environment, timeout=300):
+    """等待全部 *-sql-boot 退出并释放动态 IP，避免与常驻服务的静态 IP 冲突。"""
+    deadline = time.monotonic() + timeout
+    while True:
+        services, _ = current_containers(compose_config(environment, compose_input(baseline)))
+        pending = []
+        for name in sql_boots:
+            state = services[name]['State']
+            require(not any(state.get(key) for key in ('OOMKilled', 'Restarting', 'Dead', 'Paused')),
+                    'Writer registration failed: ' + name)
+            if state['Status'] == 'exited':
+                require(state['ExitCode'] == 0, 'Writer registration failed: ' + name)
+            else:
+                pending.append(name)
+        if not pending:
+            return
+        remaining = deadline - time.monotonic()
+        require(remaining > 0, 'Writer registration timed out: ' + ', '.join(pending))
+        time.sleep(min(0.5, remaining))
+
+
 def wait_infrastructure(name, original, signature):
     identity = original['Id']
     deadline = time.monotonic() + 360
@@ -945,8 +966,16 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                                       startup.recovery_path() if baseline.get('recoveryOverlay') else None)
             result['phase'] = 'recreate-services'
             result['containerUpdateStarted'] = True
+            sql_boots = [name for name in targets if name.endswith('-sql-boot')]
+            apps = [name for name in targets if not name.endswith('-sql-boot')]
+            if sql_boots:
+                code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
+                                 '--force-recreate', *sql_boots],
+                                 root / 'recreate-sql-boot.log', environment, 300)
+                require(code == 0, 'Writer registration start failed; inspect recreate-sql-boot.log; completed changes remain applied')
+                wait_sql_boots(sql_boots, baseline, environment)
             code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
-                             '--force-recreate', '--wait', '--wait-timeout', '300', *targets],
+                             '--force-recreate', '--wait', '--wait-timeout', '300', *apps],
                              root / 'recreate.log', environment, 600)
             require(code == 0, 'Container update failed; inspect recreate.log; completed changes remain applied')
             result['phase'] = 'verify-runtime'

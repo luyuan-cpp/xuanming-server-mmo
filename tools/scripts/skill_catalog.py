@@ -21,7 +21,10 @@ DESIGN = ROOT / "docs/design/skill-planning"
 BASES = {"A": 10000, "B": 11000, "P": 12000, "T": 13000, "O": 14000}
 SHARED = {"A02", "A06", "A10", "A14", "A16", "A19", "A25", "A26", "A27", "A33", "A34", "P04", "P06"}
 PET_ONLY = {"A18", "P14", "P15", "P16", "P17", "P18", "T01", "T05", "T06", "O03"}
-RETIRED_SKILL_IDS = {10007, 10017, 10028, 10032, 10037, 12010, 13002, 13003}
+RETIRED_SKILL_IDS = {
+    int(skill_id) for skill_id in
+    (ROOT / "cpp/libs/services/battle/constants/retired_skill_ids.inc").read_text(encoding="ascii").split(",")
+}
 RETIRED_BUFF_IDS = {100070, 100071, 100170, 100280, 100320, 100370, 120100, 120101, 130020, 130030}
 BUFFS: list[dict] = []
 SKILLS: list[dict] = []

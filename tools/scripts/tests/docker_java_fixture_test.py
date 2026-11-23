@@ -232,17 +232,58 @@ class FixtureTests(unittest.TestCase):
         calls = []
         def docker(arguments, environment, timeout=60):
             calls.append(arguments)
-            return arguments[-1] if arguments[:2] == ['image', 'inspect'] else 'Docker Compose'
+            if arguments[:2] == ['image', 'inspect']:
+                return arguments[-1]
+            if arguments == ['network', 'ls', '-q']:
+                return 'net1\n'
+            return 'Docker Compose'
         with patch.object(fixture, 'local_requirements', return_value=[]), patch.object(fixture, '_runner') as runner, \
              patch.object(fixture, '_port_available') as port, patch.object(fixture, '_docker', side_effect=docker), \
+             patch.object(fixture, '_json_docker', return_value=[
+                 {'IPAM': None}, {'IPAM': {'Config': None}},
+                 {'IPAM': {'Config': [{'Subnet': '172.18.0.0/16'}, {'Subnet': 'fd00::/64'}]}}]) as json_docker, \
              patch.object(fixture, '_run', return_value='go version go1.27.2 windows/amd64\n'), \
              patch.object(fixture, '_receipt') as write:
             fixture.preflight({})
         runner.assert_called_once_with('check-helper', {})
         port.assert_called_once()
         write.assert_not_called()
-        self.assertEqual(len(calls), 4)
-        self.assertTrue(all(args[0] == 'image' or args == ['compose', 'version'] for args in calls))
+        self.assertEqual(len(calls), 5)
+        self.assertTrue(all(args[0] == 'image' or args in (['compose', 'version'], ['network', 'ls', '-q']) for args in calls))
+        json_docker.assert_called_once_with(['network', 'inspect', 'net1'], {})
+
+    def test_subnet_conflict_fails_preflight_and_create_before_compose_up(self):
+        for overlapping in (fixture.FIXTURE_SUBNET, '10.254.254.16/28', '10.254.0.0/16'):
+            with self.subTest(subnet=overlapping):
+                def docker(arguments, environment, timeout=60):
+                    if arguments[:2] == ['image', 'inspect']:
+                        return arguments[-1]
+                    if arguments == ['network', 'ls', '-q']:
+                        return 'net1\n'
+                    return 'Docker Compose'
+                with patch.object(fixture, 'local_requirements', return_value=[]), patch.object(fixture, '_runner'), \
+                     patch.object(fixture, '_port_available'), patch.object(fixture, '_docker', side_effect=docker), \
+                     patch.object(fixture, '_json_docker', return_value=[
+                         {'Name': 'PRIVATE_LEFTOVER_NET', 'IPAM': {'Config': [{'Subnet': overlapping}]}}]), \
+                     patch.object(fixture, '_run', return_value='go version go1.27.2 windows/amd64\n'):
+                    with self.assertRaisesRegex(RuntimeError, '10\\.254\\.254\\.0/24') as caught:
+                        fixture.preflight({})
+                self.assertNotIn('PRIVATE_LEFTOVER_NET', str(caught.exception))
+        evidence = fixture.ROOT / 'build/verification'
+        evidence.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='fixture-unit-', dir=evidence) as parent:
+            directory = Path(parent) / 'new'
+            with patch.object(fixture, 'preflight'), patch.object(fixture, '_run'), \
+                 patch.object(fixture, '_sha', return_value='a' * 64), patch.object(fixture, 'source_inputs', return_value=()), \
+                 patch.object(fixture, '_assert_absent'), patch.object(fixture, '_port_available'), \
+                 patch.object(fixture, '_docker', return_value='net1\n') as docker, \
+                 patch.object(fixture, '_json_docker', return_value=[{'IPAM': {'Config': [{'Subnet': fixture.FIXTURE_SUBNET}]}}]):
+                with self.assertRaisesRegex(RuntimeError, 'no automatic retry or cleanup'):
+                    fixture.create(directory, {})
+            hold = json.loads((directory / 'create.hold.json').read_text())
+            self.assertEqual(hold['phase'], 'verify-subnet')
+            self.assertIn(fixture.FIXTURE_SUBNET, hold['reason'])
+            self.assertFalse(any('up' in call.args[0] for call in docker.call_args_list))
 
     def test_port_conflict_prevents_docker_and_build(self):
         with patch.object(fixture, 'local_requirements', return_value=[]), patch.object(fixture, '_runner'), \
@@ -310,7 +351,7 @@ class FixtureTests(unittest.TestCase):
             with patch.object(fixture, 'preflight'), patch.object(fixture, '_run'), \
                  patch.object(fixture, '_sha', return_value='a' * 64), patch.object(fixture, 'source_inputs', return_value=()), \
                  patch.object(fixture, '_assert_absent'), patch.object(fixture, '_port_available'), \
-                 patch.object(fixture, '_docker') as docker, \
+                 patch.object(fixture, '_subnet_available'), patch.object(fixture, '_docker') as docker, \
                  patch.object(fixture, '_inventory', side_effect=RuntimeError('PRIVATE_SQL_ERROR')), \
                  patch.object(fixture, 'close') as close:
                 with self.assertRaisesRegex(RuntimeError, 'no automatic retry or cleanup') as caught:
@@ -334,7 +375,8 @@ class FixtureTests(unittest.TestCase):
             reason = 'Unexpected container in the Java fixture project'
             with patch.object(fixture, 'preflight'), patch.object(fixture, '_run'), \
                  patch.object(fixture, '_sha', return_value='a' * 64), patch.object(fixture, 'source_inputs', return_value=()), \
-                 patch.object(fixture, '_assert_absent'), patch.object(fixture, '_port_available'), patch.object(fixture, '_docker'), \
+                 patch.object(fixture, '_assert_absent'), patch.object(fixture, '_port_available'), \
+                 patch.object(fixture, '_subnet_available'), patch.object(fixture, '_docker'), \
                  patch.object(fixture, '_inventory', side_effect=fixture._FixtureFailure(reason)):
                 with self.assertRaisesRegex(RuntimeError, 'no automatic retry or cleanup'):
                     fixture.create(directory, {})

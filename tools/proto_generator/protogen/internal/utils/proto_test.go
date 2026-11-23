@@ -81,7 +81,7 @@ func TestProtoPathAndDomainHelpers(t *testing.T) {
 // 测试气泡等待全部协程真正阻塞后检查互斥，无真实时钟或外部进程。
 func TestProtocExecutionExcludesConcurrentCommands(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		gate := newProtocExecutionGate()
+		gate := newProtocExecutionGate(1)
 		firstEntered := make(chan struct{})
 		secondEntered := make(chan struct{})
 		release := make(chan struct{})
@@ -124,9 +124,85 @@ func TestProtocExecutionExcludesConcurrentCommands(t *testing.T) {
 	})
 }
 
+func TestProtocExecutionEnforcesBoundedConcurrency(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gate := newProtocExecutionGate(2)
+		entered := make(chan int, 3)
+		releaseFirst := make(chan struct{})
+		releaseSecond := make(chan struct{})
+		results := make(chan error, 3)
+
+		go func() {
+			results <- gate.run(func() error {
+				entered <- 1
+				<-releaseFirst
+				return nil
+			})
+		}()
+		go func() {
+			results <- gate.run(func() error {
+				entered <- 2
+				<-releaseSecond
+				return nil
+			})
+		}()
+		<-entered
+		<-entered
+
+		go func() {
+			results <- gate.run(func() error {
+				entered <- 3
+				return nil
+			})
+		}()
+		synctest.Wait()
+		select {
+		case id := <-entered:
+			t.Fatalf("并发上限为 2 时第 %d 个命令不应提前进入", id)
+		default:
+		}
+
+		close(releaseFirst)
+		if id := <-entered; id != 3 {
+			t.Fatalf("释放一个名额后应放行第 3 个命令，实际为 %d", id)
+		}
+		close(releaseSecond)
+		for i := 0; i < 3; i++ {
+			if err := <-results; err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+}
+
+func TestDefaultProtocConcurrency(t *testing.T) {
+	cases := []struct {
+		gomaxprocs int
+		want       int
+	}{
+		{0, 1},
+		{1, 1},
+		{2, 1},
+		{3, 1},
+		{4, 2},
+		{8, 4},
+		{16, 8},
+		{20, 8},
+		{64, 8},
+	}
+	for _, tc := range cases {
+		if got := defaultProtocConcurrency(tc.gomaxprocs); got != tc.want {
+			t.Errorf("defaultProtocConcurrency(%d) = %d, want %d", tc.gomaxprocs, got, tc.want)
+		}
+	}
+	if got := cap(newProtocExecutionGate(0).active); got != 1 {
+		t.Fatalf("newProtocExecutionGate(0) cap = %d, want 1", got)
+	}
+}
+
 func TestProtocExecutionReleasesPermitAfterFailure(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		gate := newProtocExecutionGate()
+		gate := newProtocExecutionGate(1)
 		failure := errors.New("原始命令失败")
 		if err := gate.run(func() error { return failure }); err != failure {
 			t.Fatalf("原始错误被替换：%v", err)

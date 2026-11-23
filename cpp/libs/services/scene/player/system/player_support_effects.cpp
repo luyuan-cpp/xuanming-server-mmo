@@ -35,7 +35,8 @@ void PlayerSupportEffectSystem::Build(entt::entity player, SupportEffectSummary&
     summary.mutable_shield()->set_complete(complete);
     if (!inputs) return;
     for (const auto& owned : tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).skill_list())
-        if (owned.rank() > 0 && SkillTableManager::Instance().FindByIdSilent(owned.skill_table_id()).first == nullptr)
+        if (owned.rank() > 0 && SkillTableManager::Instance().FindByIdSilent(owned.skill_table_id()).first == nullptr &&
+            !supportrules::IsRetiredSkill(owned.skill_table_id()))
             complete = false;
     const auto level = playerlevel::CappedLevel(levelComp->level());
     BattlePlayerSnapshot snapshot;

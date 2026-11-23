@@ -574,11 +574,13 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 {
 	auto& registry = tlsEcs.actorRegistry;
 	static thread_local std::vector<std::pair<entt::entity, TeamFollowStopReason>> dissolving;
+	static thread_local std::vector<entt::entity> emptyFormations;
 	static thread_local std::vector<std::pair<uint64_t, TeamFollowStopReason>> leaving;
 	static thread_local std::vector<TeamFollowStep> steps;
 	// 同一队形这一 tick 的移动广播合成一批,队形处理完就发(ActorMoveBatch:每个接收者每批只收一条)。
 	static thread_local ActorMoveBatch moves;
 	dissolving.clear();
+	emptyFormations.clear();
 
 	for (auto&& [leader, comp] : registry.view<TeamFollowFormationComp>().each())
 	{
@@ -625,12 +627,22 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 				}
 			}
 		}
+		// 所有随从均已离开 / 暂离:回收空队形组件(按需状态),避免 0 队员的队长持续以 20Hz 跑轨迹更新与导航射线。
+		if (formation.Members().empty())
+		{
+			emptyFormations.push_back(leader);
+			continue;
+		}
 
 		const FollowPoint leaderPosition = ToFollowPoint(registry.get<Transform>(leader).location());
 		if (FollowHorizontalDistance(formation.Trail().Head(), leaderPosition) > kTeamFollowMaxLeaderJump)
 		{
 			RestartFormation(leader, comp, leaderPosition, moves);
 			moves.Flush();
+			if (formation.Members().empty())
+			{
+				emptyFormations.push_back(leader);
+			}
 			continue;
 		}
 
@@ -667,6 +679,10 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 				TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
 		}
 		moves.Flush();
+		if (formation.Members().empty())
+		{
+			emptyFormations.push_back(leader);
+		}
 	}
 	// 兜底:上面任何一条提前 continue 的分支漏发,也在这一 tick 之内发出,不留到下一 tick。
 	moves.Flush();
@@ -674,6 +690,14 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 	for (const auto& [leader, reason] : dissolving)
 	{
 		DissolveFormation(leader, reason);
+	}
+	for (const auto leader : emptyFormations)
+	{
+		if (const auto* comp = registry.valid(leader) ? registry.try_get<TeamFollowFormationComp>(leader) : nullptr;
+			comp != nullptr && comp->formation.Members().empty())
+		{
+			registry.remove<TeamFollowFormationComp>(leader);
+		}
 	}
 	ReleaseOrphans();
 }
@@ -789,6 +813,10 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 	registry.remove<TeamFollowAwaitLeaderComp>(follower);
 	if (!PlaceMember(leader, *comp, follower, walkAllowed))
 	{
+		if (comp->formation.Members().empty())
+		{
+			registry.remove<TeamFollowFormationComp>(leader);
+		}
 		return false;
 	}
 	if (ActorActionStateSystem::HasActionPolicy(kActorActionJoinFollow))

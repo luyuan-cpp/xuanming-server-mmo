@@ -28,7 +28,7 @@
 | §7 | 系统不变量（永久 ID / SnowFlake、Kafka 防僵尸、tip 单轴、ECS、逻辑库自治） | [docs/rules/invariants.md](docs/rules/invariants.md) |
 | §8 / §9 | 命名规范第一原则、关联 Git 仓库与权限/线程硬边界 | [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md) |
 | §10 | AI 协作分工（Claude / Codex / Gemini）、写回流程、模型档位与设计落盘 | [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md) |
-| §11 | 工程设计与编码原则（SOLID/KISS/不用宏/实例布局分层/muduo 生命周期） | [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md) |
+| §11 | 工程设计与编码原则（SOLID/KISS/不用宏/裸指针约束/实例布局分层/muduo 生命周期） | [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md) |
 | §13（位图） | 位图（bit）优先存储规范、领取状态归属与策划删表 ID 红线 | [docs/rules/bit-storage-and-table-ids.md](docs/rules/bit-storage-and-table-ids.md) |
 | §13（运行时） | C++ 编码/门禁/生命周期、通信广播、gRPC 关机与构建测试命令 | [docs/rules/cpp-runtime-and-build.md](docs/rules/cpp-runtime-and-build.md) |
 
@@ -117,9 +117,9 @@
 
 优先级：`正确性 / 安全 / 数据一致性 / 向后兼容 > 简单 / 可读 / 与仓库一致 > 可维护 / 可测试 > 有数据支撑的性能 > 假想扩展`。
 
-- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**系统/模块间采用 Actor 消息通信（状态私有、只传不可变消息、串行消费、禁借全局单例绕过；模块内部保持正常直接调用，不把内部函数过度拆成消息）**、**适合用 23 种设计模式时主动采用并向程序说明原因**、**优先使用当前开发语言的标准库，标准库没有时再去 GitHub 找同语言高 Star 成熟库（门槛随该语言生态体量浮动），交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
+- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**系统/模块间采用 Actor 消息通信（状态私有、只传不可变消息、串行消费、禁借全局单例绕过；模块内部保持正常直接调用，不把内部函数过度拆成消息）**、**适合用 23 种设计模式时主动采用并向程序说明原因**、**优先使用当前开发语言的标准库，标准库没有时再去 GitHub 找同语言高 Star 成熟库（门槛随该语言生态体量浮动），交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、**C++ 裸指针约束（禁止类/结构体/联合体非静态成员、容器元素如 `std::vector<T*>`、业务返回值及裸 `new`/`delete`；函数参数可传指针，局部变量仅限接 ECS 组件、配置表行及无法改签名的外部/框架/生成/C API 接缝指针并就地判空使用、严禁持有或向外传播；类成员受 pre-commit/CI 及按需 MSBuild AST 门禁强制拦截）**、fail-closed、面向接口测试与交付门禁。
 - **§11.6 实例与布局分层**：实例层只描述「是什么」，布局层只描述「摆在哪」，布局层源码不得出现领域概念。
-- **§11.7 连接与回调生命周期（muduo，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，绑回调只绑 `weak_ptr<自己>`**，关机两跳 `queueInLoop` 再 `quit()`。
+- **§11.7 连接与回调生命周期（muduo 与异步回调，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，关机两跳 `queueInLoop` 再 `quit()`**；新异步代码按**冷热分离四选一**（ECS 业务只按值捕 `entt::entity` + 业务 ID 保住 CPU Cache Line、多步流用协程/`LoopTaskScope`、基础设施对象用 `enable_shared_from_this` + 私有构造/`Create()` + `weak_from_this()`、冷路径句柄才用内部 `shared_ptr<State>` 且严禁塞业务热数据）；异步回调**禁 `[=]`/`[&]`、禁裸 `this`/引用、禁 `std::bind(..., this/shared_from_this())`、构造期不绑回调**，并配**先析构再触发回调**单测。
 - 完整细则见 → [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)。
 
 ## 12. 双版本服务器（C++/Go 版 + Java 版，强制）

@@ -173,13 +173,28 @@ void TurnBattleEngine::BuildSupportEffects(const BattleActorState& actor, Suppor
     healing->set_total_bonus_bps(healingBonus * 10000);
     shield->set_total_bonus_bps(shieldBonus * 10000);
     bool complete = actor.equipment_effects().support_sources_complete();
+    // InitPlayers 会过滤本服查不到的技能。跨版本快照仍需按入场原件识别未知的已学行。
+    for (const auto& player : createRequest.players()) {
+        if (player.player_id() != actor.actor_id()) continue;
+        for (const auto& [id, rank] : player.skill_ranks()) {
+            if (rank > 0 && dataProvider->FindSkill(id) == nullptr && !supportrules::IsRetiredSkill(id))
+                complete = false;
+        }
+        break;
+    }
     for (const auto& buff : actor.buffs()) if (dataProvider->FindBuff(buff.buff_table_id()) == nullptr) complete = false;
     for (const auto& [id, rank] : actor.skill_ranks()) {
         if (rank == 0) continue;
         const auto* skill = dataProvider->FindSkill(id);
-        if (skill == nullptr) { complete = false; continue; }
+        if (skill == nullptr) {
+            if (!supportrules::IsRetiredSkill(id)) complete = false;
+            continue;
+        }
         if (skill->battle_model() == 1) {
             for (const auto buffId : skill->effect()) {
+                if (dataProvider->FindBuff(buffId) == nullptr) complete = false;
+            }
+            for (const auto buffId : skill->init_effect()) {
                 if (dataProvider->FindBuff(buffId) == nullptr) complete = false;
             }
         }

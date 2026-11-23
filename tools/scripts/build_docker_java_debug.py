@@ -22,7 +22,7 @@ import zipfile
 # tools/ 也有局部 AGENTS.md；仓库根由本脚本固定的 tools/scripts 层级确定。
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATEWAY_ROOT = REPO_ROOT / "java/gateway_node"
-REACTOR_MODULES = ("authority_jdbc", "gateway_node")
+REACTOR_MODULES = ("authority_jdbc", "server_startup", "gateway_node")
 PROTO_ROOT = "proto/common/database/rollback_database_table.proto"
 DESCRIPTOR_RESOURCE = "META-INF/sql-authority/route-authority.desc"
 MAVEN_PROFILE = "-f java/pom.xml -pl gateway_node -am -o -B -T1 clean package"

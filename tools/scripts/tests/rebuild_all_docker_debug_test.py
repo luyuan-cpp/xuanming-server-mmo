@@ -153,13 +153,16 @@ class RebuildAllTests(unittest.TestCase):
         prepared = self.mock(docker_rebuild_recovery, 'prepare', return_value=b'new-image-pins')
         self.run_pipeline()
         prepared.assert_called_once()
-        command = next(call.args[0] for call in self.run_stage.call_args_list if 'up' in call.args[0])
-        files = [command[i + 1] for i, part in enumerate(command) if part == '-f']
-        self.assertEqual(files, [*map(str, subject.startup.COMPOSE_FILES),
-                                str(self.baseline['authoredOverlay']['path']), str(recovery)])
-        targets = command[command.index('300') + 1:]
-        self.assertFalse(set(targets) & subject.startup.HISTORY_ONLY)
-        self.assertIn('--no-deps', command)
+        up_commands = [call.args[0] for call in self.run_stage.call_args_list if 'up' in call.args[0]]
+        self.assertEqual(len(up_commands), 2)
+        for command in up_commands:
+            files = [command[i + 1] for i, part in enumerate(command) if part == '-f']
+            self.assertEqual(files, [*map(str, subject.startup.COMPOSE_FILES),
+                                    str(self.baseline['authoredOverlay']['path']), str(recovery)])
+            self.assertIn('--no-deps', command)
+        boot_targets = up_commands[0][up_commands[0].index('--force-recreate') + 1:]
+        app_targets = up_commands[1][up_commands[1].index('300') + 1:]
+        self.assertFalse((set(boot_targets) | set(app_targets)) & subject.startup.HISTORY_ONLY)
         self.assertEqual(recovery.read_bytes(), b'new-image-pins')
         self.assertEqual((self.root / 'recovery-before.json').read_bytes(), b'original')
         self.assertEqual(self.baseline['composeInput'], 'resolved-new-images')
@@ -272,7 +275,7 @@ class RebuildAllTests(unittest.TestCase):
         self.fixture_create.assert_called_once()
         self.fixture_close.assert_called_once()
         cmds = [call.args[0] for call in self.run_stage.call_args_list]
-        self.assertEqual(len(cmds), 3)
+        self.assertEqual(len(cmds), 4)
         self.assertTrue(cmds[0][4].endswith('build_docker_java_debug.py'))
         self.assertEqual([s['language'] for s in self.result['stages']], list(subject.ORDER))
         self.assertEqual(self.result['reused_from'], {'cpp': str(old), 'go': str(old)})
@@ -304,7 +307,7 @@ class RebuildAllTests(unittest.TestCase):
         self.pipeline_fixture()
         self.run_pipeline()
         calls = self.run_stage.call_args_list
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
         for language, call in zip(subject.ORDER, calls[:3]):
             command = call.args[0]
             self.assertTrue(command[4].endswith('build_docker_' + language + '_debug.py'))
@@ -316,13 +319,19 @@ class RebuildAllTests(unittest.TestCase):
             if language != 'java':
                 self.assertEqual(command[-2:], ['--jobs', '1'])
         self.assertEqual(calls[3].args[0][-1], '--refresh-existing')
-        command = calls[4].args[0]
-        for flag in ('--no-deps', '--no-build', '--force-recreate', '--wait'):
-            self.assertIn(flag, command)
-        self.assertEqual(command[command.index('--pull') + 1], 'never')
-        targets = command[command.index('--wait-timeout') + 2:]
-        self.assertEqual(set(targets), set(subject.startup.APPS) | {s + '-sql-boot' for s in subject.rebuild.SQL_WRITERS})
-        self.assertFalse(set(targets) & (set(subject.startup.INFRA) | set(subject.startup.INIT)))
+        boot_cmd, app_cmd = calls[4].args[0], calls[5].args[0]
+        for flag in ('--no-deps', '--no-build', '--force-recreate'):
+            self.assertIn(flag, boot_cmd)
+            self.assertIn(flag, app_cmd)
+        self.assertNotIn('--wait', boot_cmd)
+        self.assertIn('--wait', app_cmd)
+        self.assertEqual(boot_cmd[boot_cmd.index('--pull') + 1], 'never')
+        self.assertEqual(app_cmd[app_cmd.index('--pull') + 1], 'never')
+        boot_targets = boot_cmd[boot_cmd.index('--force-recreate') + 1:]
+        app_targets = app_cmd[app_cmd.index('--wait-timeout') + 2:]
+        self.assertEqual(set(boot_targets), {s + '-sql-boot' for s in subject.rebuild.SQL_WRITERS})
+        self.assertEqual(set(app_targets), set(subject.startup.APPS))
+        self.assertFalse((set(boot_targets) | set(app_targets)) & (set(subject.startup.INFRA) | set(subject.startup.INIT)))
         self.update.assert_called_once()
         self.assertEqual(self.update.call_args.args[0]['db-migrate']['image'], 'local/db-migrate:new')
         self.assertEqual(self.verify.call_count, 3)
@@ -550,18 +559,42 @@ class RebuildAllTests(unittest.TestCase):
 
     def test_recreate_failure_preserves_receipt_without_retry(self):
         self.pipeline_fixture()
-        self.run_stage.side_effect = [0, 0, 0, 0, 12]
+        self.run_stage.side_effect = [0, 0, 0, 0, 0, 12]
         with self.assertRaisesRegex(RuntimeError, 'completed changes remain applied'):
             self.run_pipeline()
-        self.assertEqual(self.run_stage.call_count, 5)
+        self.assertEqual(self.run_stage.call_count, 6)
         self.assertTrue(self.result['containerUpdateStarted'])
         self.check.assert_not_called()
+
+    def test_sql_boot_waits_for_exit_before_starting_resident_apps(self):
+        self.pipeline_fixture()
+        events = []
+        original_rows = copy.deepcopy(self.rows)
+        running_rows = copy.deepcopy(self.rows)
+        running_rows['db-sql-boot']['State'] = {'Status': 'running', 'ExitCode': 0}
+        self.mock(subject, 'current_containers', side_effect=[(running_rows, []), (original_rows, []), (original_rows, [])])
+        self.mock(subject.time, 'sleep', side_effect=lambda _: events.append('sleep'))
+        def record_stage(command, output, *_):
+            events.append(output.name)
+            return 0
+        self.run_stage.side_effect = record_stage
+        self.run_pipeline()
+        self.assertEqual(events[-3:], ['recreate-sql-boot.log', 'sleep', 'recreate.log'])
+
+    def test_failed_sql_boot_aborts_before_starting_resident_apps(self):
+        self.pipeline_fixture()
+        failed_rows = copy.deepcopy(self.rows)
+        failed_rows['db-sql-boot']['State'] = {'Status': 'exited', 'ExitCode': 1}
+        self.mock(subject, 'current_containers', return_value=(failed_rows, []))
+        with self.assertRaisesRegex(RuntimeError, 'Writer registration failed: db-sql-boot'):
+            self.run_pipeline()
+        self.assertEqual([call.args[1].name for call in self.run_stage.call_args_list][-1], 'recreate-sql-boot.log')
 
     def test_partial_cpp_go_never_builds_or_recreates_java(self):
         self.pipeline_fixture()
         self.run_pipeline(('cpp', 'go'))
-        self.assertEqual(self.run_stage.call_count, 4)
-        targets = self.run_stage.call_args.args[0]
+        self.assertEqual(self.run_stage.call_count, 5)
+        targets = [part for call in self.run_stage.call_args_list[-2:] for part in call.args[0]]
         self.assertNotIn('gateway', targets)
         self.assertNotIn('gateway-sql-boot', targets)
         self.fixture_preflight.assert_not_called()

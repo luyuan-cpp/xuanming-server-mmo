@@ -31,6 +31,7 @@ type ManifestArtifact struct {
 
 // ManifestTableEntry 对应 manifest.json 中单张表的元数据与产物列表。
 type ManifestTableEntry struct {
+	Name         string             `json:"name"`
 	HotReload    bool               `json:"hot_reload"`
 	IDsPermanent bool               `json:"ids_permanent"`
 	Rows         int64              `json:"rows"`
@@ -38,12 +39,70 @@ type ManifestTableEntry struct {
 }
 
 // BundleManifest 对应 generated/tables/manifest.json(第 2 版)。
+// 导表器输出的 JSON 中 tables 是按表名排序的对象数组(与 C++ table_bundle_manager.cpp 同口径),
+// 解析后按表名索引到 Tables 映射供校验与差量比对。
 type BundleManifest struct {
 	SchemaVersion int                           `json:"schema_version"`
 	SchemaDigest  string                        `json:"schema_digest"`
 	Version       uint64                        `json:"version"`
 	ContentDigest string                        `json:"content_digest"`
 	Tables        map[string]ManifestTableEntry `json:"tables"`
+}
+
+type bundleManifestWire struct {
+	SchemaVersion int                  `json:"schema_version"`
+	SchemaDigest  string               `json:"schema_digest"`
+	Version       uint64               `json:"version"`
+	ContentDigest string               `json:"content_digest"`
+	Tables        []ManifestTableEntry `json:"tables"`
+}
+
+// UnmarshalJSON 按导表器 v2 的 tables 数组格式反序列化,拒绝缺名或重名条目。
+func (m *BundleManifest) UnmarshalJSON(data []byte) error {
+	var wire bundleManifestWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	tables := make(map[string]ManifestTableEntry, len(wire.Tables))
+	for _, entry := range wire.Tables {
+		if strings.TrimSpace(entry.Name) == "" {
+			return fmt.Errorf("manifest table entry missing name")
+		}
+		if _, dup := tables[entry.Name]; dup {
+			return fmt.Errorf("manifest duplicate table entry %q", entry.Name)
+		}
+		tables[entry.Name] = entry
+	}
+	m.SchemaVersion = wire.SchemaVersion
+	m.SchemaDigest = wire.SchemaDigest
+	m.Version = wire.Version
+	m.ContentDigest = wire.ContentDigest
+	m.Tables = tables
+	return nil
+}
+
+// MarshalJSON 按导表器 v2 的确定性排序数组格式写出 tables。
+func (m BundleManifest) MarshalJSON() ([]byte, error) {
+	names := make([]string, 0, len(m.Tables))
+	for name := range m.Tables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	list := make([]ManifestTableEntry, 0, len(names))
+	for _, name := range names {
+		entry := m.Tables[name]
+		if entry.Name == "" {
+			entry.Name = name
+		}
+		list = append(list, entry)
+	}
+	return json.Marshal(bundleManifestWire{
+		SchemaVersion: m.SchemaVersion,
+		SchemaDigest:  m.SchemaDigest,
+		Version:       m.Version,
+		ContentDigest: m.ContentDigest,
+		Tables:        list,
+	})
 }
 
 // IsLowerHex 检查 s 是否恰好为 expectedLen 位小写十六进制字符。

@@ -141,6 +141,8 @@ void AfkHostingSystem::ApplyProbeResult(uint64_t playerId, connection_lost_hold:
 	++counters.hosted;
 	LOG_INFO << "[AfkHosting] metric=afk_hosting_started player_id=" << playerId << " expires_at=" << expiresAtSec
 			 << " hosted_total=" << counters.hosted << " (character stays in the world until reconnect or pass expiry)";
+	// 托管开始时立即补写一次已提交投影:若开通提交那一下恰好撞上 Redis 抖动,不用等最多 20 秒的错峰心跳。
+	AfkPassSystem::RefreshProjection(player, nowUnixSec);
 	// 托管开始:由服务器开启组队跟随,不等客户端声明(team-follow-server-trail.md §3.6)。之后不再用 held:
 	// 跟随这一步会挂别的组件、可能发 RPC,不碰保留组件,但没有理由再拿着指针。
 	PlayerTeamSystem::OnOfflineHostingStarted(player);

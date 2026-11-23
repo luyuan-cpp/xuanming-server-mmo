@@ -2,6 +2,8 @@ package utils
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -61,5 +63,28 @@ func TestChooseProtocSkipsWrongVersions(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
+	}
+}
+
+func TestProtocCandidatesPrefersReleaseOverDebug(t *testing.T) {
+	root := t.TempDir()
+	srcDir := filepath.Join(root, "src")
+	relBin := filepath.Join(root, "install_vs2026_rel", "bin", "protoc.exe")
+	dbgBin := filepath.Join(root, "install_vs2026_dbg", "bin", "protoc.exe")
+	for _, path := range []string{relBin, dbgBin} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("stub"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	candidates := protocCandidates(srcDir)
+	if len(candidates) < 2 {
+		t.Fatalf("expected at least 2 sdk candidates, got %v", candidates)
+	}
+	if candidates[0] != relBin || candidates[1] != dbgBin {
+		t.Fatalf("expected Release before Debug: got %v, want [%s %s ...]", candidates, relBin, dbgBin)
 	}
 }

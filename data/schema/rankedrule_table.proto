@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+// RankedRule 表的权威 schema。源表 data/RankedRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 论剑排位首发 V1 的单行全局赛季与匹配规则(只取 id=1;设计 docs/design/ranked-play-season-ui-candidate.md)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message RankedRuleTable {
+  option (cfg_sheet)       = "RankedRule";
+  option (cfg_source_file) = "RankedRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 规则版本号(修改预设或排位参数时递增;组队确认与开局提交点校验它)
+  uint32 rule_version = 2;
+  // 排位专用战斗模板(FK -> Dungeon.id,首测=5,time_limit=720)
+  uint32 battle_config_id = 3 [(cfg_fk) = "Dungeon"];
+  // 竞技快照参考职业(FK -> Class.id,首测=1)
+  uint32 reference_class_id = 4 [(cfg_fk) = "Class"];
+  // 竞技快照统一等级(首测=30)
+  uint32 competitive_level = 5;
+  // 默认人物预设(FK -> RankedPreset.id,首测=101 破阵)
+  uint32 default_character_preset_id = 6;
+  // 默认宝宝预设(FK -> RankedPreset.id,首测=203 护主)
+  uint32 default_pet_preset_id = 7;
+  // 单赛季持续天数(首测=56 即 8 周)
+  uint32 season_duration_days = 8;
+  // 排队等待提示阈值秒数(首测=120)
+  uint32 wait_prompt_seconds = 9;
+  // 分差窗口一档时长上限(秒,首测=30)
+  uint32 spread_tier1_seconds = 10;
+  // 分差窗口一档最大分差(分,首测=100)
+  uint32 spread_tier1_points = 11;
+  // 分差窗口二档时长上限(秒,首测=90)
+  uint32 spread_tier2_seconds = 12;
+  // 分差窗口二档最大分差(分,首测=200)
+  uint32 spread_tier2_points = 13;
+  // 分差窗口三档硬上限(分,首测=300,永不退化为不限)
+  uint32 spread_tier3_points = 14;
+  // 头像纹样累计有效场次门槛(首测=4)
+  uint32 milestone_avatar_matches = 15;
+  // 名片底纹累计有效场次门槛(首测=8)
+  uint32 milestone_card_matches = 16;
+  // 永久青云玉符累计有效场次门槛(首测=12)
+  uint32 milestone_talisman_matches = 17;
+  // 青锋段位下限(×100,首测=140000)
+  uint32 tier_qingfeng_centi = 18;
+  // 云章段位下限(×100,首测=155000)
+  uint32 tier_yunzhang_centi = 19;
+  // 天枢段位下限(×100,首测=170000)
+  uint32 tier_tianshu_centi = 20;
+  // 无双段位下限(×100,首测=185000)
+  uint32 tier_wushuang_centi = 21;
+  // 规则说明
+  string desc = 22;
+}

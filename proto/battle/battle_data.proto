@@ -114,6 +114,10 @@ message BattlePetSnapshot {
   repeated uint32 skill_table_ids = 12;
   map<uint32, uint32> skill_ranks = 13; // 公共原型的已学等级，开局再次校验宝宝资格。
   PetCultivationEffects pet_cultivation = 14;
+  // true = 论剑排位竞技临时宝宝(pet_id 恒为 0),仅在校验通过的排位规则下生成局内单位,不写回场外宠物。
+  bool competitive_temporary = 15;
+  // 排位竞技战斗物种(Pet.id);展示外观仍看 pet_table_id(有出战宝宝时沿用其外观,零宠时与本字段相同)。
+  uint32 combat_pet_table_id = 16;
 }
 
 // ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
@@ -169,6 +173,7 @@ message BattleActorState {
   uint64 entry_max_mana = 39;
   PetCultivationEffects pet_cultivation = 41; // 宝宝独立条目贡献，开局快照冻结。
   SupportEffectSummary support_effects = 40; // 仅本人可见；来源及中立预览由本轮真实状态生成。
+  bool competitive_temporary = 42; // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
@@ -337,6 +342,13 @@ message BattleSettlementData {
   uint32 match_mode = 18;
   uint32 battle_config_id = 19;
   repeated uint32 captured_pet_table_ids = 20; // 本人捕捉的宠物种类，随整笔结算原子落库和去重。
+  // true = 校验通过的论剑排位竞技局:scene 严禁写回血蓝、复活、宠物、经验、货币、道具消耗、掉落或捕捉,
+  // 仅放行装备材料日额度与战绩历史(docs/design/ranked-play-season-ui-candidate.md §6/§9)。
+  bool competitive_ranked = 21;
+  uint32 season_id = 22;           // 冻结的赛季编号(非排位为 0)
+  uint32 ranked_rule_version = 23; // 冻结的排位规则版本(非排位为 0)
+  // 本人是否达成排位有效参与(由 battle 房间在终局前按统一参与事实冻结,非排位恒为 false)。
+  bool participated = 24;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -382,4 +394,35 @@ enum eSpectateTier {
   SPECTATE_TIER_DIRECT = 0;     // L0:观众凭票直连 battle(直连席未满)
   SPECTATE_TIER_RELAY = 1;      // L1:直连席已满,battle 每回合给每台挂了观众的 gate 各发一条中继帧
   SPECTATE_TIER_BROADCAST = 2;  // L2:全服广播,battle 每回合只往广播 topic 发一条,所有 gate 都读
+}
+
+// ---- 论剑排位上下文(docs/design/ranked-play-season-ui-candidate.md) ----
+// 由 match 在成局提交点冻结,依次透传至 PrepareBattle / CreateBattle / battle 房间 / BattleResultEvent。
+message RankedPresetSelection {
+  uint32 character_preset_id = 1; // RankedPreset.id(role_kind=1): 101 破阵 / 102 控场 / 103 守心
+  uint32 pet_preset_id = 2;       // RankedPreset.id(role_kind=2): 201 破甲 / 202 灵咒 / 203 护主
+}
+
+message RankedMemberLoadout {
+  uint64 player_id = 1;
+  RankedPresetSelection presets = 2;
+}
+
+message RankedMatchContext {
+  uint32 season_id = 1;               // 赛季编号(从 1 起递增)
+  string season_key = 2;              // 榜 period 键(如 "s1")
+  uint64 rank_generation = 3;         // 排行榜代次(与 season_id 同频递增)
+  uint32 rule_version = 4;            // RankedRule.rule_version
+  uint32 team_size = 5;               // 每侧玩家人数(1..5)
+  string config_fingerprint = 6;      // 竞技规则与预设依赖表指纹
+  repeated RankedMemberLoadout members = 7; // 本局全员冻结预设(PrepareBattle 可只含本人,CreateBattle 含全员)
+}
+
+// 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
+message BattleParticipationFact {
+  uint64 player_id = 1;
+  bool entered_room = 2;               // 至少完成一次参战直连握手或 GetBattleState
+  bool manual_action_accepted = 3;     // 服务端至少接受过一次本人人物或宝宝有效手动指令
+  bool explicit_auto_enabled = 4;      // 进房后玩家显式开启过合法自动战斗
+  bool no_action_opportunity = 5;      // 进房后在首次可操作机会前即阵亡/被全控/对局结束
 }

@@ -180,6 +180,10 @@ class RedisFixtureTests(unittest.TestCase):
         self.patch(fixture.secrets, 'randbelow', return_value=0)
         self.patch(fixture, '_occupied_subnets', return_value=[ipaddress.ip_network('10.254.0.0/24')])
         self.assertEqual(fixture._subnet({}), '10.254.1.0/28')
+        # 即使 TiDB fixture 尚未启动，也必须避开其专用 10.254.254.0/24 网段（offset 4064..4079）。
+        self.patch(fixture.secrets, 'randbelow', return_value=4064)
+        self.patch(fixture, '_occupied_subnets', return_value=[])
+        self.assertEqual(fixture._subnet({}), '10.254.255.0/28')
         self.patch(fixture, '_occupied_subnets', return_value=[ipaddress.ip_network('10.0.0.0/8')])
         with self.assertRaisesRegex(RuntimeError, 'host routes'):
             fixture._subnet({})

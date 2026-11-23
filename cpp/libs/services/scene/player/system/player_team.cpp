@@ -113,7 +113,7 @@ namespace
 
 	// key 契约见 player_team.h 头注释;与 Go 侧 go/match/internal/team/keys.go 同一份口径。
 	constexpr std::string_view kTeamReadMethod = "/teampb.TeamAuthority/ReadMembership";
-	struct TeamSnapshotVersion { uint64_t epoch{0}, version{0}; };
+	struct TeamSnapshotVersion { uint64_t epoch{0}, version{0}; bool isLeader{false}; };
 	entt::entity TeamAuthorityNode(uint64_t playerId)
 	{
 		auto& registry = tlsNodeContextManager.GetRegistry(common::base::TeamNodeService);
@@ -333,20 +333,29 @@ void PlayerTeamSystem::OnClientFollowRequest(entt::entity player, bool follow)
 
 void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
 {
-	if (!tlsEcs.actorRegistry.valid(player))
+	auto& registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
 	{
 		return;
 	}
-	const auto* team = tlsEcs.actorRegistry.try_get<TeamId>(player);
-	if (team == nullptr || team->team_id() == 0)
+	const auto* team = registry.try_get<TeamId>(player);
+	if (team != nullptr && team->team_id() == 0)
 	{
-		return; // 不在队伍里:没有可跟的人,也不为他发一次读
+		return; // 已确认不在队伍里(墓碑 team_id=0):没有可跟的人,也不为他发一次读
 	}
+	// 两种情形都要先挂上跟随意图:
+	//   1. team == nullptr:跨节点托管落点刚建出实体,EnterScene 里的 ReadMembership 还没回包,
+	//      先挂意图才能在回包到达时立即接到队长身后(否则 Probe 先于 ReadMembership 完成会永久丢意图);
+	//   2. team->team_id() != 0:已在队里(含当前是队长 —— 若托管期间队长被惰性转让,刷新到达后立即跟上新队长)。
 	LOG_INFO << "[PlayerTeam] metric=team_follow_intent follow=1 source=offline_hosting player_id=" << GuidOf(player);
 	TeamFollowSystem::SetFollowIntent(player, true);
 	if (TeamFollowSystem::IsDriven(player))
 	{
 		return; // 已经接在队长身后:托管期间照常被带着走
+	}
+	if (const auto* snapshot = registry.try_get<TeamSnapshotVersion>(player); snapshot != nullptr && snapshot->isLeader)
+	{
+		return; // 已确认自己是队长:无需发冗余读
 	}
 	// 与客户端声明跟随同一条检查链;同场景接上不看会话,离线的人也能接上(§3.6)。
 	RefreshAndFollow(player);
@@ -354,14 +363,19 @@ void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
 
 bool PlayerTeamSystem::NeedsFollowRecheck(entt::entity player)
 {
-	if (!tlsEcs.actorRegistry.valid(player))
+	auto& registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
 	{
 		return false;
 	}
-	const auto* team = tlsEcs.actorRegistry.try_get<TeamId>(player);
-	if (team == nullptr || team->team_id() == 0)
+	const auto* team = registry.try_get<TeamId>(player);
+	if (team != nullptr && team->team_id() == 0)
 	{
-		return false; // 不在队伍里:没有可跟的人
+		return false; // 已确认不在队伍里:没有可跟的人(team == nullptr 表示尚未同步到组队权威,仍需补查)
+	}
+	if (const auto* snapshot = registry.try_get<TeamSnapshotVersion>(player); snapshot != nullptr && snapshot->isLeader)
+	{
+		return false; // 已确认自己是队长:不为队长周期发跟随读
 	}
 	// 已接在队长身后:照常被带着走,不必再读;没有跟随意图(托管开始时会挂上,缺了就是还没开始)也不读。
 	return TeamFollowSystem::WantsFollow(player) && !TeamFollowSystem::IsDriven(player);
@@ -438,7 +452,9 @@ void PlayerTeamSystem::RefreshMembership(entt::entity player, FollowMode mode)
             if (previous != nullptr && previous->membership_epoch() == reply->membership_epoch()
                 && previous->team_id() != reply->team_id()) return;
             ApplyMembership(player, reply->team_id(), reply->membership_epoch());
-            tlsEcs.actorRegistry.emplace_or_replace<TeamSnapshotVersion>(player, reply->membership_epoch(), reply->version());
+            const bool isLeader = reply->team_id() != 0 && record.leader_id() == playerId;
+            tlsEcs.actorRegistry.emplace_or_replace<TeamSnapshotVersion>(
+                player, TeamSnapshotVersion{reply->membership_epoch(), reply->version(), isLeader});
             // 服务器驱动跟随(TeamFollowSystem)要的两件事,与 mode 无关:名次(入队序号)、自己是不是队长。
             // 队长换人时组队服务给全员发刷新信号,新队长在这里停止被驱动,旧队长在这里解散队形。
             if (reply->team_id() != 0) {
@@ -709,4 +725,14 @@ void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)
 			 << " scene_id=" << sceneId << " distance=" << distance << " mutually_visible=" << mutuallyVisible
 			 << " visibility_evaluated=" << visibilityEvaluated;
 	MovementSystem::TeleportWithinScene(player, targetLocation, targetRotation, kTeleportReasonTeamRegroup);
+}
+
+void PlayerTeamSystem::SetLeadershipSnapshotForTest(entt::entity player, bool isLeader)
+{
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return;
+	}
+	auto& snapshot = tlsEcs.actorRegistry.get_or_emplace<TeamSnapshotVersion>(player);
+	snapshot.isLeader = isLeader;
 }

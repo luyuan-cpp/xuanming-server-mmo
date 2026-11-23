@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -15,6 +16,14 @@
 
 // 治疗/护盾的同一数值层，结算与只读投影共同调用；不读取ECS、不修改战斗状态。
 namespace supportrules {
+// 首测删行白名单也供正式目录校验读取。只用于解释缺行，不修改旧档或授予技能。
+inline bool IsRetiredSkill(uint32_t skillId) {
+    constexpr auto retired = std::to_array<uint32_t>({
+#include "../constants/retired_skill_ids.inc"
+    });
+    return std::find(retired.begin(), retired.end(), skillId) != retired.end();
+}
+
 inline double BaseValue(double flat, double perLevel, uint32_t level, double basis,
                         double ratio, uint32_t rank) {
     const double value = std::max(0.0, flat + perLevel * level + basis * ratio) *

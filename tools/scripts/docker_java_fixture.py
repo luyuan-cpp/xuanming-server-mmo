@@ -7,6 +7,7 @@ may retire and remove an owned fixture; external fixtures are never cleaned up.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -187,6 +188,26 @@ def _port_available():
         raise _FixtureFailure('Java fixture loopback port 24000 is occupied; no existing listener is adopted or stopped') from None
 
 
+def _subnet_available(environment):
+    target = ipaddress.ip_network(FIXTURE_SUBNET)
+    ids = _docker(['network', 'ls', '-q'], environment).split()
+    if not ids:
+        return
+    for network in _json_docker(['network', 'inspect', *ids], environment):
+        for config in ((network.get('IPAM') or {}).get('Config') or ()):
+            subnet = config.get('Subnet')
+            if not subnet:
+                continue
+            try:
+                existing = ipaddress.ip_network(subnet, strict=False)
+            except ValueError:
+                continue
+            if existing.version == 4 and existing.overlaps(target):
+                raise _FixtureFailure(
+                    'Java fixture dedicated subnet ' + FIXTURE_SUBNET
+                    + ' is occupied by an existing Docker network; inspect and remove leftover fixture resources before retrying')
+
+
 def _runner(action, environment, state_file=None):
     helper, pin = _helper(environment)
     command = ['pwsh', '-NoLogo', '-NoProfile', '-NonInteractive', '-File', str(RUNNER),
@@ -221,6 +242,7 @@ def preflight(environment):
     for expected in IMAGES.values():
         _require(_docker(['image', 'inspect', '--format', '{{.Id}}', expected], clean).strip() == expected,
                  'Pinned local Java fixture image is missing or changed; automatic pull is disabled')
+    _subnet_available(clean)
 
 
 def _compose(state):
@@ -426,6 +448,8 @@ def create(directory: Path, environment: dict):
         _assert_absent(state, clean)
         phase = 'verify-port'
         _port_available()
+        phase = 'verify-subnet'
+        _subnet_available(clean)
         phase = 'validate-compose'
         _docker(_compose(state) + ['config', '--quiet'], clean)
         # No --force-recreate and no retry: the random project was just proved absent.

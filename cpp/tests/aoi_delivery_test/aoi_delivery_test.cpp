@@ -1871,4 +1871,15 @@ TEST_F(AoiDeliveryTest, BroadcastsSkipObserversWhoseSessionWasInvalidated) {
     ViewSystem::BroadcastMessageToVisiblePlayers(walkerA, SceneMovementClientPlayerNotifyActorMoveMessageId, visibleMsg);
     EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveMessageId}), MessageIdsFor(liveObserver));
     EXPECT_TRUE(MessageIdsFor(hostedObserver).empty()) << "可见广播同样跳过已置无效的会话";
+
+    // 新步行目标进入 50m 视野时,离线托管观察者(kInvalidSessionId)既不收 ActorListCreateS2C 也不收补发移动。
+    deliveries.clear();
+    broadcasts.clear();
+    const auto newcomer = Spawn(1, 4);
+    Walk(newcomer, 5, 0);
+    AoiSystem::Update(0);
+    EXPECT_EQ(1, CreatesFor(liveObserver, newcomer));
+    EXPECT_EQ(1u, MovesFor(liveObserver, newcomer).size());
+    EXPECT_EQ(0, CreatesFor(hostedObserver, newcomer)) << "离线托管观察者不收进视野创建包";
+    EXPECT_TRUE(MovesFor(hostedObserver, newcomer).empty()) << "离线托管观察者不收进视野补发移动";
 }

@@ -31,6 +31,7 @@ namespace
 {
 	// 单测注入的投影写出,生产恒为空。
 	thread_local AfkPassSystem::ProjectionSender tlsProjectionSenderForTest;
+	thread_local bool tlsProjectionFailForTest = false;
 
 	// 本线程投影写失败的累计,随每条失败日志打出(C++ 节点没有 Prometheus 出口,口径同托管在场心跳)。
 	thread_local uint64_t tlsProjectionFailures = 0;
@@ -51,19 +52,36 @@ namespace
 		return problem == nullptr;
 	}
 
-	void SendProjection(Guid playerId, uint64_t expiresAtSec, uint64_t nowUnixSec, const char *reason)
+	void MarkProjectionConfirmed(Guid playerId, uint64_t seq)
+	{
+		const auto entity = tlsEcs.GetPlayer(playerId);
+		auto &registry = tlsEcs.actorRegistry;
+		auto *committedComp = registry.valid(entity) ? registry.try_get<AfkPassCommittedComp>(entity) : nullptr;
+		// 仅确认仍匹配最新序列的那次写出:期间若有更新的提交发出了更高 seq,迟到回包不覆盖新目标的未确认状态。
+		if (committedComp != nullptr && committedComp->projectionSeq == seq)
+		{
+			committedComp->confirmedSeq = seq;
+		}
+	}
+
+	void SendProjection(Guid playerId, uint64_t expiresAtSec, uint64_t seq, uint64_t nowUnixSec, const char *reason)
 	{
 		const bool set = afk_pass::ProjectionIsSet(expiresAtSec, nowUnixSec);
 		if (tlsProjectionSenderForTest)
 		{
 			tlsProjectionSenderForTest(playerId, expiresAtSec, set);
+			if (!tlsProjectionFailForTest)
+			{
+				MarkProjectionConfirmed(playerId, seq);
+			}
 			return;
 		}
-		// 只捕获值:回调到达时实体可能已经没了,这里也不需要它。
-		const auto onReply = [playerId, expiresAtSec, reason](hiredis::Hiredis *, redisReply *reply)
+		// 只捕获值:回调到达时实体可能已经没了,按 playerId 回查并核对 seq。
+		const auto onReply = [playerId, expiresAtSec, seq, reason](hiredis::Hiredis *, redisReply *reply)
 		{
 			if (reply != nullptr && reply->type != REDIS_REPLY_ERROR)
 			{
+				MarkProjectionConfirmed(playerId, seq);
 				return;
 			}
 			++tlsProjectionFailures;
@@ -86,13 +104,26 @@ namespace
 		}
 		if (status != REDIS_OK)
 		{
-			// 没发出去(玩家域 Redis 未连接、该 slot 无主或排队已满):回调不会来。下一次变化、加载或托管心跳会重写。
+			// 没发出去(玩家域 Redis 未连接、该 slot 无主或排队已满):回调不会来,confirmedSeq 保持落后,
+			// 下一次存盘提交、托管开始或心跳都会自动重发。
 			++tlsProjectionFailures;
 			LOG_WARN << "[AfkPass] metric=afk_pass_projection_failed player_id=" << playerId << " expires_at=" << expiresAtSec
 					 << " reason=" << reason << " cause=not_sent failures_total=" << tlsProjectionFailures;
 		}
 	}
 } // namespace
+
+bool AfkPassSystem::ValidateTables()
+{
+	afk_pass::Rule rule;
+	const char *problem = nullptr;
+	if (!CurrentRule(rule, problem))
+	{
+		LOG_ERROR << "[AfkPass] table validation failed: " << (problem != nullptr ? problem : "unknown");
+		return false;
+	}
+	return true;
+}
 
 uint64_t AfkPassSystem::ExpiresAt(entt::entity player)
 {
@@ -241,6 +272,11 @@ uint32_t AfkPassSystem::GmSet(entt::entity player, uint32_t remainingSeconds, ui
 	{
 		return kInvalidParameter;
 	}
+	// 与 Buy 共用全局可写闸:冻结、跨区 / 跨节点交接在途、退出在途或无归属围栏时不得改写存档事实源。
+	if (!player_mutability::IsPlayerMutable(player))
+	{
+		return kAfkPassFrozen;
+	}
 	auto *profile = registry.try_get<PlayerUint64Comp>(player);
 	const auto *guid = registry.try_get<PlayerGuidComp>(player);
 	if (profile == nullptr || guid == nullptr)
@@ -269,8 +305,8 @@ void AfkPassSystem::OnPlayerLoaded(entt::entity player, uint64_t nowUnixSec)
 	}
 	// 刚从库里读出来的就是已提交的值:按它重建投影(到期在将来 SET,否则 DEL —— 回档或投影残留在这里被改正)。
 	const uint64_t expiresAt = ExpiresAt(player);
-	registry.emplace_or_replace<AfkPassCommittedComp>(player, AfkPassCommittedComp{expiresAt});
-	SendProjection(guid->value, expiresAt, nowUnixSec, "loaded");
+	registry.emplace_or_replace<AfkPassCommittedComp>(player, AfkPassCommittedComp{expiresAt, /*projectionSeq=*/1, /*confirmedSeq=*/0});
+	SendProjection(guid->value, expiresAt, /*seq=*/1, nowUnixSec, "loaded");
 }
 
 void AfkPassSystem::OnSaveCommitted(Guid playerId, const PlayerAllData &committed, uint64_t nowUnixSec)
@@ -284,13 +320,14 @@ void AfkPassSystem::OnSaveCommitted(Guid playerId, const PlayerAllData &committe
 		return; // 实体已经不在,或不是经加载链建出来的:下一个持有者加载时会按库里的值写
 	}
 	const uint64_t expiresAt = committed.player_database_data().uint64_pb_component().afk_pass_expires_at();
-	if (expiresAt == committedComp->expiresAtSec)
+	if (expiresAt == committedComp->expiresAtSec && committedComp->confirmedSeq == committedComp->projectionSeq)
 	{
-		return; // 月卡没变:每次存盘都写一遍是白占 Redis
+		return; // 月卡没变且上次投影已收到 Redis 确认:每次存盘都写一遍是白占 Redis
 	}
-	// 同一玩家同时只有一笔在途存盘,回调按提交顺序到达,投影不会倒退。
+	// 同一玩家同时只有一笔在途存盘,回调按提交顺序到达,投影不会倒退。上次写失败时即便到期值未变也在此补发自愈。
 	committedComp->expiresAtSec = expiresAt;
-	SendProjection(playerId, expiresAt, nowUnixSec, "committed");
+	const uint64_t seq = ++committedComp->projectionSeq;
+	SendProjection(playerId, expiresAt, seq, nowUnixSec, "committed");
 }
 
 void AfkPassSystem::RefreshProjection(entt::entity player, uint64_t nowUnixSec)
@@ -300,17 +337,33 @@ void AfkPassSystem::RefreshProjection(entt::entity player, uint64_t nowUnixSec)
 	{
 		return;
 	}
-	const auto *committedComp = registry.try_get<AfkPassCommittedComp>(player);
+	auto *committedComp = registry.try_get<AfkPassCommittedComp>(player);
 	const auto *guid = registry.try_get<PlayerGuidComp>(player);
-	// 只补 SET:到期与清除由提交回调、加载写 DEL;托管中的角色月卡本来就有效。
-	if (committedComp == nullptr || guid == nullptr || !afk_pass::ProjectionIsSet(committedComp->expiresAtSec, nowUnixSec))
+	if (committedComp == nullptr || guid == nullptr)
 	{
 		return;
 	}
-	SendProjection(guid->value, committedComp->expiresAtSec, nowUnixSec, "hosted_refresh");
+	const bool active = afk_pass::ProjectionIsSet(committedComp->expiresAtSec, nowUnixSec);
+	const bool unconfirmed = committedComp->confirmedSeq != committedComp->projectionSeq;
+	// 有效月卡按心跳周期补写 SET(防 Redis 丢键);若先前一次 DEL(清除 / 回档)没收到确认,也在此补发 DEL 清脏键。
+	if (!active && !unconfirmed)
+	{
+		return;
+	}
+	const uint64_t seq = ++committedComp->projectionSeq;
+	SendProjection(guid->value, committedComp->expiresAtSec, seq, nowUnixSec, "hosted_refresh");
 }
 
 void AfkPassSystem::SetProjectionSenderForTest(ProjectionSender sender)
 {
 	tlsProjectionSenderForTest = std::move(sender);
+	if (!tlsProjectionSenderForTest)
+	{
+		tlsProjectionFailForTest = false;
+	}
+}
+
+void AfkPassSystem::SetProjectionFailForTest(bool fail)
+{
+	tlsProjectionFailForTest = fail;
 }

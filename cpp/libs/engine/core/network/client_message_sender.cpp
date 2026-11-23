@@ -8,6 +8,7 @@
 #include "broadcast_fanout_stats.h"
 #include "broadcast_target_codec.h"
 #include "engine/core/type_define/player_guid_comp.h"
+#include "engine/core/type_define/type_define.h"  // kInvalidSessionId
 #include "metrics/metrics_registry.h"
 #include "muduo/base/Logging.h"
 #include "network_utils.h"
@@ -30,9 +31,10 @@ void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &mes
 	}
 
 	const auto *sessionSnapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
-	if (!sessionSnapshot)
+	if (!sessionSnapshot || sessionSnapshot->gate_session_id() == 0 ||
+	    sessionSnapshot->gate_session_id() == kInvalidSessionId)
 	{
-		LOG_WARN << "Player node info not found for player entity " << entt::to_integral(playerEntity);
+		// NPC、断线保留 / 离线托管(会话已摘)或跨节点托管实体没有活跃客户端会话:静默跳过,不刷 ERROR 日志。
 		return;
 	}
 
@@ -107,10 +109,10 @@ void BroadcastToPlayerClientsImpl(uint32_t messageId, const google::protobuf::Me
 		}
 
 		const auto *sessionSnapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
-		if (!sessionSnapshot)
+		if (!sessionSnapshot || sessionSnapshot->gate_session_id() == 0 ||
+		    sessionSnapshot->gate_session_id() == kInvalidSessionId)
 		{
-			const auto *playerGuid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(playerEntity);
-			LOG_ERROR << "Player node info not found for player entity: " << (playerGuid ? playerGuid->value : 0);
+			// 跳过无活跃客户端会话的实体(NPC、断线保留 / 离线托管中的角色),避免大规模 AOI 广播刷屏。
 			continue;
 		}
 
@@ -129,6 +131,11 @@ void BroadcastToPlayerClientsImpl(uint32_t messageId, const google::protobuf::Me
 		targetsByGateEntity[gateEntity].push_back(broadcast_targets::Target{
 		    sessionSnapshot->gate_session_id(),
 		    (playerGuid != nullptr && playerGuid->value != kInvalidGuid) ? playerGuid->value : 0});
+	}
+
+	if (targetsByGateEntity.empty())
+	{
+		return;
 	}
 
 	const std::string serializedMessage = message.SerializeAsString();
@@ -167,12 +174,16 @@ void BroadcastToSceneClientsImpl(uint32_t messageId, const google::protobuf::Mes
 		if (!tlsEcs.actorRegistry.valid(playerEntity))
 			continue;
 		const auto *sessionSnapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
-		if (!sessionSnapshot)
+		if (!sessionSnapshot || sessionSnapshot->gate_session_id() == 0 ||
+		    sessionSnapshot->gate_session_id() == kInvalidSessionId)
 			continue;
 		if (const auto resolvedGateEntity = ResolvePlayerGateEntity(playerEntity, sessionSnapshot->gate_session_id());
 		    resolvedGateEntity)
 			sceneGateEntities.insert(*resolvedGateEntity);
 	}
+
+	if (sceneGateEntities.empty())
+		return;
 
 	BroadcastToSceneRequest request;
 	request.set_scene_id(sceneId);

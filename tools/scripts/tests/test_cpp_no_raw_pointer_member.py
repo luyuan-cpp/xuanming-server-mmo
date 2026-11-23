@@ -1,13 +1,13 @@
-"""C++ 类 / 结构体不放裸指针成员的文本预检;只读源码,不编译、不运行服务。
+"""C++ 类 / 结构体不放裸指针成员的静态门禁与自测;只读源码,不编译、不运行服务。
 
-真门禁是 MSBuild 每个工程编译前跑的 tools/scripts/check_no_raw_pointer_member.ps1(Directory.Build.targets 的
-NoRawPointerMemberCheck),规则在 cpp/plugin/no_raw_ptr_matcher.cq:`fieldDecl(hasType(pointerType()))`。类 / 结构体 /
-联合体的非静态成员只要是指针类型就算,`const char *` 与函数里的局部结构体(含测试夹具)也算。
+分层门禁:
+- 本地提交门禁:.githooks/pre-commit 调用本文件 `--staged`,毫秒级检查暂存区改动的 C++ 源码;
+- 远端 CI 门禁:.github/workflows/cpp-build-ci.yml 的 `test_cpp*` 每次 PR / Push 全仓扫描 `cpp/`;
+- 按需 Clang AST 全量核验:MSBuild 传 `/p:RunNoRawPointerMemberCheck=true` 触发
+  tools/scripts/check_no_raw_pointer_member.ps1(规则在 cpp/plugin/no_raw_ptr_matcher.cq:
+  `fieldDecl(hasType(pointerType()))`)。日常本地编译默认关闭以避免逐文件串行重解析拖慢构建。
 
-为什么另有这份预检:门禁只在 Windows 的 MSBuild 里跑,逐个翻译单元检查,碰到第一个违例就让整个工程失败,后面的
-单元不再检查,这个工程的用例一条都跑不到。2026-11-13 整解停在 scene 节点的 `EventLoop* loop_`,cross_zone_test 停在
-测试里的 `NamedMethod`,断线保留与换节点重投的用例因此一周没有运行记录。这份预检几秒钟跑完,Linux 上也能跑,
-写代码的人交付前自己先筛一遍;CI 的 `test_cpp*` 一步也会跑它。
+类 / 结构体 / 联合体的非静态成员只要是指针类型就算,`const char *` 与函数里的局部结构体(含测试夹具)也算。
 
 识别靠文本,不是编译器:
 - 注释、字符串、字符字面量、预处理行先去掉,行号不变;
@@ -15,21 +15,27 @@ NoRawPointerMemberCheck),规则在 cpp/plugin/no_raw_ptr_matcher.cq:`fieldDecl(h
 - 形如 `T *name;`、`T *name = …;`、`T *name{…};`、`R (*name)(…);` 的算指针成员;
 - 不算:带 `static` 的(静态成员不是字段)、函数声明、指针数组、`std::vector<T*>` 这类容器、引用成员、
   `using` / `typedef` / `friend`。
-认不出来的写法(宏拼出的成员、`typedef` 出来的指针类型、成员声明前有不带分号的宏)不在预检范围内,结论以门禁为准。
-误报或漏报时改识别规则,并把那种写法补进下面的 RecognitionTest。
+认不出来的写法(宏拼出的成员、`typedef` 出来的指针类型、成员声明前有不带分号的宏)不在文本检查范围内,
+需要精确复核时跑 MSBuild AST 门禁。误报或漏报时改识别规则,并把那种写法补进下面的 RecognitionTest。
 
-排除口径与门禁一致:third_party、generated、构建输出、cpp/libs/engine/muduo_windows;cpp/plugin 是检查器自己的
-源码,不随 game.sln 编译。
+排除口径与 AST 门禁一致:third_party、generated、构建输出、cpp/libs/engine/muduo_windows;cpp/plugin 是检查器
+自己的源码,不随 game.sln 编译。
 
 命中之后怎么改:名字用 `std::string_view`;非空借用用引用成员;可空借用用 `std::optional<std::reference_wrapper<T>>`;
 拥有用智能指针。`std::string + std::string_view` 要到 C++26 才有,拼接时包一层 `std::string(...)`。
 
-运行(仓库根目录):python tools/scripts/tests/test_cpp_no_raw_pointer_member.py -v
+运行(仓库根目录):
+- 全仓自测:python tools/scripts/tests/test_cpp_no_raw_pointer_member.py -v
+- 仅查暂存区改动(pre-commit 调用):python tools/scripts/tests/test_cpp_no_raw_pointer_member.py --staged
 """
 
+import io
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 
 
@@ -172,6 +178,17 @@ def raw_pointer_members(text):
     return found
 
 
+def should_check_path(relative_path):
+    """按仓库相对路径判断文件是否属于裸指针成员检查范围(与 cpp_sources 排除口径一致)。"""
+    normalized = relative_path.replace("\\", "/").lstrip("./")
+    if not normalized.startswith(f"{SCAN_ROOT}/") or not normalized.endswith(SOURCE_SUFFIXES):
+        return False
+    if normalized.startswith(SKIPPED_PREFIXES):
+        return False
+    parts = normalized.split("/")[:-1]
+    return not any(part in SKIPPED_DIRECTORIES or part.startswith(".") for part in parts)
+
+
 def cpp_sources():
     """(仓库相对路径, 源码) 逐个给出 cpp/ 下要查的源文件,排除口径见文件头。"""
     for folder, directories, names in os.walk(REPO / SCAN_ROOT):
@@ -185,6 +202,76 @@ def cpp_sources():
             if name.endswith(SOURCE_SUFFIXES):
                 path = Path(folder) / name
                 yield relative_folder + name, path.read_text(encoding="utf-8-sig", errors="replace")
+
+
+def _read_staged_blobs(paths, repo):
+    """单次 git cat-file --batch 读取全部暂存区内容,避免 Windows 下逐文件拉起进程。"""
+    query = "".join(f":{path}\n" for path in paths).encode("utf-8")
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "--batch"],
+        input=query,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.decode("utf-8", errors="replace").strip() or "git cat-file failed")
+    out = proc.stdout
+    pos = 0
+    results = []
+    for path in paths:
+        newline = out.find(b"\n", pos)
+        if newline < 0:
+            raise RuntimeError(f"unexpected git cat-file header for {path}")
+        header = out[pos:newline].decode("utf-8", errors="replace")
+        pos = newline + 1
+        fields = header.rsplit(" ", 2)
+        if len(fields) != 3 or fields[1] != "blob":
+            raise RuntimeError(f"staged object is not a blob for {path}: {header}")
+        size = int(fields[2])
+        blob = out[pos:pos + size]
+        pos += size + 1
+        results.append((path, blob.decode("utf-8-sig", errors="replace")))
+    return results
+
+
+def check_staged(repo=REPO, stdout=None, stderr=None):
+    """检查 Git 暂存区中改动的 C++ 源码(供 .githooks/pre-commit 调用)。"""
+    out = sys.stdout if stdout is None else stdout
+    err = sys.stderr if stderr is None else stderr
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", errors="replace").strip()
+        print(f"[no-raw-pointer-member] ERROR: git diff --cached failed: {detail}", file=err)
+        return 2
+    staged_paths = [entry.decode("utf-8", errors="replace") for entry in proc.stdout.split(b"\0") if entry]
+    targets = [path for path in staged_paths if should_check_path(path)]
+    if not targets:
+        return 0
+    try:
+        blobs = _read_staged_blobs(targets, repo)
+    except RuntimeError as exc:
+        print(f"[no-raw-pointer-member] ERROR: failed to read staged files: {exc}", file=err)
+        return 2
+
+    problems = []
+    for relative_path, text in blobs:
+        problems += [f"  {relative_path}:{line}: {statement}" for line, statement in raw_pointer_members(text)]
+    if problems:
+        print("[no-raw-pointer-member] Raw pointer member(s) detected in staged C++ files:", file=err)
+        for problem in problems:
+            print(problem, file=err)
+        print(
+            "[no-raw-pointer-member] Use std::string_view for names, T& for non-null borrows, "
+            "std::optional<std::reference_wrapper<T>> for nullable borrows, or smart pointers for ownership.",
+            file=err,
+        )
+        return 1
+    print(f"[no-raw-pointer-member] Checked {len(targets)} staged C++ file(s): OK.", file=out)
+    return 0
 
 
 class RecognitionTest(unittest.TestCase):
@@ -282,6 +369,63 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual([12], self.lines(source))
 
 
+class StagedCheckTest(unittest.TestCase):
+    def test_should_check_path_matches_exclusion_rules(self):
+        self.assertTrue(should_check_path("cpp/nodes/scene/main.cpp"))
+        self.assertTrue(should_check_path("cpp/libs/services/scene/foo.h"))
+        self.assertTrue(should_check_path(r"cpp\nodes\gate\bar.hpp"))
+        self.assertFalse(should_check_path("third_party/foo/bar.h"))
+        self.assertFalse(should_check_path("cpp/generated/proto/a.pb.h"))
+        self.assertFalse(should_check_path("cpp/libs/engine/muduo_windows/x.h"))
+        self.assertFalse(should_check_path("cpp/plugin/main.cpp"))
+        self.assertFalse(should_check_path("cpp/nodes/scene/build/gen.cpp"))
+        self.assertFalse(should_check_path("cpp/nodes/scene/.vs/tmp.h"))
+        self.assertFalse(should_check_path("go/login/main.go"))
+        self.assertFalse(should_check_path("cpp/nodes/scene/CMakeLists.txt"))
+
+    def test_staged_check_inspects_index_blob_not_working_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "-C", str(root), "init", "-q"], check=True)
+            scene_dir = root / "cpp/nodes/scene"
+            gen_dir = root / "cpp/generated"
+            scene_dir.mkdir(parents=True)
+            gen_dir.mkdir(parents=True)
+
+            ok_file = scene_dir / "ok.h"
+            ok_file.write_text("struct Ok { int value; };\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "cpp/nodes/scene/ok.h"], check=True)
+            out, err = io.StringIO(), io.StringIO()
+            self.assertEqual(0, check_staged(root, stdout=out, stderr=err))
+
+            # 工作区未暂存的改动不应触发误报。
+            ok_file.write_text("struct Ok { int* unstaged; };\n", encoding="utf-8")
+            self.assertEqual(0, check_staged(root, stdout=io.StringIO(), stderr=io.StringIO()))
+
+            # 暂存区包含裸指针成员必须拦截;仅在工作区修好但未 git add 仍应拦截。
+            bad_file = scene_dir / "bad.h"
+            bad_file.write_text("struct Bad { int* ptr; };\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "cpp/nodes/scene/bad.h"], check=True)
+            err = io.StringIO()
+            self.assertEqual(1, check_staged(root, stdout=io.StringIO(), stderr=err))
+            self.assertIn("cpp/nodes/scene/bad.h:1: int* ptr", err.getvalue())
+
+            bad_file.write_text("struct Bad { int value; };\n", encoding="utf-8")
+            self.assertEqual(1, check_staged(root, stdout=io.StringIO(), stderr=io.StringIO()))
+
+            # 暂存修复后放行,同时排除目录下的生成头不误报。
+            gen_file = gen_dir / "raw.h"
+            gen_file.write_text("struct Generated { int* raw; };\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "cpp/nodes/scene/bad.h", "cpp/generated/raw.h"], check=True)
+            self.assertEqual(0, check_staged(root, stdout=io.StringIO(), stderr=io.StringIO()))
+
+    def test_staged_check_fails_closed_outside_git_repo(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            err = io.StringIO()
+            self.assertEqual(2, check_staged(Path(tmp), stdout=io.StringIO(), stderr=err))
+            self.assertIn("ERROR", err.getvalue())
+
+
 class RepositoryRawPointerMemberTest(unittest.TestCase):
     def test_no_class_or_struct_declares_a_raw_pointer_member(self):
         scanned = 0
@@ -292,12 +436,15 @@ class RepositoryRawPointerMemberTest(unittest.TestCase):
         self.assertGreater(scanned, 500, "must scan the whole cpp tree, not a single directory")
         self.assertEqual(
             [], problems,
-            "\n" + "\n".join(problems) + "\nRaw pointer members fail the MSBuild no-raw-pointer-member gate "
-            "(cpp/plugin/no_raw_ptr_matcher.cq). Use std::string_view for names, a reference for a non-null borrow, "
+            "\n" + "\n".join(problems) + "\nRaw pointer members fail the no-raw-pointer-member gate "
+            "(.githooks/pre-commit, CI test_cpp*, and optional MSBuild AST check cpp/plugin/no_raw_ptr_matcher.cq). "
+            "Use std::string_view for names, a reference for a non-null borrow, "
             "std::optional<std::reference_wrapper<T>> for a nullable one. If this is a false positive, fix the "
             "recognizer in this file and add the pattern to RecognitionTest.",
         )
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "--staged":
+        sys.exit(check_staged())
     unittest.main()
