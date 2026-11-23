@@ -47,13 +47,21 @@ class RebuildAllTests(unittest.TestCase):
 
     def pipeline_fixture(self):
         names = [name for language in subject.ORDER for name in subject.SERVICES[language]]
+        names += [name for name, _ in subject.SCHEMA_MIGRATORS if name not in names]
         names += [name + '-sql-boot' for name in subject.rebuild.SQL_WRITERS]
         names += list(subject.startup.INFRA)
-        self.rows = {name: {'Id': name, 'Mounts': [], 'State': {'Status': 'exited' if name.endswith('-sql-boot') else 'running',
+        migrator_sources = dict(subject.SCHEMA_MIGRATORS)
+        self.rows = {name: {'Id': name, 'Mounts': [], 'State': {'Status': 'exited' if name.endswith(('-sql-boot', '-migrate')) else 'running',
                                                             'ExitCode': 0},
                             'Config': {'Labels': {'com.docker.compose.service': name}}} for name in names}
         for name, row in self.rows.items():
-            row['Image'] = 'built-' + ('sql-boot' if name.endswith('-sql-boot') else name)
+            if name.endswith('-sql-boot'):
+                image_key = 'sql-boot'
+            elif name in migrator_sources:
+                image_key = migrator_sources[name]
+            else:
+                image_key = name
+            row['Image'] = 'built-' + image_key
         self.config = {'services': {name: {'image': 'local/' + name + ':old'} for name in names}}
         self.baseline = {'bases': {name: value['image'] for name, value in self.config['services'].items()},
                          'baseIds': {}, 'envSha256': 'digest', 'services': copy.deepcopy(self.rows),
@@ -275,7 +283,7 @@ class RebuildAllTests(unittest.TestCase):
         self.fixture_create.assert_called_once()
         self.fixture_close.assert_called_once()
         cmds = [call.args[0] for call in self.run_stage.call_args_list]
-        self.assertEqual(len(cmds), 4)
+        self.assertEqual(len(cmds), 5)
         self.assertTrue(cmds[0][4].endswith('build_docker_java_debug.py'))
         self.assertEqual([s['language'] for s in self.result['stages']], list(subject.ORDER))
         self.assertEqual(self.result['reused_from'], {'cpp': str(old), 'go': str(old)})
@@ -307,7 +315,7 @@ class RebuildAllTests(unittest.TestCase):
         self.pipeline_fixture()
         self.run_pipeline()
         calls = self.run_stage.call_args_list
-        self.assertEqual(len(calls), 6)
+        self.assertEqual(len(calls), 7)
         for language, call in zip(subject.ORDER, calls[:3]):
             command = call.args[0]
             self.assertTrue(command[4].endswith('build_docker_' + language + '_debug.py'))
@@ -319,19 +327,26 @@ class RebuildAllTests(unittest.TestCase):
             if language != 'java':
                 self.assertEqual(command[-2:], ['--jobs', '1'])
         self.assertEqual(calls[3].args[0][-1], '--refresh-existing')
-        boot_cmd, app_cmd = calls[4].args[0], calls[5].args[0]
+        migrate_cmd, boot_cmd, app_cmd = calls[4].args[0], calls[5].args[0], calls[6].args[0]
         for flag in ('--no-deps', '--no-build', '--force-recreate'):
+            self.assertIn(flag, migrate_cmd)
             self.assertIn(flag, boot_cmd)
             self.assertIn(flag, app_cmd)
+        self.assertNotIn('--wait', migrate_cmd)
         self.assertNotIn('--wait', boot_cmd)
         self.assertIn('--wait', app_cmd)
+        self.assertEqual(migrate_cmd[migrate_cmd.index('--pull') + 1], 'never')
         self.assertEqual(boot_cmd[boot_cmd.index('--pull') + 1], 'never')
         self.assertEqual(app_cmd[app_cmd.index('--pull') + 1], 'never')
+        migrate_targets = migrate_cmd[migrate_cmd.index('--force-recreate') + 1:]
         boot_targets = boot_cmd[boot_cmd.index('--force-recreate') + 1:]
         app_targets = app_cmd[app_cmd.index('--wait-timeout') + 2:]
+        self.assertEqual(migrate_targets, [name for name, _ in subject.SCHEMA_MIGRATORS])
         self.assertEqual(set(boot_targets), {s + '-sql-boot' for s in subject.rebuild.SQL_WRITERS})
         self.assertEqual(set(app_targets), set(subject.startup.APPS))
-        self.assertFalse((set(boot_targets) | set(app_targets)) & (set(subject.startup.INFRA) | set(subject.startup.INIT)))
+        self.assertFalse((set(migrate_targets) | set(boot_targets) | set(app_targets))
+                         & (set(subject.startup.INFRA) | {'kafka-init', 'sql-boot', 'data-migrate'}))
+        self.assertFalse((set(boot_targets) | set(app_targets)) & set(subject.startup.INIT))
         self.update.assert_called_once()
         self.assertEqual(self.update.call_args.args[0]['db-migrate']['image'], 'local/db-migrate:new')
         self.assertEqual(self.verify.call_count, 3)
@@ -559,10 +574,10 @@ class RebuildAllTests(unittest.TestCase):
 
     def test_recreate_failure_preserves_receipt_without_retry(self):
         self.pipeline_fixture()
-        self.run_stage.side_effect = [0, 0, 0, 0, 0, 12]
+        self.run_stage.side_effect = [0, 0, 0, 0, 0, 0, 12]
         with self.assertRaisesRegex(RuntimeError, 'completed changes remain applied'):
             self.run_pipeline()
-        self.assertEqual(self.run_stage.call_count, 6)
+        self.assertEqual(self.run_stage.call_count, 7)
         self.assertTrue(self.result['containerUpdateStarted'])
         self.check.assert_not_called()
 
@@ -572,14 +587,15 @@ class RebuildAllTests(unittest.TestCase):
         original_rows = copy.deepcopy(self.rows)
         running_rows = copy.deepcopy(self.rows)
         running_rows['db-sql-boot']['State'] = {'Status': 'running', 'ExitCode': 0}
-        self.mock(subject, 'current_containers', side_effect=[(running_rows, []), (original_rows, []), (original_rows, [])])
+        self.mock(subject, 'current_containers',
+                  side_effect=[(original_rows, []), (running_rows, []), (original_rows, []), (original_rows, [])])
         self.mock(subject.time, 'sleep', side_effect=lambda _: events.append('sleep'))
         def record_stage(command, output, *_):
             events.append(output.name)
             return 0
         self.run_stage.side_effect = record_stage
         self.run_pipeline()
-        self.assertEqual(events[-3:], ['recreate-sql-boot.log', 'sleep', 'recreate.log'])
+        self.assertEqual(events[-4:], ['migrate.log', 'recreate-sql-boot.log', 'sleep', 'recreate.log'])
 
     def test_failed_sql_boot_aborts_before_starting_resident_apps(self):
         self.pipeline_fixture()
@@ -593,8 +609,8 @@ class RebuildAllTests(unittest.TestCase):
     def test_partial_cpp_go_never_builds_or_recreates_java(self):
         self.pipeline_fixture()
         self.run_pipeline(('cpp', 'go'))
-        self.assertEqual(self.run_stage.call_count, 5)
-        targets = [part for call in self.run_stage.call_args_list[-2:] for part in call.args[0]]
+        self.assertEqual(self.run_stage.call_count, 6)
+        targets = [part for call in self.run_stage.call_args_list[-3:] for part in call.args[0]]
         self.assertNotIn('gateway', targets)
         self.assertNotIn('gateway-sql-boot', targets)
         self.fixture_preflight.assert_not_called()
@@ -1418,6 +1434,189 @@ class InfraRecoveryTests(unittest.TestCase):
         self.assertEqual(self.starts, ['mysql'])
         self.assertEqual(self.result['infraRecovery'][0]['status'], 'readiness-unconfirmed')
         self.assertFalse((self.root / 'infra-mysql-healthy.json').exists())
+
+
+class RecoveryAndDiagnosticsTests(unittest.TestCase):
+    def setUp(self):
+        self.harness = RebuildAllTests()
+        self.harness.setUp()
+        self.addCleanup(self.harness.doCleanups)
+        self.root = self.harness.root
+        self.mock = self.harness.mock
+
+    def test_schema_migration_failure_stops_before_sql_boot_and_apps(self):
+        self.harness.pipeline_fixture()
+        failed_rows = copy.deepcopy(self.harness.rows)
+        failed_rows['match-migrate']['State'] = {'Status': 'exited', 'ExitCode': 4}
+        self.mock(subject, 'current_containers', return_value=(failed_rows, []))
+        with self.assertRaisesRegex(RuntimeError, r'Schema migration failed: match-migrate \(exit code 4\)'):
+            self.harness.run_pipeline()
+        self.assertEqual(self.harness.result['phase'], 'migrate-schemas')
+        self.assertEqual([call.args[1].name for call in self.harness.run_stage.call_args_list][-1], 'migrate.log')
+        self.harness.check.assert_not_called()
+
+    def test_preflight_allows_created_selected_app_and_failed_planned_oneshot_only(self):
+        self.harness.authored_preflight_fixture()
+        self.mock(subject.startup, 'ONESHOTS', new={'kafka-init', 'match-migrate', 'match-sql-boot', 'gateway-sql-boot'})
+        self.harness.authored_rows['battle']['State'] = {
+            'Status': 'created', 'ExitCode': 0, 'StartedAt': '0001-01-01T00:00:00Z', 'FinishedAt': '', 'OOMKilled': False}
+        for name, code in (('kafka-init', 0), ('match-migrate', 4), ('match-sql-boot', 1), ('gateway-sql-boot', 0)):
+            self.harness.authored_rows[name] = {
+                'Id': format(len(self.harness.authored_rows) + 1, '064x'), 'Image': 'sha256:' + '1' * 64, 'RestartCount': 0,
+                'Config': {'Labels': {'com.docker.compose.service': name,
+                    'com.docker.compose.project.config_files': ','.join(map(str, [*subject.startup.COMPOSE_FILES, self.harness.overlay]))}},
+                'HostConfig': {}, 'Mounts': [],
+                'State': {'Status': 'exited', 'ExitCode': code, 'StartedAt': 'original', 'FinishedAt': '', 'OOMKilled': False}}
+        extra_services = ('match', 'db', 'data-service', 'scene-manager', 'player-locator', 'client-rpc-router',
+                          'rank', 'player-inbox', 'login', 'db-migrate', 'match-migrate', 'match-sql-boot',
+                          'gateway-sql-boot', 'kafka-init')
+        for cfg in (self.harness.base_config, self.harness.authored_config):
+            cfg['services'].update({name: {'image': 'local/base', 'volumes': []} for name in extra_services})
+        for name in ('match', 'db', 'data-service', 'scene-manager', 'player-locator', 'client-rpc-router',
+                     'rank', 'player-inbox', 'login'):
+            if name not in self.harness.authored_rows:
+                self.harness.authored_rows[name] = copy.deepcopy(self.harness.authored_rows['login'])
+                self.harness.authored_rows[name]['Id'] = format(len(self.harness.authored_rows) + 10, '064x')
+                self.harness.authored_rows[name]['Mounts'] = []
+                self.harness.authored_rows[name]['Config']['Labels']['com.docker.compose.service'] = name
+        self.mock(subject.startup, 'APPS', new=tuple(n for n in self.harness.authored_rows if n not in subject.startup.ONESHOTS))
+        import build_docker_go_debug as go_builder
+        self.mock(go_builder, 'runtime_resource_plan', return_value={})
+        self.mock(subject.startup, 'run', side_effect=lambda cmd, **kw: (
+            json.dumps(self.harness.authored_config) if cmd[-3:] == ['config', '--format', 'json'] and kw.get('input_text') is not None
+            else json.dumps(self.harness.base_config) if cmd[-3:] == ['config', '--format', 'json']
+            else 'go version ' + go_builder.GO_VERSION + ' windows/amd64' if cmd == ['go', 'version']
+            else 'sha256:' + '1' * 64))
+        # battle 为 created 且属于选中语言 cpp，match-migrate/match-sql-boot 为计划重跑的一次性容器，应放行。
+        subject.preflight(('cpp', 'go'), {})
+        # 未选中 go 时，match-migrate / match-sql-boot 失败退出仍应拒绝。
+        with self.assertRaisesRegex(RuntimeError, r'Initialization or writer registration did not complete: match-(?:migrate|sql-boot)'):
+            subject.preflight(('cpp',), {})
+        # 未选中的 battle 处于 created 仍应拒绝。
+        with self.assertRaisesRegex(RuntimeError, 'Unsupported application state: battle'):
+            subject.preflight(('go',), {})
+
+    def test_stale_owned_fixture_conflict_auto_cleans_only_on_non_check(self):
+        self.harness.pipeline_fixture()
+        self.harness.fixture_preflight.side_effect = [
+            RuntimeError('Java fixture dedicated subnet 10.254.254.0/24 is occupied by an existing Docker network'),
+            None,
+        ]
+        cleaned = self.mock(subject, 'cleanup_stale_owned_fixtures',
+                            return_value=['container:xuanming-java-fixture-' + 'a' * 32 + '-tidb-1'])
+        self.harness.run_pipeline()
+        cleaned.assert_called_once()
+        self.assertEqual(self.harness.fixture_preflight.call_count, 2)
+        self.assertEqual(self.harness.result['cleanedStaleFixtures'],
+                         ['container:xuanming-java-fixture-' + 'a' * 32 + '-tidb-1'])
+        self.assertTrue(self.harness.result['success'])
+
+    def test_stale_fixture_check_only_never_cleans(self):
+        self.harness.pipeline_fixture()
+        self.harness.fixture_preflight.side_effect = RuntimeError('Java fixture dedicated subnet 10.254.254.0/24 is occupied')
+        cleaned = self.mock(subject, 'cleanup_stale_owned_fixtures', return_value=['network:stale'])
+        with self.assertRaisesRegex(RuntimeError, '10.254.254.0/24'):
+            self.harness.run_pipeline(check=True)
+        cleaned.assert_not_called()
+
+    def test_cleanup_stale_owned_fixtures_only_removes_matching_labeled_resources(self):
+        good_name = 'xuanming-java-fixture-' + 'a' * 32 + '-tidb-1'
+        good_net = 'xuanming-java-fixture-' + 'a' * 32 + '_default'
+        good_vol = 'xuanming-java-fixture-' + 'a' * 32 + '_pd-data'
+        calls = []
+        def fake_run(cmd, **_):
+            calls.append(cmd)
+            args = cmd[len(subject.startup.DOCKER):]
+            if args[:1] == ['ps'] and 'java-fixture.owner' in args[-1]:
+                return 'cid1 cid2\n'
+            if args[:2] == ['container', 'inspect']:
+                return json.dumps([
+                    {'Id': 'cid1', 'Name': '/' + good_name, 'Config': {'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}}},
+                    {'Id': 'cid2', 'Name': '/xuanming-debug-current-mysql-1', 'Config': {'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}}},
+                ])
+            if args[:2] == ['network', 'ls'] and 'java-fixture.owner' in args[-1]:
+                return 'nid1 nid2\n'
+            if args[:2] == ['network', 'inspect']:
+                return json.dumps([
+                    {'Id': 'nid1', 'Name': good_net, 'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}},
+                    {'Id': 'nid2', 'Name': 'xuanming-debug-current_default', 'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}},
+                ])
+            if args[:2] == ['volume', 'ls'] and 'java-fixture.owner' in args[-1]:
+                return good_vol + ' xuanming-debug-current_mysql-data\n'
+            if args[:2] == ['volume', 'inspect']:
+                return json.dumps([
+                    {'Name': good_vol, 'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}},
+                    {'Name': 'xuanming-debug-current_mysql-data', 'Labels': {subject.java_fixture.OWNER_LABEL: 'n1'}},
+                ])
+            return ''
+        self.mock(subject.startup, 'run', side_effect=fake_run)
+        removed = subject.cleanup_stale_owned_fixtures({})
+        self.assertEqual(removed, ['container:' + good_name, 'network:' + good_net, 'volume:' + good_vol])
+        rm_targets = [cmd[-1] for cmd in calls if 'rm' in cmd]
+        self.assertEqual(rm_targets, ['cid1', 'nid1', good_vol])
+
+    def test_failure_diagnostics_extracts_build_and_container_errors_and_redacts_secrets(self):
+        secrets = ['super-secret-value']
+        (self.root / 'cpp').mkdir()
+        (self.root / 'cpp/build.log').write_text(
+            'compiling foo.cpp\n'
+            '/src/cpp/foo.cpp:42:10: error: missing semicolon password=super-secret-value\n',
+            encoding='utf-8')
+        cpp_lines = subject.collect_failure_diagnostics('build-cpp', self.root, {}, secrets)
+        self.assertTrue(any('foo.cpp:42:10: error: missing semicolon' in line for line in cpp_lines))
+        self.assertFalse(any('super-secret-value' in line for line in cpp_lines))
+
+        (self.root / 'go/match').mkdir(parents=True)
+        (self.root / 'go/match/build.log').write_text(
+            'go/match/svc.go:99: undefined: MissingSymbol root:inlinepass@tcp(mysql:3306)/mmorpg_match\n',
+            encoding='utf-8')
+        go_lines = subject.collect_failure_diagnostics('build-go', self.root, {}, secrets)
+        self.assertTrue(any('go/match/svc.go:99: undefined: MissingSymbol' in line for line in go_lines))
+        self.assertFalse(any('inlinepass' in line for line in go_lines))
+
+        (self.root / 'java').mkdir()
+        (self.root / 'java/maven.log').write_text(
+            '[INFO] Running tests\n[ERROR] Tests run: 5, Failures: 1, Errors: 0\n',
+            encoding='utf-8')
+        java_lines = subject.collect_failure_diagnostics('build-java', self.root, {}, secrets)
+        self.assertTrue(any('Failures: 1' in line for line in java_lines))
+
+        (self.root / 'recreate.log').write_text(
+            'volume "old" carries the compose label "x" but does not match the compose file\n'
+            'dependency failed to start: container xuanming-debug-current-match-1 is unhealthy\n',
+            encoding='utf-8')
+        self.mock(subject.startup, 'run', return_value='cid-match\n')
+        self.mock(subject.startup, 'inspect', return_value=[{
+            'Id': 'cid-match',
+            'Config': {'Labels': {'com.docker.compose.service': 'match', 'com.docker.compose.oneoff': 'false'}},
+            'State': {'Status': 'running', 'ExitCode': 0, 'Health': {'Status': 'unhealthy'}},
+        }])
+        fake_logs = SimpleNamespace(stdout='** execution is paused because your program is panicking **\n'
+                                           'at servicecontext.go:394 token=super-secret-value\n', stderr='')
+        self.mock(subject.subprocess, 'run', return_value=fake_logs)
+        recreate_lines = subject.collect_failure_diagnostics('recreate-services', self.root,
+                                                             {'activeTargets': ['match']}, secrets)
+        self.assertTrue(any('match-1 is unhealthy' in line for line in recreate_lines))
+        self.assertTrue(any('[container match] status=running exitCode=0 health=unhealthy' in line for line in recreate_lines))
+        self.assertTrue(any('panicking' in line for line in recreate_lines))
+        self.assertFalse(any('super-secret-value' in line for line in recreate_lines))
+
+    def test_format_failure_error_and_resume_hint(self):
+        secrets = ['my-secret-pw']
+        try:
+            raise FileNotFoundError('missing file my-secret-pw')
+        except FileNotFoundError as err:
+            formatted = subject.format_failure_error(err, secrets)
+        self.assertIn('FileNotFoundError', formatted)
+        self.assertIn('[REDACTED]', formatted)
+        self.assertNotIn('my-secret-pw', formatted)
+        self.assertEqual(
+            subject.resume_hint(self.root, {'configurationWriteStarted': False, 'containerUpdateStarted': False,
+                                            'stages': [{'language': 'cpp', 'exitCode': 0}, {'language': 'go', 'exitCode': 1}]}),
+            'python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py --resume-builds-from ' + self.root.name)
+        self.assertIsNone(
+            subject.resume_hint(self.root, {'configurationWriteStarted': True, 'containerUpdateStarted': False,
+                                            'stages': [{'language': 'cpp', 'exitCode': 0}]}))
 
 
 if __name__ == '__main__':

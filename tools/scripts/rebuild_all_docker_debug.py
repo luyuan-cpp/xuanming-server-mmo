@@ -23,6 +23,25 @@ ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / 'build/docker-debug-current'
 ORDER = ('cpp', 'go', 'java')
 SERVICES = {'cpp': rebuild.CPP, 'go': rebuild.GO, 'java': ('gateway',)}
+# 非恢复栈更新 Go 服务前先执行幂等增量迁移，避免 proto 新增表/列触发常驻进程只读 schema 拒启；
+# data-migrate / sql-boot / kafka-init 属于初始化引导任务，不在此列。
+SCHEMA_MIGRATORS = (
+    ('db-migrate', 'db-migrate'),
+    ('match-migrate', 'match'),
+    ('rank-migrate', 'rank'),
+    ('player-inbox-migrate', 'player-inbox'),
+)
+SECRET_KEY_RE = re.compile(r'PASSWORD|PASSWD|SECRET|SIGNING_KEY|JDBC_URL|DSN|SQL_USERNAME|ADMIN_API_KEY|TOKEN')
+INLINE_SECRET_RES = (
+    (re.compile(r'(?i)(password|passwd|mysql_pwd|secret|token|admin_api_key|signing_key)\s*([:=])\s*([^\s,;\'")]+)'),
+     r'\1\2[REDACTED]'),
+    (re.compile(r'([a-zA-Z][a-zA-Z0-9+.-]*://[^:/@\s]+:)[^@\s]+(@)'), r'\1[REDACTED]\2'),
+    (re.compile(r'(\b(?:root|lw_[A-Za-z0-9_]+):)[^@\s]+(@tcp\()'), r'\1[REDACTED]\2'),
+)
+STALE_FIXTURE_SPECS = (
+    (java_fixture.OWNER_LABEL, re.compile(r'^xuanming-java-fixture-[0-9a-f]{32}(?:[-_].+)?$')),
+    (redis_fixture.LABEL, re.compile(r'^xuanming-java-redis-[0-9a-f]{32}(?:[-_].+)?$')),
+)
 
 
 def require(condition, message):
@@ -320,9 +339,17 @@ def preflight(languages, environment):
     if overlay['input'] is not None:
         validate_authored_mounts(services, overlay['allowed'])
     selected_apps = {name for language in languages for name in SERVICES[language]} - set(rebuild.ONE_SHOT)
+    planned_sql_boots = {name + '-sql-boot' for name in selected_apps if name in rebuild.SQL_WRITERS}
+    if recovery:
+        planned_sql_boots -= startup.HISTORY_ONLY
+    planned_migrators = ({name for name, _ in SCHEMA_MIGRATORS if name in services}
+                         if ('go' in languages and not recovery) else set())
+    planned_oneshots = planned_sql_boots | planned_migrators
     for name in startup.APPS:
         row = services[name]
-        require(row['State']['Status'] in {'running', 'exited'} and not row['State'].get('Paused'),
+        allowed_states = {'running', 'exited', 'created'} if name in selected_apps else {'running', 'exited'}
+        require(row['State']['Status'] in allowed_states
+                and not any(row['State'].get(key) for key in ('Paused', 'Restarting', 'Dead')),
                 'Unsupported application state: ' + name)
         if name not in selected_apps:
             require(startup.ready(name, row, {'gatewayPorts': startup.ports(config, 'gateway', 8081)}),
@@ -331,8 +358,14 @@ def preflight(languages, environment):
         if name not in services and recovery and name in startup.HISTORY_ONLY:
             continue
         row = services[name]
-        require(row['State']['Status'] == 'exited' and row['State']['ExitCode'] == 0,
-                'Initialization or writer registration did not complete: ' + name)
+        if name in planned_oneshots:
+            # 本次将重建的迁移与写者注册允许从上次失败退出中恢复，仍拒绝运行中或异常挂起。
+            require(row['State']['Status'] in {'exited', 'created'}
+                    and not any(row['State'].get(key) for key in ('Paused', 'Restarting', 'Dead')),
+                    'Unsupported one-shot container state: ' + name)
+        else:
+            require(row['State']['Status'] == 'exited' and row['State']['ExitCode'] == 0,
+                    'Initialization or writer registration did not complete: ' + name)
     canonical = startup.env_values((STATE / '.env').read_bytes())
     if recovery:
         retained_login_template(refresh_options)
@@ -415,12 +448,30 @@ def builder_command(language, output, bases):
     return command
 
 
+def secret_values(environment):
+    """收集需脱敏的敏感变量值，按长度降序返回。"""
+    combined = {}
+    try:
+        combined.update(startup.env_values((STATE / '.env').read_bytes()))
+    except (OSError, RuntimeError, ValueError):
+        pass
+    if environment:
+        combined.update(environment)
+    return sorted({value for key, value in combined.items() if value and SECRET_KEY_RE.search(key)},
+                  key=len, reverse=True)
+
+
+def redact_text(text, secrets):
+    for value in secrets:
+        text = text.replace(value, '[REDACTED]')
+    for pattern, replacement in INLINE_SECRET_RES:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def run_stage(command, output, environment, timeout):
     from build_docker_go_debug import stop_owned_process
-    canonical = startup.env_values((STATE / '.env').read_bytes())
-    private = {value.encode('utf-8') for key, value in {**canonical, **environment}.items()
-               if value and re.search(r'PASSWORD|PASSWD|SECRET|SIGNING_KEY|JDBC_URL|DSN|SQL_USERNAME|ADMIN_API_KEY', key)}
-    private = sorted(private, key=len, reverse=True)
+    private = [value.encode('utf-8') for value in secret_values(environment)]
     with output.open('xb') as log:
         process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         capture_errors = []
@@ -689,25 +740,29 @@ def unchanged_before_apply(config, baseline, environment):
                 'A base image reference changed during builds')
 
 
-def wait_sql_boots(sql_boots, baseline, environment, timeout=300):
-    """等待全部 *-sql-boot 退出并释放动态 IP，避免与常驻服务的静态 IP 冲突。"""
+def wait_oneshots(names, label, baseline, environment, timeout=300):
+    """等待一次性容器退出并释放动态 IP，避免与常驻服务的静态 IP 冲突。"""
     deadline = time.monotonic() + timeout
     while True:
         services, _ = current_containers(compose_config(environment, compose_input(baseline)))
         pending = []
-        for name in sql_boots:
+        for name in names:
             state = services[name]['State']
             require(not any(state.get(key) for key in ('OOMKilled', 'Restarting', 'Dead', 'Paused')),
-                    'Writer registration failed: ' + name)
+                    label + ' failed: ' + name)
             if state['Status'] == 'exited':
-                require(state['ExitCode'] == 0, 'Writer registration failed: ' + name)
+                require(state['ExitCode'] == 0, f'{label} failed: {name} (exit code {state["ExitCode"]})')
             else:
                 pending.append(name)
         if not pending:
             return
         remaining = deadline - time.monotonic()
-        require(remaining > 0, 'Writer registration timed out: ' + ', '.join(pending))
+        require(remaining > 0, label + ' timed out: ' + ', '.join(pending))
         time.sleep(min(0.5, remaining))
+
+
+def wait_sql_boots(sql_boots, baseline, environment, timeout=300):
+    wait_oneshots(sql_boots, 'Writer registration', baseline, environment, timeout)
 
 
 def wait_infrastructure(name, original, signature):
@@ -821,6 +876,53 @@ def redis_fixture_operation(result, phase, operation, *args):
         raise
 
 
+def cleanup_stale_owned_fixtures(environment):
+    """仅清理上次失败遗留的一次性 Java 测试夹具资源（须同时匹配专属 owner 标签与固定项目前缀）。"""
+    removed = []
+    for label, pattern in STALE_FIXTURE_SPECS:
+        ids = startup.run(startup.DOCKER + ['ps', '-aq', '--no-trunc', '--filter', 'label=' + label],
+                          env=environment, timeout=30).split()
+        if ids:
+            for row in json.loads(startup.run(startup.DOCKER + ['container', 'inspect', *ids], env=environment, timeout=30)):
+                name = row.get('Name', '').lstrip('/')
+                if row.get('Config', {}).get('Labels', {}).get(label) and pattern.fullmatch(name):
+                    startup.run(startup.DOCKER + ['rm', '-f', row['Id']], env=environment, timeout=30)
+                    removed.append('container:' + name)
+        net_ids = startup.run(startup.DOCKER + ['network', 'ls', '-q', '--no-trunc', '--filter', 'label=' + label],
+                              env=environment, timeout=30).split()
+        if net_ids:
+            for net in json.loads(startup.run(startup.DOCKER + ['network', 'inspect', *net_ids], env=environment, timeout=30)):
+                name = net.get('Name', '')
+                if (net.get('Labels') or {}).get(label) and pattern.fullmatch(name):
+                    startup.run(startup.DOCKER + ['network', 'rm', net['Id']], env=environment, timeout=30)
+                    removed.append('network:' + name)
+        vol_names = startup.run(startup.DOCKER + ['volume', 'ls', '-q', '--filter', 'label=' + label],
+                                env=environment, timeout=30).split()
+        if vol_names:
+            for vol in json.loads(startup.run(startup.DOCKER + ['volume', 'inspect', *vol_names], env=environment, timeout=30)):
+                name = vol.get('Name', '')
+                if (vol.get('Labels') or {}).get(label) and pattern.fullmatch(name):
+                    startup.run(startup.DOCKER + ['volume', 'rm', name], env=environment, timeout=30)
+                    removed.append('volume:' + name)
+    return removed
+
+
+def preflight_owned_fixture(result, runner, check_only, environment, conflict_tokens):
+    """非只读模式下若遇上次失败遗留的同标签临时夹具占网/占口，先精确清理后再核验一次。"""
+    try:
+        runner()
+    except RuntimeError as error:
+        if check_only or not any(token in str(error) for token in conflict_tokens):
+            raise
+        removed = cleanup_stale_owned_fixtures(environment)
+        if not removed:
+            raise
+        result.setdefault('cleanedStaleFixtures', []).extend(removed)
+        print('Cleaned stale disposable Java fixture resources from a prior failed run: '
+              + ', '.join(removed), flush=True)
+        runner()
+
+
 def pipeline(languages, root, inherited, result, check_only=False, resume_from=None):
     problems = local_requirements(languages, inherited)
     require(not problems, '\n'.join(problems) + '\nNo build, configuration refresh or container update was started; '
@@ -833,11 +935,24 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
         redis_state = None
         if 'java' in languages:
             result['javaRedisFixture'] = {'mode': redis_fixture.mode(environment), 'status': 'preflight'}
-            redis_fixture_operation(result, 'preflight', redis_fixture.preflight, environment)
+            preflight_owned_fixture(
+                result,
+                lambda: redis_fixture_operation(result, 'preflight', redis_fixture.preflight, environment),
+                check_only or result['javaRedisFixture']['mode'] != 'owned',
+                environment,
+                ('No isolated Redis fixture subnet',),
+            )
             result['javaRedisFixture']['status'] = 'preflight-complete'
             result['javaFixture'] = {'mode': java_fixture.mode(environment), 'status': 'pending'}
-            fixture_operation(result, 'preflight', java_fixture.preflight, environment)
+            preflight_owned_fixture(
+                result,
+                lambda: fixture_operation(result, 'preflight', java_fixture.preflight, environment),
+                check_only or result['javaFixture']['mode'] != 'owned',
+                environment,
+                ('10.254.254.0/24', 'port 24000'),
+            )
             result['javaFixture']['status'] = 'preflight-complete'
+        result['phase'] = 'preflight'
         config, baseline = preflight(languages, environment)
         if resume_from:
             result['phase'] = 'verify-reused-builds'
@@ -946,6 +1061,10 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             if baseline.get('recoveryOverlay'):
                 # login-sql-boot 与迁移容器仅是初始化历史，恢复栈不得重新创建或执行。
                 targets = [name for name in targets if name not in startup.HISTORY_ONLY]
+            migrator_sources = ({name: source for name, source in SCHEMA_MIGRATORS if name in baseline['services']}
+                                if ('go' in languages and not baseline.get('recoveryOverlay')) else {})
+            migrators = list(migrator_sources)
+            all_targets = [*migrators, *targets]
             # 重建必须保留原文件路径标签，供下次启动识别白名单；原件已逐字节复核。
             if recovery_update is not None:
                 path = startup.recovery_path()
@@ -964,21 +1083,33 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                 result['recoveryOverlaySha256'] = startup.sha(recovery_update)
             command = compose_command(baseline['authoredOverlay']['path'],
                                       startup.recovery_path() if baseline.get('recoveryOverlay') else None)
+            if migrators:
+                result['phase'] = 'migrate-schemas'
+                result['containerUpdateStarted'] = True
+                result['activeTargets'] = list(migrators)
+                code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
+                                 '--force-recreate', *migrators],
+                                 root / 'migrate.log', environment, 300)
+                require(code == 0, 'Schema migration start failed; inspect migrate.log; completed changes remain applied')
+                wait_oneshots(migrators, 'Schema migration', baseline, environment)
             result['phase'] = 'recreate-services'
             result['containerUpdateStarted'] = True
             sql_boots = [name for name in targets if name.endswith('-sql-boot')]
             apps = [name for name in targets if not name.endswith('-sql-boot')]
             if sql_boots:
+                result['activeTargets'] = list(sql_boots)
                 code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
                                  '--force-recreate', *sql_boots],
                                  root / 'recreate-sql-boot.log', environment, 300)
                 require(code == 0, 'Writer registration start failed; inspect recreate-sql-boot.log; completed changes remain applied')
                 wait_sql_boots(sql_boots, baseline, environment)
+            result['activeTargets'] = list(apps)
             code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
                              '--force-recreate', '--wait', '--wait-timeout', '300', *apps],
                              root / 'recreate.log', environment, 600)
             require(code == 0, 'Container update failed; inspect recreate.log; completed changes remain applied')
             result['phase'] = 'verify-runtime'
+            result.pop('activeTargets', None)
             unchanged_refreshed(canonical, refreshed_binds, baseline)
             final_config = compose_config(environment, compose_input(baseline))
             final, historical = current_containers(final_config)
@@ -986,7 +1117,7 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             require(startup.project_volumes() == baseline['projectVolumes'], 'Project volume set changed')
             for service, row in final.items():
                 original = baseline['services'][service]
-                if service not in targets:
+                if service not in all_targets:
                     require(startup.signature(row) == startup.signature(original)
                             and startup.state(row) == startup.state(original), 'Untargeted container changed: ' + service)
                 require(row['Mounts'] == original['Mounts'], 'Existing volume or bind mounts changed: ' + service)
@@ -994,22 +1125,198 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                     {row['Id']: startup.signature(row) for row in baseline['historical']}, 'Historical migration changed')
             readiness = {'gatewayPorts': startup.ports(final_config, 'gateway', 8081)}
             sql_boot_id = images.get('sql-boot', {}).get('imageId', baseline['sqlBootImageId'])
-            for name in targets:
-                expected_id = sql_boot_id if name.endswith('-sql-boot') else images[name]['imageId']
+            for name in all_targets:
+                if name.endswith('-sql-boot'):
+                    expected_id = sql_boot_id
+                elif name in migrator_sources:
+                    expected_id = images[migrator_sources[name]]['imageId']
+                else:
+                    expected_id = images[name]['imageId']
                 require(final[name].get('Image') == expected_id,
                         'Container does not use the expected image from this invocation: ' + name)
-                if name.endswith('-sql-boot'):
+                if name.endswith('-sql-boot') or name in migrator_sources:
+                    label = 'Writer registration' if name.endswith('-sql-boot') else 'Schema migration'
                     require(final[name]['State']['Status'] == 'exited' and final[name]['State']['ExitCode'] == 0,
-                            'Writer registration failed: ' + name)
-            require(all(startup.ready(service, final[service], readiness) for service in startup.INFRA + startup.APPS),
-                    'A service did not pass final runtime readiness')
+                            label + ' failed: ' + name)
+            not_ready = [service for service in startup.INFRA + startup.APPS
+                         if not startup.ready(service, final[service], readiness)]
+            if not_ready:
+                result['activeTargets'] = not_ready
+            require(not not_ready, 'Services did not pass final runtime readiness: ' + ', '.join(not_ready))
             result['phase'] = 'verify-sources'
             with (root / 'source-check.log').open('x', encoding='utf-8') as log, redirect_stdout(log):
                 require(rebuild.check(running, root / 'source-check.json'), 'Final source check failed; inspect source-check.json')
             result.update(success=True, phase='complete', applied=True, services=running)
 
 
+def _trim_line(line, limit=240):
+    text = line.rstrip('\r\n')
+    return text if len(text) <= limit else text[:limit - 3] + '...'
+
+
+def _extract_log_lines(path, pattern, secrets, limit=25, tail_fallback=15, skip_pattern=None):
+    if not path.is_file():
+        return []
+    raw_lines = path.read_text('utf-8', errors='replace').splitlines()
+    filtered = []
+    for raw in raw_lines:
+        if not raw.strip():
+            continue
+        if skip_pattern and skip_pattern.search(raw):
+            continue
+        filtered.append(redact_text(raw, secrets))
+    if not filtered:
+        return []
+    matched = []
+    seen = set()
+    if pattern is not None:
+        for line in filtered:
+            if pattern.search(line) and line not in seen:
+                seen.add(line)
+                matched.append(_trim_line(line))
+                if len(matched) >= limit:
+                    break
+    if matched:
+        return matched
+    return [_trim_line(line) for line in filtered[-tail_fallback:]]
+
+
+def _container_diagnostics(targets, secrets):
+    """最佳努力采集失败目标容器状态与脱敏尾日志，不抛出异常掩盖主错误。"""
+    if not targets:
+        return []
+    try:
+        ids = startup.run(startup.DOCKER + ['ps', '-aq', '--no-trunc', '--filter',
+                                            'label=com.docker.compose.project=' + startup.PROJECT], timeout=15).split()
+        if not ids:
+            return []
+        rows = startup.inspect(ids)
+    except BaseException:
+        return []
+    by_service = {row.get('Config', {}).get('Labels', {}).get('com.docker.compose.service'): row
+                  for row in rows if row.get('Config', {}).get('Labels', {}).get('com.docker.compose.oneoff', '').lower() != 'true'}
+    lines = []
+    inspected = 0
+    for service in targets:
+        row = by_service.get(service)
+        if not row:
+            continue
+        state = row.get('State', {})
+        status = state.get('Status', 'unknown')
+        exit_code = state.get('ExitCode')
+        health = (state.get('Health') or {}).get('Status')
+        oneshot = service.endswith(('-sql-boot', '-migrate'))
+        failed = (status != 'exited' or exit_code != 0) if oneshot else (
+            status != 'running' or health == 'unhealthy' or state.get('OOMKilled'))
+        if not failed:
+            continue
+        lines.append(f'[container {service}] status={status} exitCode={exit_code} health={health}')
+        if inspected >= 4:
+            continue
+        inspected += 1
+        try:
+            proc = subprocess.run(startup.DOCKER + ['logs', '--tail', '40', row['Id']], cwd=ROOT,
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
+            combined = ((proc.stdout or '') + '\n' + (proc.stderr or '')).splitlines()
+            tail = [_trim_line(redact_text(entry, secrets)) for entry in combined if entry.strip()][-20:]
+            for entry in tail:
+                lines.append('  ' + entry)
+        except BaseException:
+            lines.append('  (container logs unavailable)')
+    return lines
+
+
+def collect_failure_diagnostics(phase, root, result, secrets):
+    """按失败阶段汇总脱敏后的关键报错行，让终端直接定位根因。"""
+    volume_warn = re.compile(r'carries the compose label .* does not match the compose file')
+    lines = []
+    try:
+        if phase == 'build-cpp':
+            cpp_err = re.compile(r'(?::\s*(?:fatal )?error:|undefined reference|multiple definition|CMake Error|FAILED:|ERROR:|C\+\+ build stopped:)', re.I)
+            lines.extend(_extract_log_lines(root / 'cpp/build.log', cpp_err, secrets, limit=25))
+            for entry in _extract_log_lines(root / 'cpp.log', re.compile(r'stopped:|error|fail', re.I), secrets, limit=6, tail_fallback=6):
+                if entry not in lines:
+                    lines.append(entry)
+        elif phase == 'build-go':
+            go_err = re.compile(r'(?:\.go:\d+|cannot find|undefined:|ERROR:|FAIL\b|command_failed|BuildFailure|stopped:)', re.I)
+            go_dir = root / 'go'
+            if go_dir.is_dir():
+                sub_logs = sorted(go_dir.rglob('*.log'), key=lambda p: p.stat().st_mtime, reverse=True)
+                for path in sub_logs[:4]:
+                    excerpt = _extract_log_lines(path, go_err, secrets, limit=20, tail_fallback=10)
+                    if excerpt:
+                        lines.append(f'[{path.relative_to(root).as_posix()}]')
+                        lines.extend('  ' + entry for entry in excerpt)
+                        break
+            for entry in _extract_log_lines(root / 'go.log', go_err, secrets, limit=10, tail_fallback=8):
+                if entry not in lines:
+                    lines.append(entry)
+        elif phase == 'build-java':
+            java_err = re.compile(r'(?:\[ERROR\]|<<< FAILURE!|<<< ERROR!|Failures:\s*[1-9]|Errors:\s*[1-9]|Failed tests:|COMPILATION ERROR|BUILD FAILURE|Exception:|Error:)', re.I)
+            for relative in ('java/maven.log', 'java/descriptor-verify.log', 'java/javap.log', 'java/image.log', 'java.log'):
+                excerpt = _extract_log_lines(root / relative, java_err, secrets, limit=25, tail_fallback=10)
+                if excerpt:
+                    lines.append(f'[{relative}]')
+                    lines.extend('  ' + entry for entry in excerpt)
+                    if relative == 'java/maven.log':
+                        break
+        elif phase == 'refresh-configuration':
+            lines.extend(_extract_log_lines(root / 'refresh.log', None, secrets, limit=20, tail_fallback=20))
+        elif phase in ('migrate-schemas', 'recreate-services', 'verify-runtime'):
+            log_candidates = ('migrate.log',) if phase == 'migrate-schemas' else ('recreate.log', 'recreate-sql-boot.log')
+            err_re = re.compile(r'(?:error|failed|unhealthy|exited|manual action|warning:|address already in use)', re.I)
+            for name in log_candidates:
+                if (root / name).is_file():
+                    lines.extend(_extract_log_lines(root / name, err_re, secrets, limit=15, tail_fallback=10, skip_pattern=volume_warn))
+                    break
+            lines.extend(_container_diagnostics(result.get('activeTargets', ()), secrets))
+        elif phase == 'verify-sources':
+            lines.extend(_extract_log_lines(root / 'source-check.log',
+                                            re.compile(r'(?:failed:|changed; rebuild required|^\s+\S)', re.I),
+                                            secrets, limit=25, tail_fallback=15))
+    except BaseException:
+        pass
+    return lines[:80]
+
+
+def format_failure_error(error, secrets):
+    if isinstance(error, RuntimeError):
+        return redact_text(str(error), secrets)
+    location = ''
+    tb = error.__traceback__
+    last_frame = None
+    while tb is not None:
+        filename = tb.tb_frame.f_code.co_filename
+        if 'tools' in filename and 'scripts' in filename:
+            last_frame = (Path(filename).name, tb.tb_lineno, tb.tb_frame.f_code.co_name)
+        elif last_frame is None:
+            last_frame = (Path(filename).name, tb.tb_lineno, tb.tb_frame.f_code.co_name)
+        tb = tb.tb_next
+    if last_frame is not None:
+        location = f' at {last_frame[0]}:{last_frame[1]} in {last_frame[2]}'
+    name = type(error).__name__
+    if isinstance(error, (FileNotFoundError, PermissionError, IsADirectoryError, NotADirectoryError)):
+        return f'{name}{location}: {redact_text(str(error), secrets)}'
+    if isinstance(error, subprocess.TimeoutExpired):
+        return f'{name}{location} after {error.timeout}s'
+    if isinstance(error, json.JSONDecodeError):
+        return f'{name}{location}: line {error.lineno} col {error.colno}'
+    return f'{name}{location}; raw details suppressed'
+
+
+def resume_hint(root, result):
+    if result.get('configurationWriteStarted') or result.get('containerUpdateStarted'):
+        return None
+    stages = result.get('stages', [])
+    if any(stage.get('language') in ('cpp', 'go') and stage.get('exitCode') == 0 for stage in stages):
+        return 'python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py --resume-builds-from ' + root.name
+    return None
+
+
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='replace')
     parser = argparse.ArgumentParser(description='Build all debug servers serially, then apply them together.')
     parser.add_argument('--check', action='store_true', help='Read-only preflight; do not build, refresh or update containers.')
     parser.add_argument('--languages', default=','.join(ORDER), help='Selected languages; default cpp,go,java. Always built in that order.')
@@ -1027,10 +1334,27 @@ def main():
         with nullcontext() if args.check else startup.startup_lock():
             pipeline(languages, root, dict(os.environ), result, args.check, args.resume_builds_from)
     except (Exception, KeyboardInterrupt) as error:
-        result.update(errorType=type(error).__name__,
-                      error=str(error) if isinstance(error, RuntimeError) else 'Operation failed; raw details suppressed')
-        print('Stopped: ' + result['error'], file=sys.stderr)
+        secrets = secret_values(dict(os.environ))
+        message = format_failure_error(error, secrets)
+        diagnostics = collect_failure_diagnostics(result.get('phase'), root, result, secrets)
+        result.update(errorType=type(error).__name__, error=message)
+        if diagnostics:
+            result['diagnostics'] = diagnostics
+            try:
+                (root / 'failure-diagnostics.txt').write_text('\n'.join(diagnostics) + '\n', encoding='utf-8')
+            except OSError:
+                pass
+        print(f"Stopped [{result.get('phase', 'unknown')}]: {message}", file=sys.stderr)
+        if diagnostics:
+            print('--- Failure details ---', file=sys.stderr)
+            for line in diagnostics:
+                print('  ' + line, file=sys.stderr)
+            print('--- End of details (evidence: ' + str(root) + ') ---', file=sys.stderr)
+        hint = resume_hint(root, result)
+        if hint:
+            print('Resume hint: ' + hint, file=sys.stderr)
     finally:
+        result.pop('activeTargets', None)
         write_json(root / 'result.json', result)
     if result['success']:
         print('Preflight completed. No build or update performed.' if args.check else 'All selected debug servers rebuilt and updated.')
