@@ -66,10 +66,15 @@ class PcOriginalMapParityTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parity.verify_manifest(fake_server)
 
-            # Tamper 4: inject a conflicting BaseScene id (5000) without updating audit
+            # Unrelated BaseScene edit (e.g. scene 99) must not trigger false-positive failure
             shutil.copy2(parity.SERVER_ROOT / parity.MANIFEST_REL, manifest_path)
             bs_path = fake_server / parity.BASESCENE_JSON_REL
             bs = parity.read_json(bs_path)
+            bs["data"].append({"id": 99, "nav_bin_file": "other.bin", "spawn_x": 0.0, "spawn_y": 0.0, "spawn_z": 0.0})
+            bs_path.write_bytes(parity.json_bytes(bs))
+            self.assertEqual(parity.verify_manifest(fake_server)["result"], "PASS")
+
+            # Tamper 4: inject a conflicting BaseScene id (5000) without updating audit
             bs["data"].append({"id": 5000, "nav_bin_file": "fake.bin", "spawn_x": 0.0, "spawn_y": 0.0, "spawn_z": 0.0})
             bs_path.write_bytes(parity.json_bytes(bs))
             with self.assertRaises(ValueError):

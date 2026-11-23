@@ -214,7 +214,10 @@ def verify_manifest(server_root: Path, client_catalog_path: Path | None = None) 
     require(manifest.get("sourceContainerSha256") == EXPECTED_CONTAINER_SHA256, "Unexpected container SHA-256")
 
     inv = load_server_inventory(server_root)
-    require(manifest.get("existingServerInventory") == inv, "existingServerInventory drifted from actual server data")
+    recorded_inv = manifest.get("existingServerInventory")
+    require(isinstance(recorded_inv, dict), "Missing existingServerInventory snapshot")
+    for key in ("baseSceneIds", "worldSceneIds", "festivalNavSceneIds", "authoredNavSceneIds"):
+        require(isinstance(recorded_inv.get(key), list), f"Invalid existingServerInventory.{key}")
 
     requested = manifest.get("requestedMapIds") or []
     maps = manifest.get("maps") or []
@@ -246,8 +249,11 @@ def verify_manifest(server_root: Path, client_catalog_path: Path | None = None) 
 
     unavail_ids = []
     for g in unavail:
+        num_id = int(g["mapId"])
         require(g.get("integrated") is False, f"Gap {g.get('mapId')} must not be integrated")
         require(g.get("productionTravelEnabled") is False, f"Gap {g.get('mapId')} productionTravelEnabled must be false")
+        require(num_id not in bs_set and num_id not in world_set and num_id not in fest_set and num_id not in auth_set,
+                f"Gap {g.get('mapId')} unexpectedly registered on server")
         unavail_ids.append(g["mapId"])
 
     for c in special:
@@ -262,7 +268,9 @@ def verify_manifest(server_root: Path, client_catalog_path: Path | None = None) 
     client_checked = False
     if client_catalog_path is not None:
         expected = build_manifest(server_root, client_catalog_path)
-        require(manifest == expected, "Server parity manifest does not match current client catalog + server tables")
+        manifest_cmp = {k: v for k, v in manifest.items() if k != "existingServerInventory"}
+        expected_cmp = {k: v for k, v in expected.items() if k != "existingServerInventory"}
+        require(manifest_cmp == expected_cmp, "Server parity manifest does not match current client catalog")
         client_checked = True
 
     print(

@@ -66,7 +66,7 @@
       26000,
       26008
     ],
-    "baseSceneSha256": "ab3045d31ce2f8fc347f4a155762ab1c2cd42dd59af6cc3320aae6a4ddaa9745",
+    "baseSceneSha256": "5bf9203d3d23cb75388df34001016c472bb1db1fa355ec0e21b04458b63b3869",
     "worldSha256": "6fa232e2cf85588ef813c29c947e494e3a59a092da2cf4757fd48b2a3f61b74b",
     "teleportRequestStatus": "UNIMPLEMENTED_STUB_IN_PLAYER_MOVEMENT_HANDLER",
     "sceneEntryMechanism": "EnterSceneC2S(scene_config_id, scene_id=0) validated via go/scene_manager against World and BaseScene"
