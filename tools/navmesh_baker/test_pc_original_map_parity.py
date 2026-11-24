@@ -42,6 +42,17 @@ class PcOriginalMapParityTests(unittest.TestCase):
         self.assertFalse(m28002["productionTravelEnabled"])
         self.assertEqual(m28002["serverNavigationStatus"], "UNPROVEN_STATIC_BACK_ONLY")
 
+        m08001 = next(m for m in manifest["maps"] if m["mapId"] == "08001")
+        self.assertEqual(m08001["artStage"], "pc_original_static_back")
+        self.assertTrue(m08001["isTemporaryOriginal"])
+        self.assertEqual(m08001["clientDefaultAppearance"], "normal")
+        self.assertEqual([a["id"] for a in m08001["clientAppearances"]], ["normal", "spring", "midautumn"])
+        hd_spring = next(a for a in m08001["clientAppearances"] if a["id"] == "spring")
+        self.assertEqual(hd_spring["nativePixels"], [6400, 4800])
+        self.assertEqual(hd_spring["worldGrid"], {"widthPixels": 3200, "heightPixels": 2400, "tileWidthPixels": 400, "tileHeightPixels": 300})
+        self.assertFalse(m08001["serverBaseSceneRegistered"])
+        self.assertFalse(m08001["productionTravelEnabled"])
+
     def test_tampered_production_travel_or_gap_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fake_server = Path(tmp) / "server"

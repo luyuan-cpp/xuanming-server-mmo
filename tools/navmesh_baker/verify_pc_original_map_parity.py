@@ -149,8 +149,9 @@ def build_manifest(server_root: Path, client_catalog_path: Path) -> dict:
             map_item["pcOriginalSourceNativeBytes"] = int(entry["pcOriginalSourceNativeBytes"])
         if entry.get("appearances"):
             map_item["clientDefaultAppearance"] = entry["defaultAppearance"]
-            map_item["clientAppearances"] = [
-                {
+            app_list = []
+            for a in entry["appearances"]:
+                item = {
                     "id": a["id"],
                     "displayName": a.get("displayName", a["id"]),
                     "artStage": a["artStage"],
@@ -162,8 +163,12 @@ def build_manifest(server_root: Path, client_catalog_path: Path) -> dict:
                     "sourceNativeBytes": int(a["sourceNativeBytes"]),
                     "tilesManifestSha256": a["tilesManifestSha256"],
                 }
-                for a in entry["appearances"]
-            ]
+                if a.get("nativeWidth") and a.get("nativeHeight"):
+                    item["nativePixels"] = [int(a["nativeWidth"]), int(a["nativeHeight"])]
+                if a.get("worldGrid"):
+                    item["worldGrid"] = a["worldGrid"]
+                app_list.append(item)
+            map_item["clientAppearances"] = app_list
         maps_out.append(map_item)
 
     unavailable_out = []
