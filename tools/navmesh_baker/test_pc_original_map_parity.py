@@ -53,6 +53,15 @@ class PcOriginalMapParityTests(unittest.TestCase):
         self.assertFalse(m08001["serverBaseSceneRegistered"])
         self.assertFalse(m08001["productionTravelEnabled"])
 
+        m16001 = next(m for m in manifest["maps"] if m["mapId"] == "16001")
+        self.assertEqual(m16001["artStage"], "qdao_redrawn_static_back")
+        self.assertFalse(m16001["isTemporaryOriginal"])
+        self.assertEqual(m16001["nativePixels"], [1920, 1286])
+        self.assertEqual(m16001["clientDefaultAppearance"], "spring")
+        self.assertEqual([a["id"] for a in m16001["clientAppearances"]], ["spring", "midautumn", "normal"])
+        self.assertFalse(m16001["serverBaseSceneRegistered"])
+        self.assertFalse(m16001["productionTravelEnabled"])
+
     def test_tampered_production_travel_or_gap_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fake_server = Path(tmp) / "server"

@@ -7,7 +7,7 @@
   "productionTravelEnabled": false,
   "sourceContainerSha256": "724b3f9b1018951ac21d502a798d54b1b86d0a04250f01e1524add33525dc07f",
   "clientCatalogPath": "Assets/Resources/World/PcOriginalPreview20261123/catalog.json",
-  "clientCatalogSha256": "6726959ef23a0ec55a8f148e4288d4c0ebfd625c2b0d7a0f46c096b959e81141",
+  "clientCatalogSha256": "c57948dd48860cd17e1771a53df2a862e7ecd72e9eeb27729dee6906cd035d68",
   "clientCatalogRevision": "pc-original-20261123",
   "existingServerInventory": {
     "baseSceneIds": [
@@ -185,22 +185,22 @@
       "numericMapId": 16001,
       "name": "地图 16001",
       "clientPreviewStatus": "ready_local_preview_only",
-      "artStage": "pc_original_static_back",
-      "isTemporaryOriginal": true,
+      "artStage": "qdao_redrawn_static_back",
+      "isTemporaryOriginal": false,
       "replaceableByQdaoArt": true,
       "nativePixels": [
         1920,
         1286
       ],
       "sourceBranch": "gbits",
-      "sourceNativeSha256": "54fab612014768068a71ea05ba3d1f77b5a31a06b9b12ab3471cceb1d3a06ecc",
-      "sourceNativeBytes": 4053698,
-      "clientCatalogRevision": "pc-original-20261123",
-      "clientResourceRoot": "World/PcOriginalPreview20261123/16001/pc-original-20261123/",
+      "sourceNativeSha256": "3eefecb95acf3e4f027ef36a48af94844586e18f7c3478207a450b440c81e2b3",
+      "sourceNativeBytes": 4485609,
+      "clientCatalogRevision": "qdao-spring-v001",
+      "clientResourceRoot": "World/PcOriginalPreview20261123/16001/qdao-spring-v001/",
       "clientTileFormat": "jpg_q90_native_1024_grid",
       "clientTileCount": 4,
       "clientHasAlpha": false,
-      "clientTilesManifestSha256": "caaee1eeb3afc5e16bb1817f48402e3d6e8ad66dabcff296a9b34fa36e6e78dc",
+      "clientTilesManifestSha256": "b391165b56336fd6e64f23521d97d387c662f2c154e96155e6ba79c5cddc185e",
       "serverBaseSceneRegistered": false,
       "serverWorldRegistered": false,
       "serverFestivalNavRegistered": false,
@@ -209,7 +209,60 @@
       "serverCollisionStatus": "UNPROVEN_STATIC_BACK_ONLY",
       "serverEntryTeleportStatus": "NOT_REGISTERED_IN_WORLD_OR_BASESCENE",
       "productionTravelEnabled": false,
-      "relatedExistingServerSceneNote": ""
+      "relatedExistingServerSceneNote": "",
+      "pcOriginalSourceNativeSha256": "54fab612014768068a71ea05ba3d1f77b5a31a06b9b12ab3471cceb1d3a06ecc",
+      "pcOriginalSourceNativeBytes": 4053698,
+      "clientDefaultAppearance": "spring",
+      "clientAppearances": [
+        {
+          "id": "spring",
+          "displayName": "春节",
+          "artStage": "qdao_redrawn_static_back",
+          "revision": "qdao-spring-v001",
+          "resourceRoot": "World/PcOriginalPreview20261123/16001/qdao-spring-v001/",
+          "hasAlpha": false,
+          "tileFormat": "jpg_q90_native_1024_grid",
+          "sourceNativeSha256": "3eefecb95acf3e4f027ef36a48af94844586e18f7c3478207a450b440c81e2b3",
+          "sourceNativeBytes": 4485609,
+          "tilesManifestSha256": "b391165b56336fd6e64f23521d97d387c662f2c154e96155e6ba79c5cddc185e",
+          "nativePixels": [
+            1920,
+            1286
+          ]
+        },
+        {
+          "id": "midautumn",
+          "displayName": "中秋",
+          "artStage": "qdao_redrawn_static_back",
+          "revision": "qdao-midautumn-v001",
+          "resourceRoot": "World/PcOriginalPreview20261123/16001/qdao-midautumn-v001/",
+          "hasAlpha": false,
+          "tileFormat": "jpg_q90_native_1024_grid",
+          "sourceNativeSha256": "641b2f22570f2668ca760796228a96678c6d6b0b6b0d8f82629fc61ba48d2ef6",
+          "sourceNativeBytes": 4487878,
+          "tilesManifestSha256": "3c97a696728cdae9b68f152dbb6ee9f10f9678046d63785444ee4a5b20761c27",
+          "nativePixels": [
+            1920,
+            1286
+          ]
+        },
+        {
+          "id": "normal",
+          "displayName": "原版",
+          "artStage": "pc_original_static_back",
+          "revision": "pc-original-20261123",
+          "resourceRoot": "World/PcOriginalPreview20261123/16001/pc-original-20261123/",
+          "hasAlpha": false,
+          "tileFormat": "jpg_q90_native_1024_grid",
+          "sourceNativeSha256": "54fab612014768068a71ea05ba3d1f77b5a31a06b9b12ab3471cceb1d3a06ecc",
+          "sourceNativeBytes": 4053698,
+          "tilesManifestSha256": "caaee1eeb3afc5e16bb1817f48402e3d6e8ad66dabcff296a9b34fa36e6e78dc",
+          "nativePixels": [
+            1920,
+            1286
+          ]
+        }
+      ]
     },
     {
       "mapId": "29000",
