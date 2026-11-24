@@ -28,14 +28,39 @@ const (
 	pingInterval = 5 * time.Minute
 	// ackTimeout 同时是 TCP_USER_TIMEOUT:对端整机消失后,一次调用发出去最多这么久连接就断开重连。
 	ackTimeout = 20 * time.Second
+
+	// 服务端连接轮换缺省值（移植自 xuanming-server/pkg/grpcserver）：
+	// K8s L4 ClusterIP 按连接均衡，滚动更新或扩容时 HTTP/2 老连接若不断开，新副本长期分不到流量。
+	// MaxConnectionAge 触发优雅 GOAWAY，在途 RPC 在 MaxConnectionAgeGrace 内排空，客户端透明重拨到新副本。
+	DefaultMaxConnectionAge      = 15 * time.Minute
+	DefaultMaxConnectionAgeGrace = 30 * time.Second
 )
 
 func params() keepalive.ClientParameters {
 	return keepalive.ClientParameters{Time: pingInterval, Timeout: ackTimeout}
 }
 
+func serverParams(maxAge, grace time.Duration) keepalive.ServerParameters {
+	if maxAge <= 0 {
+		maxAge = DefaultMaxConnectionAge
+	}
+	if grace <= 0 {
+		grace = DefaultMaxConnectionAgeGrace
+	}
+	return keepalive.ServerParameters{
+		MaxConnectionAge:      maxAge,
+		MaxConnectionAgeGrace: grace,
+	}
+}
+
 // DialOption 是带本包 keepalive 的拨号选项。裸 grpc.NewClient 直接传入;zrpc 客户端用
 // zrpc.WithDialOption(grpckeepalive.DialOption()) 传入(它排在 RpcClientConf.KeepaliveTime 生成的选项之后,以它为准)。
 func DialOption() grpc.DialOption {
 	return grpc.WithKeepaliveParams(params())
+}
+
+// ServerOption 返回启用 MaxConnectionAge 优雅连接轮换的 gRPC 服务端选项。
+// maxAge / grace 传 <= 0 时取默认 15m / 30s。
+func ServerOption(maxAge, grace time.Duration) grpc.ServerOption {
+	return grpc.KeepaliveParams(serverParams(maxAge, grace))
 }

@@ -209,6 +209,14 @@ type SkillAllow_dead_targetComp struct {
     Value uint32
 }
 
+type SkillForbid_copyComp struct {
+    Value uint32
+}
+
+type SkillSeason_idComp struct {
+    Value uint32
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -424,6 +432,14 @@ func MakeSkillAction_tagsComp(row *pb.SkillTable) SkillAction_tagsComp {
 
 func MakeSkillAllow_dead_targetComp(row *pb.SkillTable) SkillAllow_dead_targetComp {
     return SkillAllow_dead_targetComp{Value: row.AllowDeadTarget}
+}
+
+func MakeSkillForbid_copyComp(row *pb.SkillTable) SkillForbid_copyComp {
+    return SkillForbid_copyComp{Value: row.ForbidCopy}
+}
+
+func MakeSkillSeason_idComp(row *pb.SkillTable) SkillSeason_idComp {
+    return SkillSeason_idComp{Value: row.SeasonId}
 }
 
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {

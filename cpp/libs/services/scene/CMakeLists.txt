@@ -121,6 +121,7 @@ set(SOURCE_FILES
     player/system/afk_hosting.cpp
     player/system/afk_pass.cpp
     player/system/player_appearance.cpp
+    player/system/player_season.cpp
     player/system/player_rename.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp

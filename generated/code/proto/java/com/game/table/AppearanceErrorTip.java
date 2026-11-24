@@ -63,6 +63,18 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kAppearanceUnavailable = 33006;</code>
      */
     kAppearanceUnavailable(33006),
+    /**
+     * <code>kAppearanceNotCardUnlockable = 33007;</code>
+     */
+    kAppearanceNotCardUnlockable(33007),
+    /**
+     * <code>kAppearanceAlreadyOwned = 33008;</code>
+     */
+    kAppearanceAlreadyOwned(33008),
+    /**
+     * <code>kAppearanceNotOwned = 33009;</code>
+     */
+    kAppearanceNotOwned(33009),
     UNRECOGNIZED(-1),
     ;
 
@@ -107,6 +119,18 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kAppearanceUnavailable = 33006;</code>
      */
     public static final int kAppearanceUnavailable_VALUE = 33006;
+    /**
+     * <code>kAppearanceNotCardUnlockable = 33007;</code>
+     */
+    public static final int kAppearanceNotCardUnlockable_VALUE = 33007;
+    /**
+     * <code>kAppearanceAlreadyOwned = 33008;</code>
+     */
+    public static final int kAppearanceAlreadyOwned_VALUE = 33008;
+    /**
+     * <code>kAppearanceNotOwned = 33009;</code>
+     */
+    public static final int kAppearanceNotOwned_VALUE = 33009;
 
 
     public final int getNumber() {
@@ -141,6 +165,9 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
         case 33004: return kAppearanceNoActiveTrial;
         case 33005: return kAppearanceFrozen;
         case 33006: return kAppearanceUnavailable;
+        case 33007: return kAppearanceNotCardUnlockable;
+        case 33008: return kAppearanceAlreadyOwned;
+        case 33009: return kAppearanceNotOwned;
         default: return null;
       }
     }
@@ -206,15 +233,17 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\032appearance_error_tip.proto*\371\001\n\020appeara" +
+      "\n\032appearance_error_tip.proto*\327\002\n\020appeara" +
       "nce_error\022\027\n\023kAppearance_errorOK\020\000\022\030\n\022kA" +
       "ppearanceInvalid\020\350\201\002\022\037\n\031kAppearanceAlrea" +
       "dyCurrent\020\351\201\002\022\027\n\021kAppearanceNoCard\020\352\201\002\022!" +
       "\n\033kAppearanceTrialAlreadyUsed\020\353\201\002\022\036\n\030kAp" +
       "pearanceNoActiveTrial\020\354\201\002\022\027\n\021kAppearance" +
       "Frozen\020\355\201\002\022\034\n\026kAppearanceUnavailable\020\356\201\002" +
-      "B$\n\016com.game.tableZ\022generated/pb/tableb\006" +
-      "proto3"
+      "\022\"\n\034kAppearanceNotCardUnlockable\020\357\201\002\022\035\n\027" +
+      "kAppearanceAlreadyOwned\020\360\201\002\022\031\n\023kAppearan" +
+      "ceNotOwned\020\361\201\002B$\n\016com.game.tableZ\022genera" +
+      "ted/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

@@ -485,6 +485,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kMaterialRewardRevisionFieldNumber = 10,
     kCraftingMaterialCountFieldNumber = 11,
     kEnhancementStoneCountFieldNumber = 12,
+    kSeasonCatchupSpentFieldNumber = 14,
+    kSeasonCatchupPointsFieldNumber = 13,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -611,11 +613,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_enhancement_stone_count(::uint32_t value);
 
   public:
+  // uint64 season_catchup_spent = 14;
+  void clear_season_catchup_spent() ;
+  [[nodiscard]] ::uint64_t season_catchup_spent() const;
+  void set_season_catchup_spent(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_season_catchup_spent() const;
+  void _internal_set_season_catchup_spent(::uint64_t value);
+
+  public:
+  // uint32 season_catchup_points = 13;
+  void clear_season_catchup_points() ;
+  [[nodiscard]] ::uint32_t season_catchup_points() const;
+  void set_season_catchup_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_catchup_points() const;
+  void _internal_set_season_catchup_points(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -656,6 +678,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint64_t material_reward_revision_;
     ::uint32_t crafting_material_count_;
     ::uint32_t enhancement_stone_count_;
+    ::uint64_t season_catchup_spent_;
+    ::uint32_t season_catchup_points_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1258,6 +1282,54 @@ inline ::uint32_t ClientRequestRecord::_internal_enhancement_stone_count() const
 inline void ClientRequestRecord::_internal_set_enhancement_stone_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhancement_stone_count_ = value;
+}
+
+// uint32 season_catchup_points = 13;
+inline void ClientRequestRecord::clear_season_catchup_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_catchup_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t ClientRequestRecord::season_catchup_points() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.season_catchup_points)
+  return _internal_season_catchup_points();
+}
+inline void ClientRequestRecord::set_season_catchup_points(::uint32_t value) {
+  _internal_set_season_catchup_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.season_catchup_points)
+}
+inline ::uint32_t ClientRequestRecord::_internal_season_catchup_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_catchup_points_;
+}
+inline void ClientRequestRecord::_internal_set_season_catchup_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_catchup_points_ = value;
+}
+
+// uint64 season_catchup_spent = 14;
+inline void ClientRequestRecord::clear_season_catchup_spent() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_catchup_spent_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t ClientRequestRecord::season_catchup_spent() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.season_catchup_spent)
+  return _internal_season_catchup_spent();
+}
+inline void ClientRequestRecord::set_season_catchup_spent(::uint64_t value) {
+  _internal_set_season_catchup_spent(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.season_catchup_spent)
+}
+inline ::uint64_t ClientRequestRecord::_internal_season_catchup_spent() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_catchup_spent_;
+}
+inline void ClientRequestRecord::_internal_set_season_catchup_spent(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_catchup_spent_ = value;
 }
 
 // -------------------------------------------------------------------

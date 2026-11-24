@@ -41,6 +41,7 @@
 #include "player/system/team_follow_system.h"
 #include "player/system/afk_pass.h"
 #include "player/system/player_appearance.h"
+#include "player/system/player_season.h"
 #include "player/system/player_rename.h"
 
 #include <chrono>
@@ -133,6 +134,11 @@ namespace
                     err = "scene AfkPassRule table validation failed";
                     return false;
                 }
+                if (!PlayerSeasonSystem::ValidateTables())
+                {
+                    err = "scene SeasonRule / SeasonSeal table validation failed";
+                    return false;
+                }
                 return true;
             }
 
@@ -145,6 +151,7 @@ namespace
                 PlayerRenameSystem::ValidateTables();
                 PlayerAppearanceSystem::ValidateTables();
                 AfkPassSystem::ValidateTables();
+                PlayerSeasonSystem::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

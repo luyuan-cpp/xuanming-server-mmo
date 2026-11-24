@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AppearanceSeriesTableOuterClass";
+option java_multiple_files = true;
+
+
+message AppearanceSeriesTable {
+	uint32 id = 1;
+	string series_key = 2;
+	string name = 3;
+	uint32 sort_order = 4;
+	uint32 enabled = 5;
+	string desc = 6;
+	string completion_badge_name = 7;
+	string epilogue_title = 8;
+	string epilogue_body = 9;
+}
+
+message AppearanceSeriesTableData {
+	repeated AppearanceSeriesTable data = 1;
+}

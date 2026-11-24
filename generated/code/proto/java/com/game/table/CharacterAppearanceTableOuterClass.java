@@ -45,14 +45,16 @@ public final class CharacterAppearanceTableOuterClass extends com.google.protobu
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\037characterappearance_table.proto\"~\n\030Cha" +
-      "racterAppearanceTable\022\n\n\002id\030\001 \001(\r\022\025\n\rapp" +
-      "earance_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\017\n\007enable" +
-      "d\030\004 \001(\r\022\022\n\nsort_order\030\005 \001(\r\022\014\n\004desc\030\006 \001(" +
-      "\t\"G\n\034CharacterAppearanceTableData\022\'\n\004dat" +
-      "a\030\001 \003(\0132\031.CharacterAppearanceTableBJ\n\016co" +
-      "m.game.tableB\"CharacterAppearanceTableOu" +
-      "terClassP\001Z\022generated/pb/tableb\006proto3"
+      "\n\037characterappearance_table.proto\"\305\001\n\030Ch" +
+      "aracterAppearanceTable\022\n\n\002id\030\001 \001(\r\022\025\n\rap" +
+      "pearance_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\017\n\007enabl" +
+      "ed\030\004 \001(\r\022\022\n\nsort_order\030\005 \001(\r\022\014\n\004desc\030\006 \001" +
+      "(\t\022\031\n\021starter_creatable\030\007 \001(\r\022\027\n\017card_un" +
+      "lockable\030\010 \001(\r\022\021\n\tseries_id\030\t \001(\r\"G\n\034Cha" +
+      "racterAppearanceTableData\022\'\n\004data\030\001 \003(\0132" +
+      "\031.CharacterAppearanceTableBJ\n\016com.game.t" +
+      "ableB\"CharacterAppearanceTableOuterClass" +
+      "P\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -63,7 +65,7 @@ public final class CharacterAppearanceTableOuterClass extends com.google.protobu
     internal_static_CharacterAppearanceTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_CharacterAppearanceTable_descriptor,
-        new java.lang.String[] { "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc", });
+        new java.lang.String[] { "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc", "StarterCreatable", "CardUnlockable", "SeriesId", });
     internal_static_CharacterAppearanceTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_CharacterAppearanceTableData_fieldAccessorTable = new

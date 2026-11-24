@@ -22,18 +22,19 @@ public static partial class CharacterappearanceTableReflection {
   static CharacterappearanceTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Ch9jaGFyYWN0ZXJhcHBlYXJhbmNlX3RhYmxlLnByb3RvIn4KGENoYXJhY3Rl",
-          "ckFwcGVhcmFuY2VUYWJsZRIKCgJpZBgBIAEoDRIVCg1hcHBlYXJhbmNlX2lk",
-          "GAIgASgJEgwKBG5hbWUYAyABKAkSDwoHZW5hYmxlZBgEIAEoDRISCgpzb3J0",
-          "X29yZGVyGAUgASgNEgwKBGRlc2MYBiABKAkiRwocQ2hhcmFjdGVyQXBwZWFy",
-          "YW5jZVRhYmxlRGF0YRInCgRkYXRhGAEgAygLMhkuQ2hhcmFjdGVyQXBwZWFy",
-          "YW5jZVRhYmxlQkoKDmNvbS5nYW1lLnRhYmxlQiJDaGFyYWN0ZXJBcHBlYXJh",
-          "bmNlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJv",
-          "dG8z"));
+          "Ch9jaGFyYWN0ZXJhcHBlYXJhbmNlX3RhYmxlLnByb3RvIsUBChhDaGFyYWN0",
+          "ZXJBcHBlYXJhbmNlVGFibGUSCgoCaWQYASABKA0SFQoNYXBwZWFyYW5jZV9p",
+          "ZBgCIAEoCRIMCgRuYW1lGAMgASgJEg8KB2VuYWJsZWQYBCABKA0SEgoKc29y",
+          "dF9vcmRlchgFIAEoDRIMCgRkZXNjGAYgASgJEhkKEXN0YXJ0ZXJfY3JlYXRh",
+          "YmxlGAcgASgNEhcKD2NhcmRfdW5sb2NrYWJsZRgIIAEoDRIRCglzZXJpZXNf",
+          "aWQYCSABKA0iRwocQ2hhcmFjdGVyQXBwZWFyYW5jZVRhYmxlRGF0YRInCgRk",
+          "YXRhGAEgAygLMhkuQ2hhcmFjdGVyQXBwZWFyYW5jZVRhYmxlQkoKDmNvbS5n",
+          "YW1lLnRhYmxlQiJDaGFyYWN0ZXJBcHBlYXJhbmNlVGFibGVPdXRlckNsYXNz",
+          "UAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTable), global::CharacterAppearanceTable.Parser, new[]{ "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTable), global::CharacterAppearanceTable.Parser, new[]{ "Id", "AppearanceId", "Name", "Enabled", "SortOrder", "Desc", "StarterCreatable", "CardUnlockable", "SeriesId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::CharacterAppearanceTableData), global::CharacterAppearanceTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -82,6 +83,9 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     enabled_ = other.enabled_;
     sortOrder_ = other.sortOrder_;
     desc_ = other.desc_;
+    starterCreatable_ = other.starterCreatable_;
+    cardUnlockable_ = other.cardUnlockable_;
+    seriesId_ = other.seriesId_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -163,6 +167,42 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
   }
 
+  /// <summary>Field number for the "starter_creatable" field.</summary>
+  public const int StarterCreatableFieldNumber = 7;
+  private uint starterCreatable_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StarterCreatable {
+    get { return starterCreatable_; }
+    set {
+      starterCreatable_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "card_unlockable" field.</summary>
+  public const int CardUnlockableFieldNumber = 8;
+  private uint cardUnlockable_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CardUnlockable {
+    get { return cardUnlockable_; }
+    set {
+      cardUnlockable_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "series_id" field.</summary>
+  public const int SeriesIdFieldNumber = 9;
+  private uint seriesId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SeriesId {
+    get { return seriesId_; }
+    set {
+      seriesId_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -184,6 +224,9 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     if (Enabled != other.Enabled) return false;
     if (SortOrder != other.SortOrder) return false;
     if (Desc != other.Desc) return false;
+    if (StarterCreatable != other.StarterCreatable) return false;
+    if (CardUnlockable != other.CardUnlockable) return false;
+    if (SeriesId != other.SeriesId) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -197,6 +240,9 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     if (Enabled != 0) hash ^= Enabled.GetHashCode();
     if (SortOrder != 0) hash ^= SortOrder.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (StarterCreatable != 0) hash ^= StarterCreatable.GetHashCode();
+    if (CardUnlockable != 0) hash ^= CardUnlockable.GetHashCode();
+    if (SeriesId != 0) hash ^= SeriesId.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -239,6 +285,18 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
       output.WriteRawTag(50);
       output.WriteString(Desc);
     }
+    if (StarterCreatable != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(StarterCreatable);
+    }
+    if (CardUnlockable != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(CardUnlockable);
+    }
+    if (SeriesId != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(SeriesId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -273,6 +331,18 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
       output.WriteRawTag(50);
       output.WriteString(Desc);
     }
+    if (StarterCreatable != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(StarterCreatable);
+    }
+    if (CardUnlockable != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(CardUnlockable);
+    }
+    if (SeriesId != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(SeriesId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -300,6 +370,15 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (StarterCreatable != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(StarterCreatable);
+    }
+    if (CardUnlockable != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CardUnlockable);
+    }
+    if (SeriesId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(SeriesId);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -330,6 +409,15 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.StarterCreatable != 0) {
+      StarterCreatable = other.StarterCreatable;
+    }
+    if (other.CardUnlockable != 0) {
+      CardUnlockable = other.CardUnlockable;
+    }
+    if (other.SeriesId != 0) {
+      SeriesId = other.SeriesId;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -374,6 +462,18 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
           Desc = input.ReadString();
           break;
         }
+        case 56: {
+          StarterCreatable = input.ReadUInt32();
+          break;
+        }
+        case 64: {
+          CardUnlockable = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          SeriesId = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -415,6 +515,18 @@ public sealed partial class CharacterAppearanceTable : pb::IMessage<CharacterApp
         }
         case 50: {
           Desc = input.ReadString();
+          break;
+        }
+        case 56: {
+          StarterCreatable = input.ReadUInt32();
+          break;
+        }
+        case 64: {
+          CardUnlockable = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          SeriesId = input.ReadUInt32();
           break;
         }
       }

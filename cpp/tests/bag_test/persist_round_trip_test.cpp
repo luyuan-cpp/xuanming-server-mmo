@@ -626,6 +626,15 @@ protected:
         savedBuff->set_layer(1);
         savedBuff->set_expire_at_ms(1900000000000);
 
+        // 赛季印单槽进度（season-skills-and-seal-design.md）：覆盖 PlayerSeasonComp / PlayerSeasonSealRecord。
+        auto *seasonRecord = db.mutable_season_component()->add_records();
+        seasonRecord->set_season_id(1);
+        seasonRecord->set_equipped_seal_id(101);
+        seasonRecord->set_progress_points(4);
+        seasonRecord->set_battle_points(3);
+        seasonRecord->set_catchup_points(1);
+        seasonRecord->set_revision(2);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

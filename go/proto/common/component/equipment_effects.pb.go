@@ -43,8 +43,12 @@ type EquipmentEffects struct {
 	Artifacts              []*EquipmentArtifactSource `protobuf:"bytes,14,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
 	SupportSources         []*SupportEffectSource     `protobuf:"bytes,15,rep,name=support_sources,json=supportSources,proto3" json:"support_sources,omitempty"`                            // 与同一轮聚合同时产生，禁止客户端再累计。
 	SupportSourcesComplete bool                       `protobuf:"varint,16,opt,name=support_sources_complete,json=supportSourcesComplete,proto3" json:"support_sources_complete,omitempty"` // 旧快照/缺背包输入不能冒充完整来源。
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// 单槽赛季装备栏（「赛季印」，方案 A）：与永久 8 部位装备、2 永久法宝严格隔离，不占用物品永久 GUID。
+	SeasonSeal         *SeasonSealEffect `protobuf:"bytes,17,opt,name=season_seal,json=seasonSeal,proto3" json:"season_seal,omitempty"`
+	SeasonMaxHealthBps uint32            `protobuf:"varint,18,opt,name=season_max_health_bps,json=seasonMaxHealthBps,proto3" json:"season_max_health_bps,omitempty"` // 本季赛季印轻度气血万分比（<= 500，首测上限 300）
+	SeasonDefenseBps   uint32            `protobuf:"varint,19,opt,name=season_defense_bps,json=seasonDefenseBps,proto3" json:"season_defense_bps,omitempty"`         // 本季赛季印轻度防御万分比（<= 500，首测上限 300；严禁速度/控命/抵抗）
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *EquipmentEffects) Reset() {
@@ -189,6 +193,144 @@ func (x *EquipmentEffects) GetSupportSourcesComplete() bool {
 	return false
 }
 
+func (x *EquipmentEffects) GetSeasonSeal() *SeasonSealEffect {
+	if x != nil {
+		return x.SeasonSeal
+	}
+	return nil
+}
+
+func (x *EquipmentEffects) GetSeasonMaxHealthBps() uint32 {
+	if x != nil {
+		return x.SeasonMaxHealthBps
+	}
+	return 0
+}
+
+func (x *EquipmentEffects) GetSeasonDefenseBps() uint32 {
+	if x != nil {
+		return x.SeasonDefenseBps
+	}
+	return 0
+}
+
+// 赛季印的战斗机制快照：结构与法宝效果一致，但按 (season_id, seal_id) 标识，不借用永久 item_id。
+type SeasonSealEffect struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId           uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SealId             uint32                 `protobuf:"varint,2,opt,name=seal_id,json=sealId,proto3" json:"seal_id,omitempty"`
+	EffectId           uint32                 `protobuf:"varint,3,opt,name=effect_id,json=effectId,proto3" json:"effect_id,omitempty"` // 1 物理削盾、2 法术削盾、6 开局减伤、7 防御回蓝等。
+	BonusBps           uint32                 `protobuf:"varint,4,opt,name=bonus_bps,json=bonusBps,proto3" json:"bonus_bps,omitempty"`
+	CapBps             uint32                 `protobuf:"varint,5,opt,name=cap_bps,json=capBps,proto3" json:"cap_bps,omitempty"`
+	PerRoundLimit      uint32                 `protobuf:"varint,6,opt,name=per_round_limit,json=perRoundLimit,proto3" json:"per_round_limit,omitempty"` // 0 不限。
+	BattleLimit        uint32                 `protobuf:"varint,7,opt,name=battle_limit,json=battleLimit,proto3" json:"battle_limit,omitempty"`         // 0 不限。
+	ActiveRounds       uint32                 `protobuf:"varint,8,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`      // 0 不限。
+	HealthThresholdBps uint32                 `protobuf:"varint,9,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
+	Name               string                 `protobuf:"bytes,10,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SeasonSealEffect) Reset() {
+	*x = SeasonSealEffect{}
+	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SeasonSealEffect) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeasonSealEffect) ProtoMessage() {}
+
+func (x *SeasonSealEffect) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeasonSealEffect.ProtoReflect.Descriptor instead.
+func (*SeasonSealEffect) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_equipment_effects_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SeasonSealEffect) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetSealId() uint32 {
+	if x != nil {
+		return x.SealId
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetEffectId() uint32 {
+	if x != nil {
+		return x.EffectId
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetBonusBps() uint32 {
+	if x != nil {
+		return x.BonusBps
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetCapBps() uint32 {
+	if x != nil {
+		return x.CapBps
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetPerRoundLimit() uint32 {
+	if x != nil {
+		return x.PerRoundLimit
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetBattleLimit() uint32 {
+	if x != nil {
+		return x.BattleLimit
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetActiveRounds() uint32 {
+	if x != nil {
+		return x.ActiveRounds
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetHealthThresholdBps() uint32 {
+	if x != nil {
+		return x.HealthThresholdBps
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type EquipmentArtifactSource struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	ItemId             uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
@@ -206,7 +348,7 @@ type EquipmentArtifactSource struct {
 
 func (x *EquipmentArtifactSource) Reset() {
 	*x = EquipmentArtifactSource{}
-	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[1]
+	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -218,7 +360,7 @@ func (x *EquipmentArtifactSource) String() string {
 func (*EquipmentArtifactSource) ProtoMessage() {}
 
 func (x *EquipmentArtifactSource) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[1]
+	mi := &file_proto_common_component_equipment_effects_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -231,7 +373,7 @@ func (x *EquipmentArtifactSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipmentArtifactSource.ProtoReflect.Descriptor instead.
 func (*EquipmentArtifactSource) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_equipment_effects_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_equipment_effects_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *EquipmentArtifactSource) GetItemId() uint64 {
@@ -301,7 +443,7 @@ var File_proto_common_component_equipment_effects_proto protoreflect.FileDescrip
 
 const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\n" +
-	".proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\"\xb0\b\n" +
+	".proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\"\xc5\t\n" +
 	"\x10EquipmentEffects\x12.\n" +
 	"\x13physical_attack_bps\x18\x01 \x01(\rR\x11physicalAttackBps\x12(\n" +
 	"\x10magic_attack_bps\x18\x02 \x01(\rR\x0emagicAttackBps\x12$\n" +
@@ -319,7 +461,11 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x12mana_reduction_bps\x18\r \x03(\v2'.EquipmentEffects.ManaReductionBpsEntryR\x10manaReductionBps\x126\n" +
 	"\tartifacts\x18\x0e \x03(\v2\x18.EquipmentArtifactSourceR\tartifacts\x12=\n" +
 	"\x0fsupport_sources\x18\x0f \x03(\v2\x14.SupportEffectSourceR\x0esupportSources\x128\n" +
-	"\x18support_sources_complete\x18\x10 \x01(\bR\x16supportSourcesComplete\x1a@\n" +
+	"\x18support_sources_complete\x18\x10 \x01(\bR\x16supportSourcesComplete\x122\n" +
+	"\vseason_seal\x18\x11 \x01(\v2\x11.SeasonSealEffectR\n" +
+	"seasonSeal\x121\n" +
+	"\x15season_max_health_bps\x18\x12 \x01(\rR\x12seasonMaxHealthBps\x12,\n" +
+	"\x12season_defense_bps\x18\x13 \x01(\rR\x10seasonDefenseBps\x1a@\n" +
 	"\x12AilmentHitBpsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
@@ -328,7 +474,19 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
 	"\x15ManaReductionBpsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xbb\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xd1\x02\n" +
+	"\x10SeasonSealEffect\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x17\n" +
+	"\aseal_id\x18\x02 \x01(\rR\x06sealId\x12\x1b\n" +
+	"\teffect_id\x18\x03 \x01(\rR\beffectId\x12\x1b\n" +
+	"\tbonus_bps\x18\x04 \x01(\rR\bbonusBps\x12\x17\n" +
+	"\acap_bps\x18\x05 \x01(\rR\x06capBps\x12&\n" +
+	"\x0fper_round_limit\x18\x06 \x01(\rR\rperRoundLimit\x12!\n" +
+	"\fbattle_limit\x18\a \x01(\rR\vbattleLimit\x12#\n" +
+	"\ractive_rounds\x18\b \x01(\rR\factiveRounds\x120\n" +
+	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\x12\x12\n" +
+	"\x04name\x18\n" +
+	" \x01(\tR\x04name\"\xbb\x02\n" +
 	"\x17EquipmentArtifactSource\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\teffect_id\x18\x02 \x01(\rR\beffectId\x12\x1b\n" +
@@ -352,26 +510,28 @@ func file_proto_common_component_equipment_effects_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_equipment_effects_proto_rawDescData
 }
 
-var file_proto_common_component_equipment_effects_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_common_component_equipment_effects_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_common_component_equipment_effects_proto_goTypes = []any{
 	(*EquipmentEffects)(nil),        // 0: EquipmentEffects
-	(*EquipmentArtifactSource)(nil), // 1: EquipmentArtifactSource
-	nil,                             // 2: EquipmentEffects.AilmentHitBpsEntry
-	nil,                             // 3: EquipmentEffects.AilmentResistBpsEntry
-	nil,                             // 4: EquipmentEffects.ManaReductionBpsEntry
-	(*SupportEffectSource)(nil),     // 5: SupportEffectSource
+	(*SeasonSealEffect)(nil),        // 1: SeasonSealEffect
+	(*EquipmentArtifactSource)(nil), // 2: EquipmentArtifactSource
+	nil,                             // 3: EquipmentEffects.AilmentHitBpsEntry
+	nil,                             // 4: EquipmentEffects.AilmentResistBpsEntry
+	nil,                             // 5: EquipmentEffects.ManaReductionBpsEntry
+	(*SupportEffectSource)(nil),     // 6: SupportEffectSource
 }
 var file_proto_common_component_equipment_effects_proto_depIdxs = []int32{
-	2, // 0: EquipmentEffects.ailment_hit_bps:type_name -> EquipmentEffects.AilmentHitBpsEntry
-	3, // 1: EquipmentEffects.ailment_resist_bps:type_name -> EquipmentEffects.AilmentResistBpsEntry
-	4, // 2: EquipmentEffects.mana_reduction_bps:type_name -> EquipmentEffects.ManaReductionBpsEntry
-	1, // 3: EquipmentEffects.artifacts:type_name -> EquipmentArtifactSource
-	5, // 4: EquipmentEffects.support_sources:type_name -> SupportEffectSource
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3, // 0: EquipmentEffects.ailment_hit_bps:type_name -> EquipmentEffects.AilmentHitBpsEntry
+	4, // 1: EquipmentEffects.ailment_resist_bps:type_name -> EquipmentEffects.AilmentResistBpsEntry
+	5, // 2: EquipmentEffects.mana_reduction_bps:type_name -> EquipmentEffects.ManaReductionBpsEntry
+	2, // 3: EquipmentEffects.artifacts:type_name -> EquipmentArtifactSource
+	6, // 4: EquipmentEffects.support_sources:type_name -> SupportEffectSource
+	1, // 5: EquipmentEffects.season_seal:type_name -> SeasonSealEffect
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_equipment_effects_proto_init() }
@@ -386,7 +546,7 @@ func file_proto_common_component_equipment_effects_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_equipment_effects_proto_rawDesc), len(file_proto_common_component_equipment_effects_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -10,7 +10,7 @@ enum class BattleEffectOp : uint32_t {
     Control = 13, ConsumePeriodic = 14, ExtendPeriodic = 15, DrainMana = 16,
     RetreatPet = 17, TemporaryHealth = 18, MirrorSkill = 19, PursuitDamage = 20,
     ApplyChildren = 21, ConditionalHeal = 22, ConditionalMana = 23,
-    EvasionCharge = 24, GrowingAura = 25, kCount
+    EvasionCharge = 24, GrowingAura = 25, CopyTargetSkill = 26, kCount
 };
 enum class BattleModifier : uint32_t {
     None = 0, PhysicalAttack = 1, MagicAttack = 2, Defense = 3, Speed = 4,

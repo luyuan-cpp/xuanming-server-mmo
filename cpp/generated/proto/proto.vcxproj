@@ -492,4 +492,10 @@
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_season_comp.pb.cc" />
+    <ClCompile Include="scene\player_season.pb.cc" />
+    <ClInclude Include="common\component\player_season_comp.pb.h" />
+    <ClInclude Include="scene\player_season.pb.h" />
+  </ItemGroup>
 </Project>

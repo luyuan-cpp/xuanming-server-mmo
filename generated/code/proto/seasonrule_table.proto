@@ -1,0 +1,31 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "SeasonRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message SeasonRuleTable {
+	uint32 id = 1;
+	string name = 2;
+	uint64 starts_at_ms = 3;
+	uint64 ends_at_ms = 4;
+	bool enabled = 5;
+	uint32 seal_max_points = 6;
+	uint32 pve_win_points = 7;
+	uint32 pvp_win_points = 8;
+	uint32 pvp_other_points = 9;
+	uint32 max_health_bps_cap = 10;
+	uint32 defense_bps_cap = 11;
+	uint32 catchup_currency_type = 12;
+	uint64 catchup_price_per_point = 13;
+	uint32 default_seal_id = 14;
+	string desc = 15;
+}
+
+message SeasonRuleTableData {
+	repeated SeasonRuleTable data = 1;
+}

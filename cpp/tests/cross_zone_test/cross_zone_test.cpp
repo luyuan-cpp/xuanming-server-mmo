@@ -1039,6 +1039,7 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
     registry.emplace<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
     registry.emplace<PlayerMailOutboxComp>(player); // 待寄邮件(battle-overflow-mail.md)
+    registry.emplace<PlayerSeasonComp>(player); // 赛季印持久状态(season-skills-and-seal-design.md)
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。

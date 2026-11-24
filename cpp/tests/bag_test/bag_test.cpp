@@ -3820,6 +3820,7 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player); // 同上,客户端请求幂等键账本(client-request-idempotency.md §5.3)
     tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 同上,物品数量预留(battle-item-reservation.md)
     tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player); // 同上,待寄邮件(battle-overflow-mail.md)
+    tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player); // 同上,赛季印持久状态(season-skills-and-seal-design.md)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

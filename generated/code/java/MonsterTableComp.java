@@ -83,4 +83,10 @@ public final class MonsterTableComp {
         }
     }
 
+    public record Is_boss(int value) {
+        public static Is_boss from(MonsterTable row) {
+            return new Is_boss(row.getIsBoss());
+        }
+    }
+
 }

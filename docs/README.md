@@ -300,7 +300,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
 - [biyuan-water-palace-scene5-nav-20261123.md](design/biyuan-water-palace-scene5-nav-20261123.md) — 碧渊水宫本体（`biyuan-water-palace` / 场景 5）服务端导航与配表接入设计方案
 - [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：轻量玩法 V1、UI 规格与双机交接
-- [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象切换（10 元角色形象卡）与 1 小时免费试用设计
+- [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象永久收藏衣柜、形象卡解锁与 1 小时免费试用设计
 - [character-background-collection-design.md](design/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计
 - [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
 - [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
@@ -324,6 +324,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
 - [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 - [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
+- [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2）
 - [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
 - [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 - [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
@@ -346,9 +347,11 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05）
 - [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全
 - [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
+- [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(2026-11-06 服务端源码已写;2026-11-10 补入场后补推、客户端已写,补跨节点与离线托管的跨场景跟随;均未编译未测试)
 - [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret(2026-11-10)
 - [world-map-play-v1.md](design/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先
+- [world-map-play-v2.md](design/world-map-play-v2.md) — 《五行奇谈》世界地图生态、双层潮汐聚人与低人口在场感设计（V2）
 - [writer-roster-exhaustion-20261106.md](design/writer-roster-exhaustion-20261106.md) — 写者名册会用完、死写者会堆积(缺口清单第 22 条,2026-11-06)
 - [zone-full-handling.md](design/zone-full-handling.md) — 区服满员处理（保留选区）
 - [zone-redis-regression-guard-20261022.md](design/zone-redis-regression-guard-20261022.md) — zone Redis 回退防护：「Redis 回退一族」6 条 low 的合并设计

@@ -210,6 +210,14 @@ struct SkillAllow_dead_targetComp {
     uint32_t value;
 };
 
+struct SkillForbid_copyComp {
+    uint32_t value;
+};
+
+struct SkillSeason_idComp {
+    uint32_t value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -377,6 +385,12 @@ inline SkillAction_tagsComp MakeSkillAction_tagsComp(const SkillTable& row) {
 }
 inline SkillAllow_dead_targetComp MakeSkillAllow_dead_targetComp(const SkillTable& row) {
     return { row.allow_dead_target() };
+}
+inline SkillForbid_copyComp MakeSkillForbid_copyComp(const SkillTable& row) {
+    return { row.forbid_copy() };
+}
+inline SkillSeason_idComp MakeSkillSeason_idComp(const SkillTable& row) {
+    return { row.season_id() };
 }
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();

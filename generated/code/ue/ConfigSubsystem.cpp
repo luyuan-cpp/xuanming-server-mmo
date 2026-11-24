@@ -40,6 +40,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
 	AfkPassRuleTable = NewObject<UAfkPassRuleTable>(this);
 	AppearanceRuleTable = NewObject<UAppearanceRuleTable>(this);
+	AppearanceSeriesTable = NewObject<UAppearanceSeriesTable>(this);
 	AttributeAllocRatioTable = NewObject<UAttributeAllocRatioTable>(this);
 	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
 	AttributeDimensionTable = NewObject<UAttributeDimensionTable>(this);
@@ -85,6 +86,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	RankedRuleTable = NewObject<URankedRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
 	RoleNameRuleTable = NewObject<URoleNameRuleTable>(this);
+	SeasonRuleTable = NewObject<USeasonRuleTable>(this);
+	SeasonSealTable = NewObject<USeasonSealTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
 	TestTable = NewObject<UTestTable>(this);
@@ -102,6 +105,7 @@ void UConfigSubsystem::Deinitialize()
 	ActorActionStateTable = nullptr;
 	AfkPassRuleTable = nullptr;
 	AppearanceRuleTable = nullptr;
+	AppearanceSeriesTable = nullptr;
 	AttributeAllocRatioTable = nullptr;
 	AttributeAutoPlanTable = nullptr;
 	AttributeDimensionTable = nullptr;
@@ -147,6 +151,8 @@ void UConfigSubsystem::Deinitialize()
 	RankedRuleTable = nullptr;
 	RewardTable = nullptr;
 	RoleNameRuleTable = nullptr;
+	SeasonRuleTable = nullptr;
+	SeasonSealTable = nullptr;
 	SkillTable = nullptr;
 	SkillPermissionTable = nullptr;
 	TestTable = nullptr;
@@ -169,6 +175,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UActorActionStateTable::FileName(),
 		UAfkPassRuleTable::FileName(),
 		UAppearanceRuleTable::FileName(),
+		UAppearanceSeriesTable::FileName(),
 		UAttributeAllocRatioTable::FileName(),
 		UAttributeAutoPlanTable::FileName(),
 		UAttributeDimensionTable::FileName(),
@@ -214,6 +221,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		URankedRuleTable::FileName(),
 		URewardTable::FileName(),
 		URoleNameRuleTable::FileName(),
+		USeasonRuleTable::FileName(),
+		USeasonSealTable::FileName(),
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
 		UTestTable::FileName(),
@@ -321,6 +330,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!AppearanceRuleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AppearanceSeriesTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceSeries] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AppearanceSeriesTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -959,6 +982,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (SeasonRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SeasonRuleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (SeasonSealTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonSeal] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SeasonSealTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (SkillTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Skill] 管理器未创建"));
@@ -1208,6 +1259,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!AppearanceRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AppearanceSeriesTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceSeries] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAppearanceSeriesTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceSeries] 取不到 %s"), UAppearanceSeriesTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AppearanceSeriesTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2108,6 +2179,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!RoleNameRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (SeasonRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USeasonRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonRule] 取不到 %s"), USeasonRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SeasonRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (SeasonSealTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonSeal] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USeasonSealTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SeasonSeal] 取不到 %s"), USeasonSealTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SeasonSealTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

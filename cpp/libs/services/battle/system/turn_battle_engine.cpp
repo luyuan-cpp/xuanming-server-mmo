@@ -14,6 +14,7 @@
 #include "system/combat_damage_rules.h"
 #include "system/equipment_battle_rules.h"
 #include "system/pet_cultivation_rules.h"
+#include "system/season_rules.h"
 #include "modules/currency/constants/currency.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -363,7 +364,9 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         // 表里有这一行、是本单位职业的技能、夹到当前角色等级的上限;复核完为 0 的丢掉
         for (const auto& [skillTableId, rank] : snapshot.skill_ranks()) {
             const auto* skillRow = dataProvider->FindSkill(skillTableId);
-            if (skillRow == nullptr || (skillRow->battle_model() == 1 ? !ConfiguredSubjectAllowed(actor, *skillRow) :
+            if (skillRow == nullptr ||
+                !seasonrules::IsSkillActiveInSeason(skillRow->season_id(), snapshot.active_season_id()) ||
+                (skillRow->battle_model() == 1 ? !ConfiguredSubjectAllowed(actor, *skillRow) :
                 (!IsClassSkill(*skillRow) || skillRow->class_id() != actor.class_id()))) {
                 continue;
             }
@@ -379,7 +382,8 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         // actor.skill_table_ids 同时是客户端可见的"本局可用技能"列表。
         for (const auto skillTableId : snapshot.skill_table_ids()) {
             const auto* skillRow = dataProvider->FindSkill(skillTableId);
-            if (skillRow == nullptr || !IsTurnBattleCastableSkill(*skillRow)) {
+            if (skillRow == nullptr || !IsTurnBattleCastableSkill(*skillRow) ||
+                !seasonrules::IsSkillActiveInSeason(skillRow->season_id(), snapshot.active_season_id())) {
                 continue;
             }
             if (skillRow->battle_model() == 1 && (!ConfiguredSubjectAllowed(actor, *skillRow) ||
@@ -542,6 +546,9 @@ void TurnBattleEngine::AppendMonsterActor(uint32_t monsterTableId, uint32_t mons
     // 优先读 MonsterTable 属性;行缺失(如 monster_table_id=0 的兜底怪)才回退
     // kMonsterDefault* 常量,保证任何配置下 PVE 都有能打的对手。
     const MonsterTable* row = dataProvider->FindMonster(monsterTableId);
+    if (row != nullptr && row->is_boss() != 0) {
+        actor.set_is_boss(true);
+    }
     auto* attributes = actor.mutable_attributes();
     if (row != nullptr && row->health() > 0) {
         attributes->set_health(row->health());
@@ -3529,6 +3536,7 @@ void TurnBattleEngine::StripEngineOnlyState(BattleStateS2C& state) {
         actor.clear_equipment_effects();
         actor.clear_pet_cultivation();
         actor.clear_artifact_states();
+        actor.clear_season_seal_state();
         actor.clear_entry_max_health();
         actor.clear_entry_max_mana();
     }

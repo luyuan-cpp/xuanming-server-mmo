@@ -77,6 +77,7 @@ var Faults = []Fault{
 	{Code: 30011, Group: "mystery_merchant_error", Name: "MysteryMerchantInternalError"},
 	{Code: 32004, Group: "afk_pass_error", Name: "AfkPassUnavailable"},
 	{Code: 33006, Group: "appearance_error", Name: "AppearanceUnavailable"},
+	{Code: 34011, Group: "season_error", Name: "SeasonUnavailable"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

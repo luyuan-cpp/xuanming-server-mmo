@@ -1268,6 +1268,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
     kAbilityKindFieldNumber = 20,
     kCasterMaskFieldNumber = 21,
     kActionTagsFieldNumber = 22,
+    kSeasonIdFieldNumber = 24,
   };
   // string name = 2;
   void clear_name() ;
@@ -1525,12 +1526,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   void _internal_set_action_tags(::uint32_t value);
 
   public:
+  // uint32 season_id = 24;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillCatalogEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          1, 73,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          1, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1581,6 +1592,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
     ::uint32_t ability_kind_;
     ::uint32_t caster_mask_;
     ::uint32_t action_tags_;
+    ::uint32_t season_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4526,6 +4538,30 @@ inline void SkillCatalogEntry::set_allocated_support_preview(::SupportSkillPrevi
 
   _impl_.support_preview_ = reinterpret_cast<::SupportSkillPreview*>(value);
   // @@protoc_insertion_point(field_set_allocated:SkillCatalogEntry.support_preview)
+}
+
+// uint32 season_id = 24;
+inline void SkillCatalogEntry::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t SkillCatalogEntry::season_id() const {
+  // @@protoc_insertion_point(field_get:SkillCatalogEntry.season_id)
+  return _internal_season_id();
+}
+inline void SkillCatalogEntry::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:SkillCatalogEntry.season_id)
+}
+inline ::uint32_t SkillCatalogEntry::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void SkillCatalogEntry::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
 }
 
 // -------------------------------------------------------------------

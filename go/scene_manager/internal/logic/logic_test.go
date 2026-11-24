@@ -1781,6 +1781,7 @@ func TestSelectOrRecoverWorldChannel_SelectsLowestPlayerCount(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	confIds := []uint64{1001}
 	sc.Config.WorldChannelCount = 3
+	sc.Config.WorldChannelRouting.PickPolicy = config.WorldChannelPickPolicyLeastLoaded
 	ctx := context.Background()
 
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
@@ -1820,6 +1821,7 @@ func TestSelectOrRecoverWorldChannel_AllEmpty(t *testing.T) {
 func TestCreateScene_MainWorld_MultipleChannels_ReturnsLeastLoaded(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	sc.Config.WorldChannelCount = 3
+	sc.Config.WorldChannelRouting.PickPolicy = config.WorldChannelPickPolicyLeastLoaded
 	ctx := context.Background()
 
 	mr.ZAdd(testLoadKey(), 0, "10")

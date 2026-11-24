@@ -108,10 +108,16 @@ public:
 	// 不推送的情况只有:实体无效或玩家不在任何场景(记日志,与原 handler 行为一致);异步应答回来时
 	// 实体已销毁、实体槽位已被别的玩家复用、或玩家已换到别的场景(客户端进新场景后会重新请求)。
 	// 只在 scene 节点 loop 线程调用(hiredis 回调也在该线程)。由客户端请求触发,不在 per-tick 路径上。
-	static void SendSceneInfo(entt::entity player, bool withChannelDirectory);
+	// withWorldMapOverview(= 请求里的 with_world_map_overview)为 true 时附带本 zone 的大世界地图总览读模型
+	// (SceneInfoS2C.world_map_overview,docs/design/world-map-play-v2.md §2.4):与分线目录同时请求时走同槽单次 MGET。
+	static void SendSceneInfo(entt::entity player, bool withChannelDirectory, bool withWorldMapOverview = false);
 
 	// 分线目录的 Redis 键 world_channel_directory:{ctl:<zone>}:<scene_config_id>(STRING,值是 SceneChannelDirectory 的序列化字节)。
 	// 跨语言契约:与 go/scene_manager/internal/logic/world_channel_directory.go 的 worldChannelDirectoryKey 渲染出来的键逐字节相同,
 	// 改一边必须改另一边;tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。
 	[[nodiscard]] static std::string WorldChannelDirectoryKey(uint32_t zoneId, uint32_t sceneConfigId);
+
+	// 世界地图总览读模型的 Redis 键 world_map_overview:{ctl:<zone>}(STRING,值是 WorldMapOverview 的序列化字节)。
+	// 跨语言契约:与 go/scene_manager/internal/logic/world_map_overview.go 的 worldMapOverviewKey 渲染出来的键逐字节相同。
+	[[nodiscard]] static std::string WorldMapOverviewKey(uint32_t zoneId);
 };

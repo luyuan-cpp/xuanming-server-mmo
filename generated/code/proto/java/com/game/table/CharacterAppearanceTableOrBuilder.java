@@ -63,4 +63,22 @@ public interface CharacterAppearanceTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 starter_creatable = 7;</code>
+   * @return The starterCreatable.
+   */
+  int getStarterCreatable();
+
+  /**
+   * <code>uint32 card_unlockable = 8;</code>
+   * @return The cardUnlockable.
+   */
+  int getCardUnlockable();
+
+  /**
+   * <code>uint32 series_id = 9;</code>
+   * @return The seriesId.
+   */
+  int getSeriesId();
 }

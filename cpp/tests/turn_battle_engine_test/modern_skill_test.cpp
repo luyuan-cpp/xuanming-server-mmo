@@ -18,7 +18,9 @@
 #include "system/turn_battle_engine.h"
 #include "table/code/skill_table.h"
 #include "table/code/buff_table.h"
+#include "table/code/monster_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/skill_error_tip.pb.h"
 
 namespace {
 using turnbattle::TurnBattleEngine;
@@ -156,7 +158,11 @@ protected:
     static void SetUpTestSuite() {
         oldDirectory = std::filesystem::current_path();
         loaded = test_config::FindAndLoadTestConfig(0, nullptr);
-        if (loaded) { SkillTableManager::Instance().Load(); BuffTableManager::Instance().Load(); }
+        if (loaded) {
+            SkillTableManager::Instance().Load();
+            BuffTableManager::Instance().Load();
+            MonsterTableManager::Instance().Load();
+        }
     }
     static void TearDownTestSuite() { std::filesystem::current_path(oldDirectory); }
     void SetUp() override {
@@ -168,10 +174,11 @@ protected:
         for (const auto& [id, row] : SkillTableManager::Instance().GetIdMap()) {
             data->AddSkill(id) = *row;
             data->SetSkillDamage(id, SkillTableManager::Instance().GetDamage(id));
-            if (row->battle_model() == 1) catalog[id] = *row;
+            if (row->battle_model() == 1 && row->season_id() == 0) catalog[id] = *row;
         }
         for (const auto& [id, row] : BuffTableManager::Instance().GetIdMap()) data->AddBuff(id) = *row;
-        ASSERT_EQ(catalog.size(), 61u);
+        for (const auto& [id, row] : MonsterTableManager::Instance().GetIdMap()) data->AddMonster(id) = *row;
+        ASSERT_EQ(catalog.size(), 62u);
     }
     const SkillTable& Row(uint32_t id) { return catalog.at(id); }
     std::shared_ptr<MemoryBattleDataProvider> data;
@@ -180,7 +187,7 @@ protected:
 
 TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedIdentity) {
     const std::map<char, std::vector<uint32_t>> expected = {
-        {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40}},
+        {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40,41}},
         {'B',{5,6,7,8,9,11,12,13,14,15,16}},
         {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19}},
         {'T',{1,5,6}}, {'O',{1,2,3}}};
@@ -226,6 +233,11 @@ TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedId
     EXPECT_EQ(Row(11012).pet_max_targets(), 2u);
     EXPECT_EQ(Row(13001).caster_mask(), 2u);
     EXPECT_EQ(Row(10040).caster_mask(), 1u);
+    EXPECT_EQ(Row(10041).caster_mask(), 1u);
+    EXPECT_EQ(Row(10041).forbid_copy(), 1u);
+    EXPECT_EQ(Row(11013).forbid_copy(), 1u);
+    EXPECT_EQ(Row(11015).forbid_copy(), 1u);
+    EXPECT_EQ(Row(11016).forbid_copy(), 1u);
     for (const auto retired : {10007u, 10017u, 10028u, 10032u, 10037u, 12010u, 13002u, 13003u})
         EXPECT_FALSE(catalog.contains(retired)) << retired;
 }
@@ -257,7 +269,7 @@ TEST_F(ModernSkillCatalogTest, EveryActivePrototypeCanBeCastByEveryEligibleActor
             ++casts;
         }
     }
-    EXPECT_EQ(casts, 51u); // 人物28、宝宝12专属(含A18)+11共享。
+    EXPECT_EQ(casts, 52u); // 人物29、宝宝12专属(含A18)+11共享。
 }
 
 TEST_F(ModernSkillCatalogTest, SharedAttackPreservesMainTargetAndUsesCasterTargetCap) {
@@ -564,6 +576,251 @@ TEST_F(ModernSkillCatalogTest, EmergencyHealHasLowerBaseAndHigherLowHealthRecove
     ASSERT_EQ(recovery.size(), 4u);
     EXPECT_LT(recovery[1], recovery[0]);
     EXPECT_GT(recovery[3], recovery[2]);
+}
+
+TEST_F(ModernSkillCatalogTest, CopyTargetSkillMirrorsPlannedEnemySkillWithOwnStatsRankScaleAndNoRecursion) {
+    // 对手挂 100% 触发的 P19 法术反击，验证复制施放（Mirror）不触发递归反击。
+    data->AddBuff(120190).set_trigger_chance(1.0);
+    auto run = [&](uint32_t copyRank) {
+        auto request = Request();
+        request.mutable_players(0)->set_magic_attack(1000); // 施法者高法攻
+        request.mutable_players(2)->set_magic_attack(100);  // 目标低法攻，验证走施法者自身属性
+        Learn(*request.mutable_players(0), Row(10041));
+        (*request.mutable_players(0)->mutable_skill_ranks())[10041] = copyRank;
+        Learn(*request.mutable_players(2), Row(10006));
+        Learn(*request.mutable_players(2), Row(12019));
+        TurnBattleEngine engine(data);
+        EXPECT_TRUE(engine.Initialize(request));
+        DefendAllExcept(engine);
+        engine.SubmitAction(kSelf, Cast(10041, kEnemy));
+        engine.SubmitAction(kEnemy, Cast(10006, kSelf));
+        return engine.ResolveCurrentRound();
+    };
+    const auto rank1 = run(1);
+    const auto rank1Repeat = run(1);
+    const auto rank10 = run(10);
+    EXPECT_EQ(Canonical(rank1), Canonical(rank1Repeat));
+
+    // 只扣 A41 自身 10% 法力（1000）并仅让 10041 进入 CD（3），不扣 10006 冷却。
+    EXPECT_EQ(Actor(rank1.state(), kSelf).attributes().mana(), 9000u);
+    EXPECT_EQ(Actor(rank1.state(), kSelf).skill_cooldown_rounds().at(10041), 2u);
+    EXPECT_FALSE(Actor(rank1.state(), kSelf).skill_cooldown_rounds().contains(10006));
+
+    int copyCastEvents = 0, mirroredCastEvents = 0, enemyMirrorCounterEvents = 0;
+    uint64_t rank1Damage = 0, rank10Damage = 0;
+    for (const auto& ev : rank1.events()) {
+        if (ev.event_type() == BATTLE_EVENT_SKILL && ev.source_id() == kSelf && ev.skill_table_id() == 10041) {
+            ++copyCastEvents;
+            EXPECT_EQ(ev.hit_kind(), BATTLE_HIT_NORMAL);
+        }
+        if (ev.event_type() == BATTLE_EVENT_SKILL && ev.source_id() == kSelf && ev.skill_table_id() == 10006) {
+            ++mirroredCastEvents;
+            EXPECT_EQ(ev.hit_kind(), BATTLE_HIT_MIRROR);
+        }
+        if (ev.event_type() == BATTLE_EVENT_SKILL && ev.source_id() == kEnemy && ev.hit_kind() == BATTLE_HIT_MIRROR) {
+            ++enemyMirrorCounterEvents;
+        }
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf && ev.target_id() == kEnemy &&
+            ev.skill_table_id() == 10006 && ev.hit_kind() == BATTLE_HIT_MIRROR) {
+            rank1Damage += ev.value();
+        }
+    }
+    for (const auto& ev : rank10.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf && ev.target_id() == kEnemy &&
+            ev.skill_table_id() == 10006 && ev.hit_kind() == BATTLE_HIT_MIRROR) {
+            rank10Damage += ev.value();
+        }
+    }
+    EXPECT_EQ(copyCastEvents, 1);
+    EXPECT_EQ(mirroredCastEvents, 1);
+    EXPECT_EQ(enemyMirrorCounterEvents, 0);
+    EXPECT_GT(rank1Damage, 0u);
+    EXPECT_GT(rank10Damage, rank1Damage);
+}
+
+TEST_F(ModernSkillCatalogTest, CopyTargetSkillFallsBackToLearnedPoolAndResistsWhenOnlyUncopyable) {
+    // 目标防御未放技能、身上有 A41（禁复制）与 A06（可复制）-> 方案 A 兜底抽到 A06。
+    {
+        auto request = Request();
+        Learn(*request.mutable_players(0), Row(10041));
+        Learn(*request.mutable_players(2), Row(10041));
+        Learn(*request.mutable_players(2), Row(10006));
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(request));
+        DefendAllExcept(engine);
+        engine.SubmitAction(kSelf, Cast(10041, kEnemy));
+        engine.SubmitAction(kEnemy, Cast(10041, kSelf)); // 双方互放 A41 也绝不套娃
+        const auto result = engine.ResolveCurrentRound();
+        bool selfMirroredA06 = false, enemyResisted = false;
+        for (const auto& ev : result.events()) {
+            if (ev.event_type() == BATTLE_EVENT_SKILL && ev.source_id() == kSelf &&
+                ev.skill_table_id() == 10006 && ev.hit_kind() == BATTLE_HIT_MIRROR) selfMirroredA06 = true;
+            if (ev.event_type() == BATTLE_EVENT_RESIST && ev.source_id() == kEnemy &&
+                ev.target_id() == kSelf && ev.buff_table_id() == 100410) enemyResisted = true;
+        }
+        EXPECT_TRUE(selfMirroredA06);
+        EXPECT_TRUE(enemyResisted); // kSelf 只有 A41（禁复制），kEnemy 复制 kSelf 时发 RESIST 兜底。
+    }
+    // 目标为只持有禁复制牺牲技 B16 的宝宝 -> 不免费复制牺牲技，产出 RESIST。
+    {
+        auto request = Request(1, true);
+        Learn(*request.mutable_players(0), Row(10041));
+        Learn(*request.mutable_players(1)->mutable_pets(0), Row(11016));
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(request));
+        const auto enemyPet = PetActor(engine.BuildStateSnapshot(), kEnemy);
+        DefendAllExcept(engine);
+        engine.SubmitAction(kSelf, Cast(10041, enemyPet));
+        const auto result = engine.ResolveCurrentRound();
+        bool resisted = false, mirroredSacrifice = false;
+        for (const auto& ev : result.events()) {
+            if (ev.event_type() == BATTLE_EVENT_RESIST && ev.buff_table_id() == 100410) resisted = true;
+            if (ev.event_type() == BATTLE_EVENT_SKILL && ev.skill_table_id() == 11016 && ev.hit_kind() == BATTLE_HIT_MIRROR)
+                mirroredSacrifice = true;
+        }
+        EXPECT_TRUE(resisted);
+        EXPECT_FALSE(mirroredSacrifice);
+    }
+}
+
+TEST_F(ModernSkillCatalogTest, CopyTargetSkillRemapsEnemySupportSkillToCasterTeamWithScale) {
+    auto request = Request();
+    request.mutable_players(0)->mutable_base_attributes()->set_health(2000);
+    request.mutable_players(1)->mutable_base_attributes()->set_health(2000);
+    request.mutable_players(2)->mutable_base_attributes()->set_health(2000);
+    Learn(*request.mutable_players(0), Row(10041));
+    Learn(*request.mutable_players(2), Row(10010)); // 敌方队列友方群体治疗 A10
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    DefendAllExcept(engine);
+    engine.SubmitAction(kSelf, Cast(10041, kEnemy));
+    engine.SubmitAction(kEnemy, Cast(10010, kEnemy));
+    const auto result = engine.ResolveCurrentRound();
+    // A10 Lv30 rank1 基础 600，经 85% 折算为 510，作用己方全员而不给敌方回血。
+    EXPECT_EQ(Actor(result.state(), kSelf).attributes().health(), 2510u);
+    EXPECT_EQ(Actor(result.state(), kAlly).attributes().health(), 2510u);
+    for (const auto& ev : result.events()) {
+        if (ev.event_type() == BATTLE_EVENT_HEAL && ev.source_id() == kSelf) {
+            EXPECT_NE(ev.target_id(), kEnemy);
+        }
+    }
+}
+
+TEST_F(ModernSkillCatalogTest, BossUnitsAndSkillCopyImmuneTargetsAndPassiveMirrorBossSkillsAreBlocked) {
+    // 1. 正式表 Monster 16 标记为 Boss，Monster 11 为普通怪。
+    ASSERT_NE(data->FindMonster(16), nullptr);
+    EXPECT_EQ(data->FindMonster(16)->is_boss(), 1u);
+    ASSERT_NE(data->FindMonster(11), nullptr);
+    EXPECT_EQ(data->FindMonster(11)->is_boss(), 0u);
+
+    data->SetDungeonMonsters(3, {11, 16});
+    CreateBattleRequest pve;
+    pve.set_battle_id(70099);
+    pve.set_match_mode(turnbattle::kMatchModePveSolo);
+    pve.set_battle_config_id(3);
+    pve.set_seed(20261123);
+    auto* player = pve.add_players();
+    player->set_player_id(kSelf);
+    player->set_team_index(0);
+    player->set_level(30);
+    player->set_class_id(1);
+    player->set_max_health(10000);
+    player->set_max_mana(10000);
+    player->set_magic_attack(600);
+    player->mutable_base_attributes()->set_health(10000);
+    player->mutable_base_attributes()->set_mana(10000);
+    player->mutable_base_attributes()->set_speed(300);
+    Learn(*player, Row(10041));
+    Learn(*player, Row(12019)); // P19 法术反击
+    data->AddBuff(120190).set_trigger_chance(1.0);
+
+    // 剧本给 Boss 绑定零耗蓝法攻技（老模型），验证 Boss 实际命中玩家后，100% 触发的 P19 也绝不复制 Boss 技能。
+    auto* bossScript = pve.add_team_scripts();
+    bossScript->set_team_index(1);
+    bossScript->mutable_script()->set_schema_version(1);
+    bossScript->mutable_script()->set_script_id(99);
+    auto* bossRole = bossScript->mutable_script()->add_roles();
+    bossRole->set_role_id(1);
+    bossRole->set_order(10);
+    bossRole->set_actor_type(BATTLE_ACTOR_TYPE_MONSTER);
+    bossRole->set_monster_id(16);
+    auto* rule = bossRole->add_rules();
+    rule->set_priority(10);
+    rule->set_action(BATTLE_ACTION_SKILL);
+    rule->set_skill_id(99001);
+    rule->mutable_target()->set_side(BATTLE_SCRIPT_TARGET_ENEMY);
+
+    auto& bossSkill = data->AddSkill(99001);
+    bossSkill.set_battle_model(0);
+    bossSkill.set_damage_type(0);
+    bossSkill.add_skill_type(1);
+    bossSkill.add_targeting_mode(1);
+    bossSkill.set_require_target(1);
+    bossSkill.set_attack_multiplier(1.0);
+    data->SetSkillDamage(99001, 200.0);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(pve));
+    const auto snapshot = engine.BuildStateSnapshot();
+    uint64_t minionId = 0, bossId = 0;
+    for (const auto& actor : snapshot.actors()) {
+        if (actor.monster_table_id() == 11) { minionId = actor.actor_id(); EXPECT_FALSE(actor.is_boss()); }
+        if (actor.monster_table_id() == 16) { bossId = actor.actor_id(); EXPECT_TRUE(actor.is_boss()); }
+    }
+    ASSERT_NE(minionId, 0u);
+    ASSERT_NE(bossId, 0u);
+    EXPECT_EQ(engine.ValidateAction(kSelf, Cast(10041, bossId)), kSkillInvalidTarget);
+    EXPECT_EQ(engine.ValidateAction(kSelf, Cast(10041, minionId)), kSuccess);
+
+    // Boss 释放 99001 实际打伤玩家，验证玩家 100% 触发的 P19 不产生镜像反击。
+    engine.SubmitAction(kSelf, Action(BATTLE_ACTION_DEFEND));
+    const auto result = engine.ResolveCurrentRound();
+    bool bossCastLanded = false;
+    for (const auto& ev : result.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == bossId && ev.target_id() == kSelf &&
+            ev.skill_table_id() == 99001 && ev.value() > 0) bossCastLanded = true;
+        EXPECT_FALSE(ev.source_id() == kSelf && ev.hit_kind() == BATTLE_HIT_MIRROR);
+    }
+    EXPECT_TRUE(bossCastLanded);
+
+    // 2. 场上仅有 Boss 时，target_id = 0 也拒绝施放 A41。
+    data->SetDungeonMonsters(4, {16});
+    CreateBattleRequest bossOnly = pve;
+    bossOnly.set_battle_config_id(4);
+    bossOnly.clear_team_scripts();
+    TurnBattleEngine bossOnlyEngine(data);
+    ASSERT_TRUE(bossOnlyEngine.Initialize(bossOnly));
+    EXPECT_EQ(bossOnlyEngine.ValidateAction(kSelf, Cast(10041, 0)), kSkillInvalidTarget);
+
+    // 3. kasan BuffImmuneTag("SkillCopy") 免疫拦截（通过开局常驻 Buff 挂载 immune_tag）。
+    auto& immuneBuff = data->AddBuff(99100);
+    immuneBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
+    immuneBuff.set_modifier_stat(static_cast<uint32_t>(turnbattle::BattleModifier::Defense));
+    immuneBuff.set_infinite_duration(1);
+    (*immuneBuff.mutable_immune_tag())["SkillCopy"] = true;
+
+    auto pvp = Request();
+    Learn(*pvp.mutable_players(0), Row(10041));
+    Learn(*pvp.mutable_players(2), Row(10006));
+    auto* preBuff = pvp.mutable_players(2)->add_buffs();
+    preBuff->set_buff_id(500);
+    preBuff->set_buff_table_id(99100);
+    TurnBattleEngine immuneEngine(data);
+    ASSERT_TRUE(immuneEngine.Initialize(pvp));
+    ASSERT_FALSE(Actor(immuneEngine.BuildStateSnapshot(), kEnemy).buffs().empty());
+    DefendAllExcept(immuneEngine);
+    immuneEngine.SubmitAction(kSelf, Cast(10041, kEnemy));
+    immuneEngine.SubmitAction(kEnemy, Cast(10006, kSelf));
+    const auto immuneResult = immuneEngine.ResolveCurrentRound();
+    bool sawResist = false, sawMirror = false;
+    for (const auto& ev : immuneResult.events()) {
+        if (ev.event_type() == BATTLE_EVENT_RESIST && ev.source_id() == kSelf &&
+            ev.target_id() == kEnemy && ev.buff_table_id() == 100410) sawResist = true;
+        if (ev.event_type() == BATTLE_EVENT_SKILL && ev.source_id() == kSelf && ev.hit_kind() == BATTLE_HIT_MIRROR)
+            sawMirror = true;
+    }
+    EXPECT_TRUE(sawResist);
+    EXPECT_FALSE(sawMirror);
 }
 
 } // namespace

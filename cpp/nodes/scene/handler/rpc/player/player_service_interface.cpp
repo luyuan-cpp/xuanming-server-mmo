@@ -16,6 +16,7 @@
 #include "player_mystery_merchant_handler.h"
 #include "player_pet_handler.h"
 #include "player_scene_handler.h"
+#include "player_season_handler.h"
 #include "player_skill_handler.h"
 #include "player_state_attribute_sync_handler.h"
 #include "s2s_player_scene_handler.h"
@@ -33,6 +34,7 @@ class SceneMovementClientPlayerImpl : public SceneMovementClientPlayer {};
 class SceneMysteryMerchantClientPlayerImpl : public SceneMysteryMerchantClientPlayer {};
 class ScenePetClientPlayerImpl : public ScenePetClientPlayer {};
 class SceneSceneClientPlayerImpl : public SceneSceneClientPlayer {};
+class SceneSeasonClientPlayerImpl : public SceneSeasonClientPlayer {};
 class SceneSkillClientPlayerImpl : public SceneSkillClientPlayer {};
 class ScenePlayerSyncImpl : public ScenePlayerSync {};
 class SceneScenePlayerImpl : public SceneScenePlayer {};
@@ -55,6 +57,7 @@ void InitPlayerService()
     gPlayerService.emplace("SceneMysteryMerchantClientPlayer", std::make_unique<SceneMysteryMerchantClientPlayerHandler>(std::make_unique<SceneMysteryMerchantClientPlayerImpl>()));
     gPlayerService.emplace("ScenePetClientPlayer", std::make_unique<ScenePetClientPlayerHandler>(std::make_unique<ScenePetClientPlayerImpl>()));
     gPlayerService.emplace("SceneSceneClientPlayer", std::make_unique<SceneSceneClientPlayerHandler>(std::make_unique<SceneSceneClientPlayerImpl>()));
+    gPlayerService.emplace("SceneSeasonClientPlayer", std::make_unique<SceneSeasonClientPlayerHandler>(std::make_unique<SceneSeasonClientPlayerImpl>()));
     gPlayerService.emplace("SceneSkillClientPlayer", std::make_unique<SceneSkillClientPlayerHandler>(std::make_unique<SceneSkillClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayerSync", std::make_unique<ScenePlayerSyncHandler>(std::make_unique<ScenePlayerSyncImpl>()));
     gPlayerService.emplace("SceneScenePlayer", std::make_unique<SceneScenePlayerHandler>(std::make_unique<SceneScenePlayerImpl>()));

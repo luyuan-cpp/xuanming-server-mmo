@@ -98,6 +98,14 @@ extern const ::google::protobuf::internal::ClassDataFull CharacterAppearanceEntr
 #else
 extern const CharacterAppearanceEntryGlobalsTypeInternal CharacterAppearanceEntry_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class CharacterAppearanceSeriesProgress;
+struct CharacterAppearanceSeriesProgressGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CharacterAppearanceSeriesProgressGlobalsTypeInternal CharacterAppearanceSeriesProgress_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CharacterAppearanceSeriesProgress_class_data_;
+#else
+extern const CharacterAppearanceSeriesProgressGlobalsTypeInternal CharacterAppearanceSeriesProgress_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetAppearanceInfoRequest;
 struct GetAppearanceInfoRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -221,7 +229,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchAppearanceRequest final : pub
   [[nodiscard]] static const SwitchAppearanceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchAppearanceRequest>(&SwitchAppearanceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(SwitchAppearanceRequest& a, SwitchAppearanceRequest& b) { a.Swap(&b); }
   inline void Swap(SwitchAppearanceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -315,6 +323,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchAppearanceRequest final : pub
   enum : int {
     kAppearanceIdFieldNumber = 2,
     kClientRequestIdFieldNumber = 1,
+    kExpectFreeSwitchFieldNumber = 3,
   };
   // string appearance_id = 2;
   void clear_appearance_id() ;
@@ -341,11 +350,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchAppearanceRequest final : pub
   void _internal_set_client_request_id(::uint64_t value);
 
   public:
+  // bool expect_free_switch = 3;
+  void clear_expect_free_switch() ;
+  [[nodiscard]] bool expect_free_switch() const;
+  void set_expect_free_switch(bool value);
+
+  private:
+  bool _internal_expect_free_switch() const;
+  void _internal_set_expect_free_switch(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SwitchAppearanceRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 45,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -376,6 +395,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchAppearanceRequest final : pub
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::uint64_t client_request_id_;
+    bool expect_free_switch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -439,7 +459,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartAppearanceTrialRequest final :
   [[nodiscard]] static const StartAppearanceTrialRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartAppearanceTrialRequest>(&StartAppearanceTrialRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(StartAppearanceTrialRequest& a, StartAppearanceTrialRequest& b) { a.Swap(&b); }
   inline void Swap(StartAppearanceTrialRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -656,7 +676,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAppearanceInfoRequest final : pu
   [[nodiscard]] static const GetAppearanceInfoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAppearanceInfoRequest>(&GetAppearanceInfoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(GetAppearanceInfoRequest& a, GetAppearanceInfoRequest& b) { a.Swap(&b); }
   inline void Swap(GetAppearanceInfoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -735,6 +755,352 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAppearanceInfoRequest final : pu
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fappearance_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceSeriesProgress final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CharacterAppearanceSeriesProgress) */ {
+ public:
+  inline CharacterAppearanceSeriesProgress() : CharacterAppearanceSeriesProgress(nullptr) {}
+  ~CharacterAppearanceSeriesProgress() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CharacterAppearanceSeriesProgress));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CharacterAppearanceSeriesProgress(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CharacterAppearanceSeriesProgress(const CharacterAppearanceSeriesProgress& from) : CharacterAppearanceSeriesProgress(nullptr, from) {}
+  inline CharacterAppearanceSeriesProgress(CharacterAppearanceSeriesProgress&& from) noexcept : CharacterAppearanceSeriesProgress(nullptr, ::std::move(from)) {}
+  inline CharacterAppearanceSeriesProgress& operator=(const CharacterAppearanceSeriesProgress& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CharacterAppearanceSeriesProgress& operator=(CharacterAppearanceSeriesProgress&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CharacterAppearanceSeriesProgress& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CharacterAppearanceSeriesProgress>(&CharacterAppearanceSeriesProgress_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(CharacterAppearanceSeriesProgress& a, CharacterAppearanceSeriesProgress& b) { a.Swap(&b); }
+  inline void Swap(CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CharacterAppearanceSeriesProgress>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CharacterAppearanceSeriesProgress& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CharacterAppearanceSeriesProgress& from) { CharacterAppearanceSeriesProgress::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CharacterAppearanceSeriesProgress"; }
+
+  explicit CharacterAppearanceSeriesProgress(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CharacterAppearanceSeriesProgress(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CharacterAppearanceSeriesProgress& from);
+  CharacterAppearanceSeriesProgress(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CharacterAppearanceSeriesProgress&& from) noexcept
+      : CharacterAppearanceSeriesProgress(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMemberAppearanceIdsFieldNumber = 10,
+    kSeriesKeyFieldNumber = 2,
+    kNameFieldNumber = 3,
+    kCompletionBadgeNameFieldNumber = 8,
+    kEpilogueTitleFieldNumber = 9,
+    kSeriesIdFieldNumber = 1,
+    kSortOrderFieldNumber = 4,
+    kOwnedCountFieldNumber = 5,
+    kTotalCountFieldNumber = 6,
+    kCompletedFieldNumber = 7,
+  };
+  // repeated string member_appearance_ids = 10;
+  [[nodiscard]] int member_appearance_ids_size()
+      const;
+  private:
+  int _internal_member_appearance_ids_size() const;
+
+  public:
+  void clear_member_appearance_ids() ;
+  [[nodiscard]] const ::std::string& member_appearance_ids(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_member_appearance_ids(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_member_appearance_ids(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_member_appearance_ids();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_member_appearance_ids(Arg_&& value, Args_... args);
+  [[nodiscard]] const
+      ::google::protobuf::RepeatedPtrField<::std::string>&
+      member_appearance_ids() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::std::string>*
+      PROTOBUF_NONNULL
+      mutable_member_appearance_ids();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_member_appearance_ids() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_member_appearance_ids();
+
+  public:
+  // string series_key = 2;
+  void clear_series_key() ;
+  [[nodiscard]] const ::std::string& series_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_series_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_series_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_series_key();
+  void set_allocated_series_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_series_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_series_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_series_key();
+
+  public:
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string completion_badge_name = 8;
+  void clear_completion_badge_name() ;
+  [[nodiscard]] const ::std::string& completion_badge_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_completion_badge_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_completion_badge_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_completion_badge_name();
+  void set_allocated_completion_badge_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_completion_badge_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_completion_badge_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_completion_badge_name();
+
+  public:
+  // string epilogue_title = 9;
+  void clear_epilogue_title() ;
+  [[nodiscard]] const ::std::string& epilogue_title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_epilogue_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_epilogue_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_epilogue_title();
+  void set_allocated_epilogue_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_epilogue_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_epilogue_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_epilogue_title();
+
+  public:
+  // uint32 series_id = 1;
+  void clear_series_id() ;
+  [[nodiscard]] ::uint32_t series_id() const;
+  void set_series_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_series_id() const;
+  void _internal_set_series_id(::uint32_t value);
+
+  public:
+  // uint32 sort_order = 4;
+  void clear_sort_order() ;
+  [[nodiscard]] ::uint32_t sort_order() const;
+  void set_sort_order(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sort_order() const;
+  void _internal_set_sort_order(::uint32_t value);
+
+  public:
+  // uint32 owned_count = 5;
+  void clear_owned_count() ;
+  [[nodiscard]] ::uint32_t owned_count() const;
+  void set_owned_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_owned_count() const;
+  void _internal_set_owned_count(::uint32_t value);
+
+  public:
+  // uint32 total_count = 6;
+  void clear_total_count() ;
+  [[nodiscard]] ::uint32_t total_count() const;
+  void set_total_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_count() const;
+  void _internal_set_total_count(::uint32_t value);
+
+  public:
+  // bool completed = 7;
+  void clear_completed() ;
+  [[nodiscard]] bool completed() const;
+  void set_completed(bool value);
+
+  private:
+  bool _internal_completed() const;
+  void _internal_set_completed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CharacterAppearanceSeriesProgress)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 120,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CharacterAppearanceSeriesProgress& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField<::std::string> member_appearance_ids_;
+    ::google::protobuf::internal::ArenaStringPtr series_key_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr completion_badge_name_;
+    ::google::protobuf::internal::ArenaStringPtr epilogue_title_;
+    ::uint32_t series_id_;
+    ::uint32_t sort_order_;
+    ::uint32_t owned_count_;
+    ::uint32_t total_count_;
+    bool completed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fappearance_2eproto;
 };
 // -------------------------------------------------------------------
@@ -892,6 +1258,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceEntry final : pu
     kConfigIdFieldNumber = 1,
     kSortOrderFieldNumber = 4,
     kTrialUsedFieldNumber = 5,
+    kOwnedFieldNumber = 6,
+    kCardUnlockableFieldNumber = 7,
+    kSeriesIdFieldNumber = 8,
   };
   // string appearance_id = 2;
   void clear_appearance_id() ;
@@ -953,12 +1322,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceEntry final : pu
   void _internal_set_trial_used(bool value);
 
   public:
+  // bool owned = 6;
+  void clear_owned() ;
+  [[nodiscard]] bool owned() const;
+  void set_owned(bool value);
+
+  private:
+  bool _internal_owned() const;
+  void _internal_set_owned(bool value);
+
+  public:
+  // bool card_unlockable = 7;
+  void clear_card_unlockable() ;
+  [[nodiscard]] bool card_unlockable() const;
+  void set_card_unlockable(bool value);
+
+  private:
+  bool _internal_card_unlockable() const;
+  void _internal_set_card_unlockable(bool value);
+
+  public:
+  // uint32 series_id = 8;
+  void clear_series_id() ;
+  [[nodiscard]] ::uint32_t series_id() const;
+  void set_series_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_series_id() const;
+  void _internal_set_series_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CharacterAppearanceEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          0, 50,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 58,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -991,6 +1390,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceEntry final : pu
     ::uint32_t config_id_;
     ::uint32_t sort_order_;
     bool trial_used_;
+    bool owned_;
+    bool card_unlockable_;
+    ::uint32_t series_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1053,7 +1455,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelAppearanceTrialRequest final 
   [[nodiscard]] static const CancelAppearanceTrialRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelAppearanceTrialRequest>(&CancelAppearanceTrialRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(CancelAppearanceTrialRequest& a, CancelAppearanceTrialRequest& b) { a.Swap(&b); }
   inline void Swap(CancelAppearanceTrialRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1192,7 +1594,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorAppearanceChangedS2C final : p
   [[nodiscard]] static const ActorAppearanceChangedS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorAppearanceChangedS2C>(&ActorAppearanceChangedS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(ActorAppearanceChangedS2C& a, ActorAppearanceChangedS2C& b) { a.Swap(&b); }
   inline void Swap(ActorAppearanceChangedS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1446,7 +1848,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
   [[nodiscard]] static const PlayerAppearanceInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerAppearanceInfo>(&PlayerAppearanceInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(PlayerAppearanceInfo& a, PlayerAppearanceInfo& b) { a.Swap(&b); }
   inline void Swap(PlayerAppearanceInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1539,10 +1941,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
   // accessors -------------------------------------------------------
   enum : int {
     kAppearancesFieldNumber = 13,
+    kSeriesProgressFieldNumber = 15,
     kPermanentAppearanceIdFieldNumber = 1,
     kActiveAppearanceIdFieldNumber = 2,
     kTrialAppearanceIdFieldNumber = 3,
     kTrialUsedBitsFieldNumber = 12,
+    kOwnedBitsFieldNumber = 14,
     kTrialExpiresAtFieldNumber = 4,
     kServerNowFieldNumber = 5,
     kCardItemIdFieldNumber = 6,
@@ -1571,6 +1975,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
   private:
   const ::google::protobuf::RepeatedPtrField<::CharacterAppearanceEntry>& _internal_appearances() const;
   ::google::protobuf::RepeatedPtrField<::CharacterAppearanceEntry>* PROTOBUF_NONNULL _internal_mutable_appearances();
+
+  public:
+  // repeated .CharacterAppearanceSeriesProgress series_progress = 15;
+  [[nodiscard]] int series_progress_size()
+      const;
+  private:
+  int _internal_series_progress_size() const;
+
+  public:
+  void clear_series_progress() ;
+  [[nodiscard]] const ::CharacterAppearanceSeriesProgress& series_progress(int index) const;
+  [[nodiscard]] ::CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL mutable_series_progress(int index);
+  ::CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL add_series_progress();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>&
+  series_progress() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>* PROTOBUF_NONNULL
+  mutable_series_progress();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>& _internal_series_progress() const;
+  ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>* PROTOBUF_NONNULL _internal_mutable_series_progress();
 
   public:
   // string permanent_appearance_id = 1;
@@ -1631,6 +2056,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
   const ::std::string& _internal_trial_used_bits() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_trial_used_bits(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_trial_used_bits();
+
+  public:
+  // bytes owned_bits = 14;
+  void clear_owned_bits() ;
+  [[nodiscard]] const ::std::string& owned_bits() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_owned_bits(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_owned_bits();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_owned_bits();
+  void set_allocated_owned_bits(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_owned_bits() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_owned_bits(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_owned_bits();
 
   public:
   // uint64 trial_expires_at = 4;
@@ -1717,8 +2157,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
-                          1, 99,
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          2, 99,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1747,10 +2187,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAppearanceInfo final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::CharacterAppearanceEntry > appearances_;
+    ::google::protobuf::RepeatedPtrField< ::CharacterAppearanceSeriesProgress > series_progress_;
     ::google::protobuf::internal::ArenaStringPtr permanent_appearance_id_;
     ::google::protobuf::internal::ArenaStringPtr active_appearance_id_;
     ::google::protobuf::internal::ArenaStringPtr trial_appearance_id_;
     ::google::protobuf::internal::ArenaStringPtr trial_used_bits_;
+    ::google::protobuf::internal::ArenaStringPtr owned_bits_;
     ::uint64_t trial_expires_at_;
     ::uint64_t server_now_;
     ::uint32_t card_item_id_;
@@ -1822,7 +2264,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchAppearanceResponse final : pu
   [[nodiscard]] static const SwitchAppearanceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchAppearanceResponse>(&SwitchAppearanceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(SwitchAppearanceResponse& a, SwitchAppearanceResponse& b) { a.Swap(&b); }
   inline void Swap(SwitchAppearanceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2059,7 +2501,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartAppearanceTrialResponse final 
   [[nodiscard]] static const StartAppearanceTrialResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartAppearanceTrialResponse>(&StartAppearanceTrialResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(StartAppearanceTrialResponse& a, StartAppearanceTrialResponse& b) { a.Swap(&b); }
   inline void Swap(StartAppearanceTrialResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2296,7 +2738,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAppearanceInfoResponse final : p
   [[nodiscard]] static const GetAppearanceInfoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetAppearanceInfoResponse>(&GetAppearanceInfoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(GetAppearanceInfoResponse& a, GetAppearanceInfoResponse& b) { a.Swap(&b); }
   inline void Swap(GetAppearanceInfoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2521,7 +2963,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelAppearanceTrialResponse final
   [[nodiscard]] static const CancelAppearanceTrialResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelAppearanceTrialResponse>(&CancelAppearanceTrialResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(CancelAppearanceTrialResponse& a, CancelAppearanceTrialResponse& b) { a.Swap(&b); }
   inline void Swap(CancelAppearanceTrialResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2746,7 +3188,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppearanceStateNotify final : publi
   [[nodiscard]] static const AppearanceStateNotify& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AppearanceStateNotify>(&AppearanceStateNotify_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(AppearanceStateNotify& a, AppearanceStateNotify& b) { a.Swap(&b); }
   inline void Swap(AppearanceStateNotify* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3227,6 +3669,530 @@ inline void CharacterAppearanceEntry::_internal_set_trial_used(bool value) {
   _impl_.trial_used_ = value;
 }
 
+// bool owned = 6;
+inline void CharacterAppearanceEntry::clear_owned() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool CharacterAppearanceEntry::owned() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceEntry.owned)
+  return _internal_owned();
+}
+inline void CharacterAppearanceEntry::set_owned(bool value) {
+  _internal_set_owned(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceEntry.owned)
+}
+inline bool CharacterAppearanceEntry::_internal_owned() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_;
+}
+inline void CharacterAppearanceEntry::_internal_set_owned(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_ = value;
+}
+
+// bool card_unlockable = 7;
+inline void CharacterAppearanceEntry::clear_card_unlockable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_unlockable_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool CharacterAppearanceEntry::card_unlockable() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceEntry.card_unlockable)
+  return _internal_card_unlockable();
+}
+inline void CharacterAppearanceEntry::set_card_unlockable(bool value) {
+  _internal_set_card_unlockable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceEntry.card_unlockable)
+}
+inline bool CharacterAppearanceEntry::_internal_card_unlockable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_unlockable_;
+}
+inline void CharacterAppearanceEntry::_internal_set_card_unlockable(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_unlockable_ = value;
+}
+
+// uint32 series_id = 8;
+inline void CharacterAppearanceEntry::clear_series_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t CharacterAppearanceEntry::series_id() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceEntry.series_id)
+  return _internal_series_id();
+}
+inline void CharacterAppearanceEntry::set_series_id(::uint32_t value) {
+  _internal_set_series_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceEntry.series_id)
+}
+inline ::uint32_t CharacterAppearanceEntry::_internal_series_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.series_id_;
+}
+inline void CharacterAppearanceEntry::_internal_set_series_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CharacterAppearanceSeriesProgress
+
+// uint32 series_id = 1;
+inline void CharacterAppearanceSeriesProgress::clear_series_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::series_id() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.series_id)
+  return _internal_series_id();
+}
+inline void CharacterAppearanceSeriesProgress::set_series_id(::uint32_t value) {
+  _internal_set_series_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.series_id)
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::_internal_series_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.series_id_;
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_series_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = value;
+}
+
+// string series_key = 2;
+inline void CharacterAppearanceSeriesProgress::clear_series_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::series_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.series_key)
+  return _internal_series_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceSeriesProgress::set_series_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.series_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.series_key)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::mutable_series_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_series_key();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceSeriesProgress.series_key)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::_internal_series_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.series_key_.Get();
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_series_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::_internal_mutable_series_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.series_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceSeriesProgress::release_series_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceSeriesProgress.series_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.series_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.series_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceSeriesProgress::set_allocated_series_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.series_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.series_key_.IsDefault()) {
+    _impl_.series_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceSeriesProgress.series_key)
+}
+
+// string name = 3;
+inline void CharacterAppearanceSeriesProgress::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceSeriesProgress::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.name)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceSeriesProgress.name)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceSeriesProgress::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceSeriesProgress.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceSeriesProgress::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceSeriesProgress.name)
+}
+
+// uint32 sort_order = 4;
+inline void CharacterAppearanceSeriesProgress::clear_sort_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::sort_order() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.sort_order)
+  return _internal_sort_order();
+}
+inline void CharacterAppearanceSeriesProgress::set_sort_order(::uint32_t value) {
+  _internal_set_sort_order(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.sort_order)
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::_internal_sort_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sort_order_;
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_sort_order(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = value;
+}
+
+// uint32 owned_count = 5;
+inline void CharacterAppearanceSeriesProgress::clear_owned_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::owned_count() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.owned_count)
+  return _internal_owned_count();
+}
+inline void CharacterAppearanceSeriesProgress::set_owned_count(::uint32_t value) {
+  _internal_set_owned_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.owned_count)
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::_internal_owned_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_count_;
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_owned_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_count_ = value;
+}
+
+// uint32 total_count = 6;
+inline void CharacterAppearanceSeriesProgress::clear_total_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::total_count() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.total_count)
+  return _internal_total_count();
+}
+inline void CharacterAppearanceSeriesProgress::set_total_count(::uint32_t value) {
+  _internal_set_total_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.total_count)
+}
+inline ::uint32_t CharacterAppearanceSeriesProgress::_internal_total_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_count_;
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_total_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_count_ = value;
+}
+
+// bool completed = 7;
+inline void CharacterAppearanceSeriesProgress::clear_completed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.completed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool CharacterAppearanceSeriesProgress::completed() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.completed)
+  return _internal_completed();
+}
+inline void CharacterAppearanceSeriesProgress::set_completed(bool value) {
+  _internal_set_completed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.completed)
+}
+inline bool CharacterAppearanceSeriesProgress::_internal_completed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.completed_;
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_completed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.completed_ = value;
+}
+
+// string completion_badge_name = 8;
+inline void CharacterAppearanceSeriesProgress::clear_completion_badge_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.completion_badge_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::completion_badge_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.completion_badge_name)
+  return _internal_completion_badge_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceSeriesProgress::set_completion_badge_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.completion_badge_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.completion_badge_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::mutable_completion_badge_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_completion_badge_name();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceSeriesProgress.completion_badge_name)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::_internal_completion_badge_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.completion_badge_name_.Get();
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_completion_badge_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.completion_badge_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::_internal_mutable_completion_badge_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.completion_badge_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceSeriesProgress::release_completion_badge_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceSeriesProgress.completion_badge_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.completion_badge_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.completion_badge_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceSeriesProgress::set_allocated_completion_badge_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.completion_badge_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.completion_badge_name_.IsDefault()) {
+    _impl_.completion_badge_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceSeriesProgress.completion_badge_name)
+}
+
+// string epilogue_title = 9;
+inline void CharacterAppearanceSeriesProgress::clear_epilogue_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.epilogue_title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::epilogue_title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.epilogue_title)
+  return _internal_epilogue_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CharacterAppearanceSeriesProgress::set_epilogue_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.epilogue_title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.epilogue_title)
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::mutable_epilogue_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_epilogue_title();
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceSeriesProgress.epilogue_title)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::_internal_epilogue_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.epilogue_title_.Get();
+}
+inline void CharacterAppearanceSeriesProgress::_internal_set_epilogue_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.epilogue_title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::_internal_mutable_epilogue_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.epilogue_title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CharacterAppearanceSeriesProgress::release_epilogue_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CharacterAppearanceSeriesProgress.epilogue_title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.epilogue_title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.epilogue_title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CharacterAppearanceSeriesProgress::set_allocated_epilogue_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.epilogue_title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.epilogue_title_.IsDefault()) {
+    _impl_.epilogue_title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceSeriesProgress.epilogue_title)
+}
+
+// repeated string member_appearance_ids = 10;
+inline int CharacterAppearanceSeriesProgress::_internal_member_appearance_ids_size() const {
+  return _internal_member_appearance_ids().size();
+}
+inline int CharacterAppearanceSeriesProgress::member_appearance_ids_size() const {
+  return _internal_member_appearance_ids_size();
+}
+inline void CharacterAppearanceSeriesProgress::clear_member_appearance_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_appearance_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::add_member_appearance_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s =
+      _internal_mutable_member_appearance_ids()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add_mutable:CharacterAppearanceSeriesProgress.member_appearance_ids)
+  return _s;
+}
+inline const ::std::string& CharacterAppearanceSeriesProgress::member_appearance_ids(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceSeriesProgress.member_appearance_ids)
+  return _internal_member_appearance_ids().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL CharacterAppearanceSeriesProgress::mutable_member_appearance_ids(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:CharacterAppearanceSeriesProgress.member_appearance_ids)
+  return _internal_mutable_member_appearance_ids()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void CharacterAppearanceSeriesProgress::set_member_appearance_ids(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_member_appearance_ids()->Mutable(index),
+      ::std::forward<Arg_>(value), args... );
+  // @@protoc_insertion_point(field_set:CharacterAppearanceSeriesProgress.member_appearance_ids)
+}
+template <typename Arg_, typename... Args_>
+inline void CharacterAppearanceSeriesProgress::add_member_appearance_ids(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(
+      ::google::protobuf::MessageLite::internal_visibility(), GetArena(),
+      *_internal_mutable_member_appearance_ids(), ::std::forward<Arg_>(value),
+      args... );
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:CharacterAppearanceSeriesProgress.member_appearance_ids)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& CharacterAppearanceSeriesProgress::member_appearance_ids()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:CharacterAppearanceSeriesProgress.member_appearance_ids)
+  return _internal_member_appearance_ids();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+CharacterAppearanceSeriesProgress::mutable_member_appearance_ids() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:CharacterAppearanceSeriesProgress.member_appearance_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_member_appearance_ids();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+CharacterAppearanceSeriesProgress::_internal_member_appearance_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.member_appearance_ids_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+CharacterAppearanceSeriesProgress::_internal_mutable_member_appearance_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.member_appearance_ids_;
+}
+
 // -------------------------------------------------------------------
 
 // PlayerAppearanceInfo
@@ -3235,7 +4201,7 @@ inline void CharacterAppearanceEntry::_internal_set_trial_used(bool value) {
 inline void PlayerAppearanceInfo::clear_permanent_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.permanent_appearance_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& PlayerAppearanceInfo::permanent_appearance_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3245,13 +4211,13 @@ inline const ::std::string& PlayerAppearanceInfo::permanent_appearance_id() cons
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerAppearanceInfo::set_permanent_appearance_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.permanent_appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.permanent_appearance_id)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_permanent_appearance_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_permanent_appearance_id();
   // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.permanent_appearance_id)
   return _s;
@@ -3271,10 +4237,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::_internal_mutable_p
 inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_permanent_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerAppearanceInfo.permanent_appearance_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.permanent_appearance_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.permanent_appearance_id_.Set("", GetArena());
@@ -3284,9 +4250,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_permanent_
 inline void PlayerAppearanceInfo::set_allocated_permanent_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.permanent_appearance_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.permanent_appearance_id_.IsDefault()) {
@@ -3299,7 +4265,7 @@ inline void PlayerAppearanceInfo::set_allocated_permanent_appearance_id(::std::s
 inline void PlayerAppearanceInfo::clear_active_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_appearance_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& PlayerAppearanceInfo::active_appearance_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3309,13 +4275,13 @@ inline const ::std::string& PlayerAppearanceInfo::active_appearance_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerAppearanceInfo::set_active_appearance_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.active_appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.active_appearance_id)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_active_appearance_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_active_appearance_id();
   // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.active_appearance_id)
   return _s;
@@ -3335,10 +4301,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::_internal_mutable_a
 inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_active_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerAppearanceInfo.active_appearance_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.active_appearance_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.active_appearance_id_.Set("", GetArena());
@@ -3348,9 +4314,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_active_app
 inline void PlayerAppearanceInfo::set_allocated_active_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.active_appearance_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.active_appearance_id_.IsDefault()) {
@@ -3363,7 +4329,7 @@ inline void PlayerAppearanceInfo::set_allocated_active_appearance_id(::std::stri
 inline void PlayerAppearanceInfo::clear_trial_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_appearance_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& PlayerAppearanceInfo::trial_appearance_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3373,13 +4339,13 @@ inline const ::std::string& PlayerAppearanceInfo::trial_appearance_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerAppearanceInfo::set_trial_appearance_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.trial_appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.trial_appearance_id)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_trial_appearance_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_trial_appearance_id();
   // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.trial_appearance_id)
   return _s;
@@ -3399,10 +4365,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::_internal_mutable_t
 inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_trial_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerAppearanceInfo.trial_appearance_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.trial_appearance_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.trial_appearance_id_.Set("", GetArena());
@@ -3412,9 +4378,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_trial_appe
 inline void PlayerAppearanceInfo::set_allocated_trial_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.trial_appearance_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.trial_appearance_id_.IsDefault()) {
@@ -3427,7 +4393,7 @@ inline void PlayerAppearanceInfo::set_allocated_trial_appearance_id(::std::strin
 inline void PlayerAppearanceInfo::clear_trial_expires_at() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_expires_at_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PlayerAppearanceInfo::trial_expires_at() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.trial_expires_at)
@@ -3435,7 +4401,7 @@ inline ::uint64_t PlayerAppearanceInfo::trial_expires_at() const {
 }
 inline void PlayerAppearanceInfo::set_trial_expires_at(::uint64_t value) {
   _internal_set_trial_expires_at(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.trial_expires_at)
 }
 inline ::uint64_t PlayerAppearanceInfo::_internal_trial_expires_at() const {
@@ -3451,7 +4417,7 @@ inline void PlayerAppearanceInfo::_internal_set_trial_expires_at(::uint64_t valu
 inline void PlayerAppearanceInfo::clear_server_now() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_now_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t PlayerAppearanceInfo::server_now() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.server_now)
@@ -3459,7 +4425,7 @@ inline ::uint64_t PlayerAppearanceInfo::server_now() const {
 }
 inline void PlayerAppearanceInfo::set_server_now(::uint64_t value) {
   _internal_set_server_now(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.server_now)
 }
 inline ::uint64_t PlayerAppearanceInfo::_internal_server_now() const {
@@ -3475,7 +4441,7 @@ inline void PlayerAppearanceInfo::_internal_set_server_now(::uint64_t value) {
 inline void PlayerAppearanceInfo::clear_card_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.card_item_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t PlayerAppearanceInfo::card_item_id() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.card_item_id)
@@ -3483,7 +4449,7 @@ inline ::uint32_t PlayerAppearanceInfo::card_item_id() const {
 }
 inline void PlayerAppearanceInfo::set_card_item_id(::uint32_t value) {
   _internal_set_card_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.card_item_id)
 }
 inline ::uint32_t PlayerAppearanceInfo::_internal_card_item_id() const {
@@ -3499,7 +4465,7 @@ inline void PlayerAppearanceInfo::_internal_set_card_item_id(::uint32_t value) {
 inline void PlayerAppearanceInfo::clear_card_item_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.card_item_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t PlayerAppearanceInfo::card_item_count() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.card_item_count)
@@ -3507,7 +4473,7 @@ inline ::uint32_t PlayerAppearanceInfo::card_item_count() const {
 }
 inline void PlayerAppearanceInfo::set_card_item_count(::uint32_t value) {
   _internal_set_card_item_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.card_item_count)
 }
 inline ::uint32_t PlayerAppearanceInfo::_internal_card_item_count() const {
@@ -3523,7 +4489,7 @@ inline void PlayerAppearanceInfo::_internal_set_card_item_count(::uint32_t value
 inline void PlayerAppearanceInfo::clear_owned_card_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owned_card_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PlayerAppearanceInfo::owned_card_count() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.owned_card_count)
@@ -3531,7 +4497,7 @@ inline ::uint32_t PlayerAppearanceInfo::owned_card_count() const {
 }
 inline void PlayerAppearanceInfo::set_owned_card_count(::uint32_t value) {
   _internal_set_owned_card_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.owned_card_count)
 }
 inline ::uint32_t PlayerAppearanceInfo::_internal_owned_card_count() const {
@@ -3547,7 +4513,7 @@ inline void PlayerAppearanceInfo::_internal_set_owned_card_count(::uint32_t valu
 inline void PlayerAppearanceInfo::clear_trial_duration_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_duration_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PlayerAppearanceInfo::trial_duration_seconds() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.trial_duration_seconds)
@@ -3555,7 +4521,7 @@ inline ::uint32_t PlayerAppearanceInfo::trial_duration_seconds() const {
 }
 inline void PlayerAppearanceInfo::set_trial_duration_seconds(::uint32_t value) {
   _internal_set_trial_duration_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.trial_duration_seconds)
 }
 inline ::uint32_t PlayerAppearanceInfo::_internal_trial_duration_seconds() const {
@@ -3571,7 +4537,7 @@ inline void PlayerAppearanceInfo::_internal_set_trial_duration_seconds(::uint32_
 inline void PlayerAppearanceInfo::clear_mall_sku_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mall_sku_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t PlayerAppearanceInfo::mall_sku_id() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.mall_sku_id)
@@ -3579,7 +4545,7 @@ inline ::uint64_t PlayerAppearanceInfo::mall_sku_id() const {
 }
 inline void PlayerAppearanceInfo::set_mall_sku_id(::uint64_t value) {
   _internal_set_mall_sku_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.mall_sku_id)
 }
 inline ::uint64_t PlayerAppearanceInfo::_internal_mall_sku_id() const {
@@ -3595,7 +4561,7 @@ inline void PlayerAppearanceInfo::_internal_set_mall_sku_id(::uint64_t value) {
 inline void PlayerAppearanceInfo::clear_mall_price_fen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mall_price_fen_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t PlayerAppearanceInfo::mall_price_fen() const {
   // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.mall_price_fen)
@@ -3603,7 +4569,7 @@ inline ::uint64_t PlayerAppearanceInfo::mall_price_fen() const {
 }
 inline void PlayerAppearanceInfo::set_mall_price_fen(::uint64_t value) {
   _internal_set_mall_price_fen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.mall_price_fen)
 }
 inline ::uint64_t PlayerAppearanceInfo::_internal_mall_price_fen() const {
@@ -3619,7 +4585,7 @@ inline void PlayerAppearanceInfo::_internal_set_mall_price_fen(::uint64_t value)
 inline void PlayerAppearanceInfo::clear_trial_used_bits() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_used_bits_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::std::string& PlayerAppearanceInfo::trial_used_bits() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3629,13 +4595,13 @@ inline const ::std::string& PlayerAppearanceInfo::trial_used_bits() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerAppearanceInfo::set_trial_used_bits(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   _impl_.trial_used_bits_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.trial_used_bits)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_trial_used_bits()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::std::string* _s = _internal_mutable_trial_used_bits();
   // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.trial_used_bits)
   return _s;
@@ -3655,10 +4621,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::_internal_mutable_t
 inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_trial_used_bits() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerAppearanceInfo.trial_used_bits)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   auto* released = _impl_.trial_used_bits_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.trial_used_bits_.Set("", GetArena());
@@ -3668,9 +4634,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_trial_used
 inline void PlayerAppearanceInfo::set_allocated_trial_used_bits(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   _impl_.trial_used_bits_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.trial_used_bits_.IsDefault()) {
@@ -3732,6 +4698,125 @@ inline ::google::protobuf::RepeatedPtrField<::CharacterAppearanceEntry>* PROTOBU
 PlayerAppearanceInfo::_internal_mutable_appearances() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.appearances_;
+}
+
+// bytes owned_bits = 14;
+inline void PlayerAppearanceInfo::clear_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_bits_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::std::string& PlayerAppearanceInfo::owned_bits() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.owned_bits)
+  return _internal_owned_bits();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerAppearanceInfo::set_owned_bits(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  _impl_.owned_bits_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerAppearanceInfo.owned_bits)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_owned_bits()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::std::string* _s = _internal_mutable_owned_bits();
+  // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.owned_bits)
+  return _s;
+}
+inline const ::std::string& PlayerAppearanceInfo::_internal_owned_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owned_bits_.Get();
+}
+inline void PlayerAppearanceInfo::_internal_set_owned_bits(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owned_bits_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerAppearanceInfo::_internal_mutable_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.owned_bits_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerAppearanceInfo::release_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerAppearanceInfo.owned_bits)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  auto* released = _impl_.owned_bits_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.owned_bits_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerAppearanceInfo::set_allocated_owned_bits(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  _impl_.owned_bits_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.owned_bits_.IsDefault()) {
+    _impl_.owned_bits_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerAppearanceInfo.owned_bits)
+}
+
+// repeated .CharacterAppearanceSeriesProgress series_progress = 15;
+inline int PlayerAppearanceInfo::_internal_series_progress_size() const {
+  return _internal_series_progress().size();
+}
+inline int PlayerAppearanceInfo::series_progress_size() const {
+  return _internal_series_progress_size();
+}
+inline void PlayerAppearanceInfo::clear_series_progress() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_progress_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::CharacterAppearanceSeriesProgress& PlayerAppearanceInfo::series_progress(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerAppearanceInfo.series_progress)
+  return _internal_series_progress().Get(index);
+}
+inline ::CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL PlayerAppearanceInfo::mutable_series_progress(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:PlayerAppearanceInfo.series_progress)
+  return _internal_mutable_series_progress()->Mutable(index);
+}
+inline ::CharacterAppearanceSeriesProgress* PROTOBUF_NONNULL PlayerAppearanceInfo::add_series_progress()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::CharacterAppearanceSeriesProgress* _add =
+      _internal_mutable_series_progress()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:PlayerAppearanceInfo.series_progress)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>& PlayerAppearanceInfo::series_progress() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PlayerAppearanceInfo.series_progress)
+  return _internal_series_progress();
+}
+inline ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>* PROTOBUF_NONNULL
+PlayerAppearanceInfo::mutable_series_progress() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:PlayerAppearanceInfo.series_progress)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_series_progress();
+}
+inline const ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>&
+PlayerAppearanceInfo::_internal_series_progress() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.series_progress_;
+}
+inline ::google::protobuf::RepeatedPtrField<::CharacterAppearanceSeriesProgress>* PROTOBUF_NONNULL
+PlayerAppearanceInfo::_internal_mutable_series_progress() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.series_progress_;
 }
 
 // -------------------------------------------------------------------
@@ -4023,6 +5108,30 @@ inline void SwitchAppearanceRequest::set_allocated_appearance_id(::std::string* 
     _impl_.appearance_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SwitchAppearanceRequest.appearance_id)
+}
+
+// bool expect_free_switch = 3;
+inline void SwitchAppearanceRequest::clear_expect_free_switch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_switch_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool SwitchAppearanceRequest::expect_free_switch() const {
+  // @@protoc_insertion_point(field_get:SwitchAppearanceRequest.expect_free_switch)
+  return _internal_expect_free_switch();
+}
+inline void SwitchAppearanceRequest::set_expect_free_switch(bool value) {
+  _internal_set_expect_free_switch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SwitchAppearanceRequest.expect_free_switch)
+}
+inline bool SwitchAppearanceRequest::_internal_expect_free_switch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expect_free_switch_;
+}
+inline void SwitchAppearanceRequest::_internal_set_expect_free_switch(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expect_free_switch_ = value;
 }
 
 // -------------------------------------------------------------------

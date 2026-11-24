@@ -57,6 +57,10 @@ type MonsterCapture_rateComp struct {
     Value uint32
 }
 
+type MonsterIs_bossComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -104,5 +108,9 @@ func MakeMonsterCapture_pet_table_idComp(row *pb.MonsterTable) MonsterCapture_pe
 
 func MakeMonsterCapture_rateComp(row *pb.MonsterTable) MonsterCapture_rateComp {
     return MonsterCapture_rateComp{Value: row.CaptureRate}
+}
+
+func MakeMonsterIs_bossComp(row *pb.MonsterTable) MonsterIs_bossComp {
+    return MonsterIs_bossComp{Value: row.IsBoss}
 }
 

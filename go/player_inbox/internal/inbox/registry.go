@@ -1,6 +1,7 @@
 package inbox
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -10,6 +11,7 @@ import (
 
 	"player_inbox/internal/constants"
 	"shared/currencytype"
+	"shared/dbguard"
 
 	battlepb "proto/battle"
 	inboxpb "proto/player_inbox"
@@ -337,7 +339,19 @@ func (r *Registry) ValidatePayload(t inboxpb.PlayerInboxMessageType, allowed map
 	if _, ok := allowed[t]; !ok {
 		return TypeEntry{}, constants.ErrDisabled
 	}
-	if uint64(len(payload)) > uint64(entry.Spec.GetMaxPayloadBytes()) {
+	maxBytes := int(entry.Spec.GetMaxPayloadBytes())
+	if maxBytes > 0 {
+		if err := dbguard.CheckPayload(context.Background(), dbguard.PayloadLimit{
+			DB:         "mmorpg_player_inbox",
+			Table:      "player_inbox",
+			Column:     "payload",
+			Max:        maxBytes,
+			AllowEqual: true,
+			Hint:       "check OptionPlayerInboxType.max_payload_bytes",
+		}, payload); err != nil {
+			return TypeEntry{}, constants.ErrPayloadTooLarge
+		}
+	} else if len(payload) > 0 {
 		return TypeEntry{}, constants.ErrPayloadTooLarge
 	}
 	msg, err := entry.Decode(payload)

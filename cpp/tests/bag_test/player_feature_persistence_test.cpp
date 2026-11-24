@@ -161,6 +161,7 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<ClientRequestLedgerComp>(player); // 客户端请求幂等键账本(client-request-idempotency.md §5.3)
     EmplaceIfAbsent<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
     EmplaceIfAbsent<PlayerMailOutboxComp>(player); // 待寄邮件(battle-overflow-mail.md)
+    EmplaceIfAbsent<PlayerSeasonComp>(player); // 赛季印持久状态(season-skills-and-seal-design.md)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。

@@ -7,7 +7,8 @@ syntax = "proto3";
 //
 // 角色可选外观目录表:
 //   - id 列带 (cfg_bit_index) = true,由导表器经 characterappearance_mapping.json 分配永不复用的紧凑位序,
-//     供 PlayerProfileComp.appearance_trial_used_bits 记录「每角色每形象 1 小时免费试用标记」。
+//     供 PlayerProfileComp.appearance_trial_used_bits(1 小时免费试用标记)与
+//     PlayerProfileComp.appearance_owned_bits(永久拥有收藏位图)共用位索引映射。
 //   - 表级 (cfg_ids_permanent) = true:上线后禁止物理删行或复用旧 ID,下架某个外观请将 enabled 置 0。
 
 package mmorpg.cfgtable.v1;
@@ -20,7 +21,7 @@ message CharacterAppearanceTable {
   option (cfg_primary_key)   = "id";
   option (cfg_ids_permanent) = true;
 
-  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用位图下标)
+  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用/拥有位图下标)
   uint32 id = 1 [(cfg_bit_index) = true];
   // 稳定资源外观身份 ID(如 "00_reference_topright_boy")
   string appearance_id = 2;
@@ -32,4 +33,10 @@ message CharacterAppearanceTable {
   uint32 sort_order = 5;
   // 外观简述
   string desc = 6;
+  // 是否允许新角色建角免费初始选择:1 = 允许(阿禾、冰剑少女),0 = 不可建角初始选
+  uint32 starter_creatable = 7;
+  // 未拥有时是否允许消耗角色形象卡永久解锁:1 = 允许卡换解锁,0 = 仅限专属玩法/活动解锁
+  uint32 card_unlockable = 8;
+  // 所属人物收藏系列 ID(AppearanceSeries.id,0 = 未归册;纯外观与叙事分册,零属性加成)
+  uint32 series_id = 9 [(cfg_fk) = "AppearanceSeries"];
 }

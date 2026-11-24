@@ -841,12 +841,13 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	const auto passive = PlayerSkillSystem::CollectPassiveBonus(player);
 	EquipmentEffects equipmentEffects;
 	PlayerEquipmentV1System::CollectEffects(player, equipmentEffects);
-	acc.maxHealth *= 1.0 + passive.maxHealth + equipmentEffects.max_health_bps() / 10000.0;
+	acc.maxHealth *= 1.0 + passive.maxHealth +
+		(equipmentEffects.max_health_bps() + equipmentEffects.season_max_health_bps()) / 10000.0;
 	acc.maxMana *= 1.0 + passive.maxMana;
 	acc.physicalAttack *= 1.0 + passive.physicalAttack + equipmentEffects.physical_attack_bps() / 10000.0;
 	acc.magicAttack *= 1.0 + passive.magicAttack + equipmentEffects.magic_attack_bps() / 10000.0;
 	acc.speed *= 1.0 + passive.speed + equipmentEffects.speed_bps() / 10000.0;
-	acc.defense *= 1.0 + passive.defense;
+	acc.defense *= 1.0 + passive.defense + equipmentEffects.season_defense_bps() / 10000.0;
 
 	const uint64_t oldMaxHealth = derived.max_health();
 	const uint64_t oldMaxMana = derived.max_mana();

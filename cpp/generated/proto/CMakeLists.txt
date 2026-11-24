@@ -183,6 +183,8 @@ set(SOURCE_FILES
     common/component/support_effects.pb.cc
     content_guard/content_guard.pb.cc
     scene/player_appearance.pb.cc
+    common/component/player_season_comp.pb.cc
+    scene/player_season.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

@@ -116,15 +116,20 @@ const SceneInfoComp* CurrentSceneInfo(entt::entity player)
 	return tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntityComp->sceneEntity);
 }
 
-// 推一条 NotifySceneInfo。directory 为 nullptr = 不带分线目录;非空时其内容被换进消息(Swap),
-// 调用返回后 *directory 不可再用。
-void PushSceneInfo(entt::entity player, const SceneInfoComp& sceneInfo, ::SceneChannelDirectory* directory)
+// 推一条 NotifySceneInfo。directory / overview 为 nullptr = 不带对应读模型;非空时其内容被换进消息(Swap),
+// 调用返回后对应对象不可再用。
+void PushSceneInfo(entt::entity player, const SceneInfoComp& sceneInfo, ::SceneChannelDirectory* directory,
+				   ::WorldMapOverview* overview)
 {
 	SceneInfoS2C message;
 	message.add_scene_info()->CopyFrom(sceneInfo);
 	if (directory != nullptr)
 	{
 		message.mutable_channel_directory()->Swap(directory);
+	}
+	if (overview != nullptr)
+	{
+		message.mutable_world_map_overview()->Swap(overview);
 	}
 	SendToPlayerClient(SceneSceneClientPlayerNotifySceneInfoMessageId, message, player);
 }
@@ -175,6 +180,49 @@ bool ParseChannelDirectoryReply(const redisReply* reply, uint32_t sceneConfigId,
 	{
 		LOG_ERROR << "SendSceneInfo: channel directory does not match current map;directory omitted this time, player_id=" << playerId
 				  << " scene_config_id=" << sceneConfigId << " directory_scene_config_id=" << out.scene_config_id();
+		return false;
+	}
+	return true;
+}
+
+// 把 "GET / MGET 元素" 的世界地图总览应答解析进 out。失败时 fail-open 返回 false，不阻塞 NotifySceneInfo 推送。
+bool ParseWorldMapOverviewReply(const redisReply* reply, uint32_t zoneId, uint64_t playerId, ::WorldMapOverview& out)
+{
+	if (reply == nullptr)
+	{
+		LOG_WARN << "SendSceneInfo: world map overview read got no reply(Redis disconnected);overview omitted this time, player_id=" << playerId
+				 << " zone_id=" << zoneId;
+		return false;
+	}
+	if (reply->type == REDIS_REPLY_NIL)
+	{
+		LOG_DEBUG << "SendSceneInfo: world map overview not published or expired;overview omitted this time, player_id=" << playerId
+				  << " zone_id=" << zoneId;
+		return false;
+	}
+	if (reply->type == REDIS_REPLY_ERROR)
+	{
+		LOG_WARN << "SendSceneInfo: world map overview read rejected by Redis;overview omitted this time, player_id=" << playerId
+				 << " zone_id=" << zoneId << " err=" << (reply->str != nullptr ? reply->str : "");
+		return false;
+	}
+	if (reply->type != REDIS_REPLY_STRING || reply->str == nullptr ||
+		reply->len > static_cast<size_t>(std::numeric_limits<int>::max()))
+	{
+		LOG_ERROR << "SendSceneInfo: invalid world map overview reply shape;overview omitted this time, player_id=" << playerId
+				  << " zone_id=" << zoneId << " reply_type=" << reply->type;
+		return false;
+	}
+	if (!out.ParseFromArray(reply->str, static_cast<int>(reply->len)))
+	{
+		LOG_ERROR << "SendSceneInfo: world map overview parse failed;overview omitted this time, player_id=" << playerId
+				  << " zone_id=" << zoneId << " bytes=" << reply->len;
+		return false;
+	}
+	if (out.zone_id() != zoneId)
+	{
+		LOG_ERROR << "SendSceneInfo: world map overview does not match zone;overview omitted this time, player_id=" << playerId
+				  << " zone_id=" << zoneId << " overview_zone_id=" << out.zone_id();
 		return false;
 	}
 	return true;
@@ -612,7 +660,12 @@ std::string PlayerSceneSystem::WorldChannelDirectoryKey(uint32_t zoneId, uint32_
 		   ":" + std::to_string(sceneConfigId);
 }
 
-void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirectory)
+std::string PlayerSceneSystem::WorldMapOverviewKey(uint32_t zoneId)
+{
+	return "world_map_overview:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId);
+}
+
+void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirectory, bool withWorldMapOverview)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
@@ -631,51 +684,105 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 	// 只有大世界分线才有目录:副本 / 镜像按 id 进入,没有"线"的概念。
 	const bool isWorldChannel = sceneInfo->mirror_config_id() == 0 && sceneInfo->dungeon_config_id() == 0 &&
 								sceneInfo->scene_config_id() != 0;
-	// 调用方没要目录(withChannelDirectory == false)时不读 Redis:与加目录之前的开销完全相同。
+	const bool wantDirectory = withChannelDirectory && isWorldChannel;
+	const bool wantOverview = withWorldMapOverview;
+	// 调用方都没要任何读模型时不读 Redis:与改动前开销逐字节相同。
 	// 实体上没有 Guid(playerId == 0)时回调里无从核对"还是不是这名玩家",同样不走异步。
-	if (!withChannelDirectory || !isWorldChannel || playerId == 0 || !ControlRedisReady())
+	if ((!wantDirectory && !wantOverview) || playerId == 0 || !ControlRedisReady())
 	{
-		PushSceneInfo(player, *sceneInfo, nullptr);
+		PushSceneInfo(player, *sceneInfo, nullptr, nullptr);
 		return;
 	}
 
 	// 回调要用的东西全部按值带走(sceneInfo 指向 sceneRegistry 的组件存储,应答回来时场景可能已销毁)。
 	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(AGENTS.md §13.3)。
+	const uint32_t zoneId = GetZoneId();
 	const uint64_t sceneId = sceneInfo->scene_id();
 	const uint32_t sceneConfigId = sceneInfo->scene_config_id();
-	// 集群客户端自己把回调绑到提交这一刻的 trace 上,回调里推给客户端的 scene_info 接在这次请求的 trace 下
-	// (docs/design/distributed-tracing.md §4.3)。整个 zone 的控制域键同一个 slot:本进程的控制域读在这个 slot 上停等,
-	// 排队满时 command 回 REDIS_ERR,走下面「不带目录也推」的分支。
-	const int ret = tlsControlRedis.command(
-		[player = player, playerId = playerId, sceneId = sceneId, sceneConfigId = sceneConfigId,
-		 sceneInfoCopy = *sceneInfo](hiredis::Hiredis*, redisReply* reply) {
-			if (!IsSamePlayer(player, playerId))
+	auto onReply = [player = player, playerId = playerId, zoneId = zoneId, sceneId = sceneId,
+					sceneConfigId = sceneConfigId, wantDirectory = wantDirectory, wantOverview = wantOverview,
+					sceneInfoCopy = *sceneInfo](hiredis::Hiredis*, redisReply* reply) {
+		if (!IsSamePlayer(player, playerId))
+		{
+			return;
+		}
+		// 重新取当前场景再比:应答回来之前玩家可能已经换线 / 换图。此时不推 —— 推了就是把旧线的
+		// scene_info 与目录盖到新场景上;客户端进新场景后会重新请求。
+		const auto* currentInfo = CurrentSceneInfo(player);
+		if (currentInfo == nullptr || currentInfo->scene_id() != sceneId)
+		{
+			LOG_DEBUG << "SendSceneInfo: player left the original scene before reply;discarded, player_id=" << playerId
+					  << " scene_id=" << sceneId;
+			return;
+		}
+		// 带不带读模型都要推:客户端靠这条推送结束等待。
+		::SceneChannelDirectory directory;
+		::WorldMapOverview overview;
+		bool hasDirectory = false;
+		bool hasOverview = false;
+		if (wantDirectory && wantOverview)
+		{
+			if (reply == nullptr)
 			{
-				return;
+				LOG_WARN << "SendSceneInfo: MGET directory+overview got no reply(Redis disconnected);omitted this time, player_id="
+						 << playerId << " zone_id=" << zoneId;
 			}
-			// 重新取当前场景再比:应答回来之前玩家可能已经换线 / 换图。此时不推 —— 推了就是把旧线的
-			// scene_info 与目录盖到新场景上;客户端进新场景后会重新请求。
-			const auto* currentInfo = CurrentSceneInfo(player);
-			if (currentInfo == nullptr || currentInfo->scene_id() != sceneId)
+			else if (reply->type == REDIS_REPLY_ERROR)
 			{
-				LOG_DEBUG << "SendSceneInfo: player left the original scene before reply;discarded, player_id=" << playerId
-						  << " scene_id=" << sceneId;
-				return;
+				LOG_WARN << "SendSceneInfo: MGET directory+overview rejected by Redis;omitted this time, player_id="
+						 << playerId << " zone_id=" << zoneId << " err=" << (reply->str != nullptr ? reply->str : "");
 			}
-			// 带不带目录都要推:客户端靠这条推送结束等待。
-			::SceneChannelDirectory directory;
-			const bool hasDirectory = ParseChannelDirectoryReply(reply, sceneConfigId, playerId, directory);
-			PushSceneInfo(player, sceneInfoCopy, hasDirectory ? &directory : nullptr);
-		},
-		"GET %s", PlayerSceneSystem::WorldChannelDirectoryKey(GetZoneId(), sceneConfigId).c_str());
+			else if (reply->type != REDIS_REPLY_ARRAY || reply->elements != 2 || reply->element == nullptr)
+			{
+				LOG_ERROR << "SendSceneInfo: invalid MGET directory+overview reply shape;omitted this time, player_id="
+						  << playerId << " zone_id=" << zoneId << " reply_type=" << reply->type
+						  << " elements=" << reply->elements;
+			}
+			else
+			{
+				hasDirectory = ParseChannelDirectoryReply(reply->element[0], sceneConfigId, playerId, directory);
+				hasOverview = ParseWorldMapOverviewReply(reply->element[1], zoneId, playerId, overview);
+			}
+		}
+		else if (wantDirectory)
+		{
+			hasDirectory = ParseChannelDirectoryReply(reply, sceneConfigId, playerId, directory);
+		}
+		else
+		{
+			hasOverview = ParseWorldMapOverviewReply(reply, zoneId, playerId, overview);
+		}
+		PushSceneInfo(player, sceneInfoCopy, hasDirectory ? &directory : nullptr, hasOverview ? &overview : nullptr);
+	};
+
+	// 集群客户端把回调绑到提交这一刻的 trace 上;本 zone 的分线目录与地图总览共用 {ctl:<zone>} tag(同槽),
+	// 同时请求时只发一次 MGET。
+	int ret = REDIS_ERR;
+	if (wantDirectory && wantOverview)
+	{
+		const std::string dirKey = PlayerSceneSystem::WorldChannelDirectoryKey(zoneId, sceneConfigId);
+		const std::string overviewKey = PlayerSceneSystem::WorldMapOverviewKey(zoneId);
+		ret = tlsControlRedis.command(std::move(onReply), "MGET %s %s", dirKey.c_str(), overviewKey.c_str());
+	}
+	else if (wantDirectory)
+	{
+		const std::string dirKey = PlayerSceneSystem::WorldChannelDirectoryKey(zoneId, sceneConfigId);
+		ret = tlsControlRedis.command(std::move(onReply), "GET %s", dirKey.c_str());
+	}
+	else
+	{
+		const std::string overviewKey = PlayerSceneSystem::WorldMapOverviewKey(zoneId);
+		ret = tlsControlRedis.command(std::move(onReply), "GET %s", overviewKey.c_str());
+	}
 	if (ret != REDIS_OK)
 	{
 		// 命令没被收下(守卫拒绝、slot 没有可用连接、排队满,或格式化失败)时回调永远不会被调用,
 		// 必须在这里补推,否则客户端等不到任何应答。sceneInfo 此刻仍有效:command 不会同步执行回调,
 		// 也不碰 ECS。
-		LOG_WARN << "SendSceneInfo: channel directory read command not sent;directory omitted this time, player_id=" << playerId
-				 << " scene_config_id=" << sceneConfigId << " ret=" << ret;
-		PushSceneInfo(player, *sceneInfo, nullptr);
+		LOG_WARN << "SendSceneInfo: control redis read command not sent;directory/overview omitted this time, player_id=" << playerId
+				 << " scene_config_id=" << sceneConfigId << " want_dir=" << wantDirectory
+				 << " want_overview=" << wantOverview << " ret=" << ret;
+		PushSceneInfo(player, *sceneInfo, nullptr, nullptr);
 	}
 }
 

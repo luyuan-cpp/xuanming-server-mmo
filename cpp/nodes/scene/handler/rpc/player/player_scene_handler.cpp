@@ -175,10 +175,10 @@ void SceneSceneClientPlayerHandler::SceneInfoC2S(entt::entity player,const ::Sce
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	// handler 只委托:取当前场景信息、(大世界线上)异步读分线目录、推 NotifySceneInfo(31)都在系统层
-	// (docs/design/world-channel-switch.md §5)。本方法的应答类型是 Empty,数据走那条推送。
-	// 分线目录只在请求显式要的时候才读、才带:不带 with_channel_directory 的请求开销与改动前相同。
-	PlayerSceneSystem::SendSceneInfo(player, request->with_channel_directory());
+	// handler 只委托:取当前场景信息、(大世界线上)异步读分线目录 / 地图总览、推 NotifySceneInfo(31)都在系统层
+	// (docs/design/world-channel-switch.md §5、docs/design/world-map-play-v2.md §2.4)。本方法的应答类型是 Empty,数据走那条推送。
+	// 分线目录与总览只在请求显式要的时候才读、才带:不带对应开关的请求开销与改动前相同。
+	PlayerSceneSystem::SendSceneInfo(player, request->with_channel_directory(), request->with_world_map_overview());
 ///<<< END WRITING YOUR CODE
 
 }

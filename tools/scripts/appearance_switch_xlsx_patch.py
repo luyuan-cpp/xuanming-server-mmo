@@ -48,17 +48,68 @@ except ImportError as exc:
     sys.exit(f"cannot load dependencies ({exc}): run  pip install pyyaml openpyxl  first")
 
 
+SERIES_SHEET = "AppearanceSeries"
+SERIES_ROWS = [
+    dict(
+        id=1,
+        series_key="lantern_courtyard",
+        name="留灯院旧友",
+        sort_order=1,
+        enabled=1,
+        desc="归元城面铺与月汐湾渡口间，总有一盏留到深夜的灯。",
+        completion_badge_name="留灯同袍",
+        epilogue_title="灯下三碗面",
+        epilogue_body=(
+            "雨停后的留灯院，檐水顺着竹槽滴在青石板上。阿禾把三只热腾腾的粗瓷碗端上木桌，特意给停云多加了半勺辣油，又把葱花碟子挪到听雨够不着的那一侧。\n\n"
+            "停云把擦干净的红缨枪靠在柱旁，笑道：“今儿摆渡收工早，再不用拿面汤抵工钱了。”听雨从竹筒里抽出一张折得方正的新船票，轻轻压在碗边：“这回没让给别人，等风小了，一起去八景岛看鸟。”\n\n"
+            "阿禾替两人把院灯拨亮了些，难得没急着收拾碗筷，也坐下来端起自己的那一只：“好。出门前记得叫我锁院门。”"
+        ),
+    ),
+    dict(
+        id=2,
+        series_key="elemental_blades",
+        name="水火冰锋",
+        sort_order=2,
+        enabled=1,
+        desc="霜刃、赤符、沧澜三系灵法同出玄冥，各守一脉气象。",
+        completion_badge_name="三灵同契",
+        epilogue_title="霜火沧澜试",
+        epilogue_body=(
+            "八仙岛演武台清晨起雾，冰剑先落三尺寒霜，赤符紧随其后化作一圈暖焰，将台面冻气逼成细碎水汽。\n\n"
+            "水龙书生收起折扇，抬手引散半空残雾，温声评点：“霜势太直，火势太急；若是同行对阵，倒恰好替彼此补了破绽。”\n\n"
+            "火符少年嘿嘿一笑，收起朱砂笔；冰剑少女还剑入鞘，只留下一句：“明日卯时，再来一局。”"
+        ),
+    ),
+    dict(
+        id=3,
+        series_key="lotus_melody",
+        name="清音济世",
+        sort_order=3,
+        enabled=1,
+        desc="青莲抚伤，瑶琴涤尘，乱世中守住一方安宁。",
+        completion_badge_name="清音杏林",
+        epilogue_title="青莲闻琴",
+        epilogue_body=(
+            "归元城药庐后院刚晒好新采的莲心，天音少女便抱着瑶琴坐在廊下试弦。清越的泛音散开，连檐下打盹的雀儿都歪头听了一会儿。\n\n"
+            "莲花医者分装完最后一包安神散，递过一杯温茶：“方才送来的几位伤员心神不宁，你这一曲比我半副汤药还管用。”\n\n"
+            "天音少女浅笑颔首：“那以后你煎药时，我便在廊下多弹两段，权当抵你的茶钱。”"
+        ),
+    ),
+]
+
 APPEARANCE_SHEET = "CharacterAppearance"
 APPEARANCE_ROWS = [
-    dict(id=2, appearance_id="00_reference_topright_boy", name="金发带Q道童", enabled=1, sort_order=1, desc="金冠束发，葫芦傍身的青玉小道童"),
-    dict(id=3, appearance_id="01_ice_sword_girl", name="冰剑少女", enabled=1, sort_order=2, desc="寒霜凝刃，清冷出尘"),
-    dict(id=4, appearance_id="02_fire_talisman_boy", name="火符少年", enabled=1, sort_order=3, desc="朱砂赤符，烈焰破邪"),
-    dict(id=5, appearance_id="03_lotus_healer_girl", name="莲花医者", enabled=1, sort_order=4, desc="青莲济世，妙手回春"),
-    dict(id=7, appearance_id="05_celestial_musician_girl", name="天音少女", enabled=1, sort_order=5, desc="瑶琴仙乐，清音涤尘"),
-    dict(id=8, appearance_id="09_bamboo_archer_girl", name="竹弓少女", enabled=1, sort_order=6, desc="青竹穿云，百步穿杨"),
-    dict(id=9, appearance_id="10_crimson_spear_girl", name="赤枪少女", enabled=1, sort_order=7, desc="红缨长枪，飒爽凌云"),
-    dict(id=10, appearance_id="15_water_dragon_scholar_boy", name="水龙书生", enabled=1, sort_order=8, desc="沧澜化龙，文武兼修"),
+    dict(id=2, appearance_id="00_reference_topright_boy", name="金发带Q道童", enabled=1, sort_order=1, desc="金冠束发，葫芦傍身的青玉小道童", starter_creatable=1, card_unlockable=1, series_id=1),
+    dict(id=3, appearance_id="01_ice_sword_girl", name="冰剑少女", enabled=1, sort_order=2, desc="寒霜凝刃，清冷出尘", starter_creatable=1, card_unlockable=1, series_id=2),
+    dict(id=4, appearance_id="02_fire_talisman_boy", name="火符少年", enabled=1, sort_order=3, desc="朱砂赤符，烈焰破邪", starter_creatable=0, card_unlockable=1, series_id=2),
+    dict(id=5, appearance_id="03_lotus_healer_girl", name="莲花医者", enabled=1, sort_order=4, desc="青莲济世，妙手回春", starter_creatable=0, card_unlockable=1, series_id=3),
+    dict(id=7, appearance_id="05_celestial_musician_girl", name="天音少女", enabled=1, sort_order=5, desc="瑶琴仙乐，清音涤尘", starter_creatable=0, card_unlockable=1, series_id=3),
+    dict(id=8, appearance_id="09_bamboo_archer_girl", name="竹弓少女", enabled=1, sort_order=6, desc="青竹穿云，百步穿杨", starter_creatable=0, card_unlockable=1, series_id=1),
+    dict(id=9, appearance_id="10_crimson_spear_girl", name="赤枪少女", enabled=1, sort_order=7, desc="红缨长枪，飒爽凌云", starter_creatable=0, card_unlockable=1, series_id=1),
+    dict(id=10, appearance_id="15_water_dragon_scholar_boy", name="水龙书生", enabled=1, sort_order=8, desc="沧澜化龙，文武兼修", starter_creatable=0, card_unlockable=1, series_id=2),
 ]
+
+LEGACY_APPEARANCE_DESCRIPTION = "使用后可永久切换一次角色形象，切换后将替换当前形象（商城售价 10 元）。"
 
 RULE_SHEET = "AppearanceRule"
 RULE_ROWS = [
@@ -81,7 +132,7 @@ APPEARANCE_CARD_ITEM = dict(
     battle_heal_hp=0,
     battle_heal_mp=0,
     name="角色形象卡",
-    description="使用后可永久切换一次角色形象，切换后将替换当前形象（商城售价 10 元）。",
+    description="使用后可永久解锁并切换一款支持兑换的角色形象，已拥有的形象可随时免费切换（商城售价 10 元）。",
     icon_key="UI/Icons/item_appearance_card",
     equip_level=0,
     equip_class=0,
@@ -105,10 +156,22 @@ TIP_CODES = [
     ("AppearanceNoActiveTrial", "当前没有进行中的形象试用", False),
     ("AppearanceFrozen", "当前角色状态暂时不能切换形象，请稍后再试", False),
     ("AppearanceUnavailable", "角色形象服务暂时不可用", True),
+    ("AppearanceNotCardUnlockable", "该角色形象需通过专属玩法或活动解锁，暂不可使用形象卡兑换", False),
+    ("AppearanceAlreadyOwned", "已拥有该角色形象，可直接免费切换，无需试用", False),
+    ("AppearanceNotOwned", "尚未拥有该角色形象，请先解锁后再切换", False),
 ]
 
 
 def self_check() -> None:
+    seen_series_ids = set()
+    seen_series_keys = set()
+    for row in SERIES_ROWS:
+        if row["id"] <= 0 or row["id"] in seen_series_ids:
+            fail(f"invalid or duplicate AppearanceSeries id: {row['id']}")
+        if not row["series_key"] or row["series_key"] in seen_series_keys:
+            fail(f"invalid or duplicate series_key: {row['series_key']}")
+        seen_series_ids.add(row["id"])
+        seen_series_keys.add(row["series_key"])
     seen_ids = set()
     seen_app = set()
     for row in APPEARANCE_ROWS:
@@ -116,6 +179,8 @@ def self_check() -> None:
             fail(f"invalid or duplicate CharacterAppearance id: {row['id']}")
         if not row["appearance_id"] or row["appearance_id"] in seen_app:
             fail(f"invalid or duplicate appearance_id: {row['appearance_id']}")
+        if row["series_id"] != 0 and row["series_id"] not in seen_series_ids:
+            fail(f"CharacterAppearance id={row['id']} references unknown series_id={row['series_id']}")
         seen_ids.add(row["id"])
         seen_app.add(row["appearance_id"])
     rule = RULE_ROWS[0]
@@ -147,12 +212,27 @@ def write_scalar_table(sheet: str, rows: list[dict], dry_run: bool) -> None:
 
     if xlsx_path.exists():
         ws = only_sheet(openpyxl.load_workbook(xlsx_path), xlsx_path)
-        if ws.title == sheet and first_difference(sheet_matrix(ws), wanted) is None:
+        existing_matrix = sheet_matrix(ws)
+        if ws.title == sheet and first_difference(existing_matrix, wanted) is None:
             print(f"[ALREADY CURRENT] {rel(xlsx_path)} exists with identical contents; file unchanged.")
             return
-        fail(f"{rel(xlsx_path)} already exists with different contents -- refusing to overwrite.")
-
-    print(f"Will create {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} rows")
+        prev_cols = len(existing_matrix[HEADER_ROW - 1]) if len(existing_matrix) >= HEADER_ROW else 0
+        can_upgrade_columns = (
+            ws.title == sheet
+            and 0 < prev_cols < len(names)
+            and len(existing_matrix) == len(wanted)
+            and existing_matrix[HEADER_ROW - 1] == wanted[HEADER_ROW - 1][:prev_cols]
+            and all(
+                existing_matrix[r][:prev_cols] == wanted[r][:prev_cols]
+                and all(v is None for v in existing_matrix[r][prev_cols:])
+                for r in range(DATA_BEGIN_ROW - 1, len(wanted))
+            )
+        )
+        if not can_upgrade_columns:
+            fail(f"{rel(xlsx_path)} already exists with different contents -- refusing to overwrite.")
+        print(f"Will upgrade {rel(xlsx_path)}: {prev_cols} -> {len(names)} columns x {len(rows)} rows")
+    else:
+        print(f"Will create {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} rows")
     if dry_run:
         return
     wb = openpyxl.Workbook()
@@ -172,6 +252,7 @@ def write_scalar_table(sheet: str, rows: list[dict], dry_run: bool) -> None:
 
 
 def cmd_new_tables(dry_run: bool) -> None:
+    write_scalar_table(SERIES_SHEET, SERIES_ROWS, dry_run)
     write_scalar_table(APPEARANCE_SHEET, APPEARANCE_ROWS, dry_run)
     write_scalar_table(RULE_SHEET, RULE_ROWS, dry_run)
 
@@ -209,6 +290,25 @@ def cmd_card_item_row(dry_run: bool) -> None:
         if actual == wanted:
             print(f"[ALREADY CURRENT] {rel(ITEM_XLSX)} already has appearance card id={row['id']} on row {row_idx}.")
             return
+        desc_col = header["description"]
+        upgraded = dict(actual)
+        if actual.get(desc_col) == LEGACY_APPEARANCE_DESCRIPTION:
+            upgraded[desc_col] = wanted[desc_col]
+        if upgraded == wanted:
+            print(f"{rel(ITEM_XLSX)}: updating appearance card id={row['id']} description at row {row_idx}")
+            if dry_run:
+                return
+            ws.cell(row=row_idx, column=desc_col, value=wanted[desc_col])
+            wb.save(ITEM_XLSX)
+            expected = [list(r) for r in before]
+            expected[row_idx - 1][desc_col - 1] = wanted[desc_col]
+            check_ws = only_sheet(openpyxl.load_workbook(ITEM_XLSX), ITEM_XLSX, ITEM_SHEET)
+            diff = first_difference(sheet_matrix(check_ws), expected)
+            if diff:
+                fail(f"after saving, {ITEM_XLSX.name} read back differs ({diff})")
+            bind(ITEM_SHEET, ITEM_XLSX)
+            print(f"[DONE] {rel(ITEM_XLSX)} updated id={row['id']} description; schema binding passed.")
+            return
         fail(f"{rel(ITEM_XLSX)} row {row_idx} already has id={row['id']} with different contents -- refusing to overwrite")
 
     target_row = last_data_row + 1
@@ -238,6 +338,32 @@ def cmd_tip_codes(dry_run: bool) -> None:
     if mine is not None:
         if (mine["base"], mine["width"]) == (TIP_BASE, TIP_WIDTH) and mine["codes"][:len(wanted)] == wanted:
             print(f"[ALREADY CURRENT] {header_text} (row {mine['row']}) already has these {len(wanted)} codes; file unchanged.")
+            return
+        existing_count = len(mine["codes"])
+        last_non_empty = max((r for r, row in enumerate(before, start=1) if any(v is not None for v in row)), default=0)
+        group_end_row = mine["row"] + existing_count
+        if (
+            (mine["base"], mine["width"]) == (TIP_BASE, TIP_WIDTH)
+            and existing_count < len(wanted)
+            and mine["codes"] == wanted[:existing_count]
+            and group_end_row == last_non_empty
+        ):
+            extra = wanted[existing_count:]
+            owner = {code: g["name"] for g in groups for code, _t, _f in g["codes"]}
+            clash = [f"{n} (in {owner[n]})" for n, _t, _f in extra if n in owner]
+            if clash:
+                fail(f"duplicate tip code names: {clash}")
+            patches: list[Patch] = []
+            for offset, (name, text, fault) in enumerate(extra, start=1):
+                row_idx = group_end_row + offset
+                patches += [(row_idx, 1, name), (row_idx, 2, text)]
+                if fault is not None:
+                    patches.append((row_idx, fault_col, fault))
+            print(f"Will append {len(extra)} codes to {header_text} in {rel(TIP_XLSX)} starting at row {group_end_row + 1}")
+            if dry_run:
+                return
+            apply_patches_and_verify(TIP_XLSX, None, wb, ws, before, patches, bind_schema=False)
+            print(f"[DONE] {rel(TIP_XLSX)} appended {len(extra)} codes to {header_text} ({TIP_BASE + existing_count}..{TIP_BASE + len(wanted) - 1})")
             return
         fail(f"{TIP_XLSX.name} row {mine['row']} already has group //{TIP_GROUP} with different contents")
 

@@ -13,3 +13,17 @@ func TestParamsStayWithinServerDefaultEnforcement(t *testing.T) {
 		t.Fatalf("keepalive %+v would be rejected by a grpc-go server with the default enforcement policy", p)
 	}
 }
+
+func TestServerParamsDefaultsAndOverrides(t *testing.T) {
+	d := serverParams(0, 0)
+	if d.MaxConnectionAge != DefaultMaxConnectionAge || d.MaxConnectionAgeGrace != DefaultMaxConnectionAgeGrace {
+		t.Fatalf("unexpected defaults: %+v", d)
+	}
+	c := serverParams(10*time.Minute, 45*time.Second)
+	if c.MaxConnectionAge != 10*time.Minute || c.MaxConnectionAgeGrace != 45*time.Second {
+		t.Fatalf("unexpected overrides: %+v", c)
+	}
+	if ServerOption(0, 0) == nil {
+		t.Fatal("ServerOption must not be nil")
+	}
+}

@@ -1418,6 +1418,85 @@
    },
    "tick_on_apply": 1,
    "value_basis": 2
+  },
+  {
+   "battle_op": 26,
+   "id": 100410,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 0.85,
+   "tag": {
+    "SkillCopy": true
+   }
+  },
+  {
+   "battle_op": 1,
+   "id": 150010,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 2,
+   "id": 150011,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 3,
+   "ratio": -0.15,
+   "refresh_policy": 1,
+   "stack_key": 150011,
+   "tag": {
+    "Break": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 150020,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 2,
+   "id": 150021,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 3,
+   "ratio": -0.15,
+   "refresh_policy": 1,
+   "stack_key": 150021,
+   "tag": {
+    "Break": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 9,
+   "duration_rounds": 2,
+   "effect_priority": 20,
+   "id": 150030,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 14.0,
+   "refresh_policy": 2,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 2,
+   "id": 150040,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 15,
+   "ratio": 0.15,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
   }
  ]
 }

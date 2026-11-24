@@ -120,6 +120,12 @@ enum TransactionType
   // 消耗角色形象卡(Item 3402)永久切换角色形象的销毁流水。correlation_id = 客户端幂等键 client_request_id。
   // 1 小时免费试用不消耗道具,不记流水。只追加,不复用旧编号。
   TX_APPEARANCE_SWITCH = 34;
+
+  // ── 赛季印小额快捷追赶(docs/design/season-skills-and-seal-design.md)──────
+  //
+  // 玩家消耗灵石补齐本季单槽赛季印进度（与免费同封顶上限）的扣款流水。correlation_id = 客户端幂等键 client_request_id。
+  // 只追加,不复用旧编号。
+  TX_SEASON_SEAL_CATCHUP = 35;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

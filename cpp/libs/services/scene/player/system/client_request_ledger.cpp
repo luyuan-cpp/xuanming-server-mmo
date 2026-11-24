@@ -101,6 +101,8 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.materialRewardRevision = record->material_reward_revision();
 	result.craftingMaterialCount = record->crafting_material_count();
 	result.enhancementStoneCount = record->enhancement_stone_count();
+	result.seasonCatchupPoints = record->season_catchup_points();
+	result.seasonCatchupSpent = record->season_catchup_spent();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -130,6 +132,8 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_material_reward_revision(result.materialRewardRevision);
 	record->set_crafting_material_count(result.craftingMaterialCount);
 	record->set_enhancement_stone_count(result.enhancementStoneCount);
+	record->set_season_catchup_points(result.seasonCatchupPoints);
+	record->set_season_catchup_spent(result.seasonCatchupSpent);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

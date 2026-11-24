@@ -58,6 +58,10 @@ struct MonsterCapture_rateComp {
     uint32_t value;
 };
 
+struct MonsterIs_bossComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -95,4 +99,7 @@ inline MonsterCapture_pet_table_idComp MakeMonsterCapture_pet_table_idComp(const
 }
 inline MonsterCapture_rateComp MakeMonsterCapture_rateComp(const MonsterTable& row) {
     return { row.capture_rate() };
+}
+inline MonsterIs_bossComp MakeMonsterIs_bossComp(const MonsterTable& row) {
+    return { row.is_boss() };
 }

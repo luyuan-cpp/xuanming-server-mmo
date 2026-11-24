@@ -1,6 +1,8 @@
 #include "player_battle.h"
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_equipment_material_reward.h"
+#include "player/system/player_season.h"
+#include "player/system/player_attribute.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_appearance.h"
 #include "engine/core/type_define/player_guid_comp.h"
@@ -105,6 +107,7 @@
 #include "proto/common/component/player_login_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 
 // —— 以下生成产物当前尚未生成,proto 重生成后出现(路径按仓库生成器命名规律推断,
@@ -2438,6 +2441,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 额度只在正式收件箱首次应用时生成。先做纯候选，失败时连战斗资产也不动；
     // 原来源去重继续由收件箱永久水位承担，不能依赖会淘汰的近期战果列表。
+    const uint64_t settlementNowMs = TimeSystem::NowMillisecondsUTC();
     const bool creditsMaterialReward = PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
     ClientRequestLedgerComp materialRewardCandidate;
     std::string materialRewardBefore;
@@ -2446,7 +2450,21 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         if (ledger == nullptr || tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) return false;
         materialRewardBefore = ledger->SerializeAsString();
         if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
-            TimeSystem::NowMillisecondsUTC(), materialRewardCandidate) != kSuccess) return false;
+            settlementNowMs, materialRewardCandidate) != kSuccess) return false;
+    }
+
+    // 赛季印进度同在首次收件箱应用时原子入账（仅正规 PVE 胜利与正规排位 PVP，受封顶夹取）。
+    const bool creditsSeasonProgress =
+        PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 && PlayerSeasonSystem::IsEligibleBattle(settlement);
+    PlayerSeasonComp seasonProgressCandidate;
+    std::string seasonProgressBefore;
+    bool seasonPointsIncreased = false;
+    if (creditsSeasonProgress) {
+        const auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+        if (seasonComp == nullptr) return false;
+        seasonProgressBefore = seasonComp->SerializeAsString();
+        if (PlayerSeasonSystem::PrepareBattleCredit(*seasonComp, settlement, settlementNowMs,
+            seasonProgressCandidate, seasonPointsIncreased) != kSuccess) return false;
     }
 
     const auto inboxIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
@@ -2536,8 +2554,11 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
         auto* currentLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        auto* currentSeason = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
         if (creditsMaterialReward && (currentLedger == nullptr || currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) return kInvalidParameter;
+        if (creditsSeasonProgress && (currentSeason == nullptr || currentSeason->SerializeAsString() != seasonProgressBefore))
+            return kInvalidParameter;
         if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
             (changesPets && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
             HasUnsupportedInboxConsumption(player, settlement) ||
@@ -2546,8 +2567,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             return kInvalidParameter;
         const auto error = creditCurrencies();
         if (error != kSuccess) return error;
-        // 此处之后只有无失败的候选发布；额度与货币、背包、收件箱水位同一次存盘。
+        // 此处之后只有无失败的候选发布；额度、赛季印进度与货币、背包、收件箱水位同一次存盘。
         if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
+        if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
         return kSuccess;
     };
     // 两包都放不下时这一局的掉落整批改投邮件(docs/design/battle-overflow-mail.md):在任何副作用之前备好待寄条目
@@ -2639,6 +2661,11 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     }
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kEnergy);
+    if (seasonPointsIncreased)
+    {
+        PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
+        PlayerAttributeSystem::PushPanel(player);
+    }
 
     if (!capturedPets.empty()) PetSystem::PushList(player);
 

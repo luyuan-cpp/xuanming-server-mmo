@@ -333,6 +333,12 @@ func eligibleMerchantChannels(directory *scenepb.SceneChannelDirectory) []mercha
 // pickMerchantChannel 在候选线里均匀随机挑一条;有别的选择时避开 avoidSceneID(上一轮 / 刚失效的那条线),
 // 让「每轮换一条线」名副其实。candidates 为空时返回 false。纯函数(随机性来自 rnd)。
 func pickMerchantChannel(candidates []merchantChannel, avoidSceneID uint64, rnd merchantRand) (merchantChannel, bool) {
+	return pickMerchantChannelWithTideBias(candidates, avoidSceneID, 0, 0, rnd)
+}
+
+// pickMerchantChannelWithTideBias 在避开 avoidSceneID 的基础上，若灵潮地图有可选分线且命中 biasPercent，
+// 则优先落入灵潮地图（同图优先最小线号，与 Fill-First 聚人口径对齐）。纯函数。
+func pickMerchantChannelWithTideBias(candidates []merchantChannel, avoidSceneID uint64, tideConfID uint32, biasPercent int, rnd merchantRand) (merchantChannel, bool) {
 	pool := candidates
 	if avoidSceneID != 0 && len(candidates) > 1 {
 		others := make([]merchantChannel, 0, len(candidates)-1)
@@ -348,7 +354,29 @@ func pickMerchantChannel(candidates []merchantChannel, avoidSceneID uint64, rnd 
 	if len(pool) == 0 {
 		return merchantChannel{}, false
 	}
+	if tideConfID != 0 && biasPercent > 0 {
+		tidePool := make([]merchantChannel, 0, len(pool))
+		for _, c := range pool {
+			if c.confID == tideConfID {
+				tidePool = append(tidePool, c)
+			}
+		}
+		if len(tidePool) > 0 && len(tidePool) < len(pool) {
+			if biasPercent >= 100 || rnd.Uint64N(100) < uint64(biasPercent) {
+				// collectMerchantChannels 已按 (confID, channelNo) 升序排好，优先最小线号与 Fill-First 对齐。
+				return tidePool[0], true
+			}
+		}
+	}
 	return pool[rnd.Uint64N(uint64(len(pool)))], true
+}
+
+func activeTideConfIDForMerchant(cfg config.WorldMapPlayConfig, nowUnix int64) uint32 {
+	tide := worldTideAt(nowUnix, cfg.EffectiveTideCandidateMapIds(), cfg.EffectiveTideIntervalSeconds(), cfg.EffectiveTideDurationSeconds())
+	if !tide.GetActive() {
+		return 0
+	}
+	return tide.GetSceneConfigId()
 }
 
 // pickWeightedIndex 按权重挑一个下标。调用方保证 weights 之和 >= 1。纯函数。
@@ -556,8 +584,10 @@ func scheduleMysteryMerchant(svcCtx *svc.ServiceContext, zoneID uint32, now time
 	if err != nil {
 		return metrics.MerchantScheduleError, err
 	}
-	// 上一轮的线尽量避开。记录是更早的轮次或压根没有时 GetSceneId 为 0 = 不避让。
-	channel, ok := pickMerchantChannel(channels, current.GetSceneId(), rnd)
+	// 上一轮的线尽量避开；当前灵潮激活时按配置概率优先落入灵潮图。
+	tideConfID := activeTideConfIDForMerchant(svcCtx.Config.WorldMapPlay, now.Unix())
+	biasPercent := svcCtx.Config.WorldMapPlay.EffectiveMerchantTideBiasPercent()
+	channel, ok := pickMerchantChannelWithTideBias(channels, current.GetSceneId(), tideConfID, biasPercent, rnd)
 	if !ok {
 		// 没有任何可进的线(目录还没发布 / 线全在回收或不可用):本拍不写,下一拍再试。
 		return metrics.MerchantScheduleNoChannel, nil
@@ -654,7 +684,9 @@ func keepOrRelocateMerchant(svcCtx *svc.ServiceContext, zoneID uint32, now time.
 			alive = append(alive, c)
 		}
 	}
-	channel, ok := pickMerchantChannel(alive, 0, rnd)
+	tideConfID := activeTideConfIDForMerchant(svcCtx.Config.WorldMapPlay, now.Unix())
+	biasPercent := svcCtx.Config.WorldMapPlay.EffectiveMerchantTideBiasPercent()
+	channel, ok := pickMerchantChannelWithTideBias(alive, 0, tideConfID, biasPercent, rnd)
 	if !ok {
 		return metrics.MerchantScheduleNoChannel, nil
 	}

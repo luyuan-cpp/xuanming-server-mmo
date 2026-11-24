@@ -43,4 +43,6 @@ message MonsterTable {
   uint32 capture_pet_table_id = 11 [(cfg_fk) = "Pet"];
   // 满血时捕捉成功率（万分比），残血时按缺血比例提高。
   uint32 capture_rate = 12;
+  // 1 = 首领/Boss 单位；不可被复制技能选中，开局透传至 BattleActorState.is_boss。
+  uint32 is_boss = 13;
 }

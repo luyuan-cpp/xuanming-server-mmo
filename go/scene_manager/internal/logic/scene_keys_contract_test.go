@@ -109,6 +109,7 @@ func controlDomainKeysForTest(zoneID uint32, sceneID, confID uint64, nodeID stri
 		worldAutoscaleCooldownKey(zoneID, confID),
 		worldChannelLineNoKey(zoneID, confID),
 		worldChannelDirectoryKey(zoneID, confID),
+		worldMapOverviewKey(zoneID),
 		worldPlacementSeqKey(zoneID),
 		worldInitLockKey(zoneID),
 		mysteryMerchantKey(zoneID),
@@ -150,6 +151,7 @@ func TestCrossLanguageControlKeyGoldens(t *testing.T) {
 	assert.Equal(t, "scene:{ctl:3}:18446744073709551615:node", sceneNodeKey(3, 18446744073709551615))
 	assert.Equal(t, "node:{ctl:3}:17:holder", nodeHolderKey(3, "17"))
 	assert.Equal(t, "world_channel_directory:{ctl:1}:2", worldChannelDirectoryKey(1, 2))
+	assert.Equal(t, "world_map_overview:{ctl:1}", worldMapOverviewKey(1))
 	assert.Equal(t, "mystery_merchant:{ctl:1}", mysteryMerchantKey(1))
 }
 

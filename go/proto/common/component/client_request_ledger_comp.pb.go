@@ -41,6 +41,8 @@ type ClientRequestRecord struct {
 	MaterialRewardRevision uint64 `protobuf:"varint,10,opt,name=material_reward_revision,json=materialRewardRevision,proto3" json:"material_reward_revision,omitempty"` // 材料自选：首次成功后的独立水位。
 	CraftingMaterialCount  uint32 `protobuf:"varint,11,opt,name=crafting_material_count,json=craftingMaterialCount,proto3" json:"crafting_material_count,omitempty"`    // 材料自选首次实际领取的打造材料数。
 	EnhancementStoneCount  uint32 `protobuf:"varint,12,opt,name=enhancement_stone_count,json=enhancementStoneCount,proto3" json:"enhancement_stone_count,omitempty"`    // 材料自选首次实际领取的强化石数。
+	SeasonCatchupPoints    uint32 `protobuf:"varint,13,opt,name=season_catchup_points,json=seasonCatchupPoints,proto3" json:"season_catchup_points,omitempty"`          // 赛季印追赶：首次实际补齐的进度点数。
+	SeasonCatchupSpent     uint64 `protobuf:"varint,14,opt,name=season_catchup_spent,json=seasonCatchupSpent,proto3" json:"season_catchup_spent,omitempty"`             // 赛季印追赶：首次实际扣除的货币数。
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -155,6 +157,20 @@ func (x *ClientRequestRecord) GetCraftingMaterialCount() uint32 {
 func (x *ClientRequestRecord) GetEnhancementStoneCount() uint32 {
 	if x != nil {
 		return x.EnhancementStoneCount
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetSeasonCatchupPoints() uint32 {
+	if x != nil {
+		return x.SeasonCatchupPoints
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetSeasonCatchupSpent() uint64 {
+	if x != nil {
+		return x.SeasonCatchupSpent
 	}
 	return 0
 }
@@ -305,7 +321,7 @@ var File_proto_common_component_client_request_ledger_comp_proto protoreflect.Fi
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xe6\x03\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xcc\x04\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -319,7 +335,9 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x18material_reward_revision\x18\n" +
 	" \x01(\x04R\x16materialRewardRevision\x126\n" +
 	"\x17crafting_material_count\x18\v \x01(\rR\x15craftingMaterialCount\x126\n" +
-	"\x17enhancement_stone_count\x18\f \x01(\rR\x15enhancementStoneCount\"\xb0\x01\n" +
+	"\x17enhancement_stone_count\x18\f \x01(\rR\x15enhancementStoneCount\x122\n" +
+	"\x15season_catchup_points\x18\r \x01(\rR\x13seasonCatchupPoints\x120\n" +
+	"\x14season_catchup_spent\x18\x0e \x01(\x04R\x12seasonCatchupSpent\"\xb0\x01\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +

@@ -947,6 +947,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     kHealthCostModeFieldNumber = 54,
     kActionTagsFieldNumber = 55,
     kAllowDeadTargetFieldNumber = 56,
+    kForbidCopyFieldNumber = 57,
+    kSeasonIdFieldNumber = 58,
   };
   // repeated uint32 skill_type = 2;
   [[nodiscard]] int skill_type_size()
@@ -1616,11 +1618,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
   void _internal_set_allow_dead_target(::uint32_t value);
 
   public:
+  // uint32 forbid_copy = 57;
+  void clear_forbid_copy() ;
+  [[nodiscard]] ::uint32_t forbid_copy() const;
+  void set_forbid_copy(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_forbid_copy() const;
+  void _internal_set_forbid_copy(::uint32_t value);
+
+  public:
+  // uint32 season_id = 58;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 56,
+      ::google::protobuf::internal::TcParseTable<5, 58,
                           3, 138,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1709,6 +1731,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     ::uint32_t health_cost_mode_;
     ::uint32_t action_tags_;
     ::uint32_t allow_dead_target_;
+    ::uint32_t forbid_copy_;
+    ::uint32_t season_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3757,6 +3781,54 @@ inline ::uint32_t SkillTable::_internal_allow_dead_target() const {
 inline void SkillTable::_internal_set_allow_dead_target(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_dead_target_ = value;
+}
+
+// uint32 forbid_copy = 57;
+inline void SkillTable::clear_forbid_copy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forbid_copy_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x01000000U);
+}
+inline ::uint32_t SkillTable::forbid_copy() const {
+  // @@protoc_insertion_point(field_get:SkillTable.forbid_copy)
+  return _internal_forbid_copy();
+}
+inline void SkillTable::set_forbid_copy(::uint32_t value) {
+  _internal_set_forbid_copy(value);
+  SetHasBit(_impl_._has_bits_[1], 0x01000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.forbid_copy)
+}
+inline ::uint32_t SkillTable::_internal_forbid_copy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.forbid_copy_;
+}
+inline void SkillTable::_internal_set_forbid_copy(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forbid_copy_ = value;
+}
+
+// uint32 season_id = 58;
+inline void SkillTable::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x02000000U);
+}
+inline ::uint32_t SkillTable::season_id() const {
+  // @@protoc_insertion_point(field_get:SkillTable.season_id)
+  return _internal_season_id();
+}
+inline void SkillTable::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x02000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.season_id)
+}
+inline ::uint32_t SkillTable::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void SkillTable::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
 }
 
 // repeated .Skillrequired_item required_item = 21;

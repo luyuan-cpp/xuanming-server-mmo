@@ -91,6 +91,7 @@ message BattlePlayerSnapshot {
   map<uint32, uint32> skill_ranks = 21;
   uint32 pet_capture_slots = 22; // scene 核定的本局可捕捉数量；旧快照缺省为0。
   EquipmentEffects equipment_effects = 23; // 仅人物装备，宝宝不继承。
+  uint32 active_season_id = 24; // 开局由 scene 冻结的当前赛季编号（0 = 无活跃赛季）；引擎据此复核赛季限定技能。
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -174,6 +175,8 @@ message BattleActorState {
   PetCultivationEffects pet_cultivation = 41; // 宝宝独立条目贡献，开局快照冻结。
   SupportEffectSummary support_effects = 40; // 仅本人可见；来源及中立预览由本轮真实状态生成。
   bool competitive_temporary = 42; // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
+  bool is_boss = 43; // true = 首领单位（来自 MonsterTable.is_boss）；不可被复制技能选中，客户端选目标阶段置灰。
+  BattleArtifactState season_seal_state = 44; // 单槽赛季印的局内次数状态（不占用永久法宝 item_id 列表，下发客户端前清除）。
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
@@ -268,6 +271,7 @@ message BattleEventItem {
   uint64 instigator_id = 21; // 催动者与原持续效果施加者分别保留。
   uint64 artifact_item_id = 22;
   uint32 artifact_effect_id = 23;
+  uint32 season_seal_id = 24; // 非 0 表示本次 BATTLE_EVENT_ARTIFACT 由单槽赛季印触发（artifact_item_id 为 0）。
 }
 
 // ---- 胜负 ----

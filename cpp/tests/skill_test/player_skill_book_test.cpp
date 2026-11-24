@@ -138,8 +138,9 @@ TEST_F(PlayerSkillBookTest, FreeCatalogIsSharedAcrossClassesAndLearningUsesTheSe
     ListSkillsResponse first, second;
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, first), kSuccess);
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(otherClass, second), kSuccess);
-    ASSERT_EQ(first.catalog_size(), 40);
+    ASSERT_EQ(first.catalog_size(), 41);
     ASSERT_EQ(second.catalog_size(), first.catalog_size());
+    EXPECT_NE(FindEntry(first, 10041), nullptr); // A41 玄镜映法：人物专属主动。
     EXPECT_EQ(FindEntry(first, 10018), nullptr); // A18 仅限宝宝学习。
     EXPECT_EQ(FindEntry(first, 13001), nullptr); // T01 仅限宝宝学习。
     for (int i = 0; i < first.catalog_size(); ++i) {

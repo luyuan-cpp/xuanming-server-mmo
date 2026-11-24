@@ -29,14 +29,13 @@ message SelfActorStateFlagsS2C {
   - 重复加减相同未变化位图不推包；NPC、离线托管、无有效网关会话，以及跨节点/跨区交接冻结期间（`PlayerFrozenComp` / `player.frozen()`）不推包。
   - 每次进场 / 换场景落地（`EnterScene` 之后），客户端先将本地状态位清零，服务端将上次推送基线重置为 `0`，若当前存在非零状态立刻补推 1 次（首次进场全 0 不发多余空包）。
 
-## 3. 客户端 `Inspiaaa/UnityHFSM` 选型与强制边界
+## 3. 客户端 `Inspiaaa/UnityHFSM` 接入状态与强制边界
 
-### 3.1 结论：适合未来实时 MMO，暂不预埋依赖
+### 3.1 结论：已接入纯 C# 表现层并严守边界
 
-- 当前客户端仅为移动、服务端驱动跟随（`TeamFollowDriven`）与回合制战斗演出（`BattleSequencer`），**尚未构建实时 MMO 角色动作与技能连招演出状态机**，现阶段不提前引入 `UnityHFSM` 包壳依赖。
-- 当后续正式开发实时 MMO 大世界角色动作 / 技能演出时，**适合接入 `Inspiaaa/UnityHFSM`**（建议以本地 `.tgz` 或源码 vendor 方式引入，先核对 MIT 许可）：
-  1. **契合动作演出语义**：内置层级状态（`Locomotion` / `Mounted` / `Combat` / `Controlled`）、`needsExitTime`（前摇/后摇/收刀自然过渡）与 `ForceRequestStateChange`（受控/打断强切）。
-  2. **满足双端平台红线**：纯 C#、单线程 `Update()` 驱动、无 `Thread`/`Task.Run`/`System.Reflection.Emit`，兼容微信/抖音小游戏 WebGL2 单线程与 iOS/Android IL2CPP。
+- 客户端已正式引入 MIT 协议的 `Inspiaaa/UnityHFSM` v2.3.0（上游提交 `f8fdc2e`），落地位置与实现详见 `mmorpg-client/Assets/Scripts/ThirdParty/UnityHFSM/`、`Assets/Scripts/Game/ProtagonistPresentationHfsm.cs` 及 `GameClient.Presentation`：
+  1. **契合动作演出语义**：内置层级状态（`Free`/`Combat` 下的 `Idle` / `Move` / `ActionCast(needsExitTime=true)`，以及 `Mounted` / `TeamFollow` / `Controlled`）与 `RequestStateChange(..., forceInstantly: true)`（受控/打断强切）。
+  2. **满足双端平台红线**：全量源码经审计不含 `Thread`/`Task.Run`/`Task.Delay`/`System.Reflection.Emit`/`lock`，在 Unity 主线程 `GameClient.Tick()` 驱动，兼容微信/抖音小游戏 WebGL2 单线程与 iOS/Android IL2CPP。
 
 ### 3.2 必须守住的架构红线：「表现层归客户端、状态权威归服务端」
 

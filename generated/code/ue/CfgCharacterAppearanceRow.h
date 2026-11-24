@@ -55,7 +55,7 @@ struct FCfgCharacterAppearanceRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	/** 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用位图下标) */
+	/** 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用/拥有位图下标) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	int32 id = 0;
 
@@ -78,4 +78,16 @@ struct FCfgCharacterAppearanceRow : public FTableRowBase
 	/** 外观简述 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
 	FString desc;
+
+	/** 是否允许新角色建角免费初始选择:1 = 允许(阿禾、冰剑少女),0 = 不可建角初始选 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	int32 starter_creatable = 0;
+
+	/** 未拥有时是否允许消耗角色形象卡永久解锁:1 = 允许卡换解锁,0 = 仅限专属玩法/活动解锁 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	int32 card_unlockable = 0;
+
+	/** 所属人物收藏系列 ID(AppearanceSeries.id,0 = 未归册;纯外观与叙事分册,零属性加成) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|CharacterAppearance")
+	int32 series_id = 0;
 };

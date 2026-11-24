@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 58 张表全部读完，一张都没换；
+拆成了两步。这里先把 61 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -44,6 +44,7 @@ from .actoractioncombatstate_table import ActorActionCombatStateTableManager
 from .actoractionstate_table import ActorActionStateTableManager
 from .afkpassrule_table import AfkPassRuleTableManager
 from .appearancerule_table import AppearanceRuleTableManager
+from .appearanceseries_table import AppearanceSeriesTableManager
 from .attributeallocratio_table import AttributeAllocRatioTableManager
 from .attributeautoplan_table import AttributeAutoPlanTableManager
 from .attributedimension_table import AttributeDimensionTableManager
@@ -89,6 +90,8 @@ from .rankedpreset_table import RankedPresetTableManager
 from .rankedrule_table import RankedRuleTableManager
 from .reward_table import RewardTableManager
 from .rolenamerule_table import RoleNameRuleTableManager
+from .seasonrule_table import SeasonRuleTableManager
+from .seasonseal_table import SeasonSealTableManager
 from .skill_table import SkillTableManager
 from .skillpermission_table import SkillPermissionTableManager
 from .test_table import TestTableManager
@@ -114,6 +117,7 @@ MANAGERS: dict[str, TableManager] = {
     "ActorActionState": ActorActionStateTableManager.instance(),
     "AfkPassRule": AfkPassRuleTableManager.instance(),
     "AppearanceRule": AppearanceRuleTableManager.instance(),
+    "AppearanceSeries": AppearanceSeriesTableManager.instance(),
     "AttributeAllocRatio": AttributeAllocRatioTableManager.instance(),
     "AttributeAutoPlan": AttributeAutoPlanTableManager.instance(),
     "AttributeDimension": AttributeDimensionTableManager.instance(),
@@ -159,6 +163,8 @@ MANAGERS: dict[str, TableManager] = {
     "RankedRule": RankedRuleTableManager.instance(),
     "Reward": RewardTableManager.instance(),
     "RoleNameRule": RoleNameRuleTableManager.instance(),
+    "SeasonRule": SeasonRuleTableManager.instance(),
+    "SeasonSeal": SeasonSealTableManager.instance(),
     "Skill": SkillTableManager.instance(),
     "SkillPermission": SkillPermissionTableManager.instance(),
     "Test": TestTableManager.instance(),
@@ -184,7 +190,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 58 张表。
+    """串行加载全部 61 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

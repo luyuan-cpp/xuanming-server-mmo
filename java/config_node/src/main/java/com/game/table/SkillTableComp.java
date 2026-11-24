@@ -311,6 +311,18 @@ public final class SkillTableComp {
         }
     }
 
+    public record Forbid_copy(int value) {
+        public static Forbid_copy from(SkillTable row) {
+            return new Forbid_copy(row.getForbidCopy());
+        }
+    }
+
+    public record Season_id(int value) {
+        public static Season_id from(SkillTable row) {
+            return new Season_id(row.getSeasonId());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());

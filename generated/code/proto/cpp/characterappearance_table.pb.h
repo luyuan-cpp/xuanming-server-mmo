@@ -234,6 +234,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
     kIdFieldNumber = 1,
     kEnabledFieldNumber = 4,
     kSortOrderFieldNumber = 5,
+    kStarterCreatableFieldNumber = 7,
+    kCardUnlockableFieldNumber = 8,
+    kSeriesIdFieldNumber = 9,
   };
   // string appearance_id = 2;
   void clear_appearance_id() ;
@@ -310,12 +313,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
   void _internal_set_sort_order(::uint32_t value);
 
   public:
+  // uint32 starter_creatable = 7;
+  void clear_starter_creatable() ;
+  [[nodiscard]] ::uint32_t starter_creatable() const;
+  void set_starter_creatable(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_starter_creatable() const;
+  void _internal_set_starter_creatable(::uint32_t value);
+
+  public:
+  // uint32 card_unlockable = 8;
+  void clear_card_unlockable() ;
+  [[nodiscard]] ::uint32_t card_unlockable() const;
+  void set_card_unlockable(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_card_unlockable() const;
+  void _internal_set_card_unlockable(::uint32_t value);
+
+  public:
+  // uint32 series_id = 9;
+  void clear_series_id() ;
+  [[nodiscard]] ::uint32_t series_id() const;
+  void set_series_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_series_id() const;
+  void _internal_set_series_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CharacterAppearanceTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          0, 54,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 62,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -349,6 +382,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CharacterAppearanceTable final : pu
     ::uint32_t id_;
     ::uint32_t enabled_;
     ::uint32_t sort_order_;
+    ::uint32_t starter_creatable_;
+    ::uint32_t card_unlockable_;
+    ::uint32_t series_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -845,6 +881,78 @@ inline void CharacterAppearanceTable::set_allocated_desc(::std::string* PROTOBUF
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:CharacterAppearanceTable.desc)
+}
+
+// uint32 starter_creatable = 7;
+inline void CharacterAppearanceTable::clear_starter_creatable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starter_creatable_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t CharacterAppearanceTable::starter_creatable() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.starter_creatable)
+  return _internal_starter_creatable();
+}
+inline void CharacterAppearanceTable::set_starter_creatable(::uint32_t value) {
+  _internal_set_starter_creatable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.starter_creatable)
+}
+inline ::uint32_t CharacterAppearanceTable::_internal_starter_creatable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.starter_creatable_;
+}
+inline void CharacterAppearanceTable::_internal_set_starter_creatable(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starter_creatable_ = value;
+}
+
+// uint32 card_unlockable = 8;
+inline void CharacterAppearanceTable::clear_card_unlockable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_unlockable_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t CharacterAppearanceTable::card_unlockable() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.card_unlockable)
+  return _internal_card_unlockable();
+}
+inline void CharacterAppearanceTable::set_card_unlockable(::uint32_t value) {
+  _internal_set_card_unlockable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.card_unlockable)
+}
+inline ::uint32_t CharacterAppearanceTable::_internal_card_unlockable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.card_unlockable_;
+}
+inline void CharacterAppearanceTable::_internal_set_card_unlockable(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.card_unlockable_ = value;
+}
+
+// uint32 series_id = 9;
+inline void CharacterAppearanceTable::clear_series_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t CharacterAppearanceTable::series_id() const {
+  // @@protoc_insertion_point(field_get:CharacterAppearanceTable.series_id)
+  return _internal_series_id();
+}
+inline void CharacterAppearanceTable::set_series_id(::uint32_t value) {
+  _internal_set_series_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:CharacterAppearanceTable.series_id)
+}
+inline ::uint32_t CharacterAppearanceTable::_internal_series_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.series_id_;
+}
+inline void CharacterAppearanceTable::_internal_set_series_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.series_id_ = value;
 }
 
 // -------------------------------------------------------------------

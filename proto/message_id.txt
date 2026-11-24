@@ -451,3 +451,6 @@
 450=MatchServiceUpdateRankedCosmetic
 451=MatchServiceGetRankedBattleResult
 452=ClientPlayerTeamConfirmRankedPreset
+453=SceneSeasonClientPlayerGetSeasonState
+454=SceneSeasonClientPlayerEquipSeasonSeal
+455=SceneSeasonClientPlayerCatchupSeasonSeal

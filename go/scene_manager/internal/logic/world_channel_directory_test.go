@@ -696,19 +696,19 @@ func TestOrphanCleanup_DropsLineNoTableAndDirectory(t *testing.T) {
 func TestPublishWorldChannelDirectory_Outcomes(t *testing.T) {
 	sc, mr := newChannelDirectoryCtx(t)
 
-	outcome, err := publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
+	_, outcome, err := publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
 	require.NoError(t, err)
 	assert.Equal(t, metrics.ChannelDirectoryPublishEmpty, outcome)
 
 	seedDirectoryChannel(t, mr, lineSceneA, "10", 1)
-	outcome, err = publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
+	_, outcome, err = publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
 	require.NoError(t, err)
 	assert.Equal(t, metrics.ChannelDirectoryPublishOK, outcome)
 
 	// 线号表被写成了别的类型:分配脚本报 WRONGTYPE。(miniredis 的直写 Set 不允许覆盖非字符串键,先删。)
 	mr.Del(worldChannelLineNoKey(testZoneId, directoryTestConfID))
 	require.NoError(t, mr.Set(worldChannelLineNoKey(testZoneId, directoryTestConfID), "not-a-hash"))
-	outcome, err = publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
+	_, outcome, err = publishWorldChannelDirectory(sc, testZoneId, directoryTestConfID, directoryTestNow)
 	require.Error(t, err)
 	assert.Equal(t, metrics.ChannelDirectoryPublishError, outcome)
 }

@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+// AppearanceSeries 表的权威 schema。源表 data/AppearanceSeries.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色形象收藏系列分册表（纯外观与叙事收藏，零数值属性加成）：
+//   - 表级 (cfg_ids_permanent) = true: 上线后禁止物理删行或复用旧 ID，下架系列请将 enabled 置 0。
+//   - 集齐状态由服务端根据 CharacterAppearance.series_id 与玩家权威拥有位图实时派生，不单独落盘。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AppearanceSeriesTable {
+  option (cfg_sheet)         = "AppearanceSeries";
+  option (cfg_source_file)   = "AppearanceSeries.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 系列永久主键 ID（1 起只增不删）
+  uint32 id = 1;
+  // 稳定系列标识符（全表唯一非空，如 "lantern_courtyard"）
+  string series_key = 2;
+  // 系列中文展示名（如 "留灯院旧友"）
+  string name = 3;
+  // 图鉴展示排序（升序）
+  uint32 sort_order = 4;
+  // 是否启用：1 = 启用，0 = 停用
+  uint32 enabled = 5;
+  // 系列简介（纯世界观与题材说明）
+  string desc = 6;
+  // 集齐点亮印章/铭牌展示名（纯装饰，零数值属性）
+  string completion_badge_name = 7;
+  // 集齐解锁合篇故事篇名（空 = 暂无合篇）
+  string epilogue_title = 8;
+  // 集齐解锁合篇故事正文（纯叙事，零数值属性；客户端查本地表在 completed=true 时解锁阅读）
+  string epilogue_body = 9;
+}

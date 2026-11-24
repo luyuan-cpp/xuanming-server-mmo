@@ -1,0 +1,21 @@
+{
+ "data": [
+  {
+   "catchup_currency_type": 1,
+   "catchup_price_per_point": 10,
+   "default_seal_id": 101,
+   "defense_bps_cap": 300,
+   "desc": "首季破阵之季：4 招本季免费限定技能，1 槽赛季印轻属性上限气血+3%/防御+3%，不含速度与控制属性。",
+   "enabled": true,
+   "ends_at_ms": 0,
+   "id": 1,
+   "max_health_bps_cap": 300,
+   "name": "破阵之季",
+   "pve_win_points": 1,
+   "pvp_other_points": 1,
+   "pvp_win_points": 2,
+   "seal_max_points": 12,
+   "starts_at_ms": 0
+  }
+ ]
+}

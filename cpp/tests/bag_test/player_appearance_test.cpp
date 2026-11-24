@@ -21,6 +21,7 @@
 #include "services/scene/player/system/appearance_rules.h"
 #include "services/scene/player/system/player_appearance.h"
 #include "table/code/appearancerule_table.h"
+#include "table/code/appearanceseries_table.h"
 #include "table/code/characterappearance_table.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
@@ -65,6 +66,29 @@ TEST(PlayerAppearanceRulesTest, RuleBoundsBitStorageAndUnknownHighBitPreservatio
 			  "01_ice_sword_girl");
 	EXPECT_EQ(player_appearance::EffectiveAppearance("00_reference_topright_boy", "01_ice_sword_girl", kNowSec, kNowSec),
 			  "00_reference_topright_boy");
+
+	// 永久拥有位图与切换计划四分支判定(含 card_unlockable=0 玩法专属开关)。
+	std::string ownedBits(3, '\0');
+	ownedBits[2] = static_cast<char>(1u << 3);
+	EXPECT_TRUE(player_appearance::IsOwned(ownedBits, 2, "00_reference_topright_boy", "00_reference_topright_boy"));
+	EXPECT_FALSE(player_appearance::IsOwned(ownedBits, 3, "00_reference_topright_boy", "01_ice_sword_girl"));
+	EXPECT_TRUE(player_appearance::MarkOwned(ownedBits, 3));
+	EXPECT_TRUE(player_appearance::IsOwned(ownedBits, 3, "00_reference_topright_boy", "01_ice_sword_girl"));
+	EXPECT_EQ(static_cast<unsigned char>(ownedBits[2]), 0x08u);
+
+	EXPECT_EQ(player_appearance::PlanSwitch(/*alreadyOwned=*/true, /*expectFreeSwitch=*/true, /*cardUnlockable=*/false),
+			  player_appearance::SwitchPlan::kFreeSwitch);
+	EXPECT_EQ(player_appearance::PlanSwitch(/*alreadyOwned=*/true, /*expectFreeSwitch=*/false, /*cardUnlockable=*/false),
+			  player_appearance::SwitchPlan::kFreeSwitch);
+	EXPECT_EQ(player_appearance::PlanSwitch(/*alreadyOwned=*/false, /*expectFreeSwitch=*/true, /*cardUnlockable=*/true),
+			  player_appearance::SwitchPlan::kRefuseNotOwned);
+	EXPECT_EQ(player_appearance::PlanSwitch(/*alreadyOwned=*/false, /*expectFreeSwitch=*/false, /*cardUnlockable=*/false),
+			  player_appearance::SwitchPlan::kRefuseNotCardUnlockable);
+	EXPECT_EQ(player_appearance::PlanSwitch(/*alreadyOwned=*/false, /*expectFreeSwitch=*/false, /*cardUnlockable=*/true),
+			  player_appearance::SwitchPlan::kCardUnlock);
+	EXPECT_FALSE(player_appearance::IsSeriesCompleted(0, 0));
+	EXPECT_FALSE(player_appearance::IsSeriesCompleted(2, 3));
+	EXPECT_TRUE(player_appearance::IsSeriesCompleted(3, 3));
 }
 
 class PlayerAppearanceSystemTest : public testing::Test
@@ -73,6 +97,7 @@ protected:
 	void SetUp() override
 	{
 		ItemTableManager::Instance().Load();
+		AppearanceSeriesTableManager::Instance().Load();
 		CharacterAppearanceTableManager::Instance().Load();
 		AppearanceRuleTableManager::Instance().Load();
 		ASSERT_TRUE(PlayerAppearanceSystem::ValidateTables());
@@ -290,5 +315,175 @@ TEST_F(PlayerAppearanceSystemTest, RejectsWhenNoCardOrFrozen)
 	StartAppearanceTrialResponse trialResp;
 	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, trialReq, kNowSec, trialResp),
 			  static_cast<uint32_t>(kAppearanceFrozen));
+}
+
+TEST_F(PlayerAppearanceSystemTest, PermanentWardrobeFreeSwitchFailClosedAndUnknownHighBits)
+{
+	// 预置未知高位 bit,确认只读 FillInfo 隐式把当前永久形象并入响应但不回写持久化字段。
+	auto &profile = tlsEcs.actorRegistry.get<PlayerProfileComp>(player);
+	std::string seedBits(3, '\0');
+	seedBits[2] = static_cast<char>(1u << 1);
+	profile.set_appearance_owned_bits(seedBits);
+
+	PlayerAppearanceInfo initialInfo;
+	PlayerAppearanceSystem::FillInfo(player, kNowSec, initialInfo);
+	EXPECT_EQ(profile.appearance_owned_bits(), seedBits); // 只读不脏写
+	EXPECT_TRUE(player_appearance::IsBitMarked(initialInfo.owned_bits(), 2));
+	EXPECT_EQ(static_cast<unsigned char>(initialInfo.owned_bits()[2]), 0x02u);
+	ASSERT_EQ(initialInfo.appearances_size(), 8);
+	for (const auto &entry : initialInfo.appearances())
+	{
+		EXPECT_TRUE(entry.card_unlockable());
+		EXPECT_EQ(entry.owned(), entry.appearance_id() == "00_reference_topright_boy");
+	}
+
+	// expect_free_switch=true 指向未拥有形象:fail-closed 拒绝,0 扣卡。
+	SwitchAppearanceRequest failClosedReq;
+	failClosedReq.set_client_request_id(4001);
+	failClosedReq.set_appearance_id("02_fire_talisman_boy");
+	failClosedReq.set_expect_free_switch(true);
+	SwitchAppearanceResponse resp;
+	EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, failClosedReq, kNowSec, resp),
+			  static_cast<uint32_t>(kAppearanceNotOwned));
+	EXPECT_EQ(CardCountInBag(), 2u);
+
+	// 扣 1 张卡买断解锁 02_fire_talisman_boy:旧永久 00 与新 02 同时入衣柜,且未知高位保留。
+	SwitchAppearanceRequest unlockReq;
+	unlockReq.set_client_request_id(4002);
+	unlockReq.set_appearance_id("02_fire_talisman_boy");
+	unlockReq.set_expect_free_switch(false);
+	ASSERT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, unlockReq, kNowSec + 1, resp), kSuccess);
+	EXPECT_EQ(CardCountInBag(), 1u);
+	EXPECT_TRUE(player_appearance::IsBitMarked(profile.appearance_owned_bits(), 2));
+	EXPECT_TRUE(player_appearance::IsBitMarked(profile.appearance_owned_bits(), 4));
+	EXPECT_EQ(static_cast<unsigned char>(profile.appearance_owned_bits()[2]), 0x02u);
+
+	// 同键改 expect_free_switch 必须判定参数不匹配。
+	SwitchAppearanceRequest flippedReq = unlockReq;
+	flippedReq.set_expect_free_switch(true);
+	EXPECT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, flippedReq, kNowSec + 2, resp), kInvalidParameter);
+
+	// 扣光背包剩余形象卡,验证已拥有形象双向免费切换(expect_free_switch=true/false 均 0 扣卡)。
+	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	bags.bags[kInventory].RemoveItems({{cardItemId, 1}});
+	ASSERT_EQ(CardCountInBag(), 0u);
+
+	// 对已拥有的非当前形象发起试用应拒并返回 kAppearanceAlreadyOwned,不污染试用位图。
+	StartAppearanceTrialRequest ownedTrialReq;
+	ownedTrialReq.set_client_request_id(4003);
+	ownedTrialReq.set_appearance_id("00_reference_topright_boy");
+	StartAppearanceTrialResponse ownedTrialResp;
+	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, ownedTrialReq, kNowSec + 3, ownedTrialResp),
+			  static_cast<uint32_t>(kAppearanceAlreadyOwned));
+	EXPECT_TRUE(profile.appearance_trial_used_bits().empty());
+
+	// 0 卡免费切回 00_reference_topright_boy。
+	SwitchAppearanceRequest freeBackReq;
+	freeBackReq.set_client_request_id(4004);
+	freeBackReq.set_appearance_id("00_reference_topright_boy");
+	freeBackReq.set_expect_free_switch(true);
+	ASSERT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, freeBackReq, kNowSec + 4, resp), kSuccess);
+	EXPECT_EQ(resp.info().permanent_appearance_id(), "00_reference_topright_boy");
+	EXPECT_EQ(CardCountInBag(), 0u);
+
+	// 0 卡且 expect_free_switch=false 再次切到已拥有的 02_fire_talisman_boy,同样走免费分支。
+	SwitchAppearanceRequest freeForwardReq;
+	freeForwardReq.set_client_request_id(4005);
+	freeForwardReq.set_appearance_id("02_fire_talisman_boy");
+	freeForwardReq.set_expect_free_switch(false);
+	ASSERT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, freeForwardReq, kNowSec + 5, resp), kSuccess);
+	EXPECT_EQ(resp.info().permanent_appearance_id(), "02_fire_talisman_boy");
+	EXPECT_EQ(CardCountInBag(), 0u);
+}
+
+TEST_F(PlayerAppearanceSystemTest, GrantAppearanceIsIdempotentAndPreservesActiveAndTrial)
+{
+	// 正在试用 03_lotus_healer_girl 时,内部授形 05_celestial_musician_girl 不中断试用也不改变当前永久形象。
+	StartAppearanceTrialRequest trialReq;
+	trialReq.set_client_request_id(5001);
+	trialReq.set_appearance_id("03_lotus_healer_girl");
+	StartAppearanceTrialResponse trialResp;
+	ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, trialReq, kNowSec, trialResp), kSuccess);
+	const size_t savesBefore = saveReasons.size();
+	const size_t notifiesBefore = stateNotifies.size();
+
+	bool alreadyOwned = true;
+	ASSERT_EQ(PlayerAppearanceSystem::GrantAppearance(player, "05_celestial_musician_girl", kNowSec + 1, &alreadyOwned),
+			  kSuccess);
+	EXPECT_FALSE(alreadyOwned);
+	EXPECT_EQ(saveReasons.size(), savesBefore + 1);
+	EXPECT_EQ(stateNotifies.size(), notifiesBefore + 1);
+	EXPECT_FALSE(stateNotifies.back().trial_expired());
+	EXPECT_EQ(stateNotifies.back().info().permanent_appearance_id(), "00_reference_topright_boy");
+	EXPECT_EQ(stateNotifies.back().info().active_appearance_id(), "03_lotus_healer_girl");
+
+	// 重复授形幂等无副作用。
+	ASSERT_EQ(PlayerAppearanceSystem::GrantAppearance(player, "05_celestial_musician_girl", kNowSec + 2, &alreadyOwned),
+			  kSuccess);
+	EXPECT_TRUE(alreadyOwned);
+	EXPECT_EQ(saveReasons.size(), savesBefore + 1);
+	EXPECT_EQ(stateNotifies.size(), notifiesBefore + 1);
+
+	// 扣光卡后可凭授形结果免费切到 05_celestial_musician_girl。
+	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
+	bags.bags[kInventory].RemoveItems({{cardItemId, 2}});
+	SwitchAppearanceRequest freeSwitchReq;
+	freeSwitchReq.set_client_request_id(5002);
+	freeSwitchReq.set_appearance_id("05_celestial_musician_girl");
+	freeSwitchReq.set_expect_free_switch(true);
+	SwitchAppearanceResponse switchResp;
+	ASSERT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, freeSwitchReq, kNowSec + 3, switchResp), kSuccess);
+	EXPECT_EQ(switchResp.info().permanent_appearance_id(), "05_celestial_musician_girl");
+	EXPECT_TRUE(switchResp.info().trial_appearance_id().empty());
+}
+
+TEST_F(PlayerAppearanceSystemTest, SeriesProgressTracksOwnershipIgnoresTrialsAndCompletesSeries)
+{
+	// 初始仅拥有 00_reference_topright_boy(留灯院旧友 1/3), 其余两册 0/3 与 0/2。
+	PlayerAppearanceInfo info;
+	PlayerAppearanceSystem::FillInfo(player, kNowSec, info);
+	ASSERT_EQ(info.series_progress_size(), 3);
+	EXPECT_EQ(info.series_progress(0).series_id(), 1u);
+	EXPECT_EQ(info.series_progress(0).series_key(), "lantern_courtyard");
+	EXPECT_EQ(info.series_progress(0).owned_count(), 1u);
+	EXPECT_EQ(info.series_progress(0).total_count(), 3u);
+	EXPECT_FALSE(info.series_progress(0).completed());
+	EXPECT_EQ(info.series_progress(0).member_appearance_ids_size(), 3);
+	EXPECT_EQ(info.series_progress(1).series_id(), 2u);
+	EXPECT_EQ(info.series_progress(1).owned_count(), 0u);
+	EXPECT_EQ(info.series_progress(1).total_count(), 3u);
+	EXPECT_EQ(info.series_progress(2).series_id(), 3u);
+	EXPECT_EQ(info.series_progress(2).owned_count(), 0u);
+	EXPECT_EQ(info.series_progress(2).total_count(), 2u);
+
+	// 试用同系列成员 09_bamboo_archer_girl 绝不计入系列拥有进度。
+	StartAppearanceTrialRequest trialReq;
+	trialReq.set_client_request_id(6001);
+	trialReq.set_appearance_id("09_bamboo_archer_girl");
+	StartAppearanceTrialResponse trialResp;
+	ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, trialReq, kNowSec + 1, trialResp), kSuccess);
+	EXPECT_EQ(trialResp.info().series_progress(0).owned_count(), 1u);
+	EXPECT_FALSE(trialResp.info().series_progress(0).completed());
+
+	// 消耗形象卡解锁 09_bamboo_archer_girl -> 2/3, 仍未集齐。
+	SwitchAppearanceRequest unlockReq;
+	unlockReq.set_client_request_id(6002);
+	unlockReq.set_appearance_id("09_bamboo_archer_girl");
+	SwitchAppearanceResponse switchResp;
+	ASSERT_EQ(PlayerAppearanceSystem::SwitchAppearance(player, unlockReq, kNowSec + 2, switchResp), kSuccess);
+	EXPECT_EQ(switchResp.info().series_progress(0).owned_count(), 2u);
+	EXPECT_FALSE(switchResp.info().series_progress(0).completed());
+
+	// 内部授形 10_crimson_spear_girl -> 留灯院旧友 3/3 集齐点亮印章与合篇。
+	ASSERT_EQ(PlayerAppearanceSystem::GrantAppearance(player, "10_crimson_spear_girl", kNowSec + 3), kSuccess);
+	ASSERT_FALSE(stateNotifies.empty());
+	const auto &completedSeries = stateNotifies.back().info().series_progress(0);
+	EXPECT_EQ(completedSeries.owned_count(), 3u);
+	EXPECT_EQ(completedSeries.total_count(), 3u);
+	EXPECT_TRUE(completedSeries.completed());
+	EXPECT_EQ(completedSeries.completion_badge_name(), "留灯同袍");
+	EXPECT_EQ(completedSeries.epilogue_title(), "灯下三碗面");
+	EXPECT_EQ(stateNotifies.back().info().series_progress(1).owned_count(), 0u);
+	EXPECT_EQ(stateNotifies.back().info().series_progress(2).owned_count(), 0u);
 }
 } // namespace

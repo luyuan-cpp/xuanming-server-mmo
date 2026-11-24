@@ -77,6 +77,12 @@ public interface MonsterTableOrBuilder extends
   int getCaptureRate();
 
   /**
+   * <code>uint32 is_boss = 13;</code>
+   * @return The isBoss.
+   */
+  int getIsBoss();
+
+  /**
    * <code>repeated .Monsterdrop drop = 10;</code>
    */
   java.util.List<com.game.table.Monsterdrop> 

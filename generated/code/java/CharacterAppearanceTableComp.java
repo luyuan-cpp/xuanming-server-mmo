@@ -53,4 +53,22 @@ public final class CharacterAppearanceTableComp {
         }
     }
 
+    public record Starter_creatable(int value) {
+        public static Starter_creatable from(CharacterAppearanceTable row) {
+            return new Starter_creatable(row.getStarterCreatable());
+        }
+    }
+
+    public record Card_unlockable(int value) {
+        public static Card_unlockable from(CharacterAppearanceTable row) {
+            return new Card_unlockable(row.getCardUnlockable());
+        }
+    }
+
+    public record Series_id(int value) {
+        public static Series_id from(CharacterAppearanceTable row) {
+            return new Series_id(row.getSeriesId());
+        }
+    }
+
 }

@@ -4768,6 +4768,7 @@
    "effect": [
     110130
    ],
+   "forbid_copy": 1,
    "health_cost_mode": 1,
    "id": 11013,
    "mana_percent": 0.0,
@@ -4825,6 +4826,7 @@
    "effect": [
     110150
    ],
+   "forbid_copy": 1,
    "id": 11015,
    "mana_percent": 0.25,
    "max_rank": 10,
@@ -4854,6 +4856,7 @@
     110160,
     110161
    ],
+   "forbid_copy": 1,
    "health_cost_mode": 2,
    "id": 11016,
    "mana_percent": 0.0,
@@ -5387,6 +5390,163 @@
    "pet_max_targets": 1,
    "prototype_code": "O03",
    "require_target": 1,
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "本回合复制指定敌方单位的可复制主动技能，以施法者自身属性与本技重数零耗蓝释放（伤害与数值按85%折算）；若目标本回合未施放可复制技能，则从其已学可复制主动技能中随机释放一招；首测参数，待平衡。",
+   "effect": [
+    100410
+   ],
+   "forbid_copy": 1,
+   "id": 10041,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "玄镜映法",
+   "pet_max_targets": 1,
+   "prototype_code": "A41",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.85,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "【破阵之季免费】物理攻击敌方最多3个目标并附加2回合破甲（防御-15%）；首测参数，待平衡。",
+   "effect": [
+    150010,
+    150011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15001,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "破阵裂锋",
+   "pet_max_targets": 1,
+   "prototype_code": "SS101",
+   "require_target": 1,
+   "season_id": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【破阵之季免费】法术攻击敌方最多3个目标并附加2回合破阵减防（防御-15%）；首测参数，待平衡。",
+   "effect": [
+    150020,
+    150021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15002,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "破阵灵雷",
+   "pet_max_targets": 1,
+   "prototype_code": "SS102",
+   "require_target": 1,
+   "season_id": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【破阵之季免费】为友方最多3个目标施加2回合护盾，短冷却保人应对重劈与集火；首测参数，待平衡。",
+   "effect": [
+    150030
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15003,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "固阵灵障",
+   "pet_max_targets": 1,
+   "prototype_code": "SS103",
+   "require_target": 1,
+   "season_id": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【破阵之季免费】为友方最多3个目标提升2回合双攻势能（+15%），短节奏爆发辅助；首测参数，待平衡。",
+   "effect": [
+    150040
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15004,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "破阵蓄势",
+   "pet_max_targets": 1,
+   "prototype_code": "SS104",
+   "require_target": 1,
+   "season_id": 1,
+   "skill_type": [
+    1
+   ],
    "target_team": 2,
    "targeting_mode": [
     1

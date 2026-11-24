@@ -917,6 +917,28 @@ private static final long serialVersionUID = 0L;
     return allowDeadTarget_;
   }
 
+  public static final int FORBID_COPY_FIELD_NUMBER = 57;
+  private int forbidCopy_ = 0;
+  /**
+   * <code>uint32 forbid_copy = 57;</code>
+   * @return The forbidCopy.
+   */
+  @java.lang.Override
+  public int getForbidCopy() {
+    return forbidCopy_;
+  }
+
+  public static final int SEASON_ID_FIELD_NUMBER = 58;
+  private int seasonId_ = 0;
+  /**
+   * <code>uint32 season_id = 58;</code>
+   * @return The seasonId.
+   */
+  @java.lang.Override
+  public int getSeasonId() {
+    return seasonId_;
+  }
+
   public static final int REQUIRED_ITEM_FIELD_NUMBER = 21;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Skillrequired_item> requiredItem_;
@@ -1239,6 +1261,12 @@ private static final long serialVersionUID = 0L;
     if (allowDeadTarget_ != 0) {
       output.writeUInt32(56, allowDeadTarget_);
     }
+    if (forbidCopy_ != 0) {
+      output.writeUInt32(57, forbidCopy_);
+    }
+    if (seasonId_ != 0) {
+      output.writeUInt32(58, seasonId_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -1519,6 +1547,14 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(56, allowDeadTarget_);
     }
+    if (forbidCopy_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(57, forbidCopy_);
+    }
+    if (seasonId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(58, seasonId_);
+    }
     return size;
   }
   @java.lang.Override
@@ -1664,6 +1700,10 @@ private static final long serialVersionUID = 0L;
         != other.getActionTags()) return false;
     if (getAllowDeadTarget()
         != other.getAllowDeadTarget()) return false;
+    if (getForbidCopy()
+        != other.getForbidCopy()) return false;
+    if (getSeasonId()
+        != other.getSeasonId()) return false;
     if (!getRequiredItemList()
         .equals(other.getRequiredItemList())) return false;
     if (!getRequiredResourceList()
@@ -1809,6 +1849,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getActionTags();
     hash = (37 * hash) + ALLOW_DEAD_TARGET_FIELD_NUMBER;
     hash = (53 * hash) + getAllowDeadTarget();
+    hash = (37 * hash) + FORBID_COPY_FIELD_NUMBER;
+    hash = (53 * hash) + getForbidCopy();
+    hash = (37 * hash) + SEASON_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getSeasonId();
     if (getRequiredItemCount() > 0) {
       hash = (37 * hash) + REQUIRED_ITEM_FIELD_NUMBER;
       hash = (53 * hash) + getRequiredItemList().hashCode();
@@ -2006,27 +2050,29 @@ private static final long serialVersionUID = 0L;
       healthCostMode_ = 0;
       actionTags_ = 0;
       allowDeadTarget_ = 0;
+      forbidCopy_ = 0;
+      seasonId_ = 0;
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
       } else {
         requiredItem_ = null;
         requiredItemBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00200000);
+      bitField1_ = (bitField1_ & ~0x00800000);
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
       } else {
         requiredResource_ = null;
         requiredResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00400000);
+      bitField1_ = (bitField1_ & ~0x01000000);
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
       } else {
         costResource_ = null;
         costResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00800000);
+      bitField1_ = (bitField1_ & ~0x02000000);
       return this;
     }
 
@@ -2062,27 +2108,27 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.SkillTable result) {
       if (requiredItemBuilder_ == null) {
-        if (((bitField1_ & 0x00200000) != 0)) {
+        if (((bitField1_ & 0x00800000) != 0)) {
           requiredItem_ = java.util.Collections.unmodifiableList(requiredItem_);
-          bitField1_ = (bitField1_ & ~0x00200000);
+          bitField1_ = (bitField1_ & ~0x00800000);
         }
         result.requiredItem_ = requiredItem_;
       } else {
         result.requiredItem_ = requiredItemBuilder_.build();
       }
       if (requiredResourceBuilder_ == null) {
-        if (((bitField1_ & 0x00400000) != 0)) {
+        if (((bitField1_ & 0x01000000) != 0)) {
           requiredResource_ = java.util.Collections.unmodifiableList(requiredResource_);
-          bitField1_ = (bitField1_ & ~0x00400000);
+          bitField1_ = (bitField1_ & ~0x01000000);
         }
         result.requiredResource_ = requiredResource_;
       } else {
         result.requiredResource_ = requiredResourceBuilder_.build();
       }
       if (costResourceBuilder_ == null) {
-        if (((bitField1_ & 0x00800000) != 0)) {
+        if (((bitField1_ & 0x02000000) != 0)) {
           costResource_ = java.util.Collections.unmodifiableList(costResource_);
-          bitField1_ = (bitField1_ & ~0x00800000);
+          bitField1_ = (bitField1_ & ~0x02000000);
         }
         result.costResource_ = costResource_;
       } else {
@@ -2258,6 +2304,12 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField1_ & 0x00100000) != 0)) {
         result.allowDeadTarget_ = allowDeadTarget_;
+      }
+      if (((from_bitField1_ & 0x00200000) != 0)) {
+        result.forbidCopy_ = forbidCopy_;
+      }
+      if (((from_bitField1_ & 0x00400000) != 0)) {
+        result.seasonId_ = seasonId_;
       }
     }
 
@@ -2478,11 +2530,17 @@ private static final long serialVersionUID = 0L;
       if (other.getAllowDeadTarget() != 0) {
         setAllowDeadTarget(other.getAllowDeadTarget());
       }
+      if (other.getForbidCopy() != 0) {
+        setForbidCopy(other.getForbidCopy());
+      }
+      if (other.getSeasonId() != 0) {
+        setSeasonId(other.getSeasonId());
+      }
       if (requiredItemBuilder_ == null) {
         if (!other.requiredItem_.isEmpty()) {
           if (requiredItem_.isEmpty()) {
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x00200000);
+            bitField1_ = (bitField1_ & ~0x00800000);
           } else {
             ensureRequiredItemIsMutable();
             requiredItem_.addAll(other.requiredItem_);
@@ -2495,7 +2553,7 @@ private static final long serialVersionUID = 0L;
             requiredItemBuilder_.dispose();
             requiredItemBuilder_ = null;
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x00200000);
+            bitField1_ = (bitField1_ & ~0x00800000);
             requiredItemBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredItemFieldBuilder() : null;
@@ -2508,7 +2566,7 @@ private static final long serialVersionUID = 0L;
         if (!other.requiredResource_.isEmpty()) {
           if (requiredResource_.isEmpty()) {
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x00400000);
+            bitField1_ = (bitField1_ & ~0x01000000);
           } else {
             ensureRequiredResourceIsMutable();
             requiredResource_.addAll(other.requiredResource_);
@@ -2521,7 +2579,7 @@ private static final long serialVersionUID = 0L;
             requiredResourceBuilder_.dispose();
             requiredResourceBuilder_ = null;
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x00400000);
+            bitField1_ = (bitField1_ & ~0x01000000);
             requiredResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredResourceFieldBuilder() : null;
@@ -2534,7 +2592,7 @@ private static final long serialVersionUID = 0L;
         if (!other.costResource_.isEmpty()) {
           if (costResource_.isEmpty()) {
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x00800000);
+            bitField1_ = (bitField1_ & ~0x02000000);
           } else {
             ensureCostResourceIsMutable();
             costResource_.addAll(other.costResource_);
@@ -2547,7 +2605,7 @@ private static final long serialVersionUID = 0L;
             costResourceBuilder_.dispose();
             costResourceBuilder_ = null;
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x00800000);
+            bitField1_ = (bitField1_ & ~0x02000000);
             costResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetCostResourceFieldBuilder() : null;
@@ -2930,6 +2988,16 @@ private static final long serialVersionUID = 0L;
               bitField1_ |= 0x00100000;
               break;
             } // case 448
+            case 456: {
+              forbidCopy_ = input.readUInt32();
+              bitField1_ |= 0x00200000;
+              break;
+            } // case 456
+            case 464: {
+              seasonId_ = input.readUInt32();
+              bitField1_ |= 0x00400000;
+              break;
+            } // case 464
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -5132,12 +5200,76 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int forbidCopy_ ;
+    /**
+     * <code>uint32 forbid_copy = 57;</code>
+     * @return The forbidCopy.
+     */
+    @java.lang.Override
+    public int getForbidCopy() {
+      return forbidCopy_;
+    }
+    /**
+     * <code>uint32 forbid_copy = 57;</code>
+     * @param value The forbidCopy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setForbidCopy(int value) {
+
+      forbidCopy_ = value;
+      bitField1_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 forbid_copy = 57;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearForbidCopy() {
+      bitField1_ = (bitField1_ & ~0x00200000);
+      forbidCopy_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int seasonId_ ;
+    /**
+     * <code>uint32 season_id = 58;</code>
+     * @return The seasonId.
+     */
+    @java.lang.Override
+    public int getSeasonId() {
+      return seasonId_;
+    }
+    /**
+     * <code>uint32 season_id = 58;</code>
+     * @param value The seasonId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeasonId(int value) {
+
+      seasonId_ = value;
+      bitField1_ |= 0x00400000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 season_id = 58;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSeasonId() {
+      bitField1_ = (bitField1_ & ~0x00400000);
+      seasonId_ = 0;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Skillrequired_item> requiredItem_ =
       java.util.Collections.emptyList();
     private void ensureRequiredItemIsMutable() {
-      if (!((bitField1_ & 0x00200000) != 0)) {
+      if (!((bitField1_ & 0x00800000) != 0)) {
         requiredItem_ = new java.util.ArrayList<com.game.table.Skillrequired_item>(requiredItem_);
-        bitField1_ |= 0x00200000;
+        bitField1_ |= 0x00800000;
        }
     }
 
@@ -5287,7 +5419,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredItem() {
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00200000);
+        bitField1_ = (bitField1_ & ~0x00800000);
         onChanged();
       } else {
         requiredItemBuilder_.clear();
@@ -5364,7 +5496,7 @@ private static final long serialVersionUID = 0L;
         requiredItemBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_item, com.game.table.Skillrequired_item.Builder, com.game.table.Skillrequired_itemOrBuilder>(
                 requiredItem_,
-                ((bitField1_ & 0x00200000) != 0),
+                ((bitField1_ & 0x00800000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredItem_ = null;
@@ -5375,9 +5507,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillrequired_resource> requiredResource_ =
       java.util.Collections.emptyList();
     private void ensureRequiredResourceIsMutable() {
-      if (!((bitField1_ & 0x00400000) != 0)) {
+      if (!((bitField1_ & 0x01000000) != 0)) {
         requiredResource_ = new java.util.ArrayList<com.game.table.Skillrequired_resource>(requiredResource_);
-        bitField1_ |= 0x00400000;
+        bitField1_ |= 0x01000000;
        }
     }
 
@@ -5527,7 +5659,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredResource() {
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00400000);
+        bitField1_ = (bitField1_ & ~0x01000000);
         onChanged();
       } else {
         requiredResourceBuilder_.clear();
@@ -5604,7 +5736,7 @@ private static final long serialVersionUID = 0L;
         requiredResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_resource, com.game.table.Skillrequired_resource.Builder, com.game.table.Skillrequired_resourceOrBuilder>(
                 requiredResource_,
-                ((bitField1_ & 0x00400000) != 0),
+                ((bitField1_ & 0x01000000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredResource_ = null;
@@ -5615,9 +5747,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillcost_resource> costResource_ =
       java.util.Collections.emptyList();
     private void ensureCostResourceIsMutable() {
-      if (!((bitField1_ & 0x00800000) != 0)) {
+      if (!((bitField1_ & 0x02000000) != 0)) {
         costResource_ = new java.util.ArrayList<com.game.table.Skillcost_resource>(costResource_);
-        bitField1_ |= 0x00800000;
+        bitField1_ |= 0x02000000;
        }
     }
 
@@ -5767,7 +5899,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearCostResource() {
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00800000);
+        bitField1_ = (bitField1_ & ~0x02000000);
         onChanged();
       } else {
         costResourceBuilder_.clear();
@@ -5844,7 +5976,7 @@ private static final long serialVersionUID = 0L;
         costResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillcost_resource, com.game.table.Skillcost_resource.Builder, com.game.table.Skillcost_resourceOrBuilder>(
                 costResource_,
-                ((bitField1_ & 0x00800000) != 0),
+                ((bitField1_ & 0x02000000) != 0),
                 getParentForChildren(),
                 isClean());
         costResource_ = null;

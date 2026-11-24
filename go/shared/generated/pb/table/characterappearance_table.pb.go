@@ -22,15 +22,18 @@ const (
 )
 
 type CharacterAppearanceTable struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	AppearanceId  string                 `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Enabled       uint32                 `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	SortOrder     uint32                 `protobuf:"varint,5,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
-	Desc          string                 `protobuf:"bytes,6,opt,name=desc,proto3" json:"desc,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	AppearanceId     string                 `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Enabled          uint32                 `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	SortOrder        uint32                 `protobuf:"varint,5,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	Desc             string                 `protobuf:"bytes,6,opt,name=desc,proto3" json:"desc,omitempty"`
+	StarterCreatable uint32                 `protobuf:"varint,7,opt,name=starter_creatable,json=starterCreatable,proto3" json:"starter_creatable,omitempty"`
+	CardUnlockable   uint32                 `protobuf:"varint,8,opt,name=card_unlockable,json=cardUnlockable,proto3" json:"card_unlockable,omitempty"`
+	SeriesId         uint32                 `protobuf:"varint,9,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CharacterAppearanceTable) Reset() {
@@ -105,6 +108,27 @@ func (x *CharacterAppearanceTable) GetDesc() string {
 	return ""
 }
 
+func (x *CharacterAppearanceTable) GetStarterCreatable() uint32 {
+	if x != nil {
+		return x.StarterCreatable
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceTable) GetCardUnlockable() uint32 {
+	if x != nil {
+		return x.CardUnlockable
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceTable) GetSeriesId() uint32 {
+	if x != nil {
+		return x.SeriesId
+	}
+	return 0
+}
+
 type CharacterAppearanceTableData struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
 	Data          []*CharacterAppearanceTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -153,7 +177,7 @@ var File_characterappearance_table_proto protoreflect.FileDescriptor
 
 const file_characterappearance_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1fcharacterappearance_table.proto\"\xb0\x01\n" +
+	"\x1fcharacterappearance_table.proto\"\xa3\x02\n" +
 	"\x18CharacterAppearanceTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x12\n" +
@@ -161,7 +185,10 @@ const file_characterappearance_table_proto_rawDesc = "" +
 	"\aenabled\x18\x04 \x01(\rR\aenabled\x12\x1d\n" +
 	"\n" +
 	"sort_order\x18\x05 \x01(\rR\tsortOrder\x12\x12\n" +
-	"\x04desc\x18\x06 \x01(\tR\x04desc\"M\n" +
+	"\x04desc\x18\x06 \x01(\tR\x04desc\x12+\n" +
+	"\x11starter_creatable\x18\a \x01(\rR\x10starterCreatable\x12'\n" +
+	"\x0fcard_unlockable\x18\b \x01(\rR\x0ecardUnlockable\x12\x1b\n" +
+	"\tseries_id\x18\t \x01(\rR\bseriesId\"M\n" +
 	"\x1cCharacterAppearanceTableData\x12-\n" +
 	"\x04data\x18\x01 \x03(\v2\x19.CharacterAppearanceTableR\x04dataBJ\n" +
 	"\x0ecom.game.tableB\"CharacterAppearanceTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

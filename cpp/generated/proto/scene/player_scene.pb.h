@@ -69,6 +69,8 @@ enum SyncDigestStatus : int;
 extern const uint32_t SyncDigestStatus_internal_data_[];
 enum SyncDomain : int;
 extern const uint32_t SyncDomain_internal_data_[];
+enum WorldMapHeatLevel : int;
+extern const uint32_t WorldMapHeatLevel_internal_data_[];
 class ActorCreateS2C;
 struct ActorCreateS2CGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -205,6 +207,30 @@ extern const ::google::protobuf::internal::ClassDataFull TravelToZoneResponse_cl
 #else
 extern const TravelToZoneResponseGlobalsTypeInternal TravelToZoneResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class WorldMapOverview;
+struct WorldMapOverviewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WorldMapOverviewGlobalsTypeInternal WorldMapOverview_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WorldMapOverview_class_data_;
+#else
+extern const WorldMapOverviewGlobalsTypeInternal WorldMapOverview_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class WorldMapOverviewEntry;
+struct WorldMapOverviewEntryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WorldMapOverviewEntryGlobalsTypeInternal WorldMapOverviewEntry_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WorldMapOverviewEntry_class_data_;
+#else
+extern const WorldMapOverviewEntryGlobalsTypeInternal WorldMapOverviewEntry_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class WorldTideSnapshot;
+struct WorldTideSnapshotGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WorldTideSnapshotGlobalsTypeInternal WorldTideSnapshot_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WorldTideSnapshot_class_data_;
+#else
+extern const WorldTideSnapshotGlobalsTypeInternal WorldTideSnapshot_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 template <>
@@ -219,6 +245,9 @@ internal::EnumTraitsT<::SyncDigestStatus_internal_data_>
 template <>
 internal::EnumTraitsT<::SyncDomain_internal_data_>
     internal::EnumTraitsImpl::value<::SyncDomain>;
+template <>
+internal::EnumTraitsT<::WorldMapHeatLevel_internal_data_>
+    internal::EnumTraitsImpl::value<::WorldMapHeatLevel>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -264,6 +293,48 @@ template <>
 [[nodiscard]] inline bool SceneChannelState_Parse(
     ::absl::string_view name, SceneChannelState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<SceneChannelState>(SceneChannelState_descriptor(), name,
+                                           value);
+}
+enum WorldMapHeatLevel : int {
+  WORLD_MAP_HEAT_LEVEL_UNKNOWN = 0,
+  WORLD_MAP_HEAT_LEVEL_QUIET = 1,
+  WORLD_MAP_HEAT_LEVEL_ACTIVE = 2,
+  WORLD_MAP_HEAT_LEVEL_CROWDED = 3,
+  WorldMapHeatLevel_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  WorldMapHeatLevel_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t WorldMapHeatLevel_internal_data_[];
+inline constexpr WorldMapHeatLevel WorldMapHeatLevel_MIN =
+    static_cast<WorldMapHeatLevel>(0);
+inline constexpr WorldMapHeatLevel WorldMapHeatLevel_MAX =
+    static_cast<WorldMapHeatLevel>(3);
+[[nodiscard]] inline bool WorldMapHeatLevel_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int WorldMapHeatLevel_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+WorldMapHeatLevel_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(WorldMapHeatLevel) {
+  return WorldMapHeatLevel_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& WorldMapHeatLevel_Name(T value) {
+  static_assert(::std::is_same<T, WorldMapHeatLevel>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to WorldMapHeatLevel_Name().");
+  return WorldMapHeatLevel_Name(static_cast<WorldMapHeatLevel>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& WorldMapHeatLevel_Name(WorldMapHeatLevel value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<WorldMapHeatLevel_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool WorldMapHeatLevel_Parse(
+    ::absl::string_view name, WorldMapHeatLevel* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<WorldMapHeatLevel>(WorldMapHeatLevel_descriptor(), name,
                                            value);
 }
 enum ActorType : int {
@@ -403,6 +474,576 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WorldTideSnapshot final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:WorldTideSnapshot) */ {
+ public:
+  inline WorldTideSnapshot() : WorldTideSnapshot(nullptr) {}
+  ~WorldTideSnapshot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WorldTideSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WorldTideSnapshot));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WorldTideSnapshot(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WorldTideSnapshot(const WorldTideSnapshot& from) : WorldTideSnapshot(nullptr, from) {}
+  inline WorldTideSnapshot(WorldTideSnapshot&& from) noexcept : WorldTideSnapshot(nullptr, ::std::move(from)) {}
+  inline WorldTideSnapshot& operator=(const WorldTideSnapshot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WorldTideSnapshot& operator=(WorldTideSnapshot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WorldTideSnapshot& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WorldTideSnapshot>(&WorldTideSnapshot_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(WorldTideSnapshot& a, WorldTideSnapshot& b) { a.Swap(&b); }
+  inline void Swap(WorldTideSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WorldTideSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WorldTideSnapshot* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WorldTideSnapshot>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WorldTideSnapshot& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WorldTideSnapshot& from) { WorldTideSnapshot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WorldTideSnapshot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "WorldTideSnapshot"; }
+
+  explicit WorldTideSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WorldTideSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WorldTideSnapshot& from);
+  WorldTideSnapshot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WorldTideSnapshot&& from) noexcept
+      : WorldTideSnapshot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRoundIdFieldNumber = 2,
+    kActiveFieldNumber = 1,
+    kSceneConfigIdFieldNumber = 3,
+    kRecommendedSceneIdFieldNumber = 4,
+    kStartsAtMsFieldNumber = 6,
+    kEndsAtMsFieldNumber = 7,
+    kNextStartsAtMsFieldNumber = 8,
+    kRecommendedChannelNoFieldNumber = 5,
+  };
+  // uint64 round_id = 2;
+  void clear_round_id() ;
+  [[nodiscard]] ::uint64_t round_id() const;
+  void set_round_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_round_id() const;
+  void _internal_set_round_id(::uint64_t value);
+
+  public:
+  // bool active = 1;
+  void clear_active() ;
+  [[nodiscard]] bool active() const;
+  void set_active(bool value);
+
+  private:
+  bool _internal_active() const;
+  void _internal_set_active(bool value);
+
+  public:
+  // uint32 scene_config_id = 3;
+  void clear_scene_config_id() ;
+  [[nodiscard]] ::uint32_t scene_config_id() const;
+  void set_scene_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scene_config_id() const;
+  void _internal_set_scene_config_id(::uint32_t value);
+
+  public:
+  // uint64 recommended_scene_id = 4;
+  void clear_recommended_scene_id() ;
+  [[nodiscard]] ::uint64_t recommended_scene_id() const;
+  void set_recommended_scene_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_recommended_scene_id() const;
+  void _internal_set_recommended_scene_id(::uint64_t value);
+
+  public:
+  // uint64 starts_at_ms = 6;
+  void clear_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t starts_at_ms() const;
+  void set_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_starts_at_ms() const;
+  void _internal_set_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 ends_at_ms = 7;
+  void clear_ends_at_ms() ;
+  [[nodiscard]] ::uint64_t ends_at_ms() const;
+  void set_ends_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ends_at_ms() const;
+  void _internal_set_ends_at_ms(::uint64_t value);
+
+  public:
+  // uint64 next_starts_at_ms = 8;
+  void clear_next_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t next_starts_at_ms() const;
+  void set_next_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_starts_at_ms() const;
+  void _internal_set_next_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint32 recommended_channel_no = 5;
+  void clear_recommended_channel_no() ;
+  [[nodiscard]] ::uint32_t recommended_channel_no() const;
+  void set_recommended_channel_no(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_recommended_channel_no() const;
+  void _internal_set_recommended_channel_no(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:WorldTideSnapshot)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WorldTideSnapshot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t round_id_;
+    bool active_;
+    ::uint32_t scene_config_id_;
+    ::uint64_t recommended_scene_id_;
+    ::uint64_t starts_at_ms_;
+    ::uint64_t ends_at_ms_;
+    ::uint64_t next_starts_at_ms_;
+    ::uint32_t recommended_channel_no_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WorldMapOverviewEntry final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:WorldMapOverviewEntry) */ {
+ public:
+  inline WorldMapOverviewEntry() : WorldMapOverviewEntry(nullptr) {}
+  ~WorldMapOverviewEntry() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WorldMapOverviewEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WorldMapOverviewEntry));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WorldMapOverviewEntry(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WorldMapOverviewEntry(const WorldMapOverviewEntry& from) : WorldMapOverviewEntry(nullptr, from) {}
+  inline WorldMapOverviewEntry(WorldMapOverviewEntry&& from) noexcept : WorldMapOverviewEntry(nullptr, ::std::move(from)) {}
+  inline WorldMapOverviewEntry& operator=(const WorldMapOverviewEntry& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WorldMapOverviewEntry& operator=(WorldMapOverviewEntry&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WorldMapOverviewEntry& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WorldMapOverviewEntry>(&WorldMapOverviewEntry_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(WorldMapOverviewEntry& a, WorldMapOverviewEntry& b) { a.Swap(&b); }
+  inline void Swap(WorldMapOverviewEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WorldMapOverviewEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WorldMapOverviewEntry* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WorldMapOverviewEntry>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WorldMapOverviewEntry& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WorldMapOverviewEntry& from) { WorldMapOverviewEntry::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WorldMapOverviewEntry* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "WorldMapOverviewEntry"; }
+
+  explicit WorldMapOverviewEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WorldMapOverviewEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WorldMapOverviewEntry& from);
+  WorldMapOverviewEntry(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WorldMapOverviewEntry&& from) noexcept
+      : WorldMapOverviewEntry(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSceneConfigIdFieldNumber = 1,
+    kTotalPlayerCountFieldNumber = 2,
+    kChannelCountFieldNumber = 3,
+    kHeatLevelFieldNumber = 4,
+    kRecommendedSceneIdFieldNumber = 5,
+    kRecommendedChannelNoFieldNumber = 6,
+    kIsTideMapFieldNumber = 7,
+    kHasMysteryMerchantFieldNumber = 8,
+  };
+  // uint32 scene_config_id = 1;
+  void clear_scene_config_id() ;
+  [[nodiscard]] ::uint32_t scene_config_id() const;
+  void set_scene_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scene_config_id() const;
+  void _internal_set_scene_config_id(::uint32_t value);
+
+  public:
+  // uint32 total_player_count = 2;
+  void clear_total_player_count() ;
+  [[nodiscard]] ::uint32_t total_player_count() const;
+  void set_total_player_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_player_count() const;
+  void _internal_set_total_player_count(::uint32_t value);
+
+  public:
+  // uint32 channel_count = 3;
+  void clear_channel_count() ;
+  [[nodiscard]] ::uint32_t channel_count() const;
+  void set_channel_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_channel_count() const;
+  void _internal_set_channel_count(::uint32_t value);
+
+  public:
+  // .WorldMapHeatLevel heat_level = 4;
+  void clear_heat_level() ;
+  [[nodiscard]] ::WorldMapHeatLevel heat_level() const;
+  void set_heat_level(::WorldMapHeatLevel value);
+
+  private:
+  ::WorldMapHeatLevel _internal_heat_level() const;
+  void _internal_set_heat_level(::WorldMapHeatLevel value);
+
+  public:
+  // uint64 recommended_scene_id = 5;
+  void clear_recommended_scene_id() ;
+  [[nodiscard]] ::uint64_t recommended_scene_id() const;
+  void set_recommended_scene_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_recommended_scene_id() const;
+  void _internal_set_recommended_scene_id(::uint64_t value);
+
+  public:
+  // uint32 recommended_channel_no = 6;
+  void clear_recommended_channel_no() ;
+  [[nodiscard]] ::uint32_t recommended_channel_no() const;
+  void set_recommended_channel_no(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_recommended_channel_no() const;
+  void _internal_set_recommended_channel_no(::uint32_t value);
+
+  public:
+  // bool is_tide_map = 7;
+  void clear_is_tide_map() ;
+  [[nodiscard]] bool is_tide_map() const;
+  void set_is_tide_map(bool value);
+
+  private:
+  bool _internal_is_tide_map() const;
+  void _internal_set_is_tide_map(bool value);
+
+  public:
+  // bool has_mystery_merchant = 8;
+  void clear_has_mystery_merchant() ;
+  [[nodiscard]] bool has_mystery_merchant() const;
+  void set_has_mystery_merchant(bool value);
+
+  private:
+  bool _internal_has_mystery_merchant() const;
+  void _internal_set_has_mystery_merchant(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:WorldMapOverviewEntry)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WorldMapOverviewEntry& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t scene_config_id_;
+    ::uint32_t total_player_count_;
+    ::uint32_t channel_count_;
+    int heat_level_;
+    ::uint64_t recommended_scene_id_;
+    ::uint32_t recommended_channel_no_;
+    bool is_tide_map_;
+    bool has_mystery_merchant_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:TravelToZoneRequest) */ {
  public:
@@ -459,7 +1100,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneRequest final : public 
   [[nodiscard]] static const TravelToZoneRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelToZoneRequest>(&TravelToZoneRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(TravelToZoneRequest& a, TravelToZoneRequest& b) { a.Swap(&b); }
   inline void Swap(TravelToZoneRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -672,7 +1313,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SyncDigestEntry final : public ::go
   [[nodiscard]] static const SyncDigestEntry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SyncDigestEntry>(&SyncDigestEntry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SyncDigestEntry& a, SyncDigestEntry& b) { a.Swap(&b); }
   inline void Swap(SyncDigestEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -885,7 +1526,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   [[nodiscard]] static const SceneInfoRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoRequest>(&SceneInfoRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(SceneInfoRequest& a, SceneInfoRequest& b) { a.Swap(&b); }
   inline void Swap(SceneInfoRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -978,6 +1619,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kWithChannelDirectoryFieldNumber = 1,
+    kWithWorldMapOverviewFieldNumber = 2,
   };
   // bool with_channel_directory = 1;
   void clear_with_channel_directory() ;
@@ -989,11 +1631,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
   void _internal_set_with_channel_directory(bool value);
 
   public:
+  // bool with_world_map_overview = 2;
+  void clear_with_world_map_overview() ;
+  [[nodiscard]] bool with_world_map_overview() const;
+  void set_with_world_map_overview(bool value);
+
+  private:
+  bool _internal_with_world_map_overview() const;
+  void _internal_set_with_world_map_overview(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SceneInfoRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1023,6 +1675,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoRequest final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     bool with_channel_directory_;
+    bool with_world_map_overview_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1322,7 +1975,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSyncDigestRequest final : public
   [[nodiscard]] static const GetSyncDigestRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSyncDigestRequest>(&GetSyncDigestRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(GetSyncDigestRequest& a, GetSyncDigestRequest& b) { a.Swap(&b); }
   inline void Swap(GetSyncDigestRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1461,7 +2114,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorListDestroyS2C final : public 
   [[nodiscard]] static const ActorListDestroyS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorListDestroyS2C>(&ActorListDestroyS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(ActorListDestroyS2C& a, ActorListDestroyS2C& b) { a.Swap(&b); }
   inline void Swap(ActorListDestroyS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1673,7 +2326,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorDestroyS2C final : public ::go
   [[nodiscard]] static const ActorDestroyS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorDestroyS2C>(&ActorDestroyS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(ActorDestroyS2C& a, ActorDestroyS2C& b) { a.Swap(&b); }
   inline void Swap(ActorDestroyS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1818,6 +2471,284 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorDestroyS2C final : public ::go
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WorldMapOverview final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:WorldMapOverview) */ {
+ public:
+  inline WorldMapOverview() : WorldMapOverview(nullptr) {}
+  ~WorldMapOverview() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WorldMapOverview* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WorldMapOverview));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WorldMapOverview(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WorldMapOverview(const WorldMapOverview& from) : WorldMapOverview(nullptr, from) {}
+  inline WorldMapOverview(WorldMapOverview&& from) noexcept : WorldMapOverview(nullptr, ::std::move(from)) {}
+  inline WorldMapOverview& operator=(const WorldMapOverview& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WorldMapOverview& operator=(WorldMapOverview&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WorldMapOverview& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WorldMapOverview>(&WorldMapOverview_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(WorldMapOverview& a, WorldMapOverview& b) { a.Swap(&b); }
+  inline void Swap(WorldMapOverview* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WorldMapOverview* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WorldMapOverview* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WorldMapOverview>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WorldMapOverview& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WorldMapOverview& from) { WorldMapOverview::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WorldMapOverview* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "WorldMapOverview"; }
+
+  explicit WorldMapOverview(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WorldMapOverview(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WorldMapOverview& from);
+  WorldMapOverview(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WorldMapOverview&& from) noexcept
+      : WorldMapOverview(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMapsFieldNumber = 4,
+    kTideFieldNumber = 5,
+    kUpdatedAtMsFieldNumber = 2,
+    kServerTimeMsFieldNumber = 3,
+    kZoneIdFieldNumber = 1,
+    kDailyHotspotSceneConfigIdFieldNumber = 6,
+  };
+  // repeated .WorldMapOverviewEntry maps = 4;
+  [[nodiscard]] int maps_size()
+      const;
+  private:
+  int _internal_maps_size() const;
+
+  public:
+  void clear_maps() ;
+  [[nodiscard]] const ::WorldMapOverviewEntry& maps(int index) const;
+  [[nodiscard]] ::WorldMapOverviewEntry* PROTOBUF_NONNULL mutable_maps(int index);
+  ::WorldMapOverviewEntry* PROTOBUF_NONNULL add_maps();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>&
+  maps() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>* PROTOBUF_NONNULL
+  mutable_maps();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>& _internal_maps() const;
+  ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>* PROTOBUF_NONNULL _internal_mutable_maps();
+
+  public:
+  // .WorldTideSnapshot tide = 5;
+  [[nodiscard]] bool has_tide()
+      const;
+  void clear_tide() ;
+  [[nodiscard]] const ::WorldTideSnapshot& tide() const;
+  [[nodiscard]] ::WorldTideSnapshot* PROTOBUF_NULLABLE release_tide();
+  ::WorldTideSnapshot* PROTOBUF_NONNULL mutable_tide();
+  void set_allocated_tide(::WorldTideSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_tide(::WorldTideSnapshot* PROTOBUF_NULLABLE value);
+  ::WorldTideSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_tide();
+
+  private:
+  const ::WorldTideSnapshot& _internal_tide() const;
+  ::WorldTideSnapshot* PROTOBUF_NONNULL _internal_mutable_tide();
+
+  public:
+  // uint64 updated_at_ms = 2;
+  void clear_updated_at_ms() ;
+  [[nodiscard]] ::uint64_t updated_at_ms() const;
+  void set_updated_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_at_ms() const;
+  void _internal_set_updated_at_ms(::uint64_t value);
+
+  public:
+  // uint64 server_time_ms = 3;
+  void clear_server_time_ms() ;
+  [[nodiscard]] ::uint64_t server_time_ms() const;
+  void set_server_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_time_ms() const;
+  void _internal_set_server_time_ms(::uint64_t value);
+
+  public:
+  // uint32 zone_id = 1;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 daily_hotspot_scene_config_id = 6;
+  void clear_daily_hotspot_scene_config_id() ;
+  [[nodiscard]] ::uint32_t daily_hotspot_scene_config_id() const;
+  void set_daily_hotspot_scene_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_daily_hotspot_scene_config_id() const;
+  void _internal_set_daily_hotspot_scene_config_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:WorldMapOverview)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WorldMapOverview& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::WorldMapOverviewEntry > maps_;
+    ::WorldTideSnapshot* PROTOBUF_NULLABLE tide_;
+    ::uint64_t updated_at_ms_;
+    ::uint64_t server_time_ms_;
+    ::uint32_t zone_id_;
+    ::uint32_t daily_hotspot_scene_config_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fscene_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:TravelToZoneResponse) */ {
  public:
@@ -1874,7 +2805,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelToZoneResponse final : public
   [[nodiscard]] static const TravelToZoneResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelToZoneResponse>(&TravelToZoneResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(TravelToZoneResponse& a, TravelToZoneResponse& b) { a.Swap(&b); }
   inline void Swap(TravelToZoneResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2081,7 +3012,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SyncDigestS2C final : public ::goog
   [[nodiscard]] static const SyncDigestS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SyncDigestS2C>(&SyncDigestS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(SyncDigestS2C& a, SyncDigestS2C& b) { a.Swap(&b); }
   inline void Swap(SyncDigestS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2808,7 +3739,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   [[nodiscard]] static const SceneInfoS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoS2C>(&SceneInfoS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(SceneInfoS2C& a, SceneInfoS2C& b) { a.Swap(&b); }
   inline void Swap(SceneInfoS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2902,6 +3833,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   enum : int {
     kSceneInfoFieldNumber = 1,
     kChannelDirectoryFieldNumber = 2,
+    kWorldMapOverviewFieldNumber = 3,
   };
   // repeated .SceneInfoComp scene_info = 1;
   [[nodiscard]] int scene_info_size()
@@ -2940,12 +3872,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
   ::SceneChannelDirectory* PROTOBUF_NONNULL _internal_mutable_channel_directory();
 
   public:
+  // .WorldMapOverview world_map_overview = 3;
+  [[nodiscard]] bool has_world_map_overview()
+      const;
+  void clear_world_map_overview() ;
+  [[nodiscard]] const ::WorldMapOverview& world_map_overview() const;
+  [[nodiscard]] ::WorldMapOverview* PROTOBUF_NULLABLE release_world_map_overview();
+  ::WorldMapOverview* PROTOBUF_NONNULL mutable_world_map_overview();
+  void set_allocated_world_map_overview(::WorldMapOverview* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_world_map_overview(::WorldMapOverview* PROTOBUF_NULLABLE value);
+  ::WorldMapOverview* PROTOBUF_NULLABLE unsafe_arena_release_world_map_overview();
+
+  private:
+  const ::WorldMapOverview& _internal_world_map_overview() const;
+  ::WorldMapOverview* PROTOBUF_NONNULL _internal_mutable_world_map_overview();
+
+  public:
   // @@protoc_insertion_point(class_scope:SceneInfoS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2975,6 +3923,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoS2C final : public ::googl
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::SceneInfoComp > scene_info_;
     ::SceneChannelDirectory* PROTOBUF_NULLABLE channel_directory_;
+    ::WorldMapOverview* PROTOBUF_NULLABLE world_map_overview_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3038,7 +3987,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SceneInfoResponse final : public ::
   [[nodiscard]] static const SceneInfoResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SceneInfoResponse>(&SceneInfoResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(SceneInfoResponse& a, SceneInfoResponse& b) { a.Swap(&b); }
   inline void Swap(SceneInfoResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3664,7 +4613,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorCreateS2C final : public ::goo
   [[nodiscard]] static const ActorCreateS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorCreateS2C>(&ActorCreateS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(ActorCreateS2C& a, ActorCreateS2C& b) { a.Swap(&b); }
   inline void Swap(ActorCreateS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3960,7 +4909,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ActorListCreateS2C final : public :
   [[nodiscard]] static const ActorListCreateS2C& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ActorListCreateS2C>(&ActorListCreateS2C_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(ActorListCreateS2C& a, ActorListCreateS2C& b) { a.Swap(&b); }
   inline void Swap(ActorListCreateS2C* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4866,6 +5815,651 @@ inline void SceneChannelDirectory::_internal_set_switch_enabled(bool value) {
 
 // -------------------------------------------------------------------
 
+// WorldMapOverviewEntry
+
+// uint32 scene_config_id = 1;
+inline void WorldMapOverviewEntry::clear_scene_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t WorldMapOverviewEntry::scene_config_id() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.scene_config_id)
+  return _internal_scene_config_id();
+}
+inline void WorldMapOverviewEntry::set_scene_config_id(::uint32_t value) {
+  _internal_set_scene_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.scene_config_id)
+}
+inline ::uint32_t WorldMapOverviewEntry::_internal_scene_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scene_config_id_;
+}
+inline void WorldMapOverviewEntry::_internal_set_scene_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = value;
+}
+
+// uint32 total_player_count = 2;
+inline void WorldMapOverviewEntry::clear_total_player_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_player_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t WorldMapOverviewEntry::total_player_count() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.total_player_count)
+  return _internal_total_player_count();
+}
+inline void WorldMapOverviewEntry::set_total_player_count(::uint32_t value) {
+  _internal_set_total_player_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.total_player_count)
+}
+inline ::uint32_t WorldMapOverviewEntry::_internal_total_player_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_player_count_;
+}
+inline void WorldMapOverviewEntry::_internal_set_total_player_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_player_count_ = value;
+}
+
+// uint32 channel_count = 3;
+inline void WorldMapOverviewEntry::clear_channel_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t WorldMapOverviewEntry::channel_count() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.channel_count)
+  return _internal_channel_count();
+}
+inline void WorldMapOverviewEntry::set_channel_count(::uint32_t value) {
+  _internal_set_channel_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.channel_count)
+}
+inline ::uint32_t WorldMapOverviewEntry::_internal_channel_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_count_;
+}
+inline void WorldMapOverviewEntry::_internal_set_channel_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_count_ = value;
+}
+
+// .WorldMapHeatLevel heat_level = 4;
+inline void WorldMapOverviewEntry::clear_heat_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heat_level_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::WorldMapHeatLevel WorldMapOverviewEntry::heat_level() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.heat_level)
+  return _internal_heat_level();
+}
+inline void WorldMapOverviewEntry::set_heat_level(::WorldMapHeatLevel value) {
+  _internal_set_heat_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.heat_level)
+}
+inline ::WorldMapHeatLevel WorldMapOverviewEntry::_internal_heat_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::WorldMapHeatLevel>(_impl_.heat_level_);
+}
+inline void WorldMapOverviewEntry::_internal_set_heat_level(::WorldMapHeatLevel value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.heat_level_ = value;
+}
+
+// uint64 recommended_scene_id = 5;
+inline void WorldMapOverviewEntry::clear_recommended_scene_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_scene_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t WorldMapOverviewEntry::recommended_scene_id() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.recommended_scene_id)
+  return _internal_recommended_scene_id();
+}
+inline void WorldMapOverviewEntry::set_recommended_scene_id(::uint64_t value) {
+  _internal_set_recommended_scene_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.recommended_scene_id)
+}
+inline ::uint64_t WorldMapOverviewEntry::_internal_recommended_scene_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recommended_scene_id_;
+}
+inline void WorldMapOverviewEntry::_internal_set_recommended_scene_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_scene_id_ = value;
+}
+
+// uint32 recommended_channel_no = 6;
+inline void WorldMapOverviewEntry::clear_recommended_channel_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_channel_no_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WorldMapOverviewEntry::recommended_channel_no() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.recommended_channel_no)
+  return _internal_recommended_channel_no();
+}
+inline void WorldMapOverviewEntry::set_recommended_channel_no(::uint32_t value) {
+  _internal_set_recommended_channel_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.recommended_channel_no)
+}
+inline ::uint32_t WorldMapOverviewEntry::_internal_recommended_channel_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recommended_channel_no_;
+}
+inline void WorldMapOverviewEntry::_internal_set_recommended_channel_no(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_channel_no_ = value;
+}
+
+// bool is_tide_map = 7;
+inline void WorldMapOverviewEntry::clear_is_tide_map() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_tide_map_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool WorldMapOverviewEntry::is_tide_map() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.is_tide_map)
+  return _internal_is_tide_map();
+}
+inline void WorldMapOverviewEntry::set_is_tide_map(bool value) {
+  _internal_set_is_tide_map(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.is_tide_map)
+}
+inline bool WorldMapOverviewEntry::_internal_is_tide_map() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_tide_map_;
+}
+inline void WorldMapOverviewEntry::_internal_set_is_tide_map(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_tide_map_ = value;
+}
+
+// bool has_mystery_merchant = 8;
+inline void WorldMapOverviewEntry::clear_has_mystery_merchant() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_mystery_merchant_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool WorldMapOverviewEntry::has_mystery_merchant() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverviewEntry.has_mystery_merchant)
+  return _internal_has_mystery_merchant();
+}
+inline void WorldMapOverviewEntry::set_has_mystery_merchant(bool value) {
+  _internal_set_has_mystery_merchant(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:WorldMapOverviewEntry.has_mystery_merchant)
+}
+inline bool WorldMapOverviewEntry::_internal_has_mystery_merchant() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_mystery_merchant_;
+}
+inline void WorldMapOverviewEntry::_internal_set_has_mystery_merchant(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_mystery_merchant_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// WorldTideSnapshot
+
+// bool active = 1;
+inline void WorldTideSnapshot::clear_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool WorldTideSnapshot::active() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.active)
+  return _internal_active();
+}
+inline void WorldTideSnapshot::set_active(bool value) {
+  _internal_set_active(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.active)
+}
+inline bool WorldTideSnapshot::_internal_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_;
+}
+inline void WorldTideSnapshot::_internal_set_active(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_ = value;
+}
+
+// uint64 round_id = 2;
+inline void WorldTideSnapshot::clear_round_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t WorldTideSnapshot::round_id() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.round_id)
+  return _internal_round_id();
+}
+inline void WorldTideSnapshot::set_round_id(::uint64_t value) {
+  _internal_set_round_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.round_id)
+}
+inline ::uint64_t WorldTideSnapshot::_internal_round_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_id_;
+}
+inline void WorldTideSnapshot::_internal_set_round_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_id_ = value;
+}
+
+// uint32 scene_config_id = 3;
+inline void WorldTideSnapshot::clear_scene_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t WorldTideSnapshot::scene_config_id() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.scene_config_id)
+  return _internal_scene_config_id();
+}
+inline void WorldTideSnapshot::set_scene_config_id(::uint32_t value) {
+  _internal_set_scene_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.scene_config_id)
+}
+inline ::uint32_t WorldTideSnapshot::_internal_scene_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scene_config_id_;
+}
+inline void WorldTideSnapshot::_internal_set_scene_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_config_id_ = value;
+}
+
+// uint64 recommended_scene_id = 4;
+inline void WorldTideSnapshot::clear_recommended_scene_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_scene_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t WorldTideSnapshot::recommended_scene_id() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.recommended_scene_id)
+  return _internal_recommended_scene_id();
+}
+inline void WorldTideSnapshot::set_recommended_scene_id(::uint64_t value) {
+  _internal_set_recommended_scene_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.recommended_scene_id)
+}
+inline ::uint64_t WorldTideSnapshot::_internal_recommended_scene_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recommended_scene_id_;
+}
+inline void WorldTideSnapshot::_internal_set_recommended_scene_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_scene_id_ = value;
+}
+
+// uint32 recommended_channel_no = 5;
+inline void WorldTideSnapshot::clear_recommended_channel_no() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_channel_no_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t WorldTideSnapshot::recommended_channel_no() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.recommended_channel_no)
+  return _internal_recommended_channel_no();
+}
+inline void WorldTideSnapshot::set_recommended_channel_no(::uint32_t value) {
+  _internal_set_recommended_channel_no(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.recommended_channel_no)
+}
+inline ::uint32_t WorldTideSnapshot::_internal_recommended_channel_no() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recommended_channel_no_;
+}
+inline void WorldTideSnapshot::_internal_set_recommended_channel_no(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recommended_channel_no_ = value;
+}
+
+// uint64 starts_at_ms = 6;
+inline void WorldTideSnapshot::clear_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t WorldTideSnapshot::starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.starts_at_ms)
+  return _internal_starts_at_ms();
+}
+inline void WorldTideSnapshot::set_starts_at_ms(::uint64_t value) {
+  _internal_set_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.starts_at_ms)
+}
+inline ::uint64_t WorldTideSnapshot::_internal_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.starts_at_ms_;
+}
+inline void WorldTideSnapshot::_internal_set_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starts_at_ms_ = value;
+}
+
+// uint64 ends_at_ms = 7;
+inline void WorldTideSnapshot::clear_ends_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ends_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t WorldTideSnapshot::ends_at_ms() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.ends_at_ms)
+  return _internal_ends_at_ms();
+}
+inline void WorldTideSnapshot::set_ends_at_ms(::uint64_t value) {
+  _internal_set_ends_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.ends_at_ms)
+}
+inline ::uint64_t WorldTideSnapshot::_internal_ends_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ends_at_ms_;
+}
+inline void WorldTideSnapshot::_internal_set_ends_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ends_at_ms_ = value;
+}
+
+// uint64 next_starts_at_ms = 8;
+inline void WorldTideSnapshot::clear_next_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t WorldTideSnapshot::next_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:WorldTideSnapshot.next_starts_at_ms)
+  return _internal_next_starts_at_ms();
+}
+inline void WorldTideSnapshot::set_next_starts_at_ms(::uint64_t value) {
+  _internal_set_next_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WorldTideSnapshot.next_starts_at_ms)
+}
+inline ::uint64_t WorldTideSnapshot::_internal_next_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_starts_at_ms_;
+}
+inline void WorldTideSnapshot::_internal_set_next_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_starts_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// WorldMapOverview
+
+// uint32 zone_id = 1;
+inline void WorldMapOverview::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t WorldMapOverview::zone_id() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.zone_id)
+  return _internal_zone_id();
+}
+inline void WorldMapOverview::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WorldMapOverview.zone_id)
+}
+inline ::uint32_t WorldMapOverview::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void WorldMapOverview::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// uint64 updated_at_ms = 2;
+inline void WorldMapOverview::clear_updated_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t WorldMapOverview::updated_at_ms() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.updated_at_ms)
+  return _internal_updated_at_ms();
+}
+inline void WorldMapOverview::set_updated_at_ms(::uint64_t value) {
+  _internal_set_updated_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:WorldMapOverview.updated_at_ms)
+}
+inline ::uint64_t WorldMapOverview::_internal_updated_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_at_ms_;
+}
+inline void WorldMapOverview::_internal_set_updated_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_at_ms_ = value;
+}
+
+// uint64 server_time_ms = 3;
+inline void WorldMapOverview::clear_server_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t WorldMapOverview::server_time_ms() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.server_time_ms)
+  return _internal_server_time_ms();
+}
+inline void WorldMapOverview::set_server_time_ms(::uint64_t value) {
+  _internal_set_server_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:WorldMapOverview.server_time_ms)
+}
+inline ::uint64_t WorldMapOverview::_internal_server_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_time_ms_;
+}
+inline void WorldMapOverview::_internal_set_server_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = value;
+}
+
+// repeated .WorldMapOverviewEntry maps = 4;
+inline int WorldMapOverview::_internal_maps_size() const {
+  return _internal_maps().size();
+}
+inline int WorldMapOverview::maps_size() const {
+  return _internal_maps_size();
+}
+inline void WorldMapOverview::clear_maps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.maps_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::WorldMapOverviewEntry& WorldMapOverview::maps(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.maps)
+  return _internal_maps().Get(index);
+}
+inline ::WorldMapOverviewEntry* PROTOBUF_NONNULL WorldMapOverview::mutable_maps(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:WorldMapOverview.maps)
+  return _internal_mutable_maps()->Mutable(index);
+}
+inline ::WorldMapOverviewEntry* PROTOBUF_NONNULL WorldMapOverview::add_maps()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::WorldMapOverviewEntry* _add =
+      _internal_mutable_maps()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:WorldMapOverview.maps)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>& WorldMapOverview::maps() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WorldMapOverview.maps)
+  return _internal_maps();
+}
+inline ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>* PROTOBUF_NONNULL
+WorldMapOverview::mutable_maps() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:WorldMapOverview.maps)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_maps();
+}
+inline const ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>&
+WorldMapOverview::_internal_maps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.maps_;
+}
+inline ::google::protobuf::RepeatedPtrField<::WorldMapOverviewEntry>* PROTOBUF_NONNULL
+WorldMapOverview::_internal_mutable_maps() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.maps_;
+}
+
+// .WorldTideSnapshot tide = 5;
+inline bool WorldMapOverview::has_tide() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.tide_ != nullptr);
+  return value;
+}
+inline void WorldMapOverview::clear_tide() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tide_ != nullptr) _impl_.tide_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WorldTideSnapshot& WorldMapOverview::_internal_tide() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WorldTideSnapshot* p = _impl_.tide_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WorldTideSnapshot>(&::WorldTideSnapshot_globals_);
+}
+inline const ::WorldTideSnapshot& WorldMapOverview::tide() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.tide)
+  return _internal_tide();
+}
+inline void WorldMapOverview::unsafe_arena_set_allocated_tide(
+    ::WorldTideSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tide_);
+  }
+  _impl_.tide_ = reinterpret_cast<::WorldTideSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:WorldMapOverview.tide)
+}
+inline ::WorldTideSnapshot* PROTOBUF_NULLABLE WorldMapOverview::release_tide() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WorldTideSnapshot* released = _impl_.tide_;
+  _impl_.tide_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WorldTideSnapshot* PROTOBUF_NULLABLE WorldMapOverview::unsafe_arena_release_tide() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:WorldMapOverview.tide)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WorldTideSnapshot* temp = _impl_.tide_;
+  _impl_.tide_ = nullptr;
+  return temp;
+}
+inline ::WorldTideSnapshot* PROTOBUF_NONNULL WorldMapOverview::_internal_mutable_tide() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.tide_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WorldTideSnapshot>(GetArena());
+    _impl_.tide_ = reinterpret_cast<::WorldTideSnapshot*>(p);
+  }
+  return _impl_.tide_;
+}
+inline ::WorldTideSnapshot* PROTOBUF_NONNULL WorldMapOverview::mutable_tide()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WorldTideSnapshot* _msg = _internal_mutable_tide();
+  // @@protoc_insertion_point(field_mutable:WorldMapOverview.tide)
+  return _msg;
+}
+inline void WorldMapOverview::set_allocated_tide(::WorldTideSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.tide_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.tide_ = reinterpret_cast<::WorldTideSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:WorldMapOverview.tide)
+}
+
+// uint32 daily_hotspot_scene_config_id = 6;
+inline void WorldMapOverview::clear_daily_hotspot_scene_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_hotspot_scene_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WorldMapOverview::daily_hotspot_scene_config_id() const {
+  // @@protoc_insertion_point(field_get:WorldMapOverview.daily_hotspot_scene_config_id)
+  return _internal_daily_hotspot_scene_config_id();
+}
+inline void WorldMapOverview::set_daily_hotspot_scene_config_id(::uint32_t value) {
+  _internal_set_daily_hotspot_scene_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WorldMapOverview.daily_hotspot_scene_config_id)
+}
+inline ::uint32_t WorldMapOverview::_internal_daily_hotspot_scene_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.daily_hotspot_scene_config_id_;
+}
+inline void WorldMapOverview::_internal_set_daily_hotspot_scene_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_hotspot_scene_config_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // SceneInfoS2C
 
 // repeated .SceneInfoComp scene_info = 1;
@@ -5016,6 +6610,104 @@ inline void SceneInfoS2C::set_allocated_channel_directory(::SceneChannelDirector
   // @@protoc_insertion_point(field_set_allocated:SceneInfoS2C.channel_directory)
 }
 
+// .WorldMapOverview world_map_overview = 3;
+inline bool SceneInfoS2C::has_world_map_overview() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.world_map_overview_ != nullptr);
+  return value;
+}
+inline void SceneInfoS2C::clear_world_map_overview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.world_map_overview_ != nullptr) _impl_.world_map_overview_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::WorldMapOverview& SceneInfoS2C::_internal_world_map_overview() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WorldMapOverview* p = _impl_.world_map_overview_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WorldMapOverview>(&::WorldMapOverview_globals_);
+}
+inline const ::WorldMapOverview& SceneInfoS2C::world_map_overview() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SceneInfoS2C.world_map_overview)
+  return _internal_world_map_overview();
+}
+inline void SceneInfoS2C::unsafe_arena_set_allocated_world_map_overview(
+    ::WorldMapOverview* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.world_map_overview_);
+  }
+  _impl_.world_map_overview_ = reinterpret_cast<::WorldMapOverview*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SceneInfoS2C.world_map_overview)
+}
+inline ::WorldMapOverview* PROTOBUF_NULLABLE SceneInfoS2C::release_world_map_overview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::WorldMapOverview* released = _impl_.world_map_overview_;
+  _impl_.world_map_overview_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WorldMapOverview* PROTOBUF_NULLABLE SceneInfoS2C::unsafe_arena_release_world_map_overview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SceneInfoS2C.world_map_overview)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::WorldMapOverview* temp = _impl_.world_map_overview_;
+  _impl_.world_map_overview_ = nullptr;
+  return temp;
+}
+inline ::WorldMapOverview* PROTOBUF_NONNULL SceneInfoS2C::_internal_mutable_world_map_overview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.world_map_overview_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WorldMapOverview>(GetArena());
+    _impl_.world_map_overview_ = reinterpret_cast<::WorldMapOverview*>(p);
+  }
+  return _impl_.world_map_overview_;
+}
+inline ::WorldMapOverview* PROTOBUF_NONNULL SceneInfoS2C::mutable_world_map_overview()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::WorldMapOverview* _msg = _internal_mutable_world_map_overview();
+  // @@protoc_insertion_point(field_mutable:SceneInfoS2C.world_map_overview)
+  return _msg;
+}
+inline void SceneInfoS2C::set_allocated_world_map_overview(::WorldMapOverview* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.world_map_overview_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.world_map_overview_ = reinterpret_cast<::WorldMapOverview*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SceneInfoS2C.world_map_overview)
+}
+
 // -------------------------------------------------------------------
 
 // SceneInfoRequest
@@ -5042,6 +6734,30 @@ inline bool SceneInfoRequest::_internal_with_channel_directory() const {
 inline void SceneInfoRequest::_internal_set_with_channel_directory(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.with_channel_directory_ = value;
+}
+
+// bool with_world_map_overview = 2;
+inline void SceneInfoRequest::clear_with_world_map_overview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.with_world_map_overview_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool SceneInfoRequest::with_world_map_overview() const {
+  // @@protoc_insertion_point(field_get:SceneInfoRequest.with_world_map_overview)
+  return _internal_with_world_map_overview();
+}
+inline void SceneInfoRequest::set_with_world_map_overview(bool value) {
+  _internal_set_with_world_map_overview(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SceneInfoRequest.with_world_map_overview)
+}
+inline bool SceneInfoRequest::_internal_with_world_map_overview() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.with_world_map_overview_;
+}
+inline void SceneInfoRequest::_internal_set_with_world_map_overview(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.with_world_map_overview_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -5872,6 +7588,12 @@ struct is_proto_enum<::SceneChannelState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::SceneChannelState>() {
   return ::SceneChannelState_descriptor();
+}
+template <>
+struct is_proto_enum<::WorldMapHeatLevel> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::WorldMapHeatLevel>() {
+  return ::WorldMapHeatLevel_descriptor();
 }
 template <>
 struct is_proto_enum<::ActorType> : std::true_type {};

@@ -51,6 +51,7 @@ class Snapshot:
     rows: tuple[Row, ...]
     #: 主键唯一：一个 id 一行。
     by_id: dict[int, Row]
+    idx_series_id: dict[int, tuple[Row, ...]]
 
 
 #: 还没 load 过时的空快照。让「没加载」和「加载成 0 行」走同一条读路径，
@@ -59,6 +60,7 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     container=_pb.CharacterAppearanceTableData(),
     rows=(),
     by_id={},
+    idx_series_id={},
 )
 
 
@@ -101,14 +103,20 @@ class CharacterAppearanceTableManager:
 
         rows: tuple[Row, ...] = tuple(container.data)
         by_id: dict[int, Row] = {}
+        idx_series_id: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
+            idx_series_id.setdefault(row.series_id, []).append(row)
 
+        # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
+        # 就是索引里那个对象本体，是 list 的话调用方一个 .append() 就改到了别人的索引 ——
+        # 而且改的是「所有还持有这个快照的读者」都看得见的那一份。
         return Snapshot(
             container=container,
             rows=rows,
             by_id=by_id,
+            idx_series_id={k: tuple(v) for k, v in idx_series_id.items()},
         )
 
     def apply_snapshot(self, snapshot: Snapshot) -> None:
@@ -155,6 +163,10 @@ class CharacterAppearanceTableManager:
                 result.append(row)
         return tuple(result)
 
+    def get_by_series_id(self, key: int) -> tuple[Row, ...]:
+        """二级索引：``series_id`` == key 的全部行。"""
+        return self._snap.idx_series_id.get(key, _NO_ROWS)
+
     # ---- Exists ----
 
     def exists(self, id_: int) -> bool:
@@ -164,6 +176,9 @@ class CharacterAppearanceTableManager:
 
     def count(self) -> int:
         return len(self._snap.rows)
+
+    def count_by_series_id_index(self, key: int) -> int:
+        return len(self._snap.idx_series_id.get(key, _NO_ROWS))
 
     # ---- RandOne ----
 
@@ -188,6 +203,9 @@ class CharacterAppearanceTableManager:
             if pred(row):
                 return row
         return None
+
+    # 外键登记（解析函数在 characterappearance_table_fk.py，不在这里）：
+    # FK: series_id -> AppearanceSeries.id
 
 
 #: 模块级单例。别再 ``CharacterAppearanceTableManager()`` 自己新建一个 —— 那个实例是空的，

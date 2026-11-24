@@ -564,10 +564,34 @@
     <ClInclude Include="code\appearancerule_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\appearanceseries_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\appearanceseries_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\characterappearance_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\characterappearance_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\characterappearance_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\seasonrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\seasonrule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\seasonseal_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\seasonseal_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\seasonseal_table_fk.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\mysterymerchantspot_table.h">
@@ -588,7 +612,16 @@
     <ClInclude Include="proto\appearancerule_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\appearanceseries_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\characterappearance_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\seasonrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\seasonseal_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\mysterymerchantspot_table.pb.h">
@@ -604,6 +637,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\appearance_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\season_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\chat_error_tip.pb.h">
@@ -1065,7 +1101,22 @@
     <ClCompile Include="code\appearancerule_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\appearanceseries_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\characterappearance_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\characterappearance_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\seasonrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\seasonseal_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\seasonseal_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\mysterymerchantspot_table.cpp">
@@ -1083,7 +1134,16 @@
     <ClCompile Include="proto\appearancerule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\appearanceseries_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\characterappearance_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\seasonrule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\seasonseal_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\mysterymerchantspot_table.pb.cc">
@@ -1099,6 +1159,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\appearance_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\season_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc">

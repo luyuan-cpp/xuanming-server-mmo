@@ -446,9 +446,11 @@ func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext
 		return 0, "", err
 	}
 
-	var bestSceneId uint64
-	var bestNodeId string
-	bestCount := int64(math.MaxInt64)
+	type liveCandidate struct {
+		WorldChannelCandidate
+		count int64
+	}
+	var liveCandidates []liveCandidate
 
 	var staleSceneIds []uint64
 	// 属主读不到的频道数。它们既不是候选也不算陈旧;本次一个都没选出来时据此回错误(可重试),
@@ -479,17 +481,34 @@ func SelectOrRecoverWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext
 			continue
 		}
 
-		count := readScenePlayerCount(svcCtx, zoneId, sceneId)
-
-		if count < bestCount {
-			bestCount = count
-			bestSceneId = sceneId
-			bestNodeId = nid
-		}
+		liveCandidates = append(liveCandidates, liveCandidate{
+			WorldChannelCandidate: WorldChannelCandidate{SceneID: sceneId, NodeID: nid, ZoneID: zoneId},
+			count:                 readScenePlayerCount(svcCtx, zoneId, sceneId),
+		})
 	}
 
-	if bestSceneId > 0 {
-		return bestSceneId, bestNodeId, nil
+	if len(liveCandidates) > 0 {
+		if len(liveCandidates) > 1 {
+			lineNos := readWorldChannelLineNosBestEffort(svcCtx, zoneId, confId)
+			sort.Slice(liveCandidates, func(i, j int) bool {
+				return compareWorldChannelOrder(liveCandidates[i].SceneID, liveCandidates[j].SceneID, lineNos)
+			})
+		}
+		softCap := svcCtx.Config.EffectiveChannelSoftFillThreshold()
+		if softCap > 0 {
+			for _, c := range liveCandidates {
+				if c.count < softCap {
+					return c.SceneID, c.NodeID, nil
+				}
+			}
+		}
+		best := liveCandidates[0]
+		for _, c := range liveCandidates[1:] {
+			if c.count < best.count {
+				best = c
+			}
+		}
+		return best.SceneID, best.NodeID, nil
 	}
 
 	// All channels mapped to dead nodes — lazy-reassign to live world-hosting
@@ -789,12 +808,51 @@ func reserveWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceContext
 	if len(candidates) == 0 && pick.evacuation {
 		return 0, "", fmt.Errorf("no world channel of conf %d in zone %d outside draining nodes", confId, zoneId)
 	}
+	// Fill-First 依赖确定性的线号顺序(优先 1 线,缺线号时按 scene_id 升序回退),避免 SMEMBERS 无序把玩家打散。
+	if len(candidates) > 1 {
+		lineNos := readWorldChannelLineNosBestEffort(svcCtx, zoneId, confId)
+		sort.Slice(candidates, func(i, j int) bool {
+			return compareWorldChannelOrder(candidates[i].SceneID, candidates[j].SceneID, lineNos)
+		})
+	}
 
 	sceneId, nodeId, _, err := ReserveBestWorldChannel(svcCtx, candidates, playerId)
 	if err != nil {
 		return 0, "", err
 	}
 	return sceneId, nodeId, nil
+}
+
+// readWorldChannelLineNosBestEffort 只读线号映射;Redis 读错或尚未分配时返回 nil,调用方按 scene_id 升序兜底。
+func readWorldChannelLineNosBestEffort(svcCtx *svc.ServiceContext, zoneId uint32, confId uint64) map[uint64]uint32 {
+	raw, err := svcCtx.Redis.Hgetall(worldChannelLineNoKey(zoneId, confId))
+	if err != nil || len(raw) == 0 {
+		return nil
+	}
+	out := make(map[uint64]uint32, len(raw))
+	for sidStr, lineStr := range raw {
+		sid, sidErr := strconv.ParseUint(sidStr, 10, 64)
+		lineNo, lineErr := strconv.ParseUint(lineStr, 10, 32)
+		if sidErr == nil && lineErr == nil && sid > 0 && lineNo > 0 {
+			out[sid] = uint32(lineNo)
+		}
+	}
+	return out
+}
+
+func compareWorldChannelOrder(a, b uint64, lineNos map[uint64]uint32) bool {
+	la := uint32(math.MaxUint32)
+	lb := uint32(math.MaxUint32)
+	if v, ok := lineNos[a]; ok {
+		la = v
+	}
+	if v, ok := lineNos[b]; ok {
+		lb = v
+	}
+	if la != lb {
+		return la < lb
+	}
+	return a < b
 }
 
 // luaReassignSceneNode 是 scene:{id}:node 的比较并交换:只有当前属主仍是调用方

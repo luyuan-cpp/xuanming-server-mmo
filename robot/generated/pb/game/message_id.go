@@ -421,3 +421,6 @@ const MatchServiceSaveRankedPresetMessageId = 449
 const MatchServiceUpdateRankedCosmeticMessageId = 450
 const MatchServiceGetRankedBattleResultMessageId = 451
 const ClientPlayerTeamConfirmRankedPresetMessageId = 452
+const SceneSeasonClientPlayerGetSeasonStateMessageId = 453
+const SceneSeasonClientPlayerEquipSeasonSealMessageId = 454
+const SceneSeasonClientPlayerCatchupSeasonSealMessageId = 455

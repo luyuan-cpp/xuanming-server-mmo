@@ -94,6 +94,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if err := c.ValidateUnqualifiedHolderRevokeGrace(); err != nil {
 		panic("scene_manager invalid configuration: " + err.Error())
 	}
+	// 大世界选线策略与自动缩容迟滞带(world-map-play-v2.md §2.2):参数冲突时拒启,防止选线聚人与缩容振荡。
+	if err := c.ValidateWorldChannelRouting(); err != nil {
+		panic("scene_manager invalid configuration: " + err.Error())
+	}
 	// 三段 Redis 配置(退役的旧段、ControlRedis、PlayerRedis)在建任何客户端之前校验,规则见 ValidateRedisSections。
 	if err := c.ValidateRedisSections(); err != nil {
 		panic("scene_manager invalid configuration: " + err.Error())

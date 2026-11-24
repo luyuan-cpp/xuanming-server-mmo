@@ -49,6 +49,7 @@ bool CharacterAppearanceTableManager::ParseSnapshotFromDir(
     for (int32_t i = 0; i < snap->data.data_size(); ++i) {
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
+        snap->seriesIdIndex[row_data.series_id()].push_back(&row_data);
     }
 
     out = std::move(snap);

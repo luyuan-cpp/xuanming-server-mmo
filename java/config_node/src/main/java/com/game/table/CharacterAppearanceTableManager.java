@@ -31,16 +31,21 @@ public class CharacterAppearanceTableManager {
 
 
 
+        final Map<Integer, List<CharacterAppearanceTable>> idxSeriesId;
+
 
         Snapshot(CharacterAppearanceTableData data,
-                 Map<Integer, CharacterAppearanceTable> kvData) {
+                 Map<Integer, CharacterAppearanceTable> kvData,
+                 Map<Integer, List<CharacterAppearanceTable>> idxSeriesId) {
             this.data = data;
             this.kvData = kvData;
+            this.idxSeriesId = idxSeriesId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             CharacterAppearanceTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap()
     );
 
@@ -60,12 +65,14 @@ public class CharacterAppearanceTableManager {
         CharacterAppearanceTableData data = builder.build();
 
         Map<Integer, CharacterAppearanceTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<CharacterAppearanceTable>> idxSeriesId = new HashMap<>();
 
         for (CharacterAppearanceTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
+            idxSeriesId.computeIfAbsent(row.getSeriesId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData);
+        this.snapshot = new Snapshot(data, kvData, idxSeriesId);
     }
 
     public CharacterAppearanceTableData findAll() {
@@ -87,7 +94,13 @@ public class CharacterAppearanceTableManager {
 
 
 
+    public List<CharacterAppearanceTable> getBySeriesId(int key) {
+        return snapshot.idxSeriesId.getOrDefault(key, Collections.emptyList());
+    }
 
+
+
+    // FK: series_id → AppearanceSeries.id
 
 
     // ---- Exists ----
@@ -106,6 +119,10 @@ public class CharacterAppearanceTableManager {
 
 
 
+
+    public int countBySeriesIdIndex(int key) {
+        return snapshot.idxSeriesId.getOrDefault(key, Collections.emptyList()).size();
+    }
 
 
     // ---- FindByIds (IN) ----

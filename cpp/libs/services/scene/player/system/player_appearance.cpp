@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -32,6 +33,7 @@
 #include "rpc/service_metadata/player_appearance_service_metadata.h"
 #include "spatial/system/view.h"
 #include "table/code/appearancerule_table.h"
+#include "table/code/appearanceseries_table.h"
 #include "table/code/characterappearance_table.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
@@ -86,9 +88,33 @@ namespace
 		return true;
 	}
 
-	// 按 appearance_id 查找已启用的配置行,返回其永久主键 config_id(找不到或未启用返回 0)。
+	struct EnabledAppearanceMeta
+	{
+		uint32_t configId{0};
+		bool cardUnlockable{false};
+	};
+
+	// 按 appearance_id 查找已启用的配置行,返回其永久主键与是否允许形象卡兑换(找不到或未启用 configId=0)。
 	// 不返回行指针,遵循热更快照边界约定。
-	uint32_t FindEnabledAppearanceConfigId(std::string_view appearanceId)
+	EnabledAppearanceMeta FindEnabledAppearance(std::string_view appearanceId)
+	{
+		if (appearanceId.empty())
+		{
+			return {};
+		}
+		const auto &rows = CharacterAppearanceTableManager::Instance().FindAll().data();
+		for (const auto &row : rows)
+		{
+			if (row.enabled() != 0 && row.appearance_id() == appearanceId)
+			{
+				return EnabledAppearanceMeta{row.id(), row.card_unlockable() != 0};
+			}
+		}
+		return {};
+	}
+
+	// 按 appearance_id 查找任意配置行(含 enabled=0),用于首次切换/读面板时保留旧永久外观的拥有位。
+	uint32_t FindAppearanceConfigIdAny(std::string_view appearanceId)
 	{
 		if (appearanceId.empty())
 		{
@@ -97,7 +123,7 @@ namespace
 		const auto &rows = CharacterAppearanceTableManager::Instance().FindAll().data();
 		for (const auto &row : rows)
 		{
-			if (row.enabled() != 0 && row.appearance_id() == appearanceId)
+			if (row.appearance_id() == appearanceId)
 			{
 				return row.id();
 			}
@@ -311,6 +337,27 @@ bool PlayerAppearanceSystem::ValidateTables()
 		LOG_ERROR << "[PlayerAppearance] table validation failed: " << problem;
 		return false;
 	}
+	std::unordered_set<uint32_t> enabledSeriesIds;
+	std::unordered_set<std::string> enabledSeriesKeys;
+	for (const auto &series : AppearanceSeriesTableManager::Instance().FindAll().data())
+	{
+		if (series.id() == 0 || series.series_key().empty() || series.name().empty())
+		{
+			LOG_ERROR << "[PlayerAppearance] table validation failed: invalid AppearanceSeries row id=" << series.id();
+			return false;
+		}
+		if (series.enabled() != 0)
+		{
+			if (!enabledSeriesKeys.insert(series.series_key()).second)
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: duplicate enabled series_key="
+						  << series.series_key();
+				return false;
+			}
+			enabledSeriesIds.insert(series.id());
+		}
+	}
+
 	const auto &rows = CharacterAppearanceTableManager::Instance().FindAll().data();
 	if (rows.empty())
 	{
@@ -318,6 +365,7 @@ bool PlayerAppearanceSystem::ValidateTables()
 		return false;
 	}
 	uint32_t enabledCount = 0;
+	uint32_t starterCount = 0;
 	for (const auto &row : rows)
 	{
 		if (row.appearance_id().empty())
@@ -325,19 +373,30 @@ bool PlayerAppearanceSystem::ValidateTables()
 			LOG_ERROR << "[PlayerAppearance] table validation failed: empty appearance_id for id=" << row.id();
 			return false;
 		}
-		if (!player_appearance::TrialBitIndex(row.id()).has_value())
+		if (!player_appearance::AppearanceBitIndex(row.id()).has_value())
 		{
 			LOG_ERROR << "[PlayerAppearance] table validation failed: missing bit_index mapping for id=" << row.id();
 			return false;
 		}
 		if (row.enabled() != 0)
 		{
+			if (row.series_id() != 0 && enabledSeriesIds.find(row.series_id()) == enabledSeriesIds.end())
+			{
+				LOG_ERROR << "[PlayerAppearance] table validation failed: enabled appearance id=" << row.id()
+						  << " references missing or disabled series_id=" << row.series_id();
+				return false;
+			}
 			++enabledCount;
+			if (row.starter_creatable() != 0)
+			{
+				++starterCount;
+			}
 		}
 	}
-	if (enabledCount == 0)
+	if (enabledCount == 0 || starterCount == 0)
 	{
-		LOG_ERROR << "[PlayerAppearance] table validation failed: no enabled appearance rows";
+		LOG_ERROR << "[PlayerAppearance] table validation failed: enabled=" << enabledCount
+				  << " starter_creatable=" << starterCount;
 		return false;
 	}
 	return true;
@@ -367,9 +426,12 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 	const auto &registry = tlsEcs.actorRegistry;
 	const PlayerProfileComp *profile = registry.valid(player) ? registry.try_get<PlayerProfileComp>(player) : nullptr;
 	std::string_view trialBits;
+	std::string_view permanentView;
+	std::string effectiveOwnedBits;
 	if (profile != nullptr)
 	{
 		const std::string &permanent = profile->appearance_id();
+		permanentView = permanent;
 		const bool trialActive =
 			player_appearance::IsTrialActive(profile->trial_appearance_id(), profile->trial_expires_at(), nowUnixSec);
 		info.set_permanent_appearance_id(permanent);
@@ -381,6 +443,14 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		}
 		trialBits = profile->appearance_trial_used_bits();
 		info.set_trial_used_bits(profile->appearance_trial_used_bits());
+
+		// 对外位图把当前永久形象隐式并入副本(不改写持久化组件,避免只读拉取触发脏存盘),同时保留所有未知高位。
+		effectiveOwnedBits = profile->appearance_owned_bits();
+		if (const uint32_t permanentCfgId = FindAppearanceConfigIdAny(permanent); permanentCfgId != 0)
+		{
+			player_appearance::MarkOwned(effectiveOwnedBits, permanentCfgId);
+		}
+		info.set_owned_bits(effectiveOwnedBits);
 	}
 
 	player_appearance::Rule rule;
@@ -402,6 +472,9 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		std::string name;
 		uint32_t sortOrder;
 		bool trialUsed;
+		bool owned;
+		bool cardUnlockable;
+		uint32_t seriesId;
 	};
 	std::vector<EntryRow> entries;
 	const auto &rows = CharacterAppearanceTableManager::Instance().FindAll().data();
@@ -418,6 +491,9 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 			row.name(),
 			row.sort_order(),
 			player_appearance::IsTrialUsed(trialBits, row.id()),
+			player_appearance::IsOwned(effectiveOwnedBits, row.id(), permanentView, row.appearance_id()),
+			row.card_unlockable() != 0,
+			row.series_id(),
 		});
 	}
 	std::sort(entries.begin(), entries.end(), [](const EntryRow &a, const EntryRow &b)
@@ -436,6 +512,94 @@ void PlayerAppearanceSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, 
 		out->set_name(e.name);
 		out->set_sort_order(e.sortOrder);
 		out->set_trial_used(e.trialUsed);
+		out->set_owned(e.owned);
+		out->set_card_unlockable(e.cardUnlockable);
+		out->set_series_id(e.seriesId);
+	}
+
+	// 实时派生各收藏系列图鉴进度(零新存档字段、试用不计入拥有、空系列不输出、纯外观零属性)。
+	struct SeriesAggregate
+	{
+		uint32_t seriesId{0};
+		std::string seriesKey;
+		std::string name;
+		uint32_t sortOrder{0};
+		std::string completionBadgeName;
+		std::string epilogueTitle;
+		uint32_t ownedCount{0};
+		uint32_t totalCount{0};
+		std::vector<std::string> memberAppearanceIds;
+	};
+	std::unordered_map<uint32_t, std::size_t> seriesIndexById;
+	std::vector<SeriesAggregate> seriesList;
+	const auto &seriesRows = AppearanceSeriesTableManager::Instance().FindAll().data();
+	seriesList.reserve(static_cast<std::size_t>(seriesRows.size()));
+	for (const auto &s : seriesRows)
+	{
+		if (s.enabled() == 0)
+		{
+			continue;
+		}
+		seriesIndexById.emplace(s.id(), seriesList.size());
+		seriesList.push_back(SeriesAggregate{
+			s.id(),
+			s.series_key(),
+			s.name(),
+			s.sort_order(),
+			s.completion_badge_name(),
+			s.epilogue_title(),
+			0,
+			0,
+			{},
+		});
+	}
+	for (const auto &e : entries)
+	{
+		if (e.seriesId == 0)
+		{
+			continue;
+		}
+		const auto it = seriesIndexById.find(e.seriesId);
+		if (it == seriesIndexById.end())
+		{
+			continue;
+		}
+		auto &agg = seriesList[it->second];
+		++agg.totalCount;
+		if (e.owned)
+		{
+			++agg.ownedCount;
+		}
+		agg.memberAppearanceIds.push_back(e.appearanceId);
+	}
+	std::sort(seriesList.begin(), seriesList.end(), [](const SeriesAggregate &a, const SeriesAggregate &b)
+			  {
+				  if (a.sortOrder != b.sortOrder)
+				  {
+					  return a.sortOrder < b.sortOrder;
+				  }
+				  return a.seriesId < b.seriesId;
+			  });
+	for (const auto &s : seriesList)
+	{
+		if (s.totalCount == 0)
+		{
+			continue;
+		}
+		auto *out = info.add_series_progress();
+		out->set_series_id(s.seriesId);
+		out->set_series_key(s.seriesKey);
+		out->set_name(s.name);
+		out->set_sort_order(s.sortOrder);
+		out->set_owned_count(s.ownedCount);
+		out->set_total_count(s.totalCount);
+		out->set_completed(player_appearance::IsSeriesCompleted(s.ownedCount, s.totalCount));
+		out->set_completion_badge_name(s.completionBadgeName);
+		out->set_epilogue_title(s.epilogueTitle);
+		for (const auto &memberId : s.memberAppearanceIds)
+		{
+			out->add_member_appearance_ids(memberId);
+		}
 	}
 }
 
@@ -491,20 +655,24 @@ uint32_t PlayerAppearanceSystem::SwitchAppearance(entt::entity player,
 		return mutTip;
 	}
 
-	// 3. 目标形象存在且启用。
-	const uint32_t targetConfigId = FindEnabledAppearanceConfigId(request.appearance_id());
-	if (targetConfigId == 0)
+	// 3. 目标形象存在、启用且存在稳定位索引(在扣卡前验证,保证扣卡后绝不因位映射缺失失败)。
+	const EnabledAppearanceMeta target = FindEnabledAppearance(request.appearance_id());
+	if (target.configId == 0)
 	{
 		return static_cast<uint32_t>(kAppearanceInvalid);
+	}
+	if (!player_appearance::AppearanceBitIndex(target.configId).has_value())
+	{
+		LOG_ERROR << "[PlayerAppearance] switch refused: missing bit_index for config_id=" << target.configId
+				  << " player_id=" << playerId;
+		return static_cast<uint32_t>(kAppearanceUnavailable);
 	}
 
 	// 4. 事实源持久组件。
 	auto *profile = registry.try_get<PlayerProfileComp>(player);
-	auto *bags = registry.try_get<PlayerBagsComp>(player);
-	if (profile == nullptr || bags == nullptr)
+	if (profile == nullptr)
 	{
-		LOG_ERROR << "[PlayerAppearance] switch refused: missing PlayerProfileComp or PlayerBagsComp player_id="
-				  << playerId;
+		LOG_ERROR << "[PlayerAppearance] switch refused: missing PlayerProfileComp player_id=" << playerId;
 		return static_cast<uint32_t>(kAppearanceUnavailable);
 	}
 	if (profile->appearance_id() == request.appearance_id())
@@ -512,24 +680,54 @@ uint32_t PlayerAppearanceSystem::SwitchAppearance(entt::entity player,
 		return static_cast<uint32_t>(kAppearanceAlreadyCurrent);
 	}
 
-	// 5. 形象卡预检(扣掉预留后必须足够)。
-	const ItemCountMap consumed{{rule.cardItemId, rule.cardItemCount}};
-	if (BagService::CheckRemovable(player, bags->bags[kInventory], consumed) != BagService::RemovalVerdict::kEnough)
+	// 5. 判定免费切换 vs 扣形象卡买断解锁(fail-closed)。
+	const bool alreadyOwned = player_appearance::IsOwned(
+		profile->appearance_owned_bits(), target.configId, profile->appearance_id(), request.appearance_id());
+	const player_appearance::SwitchPlan plan =
+		player_appearance::PlanSwitch(alreadyOwned, request.expect_free_switch(), target.cardUnlockable);
+	if (plan == player_appearance::SwitchPlan::kRefuseNotOwned)
 	{
-		return static_cast<uint32_t>(kAppearanceNoCard);
+		return static_cast<uint32_t>(kAppearanceNotOwned);
+	}
+	if (plan == player_appearance::SwitchPlan::kRefuseNotCardUnlockable)
+	{
+		return static_cast<uint32_t>(kAppearanceNotCardUnlockable);
 	}
 
-	// 6. 原子修改:扣形象卡 -> 覆盖永久形象并结束试用 -> 记幂等键 -> 请求关键进度存盘 -> 广播。
-	if (const uint32_t removeErr = BagService::RemoveItemsExact(
-			player, bags->bags[kInventory], consumed, TX_APPEARANCE_SWITCH, clientRequestId, request.appearance_id());
-		removeErr != kSuccess)
+	const bool consumeCard = (plan == player_appearance::SwitchPlan::kCardUnlock);
+	if (consumeCard)
 	{
-		LOG_ERROR << "[PlayerAppearance] switch refused: RemoveItemsExact failed after precheck player_id="
-				  << playerId << " item_id=" << rule.cardItemId << " err=" << removeErr;
-		return static_cast<uint32_t>(kAppearanceUnavailable);
+		auto *bags = registry.try_get<PlayerBagsComp>(player);
+		if (bags == nullptr)
+		{
+			LOG_ERROR << "[PlayerAppearance] switch refused: missing PlayerBagsComp player_id=" << playerId;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
+		const ItemCountMap consumed{{rule.cardItemId, rule.cardItemCount}};
+		if (BagService::CheckRemovable(player, bags->bags[kInventory], consumed) != BagService::RemovalVerdict::kEnough)
+		{
+			return static_cast<uint32_t>(kAppearanceNoCard);
+		}
+		if (const uint32_t removeErr = BagService::RemoveItemsExact(
+				player, bags->bags[kInventory], consumed, TX_APPEARANCE_SWITCH, clientRequestId, request.appearance_id());
+			removeErr != kSuccess)
+		{
+			LOG_ERROR << "[PlayerAppearance] switch refused: RemoveItemsExact failed after precheck player_id="
+					  << playerId << " item_id=" << rule.cardItemId << " err=" << removeErr;
+			return static_cast<uint32_t>(kAppearanceUnavailable);
+		}
 	}
 
+	// 6. 原子修改:保留原永久形象与新形象的拥有位 -> 更新永久形象并结束试用 -> 记幂等键 -> 请求关键进度存盘 -> 广播。
 	const std::string beforePermanent = profile->appearance_id();
+	std::string ownedBits = profile->appearance_owned_bits();
+	if (const uint32_t beforeConfigId = FindAppearanceConfigIdAny(beforePermanent); beforeConfigId != 0)
+	{
+		player_appearance::MarkOwned(ownedBits, beforeConfigId);
+	}
+	player_appearance::MarkOwned(ownedBits, target.configId);
+	profile->set_appearance_owned_bits(std::move(ownedBits));
+
 	profile->set_appearance_id(request.appearance_id());
 	profile->clear_trial_appearance_id();
 	profile->set_trial_expires_at(0);
@@ -541,15 +739,80 @@ uint32_t PlayerAppearanceSystem::SwitchAppearance(entt::entity player,
 
 	client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kSwitchAppearance,
 								   std::move(fingerprint), ClientRequestResult{});
-	RequestSave(player, "appearance_switch");
+	RequestSave(player, consumeCard ? "appearance_switch" : "appearance_free_switch");
 
 	LOG_INFO << "[PlayerAppearance] metric=appearance_switched player_id=" << playerId
 			 << " before=" << beforePermanent << " after=" << request.appearance_id()
-			 << " config_id=" << targetConfigId << " card_item_id=" << rule.cardItemId
-			 << " card_count=" << rule.cardItemCount << " client_request_id=" << clientRequestId;
+			 << " config_id=" << target.configId << " free_switch=" << (!consumeCard ? 1 : 0)
+			 << " card_item_id=" << (consumeCard ? rule.cardItemId : 0u)
+			 << " card_count=" << (consumeCard ? rule.cardItemCount : 0u)
+			 << " client_request_id=" << clientRequestId;
 
 	BroadcastAppearanceChanged(player, playerId, request.appearance_id(), /*isTrial=*/false, /*trialExpiresAt=*/0);
 	FillInfo(player, nowUnixSec, *response.mutable_info());
+	return kSuccess;
+}
+
+uint32_t PlayerAppearanceSystem::GrantAppearance(entt::entity player,
+												 std::string_view appearanceId,
+												 uint64_t nowUnixSec,
+												 bool *alreadyOwned)
+{
+	if (alreadyOwned != nullptr)
+	{
+		*alreadyOwned = false;
+	}
+	auto &registry = tlsEcs.actorRegistry;
+	if (!registry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	const auto *guid = registry.try_get<PlayerGuidComp>(player);
+	const Guid playerId = guid != nullptr ? guid->value : kInvalidGuid;
+
+	if (const uint32_t mutTip = CheckMutabilityTip(player); mutTip != kSuccess)
+	{
+		return mutTip;
+	}
+	const EnabledAppearanceMeta target = FindEnabledAppearance(appearanceId);
+	if (target.configId == 0)
+	{
+		return static_cast<uint32_t>(kAppearanceInvalid);
+	}
+	if (!player_appearance::AppearanceBitIndex(target.configId).has_value())
+	{
+		LOG_ERROR << "[PlayerAppearance] grant refused: missing bit_index for config_id=" << target.configId
+				  << " player_id=" << playerId;
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	auto *profile = registry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[PlayerAppearance] grant refused: missing PlayerProfileComp player_id=" << playerId;
+		return static_cast<uint32_t>(kAppearanceUnavailable);
+	}
+	if (player_appearance::IsOwned(
+			profile->appearance_owned_bits(), target.configId, profile->appearance_id(), appearanceId))
+	{
+		if (alreadyOwned != nullptr)
+		{
+			*alreadyOwned = true;
+		}
+		return kSuccess;
+	}
+
+	std::string ownedBits = profile->appearance_owned_bits();
+	player_appearance::MarkOwned(ownedBits, target.configId);
+	profile->set_appearance_owned_bits(std::move(ownedBits));
+	RequestSave(player, "appearance_grant");
+
+	LOG_INFO << "[PlayerAppearance] metric=appearance_granted player_id=" << playerId
+			 << " appearance_id=" << std::string(appearanceId) << " config_id=" << target.configId;
+
+	AppearanceStateNotify notify;
+	notify.set_trial_expired(false);
+	FillInfo(player, nowUnixSec, *notify.mutable_info());
+	PushStateNotify(player, notify);
 	return kSuccess;
 }
 
@@ -606,12 +869,13 @@ uint32_t PlayerAppearanceSystem::StartTrial(entt::entity player,
 	}
 
 	// 3. 目标形象存在且启用,且存在稳定位索引。
-	const uint32_t targetConfigId = FindEnabledAppearanceConfigId(request.appearance_id());
+	const EnabledAppearanceMeta target = FindEnabledAppearance(request.appearance_id());
+	const uint32_t targetConfigId = target.configId;
 	if (targetConfigId == 0)
 	{
 		return static_cast<uint32_t>(kAppearanceInvalid);
 	}
-	if (!player_appearance::TrialBitIndex(targetConfigId).has_value())
+	if (!player_appearance::AppearanceBitIndex(targetConfigId).has_value())
 	{
 		LOG_ERROR << "[PlayerAppearance] start trial refused: missing bit_index for config_id=" << targetConfigId
 				  << " player_id=" << playerId;
@@ -628,6 +892,11 @@ uint32_t PlayerAppearanceSystem::StartTrial(entt::entity player,
 	if (profile->appearance_id() == request.appearance_id())
 	{
 		return static_cast<uint32_t>(kAppearanceAlreadyCurrent);
+	}
+	if (player_appearance::IsOwned(
+			profile->appearance_owned_bits(), targetConfigId, profile->appearance_id(), request.appearance_id()))
+	{
+		return static_cast<uint32_t>(kAppearanceAlreadyOwned);
 	}
 	if (player_appearance::IsTrialUsed(profile->appearance_trial_used_bits(), targetConfigId))
 	{

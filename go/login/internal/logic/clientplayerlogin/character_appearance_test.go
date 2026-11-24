@@ -11,13 +11,22 @@ import (
 
 func TestCharacterAppearanceRejectsRemovedAndMalformedIDs(t *testing.T) {
 	for _, id := range []string{
-		"", "00_reference_topright_boy", "01_ice_sword_girl", "02_fire_talisman_boy",
-		"03_lotus_healer_girl", "05_celestial_musician_girl",
-		"09_bamboo_archer_girl",
-		"10_crimson_spear_girl", "15_water_dragon_scholar_boy",
+		"", "00_reference_topright_boy", "01_ice_sword_girl",
 	} {
 		if !validCharacterAppearance(id) {
-			t.Fatalf("保留身份被拒绝: %q", id)
+			t.Fatalf("初始可选建角身份被拒绝: %q", id)
+		}
+	}
+	nonStarterUnlockable := []string{
+		"02_fire_talisman_boy", "03_lotus_healer_girl", "05_celestial_musician_girl",
+		"09_bamboo_archer_girl", "10_crimson_spear_girl", "15_water_dragon_scholar_boy",
+	}
+	for _, id := range nonStarterUnlockable {
+		if validCharacterAppearance(id) {
+			t.Fatalf("需游戏内解锁的非初始身份不应允许新建角色: %q", id)
+		}
+		if !retiredCharacterAppearance(id) {
+			t.Fatalf("非初始现役身份应允许已提交建角的精确丢响应重试: %q", id)
 		}
 	}
 	for _, id := range []string{
@@ -41,6 +50,7 @@ func TestCharacterAppearanceRejectsRemovedAndMalformedIDs(t *testing.T) {
 
 func TestRetiredAppearanceOnlyReturnsExistingExactRetry(t *testing.T) {
 	for _, id := range []string{
+		"02_fire_talisman_boy", "05_celestial_musician_girl",
 		"07_moon_shadow_assassin_girl", "14_short_hair_snow_summoner_girl", "20_star_formation_master_girl",
 	} {
 		t.Run(id, func(t *testing.T) {
@@ -97,12 +107,16 @@ func TestCreateRetryRequiresSameAppearance(t *testing.T) {
 func TestCreatePlayerAppearanceIsSavedInAccountAndResponse(t *testing.T) {
 	fake := &fakeRegisterClient{}
 	h := newCreatePlayerHarnessWithNames(t, homezone.New(fake, 0, 0, 0), fake)
-	response, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{AppearanceId: "05_celestial_musician_girl"})
+	rejected, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{AppearanceId: "05_celestial_musician_girl"})
+	if err != nil || rejected.GetErrorMessage().GetId() != uint32(table.LoginError_kLoginUnknownError) {
+		t.Fatalf("非初始形象的新建角应被拒绝: %v %v", rejected, err)
+	}
+	response, err := h.l.CreatePlayer(&loginpb.CreatePlayerRequest{AppearanceId: "01_ice_sword_girl"})
 	if err != nil || response.GetErrorMessage().GetId() != 0 {
 		t.Fatalf("建角失败: %v %v", err, response.GetErrorMessage())
 	}
 	players := storedPlayers(t, h.ctx, h.rdb)
-	if len(players) != 1 || players[0].GetAppearanceId() != "05_celestial_musician_girl" {
+	if len(players) != 1 || players[0].GetAppearanceId() != "01_ice_sword_girl" {
 		t.Fatalf("账号持久化丢失外观: %v", players)
 	}
 	if len(response.GetPlayers()) != 1 || response.GetPlayers()[0].GetPlayer().GetAppearanceId() != players[0].GetAppearanceId() {

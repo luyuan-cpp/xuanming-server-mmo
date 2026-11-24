@@ -1,0 +1,36 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum season_error {
+  kSeason_errorOK = 0;
+
+  kSeasonNotOpen = 34000;
+
+  kSeasonMismatch = 34001;
+
+  kSeasonSealInvalid = 34002;
+
+  kSeasonSealAlreadyEquipped = 34003;
+
+  kSeasonSealAlreadyMax = 34004;
+
+  kSeasonCatchupDisabled = 34005;
+
+  kSeasonCatchupPriceChanged = 34006;
+
+  kSeasonCatchupCurrencyNotEnough = 34007;
+
+  kSeasonFrozen = 34008;
+
+  kSeasonInBattle = 34009;
+
+  kSeasonSkillNoUpgrade = 34010;
+
+  kSeasonUnavailable = 34011;
+
+};

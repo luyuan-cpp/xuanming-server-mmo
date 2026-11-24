@@ -17,6 +17,7 @@ import (
 	gproto "google.golang.org/protobuf/proto"
 
 	"proto/scene_manager"
+	"scene_manager/internal/config"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
 )
@@ -464,9 +465,10 @@ func TestLeaveScene_MemberRemovalFailureIsReturnedForRetry(t *testing.T) {
 	assert.Equal(t, "1", sceneMemberCount(mr, sceneID), "重试把第二步补上")
 }
 
-// 预占脚本按 SCARD 选人最少的频道,同一玩家重复预占不累加。
+// least_loaded 策略下，预占脚本按 SCARD 选人最少的频道,同一玩家重复预占不累加。
 func TestReserveBestWorldChannel_PicksLeastMembersAndIsIdempotent(t *testing.T) {
 	sc, mr := newTestSvcCtx(t, "node-1")
+	sc.Config.WorldChannelRouting.PickPolicy = config.WorldChannelPickPolicyLeastLoaded
 	const a, b, player = uint64(7710), uint64(7711), uint64(1107)
 	mr.Set(sceneNodeKey(testZoneId, a), "10")
 	mr.Set(sceneNodeKey(testZoneId, b), "20")

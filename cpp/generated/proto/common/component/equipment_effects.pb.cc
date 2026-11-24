@@ -37,11 +37,228 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto, /* tracker*/ nullptr,},
         // ::EquipmentEffects
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto, /* tracker*/ nullptr,},
+        // ::SeasonSealEffect
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto, /* tracker*/ nullptr,},
         // ::EquipmentArtifactSource
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class SeasonSealEffect::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SeasonSealEffect>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_._has_bits_);
+};
+
+constexpr SeasonSealEffect::ParseTableT_ SeasonSealEffect::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_._has_bits_),
+      0, // no _extensions_
+      10, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966272,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      10,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SeasonSealEffect>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.season_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.season_id_)}},
+      // uint32 seal_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.seal_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.seal_id_)}},
+      // uint32 effect_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.effect_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.effect_id_)}},
+      // uint32 bonus_bps = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.bonus_bps_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.bonus_bps_)}},
+      // uint32 cap_bps = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.cap_bps_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.cap_bps_)}},
+      // uint32 per_round_limit = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.per_round_limit_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.per_round_limit_)}},
+      // uint32 battle_limit = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.battle_limit_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.battle_limit_)}},
+      // uint32 active_rounds = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.active_rounds_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.active_rounds_)}},
+      // uint32 health_threshold_bps = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.health_threshold_bps_), 9>(),
+       {72, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.health_threshold_bps_)}},
+      // string name = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.name_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.season_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 seal_id = 2;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.seal_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 effect_id = 3;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.effect_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 bonus_bps = 4;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.bonus_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 cap_bps = 5;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.cap_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 per_round_limit = 6;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 battle_limit = 7;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.battle_limit_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 active_rounds = 8;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.active_rounds_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 health_threshold_bps = 9;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 10;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\20\0\0\0\0\0\0\0\0\0\4\0\0\0\0\0"
+      "SeasonSealEffect"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr SeasonSealEffect::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        season_id_{0u},
+        seal_id_{0u},
+        effect_id_{0u},
+        bonus_bps_{0u},
+        cap_bps_{0u},
+        per_round_limit_{0u},
+        battle_limit_{0u},
+        active_rounds_{0u},
+        health_threshold_bps_{0u} {}
+
+template <typename>
+constexpr SeasonSealEffect::SeasonSealEffect(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SeasonSealEffect::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SeasonSealEffect(arena);
+}
+constexpr auto SeasonSealEffect::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SeasonSealEffect), alignof(SeasonSealEffect));
+}
+constexpr auto SeasonSealEffect::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SeasonSealEffect::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SeasonSealEffect>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SeasonSealEffect::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SeasonSealEffect>(), &SeasonSealEffect::ByteSizeLong,
+              &SeasonSealEffect::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SeasonSealEffectGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SeasonSealEffectGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SeasonSealEffect_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SeasonSealEffect::InternalGenerateClassData_(
+            _default, &SeasonSealEffect_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SeasonSealEffect>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SeasonSealEffectGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SeasonSealEffect _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SeasonSealEffect>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SeasonSealEffectGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SeasonSealEffectGlobalsTypeInternal SeasonSealEffect_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SeasonSealEffect_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SeasonSealEffect_globals_.GetClassData();
+#else
+  return SeasonSealEffect_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 constexpr EquipmentEffects_ManaReductionBpsEntry_DoNotUse::ParseTableT_ EquipmentEffects_ManaReductionBpsEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
@@ -599,7 +816,7 @@ constexpr auto EquipmentArtifactSource::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
@@ -662,12 +879,12 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294443008,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
-      5,  // num_aux_entries
+      19,  // num_field_entries
+      6,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -676,49 +893,46 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::EquipmentEffects>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bool support_sources_complete = 16;
-      {::_pbi::TcParser::FastV8S2,
-       {384, 12, 0,
-        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 physical_attack_bps = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_attack_bps_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_attack_bps_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_)}},
       // uint32 magic_attack_bps = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_attack_bps_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_attack_bps_), 4>(),
+       {16, 4, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_)}},
       // uint32 max_health_bps = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.max_health_bps_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.max_health_bps_), 5>(),
+       {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_)}},
       // uint32 speed_bps = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.speed_bps_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.speed_bps_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_)}},
       // uint32 outgoing_heal_bps = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.outgoing_heal_bps_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.outgoing_heal_bps_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_)}},
       // uint32 shield_capacity_bps = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.shield_capacity_bps_), 7>(),
-       {48, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.shield_capacity_bps_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_)}},
       // uint32 physical_crit_bps = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_crit_bps_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_crit_bps_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_)}},
       // uint32 magic_crit_bps = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_crit_bps_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_crit_bps_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_)}},
       // uint32 physical_resist_bps = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_resist_bps_), 10>(),
-       {72, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_resist_bps_), 11>(),
+       {72, 11, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_)}},
       // uint32 magic_resist_bps = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_resist_bps_), 11>(),
-       {80, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_resist_bps_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -731,41 +945,75 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
       {::_pbi::TcParser::FastMtR1,
        {122, 1, 1,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_)}},
+      // bool support_sources_complete = 16;
+      {::_pbi::TcParser::FastV8S2,
+       {384, 13, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_)}},
+      // .SeasonSealEffect season_seal = 17;
+      {::_pbi::TcParser::FastMtS2,
+       {394, 2, 2,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_seal_)}},
+      // uint32 season_max_health_bps = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 14, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_max_health_bps_)}},
+      // uint32 season_defense_bps = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 15, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_defense_bps_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 physical_attack_bps = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_attack_bps = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_health_bps = 3;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 speed_bps = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 outgoing_heal_bps = 5;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 shield_capacity_bps = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 physical_crit_bps = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_crit_bps = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 physical_resist_bps = 9;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_resist_bps = 10;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<uint32, uint32> ailment_hit_bps = 11;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_hit_bps_), _Internal::kHasBitsOffset + 13, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_hit_bps_), _Internal::kHasBitsOffset + 16, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<uint32, uint32> ailment_resist_bps = 12;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_resist_bps_), _Internal::kHasBitsOffset + 14, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_resist_bps_), _Internal::kHasBitsOffset + 17, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<uint32, uint32> mana_reduction_bps = 13;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.mana_reduction_bps_), _Internal::kHasBitsOffset + 15, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.mana_reduction_bps_), _Internal::kHasBitsOffset + 18, 5, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // repeated .EquipmentArtifactSource artifacts = 14;
       {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.artifacts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .SupportEffectSource support_sources = 15;
       {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool support_sources_complete = 16;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .SeasonSealEffect season_seal = 17;
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_seal_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 season_max_health_bps = 18;
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_max_health_bps_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_defense_bps = 19;
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_defense_bps_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -777,6 +1025,11 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
         {::_pbi::TcParser::GetTable<::SupportEffectSource>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::SupportEffectSource_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SeasonSealEffect>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SeasonSealEffect_globals_},
         #endif
         {::_pbi::TcParser::GetMapAuxInfo(
             0, 0, 13, 13, 0)},
@@ -805,6 +1058,7 @@ inline constexpr EquipmentEffects::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_)>()
          }
         ,
+        season_seal_{nullptr},
         physical_attack_bps_{0u},
         magic_attack_bps_{0u},
         max_health_bps_{0u},
@@ -816,6 +1070,8 @@ inline constexpr EquipmentEffects::Impl_::Impl_(
         physical_resist_bps_{0u},
         magic_resist_bps_{0u},
         support_sources_complete_{false},
+        season_max_health_bps_{0u},
+        season_defense_bps_{0u},
         ailment_hit_bps_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::EquipmentEffects,
             PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.ailment_hit_bps_)>()
@@ -954,7 +1210,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_._has_bits_),
-        19, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.physical_attack_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.magic_attack_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.max_health_bps_),
@@ -971,7 +1227,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.artifacts_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_complete_),
-        2,
+        PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.season_seal_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.season_max_health_bps_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.season_defense_bps_),
         3,
         4,
         5,
@@ -981,12 +1239,39 @@ const ::uint32_t
         9,
         10,
         11,
-        13,
-        14,
-        15,
+        12,
+        16,
+        17,
+        18,
         0,
         1,
-        12,
+        13,
+        2,
+        14,
+        15,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_._has_bits_),
+        13, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.seal_id_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.effect_id_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.bonus_bps_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.cap_bps_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.per_round_limit_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.battle_limit_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.active_rounds_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.health_threshold_bps_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.name_),
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_._has_bits_),
         12, // hasbit index offset
@@ -1016,7 +1301,8 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::EquipmentEffects_AilmentResistBpsEntry_DoNotUse)},
         {14, sizeof(::EquipmentEffects_ManaReductionBpsEntry_DoNotUse)},
         {21, sizeof(::EquipmentEffects)},
-        {56, sizeof(::EquipmentArtifactSource)},
+        {62, sizeof(::SeasonSealEffect)},
+        {85, sizeof(::EquipmentArtifactSource)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1024,13 +1310,14 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::EquipmentEffects_AilmentResistBpsEntry_DoNotUse_globals_,
         &::EquipmentEffects_ManaReductionBpsEntry_DoNotUse_globals_,
         &::EquipmentEffects_globals_,
+        &::SeasonSealEffect_globals_,
         &::EquipmentArtifactSource_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n.proto/common/component/equipment_effec"
     "ts.proto\032,proto/common/component/support"
-    "_effects.proto\"\205\006\n\020EquipmentEffects\022\033\n\023p"
+    "_effects.proto\"\350\006\n\020EquipmentEffects\022\033\n\023p"
     "hysical_attack_bps\030\001 \001(\r\022\030\n\020magic_attack"
     "_bps\030\002 \001(\r\022\026\n\016max_health_bps\030\003 \001(\r\022\021\n\tsp"
     "eed_bps\030\004 \001(\r\022\031\n\021outgoing_heal_bps\030\005 \001(\r"
@@ -1045,17 +1332,25 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5fef
     "eductionBpsEntry\022+\n\tartifacts\030\016 \003(\0132\030.Eq"
     "uipmentArtifactSource\022-\n\017support_sources"
     "\030\017 \003(\0132\024.SupportEffectSource\022 \n\030support_"
-    "sources_complete\030\020 \001(\010\0324\n\022AilmentHitBpsE"
-    "ntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025"
-    "AilmentResistBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005va"
-    "lue\030\002 \001(\r:\0028\001\0327\n\025ManaReductionBpsEntry\022\013"
-    "\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\323\001\n\027Equip"
-    "mentArtifactSource\022\017\n\007item_id\030\001 \001(\004\022\021\n\te"
-    "ffect_id\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017\n\007cap"
-    "_bps\030\004 \001(\r\022\027\n\017per_round_limit\030\005 \001(\r\022\024\n\014b"
-    "attle_limit\030\006 \001(\r\022\025\n\ractive_rounds\030\007 \001(\r"
-    "\022\034\n\024health_threshold_bps\030\010 \001(\r\022\014\n\004name\030\t"
-    " \001(\tB\022Z\020common/componentb\006proto3"
+    "sources_complete\030\020 \001(\010\022&\n\013season_seal\030\021 "
+    "\001(\0132\021.SeasonSealEffect\022\035\n\025season_max_hea"
+    "lth_bps\030\022 \001(\r\022\032\n\022season_defense_bps\030\023 \001("
+    "\r\0324\n\022AilmentHitBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005"
+    "value\030\002 \001(\r:\0028\001\0327\n\025AilmentResistBpsEntry"
+    "\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025Mana"
+    "ReductionBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030"
+    "\002 \001(\r:\0028\001\"\337\001\n\020SeasonSealEffect\022\021\n\tseason"
+    "_id\030\001 \001(\r\022\017\n\007seal_id\030\002 \001(\r\022\021\n\teffect_id\030"
+    "\003 \001(\r\022\021\n\tbonus_bps\030\004 \001(\r\022\017\n\007cap_bps\030\005 \001("
+    "\r\022\027\n\017per_round_limit\030\006 \001(\r\022\024\n\014battle_lim"
+    "it\030\007 \001(\r\022\025\n\ractive_rounds\030\010 \001(\r\022\034\n\024healt"
+    "h_threshold_bps\030\t \001(\r\022\014\n\004name\030\n \001(\t\"\323\001\n\027"
+    "EquipmentArtifactSource\022\017\n\007item_id\030\001 \001(\004"
+    "\022\021\n\teffect_id\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017"
+    "\n\007cap_bps\030\004 \001(\r\022\027\n\017per_round_limit\030\005 \001(\r"
+    "\022\024\n\014battle_limit\030\006 \001(\r\022\025\n\ractive_rounds\030"
+    "\007 \001(\r\022\034\n\024health_threshold_bps\030\010 \001(\r\022\014\n\004n"
+    "ame\030\t \001(\tB\022Z\020common/componentb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_deps[1] = {
@@ -1065,13 +1360,13 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fequipment
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto = {
     false,
     false,
-    1112,
+    1437,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
     "proto/common/component/equipment_effects.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_once,
     descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_deps,
     1,
-    5,
+    6,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto::offsets,
@@ -1264,13 +1559,17 @@ EquipmentEffects::EquipmentEffects(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.season_seal_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.season_seal_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, physical_attack_bps_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, physical_attack_bps_),
-           offsetof(Impl_, support_sources_complete_) -
+           offsetof(Impl_, season_defense_bps_) -
                offsetof(Impl_, physical_attack_bps_) +
-               sizeof(Impl_::support_sources_complete_));
+               sizeof(Impl_::season_defense_bps_));
 
   // @@protoc_insertion_point(copy_constructor:EquipmentEffects)
 }
@@ -1307,11 +1606,11 @@ PROTOBUF_NDEBUG_INLINE EquipmentEffects::Impl_::Impl_(
 inline void EquipmentEffects::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, physical_attack_bps_),
+               offsetof(Impl_, season_seal_),
            0,
-           offsetof(Impl_, support_sources_complete_) -
-               offsetof(Impl_, physical_attack_bps_) +
-               sizeof(Impl_::support_sources_complete_));
+           offsetof(Impl_, season_defense_bps_) -
+               offsetof(Impl_, season_seal_) +
+               sizeof(Impl_::season_defense_bps_));
 }
 EquipmentEffects::~EquipmentEffects() {
   // @@protoc_insertion_point(destructor:EquipmentEffects)
@@ -1324,6 +1623,7 @@ inline void EquipmentEffects::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.season_seal_;
   this_._impl_.~Impl_();
 }
 
@@ -1361,30 +1661,36 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.artifacts_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.support_sources_.Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.season_seal_ != nullptr);
+      _impl_.season_seal_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.physical_attack_bps_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.shield_capacity_bps_) -
-        reinterpret_cast<char*>(&_impl_.physical_attack_bps_)) + sizeof(_impl_.shield_capacity_bps_));
+        reinterpret_cast<char*>(&_impl_.outgoing_heal_bps_) -
+        reinterpret_cast<char*>(&_impl_.physical_attack_bps_)) + sizeof(_impl_.outgoing_heal_bps_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.physical_crit_bps_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.support_sources_complete_) -
-        reinterpret_cast<char*>(&_impl_.physical_crit_bps_)) + sizeof(_impl_.support_sources_complete_));
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    ::memset(&_impl_.shield_capacity_bps_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.season_defense_bps_) -
+        reinterpret_cast<char*>(&_impl_.shield_capacity_bps_)) + sizeof(_impl_.season_defense_bps_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       _impl_.ailment_hit_bps_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       _impl_.ailment_resist_bps_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       _impl_.mana_reduction_bps_.Clear();
     }
   }
@@ -1412,7 +1718,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 physical_attack_bps = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_physical_attack_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1421,7 +1727,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_attack_bps = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_magic_attack_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1430,7 +1736,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 max_health_bps = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_max_health_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1439,7 +1745,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 speed_bps = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_speed_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1448,7 +1754,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 outgoing_heal_bps = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_outgoing_heal_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1457,7 +1763,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 shield_capacity_bps = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_shield_capacity_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1466,7 +1772,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 physical_crit_bps = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_physical_crit_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1475,7 +1781,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_crit_bps = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_magic_crit_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1484,7 +1790,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 physical_resist_bps = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_physical_resist_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1493,7 +1799,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_resist_bps = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_magic_resist_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1502,7 +1808,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> ailment_hit_bps = 11;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (!this_._internal_ailment_hit_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1525,7 +1831,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> ailment_resist_bps = 12;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (!this_._internal_ailment_resist_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1548,7 +1854,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> mana_reduction_bps = 13;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (!this_._internal_mana_reduction_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1597,11 +1903,36 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // bool support_sources_complete = 16;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_support_sources_complete() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           16, this_._internal_support_sources_complete(), target);
+    }
+  }
+
+  // .SeasonSealEffect season_seal = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        17, *this_._impl_.season_seal_, this_._impl_.season_seal_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 season_max_health_bps = 18;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_season_max_health_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_season_max_health_bps(), target);
+    }
+  }
+
+  // uint32 season_defense_bps = 19;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_season_defense_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_season_defense_bps(), target);
     }
   }
 
@@ -1645,86 +1976,107 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint32 physical_attack_bps = 1;
+    // .SeasonSealEffect season_seal = 17;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.season_seal_);
+    }
+    // uint32 physical_attack_bps = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_physical_attack_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_attack_bps());
       }
     }
     // uint32 magic_attack_bps = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_magic_attack_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_attack_bps());
       }
     }
     // uint32 max_health_bps = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_max_health_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_health_bps());
       }
     }
     // uint32 speed_bps = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_speed_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_speed_bps());
       }
     }
     // uint32 outgoing_heal_bps = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_outgoing_heal_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_outgoing_heal_bps());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 shield_capacity_bps = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_shield_capacity_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shield_capacity_bps());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 physical_crit_bps = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_physical_crit_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_crit_bps());
       }
     }
     // uint32 magic_crit_bps = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_magic_crit_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_crit_bps());
       }
     }
     // uint32 physical_resist_bps = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_physical_resist_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_resist_bps());
       }
     }
     // uint32 magic_resist_bps = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_magic_resist_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_resist_bps());
       }
     }
     // bool support_sources_complete = 16;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_support_sources_complete() != 0) {
         total_size += 3;
       }
     }
+    // uint32 season_max_health_bps = 18;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_season_max_health_bps() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_max_health_bps());
+      }
+    }
+    // uint32 season_defense_bps = 19;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_season_defense_bps() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_defense_bps());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
     // map<uint32, uint32> ailment_hit_bps = 11;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_ailment_hit_bps_size());
       for (const auto& entry : this_._internal_ailment_hit_bps()) {
@@ -1734,7 +2086,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
       }
     }
     // map<uint32, uint32> ailment_resist_bps = 12;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_ailment_resist_bps_size());
       for (const auto& entry : this_._internal_ailment_resist_bps()) {
@@ -1744,7 +2096,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
       }
     }
     // map<uint32, uint32> mana_reduction_bps = 13;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_mana_reduction_bps_size());
       for (const auto& entry : this_._internal_mana_reduction_bps()) {
@@ -1784,69 +2136,89 @@ void EquipmentEffects::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_support_sources());
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.season_seal_ != nullptr);
+      if (_this->_impl_.season_seal_ == nullptr) {
+        _this->_impl_.season_seal_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.season_seal_);
+      } else {
+        _this->_impl_.season_seal_->MergeFrom(*from._impl_.season_seal_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_physical_attack_bps() != 0) {
         _this->_impl_.physical_attack_bps_ = from._impl_.physical_attack_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_magic_attack_bps() != 0) {
         _this->_impl_.magic_attack_bps_ = from._impl_.magic_attack_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_max_health_bps() != 0) {
         _this->_impl_.max_health_bps_ = from._impl_.max_health_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_speed_bps() != 0) {
         _this->_impl_.speed_bps_ = from._impl_.speed_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_outgoing_heal_bps() != 0) {
         _this->_impl_.outgoing_heal_bps_ = from._impl_.outgoing_heal_bps_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_shield_capacity_bps() != 0) {
-        _this->_impl_.shield_capacity_bps_ = from._impl_.shield_capacity_bps_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_shield_capacity_bps() != 0) {
+        _this->_impl_.shield_capacity_bps_ = from._impl_.shield_capacity_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_physical_crit_bps() != 0) {
         _this->_impl_.physical_crit_bps_ = from._impl_.physical_crit_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_magic_crit_bps() != 0) {
         _this->_impl_.magic_crit_bps_ = from._impl_.magic_crit_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_physical_resist_bps() != 0) {
         _this->_impl_.physical_resist_bps_ = from._impl_.physical_resist_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_magic_resist_bps() != 0) {
         _this->_impl_.magic_resist_bps_ = from._impl_.magic_resist_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_support_sources_complete() != 0) {
         _this->_impl_.support_sources_complete_ = from._impl_.support_sources_complete_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
-      _this->_impl_.ailment_hit_bps_.MergeFrom(from._impl_.ailment_hit_bps_);
-    }
     if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-      _this->_impl_.ailment_resist_bps_.MergeFrom(from._impl_.ailment_resist_bps_);
+      if (from._internal_season_max_health_bps() != 0) {
+        _this->_impl_.season_max_health_bps_ = from._impl_.season_max_health_bps_;
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_season_defense_bps() != 0) {
+        _this->_impl_.season_defense_bps_ = from._impl_.season_defense_bps_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      _this->_impl_.ailment_hit_bps_.MergeFrom(from._impl_.ailment_hit_bps_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      _this->_impl_.ailment_resist_bps_.MergeFrom(from._impl_.ailment_resist_bps_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       _this->_impl_.mana_reduction_bps_.MergeFrom(from._impl_.mana_reduction_bps_);
     }
   }
@@ -1870,17 +2242,456 @@ void EquipmentEffects::InternalSwap(EquipmentEffects* PROTOBUF_RESTRICT PROTOBUF
   _impl_.artifacts_.InternalSwap(&other->_impl_.artifacts_);
   _impl_.support_sources_.InternalSwap(&other->_impl_.support_sources_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_)
-      + sizeof(EquipmentEffects::_impl_.support_sources_complete_)
-      - PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_)>(
-          reinterpret_cast<char*>(&_impl_.physical_attack_bps_),
-          reinterpret_cast<char*>(&other->_impl_.physical_attack_bps_));
+      PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_defense_bps_)
+      + sizeof(EquipmentEffects::_impl_.season_defense_bps_)
+      - PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.season_seal_)>(
+          reinterpret_cast<char*>(&_impl_.season_seal_),
+          reinterpret_cast<char*>(&other->_impl_.season_seal_));
   _impl_.ailment_hit_bps_.InternalSwap(&other->_impl_.ailment_hit_bps_);
   _impl_.ailment_resist_bps_.InternalSwap(&other->_impl_.ailment_resist_bps_);
   _impl_.mana_reduction_bps_.InternalSwap(&other->_impl_.mana_reduction_bps_);
 }
 
 ::google::protobuf::Metadata EquipmentEffects::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SeasonSealEffect::SeasonSealEffect(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SeasonSealEffect_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SeasonSealEffect)
+}
+PROTOBUF_NDEBUG_INLINE SeasonSealEffect::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SeasonSealEffect& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+SeasonSealEffect::SeasonSealEffect(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SeasonSealEffect& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SeasonSealEffect_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SeasonSealEffect* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, season_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, season_id_),
+           offsetof(Impl_, health_threshold_bps_) -
+               offsetof(Impl_, season_id_) +
+               sizeof(Impl_::health_threshold_bps_));
+
+  // @@protoc_insertion_point(copy_constructor:SeasonSealEffect)
+}
+PROTOBUF_NDEBUG_INLINE SeasonSealEffect::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void SeasonSealEffect::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, season_id_),
+           0,
+           offsetof(Impl_, health_threshold_bps_) -
+               offsetof(Impl_, season_id_) +
+               sizeof(Impl_::health_threshold_bps_));
+}
+SeasonSealEffect::~SeasonSealEffect() {
+  // @@protoc_insertion_point(destructor:SeasonSealEffect)
+  SharedDtor(*this);
+}
+inline void SeasonSealEffect::SharedDtor(MessageLite& self) {
+  SeasonSealEffect& this_ = static_cast<SeasonSealEffect&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SeasonSealEffect_class_data_ =
+        SeasonSealEffect::InternalGenerateClassData_(SeasonSealEffect_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SeasonSealEffect::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SeasonSealEffect_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SeasonSealEffect_class_data_.tc_table);
+  return SeasonSealEffect_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SeasonSealEffect::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SeasonSealEffect_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SeasonSealEffect_globals_));
+  return SeasonSealEffect_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SeasonSealEffect::ParseTableT_
+    SeasonSealEffect::_table_ =
+        SeasonSealEffect::InternalGenerateParseTable_(SeasonSealEffect_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SeasonSealEffect::Clear() {
+// @@protoc_insertion_point(message_clear_start:SeasonSealEffect)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.season_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.battle_limit_) -
+        reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.battle_limit_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.active_rounds_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.health_threshold_bps_) -
+        reinterpret_cast<char*>(&_impl_.active_rounds_)) + sizeof(_impl_.health_threshold_bps_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SeasonSealEffect::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SeasonSealEffect& this_ = static_cast<const SeasonSealEffect&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SeasonSealEffect::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SeasonSealEffect& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SeasonSealEffect)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint32 seal_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_seal_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_seal_id(), target);
+    }
+  }
+
+  // uint32 effect_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_effect_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_effect_id(), target);
+    }
+  }
+
+  // uint32 bonus_bps = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_bonus_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_bonus_bps(), target);
+    }
+  }
+
+  // uint32 cap_bps = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_cap_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_cap_bps(), target);
+    }
+  }
+
+  // uint32 per_round_limit = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_per_round_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_per_round_limit(), target);
+    }
+  }
+
+  // uint32 battle_limit = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_battle_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_battle_limit(), target);
+    }
+  }
+
+  // uint32 active_rounds = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_active_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_active_rounds(), target);
+    }
+  }
+
+  // uint32 health_threshold_bps = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_health_threshold_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_health_threshold_bps(), target);
+    }
+  }
+
+  // string name = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SeasonSealEffect.name");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SeasonSealEffect)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SeasonSealEffect::ByteSizeLong(const MessageLite& base) {
+  const SeasonSealEffect& this_ = static_cast<const SeasonSealEffect&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SeasonSealEffect::ByteSizeLong() const {
+  const SeasonSealEffect& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SeasonSealEffect)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string name = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 seal_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_seal_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_seal_id());
+      }
+    }
+    // uint32 effect_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_effect_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_effect_id());
+      }
+    }
+    // uint32 bonus_bps = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_bonus_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_bps());
+      }
+    }
+    // uint32 cap_bps = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_cap_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_cap_bps());
+      }
+    }
+    // uint32 per_round_limit = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_per_round_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_per_round_limit());
+      }
+    }
+    // uint32 battle_limit = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_battle_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_battle_limit());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint32 active_rounds = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_active_rounds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_rounds());
+      }
+    }
+    // uint32 health_threshold_bps = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_health_threshold_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_health_threshold_bps());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SeasonSealEffect::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SeasonSealEffect*>(&to_msg);
+  auto& from = static_cast<const SeasonSealEffect&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SeasonSealEffect)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_seal_id() != 0) {
+        _this->_impl_.seal_id_ = from._impl_.seal_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_effect_id() != 0) {
+        _this->_impl_.effect_id_ = from._impl_.effect_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_bonus_bps() != 0) {
+        _this->_impl_.bonus_bps_ = from._impl_.bonus_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_cap_bps() != 0) {
+        _this->_impl_.cap_bps_ = from._impl_.cap_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_per_round_limit() != 0) {
+        _this->_impl_.per_round_limit_ = from._impl_.per_round_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_battle_limit() != 0) {
+        _this->_impl_.battle_limit_ = from._impl_.battle_limit_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_active_rounds() != 0) {
+        _this->_impl_.active_rounds_ = from._impl_.active_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_health_threshold_bps() != 0) {
+        _this->_impl_.health_threshold_bps_ = from._impl_.health_threshold_bps_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SeasonSealEffect::CopyFrom(const SeasonSealEffect& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SeasonSealEffect)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SeasonSealEffect::InternalSwap(SeasonSealEffect* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.health_threshold_bps_)
+      + sizeof(SeasonSealEffect::_impl_.health_threshold_bps_)
+      - PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.season_id_)>(
+          reinterpret_cast<char*>(&_impl_.season_id_),
+          reinterpret_cast<char*>(&other->_impl_.season_id_));
+}
+
+::google::protobuf::Metadata SeasonSealEffect::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

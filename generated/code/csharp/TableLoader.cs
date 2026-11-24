@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 58;
+        public const int TableCount = 61;
 
         private static Action s_loadSuccessCallback;
 
@@ -45,6 +45,7 @@ namespace MmorpgClient.Table
                 ActorActionStateTableManager.FileName(useBinary),
                 AfkPassRuleTableManager.FileName(useBinary),
                 AppearanceRuleTableManager.FileName(useBinary),
+                AppearanceSeriesTableManager.FileName(useBinary),
                 AttributeAllocRatioTableManager.FileName(useBinary),
                 AttributeAutoPlanTableManager.FileName(useBinary),
                 AttributeDimensionTableManager.FileName(useBinary),
@@ -90,6 +91,8 @@ namespace MmorpgClient.Table
                 RankedRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
                 RoleNameRuleTableManager.FileName(useBinary),
+                SeasonRuleTableManager.FileName(useBinary),
+                SeasonSealTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
                 SkillPermissionTableManager.FileName(useBinary),
                 TestTableManager.FileName(useBinary),
@@ -110,6 +113,7 @@ namespace MmorpgClient.Table
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
             AfkPassRuleTableManager.Instance.Load(configDir, useBinary);
             AppearanceRuleTableManager.Instance.Load(configDir, useBinary);
+            AppearanceSeriesTableManager.Instance.Load(configDir, useBinary);
             AttributeAllocRatioTableManager.Instance.Load(configDir, useBinary);
             AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
             AttributeDimensionTableManager.Instance.Load(configDir, useBinary);
@@ -155,6 +159,8 @@ namespace MmorpgClient.Table
             RankedRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
             RoleNameRuleTableManager.Instance.Load(configDir, useBinary);
+            SeasonRuleTableManager.Instance.Load(configDir, useBinary);
+            SeasonSealTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
             TestTableManager.Instance.Load(configDir, useBinary);
@@ -199,6 +205,8 @@ namespace MmorpgClient.Table
                 AfkPassRuleTableManager.Instance.LoadFromBytes, AfkPassRuleTableManager.Instance.LoadFromJson);
             LoadOne(AppearanceRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 AppearanceRuleTableManager.Instance.LoadFromBytes, AppearanceRuleTableManager.Instance.LoadFromJson);
+            LoadOne(AppearanceSeriesTableManager.FileName(useBinary), byteProvider, useBinary,
+                AppearanceSeriesTableManager.Instance.LoadFromBytes, AppearanceSeriesTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAllocRatioTableManager.FileName(useBinary), byteProvider, useBinary,
                 AttributeAllocRatioTableManager.Instance.LoadFromBytes, AttributeAllocRatioTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAutoPlanTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -289,6 +297,10 @@ namespace MmorpgClient.Table
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
             LoadOne(RoleNameRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 RoleNameRuleTableManager.Instance.LoadFromBytes, RoleNameRuleTableManager.Instance.LoadFromJson);
+            LoadOne(SeasonRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                SeasonRuleTableManager.Instance.LoadFromBytes, SeasonRuleTableManager.Instance.LoadFromJson);
+            LoadOne(SeasonSealTableManager.FileName(useBinary), byteProvider, useBinary,
+                SeasonSealTableManager.Instance.LoadFromBytes, SeasonSealTableManager.Instance.LoadFromJson);
             LoadOne(SkillTableManager.FileName(useBinary), byteProvider, useBinary,
                 SkillTableManager.Instance.LoadFromBytes, SkillTableManager.Instance.LoadFromJson);
             LoadOne(SkillPermissionTableManager.FileName(useBinary), byteProvider, useBinary,

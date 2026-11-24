@@ -94,6 +94,7 @@ type MonsterTable struct {
 	GoldReward        uint64                 `protobuf:"varint,9,opt,name=gold_reward,json=goldReward,proto3" json:"gold_reward,omitempty"`
 	CapturePetTableId uint32                 `protobuf:"varint,11,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`
 	CaptureRate       uint32                 `protobuf:"varint,12,opt,name=capture_rate,json=captureRate,proto3" json:"capture_rate,omitempty"`
+	IsBoss            uint32                 `protobuf:"varint,13,opt,name=is_boss,json=isBoss,proto3" json:"is_boss,omitempty"`
 	Drop              []*Monsterdrop         `protobuf:"bytes,10,rep,name=drop,proto3" json:"drop,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -206,6 +207,13 @@ func (x *MonsterTable) GetCaptureRate() uint32 {
 	return 0
 }
 
+func (x *MonsterTable) GetIsBoss() uint32 {
+	if x != nil {
+		return x.IsBoss
+	}
+	return 0
+}
+
 func (x *MonsterTable) GetDrop() []*Monsterdrop {
 	if x != nil {
 		return x.Drop
@@ -266,7 +274,7 @@ const file_monster_table_proto_rawDesc = "" +
 	"\tdrop_item\x18\x01 \x01(\rR\bdropItem\x12\x1d\n" +
 	"\n" +
 	"drop_count\x18\x02 \x01(\rR\tdropCount\x12\x1b\n" +
-	"\tdrop_rate\x18\x03 \x01(\rR\bdropRate\"\xf4\x02\n" +
+	"\tdrop_rate\x18\x03 \x01(\rR\bdropRate\"\x8d\x03\n" +
 	"\fMonsterTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x1a\n" +
@@ -284,7 +292,8 @@ const file_monster_table_proto_rawDesc = "" +
 	"\vgold_reward\x18\t \x01(\x04R\n" +
 	"goldReward\x12/\n" +
 	"\x14capture_pet_table_id\x18\v \x01(\rR\x11capturePetTableId\x12!\n" +
-	"\fcapture_rate\x18\f \x01(\rR\vcaptureRate\x12 \n" +
+	"\fcapture_rate\x18\f \x01(\rR\vcaptureRate\x12\x17\n" +
+	"\ais_boss\x18\r \x01(\rR\x06isBoss\x12 \n" +
 	"\x04drop\x18\n" +
 	" \x03(\v2\f.MonsterdropR\x04drop\"5\n" +
 	"\x10MonsterTableData\x12!\n" +

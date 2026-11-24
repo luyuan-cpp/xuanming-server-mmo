@@ -1,6 +1,7 @@
 #include "system/turn_battle_engine.h"
 #include "system/equipment_battle_rules.h"
 #include "system/combat_damage_rules.h"
+#include "system/season_rules.h"
 #include "system/support_effect_rules.h"
 #include "system/pet_cultivation_rules.h"
 
@@ -37,7 +38,15 @@ bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const Equipm
         effects.physical_resist_bps() > equipbattle::MaximumSourceBps(9) || effects.magic_resist_bps() > equipbattle::MaximumSourceBps(10) ||
         !Bounded(effects.ailment_hit_bps(), 7, equipbattle::MaximumSourceBps(11)) ||
         !Bounded(effects.ailment_resist_bps(), 7, equipbattle::MaximumSourceBps(12)) ||
-        !Bounded(effects.mana_reduction_bps(), 12, equipbattle::MaximumSourceBps(13)) || effects.artifacts_size() > 2) return false;
+        !Bounded(effects.mana_reduction_bps(), 12, equipbattle::MaximumSourceBps(13)) || effects.artifacts_size() > 2 ||
+        effects.season_max_health_bps() > seasonrules::kHardStatCapBps ||
+        effects.season_defense_bps() > seasonrules::kHardStatCapBps) return false;
+    if (effects.has_season_seal()) {
+        const auto& seal = effects.season_seal();
+        if (!seasonrules::ValidSealEffect(seal.season_id(), seal.seal_id(), seal.effect_id(),
+                seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(), seal.battle_limit(),
+                seal.active_rounds(), seal.health_threshold_bps())) return false;
+    }
     std::set<uint64_t> instances;
     for (const auto& source : effects.artifacts()) {
         if (source.item_id() == 0 || source.item_id() >> 63 || !instances.insert(source.item_id()).second ||
@@ -52,6 +61,7 @@ bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const Equipm
     auto* sources = actor.mutable_equipment_effects()->mutable_artifacts();
     std::sort(sources->begin(), sources->end(), [](const auto& left, const auto& right) { return left.item_id() < right.item_id(); });
     for (const auto& source : *sources) actor.add_artifact_states()->set_item_id(source.item_id());
+    actor.clear_season_seal_state();
     actor.set_entry_max_health(actor.max_health());
     actor.set_entry_max_mana(actor.max_mana());
     return true;
@@ -92,6 +102,34 @@ void TurnBattleEngine::UseArtifact(BattleActorState& actor, int index, uint64_t 
     event->set_value(value); event->set_success(true);
 }
 
+bool TurnBattleEngine::SeasonSealAvailable(const BattleActorState& actor, uint32_t effect) const {
+    if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || !IsActorActive(actor) ||
+        !actor.equipment_effects().has_season_seal()) return false;
+    const auto& seal = actor.equipment_effects().season_seal();
+    if (seal.effect_id() != effect || (seal.active_rounds() > 0 && roundIndex > seal.active_rounds())) return false;
+    const auto& state = actor.season_seal_state();
+    if (seal.battle_limit() > 0 && state.used_count() >= seal.battle_limit()) return false;
+    if (seal.per_round_limit() > 0 && state.last_trigger_round() == roundIndex &&
+        state.round_trigger_count() >= seal.per_round_limit()) return false;
+    return true;
+}
+
+void TurnBattleEngine::UseSeasonSeal(BattleActorState& actor, uint64_t targetId,
+                                     uint64_t value, TurnResultS2C& result) {
+    if (!actor.equipment_effects().has_season_seal()) return;
+    const auto& seal = actor.equipment_effects().season_seal();
+    auto* state = actor.mutable_season_seal_state();
+    state->set_used_count(state->used_count() + 1);
+    state->set_round_trigger_count(state->last_trigger_round() == roundIndex ? state->round_trigger_count() + 1 : 1);
+    state->set_last_trigger_round(roundIndex);
+    auto* event = AppendEvent(result, BATTLE_EVENT_ARTIFACT, actor.actor_id(), targetId);
+    event->set_artifact_item_id(0);
+    event->set_artifact_effect_id(seal.effect_id());
+    event->set_season_seal_id(seal.seal_id());
+    event->set_value(value);
+    event->set_success(true);
+}
+
 void TurnBattleEngine::EquipmentDefend(BattleActorState& actor, TurnResultS2C& result) {
     const uint64_t before = actor.attributes().mana();
     const uint64_t missing = actor.max_mana() > before ? actor.max_mana() - before : 0;
@@ -102,6 +140,14 @@ void TurnBattleEngine::EquipmentDefend(BattleActorState& actor, TurnResultS2C& r
         const uint64_t gain = std::min(missing - total, equipbattle::FloorBps(actor.entry_max_mana(), source.bonus_bps()));
         if (gain == 0) continue;
         total += gain; UseArtifact(actor, index, actor.actor_id(), gain, result);
+    }
+    if (SeasonSealAvailable(actor, 7) && missing > total) {
+        const auto& seal = actor.equipment_effects().season_seal();
+        const uint64_t gain = std::min(missing - total, equipbattle::FloorBps(actor.entry_max_mana(), seal.bonus_bps()));
+        if (gain > 0) {
+            total += gain;
+            UseSeasonSeal(actor, actor.actor_id(), gain, result);
+        }
     }
     if (total == 0) return;
     actor.mutable_attributes()->set_mana(before + total);
@@ -122,6 +168,15 @@ uint64_t TurnBattleEngine::EquipmentReduceDamage(BattleActorState& source, Battl
             equipbattle::FloorBps(target.entry_max_health(), artifact.cap_bps())});
         if (part == 0) continue;
         reduction += part; UseArtifact(target, index, target.actor_id(), part, result);
+    }
+    if (SeasonSealAvailable(target, 6) && damage > reduction) {
+        const auto& seal = target.equipment_effects().season_seal();
+        const uint64_t part = std::min({damage - reduction, equipbattle::FloorBps(damage, seal.bonus_bps()),
+            equipbattle::FloorBps(target.entry_max_health(), seal.cap_bps())});
+        if (part > 0) {
+            reduction += part;
+            UseSeasonSeal(target, target.actor_id(), part, result);
+        }
     }
     return damage - reduction;
 }
@@ -153,6 +208,28 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
             if (part == saved.remaining_capacity()) RemoveConfiguredBuff(target, id, result);
         }
         if (removed > 0) UseArtifact(source, index, target.actor_id(), removed, result);
+    }
+    if (effect != 0 && SeasonSealAvailable(source, effect)) {
+        const auto& seal = source.equipment_effects().season_seal();
+        const uint64_t before = equipbattle::FloorBps(damage, accumulated);
+        accumulated += seal.bonus_bps();
+        uint64_t left = equipbattle::FloorBps(damage, accumulated) - before, removed = 0;
+        for (const auto id : shields) {
+            if (left == 0) break;
+            const int buffIndex = FindBuffIndex(target, id); if (buffIndex < 0) continue;
+            const auto saved = target.buffs(buffIndex);
+            const uint64_t part = std::min(left, saved.remaining_capacity());
+            if (part == 0) continue;
+            left -= part; removed += part;
+            target.mutable_buffs(buffIndex)->set_remaining_capacity(saved.remaining_capacity() - part);
+            auto* event = AppendEvent(result, BATTLE_EVENT_SHIELD, source.actor_id(), target.actor_id());
+            event->set_buff_table_id(saved.buff_table_id()); event->set_buff_instance_id(id);
+            event->set_absorbed(part); event->set_shield_after(saved.remaining_capacity() - part);
+            event->set_artifact_item_id(0); event->set_artifact_effect_id(effect);
+            event->set_season_seal_id(seal.seal_id());
+            if (part == saved.remaining_capacity()) RemoveConfiguredBuff(target, id, result);
+        }
+        if (removed > 0) UseSeasonSeal(source, target.actor_id(), removed, result);
     }
 }
 

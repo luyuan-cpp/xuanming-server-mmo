@@ -1,0 +1,28 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "SeasonSealTableOuterClass";
+option java_multiple_files = true;
+
+
+message SeasonSealTable {
+	uint32 id = 1;
+	uint32 season_id = 2;
+	string name = 3;
+	string description = 4;
+	string icon_key = 5;
+	uint32 effect_id = 6;
+	uint32 bonus_bps = 7;
+	uint32 cap_bps = 8;
+	uint32 per_round_limit = 9;
+	uint32 battle_limit = 10;
+	uint32 active_rounds = 11;
+	uint32 health_threshold_bps = 12;
+}
+
+message SeasonSealTableData {
+	repeated SeasonSealTable data = 1;
+}

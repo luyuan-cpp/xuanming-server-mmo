@@ -118,6 +118,7 @@ static void MonsterTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	MonsterTableCheckNarrowedField(RowObject, TEXT("gold_reward"), TEXT("gold_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("capture_pet_table_id"), TEXT("capture_pet_table_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("capture_rate"), TEXT("capture_rate"), RowIndex, 2147483647.0, TEXT("uint32"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("is_boss"), TEXT("is_boss"), RowIndex, 2147483647.0, TEXT("uint32"));
 	// 子消息 drop[]:每个元素是一个对象,逐个元素查它的收窄列。
 	if (const TSharedPtr<FJsonValue>* DropField = RowObject->Values.Find(TEXT("drop")))
 	{

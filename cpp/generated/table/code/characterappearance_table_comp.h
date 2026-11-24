@@ -38,6 +38,18 @@ struct CharacterAppearanceDescComp {
     std::string_view value;
 };
 
+struct CharacterAppearanceStarter_creatableComp {
+    uint32_t value;
+};
+
+struct CharacterAppearanceCard_unlockableComp {
+    uint32_t value;
+};
+
+struct CharacterAppearanceSeries_idComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -60,4 +72,13 @@ inline CharacterAppearanceSort_orderComp MakeCharacterAppearanceSort_orderComp(c
 }
 inline CharacterAppearanceDescComp MakeCharacterAppearanceDescComp(const CharacterAppearanceTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline CharacterAppearanceStarter_creatableComp MakeCharacterAppearanceStarter_creatableComp(const CharacterAppearanceTable& row) {
+    return { row.starter_creatable() };
+}
+inline CharacterAppearanceCard_unlockableComp MakeCharacterAppearanceCard_unlockableComp(const CharacterAppearanceTable& row) {
+    return { row.card_unlockable() };
+}
+inline CharacterAppearanceSeries_idComp MakeCharacterAppearanceSeries_idComp(const CharacterAppearanceTable& row) {
+    return { row.series_id() };
 }

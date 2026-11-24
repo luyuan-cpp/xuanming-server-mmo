@@ -720,11 +720,11 @@ constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._has_bits_),
       0, // no _extensions_
-      23, 248,  // max_field_number, fast_idx_mask
+      24, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4286578688,  // skipmap
+      4278190080,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      23,  // num_field_entries
+      24,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -827,7 +827,10 @@ constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGeneratePar
       {::_pbi::TcParser::FastMtS2,
        {442, 4, 0,
         PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.season_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -884,6 +887,8 @@ constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .SupportSkillPreview support_preview = 23;
       {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 season_id = 24;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.season_id_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -893,7 +898,7 @@ constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGeneratePar
         #endif
     }},
     {{
-      "\21\0\4\13\10\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\21\0\4\13\10\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "SkillCatalogEntry"
       "name"
       "description"
@@ -938,7 +943,8 @@ inline constexpr SkillCatalogEntry::Impl_::Impl_(
         duration_rounds_{0u},
         ability_kind_{0u},
         caster_mask_{0u},
-        action_tags_{0u} {}
+        action_tags_{0u},
+        season_id_{0u} {}
 
 template <typename>
 constexpr SkillCatalogEntry::SkillCatalogEntry(::_pbi::ConstantInitialized,
@@ -1802,7 +1808,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_._has_bits_),
-        26, // hasbit index offset
+        27, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.skill_table_id_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.description_),
@@ -1826,6 +1832,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.caster_mask_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.action_tags_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.support_preview_),
+        PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.season_id_),
         5,
         0,
         1,
@@ -1849,6 +1856,7 @@ const ::uint32_t
         21,
         22,
         4,
+        23,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::UpgradeSkillRequest, _impl_._has_bits_),
         7, // hasbit index offset
@@ -1882,8 +1890,8 @@ static const ::_pbi::MigrationSchema
         {42, sizeof(::ListSkillsRequest)},
         {47, sizeof(::ListSkillsResponse)},
         {64, sizeof(::SkillCatalogEntry)},
-        {113, sizeof(::UpgradeSkillRequest)},
-        {124, sizeof(::UpgradeSkillResponse)},
+        {115, sizeof(::UpgradeSkillRequest)},
+        {126, sizeof(::UpgradeSkillResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1923,7 +1931,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "kill_list\030\002 \001(\0132\024.PlayerSkillListComp\022#\n"
     "\007catalog\030\003 \003(\0132\022.SkillCatalogEntry\022\024\n\014pl"
     "ayer_level\030\004 \001(\r\022\020\n\010class_id\030\005 \001(\r\022\030\n\020cu"
-    "rrency_balance\030\006 \001(\004\022\016\n\006pet_id\030\007 \001(\004\"\221\004\n"
+    "rrency_balance\030\006 \001(\004\022\016\n\006pet_id\030\007 \001(\004\"\244\004\n"
     "\021SkillCatalogEntry\022\026\n\016skill_table_id\030\001 \001"
     "(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\020\n"
     "\010icon_key\030\004 \001(\t\022\020\n\010class_id\030\005 \001(\r\022\020\n\010cat"
@@ -1937,22 +1945,22 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "dead_target\030\023 \001(\010\022\024\n\014ability_kind\030\024 \001(\r\022"
     "\023\n\013caster_mask\030\025 \001(\r\022\023\n\013action_tags\030\026 \001("
     "\r\022-\n\017support_preview\030\027 \001(\0132\024.SupportSkil"
-    "lPreview\"c\n\023UpgradeSkillRequest\022\026\n\016skill"
-    "_table_id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r"
-    "\n\005count\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024Upgrad"
-    "eSkillResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkil"
-    "lsResponse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013st"
-    "op_tip_id\030\004 \001(\r2\305\002\n\026SceneSkillClientPlay"
-    "er\022;\n\014ReleaseSkill\022\024.ReleaseSkillRequest"
-    "\032\025.ReleaseSkillResponse\022/\n\017NotifySkillUs"
-    "ed\022\r.SkillUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026Noti"
-    "fySkillInterrupted\022\024.SkillInterruptedS2C"
-    "\032\006.Empty\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkil"
-    "lsRequest\032\023.ListSkillsResponse\022;\n\014Upgrad"
-    "eSkill\022\024.UpgradeSkillRequest\032\025.UpgradeSk"
-    "illResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b"
-    "\006proto3"
+    "lPreview\022\021\n\tseason_id\030\030 \001(\r\"c\n\023UpgradeSk"
+    "illRequest\022\026\n\016skill_table_id\030\001 \001(\r\022\025\n\rex"
+    "pected_rank\030\002 \001(\r\022\r\n\005count\030\003 \001(\r\022\016\n\006pet_"
+    "id\030\004 \001(\004\"\217\001\n\024UpgradeSkillResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022\"\n\005sta"
+    "te\030\002 \001(\0132\023.ListSkillsResponse\022\026\n\016upgrade"
+    "d_count\030\003 \001(\r\022\023\n\013stop_tip_id\030\004 \001(\r2\305\002\n\026S"
+    "ceneSkillClientPlayer\022;\n\014ReleaseSkill\022\024."
+    "ReleaseSkillRequest\032\025.ReleaseSkillRespon"
+    "se\022/\n\017NotifySkillUsed\022\r.SkillUsedS2C\032\006.E"
+    "mpty\"\005\210\231\310\001\002\022=\n\026NotifySkillInterrupted\022\024."
+    "SkillInterruptedS2C\032\006.Empty\"\005\210\231\310\001\002\0225\n\nLi"
+    "stSkills\022\022.ListSkillsRequest\032\023.ListSkill"
+    "sResponse\022;\n\014UpgradeSkill\022\024.UpgradeSkill"
+    "Request\032\025.UpgradeSkillResponse\032\n\200\250\303\001\001\210\250\303"
+    "\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[7] = {
@@ -1968,7 +1976,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto = {
     false,
     false,
-    2127,
+    2146,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto,
     "proto/scene/player_skill.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once,
@@ -3790,9 +3798,9 @@ SkillCatalogEntry::SkillCatalogEntry(
                offsetof(Impl_, skill_table_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, skill_table_id_),
-           offsetof(Impl_, action_tags_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, skill_table_id_) +
-               sizeof(Impl_::action_tags_));
+               sizeof(Impl_::season_id_));
 
   // @@protoc_insertion_point(copy_constructor:SkillCatalogEntry)
 }
@@ -3810,9 +3818,9 @@ inline void SkillCatalogEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, support_preview_),
            0,
-           offsetof(Impl_, action_tags_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, support_preview_) +
-               sizeof(Impl_::action_tags_));
+               sizeof(Impl_::season_id_));
 }
 SkillCatalogEntry::~SkillCatalogEntry() {
   // @@protoc_insertion_point(destructor:SkillCatalogEntry)
@@ -3895,10 +3903,10 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
         reinterpret_cast<char*>(&_impl_.cooldown_rounds_) -
         reinterpret_cast<char*>(&_impl_.max_targets_)) + sizeof(_impl_.cooldown_rounds_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.mana_percent_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.action_tags_) -
-        reinterpret_cast<char*>(&_impl_.mana_percent_)) + sizeof(_impl_.action_tags_));
+        reinterpret_cast<char*>(&_impl_.season_id_) -
+        reinterpret_cast<char*>(&_impl_.mana_percent_)) + sizeof(_impl_.season_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4132,6 +4140,15 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
         stream);
   }
 
+  // uint32 season_id = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_season_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4269,7 +4286,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // double mana_percent = 14;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(this_._internal_mana_percent()) != 0) {
@@ -4316,6 +4333,13 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
       if (this_._internal_action_tags() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_action_tags());
+      }
+    }
+    // uint32 season_id = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_id());
       }
     }
   }
@@ -4440,7 +4464,7 @@ void SkillCatalogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(from._internal_mana_percent()) != 0) {
         _this->_impl_.mana_percent_ = from._impl_.mana_percent_;
@@ -4476,6 +4500,11 @@ void SkillCatalogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.action_tags_ = from._impl_.action_tags_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -4501,8 +4530,8 @@ void SkillCatalogEntry::InternalSwap(SkillCatalogEntry* PROTOBUF_RESTRICT PROTOB
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.category_, &other->_impl_.category_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_)
-      + sizeof(SkillCatalogEntry::_impl_.action_tags_)
+      PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.season_id_)
+      + sizeof(SkillCatalogEntry::_impl_.season_id_)
       - PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_)>(
           reinterpret_cast<char*>(&_impl_.support_preview_),
           reinterpret_cast<char*>(&other->_impl_.support_preview_));

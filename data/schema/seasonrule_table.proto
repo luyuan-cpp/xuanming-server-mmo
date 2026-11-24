@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+// SeasonRule 表的权威 schema。源表 data/SeasonRule.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 赛季全局排期、赛季印进度门槛、轻数值上限与小额追赶规则（设计见 docs/design/season-skills-and-seal-design.md）。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message SeasonRuleTable {
+  option (cfg_sheet)       = "SeasonRule";
+  option (cfg_source_file) = "SeasonRule.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 赛季编号（从 1 起递增，对应 Skill.season_id 与 SeasonSeal.season_id）
+  uint32 id = 1;
+  // 赛季展示名（如 破阵之季）
+  string name = 2;
+  // 赛季开始时刻（UTC 毫秒，左闭；0 表示立即可用）
+  uint64 starts_at_ms = 3;
+  // 赛季结束时刻（UTC 毫秒，右开；0 表示首测未设截止时刻）
+  uint64 ends_at_ms = 4;
+  // 是否启用（同一时刻最多允许 1 条启用且在有效期内的赛季）
+  bool enabled = 5;
+  // 赛季印满级所需总点数（首测 = 12）
+  uint32 seal_max_points = 6;
+  // 合格正规 PVE 胜利获得的赛季印点数（首测 = 1）
+  uint32 pve_win_points = 7;
+  // 合格正规排位 PVP 胜利获得的赛季印点数（首测 = 2）
+  uint32 pvp_win_points = 8;
+  // 合格正规排位 PVP 平/负获得的赛季印点数（首测 = 1）
+  uint32 pvp_other_points = 9;
+  // 赛季印满级气血万分比上限（首测 = 300 即 3%，服务端硬上限 <= 500）
+  uint32 max_health_bps_cap = 10;
+  // 赛季印满级防御万分比上限（首测 = 300 即 3%，服务端硬上限 <= 500；禁加速度/控命/抵抗）
+  uint32 defense_bps_cap = 11;
+  // 快捷追赶扣除的货币类型（CurrencyType：0 银两 / 1 灵石 / 2 绑定灵石）
+  uint32 catchup_currency_type = 12;
+  // 每补 1 点进度的货币单价（0 = 暂不开放快捷追赶；首测 = 10 灵石）
+  uint64 catchup_price_per_point = 13;
+  // 本季默认佩戴的赛季印 ID（FK -> SeasonSeal.id）
+  uint32 default_seal_id = 14;
+  // 赛季简介说明
+  string desc = 15;
+}

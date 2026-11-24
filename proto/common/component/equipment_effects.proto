@@ -23,6 +23,24 @@ message EquipmentEffects {
   repeated EquipmentArtifactSource artifacts = 14;
   repeated SupportEffectSource support_sources = 15; // 与同一轮聚合同时产生，禁止客户端再累计。
   bool support_sources_complete = 16; // 旧快照/缺背包输入不能冒充完整来源。
+  // 单槽赛季装备栏（「赛季印」，方案 A）：与永久 8 部位装备、2 永久法宝严格隔离，不占用物品永久 GUID。
+  SeasonSealEffect season_seal = 17;
+  uint32 season_max_health_bps = 18; // 本季赛季印轻度气血万分比（<= 500，首测上限 300）
+  uint32 season_defense_bps = 19;    // 本季赛季印轻度防御万分比（<= 500，首测上限 300；严禁速度/控命/抵抗）
+}
+
+// 赛季印的战斗机制快照：结构与法宝效果一致，但按 (season_id, seal_id) 标识，不借用永久 item_id。
+message SeasonSealEffect {
+  uint32 season_id = 1;
+  uint32 seal_id = 2;
+  uint32 effect_id = 3; // 1 物理削盾、2 法术削盾、6 开局减伤、7 防御回蓝等。
+  uint32 bonus_bps = 4;
+  uint32 cap_bps = 5;
+  uint32 per_round_limit = 6; // 0 不限。
+  uint32 battle_limit = 7;    // 0 不限。
+  uint32 active_rounds = 8;   // 0 不限。
+  uint32 health_threshold_bps = 9;
+  string name = 10;
 }
 
 message EquipmentArtifactSource {

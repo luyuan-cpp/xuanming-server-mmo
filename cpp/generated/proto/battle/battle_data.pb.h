@@ -2579,6 +2579,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEventItem final : public ::go
     kDamageOriginFieldNumber = 20,
     kArtifactEffectIdFieldNumber = 23,
     kArtifactItemIdFieldNumber = 22,
+    kSeasonSealIdFieldNumber = 24,
   };
   // uint64 source_id = 2;
   void clear_source_id() ;
@@ -2812,11 +2813,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEventItem final : public ::go
   void _internal_set_artifact_item_id(::uint64_t value);
 
   public:
+  // uint32 season_seal_id = 24;
+  void clear_season_seal_id() ;
+  [[nodiscard]] ::uint32_t season_seal_id() const;
+  void set_season_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_id() const;
+  void _internal_set_season_seal_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleEventItem)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
+      ::google::protobuf::internal::TcParseTable<5, 24,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2868,6 +2879,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEventItem final : public ::go
     ::uint32_t damage_origin_;
     ::uint32_t artifact_effect_id_;
     ::uint64_t artifact_item_id_;
+    ::uint32_t season_seal_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6627,6 +6639,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kClassIdFieldNumber = 18,
     kGenderFieldNumber = 19,
     kPetCaptureSlotsFieldNumber = 22,
+    kActiveSeasonIdFieldNumber = 24,
     kSkillRanksFieldNumber = 21,
   };
   // repeated uint32 skill_table_ids = 7;
@@ -6931,6 +6944,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_pet_capture_slots(::uint32_t value);
 
   public:
+  // uint32 active_season_id = 24;
+  void clear_active_season_id() ;
+  [[nodiscard]] ::uint32_t active_season_id() const;
+  void set_active_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_season_id() const;
+  void _internal_set_active_season_id(::uint32_t value);
+
+  public:
   // map<uint32, uint32> skill_ranks = 21;
   [[nodiscard]] int skill_ranks_size()
       const;
@@ -6951,8 +6974,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          8, 86,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          8, 94,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7003,6 +7026,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::uint32_t class_id_;
     ::uint32_t gender_;
     ::uint32_t pet_capture_slots_;
+    ::uint32_t active_season_id_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7165,6 +7189,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kAppearanceIdFieldNumber = 24,
     kAttributesFieldNumber = 6,
     kCombatFieldNumber = 27,
+    kSeasonSealStateFieldNumber = 44,
     kActorIdFieldNumber = 1,
     kActorTypeFieldNumber = 2,
     kTeamIndexFieldNumber = 3,
@@ -7198,9 +7223,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kSupportEffectsFieldNumber = 40,
     kPetCultivationFieldNumber = 41,
     kEntryMaxHealthFieldNumber = 38,
+    kEntryMaxManaFieldNumber = 39,
     kWithdrawUntilRoundFieldNumber = 34,
     kCompetitiveTemporaryFieldNumber = 42,
-    kEntryMaxManaFieldNumber = 39,
+    kIsBossFieldNumber = 43,
   };
   // repeated .BattleBuffEntry buffs = 12;
   [[nodiscard]] int buffs_size()
@@ -7303,6 +7329,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   private:
   const ::CombatAttributes& _internal_combat() const;
   ::CombatAttributes* PROTOBUF_NONNULL _internal_mutable_combat();
+
+  public:
+  // .BattleArtifactState season_seal_state = 44;
+  [[nodiscard]] bool has_season_seal_state()
+      const;
+  void clear_season_seal_state() ;
+  [[nodiscard]] const ::BattleArtifactState& season_seal_state() const;
+  [[nodiscard]] ::BattleArtifactState* PROTOBUF_NULLABLE release_season_seal_state();
+  ::BattleArtifactState* PROTOBUF_NONNULL mutable_season_seal_state();
+  void set_allocated_season_seal_state(::BattleArtifactState* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_season_seal_state(::BattleArtifactState* PROTOBUF_NULLABLE value);
+  ::BattleArtifactState* PROTOBUF_NULLABLE unsafe_arena_release_season_seal_state();
+
+  private:
+  const ::BattleArtifactState& _internal_season_seal_state() const;
+  ::BattleArtifactState* PROTOBUF_NONNULL _internal_mutable_season_seal_state();
 
   public:
   // uint64 actor_id = 1;
@@ -7698,6 +7740,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_entry_max_health(::uint64_t value);
 
   public:
+  // uint64 entry_max_mana = 39;
+  void clear_entry_max_mana() ;
+  [[nodiscard]] ::uint64_t entry_max_mana() const;
+  void set_entry_max_mana(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_entry_max_mana() const;
+  void _internal_set_entry_max_mana(::uint64_t value);
+
+  public:
   // uint32 withdraw_until_round = 34;
   void clear_withdraw_until_round() ;
   [[nodiscard]] ::uint32_t withdraw_until_round() const;
@@ -7718,22 +7770,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_competitive_temporary(bool value);
 
   public:
-  // uint64 entry_max_mana = 39;
-  void clear_entry_max_mana() ;
-  [[nodiscard]] ::uint64_t entry_max_mana() const;
-  void set_entry_max_mana(::uint64_t value);
+  // bool is_boss = 43;
+  void clear_is_boss() ;
+  [[nodiscard]] bool is_boss() const;
+  void set_is_boss(bool value);
 
   private:
-  ::uint64_t _internal_entry_max_mana() const;
-  void _internal_set_entry_max_mana(::uint64_t value);
+  bool _internal_is_boss() const;
+  void _internal_set_is_boss(bool value);
 
   public:
   // @@protoc_insertion_point(class_scope:BattleActorState)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 42,
-                          11, 82,
+      ::google::protobuf::internal::TcParseTable<5, 44,
+                          12, 82,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7768,6 +7820,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::BaseAttributesComp* PROTOBUF_NULLABLE attributes_;
     ::CombatAttributes* PROTOBUF_NULLABLE combat_;
+    ::BattleArtifactState* PROTOBUF_NULLABLE season_seal_state_;
     ::uint64_t actor_id_;
     int actor_type_;
     ::uint32_t team_index_;
@@ -7802,9 +7855,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     ::SupportEffectSummary* PROTOBUF_NULLABLE support_effects_;
     ::PetCultivationEffects* PROTOBUF_NULLABLE pet_cultivation_;
     ::uint64_t entry_max_health_;
+    ::uint64_t entry_max_mana_;
     ::uint32_t withdraw_until_round_;
     bool competitive_temporary_;
-    ::uint64_t entry_max_mana_;
+    bool is_boss_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9539,7 +9593,7 @@ inline int BattlePlayerSnapshot::skill_ranks_size() const {
 inline void BattlePlayerSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -9555,7 +9609,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -9675,6 +9729,30 @@ inline void BattlePlayerSnapshot::set_allocated_equipment_effects(::EquipmentEff
 
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
   // @@protoc_insertion_point(field_set_allocated:BattlePlayerSnapshot.equipment_effects)
+}
+
+// uint32 active_season_id = 24;
+inline void BattlePlayerSnapshot::clear_active_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t BattlePlayerSnapshot::active_season_id() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.active_season_id)
+  return _internal_active_season_id();
+}
+inline void BattlePlayerSnapshot::set_active_season_id(::uint32_t value) {
+  _internal_set_active_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.active_season_id)
+}
+inline ::uint32_t BattlePlayerSnapshot::_internal_active_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_season_id_;
+}
+inline void BattlePlayerSnapshot::_internal_set_active_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_season_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -10295,7 +10373,7 @@ inline void BattlePetSnapshot::_internal_set_combat_pet_table_id(::uint32_t valu
 inline void BattleActorState::clear_actor_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.actor_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t BattleActorState::actor_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.actor_id)
@@ -10303,7 +10381,7 @@ inline ::uint64_t BattleActorState::actor_id() const {
 }
 inline void BattleActorState::set_actor_id(::uint64_t value) {
   _internal_set_actor_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleActorState.actor_id)
 }
 inline ::uint64_t BattleActorState::_internal_actor_id() const {
@@ -10319,7 +10397,7 @@ inline void BattleActorState::_internal_set_actor_id(::uint64_t value) {
 inline void BattleActorState::clear_actor_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.actor_type_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::eBattleActorType BattleActorState::actor_type() const {
   // @@protoc_insertion_point(field_get:BattleActorState.actor_type)
@@ -10327,7 +10405,7 @@ inline ::eBattleActorType BattleActorState::actor_type() const {
 }
 inline void BattleActorState::set_actor_type(::eBattleActorType value) {
   _internal_set_actor_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleActorState.actor_type)
 }
 inline ::eBattleActorType BattleActorState::_internal_actor_type() const {
@@ -10343,7 +10421,7 @@ inline void BattleActorState::_internal_set_actor_type(::eBattleActorType value)
 inline void BattleActorState::clear_team_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t BattleActorState::team_index() const {
   // @@protoc_insertion_point(field_get:BattleActorState.team_index)
@@ -10351,7 +10429,7 @@ inline ::uint32_t BattleActorState::team_index() const {
 }
 inline void BattleActorState::set_team_index(::uint32_t value) {
   _internal_set_team_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleActorState.team_index)
 }
 inline ::uint32_t BattleActorState::_internal_team_index() const {
@@ -10431,7 +10509,7 @@ inline void BattleActorState::set_allocated_name(::std::string* PROTOBUF_NULLABL
 inline void BattleActorState::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t BattleActorState::level() const {
   // @@protoc_insertion_point(field_get:BattleActorState.level)
@@ -10439,7 +10517,7 @@ inline ::uint32_t BattleActorState::level() const {
 }
 inline void BattleActorState::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:BattleActorState.level)
 }
 inline ::uint32_t BattleActorState::_internal_level() const {
@@ -10548,7 +10626,7 @@ inline void BattleActorState::set_allocated_attributes(::BaseAttributesComp* PRO
 inline void BattleActorState::clear_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t BattleActorState::max_health() const {
   // @@protoc_insertion_point(field_get:BattleActorState.max_health)
@@ -10556,7 +10634,7 @@ inline ::uint64_t BattleActorState::max_health() const {
 }
 inline void BattleActorState::set_max_health(::uint64_t value) {
   _internal_set_max_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleActorState.max_health)
 }
 inline ::uint64_t BattleActorState::_internal_max_health() const {
@@ -10572,7 +10650,7 @@ inline void BattleActorState::_internal_set_max_health(::uint64_t value) {
 inline void BattleActorState::clear_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t BattleActorState::max_mana() const {
   // @@protoc_insertion_point(field_get:BattleActorState.max_mana)
@@ -10580,7 +10658,7 @@ inline ::uint64_t BattleActorState::max_mana() const {
 }
 inline void BattleActorState::set_max_mana(::uint64_t value) {
   _internal_set_max_mana(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:BattleActorState.max_mana)
 }
 inline ::uint64_t BattleActorState::_internal_max_mana() const {
@@ -10596,7 +10674,7 @@ inline void BattleActorState::_internal_set_max_mana(::uint64_t value) {
 inline void BattleActorState::clear_is_dead() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_dead_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline bool BattleActorState::is_dead() const {
   // @@protoc_insertion_point(field_get:BattleActorState.is_dead)
@@ -10604,7 +10682,7 @@ inline bool BattleActorState::is_dead() const {
 }
 inline void BattleActorState::set_is_dead(bool value) {
   _internal_set_is_dead(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattleActorState.is_dead)
 }
 inline bool BattleActorState::_internal_is_dead() const {
@@ -10620,7 +10698,7 @@ inline void BattleActorState::_internal_set_is_dead(bool value) {
 inline void BattleActorState::clear_is_defending() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_defending_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline bool BattleActorState::is_defending() const {
   // @@protoc_insertion_point(field_get:BattleActorState.is_defending)
@@ -10628,7 +10706,7 @@ inline bool BattleActorState::is_defending() const {
 }
 inline void BattleActorState::set_is_defending(bool value) {
   _internal_set_is_defending(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleActorState.is_defending)
 }
 inline bool BattleActorState::_internal_is_defending() const {
@@ -10644,7 +10722,7 @@ inline void BattleActorState::_internal_set_is_defending(bool value) {
 inline void BattleActorState::clear_fled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.fled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool BattleActorState::fled() const {
   // @@protoc_insertion_point(field_get:BattleActorState.fled)
@@ -10652,7 +10730,7 @@ inline bool BattleActorState::fled() const {
 }
 inline void BattleActorState::set_fled(bool value) {
   _internal_set_fled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BattleActorState.fled)
 }
 inline bool BattleActorState::_internal_fled() const {
@@ -10774,7 +10852,7 @@ BattleActorState::_internal_mutable_skill_table_ids() {
 inline void BattleActorState::clear_monster_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.monster_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BattleActorState::monster_table_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.monster_table_id)
@@ -10782,7 +10860,7 @@ inline ::uint32_t BattleActorState::monster_table_id() const {
 }
 inline void BattleActorState::set_monster_table_id(::uint32_t value) {
   _internal_set_monster_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BattleActorState.monster_table_id)
 }
 inline ::uint32_t BattleActorState::_internal_monster_table_id() const {
@@ -10804,7 +10882,7 @@ inline int BattleActorState::skill_cooldown_rounds_size() const {
 inline void BattleActorState::clear_skill_cooldown_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_cooldown_rounds_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattleActorState::_internal_skill_cooldown_rounds() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -10820,7 +10898,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleActorState::mutable_skill_cooldown_rounds()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_mutable_map:BattleActorState.skill_cooldown_rounds)
   return _internal_mutable_skill_cooldown_rounds();
 }
@@ -10829,7 +10907,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 inline void BattleActorState::clear_is_auto() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_auto_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline bool BattleActorState::is_auto() const {
   // @@protoc_insertion_point(field_get:BattleActorState.is_auto)
@@ -10837,7 +10915,7 @@ inline bool BattleActorState::is_auto() const {
 }
 inline void BattleActorState::set_is_auto(bool value) {
   _internal_set_is_auto(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BattleActorState.is_auto)
 }
 inline bool BattleActorState::_internal_is_auto() const {
@@ -10853,7 +10931,7 @@ inline void BattleActorState::_internal_set_is_auto(bool value) {
 inline void BattleActorState::clear_formation_slot() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.formation_slot_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t BattleActorState::formation_slot() const {
   // @@protoc_insertion_point(field_get:BattleActorState.formation_slot)
@@ -10861,7 +10939,7 @@ inline ::uint32_t BattleActorState::formation_slot() const {
 }
 inline void BattleActorState::set_formation_slot(::uint32_t value) {
   _internal_set_formation_slot(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BattleActorState.formation_slot)
 }
 inline ::uint32_t BattleActorState::_internal_formation_slot() const {
@@ -10877,7 +10955,7 @@ inline void BattleActorState::_internal_set_formation_slot(::uint32_t value) {
 inline void BattleActorState::clear_physical_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t BattleActorState::physical_attack() const {
   // @@protoc_insertion_point(field_get:BattleActorState.physical_attack)
@@ -10885,7 +10963,7 @@ inline ::uint64_t BattleActorState::physical_attack() const {
 }
 inline void BattleActorState::set_physical_attack(::uint64_t value) {
   _internal_set_physical_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BattleActorState.physical_attack)
 }
 inline ::uint64_t BattleActorState::_internal_physical_attack() const {
@@ -10901,7 +10979,7 @@ inline void BattleActorState::_internal_set_physical_attack(::uint64_t value) {
 inline void BattleActorState::clear_magic_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t BattleActorState::magic_attack() const {
   // @@protoc_insertion_point(field_get:BattleActorState.magic_attack)
@@ -10909,7 +10987,7 @@ inline ::uint64_t BattleActorState::magic_attack() const {
 }
 inline void BattleActorState::set_magic_attack(::uint64_t value) {
   _internal_set_magic_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BattleActorState.magic_attack)
 }
 inline ::uint64_t BattleActorState::_internal_magic_attack() const {
@@ -10925,7 +11003,7 @@ inline void BattleActorState::_internal_set_magic_attack(::uint64_t value) {
 inline void BattleActorState::clear_defense() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.defense_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint64_t BattleActorState::defense() const {
   // @@protoc_insertion_point(field_get:BattleActorState.defense)
@@ -10933,7 +11011,7 @@ inline ::uint64_t BattleActorState::defense() const {
 }
 inline void BattleActorState::set_defense(::uint64_t value) {
   _internal_set_defense(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BattleActorState.defense)
 }
 inline ::uint64_t BattleActorState::_internal_defense() const {
@@ -10949,7 +11027,7 @@ inline void BattleActorState::_internal_set_defense(::uint64_t value) {
 inline void BattleActorState::clear_owner_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint64_t BattleActorState::owner_player_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.owner_player_id)
@@ -10957,7 +11035,7 @@ inline ::uint64_t BattleActorState::owner_player_id() const {
 }
 inline void BattleActorState::set_owner_player_id(::uint64_t value) {
   _internal_set_owner_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:BattleActorState.owner_player_id)
 }
 inline ::uint64_t BattleActorState::_internal_owner_player_id() const {
@@ -10973,7 +11051,7 @@ inline void BattleActorState::_internal_set_owner_player_id(::uint64_t value) {
 inline void BattleActorState::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t BattleActorState::pet_table_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.pet_table_id)
@@ -10981,7 +11059,7 @@ inline ::uint32_t BattleActorState::pet_table_id() const {
 }
 inline void BattleActorState::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.pet_table_id)
 }
 inline ::uint32_t BattleActorState::_internal_pet_table_id() const {
@@ -10997,7 +11075,7 @@ inline void BattleActorState::_internal_set_pet_table_id(::uint32_t value) {
 inline void BattleActorState::clear_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint64_t BattleActorState::pet_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.pet_id)
@@ -11005,7 +11083,7 @@ inline ::uint64_t BattleActorState::pet_id() const {
 }
 inline void BattleActorState::set_pet_id(::uint64_t value) {
   _internal_set_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:BattleActorState.pet_id)
 }
 inline ::uint64_t BattleActorState::_internal_pet_id() const {
@@ -11085,7 +11163,7 @@ inline void BattleActorState::set_allocated_appearance_id(::std::string* PROTOBU
 inline void BattleActorState::clear_class_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.class_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t BattleActorState::class_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.class_id)
@@ -11093,7 +11171,7 @@ inline ::uint32_t BattleActorState::class_id() const {
 }
 inline void BattleActorState::set_class_id(::uint32_t value) {
   _internal_set_class_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.class_id)
 }
 inline ::uint32_t BattleActorState::_internal_class_id() const {
@@ -11109,7 +11187,7 @@ inline void BattleActorState::_internal_set_class_id(::uint32_t value) {
 inline void BattleActorState::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint32_t BattleActorState::gender() const {
   // @@protoc_insertion_point(field_get:BattleActorState.gender)
@@ -11117,7 +11195,7 @@ inline ::uint32_t BattleActorState::gender() const {
 }
 inline void BattleActorState::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.gender)
 }
 inline ::uint32_t BattleActorState::_internal_gender() const {
@@ -11232,7 +11310,7 @@ inline int BattleActorState::skill_ranks_size() const {
 inline void BattleActorState::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattleActorState::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11248,7 +11326,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleActorState::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_mutable_map:BattleActorState.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -11257,7 +11335,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 inline void BattleActorState::clear_capture_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capture_pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint32_t BattleActorState::capture_pet_table_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.capture_pet_table_id)
@@ -11265,7 +11343,7 @@ inline ::uint32_t BattleActorState::capture_pet_table_id() const {
 }
 inline void BattleActorState::set_capture_pet_table_id(::uint32_t value) {
   _internal_set_capture_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.capture_pet_table_id)
 }
 inline ::uint32_t BattleActorState::_internal_capture_pet_table_id() const {
@@ -11281,7 +11359,7 @@ inline void BattleActorState::_internal_set_capture_pet_table_id(::uint32_t valu
 inline void BattleActorState::clear_captured_by_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.captured_by_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint64_t BattleActorState::captured_by_player_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.captured_by_player_id)
@@ -11289,7 +11367,7 @@ inline ::uint64_t BattleActorState::captured_by_player_id() const {
 }
 inline void BattleActorState::set_captured_by_player_id(::uint64_t value) {
   _internal_set_captured_by_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.captured_by_player_id)
 }
 inline ::uint64_t BattleActorState::_internal_captured_by_player_id() const {
@@ -11305,7 +11383,7 @@ inline void BattleActorState::_internal_set_captured_by_player_id(::uint64_t val
 inline void BattleActorState::clear_capture_min_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capture_min_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::uint32_t BattleActorState::capture_min_level() const {
   // @@protoc_insertion_point(field_get:BattleActorState.capture_min_level)
@@ -11313,7 +11391,7 @@ inline ::uint32_t BattleActorState::capture_min_level() const {
 }
 inline void BattleActorState::set_capture_min_level(::uint32_t value) {
   _internal_set_capture_min_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:BattleActorState.capture_min_level)
 }
 inline ::uint32_t BattleActorState::_internal_capture_min_level() const {
@@ -11335,7 +11413,7 @@ inline int BattleActorState::ability_use_counts_size() const {
 inline void BattleActorState::clear_ability_use_counts() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ability_use_counts_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattleActorState::_internal_ability_use_counts() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11351,7 +11429,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleActorState::mutable_ability_use_counts()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_map:BattleActorState.ability_use_counts)
   return _internal_mutable_ability_use_counts();
 }
@@ -11366,7 +11444,7 @@ inline int BattleActorState::runtime_skills_size() const {
 inline void BattleActorState::clear_runtime_skills() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.runtime_skills_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
 }
 inline ::uint32_t BattleActorState::runtime_skills(int index) const {
   // @@protoc_insertion_point(field_get:BattleActorState.runtime_skills)
@@ -11381,7 +11459,7 @@ inline void BattleActorState::add_runtime_skills(::uint32_t value) {
   _internal_mutable_runtime_skills()
       ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
           internal_visibility(), this, value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   // @@protoc_insertion_point(field_add:BattleActorState.runtime_skills)
 }
 inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleActorState::runtime_skills() const
@@ -11391,7 +11469,7 @@ inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleActorState::ru
 }
 inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattleActorState::mutable_runtime_skills()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   // @@protoc_insertion_point(field_mutable_list:BattleActorState.runtime_skills)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_runtime_skills();
@@ -11411,7 +11489,7 @@ BattleActorState::_internal_mutable_runtime_skills() {
 inline void BattleActorState::clear_withdraw_until_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.withdraw_until_round_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
 }
 inline ::uint32_t BattleActorState::withdraw_until_round() const {
   // @@protoc_insertion_point(field_get:BattleActorState.withdraw_until_round)
@@ -11419,7 +11497,7 @@ inline ::uint32_t BattleActorState::withdraw_until_round() const {
 }
 inline void BattleActorState::set_withdraw_until_round(::uint32_t value) {
   _internal_set_withdraw_until_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleActorState.withdraw_until_round)
 }
 inline ::uint32_t BattleActorState::_internal_withdraw_until_round() const {
@@ -11441,7 +11519,7 @@ inline int BattleActorState::round_effect_usage_size() const {
 inline void BattleActorState::clear_round_effect_usage() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.round_effect_usage_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint64_t>& BattleActorState::_internal_round_effect_usage() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11457,14 +11535,14 @@ inline ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL BattleA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL BattleActorState::mutable_round_effect_usage()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
   // @@protoc_insertion_point(field_mutable_map:BattleActorState.round_effect_usage)
   return _internal_mutable_round_effect_usage();
 }
 
 // .EquipmentEffects equipment_effects = 36;
 inline bool BattleActorState::has_equipment_effects() const {
-  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000008U);
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.equipment_effects_ != nullptr);
   return value;
 }
@@ -11485,16 +11563,16 @@ inline void BattleActorState::unsafe_arena_set_allocated_equipment_effects(
   }
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.equipment_effects)
 }
 inline ::EquipmentEffects* PROTOBUF_NULLABLE BattleActorState::release_equipment_effects() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
   ::EquipmentEffects* released = _impl_.equipment_effects_;
   _impl_.equipment_effects_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11514,7 +11592,7 @@ inline ::EquipmentEffects* PROTOBUF_NULLABLE BattleActorState::unsafe_arena_rele
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattleActorState.equipment_effects)
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
   ::EquipmentEffects* temp = _impl_.equipment_effects_;
   _impl_.equipment_effects_ = nullptr;
   return temp;
@@ -11529,7 +11607,7 @@ inline ::EquipmentEffects* PROTOBUF_NONNULL BattleActorState::_internal_mutable_
 }
 inline ::EquipmentEffects* PROTOBUF_NONNULL BattleActorState::mutable_equipment_effects()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   ::EquipmentEffects* _msg = _internal_mutable_equipment_effects();
   // @@protoc_insertion_point(field_mutable:BattleActorState.equipment_effects)
   return _msg;
@@ -11546,9 +11624,9 @@ inline void BattleActorState::set_allocated_equipment_effects(::EquipmentEffects
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
   }
 
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
@@ -11565,7 +11643,7 @@ inline int BattleActorState::artifact_states_size() const {
 inline void BattleActorState::clear_artifact_states() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.artifact_states_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
 }
 inline const ::BattleArtifactState& BattleActorState::artifact_states(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -11583,7 +11661,7 @@ inline ::BattleArtifactState* PROTOBUF_NONNULL BattleActorState::add_artifact_st
   ::BattleArtifactState* _add =
       _internal_mutable_artifact_states()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
   // @@protoc_insertion_point(field_add:BattleActorState.artifact_states)
   return _add;
 }
@@ -11594,7 +11672,7 @@ inline const ::google::protobuf::RepeatedPtrField<::BattleArtifactState>& Battle
 }
 inline ::google::protobuf::RepeatedPtrField<::BattleArtifactState>* PROTOBUF_NONNULL
 BattleActorState::mutable_artifact_states() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
   // @@protoc_insertion_point(field_mutable_list:BattleActorState.artifact_states)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_artifact_states();
@@ -11614,7 +11692,7 @@ BattleActorState::_internal_mutable_artifact_states() {
 inline void BattleActorState::clear_entry_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint64_t BattleActorState::entry_max_health() const {
   // @@protoc_insertion_point(field_get:BattleActorState.entry_max_health)
@@ -11622,7 +11700,7 @@ inline ::uint64_t BattleActorState::entry_max_health() const {
 }
 inline void BattleActorState::set_entry_max_health(::uint64_t value) {
   _internal_set_entry_max_health(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleActorState.entry_max_health)
 }
 inline ::uint64_t BattleActorState::_internal_entry_max_health() const {
@@ -11638,7 +11716,7 @@ inline void BattleActorState::_internal_set_entry_max_health(::uint64_t value) {
 inline void BattleActorState::clear_entry_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline ::uint64_t BattleActorState::entry_max_mana() const {
   // @@protoc_insertion_point(field_get:BattleActorState.entry_max_mana)
@@ -11646,7 +11724,7 @@ inline ::uint64_t BattleActorState::entry_max_mana() const {
 }
 inline void BattleActorState::set_entry_max_mana(::uint64_t value) {
   _internal_set_entry_max_mana(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleActorState.entry_max_mana)
 }
 inline ::uint64_t BattleActorState::_internal_entry_max_mana() const {
@@ -11660,7 +11738,7 @@ inline void BattleActorState::_internal_set_entry_max_mana(::uint64_t value) {
 
 // .PetCultivationEffects pet_cultivation = 41;
 inline bool BattleActorState::has_pet_cultivation() const {
-  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000020U);
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000040U);
   PROTOBUF_ASSUME(!value || _impl_.pet_cultivation_ != nullptr);
   return value;
 }
@@ -11681,16 +11759,16 @@ inline void BattleActorState::unsafe_arena_set_allocated_pet_cultivation(
   }
   _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.pet_cultivation)
 }
 inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattleActorState::release_pet_cultivation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
   ::PetCultivationEffects* released = _impl_.pet_cultivation_;
   _impl_.pet_cultivation_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11710,7 +11788,7 @@ inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattleActorState::unsafe_arena
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattleActorState.pet_cultivation)
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
   ::PetCultivationEffects* temp = _impl_.pet_cultivation_;
   _impl_.pet_cultivation_ = nullptr;
   return temp;
@@ -11725,7 +11803,7 @@ inline ::PetCultivationEffects* PROTOBUF_NONNULL BattleActorState::_internal_mut
 }
 inline ::PetCultivationEffects* PROTOBUF_NONNULL BattleActorState::mutable_pet_cultivation()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   ::PetCultivationEffects* _msg = _internal_mutable_pet_cultivation();
   // @@protoc_insertion_point(field_mutable:BattleActorState.pet_cultivation)
   return _msg;
@@ -11742,9 +11820,9 @@ inline void BattleActorState::set_allocated_pet_cultivation(::PetCultivationEffe
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
   }
 
   _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
@@ -11753,7 +11831,7 @@ inline void BattleActorState::set_allocated_pet_cultivation(::PetCultivationEffe
 
 // .SupportEffectSummary support_effects = 40;
 inline bool BattleActorState::has_support_effects() const {
-  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000010U);
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000020U);
   PROTOBUF_ASSUME(!value || _impl_.support_effects_ != nullptr);
   return value;
 }
@@ -11774,16 +11852,16 @@ inline void BattleActorState::unsafe_arena_set_allocated_support_effects(
   }
   _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.support_effects)
 }
 inline ::SupportEffectSummary* PROTOBUF_NULLABLE BattleActorState::release_support_effects() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
   ::SupportEffectSummary* released = _impl_.support_effects_;
   _impl_.support_effects_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11803,7 +11881,7 @@ inline ::SupportEffectSummary* PROTOBUF_NULLABLE BattleActorState::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattleActorState.support_effects)
 
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
   ::SupportEffectSummary* temp = _impl_.support_effects_;
   _impl_.support_effects_ = nullptr;
   return temp;
@@ -11818,7 +11896,7 @@ inline ::SupportEffectSummary* PROTOBUF_NONNULL BattleActorState::_internal_muta
 }
 inline ::SupportEffectSummary* PROTOBUF_NONNULL BattleActorState::mutable_support_effects()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   ::SupportEffectSummary* _msg = _internal_mutable_support_effects();
   // @@protoc_insertion_point(field_mutable:BattleActorState.support_effects)
   return _msg;
@@ -11835,9 +11913,9 @@ inline void BattleActorState::set_allocated_support_effects(::SupportEffectSumma
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
   }
 
   _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
@@ -11848,7 +11926,7 @@ inline void BattleActorState::set_allocated_support_effects(::SupportEffectSumma
 inline void BattleActorState::clear_competitive_temporary() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.competitive_temporary_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
 }
 inline bool BattleActorState::competitive_temporary() const {
   // @@protoc_insertion_point(field_get:BattleActorState.competitive_temporary)
@@ -11856,7 +11934,7 @@ inline bool BattleActorState::competitive_temporary() const {
 }
 inline void BattleActorState::set_competitive_temporary(bool value) {
   _internal_set_competitive_temporary(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleActorState.competitive_temporary)
 }
 inline bool BattleActorState::_internal_competitive_temporary() const {
@@ -11866,6 +11944,128 @@ inline bool BattleActorState::_internal_competitive_temporary() const {
 inline void BattleActorState::_internal_set_competitive_temporary(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.competitive_temporary_ = value;
+}
+
+// bool is_boss = 43;
+inline void BattleActorState::clear_is_boss() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_boss_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+}
+inline bool BattleActorState::is_boss() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.is_boss)
+  return _internal_is_boss();
+}
+inline void BattleActorState::set_is_boss(bool value) {
+  _internal_set_is_boss(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  // @@protoc_insertion_point(field_set:BattleActorState.is_boss)
+}
+inline bool BattleActorState::_internal_is_boss() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_boss_;
+}
+inline void BattleActorState::_internal_set_is_boss(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_boss_ = value;
+}
+
+// .BattleArtifactState season_seal_state = 44;
+inline bool BattleActorState::has_season_seal_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.season_seal_state_ != nullptr);
+  return value;
+}
+inline void BattleActorState::clear_season_seal_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_seal_state_ != nullptr) _impl_.season_seal_state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::BattleArtifactState& BattleActorState::_internal_season_seal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleArtifactState* p = _impl_.season_seal_state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleArtifactState>(&::BattleArtifactState_globals_);
+}
+inline const ::BattleArtifactState& BattleActorState::season_seal_state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleActorState.season_seal_state)
+  return _internal_season_seal_state();
+}
+inline void BattleActorState::unsafe_arena_set_allocated_season_seal_state(
+    ::BattleArtifactState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_seal_state_);
+  }
+  _impl_.season_seal_state_ = reinterpret_cast<::BattleArtifactState*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.season_seal_state)
+}
+inline ::BattleArtifactState* PROTOBUF_NULLABLE BattleActorState::release_season_seal_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleArtifactState* released = _impl_.season_seal_state_;
+  _impl_.season_seal_state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleArtifactState* PROTOBUF_NULLABLE BattleActorState::unsafe_arena_release_season_seal_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleActorState.season_seal_state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleArtifactState* temp = _impl_.season_seal_state_;
+  _impl_.season_seal_state_ = nullptr;
+  return temp;
+}
+inline ::BattleArtifactState* PROTOBUF_NONNULL BattleActorState::_internal_mutable_season_seal_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_seal_state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleArtifactState>(GetArena());
+    _impl_.season_seal_state_ = reinterpret_cast<::BattleArtifactState*>(p);
+  }
+  return _impl_.season_seal_state_;
+}
+inline ::BattleArtifactState* PROTOBUF_NONNULL BattleActorState::mutable_season_seal_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleArtifactState* _msg = _internal_mutable_season_seal_state();
+  // @@protoc_insertion_point(field_mutable:BattleActorState.season_seal_state)
+  return _msg;
+}
+inline void BattleActorState::set_allocated_season_seal_state(::BattleArtifactState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_seal_state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.season_seal_state_ = reinterpret_cast<::BattleArtifactState*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleActorState.season_seal_state)
 }
 
 // -------------------------------------------------------------------
@@ -12674,6 +12874,30 @@ inline ::uint32_t BattleEventItem::_internal_artifact_effect_id() const {
 inline void BattleEventItem::_internal_set_artifact_effect_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.artifact_effect_id_ = value;
+}
+
+// uint32 season_seal_id = 24;
+inline void BattleEventItem::clear_season_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t BattleEventItem::season_seal_id() const {
+  // @@protoc_insertion_point(field_get:BattleEventItem.season_seal_id)
+  return _internal_season_seal_id();
+}
+inline void BattleEventItem::set_season_seal_id(::uint32_t value) {
+  _internal_set_season_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:BattleEventItem.season_seal_id)
+}
+inline ::uint32_t BattleEventItem::_internal_season_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_seal_id_;
+}
+inline void BattleEventItem::_internal_set_season_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_seal_id_ = value;
 }
 
 // -------------------------------------------------------------------

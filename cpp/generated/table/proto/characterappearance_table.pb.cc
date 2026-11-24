@@ -48,11 +48,11 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
     {
       PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -87,6 +87,23 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
       {::_pbi::TcParser::FastUS1,
        {50, 2, 0,
         PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.desc_)}},
+      // uint32 starter_creatable = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.starter_creatable_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.starter_creatable_)}},
+      // uint32 card_unlockable = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.card_unlockable_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.card_unlockable_)}},
+      // uint32 series_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CharacterAppearanceTable, _impl_.series_id_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -103,10 +120,16 @@ constexpr CharacterAppearanceTable::ParseTableT_ CharacterAppearanceTable::Inter
       {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.sort_order_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 6;
       {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.desc_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 starter_creatable = 7;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.starter_creatable_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 card_unlockable = 8;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.card_unlockable_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 series_id = 9;
+      {PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\30\0\15\4\0\0\4\0"
+      "\30\0\15\4\0\0\4\0\0\0\0\0\0\0\0\0"
       "CharacterAppearanceTable"
       "appearance_id"
       "name"
@@ -131,7 +154,10 @@ inline constexpr CharacterAppearanceTable::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         id_{0u},
         enabled_{0u},
-        sort_order_{0u} {}
+        sort_order_{0u},
+        starter_creatable_{0u},
+        card_unlockable_{0u},
+        series_id_{0u} {}
 
 template <typename>
 constexpr CharacterAppearanceTable::CharacterAppearanceTable(::_pbi::ConstantInitialized,
@@ -385,19 +411,25 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_._has_bits_),
-        9, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.appearance_id_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.sort_order_),
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.starter_creatable_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.card_unlockable_),
+        PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTable, _impl_.series_id_),
         3,
         0,
         1,
         4,
         5,
         2,
+        6,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CharacterAppearanceTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -408,7 +440,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::CharacterAppearanceTable)},
-        {15, sizeof(::CharacterAppearanceTableData)},
+        {21, sizeof(::CharacterAppearanceTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -417,20 +449,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_characterappearance_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\037characterappearance_table.proto\"~\n\030Cha"
-    "racterAppearanceTable\022\n\n\002id\030\001 \001(\r\022\025\n\rapp"
-    "earance_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\017\n\007enable"
-    "d\030\004 \001(\r\022\022\n\nsort_order\030\005 \001(\r\022\014\n\004desc\030\006 \001("
-    "\t\"G\n\034CharacterAppearanceTableData\022\'\n\004dat"
-    "a\030\001 \003(\0132\031.CharacterAppearanceTableBJ\n\016co"
-    "m.game.tableB\"CharacterAppearanceTableOu"
-    "terClassP\001Z\022generated/pb/tableb\006proto3"
+    "\n\037characterappearance_table.proto\"\305\001\n\030Ch"
+    "aracterAppearanceTable\022\n\n\002id\030\001 \001(\r\022\025\n\rap"
+    "pearance_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\017\n\007enabl"
+    "ed\030\004 \001(\r\022\022\n\nsort_order\030\005 \001(\r\022\014\n\004desc\030\006 \001"
+    "(\t\022\031\n\021starter_creatable\030\007 \001(\r\022\027\n\017card_un"
+    "lockable\030\010 \001(\r\022\021\n\tseries_id\030\t \001(\r\"G\n\034Cha"
+    "racterAppearanceTableData\022\'\n\004data\030\001 \003(\0132"
+    "\031.CharacterAppearanceTableBJ\n\016com.game.t"
+    "ableB\"CharacterAppearanceTableOuterClass"
+    "P\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_characterappearance_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_characterappearance_5ftable_2eproto = {
     false,
     false,
-    318,
+    390,
     descriptor_table_protodef_characterappearance_5ftable_2eproto,
     "characterappearance_table.proto",
     &descriptor_table_characterappearance_5ftable_2eproto_once,
@@ -482,9 +516,9 @@ CharacterAppearanceTable::CharacterAppearanceTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, sort_order_) -
+           offsetof(Impl_, series_id_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::sort_order_));
+               sizeof(Impl_::series_id_));
 
   // @@protoc_insertion_point(copy_constructor:CharacterAppearanceTable)
 }
@@ -501,9 +535,9 @@ inline void CharacterAppearanceTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, sort_order_) -
+           offsetof(Impl_, series_id_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::sort_order_));
+               sizeof(Impl_::series_id_));
 }
 CharacterAppearanceTable::~CharacterAppearanceTable() {
   // @@protoc_insertion_point(destructor:CharacterAppearanceTable)
@@ -567,11 +601,12 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sort_order_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.sort_order_));
+        reinterpret_cast<char*>(&_impl_.card_unlockable_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.card_unlockable_));
   }
+  _impl_.series_id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -652,6 +687,33 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
     }
   }
 
+  // uint32 starter_creatable = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_starter_creatable() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_starter_creatable(), target);
+    }
+  }
+
+  // uint32 card_unlockable = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_card_unlockable() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_card_unlockable(), target);
+    }
+  }
+
+  // uint32 series_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_series_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_series_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -677,7 +739,7 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string appearance_id = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_appearance_id().empty()) {
@@ -720,6 +782,29 @@ PROTOBUF_NOINLINE void CharacterAppearanceTable::Clear() {
             this_._internal_sort_order());
       }
     }
+    // uint32 starter_creatable = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_starter_creatable() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_starter_creatable());
+      }
+    }
+    // uint32 card_unlockable = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_card_unlockable() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_card_unlockable());
+      }
+    }
+  }
+   {
+    // uint32 series_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_series_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_series_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -738,7 +823,7 @@ void CharacterAppearanceTable::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_appearance_id().empty()) {
         _this->_internal_set_appearance_id(from._internal_appearance_id());
@@ -781,6 +866,21 @@ void CharacterAppearanceTable::MergeImpl(::google::protobuf::MessageLite& to_msg
         _this->_impl_.sort_order_ = from._impl_.sort_order_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_starter_creatable() != 0) {
+        _this->_impl_.starter_creatable_ = from._impl_.starter_creatable_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_card_unlockable() != 0) {
+        _this->_impl_.card_unlockable_ = from._impl_.card_unlockable_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_series_id() != 0) {
+      _this->_impl_.series_id_ = from._impl_.series_id_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -805,8 +905,8 @@ void CharacterAppearanceTable::InternalSwap(CharacterAppearanceTable* PROTOBUF_R
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.sort_order_)
-      + sizeof(CharacterAppearanceTable::_impl_.sort_order_)
+      PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.series_id_)
+      + sizeof(CharacterAppearanceTable::_impl_.series_id_)
       - PROTOBUF_FIELD_OFFSET(CharacterAppearanceTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

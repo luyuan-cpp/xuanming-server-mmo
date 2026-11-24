@@ -11,6 +11,7 @@
 #include <vector>
 #include <google/protobuf/message.h>
 #include "core/type_define/player_guid_comp.h"
+#include "engine/core/time/system/time.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
@@ -22,6 +23,7 @@
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/player_season.h"
 #include "battle/system/player_battle.h"
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -320,6 +322,8 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
         source->set_active_rounds(row->active_rounds()); source->set_health_threshold_bps(row->health_threshold_bps());
         source->set_name(row->name());
     }
+    // 汇总单槽赛季印轻属性（仅气血与防御）及本季轻机制，与永久八部位和两件法宝独立存放。
+    PlayerSeasonSystem::CollectEffects(player, TimeSystem::NowMillisecondsUTC(), effects);
 }
 
 uint32_t PlayerEquipmentV1System::GetRules(entt::entity player, GetEquipmentCraftRulesResponse& response) {

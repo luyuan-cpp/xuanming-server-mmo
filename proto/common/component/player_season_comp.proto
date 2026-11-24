@@ -1,0 +1,19 @@
+syntax = "proto3";
+option go_package = "common/component";
+
+// 角色单季赛季印（单槽赛季装备栏）持久状态（设计见 docs/design/season-skills-and-seal-design.md）。
+// 换季不删除历史赛季记录（留作纪念与对账），运行期仅按当前激活赛季 ID 读取对应记录。
+message PlayerSeasonSealRecord {
+  uint32 season_id = 1;
+  uint32 equipped_seal_id = 2; // 当前佩戴的赛季印 ID（0 = 使用当季默认赛季印）
+  uint32 progress_points = 3;  // 本季累计进度点（战斗 + 快捷追赶，运行期按 SeasonRule.seal_max_points 夹取）
+  uint32 battle_points = 4;    // 其中通过正规排位 / PVE 战斗获得的点数
+  uint32 catchup_points = 5;   // 其中通过小额快捷追赶补齐的点数
+  uint64 revision = 6;         // 本季写操作修订号（切印 / 追赶递增）
+}
+
+// 玩家赛季进度持久化组件（player_database 字段 30，GROWTH 分组）。
+// records 下标不承载任何业务顺序语义（AGENTS.md §11.6），按 season_id 定位。
+message PlayerSeasonComp {
+  repeated PlayerSeasonSealRecord records = 1;
+}

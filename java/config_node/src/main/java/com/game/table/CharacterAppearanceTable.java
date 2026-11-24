@@ -201,6 +201,39 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int STARTER_CREATABLE_FIELD_NUMBER = 7;
+  private int starterCreatable_ = 0;
+  /**
+   * <code>uint32 starter_creatable = 7;</code>
+   * @return The starterCreatable.
+   */
+  @java.lang.Override
+  public int getStarterCreatable() {
+    return starterCreatable_;
+  }
+
+  public static final int CARD_UNLOCKABLE_FIELD_NUMBER = 8;
+  private int cardUnlockable_ = 0;
+  /**
+   * <code>uint32 card_unlockable = 8;</code>
+   * @return The cardUnlockable.
+   */
+  @java.lang.Override
+  public int getCardUnlockable() {
+    return cardUnlockable_;
+  }
+
+  public static final int SERIES_ID_FIELD_NUMBER = 9;
+  private int seriesId_ = 0;
+  /**
+   * <code>uint32 series_id = 9;</code>
+   * @return The seriesId.
+   */
+  @java.lang.Override
+  public int getSeriesId() {
+    return seriesId_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -233,6 +266,15 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 6, desc_);
     }
+    if (starterCreatable_ != 0) {
+      output.writeUInt32(7, starterCreatable_);
+    }
+    if (cardUnlockable_ != 0) {
+      output.writeUInt32(8, cardUnlockable_);
+    }
+    if (seriesId_ != 0) {
+      output.writeUInt32(9, seriesId_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -257,6 +299,18 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(6, desc_);
+    }
+    if (starterCreatable_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(7, starterCreatable_);
+    }
+    if (cardUnlockable_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, cardUnlockable_);
+    }
+    if (seriesId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, seriesId_);
     }
     return size;
   }
@@ -294,6 +348,12 @@ private static final long serialVersionUID = 0L;
         != other.getSortOrder()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getStarterCreatable()
+        != other.getStarterCreatable()) return false;
+    if (getCardUnlockable()
+        != other.getCardUnlockable()) return false;
+    if (getSeriesId()
+        != other.getSeriesId()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -317,6 +377,12 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getSortOrder();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + STARTER_CREATABLE_FIELD_NUMBER;
+    hash = (53 * hash) + getStarterCreatable();
+    hash = (37 * hash) + CARD_UNLOCKABLE_FIELD_NUMBER;
+    hash = (53 * hash) + getCardUnlockable();
+    hash = (37 * hash) + SERIES_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getSeriesId();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -454,6 +520,9 @@ private static final long serialVersionUID = 0L;
       enabled_ = 0;
       sortOrder_ = 0;
       desc_ = "";
+      starterCreatable_ = 0;
+      cardUnlockable_ = 0;
+      seriesId_ = 0;
       return this;
     }
 
@@ -505,6 +574,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.starterCreatable_ = starterCreatable_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.cardUnlockable_ = cardUnlockable_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.seriesId_ = seriesId_;
+      }
     }
 
     @java.lang.Override
@@ -542,6 +620,15 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00000020;
         onChanged();
+      }
+      if (other.getStarterCreatable() != 0) {
+        setStarterCreatable(other.getStarterCreatable());
+      }
+      if (other.getCardUnlockable() != 0) {
+        setCardUnlockable(other.getCardUnlockable());
+      }
+      if (other.getSeriesId() != 0) {
+        setSeriesId(other.getSeriesId());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -599,6 +686,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 50
+            case 56: {
+              starterCreatable_ = input.readUInt32();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              cardUnlockable_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              seriesId_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -924,6 +1026,102 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private int starterCreatable_ ;
+    /**
+     * <code>uint32 starter_creatable = 7;</code>
+     * @return The starterCreatable.
+     */
+    @java.lang.Override
+    public int getStarterCreatable() {
+      return starterCreatable_;
+    }
+    /**
+     * <code>uint32 starter_creatable = 7;</code>
+     * @param value The starterCreatable to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStarterCreatable(int value) {
+
+      starterCreatable_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 starter_creatable = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStarterCreatable() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      starterCreatable_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int cardUnlockable_ ;
+    /**
+     * <code>uint32 card_unlockable = 8;</code>
+     * @return The cardUnlockable.
+     */
+    @java.lang.Override
+    public int getCardUnlockable() {
+      return cardUnlockable_;
+    }
+    /**
+     * <code>uint32 card_unlockable = 8;</code>
+     * @param value The cardUnlockable to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCardUnlockable(int value) {
+
+      cardUnlockable_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 card_unlockable = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCardUnlockable() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      cardUnlockable_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int seriesId_ ;
+    /**
+     * <code>uint32 series_id = 9;</code>
+     * @return The seriesId.
+     */
+    @java.lang.Override
+    public int getSeriesId() {
+      return seriesId_;
+    }
+    /**
+     * <code>uint32 series_id = 9;</code>
+     * @param value The seriesId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeriesId(int value) {
+
+      seriesId_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 series_id = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSeriesId() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      seriesId_ = 0;
       onChanged();
       return this;
     }

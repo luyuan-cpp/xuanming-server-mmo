@@ -316,6 +316,14 @@ type Config struct {
 	// 设计文档:docs/design/mystery-merchant.md §4.4。
 	MysteryMerchant MysteryMerchantConfig `json:",optional"`
 
+	// WorldChannelRouting: 大世界自动选线策略(默认 Fill-First 软上限聚人,可切 least_loaded)。整块可缺省。
+	// 设计文档:docs/design/world-map-play-v2.md §2.2。
+	WorldChannelRouting WorldChannelRoutingConfig `json:",optional"`
+
+	// WorldMapPlay: 世界地图总览读模型与双层潮汐(开服控图 / 灵潮轮转 / 今日旺地 / 神秘商人倾向)。整块可缺省。
+	// 设计文档:docs/design/world-map-play-v2.md §2.3–§2.5。
+	WorldMapPlay WorldMapPlayConfig `json:",optional"`
+
 	// SceneReentryBarrierSeconds: 节点判死之后,SceneManager 允许把它名下的
 	// 场景改派/销毁/清理之前必须等待的秒数。0(默认)= 用
 	// constants.SceneReentryBarrier(= C++ drain 预算 + 时钟余量)。
@@ -559,6 +567,190 @@ func (c MysteryMerchantConfig) EffectiveTickSeconds() int64 {
 		return maxMysteryMerchantTickSeconds
 	}
 	return c.TickSeconds
+}
+
+// WorldChannelRoutingConfig 控制大世界频道的默认选线策略(docs/design/world-map-play-v2.md §2.2)。
+// 零值即默认 Fill-First(优先填满最小线号至 SoftFillThreshold,全部达到后退回 least_loaded)。
+type WorldChannelRoutingConfig struct {
+	// PickPolicy: "" / "fill_first" = 软上限聚人; "least_loaded" = 纯最少人均衡(压测可用)。
+	PickPolicy string `json:",optional"`
+
+	// SoftFillThreshold: Fill-First 模式下单线软上限人数。0 = 取默认 200; 负数拒启。
+	SoftFillThreshold int64 `json:",optional"`
+}
+
+const (
+	WorldChannelPickPolicyFillFirst   = "fill_first"
+	WorldChannelPickPolicyLeastLoaded = "least_loaded"
+
+	defaultWorldChannelSoftFillThreshold int64 = 200
+)
+
+// EffectiveChannelPickPolicy 返回生效的选线策略("fill_first" 或 "least_loaded")。
+func (c *Config) EffectiveChannelPickPolicy() string {
+	if c.WorldChannelRouting.PickPolicy == WorldChannelPickPolicyLeastLoaded {
+		return WorldChannelPickPolicyLeastLoaded
+	}
+	return WorldChannelPickPolicyFillFirst
+}
+
+// EffectiveChannelSoftFillThreshold 返回 Fill-First 软上限; 0 表示退化为纯 least_loaded。
+func (c *Config) EffectiveChannelSoftFillThreshold() int64 {
+	if c.EffectiveChannelPickPolicy() == WorldChannelPickPolicyLeastLoaded {
+		return 0
+	}
+	if c.WorldChannelRouting.SoftFillThreshold <= 0 {
+		return defaultWorldChannelSoftFillThreshold
+	}
+	return c.WorldChannelRouting.SoftFillThreshold
+}
+
+// ValidateWorldChannelRouting 校验选线策略与自动缩容迟滞带(防止 Fill-First 与缩容来回振荡)。
+func (c *Config) ValidateWorldChannelRouting() error {
+	policy := c.WorldChannelRouting.PickPolicy
+	if policy != "" && policy != WorldChannelPickPolicyFillFirst && policy != WorldChannelPickPolicyLeastLoaded {
+		return fmt.Errorf("WorldChannelRouting.PickPolicy must be %q or %q, got %q",
+			WorldChannelPickPolicyFillFirst, WorldChannelPickPolicyLeastLoaded, policy)
+	}
+	if c.WorldChannelRouting.SoftFillThreshold < 0 {
+		return fmt.Errorf("WorldChannelRouting.SoftFillThreshold must be >= 0, got %d",
+			c.WorldChannelRouting.SoftFillThreshold)
+	}
+	if c.EffectiveChannelPickPolicy() == WorldChannelPickPolicyFillFirst && c.WorldAutoscale.Enabled {
+		soft := c.EffectiveChannelSoftFillThreshold()
+		scaleIn := c.WorldAutoscale.ScaleInPlayerThreshold
+		scaleOut := c.WorldAutoscale.ScaleOutPlayerThreshold
+		if scaleIn > 0 && soft < scaleIn*2 {
+			return fmt.Errorf("WorldChannelRouting.SoftFillThreshold (%d) must be >= 2 * WorldAutoscale.ScaleInPlayerThreshold (%d)",
+				soft, scaleIn)
+		}
+		if scaleOut > 0 && soft >= scaleOut {
+			return fmt.Errorf("WorldChannelRouting.SoftFillThreshold (%d) must be < WorldAutoscale.ScaleOutPlayerThreshold (%d)",
+				soft, scaleOut)
+		}
+	}
+	return nil
+}
+
+// WorldMapPlayConfig 控制世界地图总览读模型与双层潮汐(docs/design/world-map-play-v2.md §2.3–§2.5)。
+// 字段全部 optional,零值即默认开服控图 [1, 2, 5] 与野外潮汐池 [2, 5]。
+type WorldMapPlayConfig struct {
+	// OpenWorldMapIds: 总览中对外展示的开放大世界地图顺序。空 = 默认 [1, 2, 5]。
+	OpenWorldMapIds []uint32 `json:",optional"`
+
+	// TideCandidateMapIds: 灵潮与今日旺地轮转的野外地图池。空 = 默认 [2, 5]。
+	TideCandidateMapIds []uint32 `json:",optional"`
+
+	// TideIntervalSeconds: 灵潮轮转周期(秒)。0 = 默认 3600; 钳到 [60, 86400]。
+	TideIntervalSeconds int64 `json:",optional"`
+
+	// TideDurationSeconds: 单轮灵潮持续时长(秒)。0 = 默认 2400; 钳到 [30, TideIntervalSeconds]。
+	TideDurationSeconds int64 `json:",optional"`
+
+	// CrowdedPlayerThreshold: 地图总人数 >= 该值判定为「热闹」。0 = 默认 8。
+	CrowdedPlayerThreshold uint32 `json:",optional"`
+
+	// MerchantTideBiasPercent: 灵潮开启时神秘商人优先落入灵潮图的概率 [0, 100]。0 = 默认 80; 负数 = 0(关闭倾向)。
+	MerchantTideBiasPercent int `json:",optional"`
+}
+
+const (
+	defaultWorldMapTideIntervalSeconds int64  = 3600
+	minWorldMapTideIntervalSeconds     int64  = 60
+	maxWorldMapTideIntervalSeconds     int64  = 24 * 60 * 60
+	defaultWorldMapTideDurationSeconds int64  = 2400
+	minWorldMapTideDurationSeconds     int64  = 30
+	defaultWorldMapCrowdedThreshold    uint32 = 8
+	defaultMerchantTideBiasPercent     int    = 80
+)
+
+var (
+	defaultOpenWorldMapIds     = []uint32{1, 2, 5}
+	defaultTideCandidateMapIds = []uint32{2, 5}
+)
+
+// EffectiveOpenWorldMapIds 返回开放大世界地图列表(去重、过滤 0)。
+func (c WorldMapPlayConfig) EffectiveOpenWorldMapIds() []uint32 {
+	return normalizeWorldMapIds(c.OpenWorldMapIds, defaultOpenWorldMapIds)
+}
+
+// EffectiveTideCandidateMapIds 返回灵潮与今日旺地轮转池(去重、过滤 0)。
+func (c WorldMapPlayConfig) EffectiveTideCandidateMapIds() []uint32 {
+	return normalizeWorldMapIds(c.TideCandidateMapIds, defaultTideCandidateMapIds)
+}
+
+func normalizeWorldMapIds(raw, fallback []uint32) []uint32 {
+	src := raw
+	if len(src) == 0 {
+		src = fallback
+	}
+	seen := make(map[uint32]struct{}, len(src))
+	out := make([]uint32, 0, len(src))
+	for _, id := range src {
+		if id == 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		out = append(out, fallback...)
+	}
+	return out
+}
+
+// EffectiveTideIntervalSeconds 返回灵潮周期(秒),恒在 [60, 86400]。
+func (c WorldMapPlayConfig) EffectiveTideIntervalSeconds() int64 {
+	v := c.TideIntervalSeconds
+	switch {
+	case v == 0:
+		return defaultWorldMapTideIntervalSeconds
+	case v < minWorldMapTideIntervalSeconds:
+		return minWorldMapTideIntervalSeconds
+	case v > maxWorldMapTideIntervalSeconds:
+		return maxWorldMapTideIntervalSeconds
+	}
+	return v
+}
+
+// EffectiveTideDurationSeconds 返回单轮灵潮持续时长(秒),恒在 [30, EffectiveTideIntervalSeconds]。
+func (c WorldMapPlayConfig) EffectiveTideDurationSeconds() int64 {
+	interval := c.EffectiveTideIntervalSeconds()
+	v := c.TideDurationSeconds
+	if v == 0 {
+		v = defaultWorldMapTideDurationSeconds
+	}
+	if v < minWorldMapTideDurationSeconds {
+		v = minWorldMapTideDurationSeconds
+	}
+	if v > interval {
+		v = interval
+	}
+	return v
+}
+
+// EffectiveCrowdedPlayerThreshold 返回「热闹」热度档的人数阈值(恒 >= 1)。
+func (c WorldMapPlayConfig) EffectiveCrowdedPlayerThreshold() uint32 {
+	if c.CrowdedPlayerThreshold == 0 {
+		return defaultWorldMapCrowdedThreshold
+	}
+	return c.CrowdedPlayerThreshold
+}
+
+// EffectiveMerchantTideBiasPercent 返回神秘商人落入当前灵潮图的概率 [0, 100]。
+func (c WorldMapPlayConfig) EffectiveMerchantTideBiasPercent() int {
+	switch {
+	case c.MerchantTideBiasPercent < 0:
+		return 0
+	case c.MerchantTideBiasPercent == 0:
+		return defaultMerchantTideBiasPercent
+	case c.MerchantTideBiasPercent > 100:
+		return 100
+	}
+	return c.MerchantTideBiasPercent
 }
 
 // ChannelMaxPlayers 返回玩家主动选线时的每线人数上限,恒为正。

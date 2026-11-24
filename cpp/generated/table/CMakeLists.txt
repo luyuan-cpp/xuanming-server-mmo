@@ -105,7 +105,12 @@ set(SOURCE_FILES
     code/afkpassrule_table.cpp
     code/appearancerule_table.cpp
     code/appearancerule_table_fk.cpp
+    code/appearanceseries_table.cpp
     code/characterappearance_table.cpp
+    code/characterappearance_table_fk.cpp
+    code/seasonrule_table.cpp
+    code/seasonseal_table.cpp
+    code/seasonseal_table_fk.cpp
     code/mysterymerchantspot_table.cpp
     code/item_table_fk.cpp
     code/attributerule_table.cpp
@@ -177,12 +182,16 @@ set(SOURCE_FILES
     proto/mysterymerchantrule_table.pb.cc
     proto/afkpassrule_table.pb.cc
     proto/appearancerule_table.pb.cc
+    proto/appearanceseries_table.pb.cc
     proto/characterappearance_table.pb.cc
+    proto/seasonrule_table.pb.cc
+    proto/seasonseal_table.pb.cc
     proto/mysterymerchantspot_table.pb.cc
     proto/tip/mystery_merchant_error_tip.pb.cc
     proto/tip/payment_error_tip.pb.cc
     proto/tip/afk_pass_error_tip.pb.cc
     proto/tip/appearance_error_tip.pb.cc
+    proto/tip/season_error_tip.pb.cc
     proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc

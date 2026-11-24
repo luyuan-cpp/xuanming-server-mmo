@@ -22,7 +22,8 @@ bool Persistent(BattleEffectOp op) {
     case BattleEffectOp::Damage: case BattleEffectOp::Heal: case BattleEffectOp::RestoreMana:
     case BattleEffectOp::DispelDebuff: case BattleEffectOp::DispelBuff:
     case BattleEffectOp::ConsumePeriodic: case BattleEffectOp::ExtendPeriodic:
-    case BattleEffectOp::DrainMana: case BattleEffectOp::RetreatPet: return false;
+    case BattleEffectOp::DrainMana: case BattleEffectOp::RetreatPet:
+    case BattleEffectOp::CopyTargetSkill: return false;
     default: return true;
     }
 }
@@ -53,10 +54,59 @@ bool TurnBattleEngine::ConfiguredTargetAllowed(const BattleActorState& actor, co
     if (row.health_cost_mode() == 2 && actor.actor_id() == target.actor_id()) return false;
     for (const auto id : row.effect()) {
         const auto* effect = dataProvider->FindBuff(id);
-        if (effect != nullptr && static_cast<BattleEffectOp>(effect->battle_op()) == BattleEffectOp::RetreatPet &&
-            target.actor_type() != BATTLE_ACTOR_TYPE_PET) return false;
+        if (effect == nullptr) continue;
+        const auto op = static_cast<BattleEffectOp>(effect->battle_op());
+        if (op == BattleEffectOp::RetreatPet && target.actor_type() != BATTLE_ACTOR_TYPE_PET) return false;
+        if (op == BattleEffectOp::CopyTargetSkill && target.is_boss()) return false;
     }
     return true;
+}
+bool TurnBattleEngine::HasValidConfiguredTarget(const BattleActorState& caster, const SkillTable& row) const {
+    for (const auto& candidate : actors) {
+        if (ConfiguredTargetAllowed(caster, candidate, row)) return true;
+    }
+    return false;
+}
+bool TurnBattleEngine::IsSkillCopyableFor(const BattleActorState& caster, const SkillTable& row) const {
+    if (row.battle_model() != 1 || row.ability_kind() != 1) return false;
+    if (row.forbid_copy() != 0 || row.health_cost_mode() != 0 || row.max_battle_uses() != 0) return false;
+    for (const auto effectId : row.effect()) {
+        const auto* effect = dataProvider->FindBuff(effectId);
+        if (effect == nullptr) continue;
+        const auto op = static_cast<BattleEffectOp>(effect->battle_op());
+        if (op == BattleEffectOp::CopyTargetSkill) return false;
+        // 依赖已付气血/法力的转换技在零耗蓝镜像中无有效基数，结构上禁止复制。
+        if (effect->value_basis() == 5 || effect->value_basis() == 6) return false;
+    }
+    return HasValidConfiguredTarget(caster, row);
+}
+bool TurnBattleEngine::HasCopyableSkillFor(const BattleActorState& caster, const BattleActorState& target) const {
+    if (target.is_boss()) return false;
+    for (const auto skillId : target.skill_table_ids()) {
+        const auto* candidate = dataProvider->FindSkill(skillId);
+        if (candidate != nullptr && IsSkillCopyableFor(caster, *candidate)) return true;
+    }
+    return false;
+}
+std::optional<uint32_t> TurnBattleEngine::SelectCopiedSkillId(const BattleActorState& caster,
+                                                              const BattleActorState& target) {
+    // 优先复制目标本回合选定的可复制主动技能（不依赖双方出手先后）。
+    if (const auto it = pendingActions.find(target.actor_id());
+        it != pendingActions.end() && it->second.action_type() == BATTLE_ACTION_SKILL) {
+        const auto* planned = dataProvider->FindSkill(it->second.skill_table_id());
+        if (planned != nullptr && IsSkillCopyableFor(caster, *planned)) return planned->id();
+    }
+    // 方案 A 兜底：目标本回合未选可复制技能时，从其已学可复制主动技能池按 ID 排序去重后确定性抽取。
+    std::vector<uint32_t> candidates;
+    for (const auto skillId : target.skill_table_ids()) {
+        const auto* candidate = dataProvider->FindSkill(skillId);
+        if (candidate != nullptr && IsSkillCopyableFor(caster, *candidate)) candidates.push_back(skillId);
+    }
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    if (candidates.empty()) return std::nullopt;
+    const size_t pick = candidates.size() == 1 ? 0 : static_cast<size_t>(RandIndex(candidates.size()));
+    return candidates[pick];
 }
 uint32_t TurnBattleEngine::CheckConfiguredSkill(const BattleActorState& actor, const BattleAction& action,
                                                 const SkillTable& row) const {
@@ -168,14 +218,16 @@ double TurnBattleEngine::ConfiguredValue(const BattleActorState& caster, const B
 }
 void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const BattleAction& action,
                                                const SkillTable& row, TurnResultS2C& result,
-                                               BattleDamageOrigin origin, double scale) {
+                                               BattleDamageOrigin origin, double scale,
+                                               uint32_t rankOverride) {
     const bool normal = origin == BattleDamageOrigin::Direct;
     if (normal && CheckActionPrerequisites(actor, action) != kSuccess) return;
     auto targets = SelectConfiguredTargets(actor, row, action.target_id());
     if (origin == BattleDamageOrigin::Confusion) targets = {action.target_id()};
     if (targets.empty()) return;
     EffectContext context;
-    context.skillId = row.id(); context.rank = ConfiguredRank(actor, row);
+    context.skillId = row.id();
+    context.rank = rankOverride > 0 ? rankOverride : ConfiguredRank(actor, row);
     if (origin == BattleDamageOrigin::Mirror) context.rank = std::max(1u, context.rank);
     context.origin = origin; context.scale = scale;
     context.primaryTargetId = targets.front();
@@ -249,6 +301,7 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     const bool hostile = receiver.team_index() != caster.team_index();
     if (HasConfiguredState(receiver, BattleStateKind::Freeze) && hostile) return;
     double value = ConfiguredValue(caster, receiver, row, context);
+    if (context.scale != 1.0) value *= context.scale;
     if (op == BattleEffectOp::PeriodicDamage && row.state_kind() == static_cast<uint32_t>(BattleStateKind::Poison))
         value = supportrules::ApplyBonus(value, petcultivation::PoisonBonus(caster));
     // 持续治疗的覆盖强度与每跳快照采用同一完整施放方值，避免旧印因施法者加成不同被弱覆盖。
@@ -360,6 +413,35 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
             auto* event = AppendEvent(result, BATTLE_EVENT_PET_RETREAT, caster.actor_id(), receiver.actor_id());
             event->set_success(success); event->set_value(1);
             if (success) { receiver.set_fled(true); receiver.set_withdraw_until_round(roundIndex + std::max(1u, row.duration_rounds()) + 1); }
+            break;
+        }
+        case BattleEffectOp::CopyTargetSkill: {
+            if (context.origin == BattleDamageOrigin::Mirror) break;
+            if (receiver.is_boss() || IsImmuneToBuff(receiver, row)) {
+                auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), receiver.actor_id());
+                resisted->set_buff_table_id(row.id());
+                break;
+            }
+            const auto copiedSkillId = SelectCopiedSkillId(caster, receiver);
+            if (!copiedSkillId.has_value()) {
+                auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), receiver.actor_id());
+                resisted->set_buff_table_id(row.id());
+                break;
+            }
+            const auto* copiedSkill = dataProvider->FindSkill(*copiedSkillId);
+            if (copiedSkill == nullptr) break;
+            BattleAction copiedAction;
+            copiedAction.set_action_type(BATTLE_ACTION_SKILL);
+            copiedAction.set_skill_table_id(copiedSkill->id());
+            if (copiedSkill->target_team() == 2 || copiedSkill->target_team() == 3) {
+                // 复制到友方辅助/治疗/护盾或自身技能时，自动切回己方阵营，避免反手资敌。
+                copiedAction.set_target_id(ConfiguredTargetAllowed(caster, caster, *copiedSkill) ? caster.actor_id() : 0);
+            } else {
+                copiedAction.set_target_id(ConfiguredTargetAllowed(caster, receiver, *copiedSkill) ? receiver.actor_id() : 0);
+            }
+            const double mirrorScale = row.ratio() > 0 ? row.ratio() : 1.0;
+            ExecuteConfiguredSkill(caster, copiedAction, *copiedSkill, result,
+                                   BattleDamageOrigin::Mirror, mirrorScale, context.rank);
             break;
         }
         default: break;
@@ -612,6 +694,7 @@ void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleAct
         case BattleEffectOp::MirrorSkill: {
             if (HasConfiguredState(owner, BattleStateKind::Freeze) || HasConfiguredState(owner, BattleStateKind::Sleep) || !IsActorActive(other)) break;
             const auto* incoming = dataProvider->FindSkill(context.skillId);
+            if (incoming != nullptr && (other.is_boss() || incoming->forbid_copy() != 0)) break;
             if (incoming != nullptr && incoming->battle_model() == 1) {
                 BattleAction action; action.set_action_type(BATTLE_ACTION_SKILL); action.set_skill_table_id(incoming->id()); action.set_target_id(other.actor_id());
                 ExecuteConfiguredSkill(owner, action, *incoming, result, BattleDamageOrigin::Mirror, row.ratio() > 0 ? row.ratio() : 1);
@@ -832,6 +915,7 @@ std::optional<BattleAction> TurnBattleEngine::SelectAutoConfiguredSkill(const Ba
                 const auto op = static_cast<BattleEffectOp>(effect->battle_op());
                 if (op == BattleEffectOp::Heal) useful = target.attributes().health() * 1.0 < target.max_health() * 0.7;
                 else if (op == BattleEffectOp::RestoreMana) useful = target.attributes().mana() * 1.0 < target.max_mana() * 0.4;
+                else if (op == BattleEffectOp::CopyTargetSkill) useful = !IsImmuneToBuff(target, *effect) && HasCopyableSkillFor(actor, target);
                 else if (Persistent(op)) {
                     bool present = false; for (const auto& entry : target.buffs()) if (entry.buff_table_id() == effectId) present = true;
                     useful = useful || !present;

@@ -85,6 +85,7 @@ message SkillCatalogEntry {
   uint32 caster_mask = 21; // 1人物、2宝宝；按施法者资格区分。
   uint32 action_tags = 22; // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
   SupportSkillPreview support_preview = 23; // 服务端中立参考值，缺省表示没有权威预览。
+  uint32 season_id = 24; // 0 = 常驻永久技能；> 0 = 本季免费限定技能（无需消耗银两修习，随角色等级自动生效）。
 }
 
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。

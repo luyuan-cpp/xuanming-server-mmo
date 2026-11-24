@@ -337,23 +337,23 @@ func clampCountToUint32(n int64) uint32 {
 //   - 线号分配失败、读 scene:{id}:node 失败、序列化 / 写入失败 → 不发布。
 //
 // now 由调用方传入:updated_at_ms 是目录里唯一依赖墙钟的字段,显式传入便于单测断言。
-func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, now time.Time) (string, error) {
+func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, now time.Time) (*scenepb.SceneChannelDirectory, string, error) {
 	// 先读在役、再读回收中,顺序不能反:线只会从在役单向移到回收中(beginDrainWorldChannel)。
 	// 反过来读,就算那一步是原子的,也会出现「读回收中时它还没移过去、读在役时它已经移走」而两头落空,
 	// 线号随之被释放(见 luaAllocWorldChannelLineNumbers 的「已知残余」)。按现在的顺序,原子的移动
 	// 最多让它两边都读到,下面按回收中处理。
 	activeMembers, err := svcCtx.Redis.Smembers(worldChannelsKey(zoneID, confID))
 	if err != nil {
-		return metrics.ChannelDirectoryPublishError, fmt.Errorf("读在役线集合失败: %w", err)
+		return nil, metrics.ChannelDirectoryPublishError, fmt.Errorf("读在役线集合失败: %w", err)
 	}
 	drainingMembers, err := svcCtx.Redis.Smembers(worldDrainingSetKey(zoneID, confID))
 	if err != nil {
-		return metrics.ChannelDirectoryPublishError, fmt.Errorf("读回收中线集合失败: %w", err)
+		return nil, metrics.ChannelDirectoryPublishError, fmt.Errorf("读回收中线集合失败: %w", err)
 	}
 	activeIDs := parseWorldChannelMembers(activeMembers)
 	drainingIDs := parseWorldChannelMembers(drainingMembers)
 	if len(activeIDs)+len(drainingIDs) == 0 {
-		return metrics.ChannelDirectoryPublishEmpty, nil
+		return nil, metrics.ChannelDirectoryPublishEmpty, nil
 	}
 
 	// 回收中的线继续留在目录里(显示为 CLOSING)并保留线号:它上面还有人,
@@ -369,7 +369,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 
 	lineNos, err := allocateWorldChannelLineNumbers(svcCtx, zoneID, confID, allIDs)
 	if err != nil {
-		return metrics.ChannelDirectoryPublishError, err
+		return nil, metrics.ChannelDirectoryPublishError, err
 	}
 
 	cfg := svcCtx.Config.ChannelSwitch
@@ -384,7 +384,7 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 			// 回收中的线状态已定,不必再读节点映射(排空收尾时它的映射本来就会先被删)。
 			nodeID, nodeErr := svcCtx.Redis.Get(sceneNodeKey(zoneID, sceneID))
 			if nodeErr != nil {
-				return metrics.ChannelDirectoryPublishError, fmt.Errorf("读 scene %d 的节点映射失败: %w", sceneID, nodeErr)
+				return nil, metrics.ChannelDirectoryPublishError, fmt.Errorf("读 scene %d 的节点映射失败: %w", sceneID, nodeErr)
 			}
 			nodeUsable = worldChannelNodeUsable(svcCtx, zoneID, nodeID)
 		}
@@ -414,19 +414,19 @@ func publishWorldChannelDirectory(svcCtx *svc.ServiceContext, zoneID uint32, con
 	}
 	payload, err := proto.Marshal(directory)
 	if err != nil {
-		return metrics.ChannelDirectoryPublishError, fmt.Errorf("序列化目录失败: %w", err)
+		return nil, metrics.ChannelDirectoryPublishError, fmt.Errorf("序列化目录失败: %w", err)
 	}
 	// 值是 protobuf 字节,直接当 Go string 写(Redis 字符串二进制安全;player:{id}:location 同款)。
 	ttlSeconds := worldChannelDirectoryTTLSeconds(cfg.EffectiveDirectoryRefreshSeconds(),
 		svcCtx.Config.EffectiveLeaderLockTTLSeconds())
 	if err := svcCtx.Redis.Setex(worldChannelDirectoryKey(zoneID, confID), string(payload), ttlSeconds); err != nil {
-		return metrics.ChannelDirectoryPublishError, fmt.Errorf("写目录失败: %w", err)
+		return nil, metrics.ChannelDirectoryPublishError, fmt.Errorf("写目录失败: %w", err)
 	}
-	return metrics.ChannelDirectoryPublishOK, nil
+	return directory, metrics.ChannelDirectoryPublishOK, nil
 }
 
 // PublishWorldChannelDirectoriesForZone 对一个 zone 的全部大世界地图各发布一轮分线目录,
-// 返回成功发布的地图数。导出是为了让单测直接驱动一轮(同 AutoscaleWorldChannelsForZone)。
+// 并同步写入本 zone 的世界地图总览读模型,返回成功发布的地图数。导出是为了让单测直接驱动一轮(同 AutoscaleWorldChannelsForZone)。
 //
 // **只有领导者执行**,闸门放在这里而不是只放在循环里:线号表是读改写,虽然有 Lua 兜底,
 // 目录键却是整份覆盖 —— 两个副本各写各的会让 updated_at_ms 与人数来回跳。跟着写入口走,
@@ -438,12 +438,13 @@ func PublishWorldChannelDirectoriesForZone(ctx context.Context, svcCtx *svc.Serv
 		return 0
 	}
 	published := 0
+	dirsByConf := make(map[uint32]*scenepb.SceneChannelDirectory)
 	for _, confID := range worldConfIds() {
 		if ctx.Err() != nil {
 			// 进程正在退出:剩下的图不再发布,已发布的靠 TTL 过期或由接任的领导者覆盖。
 			return published
 		}
-		outcome, err := publishWorldChannelDirectory(svcCtx, zoneID, confID, now)
+		dir, outcome, err := publishWorldChannelDirectory(svcCtx, zoneID, confID, now)
 		metrics.ObserveWorldChannelDirectoryPublish(zoneID, outcome)
 		if err != nil {
 			logx.Errorf("[ChannelDirectory] zone=%d conf=%d: channel directory not published this round: %v", zoneID, confID, err)
@@ -451,6 +452,12 @@ func PublishWorldChannelDirectoriesForZone(ctx context.Context, svcCtx *svc.Serv
 		}
 		if outcome == metrics.ChannelDirectoryPublishOK {
 			published++
+			dirsByConf[uint32(confID)] = dir
+		}
+	}
+	if len(dirsByConf) > 0 && ctx.Err() == nil {
+		if err := publishWorldMapOverview(svcCtx, zoneID, dirsByConf, now); err != nil {
+			logx.Errorf("[WorldMapOverview] zone=%d: world map overview not published this round: %v", zoneID, err)
 		}
 	}
 	return published

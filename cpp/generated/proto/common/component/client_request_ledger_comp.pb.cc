@@ -212,11 +212,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      14,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -275,8 +275,14 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhancement_stone_count_), 11>(),
        {96, 11, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_catchup_points = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.season_catchup_points_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_)}},
+      // uint64 season_catchup_spent = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.season_catchup_spent_), 12>(),
+       {112, 12, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -305,6 +311,10 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 enhancement_stone_count = 12;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_catchup_points = 13;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 season_catchup_spent = 14;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -330,7 +340,9 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         forge_revision_{::uint64_t{0u}},
         material_reward_revision_{::uint64_t{0u}},
         crafting_material_count_{0u},
-        enhancement_stone_count_{0u} {}
+        enhancement_stone_count_{0u},
+        season_catchup_spent_{::uint64_t{0u}},
+        season_catchup_points_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -610,7 +622,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        15, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -623,6 +635,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.material_reward_revision_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafting_material_count_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhancement_stone_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.season_catchup_points_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.season_catchup_spent_),
         1,
         2,
         0,
@@ -635,6 +649,8 @@ const ::uint32_t
         9,
         10,
         11,
+        13,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         7, // hasbit index offset
@@ -662,8 +678,8 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {27, sizeof(::EquipmentMaterialRewardLedger)},
-        {38, sizeof(::ClientRequestLedgerComp)},
+        {31, sizeof(::EquipmentMaterialRewardLedger)},
+        {42, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -674,7 +690,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\264\002\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\361\002\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -682,21 +698,22 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     " \001(\004\022\026\n\016forge_revision\030\t \001(\004\022 \n\030material"
     "_reward_revision\030\n \001(\004\022\037\n\027crafting_mater"
     "ial_count\030\013 \001(\r\022\037\n\027enhancement_stone_cou"
-    "nt\030\014 \001(\r\"z\n\035EquipmentMaterialRewardLedge"
-    "r\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned_to"
-    "day\030\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n\010re"
-    "vision\030\004 \001(\004\"\243\001\n\027ClientRequestLedgerComp"
-    "\022%\n\007records\030\001 \003(\0132\024.ClientRequestRecord\022"
-    "\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001("
-    "\004\0227\n\017material_reward\030\004 \001(\0132\036.EquipmentMa"
-    "terialRewardLedgerB\022Z\020common/componentb\006"
-    "proto3"
+    "nt\030\014 \001(\r\022\035\n\025season_catchup_points\030\r \001(\r\022"
+    "\034\n\024season_catchup_spent\030\016 \001(\004\"z\n\035Equipme"
+    "ntMaterialRewardLedger\022\030\n\020day_starts_at_"
+    "ms\030\001 \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017availa"
+    "ble_units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\"\243\001\n\027Cl"
+    "ientRequestLedgerComp\022%\n\007records\030\001 \003(\0132\024"
+    ".ClientRequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026"
+    "\n\016forge_revision\030\003 \001(\004\0227\n\017material_rewar"
+    "d\030\004 \001(\0132\036.EquipmentMaterialRewardLedgerB"
+    "\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    686,
+    747,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -746,9 +763,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, enhancement_stone_count_) -
+           offsetof(Impl_, season_catchup_points_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::enhancement_stone_count_));
+               sizeof(Impl_::season_catchup_points_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -763,9 +780,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, enhancement_stone_count_) -
+           offsetof(Impl_, season_catchup_points_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::enhancement_stone_count_));
+               sizeof(Impl_::season_catchup_points_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -824,10 +841,10 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.equipment_item_id_) -
         reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.equipment_item_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.forge_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.enhancement_stone_count_) -
-        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.enhancement_stone_count_));
+        reinterpret_cast<char*>(&_impl_.season_catchup_points_) -
+        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.season_catchup_points_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -959,6 +976,24 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint32 season_catchup_points = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_season_catchup_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_season_catchup_points(), target);
+    }
+  }
+
+  // uint64 season_catchup_spent = 14;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_season_catchup_spent() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_season_catchup_spent(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1041,7 +1076,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint64 forge_revision = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_forge_revision() != 0) {
@@ -1068,6 +1103,20 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       if (this_._internal_enhancement_stone_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enhancement_stone_count());
+      }
+    }
+    // uint64 season_catchup_spent = 14;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_season_catchup_spent() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_season_catchup_spent());
+      }
+    }
+    // uint32 season_catchup_points = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_season_catchup_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_catchup_points());
       }
     }
   }
@@ -1134,7 +1183,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_forge_revision() != 0) {
         _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
@@ -1153,6 +1202,16 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_enhancement_stone_count() != 0) {
         _this->_impl_.enhancement_stone_count_ = from._impl_.enhancement_stone_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_season_catchup_spent() != 0) {
+        _this->_impl_.season_catchup_spent_ = from._impl_.season_catchup_spent_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_season_catchup_points() != 0) {
+        _this->_impl_.season_catchup_points_ = from._impl_.season_catchup_points_;
       }
     }
   }
@@ -1177,8 +1236,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_)
-      + sizeof(ClientRequestRecord::_impl_.enhancement_stone_count_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_)
+      + sizeof(ClientRequestRecord::_impl_.season_catchup_points_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

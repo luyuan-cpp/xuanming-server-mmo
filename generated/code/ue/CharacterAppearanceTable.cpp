@@ -110,6 +110,9 @@ static void CharacterAppearanceTableCheckNarrowedRow(const TSharedPtr<FJsonObjec
 	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("enabled"), TEXT("enabled"), RowIndex, 2147483647.0, TEXT("uint32"));
 	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("sort_order"), TEXT("sort_order"), RowIndex, 2147483647.0, TEXT("uint32"));
+	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("starter_creatable"), TEXT("starter_creatable"), RowIndex, 2147483647.0, TEXT("uint32"));
+	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("card_unlockable"), TEXT("card_unlockable"), RowIndex, 2147483647.0, TEXT("uint32"));
+	CharacterAppearanceTableCheckNarrowedField(RowObject, TEXT("series_id"), TEXT("series_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UCharacterAppearanceTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -200,6 +203,7 @@ void UCharacterAppearanceTable::BuildIndices(FSnapshot& Snap)
 				*LexToString(Row.id), *Existing, RowIndex);
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
+		Snap.SeriesIdIndex.FindOrAdd(Row.series_id).Add(RowIndex);
 	}
 }
 
@@ -252,6 +256,29 @@ const FCfgCharacterAppearanceRow* UCharacterAppearanceTable::RandOne() const
 		return nullptr;
 	}
 	return &Snapshot->Rows[FMath::RandRange(0, Snapshot->Rows.Num() - 1)];
+}
+
+TArray<const FCfgCharacterAppearanceRow*> UCharacterAppearanceTable::GetBySeriesId(int32 Key) const
+{
+	TArray<const FCfgCharacterAppearanceRow*> Result;
+	const TArray<int32>& Indices = GetSeriesIdIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UCharacterAppearanceTable::GetSeriesIdIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->SeriesIdIndex.Find(Key);
+	return Found != nullptr ? *Found : GCharacterAppearanceEmptyIndices;
+}
+
+int32 UCharacterAppearanceTable::CountBySeriesIdIndex(int32 Key) const
+{
+	return GetSeriesIdIndices(Key).Num();
 }
 
 TArray<const FCfgCharacterAppearanceRow*> UCharacterAppearanceTable::Where(TFunctionRef<bool(const FCfgCharacterAppearanceRow&)> Pred) const

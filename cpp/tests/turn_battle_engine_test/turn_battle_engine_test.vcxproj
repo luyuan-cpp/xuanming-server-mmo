@@ -168,6 +168,7 @@
     <ClCompile Include="buff_event_test.cpp" />
     <ClCompile Include="modern_skill_test.cpp" />
     <ClCompile Include="equipment_v1_battle_test.cpp" />
+    <ClCompile Include="season_battle_test.cpp" />
     <ClCompile Include="skill_trigger_test.cpp" />
     <ClCompile Include="player_revive_rule_test.cpp" />
     <ClCompile Include="attribute_allocation_rules_test.cpp" />

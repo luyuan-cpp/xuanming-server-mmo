@@ -20,6 +20,7 @@ import (
 type characterappearanceSnapshot struct {
     data   []*pb.CharacterAppearanceTable
     kvData map[uint32]*pb.CharacterAppearanceTable
+    idxSeriesId map[uint32][]*pb.CharacterAppearanceTable
 }
 
 type CharacterAppearanceTableManager struct {
@@ -40,6 +41,7 @@ func NewCharacterAppearanceTableManager() *CharacterAppearanceTableManager {
     m := &CharacterAppearanceTableManager{}
     m.snap.Store(&characterappearanceSnapshot{
         kvData: make(map[uint32]*pb.CharacterAppearanceTable),
+        idxSeriesId: make(map[uint32][]*pb.CharacterAppearanceTable),
     })
     return m
 }
@@ -84,10 +86,12 @@ func (m *CharacterAppearanceTableManager) loadSnapshot(configDir string, useBina
 
     snap := &characterappearanceSnapshot{
         kvData: make(map[uint32]*pb.CharacterAppearanceTable, len(container.Data)),
+        idxSeriesId: make(map[uint32][]*pb.CharacterAppearanceTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        snap.idxSeriesId[row.SeriesId] = append(snap.idxSeriesId[row.SeriesId], row)
     }
 
     snap.data = container.Data
@@ -103,6 +107,12 @@ func (m *CharacterAppearanceTableManager) FindById(id uint32) (*pb.CharacterAppe
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
+}
+
+
+func (m *CharacterAppearanceTableManager) GetBySeriesId(key uint32) []*pb.CharacterAppearanceTable {
+    snap := m.snap.Load()
+    return snap.idxSeriesId[key]
 }
 
 
@@ -122,6 +132,12 @@ func (m *CharacterAppearanceTableManager) Exists(id uint32) bool {
 func (m *CharacterAppearanceTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *CharacterAppearanceTableManager) CountBySeriesIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxSeriesId[key])
 }
 
 
@@ -173,6 +189,8 @@ func (m *CharacterAppearanceTableManager) First(pred func(*pb.CharacterAppearanc
     }
     return nil, false
 }
+// FK: series_id → AppearanceSeries.id
+
 
 // ---- Composite Key ----
 

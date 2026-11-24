@@ -1597,12 +1597,12 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(player_database, _impl_._has_bits_),
       0, // no _extensions_
-      29, 248,  // max_field_number, fast_idx_mask
+      30, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      3758555648,  // skipmap
+      3221684736,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      25,  // num_field_entries
-      23,  // num_aux_entries
+      26,  // num_field_entries
+      24,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1613,8 +1613,8 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 23>(),
-       {8, 23, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_database, _impl_.player_id_), 24>(),
+       {8, 24, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_)}},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {::_pbi::TcParser::FastMtS1,
@@ -1682,7 +1682,7 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_)}},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
       {::_pbi::TcParser::FastV32S2,
-       {424, 24, 0,
+       {424, 25, 0,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_)}},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {::_pbi::TcParser::FastMtS2,
@@ -1716,13 +1716,16 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       {::_pbi::TcParser::FastMtR2,
        {490, 0, 22,
         PROTOBUF_FIELD_OFFSET(player_database, _impl_.saved_buffs_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
+      {::_pbi::TcParser::FastMtS2,
+       {498, 23, 23,
+        PROTOBUF_FIELD_OFFSET(player_database, _impl_.season_component_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.player_id_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .Transform transform = 2 [(.OptionPersistGroup) = 9];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.transform_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerUint64Comp uint64_pb_component = 3 [(.OptionPersistGroup) = 4];
@@ -1754,7 +1757,7 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       // .PlayerInboxLedgerComp inbox_ledger = 20 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.inbox_ledger_), _Internal::kHasBitsOffset + 15, 14, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.persist_schema_gen_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.mystery_merchant_), _Internal::kHasBitsOffset + 16, 15, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .PlayerBattleResultComp battle_results = 23 [(.OptionPersistGroup) = 4];
@@ -1771,6 +1774,8 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.skill_cooldowns_), _Internal::kHasBitsOffset + 22, 21, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .SavedBuffComp saved_buffs = 29 [(.OptionPersistGroup) = 6];
       {PROTOBUF_FIELD_OFFSET(player_database, _impl_.saved_buffs_), _Internal::kHasBitsOffset + 0, 22, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
+      {PROTOBUF_FIELD_OFFSET(player_database, _impl_.season_component_), _Internal::kHasBitsOffset + 23, 23, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1888,6 +1893,11 @@ constexpr player_database::ParseTableT_ player_database::InternalGenerateParseTa
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::SavedBuffComp_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PlayerSeasonComp>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PlayerSeasonComp_globals_},
+        #endif
     }},
     {{
     }},
@@ -1926,6 +1936,7 @@ inline constexpr player_database::Impl_::Impl_(
         item_holds_{nullptr},
         mail_outbox_{nullptr},
         skill_cooldowns_{nullptr},
+        season_component_{nullptr},
         player_id_{::uint64_t{0u}},
         persist_schema_gen_{0u} {}
 
@@ -2093,7 +2104,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_._has_bits_),
-        28, // hasbit index offset
+        29, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.transform_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.uint64_pb_component_),
@@ -2119,7 +2130,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.mail_outbox_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.skill_cooldowns_),
         PROTOBUF_FIELD_OFFSET(::player_database, _impl_.saved_buffs_),
-        23,
+        PROTOBUF_FIELD_OFFSET(::player_database, _impl_.season_component_),
+        24,
         1,
         2,
         3,
@@ -2135,7 +2147,7 @@ const ::uint32_t
         13,
         14,
         15,
-        24,
+        25,
         16,
         17,
         18,
@@ -2144,6 +2156,7 @@ const ::uint32_t
         21,
         22,
         0,
+        23,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_store, _impl_._has_bits_),
         12, // hasbit index offset
@@ -2194,8 +2207,8 @@ static const ::_pbi::MigrationSchema
         {51, sizeof(::account_share_database)},
         {56, sizeof(::player_centre_database)},
         {63, sizeof(::player_database)},
-        {116, sizeof(::player_store)},
-        {137, sizeof(::player_audit_outbox)},
+        {118, sizeof(::player_store)},
+        {139, sizeof(::player_audit_outbox)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2234,79 +2247,82 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabas
     "dger_comp.proto\0322proto/common/component/"
     "player_item_hold_comp.proto\0324proto/commo"
     "n/component/player_mail_outbox_comp.prot"
-    "o\032&proto/common/component/time_comp.prot"
-    "o\032&proto/common/component/buff_comp.prot"
-    "o\032/proto/common/database/bag_quest_mail_"
-    "data.proto\"\204\001\n\004user\022\n\n\002id\030\001 \001(\004\022\024\n\014displ"
-    "ay_name\030\002 \001(\t\022\020\n\010is_guest\030\003 \001(\010\022\023\n\013creat"
-    "e_time\030\004 \001(\004\022\022\n\nlast_login\030\005 \001(\004:\037\212\222\364\001\004u"
-    "ser\222\222\364\001\002id\332\222\364\001\nlast_login\"\230\001\n\nuser_oauth"
-    "\022\017\n\007user_id\030\001 \001(\004\022\020\n\010provider\030\002 \001(\t\022\023\n\013p"
-    "rovider_id\030\003 \001(\t\022\023\n\013create_time\030\004 \001(\004:=\212"
-    "\222\364\001\nuser_oauth\222\222\364\001\020user_id,provider\342\222\364\001\024"
-    "provider,provider_id\"h\n\nuser_phone\022\017\n\007us"
-    "er_id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t\022\023\n\013create_tim"
-    "e\030\003 \001(\004:%\212\222\364\001\nuser_phone\222\222\364\001\007user_id\342\222\364\001"
-    "\005phone\"c\n\ruser_password\022\017\n\007user_id\030\001 \001(\004"
-    "\022\014\n\004hash\030\002 \001(\t\022\023\n\013create_time\030\003 \001(\004:\036\212\222\364"
-    "\001\ruser_password\222\222\364\001\007user_id\"\204\001\n\ruser_acc"
-    "ounts\022\017\n\007account\030\001 \001(\t\022\020\n\010password\030\002 \001(\t"
-    "\0220\n\016simple_players\030\003 \001(\0132\030.AccountSimple"
-    "PlayerList:\036\212\222\364\001\ruser_accounts\222\222\364\001\007accou"
-    "nt\"R\n\026account_share_database\022\017\n\007account\030"
-    "\001 \001(\t:\'\212\222\364\001\026account_share_database\222\222\364\001\007a"
-    "ccount\"\240\001\n\026player_centre_database\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022+\n\nscene_info\030\002 \001(\0132\027.Playe"
-    "rSceneContextComp:F\212\222\364\001\026player_centre_da"
-    "tabase\222\222\364\001\tplayer_id\262\222\364\001\tplayer_id\250\223\364\001\001\260"
-    "\223\364\001\004\270\223\364\001\004\"\245\n\n\017player_database\022\030\n\tplayer_"
-    "id\030\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransform\030\002 \001(\0132\n.Tra"
-    "nsformB\005\310\376\244\002\t\0225\n\023uint64_pb_component\030\003 \001"
-    "(\0132\021.PlayerUint64CompB\005\310\376\244\002\004\022/\n\nskill_li"
-    "st\030\004 \001(\0132\024.PlayerSkillListCompB\005\310\376\244\002\003\0225\n"
-    "\023uint32_pb_component\030\005 \001(\0132\021.PlayerUint3"
-    "2CompB\005\310\376\244\002\004\022@\n\034derived_attributes_compo"
-    "nent\030\006 \001(\0132\023.BaseAttributesCompB\005\310\376\244\002\006\022*"
-    "\n\017level_component\030\007 \001(\0132\n.LevelCompB\005\310\376\244"
-    "\002\006\022&\n\010currency\030\010 \001(\0132\r.CurrencyCompB\005\310\376\244"
-    "\002\007\022=\n\021stress_test_probe\030\t \001(\0132\026.PlayerSt"
-    "ressTestProbeB\n\300\376\244\002\001\310\376\244\002\004\0228\n\023attribute_c"
-    "omponent\030\013 \001(\0132\024.PlayerAttributeCompB\005\310\376"
-    "\244\002\003\022,\n\rpet_component\030\014 \001(\0132\016.PlayerPetCo"
-    "mpB\005\310\376\244\002\003\022)\n\rbag_component\030\r \001(\0132\013.BagAl"
-    "lDataB\005\310\376\244\002\010\022/\n\021mission_component\030\016 \001(\0132"
-    "\r.QuestAllDataB\005\310\376\244\002\003\0224\n\021profile_compone"
-    "nt\030\017 \001(\0132\022.PlayerProfileCompB\005\310\376\244\002\004\0228\n\017a"
-    "sset_op_ledger\030\020 \001(\0132\030.PlayerAssetOpLedg"
-    "erCompB\005\310\376\244\002\007\0223\n\014inbox_ledger\030\024 \001(\0132\026.Pl"
-    "ayerInboxLedgerCompB\005\310\376\244\002\007\022!\n\022persist_sc"
-    "hema_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020mystery_merchan"
-    "t\030\026 \001(\0132\032.PlayerMysteryMerchantCompB\005\310\376\244"
-    "\002\007\0226\n\016battle_results\030\027 \001(\0132\027.PlayerBattl"
-    "eResultCompB\005\310\376\244\002\004\0228\n\017item_gain_block\030\030 "
-    "\001(\0132\030.PlayerItemGainBlockCompB\005\310\376\244\002\004\022>\n\025"
-    "client_request_ledger\030\031 \001(\0132\030.ClientRequ"
-    "estLedgerCompB\005\310\376\244\002\007\022.\n\nitem_holds\030\032 \001(\013"
-    "2\023.PlayerItemHoldCompB\005\310\376\244\002\004\0221\n\013mail_out"
-    "box\030\033 \001(\0132\025.PlayerMailOutboxCompB\005\310\376\244\002\007\022"
-    "5\n\017skill_cooldowns\030\034 \001(\0132\025.CooldownTimeL"
-    "istCompB\005\310\376\244\002\006\022*\n\013saved_buffs\030\035 \003(\0132\016.Sa"
-    "vedBuffCompB\005\310\376\244\002\006:\005\350\222\364\001\001J\004\010\n\020\013J\004\010\021\020\022J\004\010"
-    "\022\020\023J\004\010\023\020\024\"\337\001\n\014player_store\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013owner_epoch\030\003 \001(\004"
-    "\022\020\n\010save_seq\030\004 \001(\004\022\022\n\nschema_gen\030\005 \001(\r\022\027"
-    "\n\017holder_instance\030\006 \001(\014\022\020\n\010released\030\007 \001("
-    "\r\022\017\n\007payload\030\010 \001(\014\022\021\n\tclaim_seq\030\t \001(\004:$\212"
-    "\222\364\001\014player_store\222\222\364\001\016player_id,kind\"\327\001\n\023"
-    "player_audit_outbox\022\r\n\005shard\030\001 \001(\r\022\014\n\004ki"
-    "nd\030\002 \001(\r\022\022\n\ncreated_ms\030\003 \001(\004\022\021\n\tplayer_i"
-    "d\030\004 \001(\004\022\021\n\trecord_id\030\005 \001(\004\022\020\n\010save_seq\030\006"
-    " \001(\004\022\017\n\007payload\030\007 \001(\014:F\212\222\364\001\023player_audit"
-    "_outbox\222\222\364\001)shard,kind,created_ms,player"
-    "_id,record_idB\021Z\017common/databaseb\006proto3"
+    "o\032/proto/common/component/player_season_"
+    "comp.proto\032&proto/common/component/time_"
+    "comp.proto\032&proto/common/component/buff_"
+    "comp.proto\032/proto/common/database/bag_qu"
+    "est_mail_data.proto\"\204\001\n\004user\022\n\n\002id\030\001 \001(\004"
+    "\022\024\n\014display_name\030\002 \001(\t\022\020\n\010is_guest\030\003 \001(\010"
+    "\022\023\n\013create_time\030\004 \001(\004\022\022\n\nlast_login\030\005 \001("
+    "\004:\037\212\222\364\001\004user\222\222\364\001\002id\332\222\364\001\nlast_login\"\230\001\n\nu"
+    "ser_oauth\022\017\n\007user_id\030\001 \001(\004\022\020\n\010provider\030\002"
+    " \001(\t\022\023\n\013provider_id\030\003 \001(\t\022\023\n\013create_time"
+    "\030\004 \001(\004:=\212\222\364\001\nuser_oauth\222\222\364\001\020user_id,prov"
+    "ider\342\222\364\001\024provider,provider_id\"h\n\nuser_ph"
+    "one\022\017\n\007user_id\030\001 \001(\004\022\r\n\005phone\030\002 \001(\t\022\023\n\013c"
+    "reate_time\030\003 \001(\004:%\212\222\364\001\nuser_phone\222\222\364\001\007us"
+    "er_id\342\222\364\001\005phone\"c\n\ruser_password\022\017\n\007user"
+    "_id\030\001 \001(\004\022\014\n\004hash\030\002 \001(\t\022\023\n\013create_time\030\003"
+    " \001(\004:\036\212\222\364\001\ruser_password\222\222\364\001\007user_id\"\204\001\n"
+    "\ruser_accounts\022\017\n\007account\030\001 \001(\t\022\020\n\010passw"
+    "ord\030\002 \001(\t\0220\n\016simple_players\030\003 \001(\0132\030.Acco"
+    "untSimplePlayerList:\036\212\222\364\001\ruser_accounts\222"
+    "\222\364\001\007account\"R\n\026account_share_database\022\017\n"
+    "\007account\030\001 \001(\t:\'\212\222\364\001\026account_share_datab"
+    "ase\222\222\364\001\007account\"\240\001\n\026player_centre_databa"
+    "se\022\021\n\tplayer_id\030\001 \001(\004\022+\n\nscene_info\030\002 \001("
+    "\0132\027.PlayerSceneContextComp:F\212\222\364\001\026player_"
+    "centre_database\222\222\364\001\tplayer_id\262\222\364\001\tplayer"
+    "_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\331\n\n\017player_database\022\030"
+    "\n\tplayer_id\030\001 \001(\004B\005\310\376\244\002\000\022$\n\ttransform\030\002 "
+    "\001(\0132\n.TransformB\005\310\376\244\002\t\0225\n\023uint64_pb_comp"
+    "onent\030\003 \001(\0132\021.PlayerUint64CompB\005\310\376\244\002\004\022/\n"
+    "\nskill_list\030\004 \001(\0132\024.PlayerSkillListCompB"
+    "\005\310\376\244\002\003\0225\n\023uint32_pb_component\030\005 \001(\0132\021.Pl"
+    "ayerUint32CompB\005\310\376\244\002\004\022@\n\034derived_attribu"
+    "tes_component\030\006 \001(\0132\023.BaseAttributesComp"
+    "B\005\310\376\244\002\006\022*\n\017level_component\030\007 \001(\0132\n.Level"
+    "CompB\005\310\376\244\002\006\022&\n\010currency\030\010 \001(\0132\r.Currency"
+    "CompB\005\310\376\244\002\007\022=\n\021stress_test_probe\030\t \001(\0132\026"
+    ".PlayerStressTestProbeB\n\300\376\244\002\001\310\376\244\002\004\0228\n\023at"
+    "tribute_component\030\013 \001(\0132\024.PlayerAttribut"
+    "eCompB\005\310\376\244\002\003\022,\n\rpet_component\030\014 \001(\0132\016.Pl"
+    "ayerPetCompB\005\310\376\244\002\003\022)\n\rbag_component\030\r \001("
+    "\0132\013.BagAllDataB\005\310\376\244\002\010\022/\n\021mission_compone"
+    "nt\030\016 \001(\0132\r.QuestAllDataB\005\310\376\244\002\003\0224\n\021profil"
+    "e_component\030\017 \001(\0132\022.PlayerProfileCompB\005\310"
+    "\376\244\002\004\0228\n\017asset_op_ledger\030\020 \001(\0132\030.PlayerAs"
+    "setOpLedgerCompB\005\310\376\244\002\007\0223\n\014inbox_ledger\030\024"
+    " \001(\0132\026.PlayerInboxLedgerCompB\005\310\376\244\002\007\022!\n\022p"
+    "ersist_schema_gen\030\025 \001(\rB\005\310\376\244\002\000\022;\n\020myster"
+    "y_merchant\030\026 \001(\0132\032.PlayerMysteryMerchant"
+    "CompB\005\310\376\244\002\007\0226\n\016battle_results\030\027 \001(\0132\027.Pl"
+    "ayerBattleResultCompB\005\310\376\244\002\004\0228\n\017item_gain"
+    "_block\030\030 \001(\0132\030.PlayerItemGainBlockCompB\005"
+    "\310\376\244\002\004\022>\n\025client_request_ledger\030\031 \001(\0132\030.C"
+    "lientRequestLedgerCompB\005\310\376\244\002\007\022.\n\nitem_ho"
+    "lds\030\032 \001(\0132\023.PlayerItemHoldCompB\005\310\376\244\002\004\0221\n"
+    "\013mail_outbox\030\033 \001(\0132\025.PlayerMailOutboxCom"
+    "pB\005\310\376\244\002\007\0225\n\017skill_cooldowns\030\034 \001(\0132\025.Cool"
+    "downTimeListCompB\005\310\376\244\002\006\022*\n\013saved_buffs\030\035"
+    " \003(\0132\016.SavedBuffCompB\005\310\376\244\002\006\0222\n\020season_co"
+    "mponent\030\036 \001(\0132\021.PlayerSeasonCompB\005\310\376\244\002\003:"
+    "\005\350\222\364\001\001J\004\010\n\020\013J\004\010\021\020\022J\004\010\022\020\023J\004\010\023\020\024\"\337\001\n\014playe"
+    "r_store\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r"
+    "\022\023\n\013owner_epoch\030\003 \001(\004\022\020\n\010save_seq\030\004 \001(\004\022"
+    "\022\n\nschema_gen\030\005 \001(\r\022\027\n\017holder_instance\030\006"
+    " \001(\014\022\020\n\010released\030\007 \001(\r\022\017\n\007payload\030\010 \001(\014\022"
+    "\021\n\tclaim_seq\030\t \001(\004:$\212\222\364\001\014player_store\222\222\364"
+    "\001\016player_id,kind\"\327\001\n\023player_audit_outbox"
+    "\022\r\n\005shard\030\001 \001(\r\022\014\n\004kind\030\002 \001(\r\022\022\n\ncreated"
+    "_ms\030\003 \001(\004\022\021\n\tplayer_id\030\004 \001(\004\022\021\n\trecord_i"
+    "d\030\005 \001(\004\022\020\n\010save_seq\030\006 \001(\004\022\017\n\007payload\030\007 \001"
+    "(\014:F\212\222\364\001\023player_audit_outbox\222\222\364\001)shard,k"
+    "ind,created_ms,player_id,record_idB\021Z\017co"
+    "mmon/databaseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[20] = {
+    descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps[21] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fasset_5fop_5fledger_5fcomp_2eproto,
@@ -2323,6 +2339,7 @@ static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmystery_5fmerchant_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fscene_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2ftime_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto,
@@ -2332,12 +2349,12 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fda
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto = {
     false,
     false,
-    3680,
+    3781,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto,
     "proto/common/database/mysql_database_table.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_once,
     descriptor_table_proto_2fcommon_2fdatabase_2fmysql_5fdatabase_5ftable_2eproto_deps,
-    20,
+    21,
     10,
     schemas,
     file_message_globals,
@@ -4425,6 +4442,11 @@ void player_database::clear_saved_buffs() {
   _impl_.saved_buffs_.Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
+void player_database::clear_season_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_component_ != nullptr) _impl_.season_component_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
 player_database::player_database(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, player_database_get_class_data()) {
@@ -4529,6 +4551,9 @@ player_database::player_database(
   _impl_.skill_cooldowns_ = (CheckHasBit(cached_has_bits, 0x00400000U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.skill_cooldowns_)
                 : nullptr;
+  _impl_.season_component_ = (CheckHasBit(cached_has_bits, 0x00800000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.season_component_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -4591,6 +4616,7 @@ inline void player_database::SharedDtor(MessageLite& self) {
   delete this_._impl_.item_holds_;
   delete this_._impl_.mail_outbox_;
   delete this_._impl_.skill_cooldowns_;
+  delete this_._impl_.season_component_;
   this_._impl_.~Impl_();
 }
 
@@ -4695,7 +4721,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       _impl_.inbox_ledger_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       ABSL_DCHECK(_impl_.mystery_merchant_ != nullptr);
       _impl_.mystery_merchant_->Clear();
@@ -4724,9 +4750,16 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       ABSL_DCHECK(_impl_.skill_cooldowns_ != nullptr);
       _impl_.skill_cooldowns_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      ABSL_DCHECK(_impl_.season_component_ != nullptr);
+      _impl_.season_component_->Clear();
+    }
   }
-  _impl_.player_id_ = ::uint64_t{0u};
-  _impl_.persist_schema_gen_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.persist_schema_gen_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.persist_schema_gen_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4751,7 +4784,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4865,7 +4898,7 @@ PROTOBUF_NOINLINE void player_database::Clear() {
   }
 
   // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
     if (this_._internal_persist_schema_gen() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4933,6 +4966,13 @@ PROTOBUF_NOINLINE void player_database::Clear() {
               29, repfield, repfield.GetCachedSize(),
               target, stream);
     }
+  }
+
+  // .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        30, *this_._impl_.season_component_, this_._impl_.season_component_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -5082,17 +5122,22 @@ PROTOBUF_NOINLINE void player_database::Clear() {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.skill_cooldowns_);
     }
-    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    // .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
     if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.season_component_);
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
-  }
-   {
     // uint32 persist_schema_gen = 21 [(.OptionPersistGroup) = 0];
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (this_._internal_persist_schema_gen() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_persist_schema_gen());
@@ -5304,14 +5349,24 @@ void player_database::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      ABSL_DCHECK(from._impl_.season_component_ != nullptr);
+      if (_this->_impl_.season_component_ == nullptr) {
+        _this->_impl_.season_component_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.season_component_);
+      } else {
+        _this->_impl_.season_component_->MergeFrom(*from._impl_.season_component_);
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
-    if (from._internal_persist_schema_gen() != 0) {
-      _this->_impl_.persist_schema_gen_ = from._impl_.persist_schema_gen_;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_persist_schema_gen() != 0) {
+        _this->_impl_.persist_schema_gen_ = from._impl_.persist_schema_gen_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;

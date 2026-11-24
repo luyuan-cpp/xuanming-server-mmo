@@ -47,6 +47,7 @@
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/component/player_mail_outbox_comp.pb.h"
+#include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/time_comp.pb.h"
 #include "proto/common/component/buff_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -2547,6 +2548,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kItemHoldsFieldNumber = 26,
     kMailOutboxFieldNumber = 27,
     kSkillCooldownsFieldNumber = 28,
+    kSeasonComponentFieldNumber = 30,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
@@ -2923,6 +2925,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::CooldownTimeListComp* PROTOBUF_NONNULL _internal_mutable_skill_cooldowns();
 
   public:
+  // .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
+  [[nodiscard]] bool has_season_component()
+      const;
+  void clear_season_component() ;
+  [[nodiscard]] const ::PlayerSeasonComp& season_component() const;
+  [[nodiscard]] ::PlayerSeasonComp* PROTOBUF_NULLABLE release_season_component();
+  ::PlayerSeasonComp* PROTOBUF_NONNULL mutable_season_component();
+  void set_allocated_season_component(::PlayerSeasonComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_season_component(::PlayerSeasonComp* PROTOBUF_NULLABLE value);
+  ::PlayerSeasonComp* PROTOBUF_NULLABLE unsafe_arena_release_season_component();
+
+  private:
+  const ::PlayerSeasonComp& _internal_season_component() const;
+  ::PlayerSeasonComp* PROTOBUF_NONNULL _internal_mutable_season_component();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2947,8 +2965,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 25,
-                          23, 0,
+      ::google::protobuf::internal::TcParseTable<5, 26,
+                          24, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2999,6 +3017,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerItemHoldComp* PROTOBUF_NULLABLE item_holds_;
     ::PlayerMailOutboxComp* PROTOBUF_NULLABLE mail_outbox_;
     ::CooldownTimeListComp* PROTOBUF_NULLABLE skill_cooldowns_;
+    ::PlayerSeasonComp* PROTOBUF_NULLABLE season_component_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4017,7 +4036,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -4025,7 +4044,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -5436,7 +5455,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5444,7 +5463,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -6155,6 +6174,99 @@ inline ::google::protobuf::RepeatedPtrField<::SavedBuffComp>* PROTOBUF_NONNULL
 player_database::_internal_mutable_saved_buffs() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.saved_buffs_;
+}
+
+// .PlayerSeasonComp season_component = 30 [(.OptionPersistGroup) = 3];
+inline bool player_database::has_season_component() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00800000U);
+  PROTOBUF_ASSUME(!value || _impl_.season_component_ != nullptr);
+  return value;
+}
+inline const ::PlayerSeasonComp& player_database::_internal_season_component() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerSeasonComp* p = _impl_.season_component_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerSeasonComp>(&::PlayerSeasonComp_globals_);
+}
+inline const ::PlayerSeasonComp& player_database::season_component() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.season_component)
+  return _internal_season_component();
+}
+inline void player_database::unsafe_arena_set_allocated_season_component(
+    ::PlayerSeasonComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_component_);
+  }
+  _impl_.season_component_ = reinterpret_cast<::PlayerSeasonComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.season_component)
+}
+inline ::PlayerSeasonComp* PROTOBUF_NULLABLE player_database::release_season_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ::PlayerSeasonComp* released = _impl_.season_component_;
+  _impl_.season_component_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerSeasonComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_season_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.season_component)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ::PlayerSeasonComp* temp = _impl_.season_component_;
+  _impl_.season_component_ = nullptr;
+  return temp;
+}
+inline ::PlayerSeasonComp* PROTOBUF_NONNULL player_database::_internal_mutable_season_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_component_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerSeasonComp>(GetArena());
+    _impl_.season_component_ = reinterpret_cast<::PlayerSeasonComp*>(p);
+  }
+  return _impl_.season_component_;
+}
+inline ::PlayerSeasonComp* PROTOBUF_NONNULL player_database::mutable_season_component()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ::PlayerSeasonComp* _msg = _internal_mutable_season_component();
+  // @@protoc_insertion_point(field_mutable:player_database.season_component)
+  return _msg;
+}
+inline void player_database::set_allocated_season_component(::PlayerSeasonComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_component_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  }
+
+  _impl_.season_component_ = reinterpret_cast<::PlayerSeasonComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.season_component)
 }
 
 // -------------------------------------------------------------------

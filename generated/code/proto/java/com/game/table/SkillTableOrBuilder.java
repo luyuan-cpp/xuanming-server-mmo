@@ -415,6 +415,18 @@ public interface SkillTableOrBuilder extends
   int getAllowDeadTarget();
 
   /**
+   * <code>uint32 forbid_copy = 57;</code>
+   * @return The forbidCopy.
+   */
+  int getForbidCopy();
+
+  /**
+   * <code>uint32 season_id = 58;</code>
+   * @return The seasonId.
+   */
+  int getSeasonId();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

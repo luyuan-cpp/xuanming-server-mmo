@@ -346,6 +346,17 @@ state=bootstrap
 1=PlayerProfileComp#10 optional uint64 appearance_switch_seq
 1=PlayerBattleResult#19 optional uint32 material_credit_units_added
 1=PlayerBattleResult#20 optional uint32 season_id
+1=PlayerProfileComp#11 optional bytes appearance_owned_bits
+1=ClientRequestRecord#13 optional uint32 season_catchup_points
+1=ClientRequestRecord#14 optional uint64 season_catchup_spent
+1=PlayerSeasonComp#1 repeated PlayerSeasonSealRecord records
+1=PlayerSeasonSealRecord#1 optional uint32 season_id
+1=PlayerSeasonSealRecord#2 optional uint32 equipped_seal_id
+1=PlayerSeasonSealRecord#3 optional uint32 progress_points
+1=PlayerSeasonSealRecord#4 optional uint32 battle_points
+1=PlayerSeasonSealRecord#5 optional uint32 catchup_points
+1=PlayerSeasonSealRecord#6 optional uint64 revision
+1=player_database#30 optional PlayerSeasonComp season_component group=3
 
 retired=player_database#10
 retired=player_database#17

@@ -4,9 +4,12 @@
 #include <vector>
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_skill.h"
+#include "player/system/player_season.h"
 #include "player/system/player_level_rules.h"
+#include "engine/core/time/system/time.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/constants/battle_effect_constants.h"
+#include "services/battle/system/season_rules.h"
 #include "services/battle/system/support_effect_rules.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -80,8 +83,10 @@ void PlayerSupportEffectSystem::Build(entt::entity player, SupportEffectSummary&
     summary.mutable_healing()->set_total_bonus_bps(healingBonus * 10000);
     summary.mutable_shield()->set_total_bonus_bps(shieldBonus * 10000);
     std::vector<const SkillTable*> freeSkills;
+    const uint32_t activeSeasonId = PlayerSeasonSystem::ActiveSeasonId(TimeSystem::NowMillisecondsUTC());
     for (const auto& skill : SkillTableManager::Instance().FindAll().data()) {
-        if (!PlayerSkillSystem::IsFreeSkillFor(skill, 1)) continue;
+        if (!PlayerSkillSystem::IsFreeSkillFor(skill, 1) ||
+            !seasonrules::IsSkillActiveInSeason(skill.season_id(), activeSeasonId)) continue;
         freeSkills.push_back(&skill);
         for (const auto id : skill.effect()) {
             if (BuffTableManager::Instance().FindByIdSilent(id).first == nullptr) complete = false;

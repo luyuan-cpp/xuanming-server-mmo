@@ -61,11 +61,60 @@ message SceneChannelDirectory
 	bool switch_enabled = 7;                // false = 服务端关闭了玩家主动切线,客户端整面板置灰
 }
 
+// 大世界地图聚合热度档位(docs/design/world-map-play-v2.md §2.2.3):只暴露聚合档位,不暴露玩家明细。
+enum WorldMapHeatLevel
+{
+	WORLD_MAP_HEAT_LEVEL_UNKNOWN = 0;
+	WORLD_MAP_HEAT_LEVEL_QUIET = 1;    // 清幽(0 人)
+	WORLD_MAP_HEAT_LEVEL_ACTIVE = 2;   // 有人
+	WORLD_MAP_HEAT_LEVEL_CROWDED = 3;  // 热闹
+}
+
+// 单张已开放大世界地图的聚合态势。
+message WorldMapOverviewEntry
+{
+	uint32 scene_config_id = 1;
+	uint32 total_player_count = 2;      // 全线汇总人数(秒级滞后)
+	uint32 channel_count = 3;           // 当前可进分线数
+	WorldMapHeatLevel heat_level = 4;
+	uint64 recommended_scene_id = 5;    // 推荐聚人线 scene_id(未满最小线号活线;0 = 暂不可用)
+	uint32 recommended_channel_no = 6;  // 推荐线号,只用于展示
+	bool is_tide_map = 7;               // true = 本轮五行灵潮目标野外图
+	bool has_mystery_merchant = 8;      // true = 神秘商人此刻落在这张图上
+}
+
+// 微观全服循环「五行灵潮」状态(按墙钟确定性轮换,docs/design/world-map-play-v2.md §2.2.2)。
+message WorldTideSnapshot
+{
+	bool active = 1;                    // true = 此刻处于本轮灵潮持续期内
+	uint64 round_id = 2;                // 本轮起始 Unix 秒
+	uint32 scene_config_id = 3;         // 本轮灵潮所在野外地图(0 = 未配置候选)
+	uint64 recommended_scene_id = 4;    // 灵潮图推荐聚人线 scene_id
+	uint32 recommended_channel_no = 5;  // 灵潮图推荐线号
+	uint64 starts_at_ms = 6;            // 本轮灵潮开始时刻(毫秒)
+	uint64 ends_at_ms = 7;              // 本轮灵潮结束时刻(毫秒)
+	uint64 next_starts_at_ms = 8;       // 下一轮灵潮开始时刻(毫秒)
+}
+
+// 一个 zone 全部已开放大世界地图的聚人态势读模型(Redis key: world_map_overview:{ctl:<zone>})。
+// 由 scene_manager 领导者随分线目录周期发布,scene 节点只读转发,客户端只在显式请求时获取。
+message WorldMapOverview
+{
+	uint32 zone_id = 1;
+	uint64 updated_at_ms = 2;
+	uint64 server_time_ms = 3;
+	repeated WorldMapOverviewEntry maps = 4;  // 按 scene_config_id 升序
+	WorldTideSnapshot tide = 5;               // 微观每小时灵潮
+	uint32 daily_hotspot_scene_config_id = 6; // 宏观每日灵脉旺地(UTC+8 05:00 换日;0 = 未启用)
+}
+
 message SceneInfoS2C
 {
   repeated SceneInfoComp scene_info = 1;
   // 玩家当前所在大世界地图的分线目录。副本 / 镜像里、或目录尚未发布时不带(has_channel_directory == false)。
   SceneChannelDirectory channel_directory = 2;
+  // 本 zone 已开放大世界地图的热度与灵潮总览。仅客户端请求 with_world_map_overview 且总览已发布时附带。
+  WorldMapOverview world_map_overview = 3;
 }
 
 message SceneInfoRequest
@@ -74,6 +123,8 @@ message SceneInfoRequest
 	// 做成显式开关而不是默认附带:带目录要让 scene 节点多读一次 zone Redis、推送也更大,而压测机器人把
 	// SceneInfoC2S 当作高频的"动一下"在发 —— 不带本字段的请求,开销与改动前逐字节相同。
 	bool with_channel_directory = 1;
+	// true = 连同本 zone 的大世界地图热度与灵潮总览一起要(SceneInfoS2C.world_map_overview,docs/design/world-map-play-v2.md §2.2)。
+	bool with_world_map_overview = 2;
 }
 
 message SceneInfoResponse

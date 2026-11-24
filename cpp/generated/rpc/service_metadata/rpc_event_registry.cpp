@@ -40,6 +40,7 @@
 #include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_scene.pb.h"
+#include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "proto/scene/s2s_player_scene.pb.h"
@@ -90,6 +91,7 @@
 #include "rpc/service_metadata/player_mystery_merchant_service_metadata.h"
 #include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
+#include "rpc/service_metadata/player_season_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
 #include "rpc/service_metadata/s2s_player_scene_service_metadata.h"
@@ -406,7 +408,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 453,
+static_assert(kMaxRpcMethodCount == 456,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -2106,6 +2108,23 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneSeasonClientPlayer ---
+    gRpcMethodRegistry[SceneSeasonClientPlayerGetSeasonStateMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "GetSeasonState",
+        std::make_unique<::GetSeasonStateRequest>(),
+        std::make_unique<::GetSeasonStateResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerEquipSeasonSealMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "EquipSeasonSeal",
+        std::make_unique<::EquipSeasonSealRequest>(),
+        std::make_unique<::EquipSeasonSealResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerCatchupSeasonSealMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "CatchupSeasonSeal",
+        std::make_unique<::CatchupSeasonSealRequest>(),
+        std::make_unique<::CatchupSeasonSealResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
         "SceneSkillClientPlayer", "ReleaseSkill",
@@ -2755,6 +2774,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:
 	case SceneSceneClientPlayerGetSyncDigestMessageId:
+	case SceneSeasonClientPlayerGetSeasonStateMessageId:
+	case SceneSeasonClientPlayerEquipSeasonSealMessageId:
+	case SceneSeasonClientPlayerCatchupSeasonSealMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:

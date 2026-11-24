@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// SeasonSeal 表的权威 schema。源表 data/SeasonSeal.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 单槽赛季装备栏（「赛季印」，方案 A）各赛季可选机制目录（设计见 docs/design/season-skills-and-seal-design.md）。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message SeasonSealTable {
+  option (cfg_sheet)       = "SeasonSeal";
+  option (cfg_source_file) = "SeasonSeal.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 赛季印唯一 ID（如 101..104）
+  uint32 id = 1;
+  // 所属赛季 ID（FK -> SeasonRule.id）
+  uint32 season_id = 2 [(cfg_fk) = "SeasonRule", (cfg_index) = true];
+  // 展示名称
+  string name = 3;
+  // 效果说明
+  string description = 4;
+  // 客户端图标键（不带 Assets/Resources 前缀与扩展名）
+  string icon_key = 5;
+  // 复用的轻量战斗机制种类（同 EquipArtifact effect_id：1 物理削盾、2 法术削盾、6 开局减伤、7 防御回蓝等）
+  uint32 effect_id = 6;
+  // 增效、削盾、减伤或回蓝比例（万分比整数）
+  uint32 bonus_bps = 7;
+  // 以入战最大气血为基准的减伤上限（万分比；0 表示无此限制）
+  uint32 cap_bps = 8;
+  // 每回合触发次数上限（0 不限）
+  uint32 per_round_limit = 9;
+  // 每场战斗触发次数上限（0 不限）
+  uint32 battle_limit = 10;
+  // 仅在前几回合可触发（0 不限）
+  uint32 active_rounds = 11;
+  // 触发治疗增幅时的气血比例上限（万分比；0 无此条件）
+  uint32 health_threshold_bps = 12;
+}

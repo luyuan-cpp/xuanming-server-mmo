@@ -70,28 +70,96 @@ namespace player_appearance
 	}
 
 	// 按 CharacterAppearance 主键查询稳定位索引。表主键未登记映射返回 std::nullopt。
-	inline std::optional<uint32_t> TrialBitIndex(uint32_t configId)
+	inline std::optional<uint32_t> AppearanceBitIndex(uint32_t configId)
 	{
 		return GetBitIndex(CharacterAppearanceBitMap, configId);
+	}
+
+	inline std::optional<uint32_t> TrialBitIndex(uint32_t configId)
+	{
+		return AppearanceBitIndex(configId);
+	}
+
+	// 查询紧凑位图指定主键是否置位(低位在前;未映射或越界返回 false)。
+	inline bool IsBitMarked(std::string_view bits, uint32_t configId)
+	{
+		const auto idx = AppearanceBitIndex(configId);
+		return idx.has_value() && TestPackedBit(bits, *idx);
+	}
+
+	// 在紧凑位图中置位指定主键(保留其他高位未知 bit 不变)。未映射返回 false。
+	inline bool MarkBit(std::string &bits, uint32_t configId)
+	{
+		const auto idx = AppearanceBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		SetPackedBit(bits, *idx);
+		return true;
 	}
 
 	// 查询该形象是否已被试用过(紧凑位图,低位在前;未映射或越界按未试用返回 false)。
 	inline bool IsTrialUsed(std::string_view trialUsedBits, uint32_t configId)
 	{
-		const auto idx = TrialBitIndex(configId);
-		return idx.has_value() && TestPackedBit(trialUsedBits, *idx);
+		return IsBitMarked(trialUsedBits, configId);
 	}
 
 	// 在紧凑位图中置位该形象的试用标记(保留其他高位未知 bit 不变)。未映射返回 false。
 	inline bool MarkTrialUsed(std::string &trialUsedBits, uint32_t configId)
 	{
-		const auto idx = TrialBitIndex(configId);
-		if (!idx.has_value())
+		return MarkBit(trialUsedBits, configId);
+	}
+
+	// 查询玩家是否永久拥有该形象:显式 owned_bits 置位,或等于当前永久 appearance_id(旧角色零迁移兼容)。
+	inline bool IsOwned(std::string_view ownedBits,
+						uint32_t configId,
+						std::string_view permanentAppearanceId,
+						std::string_view candidateAppearanceId)
+	{
+		if (!candidateAppearanceId.empty() && candidateAppearanceId == permanentAppearanceId)
 		{
-			return false;
+			return true;
 		}
-		SetPackedBit(trialUsedBits, *idx);
-		return true;
+		return IsBitMarked(ownedBits, configId);
+	}
+
+	// 在永久拥有位图中置位指定主键(保留其他高位未知 bit 不变)。未映射返回 false。
+	inline bool MarkOwned(std::string &ownedBits, uint32_t configId)
+	{
+		return MarkBit(ownedBits, configId);
+	}
+
+	enum class SwitchPlan : uint8_t
+	{
+		kFreeSwitch,
+		kCardUnlock,
+		kRefuseNotOwned,
+		kRefuseNotCardUnlockable,
+	};
+
+	// 决定一次切换请求走免费切换、扣卡买断解锁，还是 fail-closed 拒绝。
+	inline SwitchPlan PlanSwitch(bool alreadyOwned, bool expectFreeSwitch, bool cardUnlockable)
+	{
+		if (alreadyOwned)
+		{
+			return SwitchPlan::kFreeSwitch;
+		}
+		if (expectFreeSwitch)
+		{
+			return SwitchPlan::kRefuseNotOwned;
+		}
+		if (!cardUnlockable)
+		{
+			return SwitchPlan::kRefuseNotCardUnlockable;
+		}
+		return SwitchPlan::kCardUnlock;
+	}
+
+	// 系列图鉴是否集齐(纯外观点亮与合篇解锁判定,零数值属性)。空系列(totalCount==0)永不算集齐。
+	inline bool IsSeriesCompleted(uint32_t ownedCount, uint32_t totalCount)
+	{
+		return totalCount > 0 && ownedCount >= totalCount;
 	}
 
 	// 目录外观同步失败时的有界指数退避:2s, 4s, 8s, 16s, 30s 封顶。

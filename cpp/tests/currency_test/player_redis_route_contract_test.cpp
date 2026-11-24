@@ -220,10 +220,13 @@ namespace
 		// 句柄当场拒绝,原因是 tag 属于另一个域。两把键取自生产的拼键函数,同时钉住与 Go 侧逐字节相同的键形
 		// (go/scene_manager 的 worldChannelDirectoryKey、mysteryMerchantKey)。
 		const std::string directoryKey = PlayerSceneSystem::WorldChannelDirectoryKey(1, 2);
+		const std::string overviewKey = PlayerSceneSystem::WorldMapOverviewKey(1);
 		const std::string merchantKey = PlayerMysteryMerchantSystem::RecordKey(1);
 		EXPECT_EQ(directoryKey, "world_channel_directory:{ctl:1}:2");
+		EXPECT_EQ(overviewKey, "world_map_overview:{ctl:1}");
 		EXPECT_EQ(merchantKey, "mystery_merchant:{ctl:1}");
 		EXPECT_EQ(PlayerRoute(Resp({"GET", directoryKey})).reason, RouteRejectReason::kWrongDomainTag);
+		EXPECT_EQ(PlayerRoute(Resp({"GET", overviewKey})).reason, RouteRejectReason::kWrongDomainTag);
 		EXPECT_EQ(PlayerRoute(Resp({"HGET", merchantKey, "state"})).reason, RouteRejectReason::kWrongDomainTag);
 		// 唤醒的分片频道带控制集群 aw 族的 tag,发到玩家域句柄同样按域拒绝。
 		// 玩家域也不用 PUBLISH(Cluster 下普通 PUBLISH 全集群广播,设计 §5.12)。
@@ -249,6 +252,10 @@ namespace
 			EXPECT_EQ(route.slot, zoneSlot) << what;
 		};
 		expectZoneSlot(Resp({"GET", PlayerSceneSystem::WorldChannelDirectoryKey(kZone, 2)}), "GET world channel directory");
+		expectZoneSlot(Resp({"GET", PlayerSceneSystem::WorldMapOverviewKey(kZone)}), "GET world map overview");
+		expectZoneSlot(Resp({"MGET", PlayerSceneSystem::WorldChannelDirectoryKey(kZone, 2),
+							 PlayerSceneSystem::WorldMapOverviewKey(kZone)}),
+					   "MGET world channel directory and world map overview");
 		expectZoneSlot(Resp({"HGET", PlayerMysteryMerchantSystem::RecordKey(kZone), "state"}), "HGET mystery merchant");
 		// 归属对账一批:本节点号的持有者加若干场景的属主键,同一个 tag。
 		expectZoneSlot(Resp({"MGET", scene_ownership::NodeHolderKey(kZone, "3"), scene_ownership::SceneNodeKey(kZone, 101),

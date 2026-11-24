@@ -55,6 +55,7 @@ enum class ClientRequestKind : uint8_t
 	kBuyAfkPass = 6,              // SceneAfkPassClientPlayer.BuyAfkPass(docs/design/afk-monthly-card.md §4.1);首次结果取当前月卡状态
 	kSwitchAppearance = 7,        // SceneAppearanceClientPlayer.SwitchAppearance:消费角色形象卡永久切换形象
 	kStartAppearanceTrial = 8,    // SceneAppearanceClientPlayer.StartAppearanceTrial:开启某形象 1 小时试用(位图记账)
+	kCatchupSeasonSeal = 9,       // SceneSeasonClientPlayer.CatchupSeasonSeal:小额灵石快捷追赶赛季印进度
 	kCount
 };
 
@@ -71,7 +72,8 @@ enum class ClientRequestVerdict : uint8_t
 // 名字表:日志用。下标即枚举值,static_assert 防脱节。
 inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhance_equip", "buy_mystery_merchant_goods",
 														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward",
-														  "buy_afk_pass", "switch_appearance", "start_appearance_trial"};
+														  "buy_afk_pass", "switch_appearance", "start_appearance_trial",
+														  "catchup_season_seal"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -104,6 +106,8 @@ struct ClientRequestResult
 	uint64_t materialRewardRevision{0};
 	uint32_t craftingMaterialCount{0};
 	uint32_t enhancementStoneCount{0};
+	uint32_t seasonCatchupPoints{0};
+	uint64_t seasonCatchupSpent{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

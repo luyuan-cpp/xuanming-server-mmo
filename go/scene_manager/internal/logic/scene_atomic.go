@@ -57,15 +57,14 @@ end
 return redis.call('SCARD', KEYS[2])
 `
 
-// luaReserveBestWorldChannel atomically selects the least-loaded live world
-// channel from KEYS scene/members pairs and reserves one player slot on it.
-// Selection and SADD have to be a single Redis operation during login storms,
-// otherwise many concurrent calls can observe the same empty channel.
+// luaReserveBestWorldChannel atomically selects a live world channel from KEYS
+// scene/members pairs and reserves one player slot on it.
+// Selection and SADD have to be a single Redis operation during login storms.
 //
 // KEYS are laid out as 3N entries so every key the script touches is declared up-front:
 //
 //	KEYS[1..2N]    = scene:{ctl:<z>}:<id>:node, instance:{ctl:<z>}:<id>:members, ...
-//	                 (interleaved per candidate)
+//	                 (interleaved per candidate; caller orders candidates by lineNo asc)
 //	KEYS[2N+1..3N] = node:{ctl:<z>}:<candidateNode>:members (one per candidate, so the
 //	                 script can look up the chosen candidate's node set without
 //	                 string-building a key from data).
@@ -74,6 +73,8 @@ return redis.call('SCARD', KEYS[2])
 // ARGV[i] for i in 1..N = nodeId string for candidate i, used both for the
 // equality check against scene:{id}:node and to remember the picked node.
 // ARGV[N+1] = 十进制 player_id。
+// ARGV[N+2] = 十进制 softFillThreshold（>0 启用 Fill-First：优先选按入参序第一条 count < softFillThreshold 的存活线，
+// 全线达到后回退至人数最少线；<=0 为纯 least_loaded）。
 //
 // Return = {bestIdx, nodeId, newCount}, or nil if every candidate went stale.
 //
@@ -83,23 +84,32 @@ return redis.call('SCARD', KEYS[2])
 // NOTE: keys are constructed from Go (see ReserveBestWorldChannel) and
 // passed in fixed slots. The script never builds a key from ARGV data.
 const luaReserveBestWorldChannel = `
-local n = #ARGV - 1
+local n = #ARGV - 2
 local player = ARGV[n + 1]
+local softCap = tonumber(ARGV[n + 2]) or 0
 local bestIdx = nil
-local bestCount = nil
+local leastIdx = nil
+local leastCount = nil
 
 for i = 1, n do
     local sceneNodeKey = KEYS[(i - 1) * 2 + 1]
     local membersKey = KEYS[(i - 1) * 2 + 2]
     if redis.call('GET', sceneNodeKey) == ARGV[i] then
         local count = redis.call('SCARD', membersKey)
-        if bestCount == nil or count < bestCount then
+        if softCap > 0 and count < softCap then
             bestIdx = i
-            bestCount = count
+            break
+        end
+        if leastCount == nil or count < leastCount then
+            leastIdx = i
+            leastCount = count
         end
     end
 end
 
+if bestIdx == nil then
+    bestIdx = leastIdx
+end
 if bestIdx == nil then
     return nil
 end
@@ -517,11 +527,14 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 		keys = append(keys, nodeMembersKey(c.ZoneID, c.NodeID))
 	}
 
-	args := make([]any, 0, n+1)
+	args := make([]any, 0, n+2)
 	for _, c := range candidates {
 		args = append(args, c.NodeID)
 	}
-	args = append(args, strconv.FormatUint(playerId, 10))
+	args = append(args,
+		strconv.FormatUint(playerId, 10),
+		strconv.FormatInt(svcCtx.Config.EffectiveChannelSoftFillThreshold(), 10),
+	)
 
 	raw, err := svcCtx.Redis.Eval(luaReserveBestWorldChannel, keys, args...)
 	// 脚本回 nil 表示候选全部陈旧,go-redis 把它翻成 redis.Nil:这是「没选到」,不是读错。

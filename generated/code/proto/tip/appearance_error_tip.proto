@@ -23,4 +23,10 @@ enum appearance_error {
 
   kAppearanceUnavailable = 33006;
 
+  kAppearanceNotCardUnlockable = 33007;
+
+  kAppearanceAlreadyOwned = 33008;
+
+  kAppearanceNotOwned = 33009;
+
 };

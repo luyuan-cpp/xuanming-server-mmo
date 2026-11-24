@@ -455,6 +455,7 @@ type SkillCatalogEntry struct {
 	CasterMask        uint32                         `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                          // 1人物、2宝宝；按施法者资格区分。
 	ActionTags        uint32                         `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                          // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
 	SupportPreview    *component.SupportSkillPreview `protobuf:"bytes,23,opt,name=support_preview,json=supportPreview,proto3" json:"support_preview,omitempty"`               // 服务端中立参考值，缺省表示没有权威预览。
+	SeasonId          uint32                         `protobuf:"varint,24,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                // 0 = 常驻永久技能；> 0 = 本季免费限定技能（无需消耗银两修习，随角色等级自动生效）。
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -650,6 +651,13 @@ func (x *SkillCatalogEntry) GetSupportPreview() *component.SupportSkillPreview {
 	return nil
 }
 
+func (x *SkillCatalogEntry) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
 type UpgradeSkillRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -823,7 +831,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\fplayer_level\x18\x04 \x01(\rR\vplayerLevel\x12\x19\n" +
 	"\bclass_id\x18\x05 \x01(\rR\aclassId\x12)\n" +
 	"\x10currency_balance\x18\x06 \x01(\x04R\x0fcurrencyBalance\x12\x15\n" +
-	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xaa\x06\n" +
+	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xc7\x06\n" +
 	"\x11SkillCatalogEntry\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -853,7 +861,8 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"casterMask\x12\x1f\n" +
 	"\vaction_tags\x18\x16 \x01(\rR\n" +
 	"actionTags\x12=\n" +
-	"\x0fsupport_preview\x18\x17 \x01(\v2\x14.SupportSkillPreviewR\x0esupportPreview\"\x8d\x01\n" +
+	"\x0fsupport_preview\x18\x17 \x01(\v2\x14.SupportSkillPreviewR\x0esupportPreview\x12\x1b\n" +
+	"\tseason_id\x18\x18 \x01(\rR\bseasonId\"\x8d\x01\n" +
 	"\x13UpgradeSkillRequest\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12#\n" +
 	"\rexpected_rank\x18\x02 \x01(\rR\fexpectedRank\x12\x14\n" +

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "muduo/base/Logging.h"
+#include "engine/core/time/system/time.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "battle/system/player_battle.h"
 #include "modules/currency/constants/currency.h"
@@ -16,12 +17,15 @@
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/player_season.h"
 #include "services/battle/constants/turn_battle_constants.h"
 #include "services/battle/system/class_skill_rules.h"
+#include "services/battle/system/season_rules.h"
 #include "table/code/buff_table.h"
 #include "table/code/class_table.h"
 #include "table/code/skill_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/season_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -74,6 +78,17 @@ namespace
 			return nullptr;
 		}
 		return SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
+	}
+
+	uint32_t ActiveSeasonIdNow()
+	{
+		return PlayerSeasonSystem::ActiveSeasonId(TimeSystem::NowMillisecondsUTC());
+	}
+
+	bool IsActiveSeasonalPlayerSkill(const SkillTable &row, uint32_t activeSeasonId)
+	{
+		return row.season_id() != 0 && activeSeasonId != 0 && row.season_id() == activeSeasonId &&
+			   PlayerSkillSystem::IsFreeSkillFor(row, 1);
 	}
 
 	// 这个职业有没有职业技能。有的职业(1..4)不再使用旧通用占位技能。
@@ -370,6 +385,16 @@ uint32_t PlayerSkillSystem::CheckSkillUsable(entt::entity player, const uint32_t
 	{
 		return kServiceUnavailable;
 	}
+	if (row->season_id() != 0)
+	{
+		const uint32_t activeSeasonId = ActiveSeasonIdNow();
+		if (!IsActiveSeasonalPlayerSkill(*row, activeSeasonId) ||
+			seasonrules::EffectiveSeasonalSkillRank(PlayerLevel(player), row->unlock_level(), row->max_rank()) == 0)
+		{
+			return kInvalidTableId;
+		}
+		return kSuccess;
+	}
 	const auto *entry = FindEntry(*list, skillTableId);
 	const auto classId = PlayerClassId(player);
 	if (entry == nullptr || !IsUsable(*row, *entry, classId, ClassHasClassSkills(classId), PlayerLevel(player)))
@@ -391,6 +416,12 @@ uint32_t PlayerSkillSystem::EffectiveRank(entt::entity player, const uint32_t sk
 		!IsActiveFor(*row, PlayerClassId(player), false))
 	{
 		return 0;
+	}
+	if (row->season_id() != 0)
+	{
+		return IsActiveSeasonalPlayerSkill(*row, ActiveSeasonIdNow())
+				   ? seasonrules::EffectiveSeasonalSkillRank(PlayerLevel(player), row->unlock_level(), row->max_rank())
+				   : 0u;
 	}
 	return EffectiveRankOf(*row, StoredRank(*list, skillTableId), PlayerLevel(player));
 }
@@ -497,11 +528,12 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	// 字段本身必须在场(哪怕是空表):robot 把缺字段读成"技能被清空"。
 	// 显式投影、不 CopyFrom 存档条目:只带 skill_table_id,职业技能再带存储重数(与 catalog.rank 同口径)。
 	// 存档条目的内部 id 与本版本解释不了的未知字段(新版本加的)不下发;旧通用技能的 rank 读写都忽略,回包里恒为 0。
+	const uint32_t activeSeasonId = ActiveSeasonIdNow();
 	auto *owned = response.mutable_skill_list();
 	for (const auto &entry : list.skill_list())
 	{
 		const auto *row = FindSkillRow(entry.skill_table_id());
-		if (row == nullptr || !IsUsable(*row, entry, classId, classHasClassSkills, level))
+		if (row == nullptr || row->season_id() != 0 || !IsUsable(*row, entry, classId, classHasClassSkills, level))
 		{
 			continue;
 		}
@@ -519,9 +551,15 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	std::vector<const SkillTable *> rows;
 	const auto& configured = SkillTableManager::Instance().FindAll().data();
 	const bool hasFreeCatalog = std::any_of(configured.begin(), configured.end(),
-		[](const auto& row) { return IsFreeSkillFor(row, 1); });
+		[activeSeasonId](const auto& row) {
+			return IsFreeSkillFor(row, 1) && seasonrules::IsSkillActiveInSeason(row.season_id(), activeSeasonId);
+		});
 	for (const auto &row : SkillTableManager::Instance().FindAll().data())
 	{
+		if (!seasonrules::IsSkillActiveInSeason(row.season_id(), activeSeasonId))
+		{
+			continue;
+		}
 		if (hasFreeCatalog ? IsFreeSkillFor(row, 1) : IsClassSkill(row) && row.class_id() == classId)
 		{
 			rows.push_back(&row);
@@ -530,13 +568,32 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	std::sort(rows.begin(), rows.end(),
 			  [](const SkillTable *lhs, const SkillTable *rhs) { return lhs->id() < rhs->id(); });
 
+	// 当季免费赛季技能自动并入已拥有列表（按 skill_table_id 升序），不写入永久存档。
+	for (const auto *row : rows)
+	{
+		if (!IsActiveSeasonalPlayerSkill(*row, activeSeasonId))
+		{
+			continue;
+		}
+		const uint32_t effRank = seasonrules::EffectiveSeasonalSkillRank(level, row->unlock_level(), row->max_rank());
+		if (effRank > 0)
+		{
+			auto *ownedEntry = owned->add_skill_list();
+			ownedEntry->set_skill_table_id(row->id());
+			ownedEntry->set_rank(effRank);
+		}
+	}
+
 	const uint32_t busyTip = CheckSkillWritable(player);
 	SupportEffectSummary support;
 	PlayerSupportEffectSystem::Build(player, support);
 	for (const auto *row : rows)
 	{
 		auto* entry = response.add_catalog();
-		FillCatalogEntry(*row, StoredRank(list, row->id()), level, balance, busyTip, false, *entry);
+		const uint32_t rank = row->season_id() != 0
+			? seasonrules::EffectiveSeasonalSkillRank(level, row->unlock_level(), row->max_rank())
+			: StoredRank(list, row->id());
+		FillCatalogEntry(*row, rank, level, balance, busyTip, false, *entry);
 		for (const auto& preview : support.previews()) if (preview.skill_table_id() == row->id()) {
 			*entry->mutable_support_preview() = preview; break;
 		}
@@ -548,7 +605,8 @@ void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, u
 	uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view)
 {
 	const auto rankLimit = classskill::RankLimit(level, row.unlock_level(), row.max_rank());
-	const auto nextCost = rank < row.max_rank() ? classskill::UpgradeCost(rank + 1, row.unlock_level()) : 0;
+	const bool isSeasonal = row.season_id() != 0;
+	const auto nextCost = (!isSeasonal && rank < row.max_rank()) ? classskill::UpgradeCost(rank + 1, row.unlock_level()) : 0;
 	view.set_skill_table_id(row.id());
 	view.set_name(row.name());
 	view.set_description(row.description());
@@ -570,7 +628,9 @@ void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, u
 	view.set_ability_kind(row.ability_kind());
 	view.set_caster_mask(row.caster_mask());
 	view.set_action_tags(row.action_tags());
-	view.set_upgrade_block_tip_id(busyTip != 0 ? busyTip : rank >= row.max_rank() ? kSkillMaxRankReached :
+	view.set_season_id(row.season_id());
+	view.set_upgrade_block_tip_id(isSeasonal ? static_cast<uint32_t>(kSeasonSkillNoUpgrade) :
+		busyTip != 0 ? busyTip : rank >= row.max_rank() ? kSkillMaxRankReached :
 		rank >= rankLimit ? kSkillLevelNotEnough : nextCost > balance ? kSkillGoldNotEnough : 0);
 }
 
@@ -614,6 +674,11 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 	if (row == nullptr)
 	{
 		finish(kInvalidTableId);
+		return;
+	}
+	if (row->season_id() != 0)
+	{
+		finish(kSeasonSkillNoUpgrade);
 		return;
 	}
 	const auto classId = PlayerClassId(player);
@@ -700,10 +765,12 @@ void PlayerSkillSystem::FillBattleSnapshot(entt::entity player, BattlePlayerSnap
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
 	const bool classHasClassSkills = ClassHasClassSkills(classId);
+	const uint32_t activeSeasonId = ActiveSeasonIdNow();
+	snapshot.set_active_season_id(activeSeasonId);
 	for (const auto &skill : list->skill_list())
 	{
 		const auto *row = FindSkillRow(skill.skill_table_id());
-		if (row == nullptr || !IsUsable(*row, skill, classId, classHasClassSkills, level))
+		if (row == nullptr || row->season_id() != 0 || !IsUsable(*row, skill, classId, classHasClassSkills, level))
 		{
 			continue;
 		}
@@ -714,6 +781,33 @@ void PlayerSkillSystem::FillBattleSnapshot(entt::entity player, BattlePlayerSnap
 		if (IsTurnBattleCastable(*row))
 		{
 			snapshot.add_skill_table_ids(row->id());
+		}
+	}
+	// 当季免费赛季技能：按 skill_table_id 升序并入快照，开局即随 snapshot.active_season_id 冻结。
+	if (activeSeasonId != 0)
+	{
+		std::vector<const SkillTable *> seasonalRows;
+		for (const auto &row : SkillTableManager::Instance().FindAll().data())
+		{
+			if (IsActiveSeasonalPlayerSkill(row, activeSeasonId))
+			{
+				seasonalRows.push_back(&row);
+			}
+		}
+		std::sort(seasonalRows.begin(), seasonalRows.end(),
+				  [](const SkillTable *lhs, const SkillTable *rhs) { return lhs->id() < rhs->id(); });
+		for (const auto *row : seasonalRows)
+		{
+			const uint32_t effRank = seasonrules::EffectiveSeasonalSkillRank(level, row->unlock_level(), row->max_rank());
+			if (effRank == 0)
+			{
+				continue;
+			}
+			(*snapshot.mutable_skill_ranks())[row->id()] = effRank;
+			if (IsTurnBattleCastable(*row))
+			{
+				snapshot.add_skill_table_ids(row->id());
+			}
 		}
 	}
 }
@@ -728,21 +822,14 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 	}
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
-	for (const auto &skill : list->skill_list())
-	{
-		const auto *row = FindSkillRow(skill.skill_table_id());
-		if (row == nullptr || !IsClassSkill(*row) || row->passive_stat().empty() ||
-			!IsActiveFor(*row, classId, false))
+	const uint32_t activeSeasonId = ActiveSeasonIdNow();
+	const auto accumulatePassive = [&](const SkillTable &row, uint32_t rank) {
+		if (rank == 0 || row.passive_stat().empty())
 		{
-			continue;
+			return;
 		}
-		const auto rank = EffectiveRankOf(*row, skill.rank(), level);
-		if (rank == 0)
-		{
-			continue;
-		}
-		const double value = row->passive_percent() * classskill::PassiveRankFactor(rank);
-		switch (classskill::ParsePassiveStat(row->passive_stat()))
+		const double value = row.passive_percent() * classskill::PassiveRankFactor(rank);
+		switch (classskill::ParsePassiveStat(row.passive_stat()))
 		{
 		case classskill::PassiveStat::kDefense:
 			bonus.defense += value;
@@ -770,9 +857,30 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 			break;
 		case classskill::PassiveStat::kNone:
 		case classskill::PassiveStat::kCount:
-			LOG_WARN << "[PlayerSkill] Unknown passive_stat ignored: skill_table_id=" << row->id()
-					 << " passive_stat=" << row->passive_stat();
+			LOG_WARN << "[PlayerSkill] Unknown passive_stat ignored: skill_table_id=" << row.id()
+					 << " passive_stat=" << row.passive_stat();
 			break;
+		}
+	};
+	for (const auto &skill : list->skill_list())
+	{
+		const auto *row = FindSkillRow(skill.skill_table_id());
+		if (row == nullptr || row->season_id() != 0 || !IsClassSkill(*row) || row->passive_stat().empty() ||
+			!IsActiveFor(*row, classId, false))
+		{
+			continue;
+		}
+		accumulatePassive(*row, EffectiveRankOf(*row, skill.rank(), level));
+	}
+	if (activeSeasonId != 0)
+	{
+		for (const auto &row : SkillTableManager::Instance().FindAll().data())
+		{
+			if (!IsActiveSeasonalPlayerSkill(row, activeSeasonId) || row.passive_stat().empty())
+			{
+				continue;
+			}
+			accumulatePassive(row, seasonrules::EffectiveSeasonalSkillRank(level, row.unlock_level(), row.max_rank()));
 		}
 	}
 	return bonus;

@@ -24,14 +24,17 @@ const (
 type AppearanceError int32
 
 const (
-	AppearanceError_kAppearance_errorOK         AppearanceError = 0
-	AppearanceError_kAppearanceInvalid          AppearanceError = 33000
-	AppearanceError_kAppearanceAlreadyCurrent   AppearanceError = 33001
-	AppearanceError_kAppearanceNoCard           AppearanceError = 33002
-	AppearanceError_kAppearanceTrialAlreadyUsed AppearanceError = 33003
-	AppearanceError_kAppearanceNoActiveTrial    AppearanceError = 33004
-	AppearanceError_kAppearanceFrozen           AppearanceError = 33005
-	AppearanceError_kAppearanceUnavailable      AppearanceError = 33006
+	AppearanceError_kAppearance_errorOK          AppearanceError = 0
+	AppearanceError_kAppearanceInvalid           AppearanceError = 33000
+	AppearanceError_kAppearanceAlreadyCurrent    AppearanceError = 33001
+	AppearanceError_kAppearanceNoCard            AppearanceError = 33002
+	AppearanceError_kAppearanceTrialAlreadyUsed  AppearanceError = 33003
+	AppearanceError_kAppearanceNoActiveTrial     AppearanceError = 33004
+	AppearanceError_kAppearanceFrozen            AppearanceError = 33005
+	AppearanceError_kAppearanceUnavailable       AppearanceError = 33006
+	AppearanceError_kAppearanceNotCardUnlockable AppearanceError = 33007
+	AppearanceError_kAppearanceAlreadyOwned      AppearanceError = 33008
+	AppearanceError_kAppearanceNotOwned          AppearanceError = 33009
 )
 
 // Enum value maps for AppearanceError.
@@ -45,16 +48,22 @@ var (
 		33004: "kAppearanceNoActiveTrial",
 		33005: "kAppearanceFrozen",
 		33006: "kAppearanceUnavailable",
+		33007: "kAppearanceNotCardUnlockable",
+		33008: "kAppearanceAlreadyOwned",
+		33009: "kAppearanceNotOwned",
 	}
 	AppearanceError_value = map[string]int32{
-		"kAppearance_errorOK":         0,
-		"kAppearanceInvalid":          33000,
-		"kAppearanceAlreadyCurrent":   33001,
-		"kAppearanceNoCard":           33002,
-		"kAppearanceTrialAlreadyUsed": 33003,
-		"kAppearanceNoActiveTrial":    33004,
-		"kAppearanceFrozen":           33005,
-		"kAppearanceUnavailable":      33006,
+		"kAppearance_errorOK":          0,
+		"kAppearanceInvalid":           33000,
+		"kAppearanceAlreadyCurrent":    33001,
+		"kAppearanceNoCard":            33002,
+		"kAppearanceTrialAlreadyUsed":  33003,
+		"kAppearanceNoActiveTrial":     33004,
+		"kAppearanceFrozen":            33005,
+		"kAppearanceUnavailable":       33006,
+		"kAppearanceNotCardUnlockable": 33007,
+		"kAppearanceAlreadyOwned":      33008,
+		"kAppearanceNotOwned":          33009,
 	}
 )
 
@@ -89,7 +98,7 @@ var File_appearance_error_tip_proto protoreflect.FileDescriptor
 
 const file_appearance_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x1aappearance_error_tip.proto*\xf9\x01\n" +
+	"\x1aappearance_error_tip.proto*\xd7\x02\n" +
 	"\x10appearance_error\x12\x17\n" +
 	"\x13kAppearance_errorOK\x10\x00\x12\x18\n" +
 	"\x12kAppearanceInvalid\x10\xe8\x81\x02\x12\x1f\n" +
@@ -98,7 +107,10 @@ const file_appearance_error_tip_proto_rawDesc = "" +
 	"\x1bkAppearanceTrialAlreadyUsed\x10\xeb\x81\x02\x12\x1e\n" +
 	"\x18kAppearanceNoActiveTrial\x10\xec\x81\x02\x12\x17\n" +
 	"\x11kAppearanceFrozen\x10\xed\x81\x02\x12\x1c\n" +
-	"\x16kAppearanceUnavailable\x10\xee\x81\x02B$\n" +
+	"\x16kAppearanceUnavailable\x10\xee\x81\x02\x12\"\n" +
+	"\x1ckAppearanceNotCardUnlockable\x10\xef\x81\x02\x12\x1d\n" +
+	"\x17kAppearanceAlreadyOwned\x10\xf0\x81\x02\x12\x19\n" +
+	"\x13kAppearanceNotOwned\x10\xf1\x81\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

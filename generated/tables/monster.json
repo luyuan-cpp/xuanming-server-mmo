@@ -16,6 +16,7 @@
    "gold_reward": 10,
    "health": 370,
    "id": 1,
+   "is_boss": 0,
    "resistance": 0,
    "speed": 240,
    "strength": 30
@@ -41,6 +42,7 @@
    "gold_reward": 12,
    "health": 360,
    "id": 2,
+   "is_boss": 0,
    "resistance": 0,
    "speed": 252,
    "strength": 32
@@ -54,6 +56,7 @@
    "gold_reward": 15,
    "health": 900,
    "id": 3,
+   "is_boss": 0,
    "resistance": 0,
    "speed": 346,
    "strength": 65
@@ -67,6 +70,7 @@
    "gold_reward": 20,
    "health": 1250,
    "id": 4,
+   "is_boss": 0,
    "resistance": 5,
    "speed": 410,
    "strength": 90
@@ -80,6 +84,7 @@
    "gold_reward": 25,
    "health": 1650,
    "id": 5,
+   "is_boss": 0,
    "resistance": 5,
    "speed": 475,
    "strength": 115
@@ -93,6 +98,7 @@
    "gold_reward": 40,
    "health": 2000,
    "id": 6,
+   "is_boss": 0,
    "resistance": 10,
    "speed": 540,
    "strength": 140
@@ -106,6 +112,7 @@
    "gold_reward": 55,
    "health": 2400,
    "id": 7,
+   "is_boss": 0,
    "resistance": 10,
    "speed": 605,
    "strength": 165
@@ -119,6 +126,7 @@
    "gold_reward": 70,
    "health": 2850,
    "id": 8,
+   "is_boss": 0,
    "resistance": 15,
    "speed": 702,
    "strength": 200
@@ -132,6 +140,7 @@
    "gold_reward": 90,
    "health": 3400,
    "id": 9,
+   "is_boss": 0,
    "resistance": 15,
    "speed": 799,
    "strength": 235
@@ -145,6 +154,7 @@
    "gold_reward": 120,
    "health": 4000,
    "id": 10,
+   "is_boss": 0,
    "resistance": 20,
    "speed": 896,
    "strength": 280
@@ -158,6 +168,7 @@
    "gold_reward": 150,
    "health": 4600,
    "id": 11,
+   "is_boss": 0,
    "resistance": 20,
    "speed": 1026,
    "strength": 190
@@ -171,6 +182,7 @@
    "gold_reward": 190,
    "health": 5000,
    "id": 12,
+   "is_boss": 0,
    "resistance": 25,
    "speed": 1123,
    "strength": 210
@@ -184,6 +196,7 @@
    "gold_reward": 240,
    "health": 6000,
    "id": 13,
+   "is_boss": 0,
    "resistance": 25,
    "speed": 1285,
    "strength": 420
@@ -197,6 +210,7 @@
    "gold_reward": 300,
    "health": 7000,
    "id": 14,
+   "is_boss": 0,
    "resistance": 30,
    "speed": 1447,
    "strength": 500
@@ -210,6 +224,7 @@
    "gold_reward": 400,
    "health": 8500,
    "id": 15,
+   "is_boss": 0,
    "resistance": 30,
    "speed": 1674,
    "strength": 600
@@ -223,6 +238,7 @@
    "gold_reward": 800,
    "health": 10500,
    "id": 16,
+   "is_boss": 1,
    "resistance": 40,
    "speed": 1320,
    "strength": 320

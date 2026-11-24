@@ -307,6 +307,14 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	int32 allow_dead_target = 0;
 
+	/** 1 = 禁止被复制技能（如 A41 玄镜映法）复制：用于 Boss 技能、复制技能自身、牺牲/资源转换/限次等特殊技能。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 forbid_copy = 0;
+
+	/** 所属赛季编号：0 = 常驻永久技能（按原有机制修习与保留）；> 0 = 仅当当前激活赛季等于该值时免费自动生效的赛季限定技能。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 season_id = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

@@ -108,6 +108,10 @@ struct FCfgMonsterRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	int32 capture_rate = 0;
 
+	/** 1 = 首领/Boss 单位；不可被复制技能选中，开局透传至 BattleActorState.is_boss。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 is_boss = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	TArray<FCfgMonsterDrop> drop;
 };

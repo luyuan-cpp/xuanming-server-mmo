@@ -17,6 +17,7 @@ struct CharacterAppearanceTableSnapshot {
 
     CharacterAppearanceTableData data;
     IdMapType idMap;
+    std::unordered_map<uint32_t, std::vector<const CharacterAppearanceTable*>> seriesIdIndex;
     const CharacterAppearanceTable* FindRowById(uint32_t tableId) const {
         const auto it = idMap.find(tableId);
         return it != idMap.end() ? it->second : nullptr;
@@ -72,6 +73,14 @@ public:
 
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
+    // FK: series_id -> AppearanceSeries.id
+    const std::unordered_map<uint32_t, std::vector<const CharacterAppearanceTable*>>& GetSeriesIdIndex() const { return snapshot->seriesIdIndex; }
+    const std::vector<const CharacterAppearanceTable*>& GetBySeriesId(uint32_t key) const {
+        static const std::vector<const CharacterAppearanceTable*> kEmpty;
+        auto it = snapshot->seriesIdIndex.find(key);
+        return it != snapshot->seriesIdIndex.end() ? it->second : kEmpty;
+    }
+
     // ---- Exists ----
 
     bool Exists(uint32_t id) const { return snapshot->idMap.count(id) > 0; }
@@ -79,6 +88,10 @@ public:
     // ---- Count ----
 
     std::size_t Count() const { return snapshot->idMap.size(); }
+    std::size_t CountBySeriesIdIndex(uint32_t key) const {
+        auto it = snapshot->seriesIdIndex.find(key);
+        return it != snapshot->seriesIdIndex.end() ? it->second.size() : 0;
+    }
 
     // ---- FindByIds (IN) ----
 

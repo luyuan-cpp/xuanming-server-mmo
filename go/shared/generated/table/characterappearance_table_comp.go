@@ -37,6 +37,18 @@ type CharacterAppearanceDescComp struct {
     Value string
 }
 
+type CharacterAppearanceStarter_creatableComp struct {
+    Value uint32
+}
+
+type CharacterAppearanceCard_unlockableComp struct {
+    Value uint32
+}
+
+type CharacterAppearanceSeries_idComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -64,5 +76,17 @@ func MakeCharacterAppearanceSort_orderComp(row *pb.CharacterAppearanceTable) Cha
 
 func MakeCharacterAppearanceDescComp(row *pb.CharacterAppearanceTable) CharacterAppearanceDescComp {
     return CharacterAppearanceDescComp{Value: row.Desc}
+}
+
+func MakeCharacterAppearanceStarter_creatableComp(row *pb.CharacterAppearanceTable) CharacterAppearanceStarter_creatableComp {
+    return CharacterAppearanceStarter_creatableComp{Value: row.StarterCreatable}
+}
+
+func MakeCharacterAppearanceCard_unlockableComp(row *pb.CharacterAppearanceTable) CharacterAppearanceCard_unlockableComp {
+    return CharacterAppearanceCard_unlockableComp{Value: row.CardUnlockable}
+}
+
+func MakeCharacterAppearanceSeries_idComp(row *pb.CharacterAppearanceTable) CharacterAppearanceSeries_idComp {
+    return CharacterAppearanceSeries_idComp{Value: row.SeriesId}
 }
 

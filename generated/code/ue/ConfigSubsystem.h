@@ -36,6 +36,7 @@
 #include "ActorActionStateTable.h"
 #include "AfkPassRuleTable.h"
 #include "AppearanceRuleTable.h"
+#include "AppearanceSeriesTable.h"
 #include "AttributeAllocRatioTable.h"
 #include "AttributeAutoPlanTable.h"
 #include "AttributeDimensionTable.h"
@@ -81,6 +82,8 @@
 #include "RankedRuleTable.h"
 #include "RewardTable.h"
 #include "RoleNameRuleTable.h"
+#include "SeasonRuleTable.h"
+#include "SeasonSealTable.h"
 #include "SkillTable.h"
 #include "SkillPermissionTable.h"
 #include "TestTable.h"
@@ -125,7 +128,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 58;
+	static constexpr int32 TableCount = 61;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -196,6 +199,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UAppearanceRuleTable* GetAppearanceRuleTable() const { return AppearanceRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAppearanceSeriesTable* GetAppearanceSeriesTable() const { return AppearanceSeriesTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UAttributeAllocRatioTable* GetAttributeAllocRatioTable() const { return AttributeAllocRatioTable; }
@@ -333,6 +339,12 @@ public:
 	URoleNameRuleTable* GetRoleNameRuleTable() const { return RoleNameRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USeasonRuleTable* GetSeasonRuleTable() const { return SeasonRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USeasonSealTable* GetSeasonSealTable() const { return SeasonSealTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	USkillTable* GetSkillTable() const { return SkillTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -365,6 +377,8 @@ private:
 	TObjectPtr<UAfkPassRuleTable> AfkPassRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UAppearanceRuleTable> AppearanceRuleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAppearanceSeriesTable> AppearanceSeriesTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UAttributeAllocRatioTable> AttributeAllocRatioTable;
 	UPROPERTY(Transient)
@@ -455,6 +469,10 @@ private:
 	TObjectPtr<URewardTable> RewardTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URoleNameRuleTable> RoleNameRuleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<USeasonRuleTable> SeasonRuleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<USeasonSealTable> SeasonSealTable;
 	UPROPERTY(Transient)
 	TObjectPtr<USkillTable> SkillTable;
 	UPROPERTY(Transient)

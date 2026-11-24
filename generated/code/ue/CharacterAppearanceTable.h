@@ -26,6 +26,8 @@ struct FCfgCharacterAppearanceSnapshot
 	TArray<FCfgCharacterAppearanceRow> Rows;
 	/// id -> 行下标。
 	TMap<int32, int32> IdIndex;
+	/// series_id -> 全部命中行的下标(二级索引)。
+	TMap<int32, TArray<int32>> SeriesIdIndex;
 };
 
 /**
@@ -125,6 +127,16 @@ public:
 	// (主键那一层是另一回事:可重复主键在五门里都叫 FindAllById,那个名字是对的。)
 
 	// ---- 二级索引(idx / 标量外键自动索引)----
+
+	/// series_id == Key 的全部行。
+	TArray<const FCfgCharacterAppearanceRow*> GetBySeriesId(int32 Key) const;
+	/// 零分配版:下标数组,配 RowAt() 用。
+	const TArray<int32>& GetSeriesIdIndices(int32 Key) const;
+	int32 CountBySeriesIdIndex(int32 Key) const;
+	const TMap<int32, TArray<int32>>& GetSeriesIdIndex() const
+	{
+		return Snapshot->SeriesIdIndex;
+	}
 
 	// ---- repeated 标量的值索引 ----
 

@@ -16,6 +16,7 @@
 #include "actoractionstate_table.h"
 #include "afkpassrule_table.h"
 #include "appearancerule_table.h"
+#include "appearanceseries_table.h"
 #include "attributeallocratio_table.h"
 #include "attributeautoplan_table.h"
 #include "attributedimension_table.h"
@@ -61,6 +62,8 @@
 #include "rankedrule_table.h"
 #include "reward_table.h"
 #include "rolenamerule_table.h"
+#include "seasonrule_table.h"
+#include "seasonseal_table.h"
 #include "skill_table.h"
 #include "skillpermission_table.h"
 #include "test_table.h"
@@ -80,9 +83,9 @@ LoadSuccessCallback loadSuccessCallback;
 
 namespace {
 
-constexpr std::size_t kTableCount = 58;
+constexpr std::size_t kTableCount = 61;
 
-constexpr std::array<std::string_view, 58> kTableNames = {
+constexpr std::array<std::string_view, 61> kTableNames = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -90,6 +93,7 @@ constexpr std::array<std::string_view, 58> kTableNames = {
     "ActorActionState",
     "AfkPassRule",
     "AppearanceRule",
+    "AppearanceSeries",
     "AttributeAllocRatio",
     "AttributeAutoPlan",
     "AttributeDimension",
@@ -135,6 +139,8 @@ constexpr std::array<std::string_view, 58> kTableNames = {
     "RankedRule",
     "Reward",
     "RoleNameRule",
+    "SeasonRule",
+    "SeasonSeal",
     "Skill",
     "SkillPermission",
     "Test",
@@ -144,7 +150,7 @@ constexpr std::array<std::string_view, 58> kTableNames = {
 };
 
 
-constexpr std::array<std::string_view, 13> kHotReloadableTables = {
+constexpr std::array<std::string_view, 15> kHotReloadableTables = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -156,6 +162,8 @@ constexpr std::array<std::string_view, 13> kHotReloadableTables = {
     "Monster",
     "MysteryMerchantGoods",
     "MysteryMerchantRule",
+    "SeasonRule",
+    "SeasonSeal",
     "Skill",
     "SkillPermission",
 };
@@ -181,6 +189,8 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
     set->afkPassRuleTable = AfkPassRuleTableManager::Instance().CurrentSnapshot();
 
     set->appearanceRuleTable = AppearanceRuleTableManager::Instance().CurrentSnapshot();
+
+    set->appearanceSeriesTable = AppearanceSeriesTableManager::Instance().CurrentSnapshot();
 
     set->attributeAllocRatioTable = AttributeAllocRatioTableManager::Instance().CurrentSnapshot();
 
@@ -272,6 +282,10 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
 
     set->roleNameRuleTable = RoleNameRuleTableManager::Instance().CurrentSnapshot();
 
+    set->seasonRuleTable = SeasonRuleTableManager::Instance().CurrentSnapshot();
+
+    set->seasonSealTable = SeasonSealTableManager::Instance().CurrentSnapshot();
+
     set->skillTable = SkillTableManager::Instance().CurrentSnapshot();
 
     set->skillPermissionTable = SkillPermissionTableManager::Instance().CurrentSnapshot();
@@ -302,6 +316,8 @@ void InstallTableSetIntoManagers(const TableSet& set) {
     AfkPassRuleTableManager::Instance().InstallSnapshot(set.afkPassRuleTable);
 
     AppearanceRuleTableManager::Instance().InstallSnapshot(set.appearanceRuleTable);
+
+    AppearanceSeriesTableManager::Instance().InstallSnapshot(set.appearanceSeriesTable);
 
     AttributeAllocRatioTableManager::Instance().InstallSnapshot(set.attributeAllocRatioTable);
 
@@ -393,6 +409,10 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     RoleNameRuleTableManager::Instance().InstallSnapshot(set.roleNameRuleTable);
 
+    SeasonRuleTableManager::Instance().InstallSnapshot(set.seasonRuleTable);
+
+    SeasonSealTableManager::Instance().InstallSnapshot(set.seasonSealTable);
+
     SkillTableManager::Instance().InstallSnapshot(set.skillTable);
 
     SkillPermissionTableManager::Instance().InstallSnapshot(set.skillPermissionTable);
@@ -417,57 +437,60 @@ void LoadTableAt(std::size_t index) {
     case 4: ActorActionStateTableManager::Instance().Load(); break;
     case 5: AfkPassRuleTableManager::Instance().Load(); break;
     case 6: AppearanceRuleTableManager::Instance().Load(); break;
-    case 7: AttributeAllocRatioTableManager::Instance().Load(); break;
-    case 8: AttributeAutoPlanTableManager::Instance().Load(); break;
-    case 9: AttributeDimensionTableManager::Instance().Load(); break;
-    case 10: AttributePoolTableManager::Instance().Load(); break;
-    case 11: AttributeRuleTableManager::Instance().Load(); break;
-    case 12: BaseSceneTableManager::Instance().Load(); break;
-    case 13: BuffTableManager::Instance().Load(); break;
-    case 14: CharacterAppearanceTableManager::Instance().Load(); break;
-    case 15: ClassTableManager::Instance().Load(); break;
-    case 16: ConditionTableManager::Instance().Load(); break;
-    case 17: CooldownTableManager::Instance().Load(); break;
-    case 18: DungeonTableManager::Instance().Load(); break;
-    case 19: EquipAffixPoolTableManager::Instance().Load(); break;
-    case 20: EquipAffixRuleTableManager::Instance().Load(); break;
-    case 21: EquipArtifactTableManager::Instance().Load(); break;
-    case 22: EquipAttributeTableManager::Instance().Load(); break;
-    case 23: EquipAttributeCapTableManager::Instance().Load(); break;
-    case 24: EquipEnhanceTableManager::Instance().Load(); break;
-    case 25: EquipGemTableManager::Instance().Load(); break;
-    case 26: EquipGemSocketTableManager::Instance().Load(); break;
-    case 27: EquipSlotTableManager::Instance().Load(); break;
-    case 28: EquipV1AffixTableManager::Instance().Load(); break;
-    case 29: GlobalVariableTableManager::Instance().Load(); break;
-    case 30: GuildActivityTableManager::Instance().Load(); break;
-    case 31: GuildDonateTableManager::Instance().Load(); break;
-    case 32: GuildLevelTableManager::Instance().Load(); break;
-    case 33: GuildRuleTableManager::Instance().Load(); break;
-    case 34: GuildShopTableManager::Instance().Load(); break;
-    case 35: ItemTableManager::Instance().Load(); break;
-    case 36: MessageLimiterTableManager::Instance().Load(); break;
-    case 37: MirrorTableManager::Instance().Load(); break;
-    case 38: MissionTableManager::Instance().Load(); break;
-    case 39: MonsterTableManager::Instance().Load(); break;
-    case 40: MysteryMerchantGoodsTableManager::Instance().Load(); break;
-    case 41: MysteryMerchantRuleTableManager::Instance().Load(); break;
-    case 42: MysteryMerchantSpotTableManager::Instance().Load(); break;
-    case 43: PetTableManager::Instance().Load(); break;
-    case 44: PetEntryTableManager::Instance().Load(); break;
-    case 45: PetRuleTableManager::Instance().Load(); break;
-    case 46: PetTierTableManager::Instance().Load(); break;
-    case 47: PlayModeTableManager::Instance().Load(); break;
-    case 48: RankedPresetTableManager::Instance().Load(); break;
-    case 49: RankedRuleTableManager::Instance().Load(); break;
-    case 50: RewardTableManager::Instance().Load(); break;
-    case 51: RoleNameRuleTableManager::Instance().Load(); break;
-    case 52: SkillTableManager::Instance().Load(); break;
-    case 53: SkillPermissionTableManager::Instance().Load(); break;
-    case 54: TestTableManager::Instance().Load(); break;
-    case 55: TestMultiKeyTableManager::Instance().Load(); break;
-    case 56: WorldTableManager::Instance().Load(); break;
-    case 57: ZoneGroupTableManager::Instance().Load(); break;
+    case 7: AppearanceSeriesTableManager::Instance().Load(); break;
+    case 8: AttributeAllocRatioTableManager::Instance().Load(); break;
+    case 9: AttributeAutoPlanTableManager::Instance().Load(); break;
+    case 10: AttributeDimensionTableManager::Instance().Load(); break;
+    case 11: AttributePoolTableManager::Instance().Load(); break;
+    case 12: AttributeRuleTableManager::Instance().Load(); break;
+    case 13: BaseSceneTableManager::Instance().Load(); break;
+    case 14: BuffTableManager::Instance().Load(); break;
+    case 15: CharacterAppearanceTableManager::Instance().Load(); break;
+    case 16: ClassTableManager::Instance().Load(); break;
+    case 17: ConditionTableManager::Instance().Load(); break;
+    case 18: CooldownTableManager::Instance().Load(); break;
+    case 19: DungeonTableManager::Instance().Load(); break;
+    case 20: EquipAffixPoolTableManager::Instance().Load(); break;
+    case 21: EquipAffixRuleTableManager::Instance().Load(); break;
+    case 22: EquipArtifactTableManager::Instance().Load(); break;
+    case 23: EquipAttributeTableManager::Instance().Load(); break;
+    case 24: EquipAttributeCapTableManager::Instance().Load(); break;
+    case 25: EquipEnhanceTableManager::Instance().Load(); break;
+    case 26: EquipGemTableManager::Instance().Load(); break;
+    case 27: EquipGemSocketTableManager::Instance().Load(); break;
+    case 28: EquipSlotTableManager::Instance().Load(); break;
+    case 29: EquipV1AffixTableManager::Instance().Load(); break;
+    case 30: GlobalVariableTableManager::Instance().Load(); break;
+    case 31: GuildActivityTableManager::Instance().Load(); break;
+    case 32: GuildDonateTableManager::Instance().Load(); break;
+    case 33: GuildLevelTableManager::Instance().Load(); break;
+    case 34: GuildRuleTableManager::Instance().Load(); break;
+    case 35: GuildShopTableManager::Instance().Load(); break;
+    case 36: ItemTableManager::Instance().Load(); break;
+    case 37: MessageLimiterTableManager::Instance().Load(); break;
+    case 38: MirrorTableManager::Instance().Load(); break;
+    case 39: MissionTableManager::Instance().Load(); break;
+    case 40: MonsterTableManager::Instance().Load(); break;
+    case 41: MysteryMerchantGoodsTableManager::Instance().Load(); break;
+    case 42: MysteryMerchantRuleTableManager::Instance().Load(); break;
+    case 43: MysteryMerchantSpotTableManager::Instance().Load(); break;
+    case 44: PetTableManager::Instance().Load(); break;
+    case 45: PetEntryTableManager::Instance().Load(); break;
+    case 46: PetRuleTableManager::Instance().Load(); break;
+    case 47: PetTierTableManager::Instance().Load(); break;
+    case 48: PlayModeTableManager::Instance().Load(); break;
+    case 49: RankedPresetTableManager::Instance().Load(); break;
+    case 50: RankedRuleTableManager::Instance().Load(); break;
+    case 51: RewardTableManager::Instance().Load(); break;
+    case 52: RoleNameRuleTableManager::Instance().Load(); break;
+    case 53: SeasonRuleTableManager::Instance().Load(); break;
+    case 54: SeasonSealTableManager::Instance().Load(); break;
+    case 55: SkillTableManager::Instance().Load(); break;
+    case 56: SkillPermissionTableManager::Instance().Load(); break;
+    case 57: TestTableManager::Instance().Load(); break;
+    case 58: TestMultiKeyTableManager::Instance().Load(); break;
+    case 59: WorldTableManager::Instance().Load(); break;
+    case 60: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -544,156 +567,165 @@ bool LoadTableIntoSetAt(const std::size_t index,
         return AppearanceRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.appearanceRuleTable, err);
     case 7:
+        return AppearanceSeriesTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.appearanceSeriesTable, err);
+    case 8:
         return AttributeAllocRatioTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.attributeAllocRatioTable, err);
-    case 8:
+    case 9:
         return AttributeAutoPlanTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.attributeAutoPlanTable, err);
-    case 9:
+    case 10:
         return AttributeDimensionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.attributeDimensionTable, err);
-    case 10:
+    case 11:
         return AttributePoolTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.attributePoolTable, err);
-    case 11:
+    case 12:
         return AttributeRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.attributeRuleTable, err);
-    case 12:
+    case 13:
         return BaseSceneTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.baseSceneTable, err);
-    case 13:
+    case 14:
         return BuffTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.buffTable, err);
-    case 14:
+    case 15:
         return CharacterAppearanceTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.characterAppearanceTable, err);
-    case 15:
+    case 16:
         return ClassTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.classTable, err);
-    case 16:
+    case 17:
         return ConditionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.conditionTable, err);
-    case 17:
+    case 18:
         return CooldownTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.cooldownTable, err);
-    case 18:
+    case 19:
         return DungeonTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.dungeonTable, err);
-    case 19:
+    case 20:
         return EquipAffixPoolTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipAffixPoolTable, err);
-    case 20:
+    case 21:
         return EquipAffixRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipAffixRuleTable, err);
-    case 21:
+    case 22:
         return EquipArtifactTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipArtifactTable, err);
-    case 22:
+    case 23:
         return EquipAttributeTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipAttributeTable, err);
-    case 23:
+    case 24:
         return EquipAttributeCapTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipAttributeCapTable, err);
-    case 24:
+    case 25:
         return EquipEnhanceTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipEnhanceTable, err);
-    case 25:
+    case 26:
         return EquipGemTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipGemTable, err);
-    case 26:
+    case 27:
         return EquipGemSocketTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipGemSocketTable, err);
-    case 27:
+    case 28:
         return EquipSlotTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipSlotTable, err);
-    case 28:
+    case 29:
         return EquipV1AffixTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.equipV1AffixTable, err);
-    case 29:
+    case 30:
         return GlobalVariableTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.globalVariableTable, err);
-    case 30:
+    case 31:
         return GuildActivityTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.guildActivityTable, err);
-    case 31:
+    case 32:
         return GuildDonateTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.guildDonateTable, err);
-    case 32:
+    case 33:
         return GuildLevelTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.guildLevelTable, err);
-    case 33:
+    case 34:
         return GuildRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.guildRuleTable, err);
-    case 34:
+    case 35:
         return GuildShopTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.guildShopTable, err);
-    case 35:
+    case 36:
         return ItemTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.itemTable, err);
-    case 36:
+    case 37:
         return MessageLimiterTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.messageLimiterTable, err);
-    case 37:
+    case 38:
         return MirrorTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.mirrorTable, err);
-    case 38:
+    case 39:
         return MissionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.missionTable, err);
-    case 39:
+    case 40:
         return MonsterTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.monsterTable, err);
-    case 40:
+    case 41:
         return MysteryMerchantGoodsTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.mysteryMerchantGoodsTable, err);
-    case 41:
+    case 42:
         return MysteryMerchantRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.mysteryMerchantRuleTable, err);
-    case 42:
+    case 43:
         return MysteryMerchantSpotTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.mysteryMerchantSpotTable, err);
-    case 43:
+    case 44:
         return PetTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petTable, err);
-    case 44:
+    case 45:
         return PetEntryTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petEntryTable, err);
-    case 45:
+    case 46:
         return PetRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petRuleTable, err);
-    case 46:
+    case 47:
         return PetTierTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.petTierTable, err);
-    case 47:
+    case 48:
         return PlayModeTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.playModeTable, err);
-    case 48:
+    case 49:
         return RankedPresetTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rankedPresetTable, err);
-    case 49:
+    case 50:
         return RankedRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rankedRuleTable, err);
-    case 50:
+    case 51:
         return RewardTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.rewardTable, err);
-    case 51:
+    case 52:
         return RoleNameRuleTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.roleNameRuleTable, err);
-    case 52:
+    case 53:
+        return SeasonRuleTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.seasonRuleTable, err);
+    case 54:
+        return SeasonSealTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.seasonSealTable, err);
+    case 55:
         return SkillTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillTable, err);
-    case 53:
+    case 56:
         return SkillPermissionTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.skillPermissionTable, err);
-    case 54:
+    case 57:
         return TestTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testTable, err);
-    case 55:
+    case 58:
         return TestMultiKeyTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testMultiKeyTable, err);
-    case 56:
+    case 59:
         return WorldTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.worldTable, err);
-    case 57:
+    case 60:
         return ZoneGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.zoneGroupTable, err);
     default:
@@ -755,6 +787,8 @@ void InvokeTablesLoadSuccess() {
     AfkPassRuleTableManager::Instance().LoadSuccess();
 
     AppearanceRuleTableManager::Instance().LoadSuccess();
+
+    AppearanceSeriesTableManager::Instance().LoadSuccess();
 
     AttributeAllocRatioTableManager::Instance().LoadSuccess();
 
@@ -846,6 +880,10 @@ void InvokeTablesLoadSuccess() {
 
     RoleNameRuleTableManager::Instance().LoadSuccess();
 
+    SeasonRuleTableManager::Instance().LoadSuccess();
+
+    SeasonSealTableManager::Instance().LoadSuccess();
+
     SkillTableManager::Instance().LoadSuccess();
 
     SkillPermissionTableManager::Instance().LoadSuccess();
@@ -879,6 +917,8 @@ void LoadTables() {
     AfkPassRuleTableManager::Instance().Load();
 
     AppearanceRuleTableManager::Instance().Load();
+
+    AppearanceSeriesTableManager::Instance().Load();
 
     AttributeAllocRatioTableManager::Instance().Load();
 
@@ -969,6 +1009,10 @@ void LoadTables() {
     RewardTableManager::Instance().Load();
 
     RoleNameRuleTableManager::Instance().Load();
+
+    SeasonRuleTableManager::Instance().Load();
+
+    SeasonSealTableManager::Instance().Load();
 
     SkillTableManager::Instance().Load();
 

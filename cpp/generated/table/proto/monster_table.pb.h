@@ -473,6 +473,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
     kExpRewardFieldNumber = 8,
     kGoldRewardFieldNumber = 9,
     kCaptureRateFieldNumber = 12,
+    kIsBossFieldNumber = 13,
   };
   // repeated .Monsterdrop drop = 10;
   [[nodiscard]] int drop_size()
@@ -605,11 +606,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
   void _internal_set_capture_rate(::uint32_t value);
 
   public:
+  // uint32 is_boss = 13;
+  void clear_is_boss() ;
+  [[nodiscard]] ::uint32_t is_boss() const;
+  void set_is_boss(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_is_boss() const;
+  void _internal_set_is_boss(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:MonsterTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -650,6 +661,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
     ::uint64_t exp_reward_;
     ::uint64_t gold_reward_;
     ::uint32_t capture_rate_;
+    ::uint32_t is_boss_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1222,6 +1234,30 @@ inline ::uint32_t MonsterTable::_internal_capture_rate() const {
 inline void MonsterTable::_internal_set_capture_rate(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.capture_rate_ = value;
+}
+
+// uint32 is_boss = 13;
+inline void MonsterTable::clear_is_boss() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_boss_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t MonsterTable::is_boss() const {
+  // @@protoc_insertion_point(field_get:MonsterTable.is_boss)
+  return _internal_is_boss();
+}
+inline void MonsterTable::set_is_boss(::uint32_t value) {
+  _internal_set_is_boss(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:MonsterTable.is_boss)
+}
+inline ::uint32_t MonsterTable::_internal_is_boss() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_boss_;
+}
+inline void MonsterTable::_internal_set_is_boss(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_boss_ = value;
 }
 
 // repeated .Monsterdrop drop = 10;

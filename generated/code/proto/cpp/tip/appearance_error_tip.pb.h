@@ -70,6 +70,9 @@ enum appearance_error : int {
   kAppearanceNoActiveTrial = 33004,
   kAppearanceFrozen = 33005,
   kAppearanceUnavailable = 33006,
+  kAppearanceNotCardUnlockable = 33007,
+  kAppearanceAlreadyOwned = 33008,
+  kAppearanceNotOwned = 33009,
   appearance_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   appearance_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -80,11 +83,11 @@ extern const uint32_t appearance_error_internal_data_[];
 inline constexpr appearance_error appearance_error_MIN =
     static_cast<appearance_error>(0);
 inline constexpr appearance_error appearance_error_MAX =
-    static_cast<appearance_error>(33006);
+    static_cast<appearance_error>(33009);
 [[nodiscard]] inline bool appearance_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, appearance_error_internal_data_);
 }
-inline constexpr int appearance_error_ARRAYSIZE = 33006 + 1;
+inline constexpr int appearance_error_ARRAYSIZE = 33009 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 appearance_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(appearance_error) {

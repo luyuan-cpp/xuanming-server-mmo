@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "ece0013ccbb6f3b0"
+const SchemaDigest = "0f6757d95603c861"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -23,6 +23,8 @@ var hotReloadableTables = map[string]bool{
 	"Monster": true,
 	"MysteryMerchantGoods": true,
 	"MysteryMerchantRule": true,
+	"SeasonRule": true,
+	"SeasonSeal": true,
 	"Skill": true,
 	"SkillPermission": true,
 }
@@ -35,6 +37,7 @@ var allTableNames = []string{
 	"ActorActionState",
 	"AfkPassRule",
 	"AppearanceRule",
+	"AppearanceSeries",
 	"AttributeAllocRatio",
 	"AttributeAutoPlan",
 	"AttributeDimension",
@@ -80,6 +83,8 @@ var allTableNames = []string{
 	"RankedRule",
 	"Reward",
 	"RoleNameRule",
+	"SeasonRule",
+	"SeasonSeal",
 	"Skill",
 	"SkillPermission",
 	"Test",
@@ -119,6 +124,7 @@ type TableSet struct {
 	ActorActionState *ActorActionStateTableManager
 	AfkPassRule *AfkPassRuleTableManager
 	AppearanceRule *AppearanceRuleTableManager
+	AppearanceSeries *AppearanceSeriesTableManager
 	AttributeAllocRatio *AttributeAllocRatioTableManager
 	AttributeAutoPlan *AttributeAutoPlanTableManager
 	AttributeDimension *AttributeDimensionTableManager
@@ -164,6 +170,8 @@ type TableSet struct {
 	RankedRule *RankedRuleTableManager
 	Reward *RewardTableManager
 	RoleNameRule *RoleNameRuleTableManager
+	SeasonRule *SeasonRuleTableManager
+	SeasonSeal *SeasonSealTableManager
 	Skill *SkillTableManager
 	SkillPermission *SkillPermissionTableManager
 	Test *TestTableManager
@@ -199,6 +207,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		ActorActionState: NewActorActionStateTableManager(),
 		AfkPassRule: NewAfkPassRuleTableManager(),
 		AppearanceRule: NewAppearanceRuleTableManager(),
+		AppearanceSeries: NewAppearanceSeriesTableManager(),
 		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
 		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
 		AttributeDimension: NewAttributeDimensionTableManager(),
@@ -244,6 +253,8 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
+		SeasonRule: NewSeasonRuleTableManager(),
+		SeasonSeal: NewSeasonSealTableManager(),
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
 		Test: NewTestTableManager(),
@@ -271,6 +282,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.AppearanceRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare AppearanceRule table failed: %w", err)
+	}
+	if err := ts.AppearanceSeries.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AppearanceSeries table failed: %w", err)
 	}
 	if err := ts.AttributeAllocRatio.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare AttributeAllocRatio table failed: %w", err)
@@ -407,6 +421,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.RoleNameRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare RoleNameRule table failed: %w", err)
 	}
+	if err := ts.SeasonRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SeasonRule table failed: %w", err)
+	}
+	if err := ts.SeasonSeal.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SeasonSeal table failed: %w", err)
+	}
 	if err := ts.Skill.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Skill table failed: %w", err)
 	}
@@ -455,6 +475,9 @@ func Commit(ts *TableSet) {
 	}
 	if ts.AppearanceRule != nil {
 		AppearanceRuleTableManagerInstance.swapSnapshot(ts.AppearanceRule.snap.Load())
+	}
+	if ts.AppearanceSeries != nil {
+		AppearanceSeriesTableManagerInstance.swapSnapshot(ts.AppearanceSeries.snap.Load())
 	}
 	if ts.AttributeAllocRatio != nil {
 		AttributeAllocRatioTableManagerInstance.swapSnapshot(ts.AttributeAllocRatio.snap.Load())
@@ -591,6 +614,12 @@ func Commit(ts *TableSet) {
 	if ts.RoleNameRule != nil {
 		RoleNameRuleTableManagerInstance.swapSnapshot(ts.RoleNameRule.snap.Load())
 	}
+	if ts.SeasonRule != nil {
+		SeasonRuleTableManagerInstance.swapSnapshot(ts.SeasonRule.snap.Load())
+	}
+	if ts.SeasonSeal != nil {
+		SeasonSealTableManagerInstance.swapSnapshot(ts.SeasonSeal.snap.Load())
+	}
 	if ts.Skill != nil {
 		SkillTableManagerInstance.swapSnapshot(ts.Skill.snap.Load())
 	}
@@ -660,6 +689,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ActorActionState: NewActorActionStateTableManager(),
 		AfkPassRule: NewAfkPassRuleTableManager(),
 		AppearanceRule: NewAppearanceRuleTableManager(),
+		AppearanceSeries: NewAppearanceSeriesTableManager(),
 		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
 		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
 		AttributeDimension: NewAttributeDimensionTableManager(),
@@ -705,6 +735,8 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
 		RoleNameRule: NewRoleNameRuleTableManager(),
+		SeasonRule: NewSeasonRuleTableManager(),
+		SeasonSeal: NewSeasonSealTableManager(),
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
 		Test: NewTestTableManager(),
@@ -713,7 +745,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(58)
+	wg.Add(61)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -754,6 +786,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.AppearanceRule.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load AppearanceRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AppearanceSeries.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AppearanceSeries table: %v", err)
 		}
 	}()
 	go func() {
@@ -1024,6 +1062,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.RoleNameRule.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load RoleNameRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.SeasonRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SeasonRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.SeasonSeal.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SeasonSeal table: %v", err)
 		}
 	}()
 	go func() {

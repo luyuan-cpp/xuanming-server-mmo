@@ -498,11 +498,11 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
     {
       PROTOBUF_FIELD_OFFSET(SkillTable, _impl_._has_bits_),
       0, // no _extensions_
-      56, 248,  // max_field_number, fast_idx_mask
+      58, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      56,  // num_field_entries
+      58,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -640,7 +640,7 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
     }}, {{
       33, 0, 2,
       0, 32,
-      65280, 48,
+      64512, 48,
       65535, 65535
     }}, {{
       // uint32 id = 1;
@@ -755,6 +755,10 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
       {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.action_tags_), _Internal::kHasBitsOffset + 54, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 allow_dead_target = 56;
       {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.allow_dead_target_), _Internal::kHasBitsOffset + 55, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 forbid_copy = 57;
+      {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.forbid_copy_), _Internal::kHasBitsOffset + 56, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 season_id = 58;
+      {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.season_id_), _Internal::kHasBitsOffset + 57, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -893,7 +897,9 @@ inline constexpr SkillTable::Impl_::Impl_(
         max_battle_uses_{0u},
         health_cost_mode_{0u},
         action_tags_{0u},
-        allow_dead_target_{0u} {}
+        allow_dead_target_{0u},
+        forbid_copy_{0u},
+        season_id_{0u} {}
 
 template <typename>
 constexpr SkillTable::SkillTable(::_pbi::ConstantInitialized,
@@ -1168,7 +1174,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_._has_bits_),
-        59, // hasbit index offset
+        61, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.skill_type_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.targeting_mode_),
@@ -1222,6 +1228,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.health_cost_mode_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.action_tags_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.allow_dead_target_),
+        PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.forbid_copy_),
+        PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.required_item_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.required_resource_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.cost_resource_),
@@ -1278,6 +1286,8 @@ const ::uint32_t
         53,
         54,
         55,
+        56,
+        57,
         3,
         4,
         5,
@@ -1294,7 +1304,7 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::Skillrequired_resource)},
         {14, sizeof(::Skillcost_resource)},
         {21, sizeof(::SkillTable)},
-        {136, sizeof(::SkillTableData)},
+        {140, sizeof(::SkillTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1312,7 +1322,7 @@ const char descriptor_table_protodef_skill_5ftable_2eproto[] ABSL_ATTRIBUTE_SECT
     "urce\022\036\n\026required_resource_type\030\001 \001(\r\022\037\n\027"
     "required_resource_value\030\002 \001(\r\"J\n\022Skillco"
     "st_resource\022\030\n\020cost_resource_id\030\001 \001(\r\022\032\n"
-    "\022cost_resource_cost\030\002 \001(\r\"\240\n\n\nSkillTable"
+    "\022cost_resource_cost\030\002 \001(\r\"\310\n\n\nSkillTable"
     "\022\n\n\002id\030\001 \001(\r\022\022\n\nskill_type\030\002 \003(\r\022\026\n\016targ"
     "eting_mode\030\003 \003(\r\022\026\n\016require_target\030\004 \001(\r"
     "\022\025\n\rtarget_status\030\005 \001(\r\022\022\n\ncast_point\030\006 "
@@ -1342,6 +1352,7 @@ const char descriptor_table_protodef_skill_5ftable_2eproto[] ABSL_ATTRIBUTE_SECT
     "\016prototype_code\0304 \001(\t\022\027\n\017max_battle_uses"
     "\0305 \001(\r\022\030\n\020health_cost_mode\0306 \001(\r\022\023\n\013acti"
     "on_tags\0307 \001(\r\022\031\n\021allow_dead_target\0308 \001(\r"
+    "\022\023\n\013forbid_copy\0309 \001(\r\022\021\n\tseason_id\030: \001(\r"
     "\022*\n\rrequired_item\030\025 \003(\0132\023.Skillrequired_"
     "item\0222\n\021required_resource\030\026 \003(\0132\027.Skillr"
     "equired_resource\022*\n\rcost_resource\030\027 \003(\0132"
@@ -1354,7 +1365,7 @@ static ::absl::once_flag descriptor_table_skill_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_skill_5ftable_2eproto = {
     false,
     false,
-    1695,
+    1735,
     descriptor_table_protodef_skill_5ftable_2eproto,
     "skill_table.proto",
     &descriptor_table_skill_5ftable_2eproto_once,
@@ -2154,9 +2165,9 @@ SkillTable::SkillTable(
                offsetof(Impl_, max_rank_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, max_rank_),
-           offsetof(Impl_, allow_dead_target_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, max_rank_) +
-               sizeof(Impl_::allow_dead_target_));
+               sizeof(Impl_::season_id_));
 
   // @@protoc_insertion_point(copy_constructor:SkillTable)
 }
@@ -2222,9 +2233,9 @@ inline void SkillTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, max_rank_),
            0,
-           offsetof(Impl_, allow_dead_target_) -
+           offsetof(Impl_, season_id_) -
                offsetof(Impl_, max_rank_) +
-               sizeof(Impl_::allow_dead_target_));
+               sizeof(Impl_::season_id_));
 }
 SkillTable::~SkillTable() {
   // @@protoc_insertion_point(destructor:SkillTable)
@@ -2359,6 +2370,11 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
     ::memset(&_impl_.battle_model_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.allow_dead_target_) -
         reinterpret_cast<char*>(&_impl_.battle_model_)) + sizeof(_impl_.allow_dead_target_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    ::memset(&_impl_.forbid_copy_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.season_id_) -
+        reinterpret_cast<char*>(&_impl_.forbid_copy_)) + sizeof(_impl_.season_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2917,6 +2933,24 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
     }
   }
 
+  // uint32 forbid_copy = 57;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_forbid_copy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          57, this_._internal_forbid_copy(), target);
+    }
+  }
+
+  // uint32 season_id = 58;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          58, this_._internal_season_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3335,6 +3369,22 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    // uint32 forbid_copy = 57;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_forbid_copy() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_forbid_copy());
+      }
+    }
+    // uint32 season_id = 58;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_season_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -3668,6 +3718,18 @@ void SkillTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_forbid_copy() != 0) {
+        _this->_impl_.forbid_copy_ = from._impl_.forbid_copy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+  }
   _this->_impl_._has_bits_.Or(from._impl_._has_bits_);
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -3709,8 +3771,8 @@ void SkillTable::InternalSwap(SkillTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL oth
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.passive_stat_, &other->_impl_.passive_stat_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.prototype_code_, &other->_impl_.prototype_code_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.allow_dead_target_)
-      + sizeof(SkillTable::_impl_.allow_dead_target_)
+      PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.season_id_)
+      + sizeof(SkillTable::_impl_.season_id_)
       - PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.max_rank_)>(
           reinterpret_cast<char*>(&_impl_.max_rank_),
           reinterpret_cast<char*>(&other->_impl_.max_rank_));

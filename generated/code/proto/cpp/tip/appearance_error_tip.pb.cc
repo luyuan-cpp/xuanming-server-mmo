@@ -35,21 +35,23 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_appearance_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\032appearance_error_tip.proto*\371\001\n\020appeara"
+    "\n\032appearance_error_tip.proto*\327\002\n\020appeara"
     "nce_error\022\027\n\023kAppearance_errorOK\020\000\022\030\n\022kA"
     "ppearanceInvalid\020\350\201\002\022\037\n\031kAppearanceAlrea"
     "dyCurrent\020\351\201\002\022\027\n\021kAppearanceNoCard\020\352\201\002\022!"
     "\n\033kAppearanceTrialAlreadyUsed\020\353\201\002\022\036\n\030kAp"
     "pearanceNoActiveTrial\020\354\201\002\022\027\n\021kAppearance"
     "Frozen\020\355\201\002\022\034\n\026kAppearanceUnavailable\020\356\201\002"
-    "B$\n\016com.game.tableZ\022generated/pb/tableb\006"
-    "proto3"
+    "\022\"\n\034kAppearanceNotCardUnlockable\020\357\201\002\022\035\n\027"
+    "kAppearanceAlreadyOwned\020\360\201\002\022\031\n\023kAppearan"
+    "ceNotOwned\020\361\201\002B$\n\016com.game.tableZ\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_appearance_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_appearance_5ferror_5ftip_2eproto = {
     false,
     false,
-    326,
+    420,
     descriptor_table_protodef_appearance_5ferror_5ftip_2eproto,
     "appearance_error_tip.proto",
     &descriptor_table_appearance_5ferror_5ftip_2eproto_once,
@@ -68,7 +70,7 @@ appearance_error_descriptor() {
   return file_level_enum_descriptors_appearance_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t appearance_error_internal_data_[] = {
-    65536u, 458752u, 33003u, 33001u, 33005u, 33000u, 33002u, 33004u, 33006u, };
+    65536u, 655360u, 33006u, 33003u, 33008u, 33001u, 33005u, 33007u, 33009u, 33000u, 33002u, 33004u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

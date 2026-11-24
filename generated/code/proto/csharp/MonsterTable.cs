@@ -24,20 +24,20 @@ public static partial class MonsterTableReflection {
         string.Concat(
           "ChNtb25zdGVyX3RhYmxlLnByb3RvIkcKC01vbnN0ZXJkcm9wEhEKCWRyb3Bf",
           "aXRlbRgBIAEoDRISCgpkcm9wX2NvdW50GAIgASgNEhEKCWRyb3BfcmF0ZRgD",
-          "IAEoDSL7AQoMTW9uc3RlclRhYmxlEgoKAmlkGAEgASgNEg4KBmhlYWx0aBgC",
+          "IAEoDSKMAgoMTW9uc3RlclRhYmxlEgoKAmlkGAEgASgNEg4KBmhlYWx0aBgC",
           "IAEoBBIQCghzdHJlbmd0aBgDIAEoBBINCgVhcm1vchgEIAEoBBISCgpyZXNp",
           "c3RhbmNlGAUgASgEEhIKCmNyaXRjaGFuY2UYBiABKAQSDQoFc3BlZWQYByAB",
           "KAQSEgoKZXhwX3Jld2FyZBgIIAEoBBITCgtnb2xkX3Jld2FyZBgJIAEoBBIc",
           "ChRjYXB0dXJlX3BldF90YWJsZV9pZBgLIAEoDRIUCgxjYXB0dXJlX3JhdGUY",
-          "DCABKA0SGgoEZHJvcBgKIAMoCzIMLk1vbnN0ZXJkcm9wIi8KEE1vbnN0ZXJU",
-          "YWJsZURhdGESGwoEZGF0YRgBIAMoCzINLk1vbnN0ZXJUYWJsZUI+Cg5jb20u",
-          "Z2FtZS50YWJsZUIWTW9uc3RlclRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
-          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "DCABKA0SDwoHaXNfYm9zcxgNIAEoDRIaCgRkcm9wGAogAygLMgwuTW9uc3Rl",
+          "cmRyb3AiLwoQTW9uc3RlclRhYmxlRGF0YRIbCgRkYXRhGAEgAygLMg0uTW9u",
+          "c3RlclRhYmxlQj4KDmNvbS5nYW1lLnRhYmxlQhZNb25zdGVyVGFibGVPdXRl",
+          "ckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Monsterdrop), global::Monsterdrop.Parser, new[]{ "DropItem", "DropCount", "DropRate" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "CapturePetTableId", "CaptureRate", "Drop" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "CapturePetTableId", "CaptureRate", "IsBoss", "Drop" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTableData), global::MonsterTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -363,6 +363,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     goldReward_ = other.goldReward_;
     capturePetTableId_ = other.capturePetTableId_;
     captureRate_ = other.captureRate_;
+    isBoss_ = other.isBoss_;
     drop_ = other.drop_.Clone();
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
@@ -505,6 +506,18 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
   }
 
+  /// <summary>Field number for the "is_boss" field.</summary>
+  public const int IsBossFieldNumber = 13;
+  private uint isBoss_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint IsBoss {
+    get { return isBoss_; }
+    set {
+      isBoss_ = value;
+    }
+  }
+
   /// <summary>Field number for the "drop" field.</summary>
   public const int DropFieldNumber = 10;
   private static readonly pb::FieldCodec<global::Monsterdrop> _repeated_drop_codec
@@ -542,6 +555,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (GoldReward != other.GoldReward) return false;
     if (CapturePetTableId != other.CapturePetTableId) return false;
     if (CaptureRate != other.CaptureRate) return false;
+    if (IsBoss != other.IsBoss) return false;
     if(!drop_.Equals(other.drop_)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
@@ -561,6 +575,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (GoldReward != 0UL) hash ^= GoldReward.GetHashCode();
     if (CapturePetTableId != 0) hash ^= CapturePetTableId.GetHashCode();
     if (CaptureRate != 0) hash ^= CaptureRate.GetHashCode();
+    if (IsBoss != 0) hash ^= IsBoss.GetHashCode();
     hash ^= drop_.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
@@ -625,6 +640,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(96);
       output.WriteUInt32(CaptureRate);
     }
+    if (IsBoss != 0) {
+      output.WriteRawTag(104);
+      output.WriteUInt32(IsBoss);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -680,6 +699,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(96);
       output.WriteUInt32(CaptureRate);
     }
+    if (IsBoss != 0) {
+      output.WriteRawTag(104);
+      output.WriteUInt32(IsBoss);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -722,6 +745,9 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
     if (CaptureRate != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CaptureRate);
+    }
+    if (IsBoss != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(IsBoss);
     }
     size += drop_.CalculateSize(_repeated_drop_codec);
     if (_unknownFields != null) {
@@ -768,6 +794,9 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
     if (other.CaptureRate != 0) {
       CaptureRate = other.CaptureRate;
+    }
+    if (other.IsBoss != 0) {
+      IsBoss = other.IsBoss;
     }
     drop_.Add(other.drop_);
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -837,6 +866,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
           CaptureRate = input.ReadUInt32();
           break;
         }
+        case 104: {
+          IsBoss = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -902,6 +935,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
         }
         case 96: {
           CaptureRate = input.ReadUInt32();
+          break;
+        }
+        case 104: {
+          IsBoss = input.ReadUInt32();
           break;
         }
       }

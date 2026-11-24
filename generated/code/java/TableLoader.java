@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "ece0013ccbb6f3b0";
+    public static final String SCHEMA_DIGEST = "0f6757d95603c861";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -24,6 +24,8 @@ public class TableLoader {
             "Monster",
             "MysteryMerchantGoods",
             "MysteryMerchantRule",
+            "SeasonRule",
+            "SeasonSeal",
             "Skill",
             "SkillPermission"
     );
@@ -53,6 +55,8 @@ public class TableLoader {
         AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
 
         AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
+
+        AppearanceSeriesTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
@@ -144,6 +148,10 @@ public class TableLoader {
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
 
+        SeasonRuleTableManager.getInstance().load(configDir, useBinary);
+
+        SeasonSealTableManager.getInstance().load(configDir, useBinary);
+
         SkillTableManager.getInstance().load(configDir, useBinary);
 
         SkillPermissionTableManager.getInstance().load(configDir, useBinary);
@@ -171,7 +179,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(58);
+        CountDownLatch latch = new CountDownLatch(61);
 
         new Thread(() -> {
             try {
@@ -238,6 +246,16 @@ public class TableLoader {
                 AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load AppearanceRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AppearanceSeriesTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AppearanceSeries table", e);
             } finally {
                 latch.countDown();
             }
@@ -695,6 +713,26 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                SeasonRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SeasonRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                SeasonSealTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SeasonSeal table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 SkillTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Skill table", e);
@@ -787,6 +825,8 @@ public class TableLoader {
 
         AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
 
+        AppearanceSeriesTableManager.getInstance().load(configDir, useBinary);
+
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
@@ -876,6 +916,10 @@ public class TableLoader {
         RewardTableManager.getInstance().load(configDir, useBinary);
 
         RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
+
+        SeasonRuleTableManager.getInstance().load(configDir, useBinary);
+
+        SeasonSealTableManager.getInstance().load(configDir, useBinary);
 
         SkillTableManager.getInstance().load(configDir, useBinary);
 

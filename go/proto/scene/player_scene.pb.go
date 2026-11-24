@@ -85,6 +85,59 @@ func (SceneChannelState) EnumDescriptor() ([]byte, []int) {
 	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{0}
 }
 
+// 大世界地图聚合热度档位(docs/design/world-map-play-v2.md §2.2.3):只暴露聚合档位,不暴露玩家明细。
+type WorldMapHeatLevel int32
+
+const (
+	WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_UNKNOWN WorldMapHeatLevel = 0
+	WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_QUIET   WorldMapHeatLevel = 1 // 清幽(0 人)
+	WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_ACTIVE  WorldMapHeatLevel = 2 // 有人
+	WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_CROWDED WorldMapHeatLevel = 3 // 热闹
+)
+
+// Enum value maps for WorldMapHeatLevel.
+var (
+	WorldMapHeatLevel_name = map[int32]string{
+		0: "WORLD_MAP_HEAT_LEVEL_UNKNOWN",
+		1: "WORLD_MAP_HEAT_LEVEL_QUIET",
+		2: "WORLD_MAP_HEAT_LEVEL_ACTIVE",
+		3: "WORLD_MAP_HEAT_LEVEL_CROWDED",
+	}
+	WorldMapHeatLevel_value = map[string]int32{
+		"WORLD_MAP_HEAT_LEVEL_UNKNOWN": 0,
+		"WORLD_MAP_HEAT_LEVEL_QUIET":   1,
+		"WORLD_MAP_HEAT_LEVEL_ACTIVE":  2,
+		"WORLD_MAP_HEAT_LEVEL_CROWDED": 3,
+	}
+)
+
+func (x WorldMapHeatLevel) Enum() *WorldMapHeatLevel {
+	p := new(WorldMapHeatLevel)
+	*p = x
+	return p
+}
+
+func (x WorldMapHeatLevel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (WorldMapHeatLevel) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_scene_proto_enumTypes[1].Descriptor()
+}
+
+func (WorldMapHeatLevel) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_scene_proto_enumTypes[1]
+}
+
+func (x WorldMapHeatLevel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use WorldMapHeatLevel.Descriptor instead.
+func (WorldMapHeatLevel) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{1}
+}
+
 type ActorType int32
 
 const (
@@ -118,11 +171,11 @@ func (x ActorType) String() string {
 }
 
 func (ActorType) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_scene_proto_enumTypes[1].Descriptor()
+	return file_proto_scene_player_scene_proto_enumTypes[2].Descriptor()
 }
 
 func (ActorType) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_scene_proto_enumTypes[1]
+	return &file_proto_scene_player_scene_proto_enumTypes[2]
 }
 
 func (x ActorType) Number() protoreflect.EnumNumber {
@@ -131,7 +184,7 @@ func (x ActorType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ActorType.Descriptor instead.
 func (ActorType) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{1}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{2}
 }
 
 // 落地恢复:按域版本摘要(docs/design/landing-recovery-sync-digest.md)。
@@ -190,11 +243,11 @@ func (x SyncDomain) String() string {
 }
 
 func (SyncDomain) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_scene_proto_enumTypes[2].Descriptor()
+	return file_proto_scene_player_scene_proto_enumTypes[3].Descriptor()
 }
 
 func (SyncDomain) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_scene_proto_enumTypes[2]
+	return &file_proto_scene_player_scene_proto_enumTypes[3]
 }
 
 func (x SyncDomain) Number() protoreflect.EnumNumber {
@@ -203,7 +256,7 @@ func (x SyncDomain) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SyncDomain.Descriptor instead.
 func (SyncDomain) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{2}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{3}
 }
 
 type SyncDigestStatus int32
@@ -236,11 +289,11 @@ func (x SyncDigestStatus) String() string {
 }
 
 func (SyncDigestStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_scene_player_scene_proto_enumTypes[3].Descriptor()
+	return file_proto_scene_player_scene_proto_enumTypes[4].Descriptor()
 }
 
 func (SyncDigestStatus) Type() protoreflect.EnumType {
-	return &file_proto_scene_player_scene_proto_enumTypes[3]
+	return &file_proto_scene_player_scene_proto_enumTypes[4]
 }
 
 func (x SyncDigestStatus) Number() protoreflect.EnumNumber {
@@ -249,7 +302,7 @@ func (x SyncDigestStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SyncDigestStatus.Descriptor instead.
 func (SyncDigestStatus) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{4}
 }
 
 type EnterSceneC2SRequest struct {
@@ -548,18 +601,308 @@ func (x *SceneChannelDirectory) GetSwitchEnabled() bool {
 	return false
 }
 
+// 单张已开放大世界地图的聚合态势。
+type WorldMapOverviewEntry struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	SceneConfigId        uint32                 `protobuf:"varint,1,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`
+	TotalPlayerCount     uint32                 `protobuf:"varint,2,opt,name=total_player_count,json=totalPlayerCount,proto3" json:"total_player_count,omitempty"` // 全线汇总人数(秒级滞后)
+	ChannelCount         uint32                 `protobuf:"varint,3,opt,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty"`               // 当前可进分线数
+	HeatLevel            WorldMapHeatLevel      `protobuf:"varint,4,opt,name=heat_level,json=heatLevel,proto3,enum=WorldMapHeatLevel" json:"heat_level,omitempty"`
+	RecommendedSceneId   uint64                 `protobuf:"varint,5,opt,name=recommended_scene_id,json=recommendedSceneId,proto3" json:"recommended_scene_id,omitempty"`       // 推荐聚人线 scene_id(未满最小线号活线;0 = 暂不可用)
+	RecommendedChannelNo uint32                 `protobuf:"varint,6,opt,name=recommended_channel_no,json=recommendedChannelNo,proto3" json:"recommended_channel_no,omitempty"` // 推荐线号,只用于展示
+	IsTideMap            bool                   `protobuf:"varint,7,opt,name=is_tide_map,json=isTideMap,proto3" json:"is_tide_map,omitempty"`                                  // true = 本轮五行灵潮目标野外图
+	HasMysteryMerchant   bool                   `protobuf:"varint,8,opt,name=has_mystery_merchant,json=hasMysteryMerchant,proto3" json:"has_mystery_merchant,omitempty"`       // true = 神秘商人此刻落在这张图上
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *WorldMapOverviewEntry) Reset() {
+	*x = WorldMapOverviewEntry{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldMapOverviewEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldMapOverviewEntry) ProtoMessage() {}
+
+func (x *WorldMapOverviewEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldMapOverviewEntry.ProtoReflect.Descriptor instead.
+func (*WorldMapOverviewEntry) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *WorldMapOverviewEntry) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *WorldMapOverviewEntry) GetTotalPlayerCount() uint32 {
+	if x != nil {
+		return x.TotalPlayerCount
+	}
+	return 0
+}
+
+func (x *WorldMapOverviewEntry) GetChannelCount() uint32 {
+	if x != nil {
+		return x.ChannelCount
+	}
+	return 0
+}
+
+func (x *WorldMapOverviewEntry) GetHeatLevel() WorldMapHeatLevel {
+	if x != nil {
+		return x.HeatLevel
+	}
+	return WorldMapHeatLevel_WORLD_MAP_HEAT_LEVEL_UNKNOWN
+}
+
+func (x *WorldMapOverviewEntry) GetRecommendedSceneId() uint64 {
+	if x != nil {
+		return x.RecommendedSceneId
+	}
+	return 0
+}
+
+func (x *WorldMapOverviewEntry) GetRecommendedChannelNo() uint32 {
+	if x != nil {
+		return x.RecommendedChannelNo
+	}
+	return 0
+}
+
+func (x *WorldMapOverviewEntry) GetIsTideMap() bool {
+	if x != nil {
+		return x.IsTideMap
+	}
+	return false
+}
+
+func (x *WorldMapOverviewEntry) GetHasMysteryMerchant() bool {
+	if x != nil {
+		return x.HasMysteryMerchant
+	}
+	return false
+}
+
+// 微观全服循环「五行灵潮」状态(按墙钟确定性轮换,docs/design/world-map-play-v2.md §2.2.2)。
+type WorldTideSnapshot struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Active               bool                   `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                                                           // true = 此刻处于本轮灵潮持续期内
+	RoundId              uint64                 `protobuf:"varint,2,opt,name=round_id,json=roundId,proto3" json:"round_id,omitempty"`                                          // 本轮起始 Unix 秒
+	SceneConfigId        uint32                 `protobuf:"varint,3,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`                      // 本轮灵潮所在野外地图(0 = 未配置候选)
+	RecommendedSceneId   uint64                 `protobuf:"varint,4,opt,name=recommended_scene_id,json=recommendedSceneId,proto3" json:"recommended_scene_id,omitempty"`       // 灵潮图推荐聚人线 scene_id
+	RecommendedChannelNo uint32                 `protobuf:"varint,5,opt,name=recommended_channel_no,json=recommendedChannelNo,proto3" json:"recommended_channel_no,omitempty"` // 灵潮图推荐线号
+	StartsAtMs           uint64                 `protobuf:"varint,6,opt,name=starts_at_ms,json=startsAtMs,proto3" json:"starts_at_ms,omitempty"`                               // 本轮灵潮开始时刻(毫秒)
+	EndsAtMs             uint64                 `protobuf:"varint,7,opt,name=ends_at_ms,json=endsAtMs,proto3" json:"ends_at_ms,omitempty"`                                     // 本轮灵潮结束时刻(毫秒)
+	NextStartsAtMs       uint64                 `protobuf:"varint,8,opt,name=next_starts_at_ms,json=nextStartsAtMs,proto3" json:"next_starts_at_ms,omitempty"`                 // 下一轮灵潮开始时刻(毫秒)
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *WorldTideSnapshot) Reset() {
+	*x = WorldTideSnapshot{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldTideSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldTideSnapshot) ProtoMessage() {}
+
+func (x *WorldTideSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldTideSnapshot.ProtoReflect.Descriptor instead.
+func (*WorldTideSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WorldTideSnapshot) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *WorldTideSnapshot) GetRoundId() uint64 {
+	if x != nil {
+		return x.RoundId
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetRecommendedSceneId() uint64 {
+	if x != nil {
+		return x.RecommendedSceneId
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetRecommendedChannelNo() uint32 {
+	if x != nil {
+		return x.RecommendedChannelNo
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetStartsAtMs() uint64 {
+	if x != nil {
+		return x.StartsAtMs
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetEndsAtMs() uint64 {
+	if x != nil {
+		return x.EndsAtMs
+	}
+	return 0
+}
+
+func (x *WorldTideSnapshot) GetNextStartsAtMs() uint64 {
+	if x != nil {
+		return x.NextStartsAtMs
+	}
+	return 0
+}
+
+// 一个 zone 全部已开放大世界地图的聚人态势读模型(Redis key: world_map_overview:{ctl:<zone>})。
+// 由 scene_manager 领导者随分线目录周期发布,scene 节点只读转发,客户端只在显式请求时获取。
+type WorldMapOverview struct {
+	state                     protoimpl.MessageState   `protogen:"open.v1"`
+	ZoneId                    uint32                   `protobuf:"varint,1,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	UpdatedAtMs               uint64                   `protobuf:"varint,2,opt,name=updated_at_ms,json=updatedAtMs,proto3" json:"updated_at_ms,omitempty"`
+	ServerTimeMs              uint64                   `protobuf:"varint,3,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	Maps                      []*WorldMapOverviewEntry `protobuf:"bytes,4,rep,name=maps,proto3" json:"maps,omitempty"`                                                                                   // 按 scene_config_id 升序
+	Tide                      *WorldTideSnapshot       `protobuf:"bytes,5,opt,name=tide,proto3" json:"tide,omitempty"`                                                                                   // 微观每小时灵潮
+	DailyHotspotSceneConfigId uint32                   `protobuf:"varint,6,opt,name=daily_hotspot_scene_config_id,json=dailyHotspotSceneConfigId,proto3" json:"daily_hotspot_scene_config_id,omitempty"` // 宏观每日灵脉旺地(UTC+8 05:00 换日;0 = 未启用)
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *WorldMapOverview) Reset() {
+	*x = WorldMapOverview{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldMapOverview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldMapOverview) ProtoMessage() {}
+
+func (x *WorldMapOverview) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldMapOverview.ProtoReflect.Descriptor instead.
+func (*WorldMapOverview) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *WorldMapOverview) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *WorldMapOverview) GetUpdatedAtMs() uint64 {
+	if x != nil {
+		return x.UpdatedAtMs
+	}
+	return 0
+}
+
+func (x *WorldMapOverview) GetServerTimeMs() uint64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+func (x *WorldMapOverview) GetMaps() []*WorldMapOverviewEntry {
+	if x != nil {
+		return x.Maps
+	}
+	return nil
+}
+
+func (x *WorldMapOverview) GetTide() *WorldTideSnapshot {
+	if x != nil {
+		return x.Tide
+	}
+	return nil
+}
+
+func (x *WorldMapOverview) GetDailyHotspotSceneConfigId() uint32 {
+	if x != nil {
+		return x.DailyHotspotSceneConfigId
+	}
+	return 0
+}
+
 type SceneInfoS2C struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	SceneInfo []*SceneInfoComp       `protobuf:"bytes,1,rep,name=scene_info,json=sceneInfo,proto3" json:"scene_info,omitempty"`
 	// 玩家当前所在大世界地图的分线目录。副本 / 镜像里、或目录尚未发布时不带(has_channel_directory == false)。
 	ChannelDirectory *SceneChannelDirectory `protobuf:"bytes,2,opt,name=channel_directory,json=channelDirectory,proto3" json:"channel_directory,omitempty"`
+	// 本 zone 已开放大世界地图的热度与灵潮总览。仅客户端请求 with_world_map_overview 且总览已发布时附带。
+	WorldMapOverview *WorldMapOverview `protobuf:"bytes,3,opt,name=world_map_overview,json=worldMapOverview,proto3" json:"world_map_overview,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SceneInfoS2C) Reset() {
 	*x = SceneInfoS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[5]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +914,7 @@ func (x *SceneInfoS2C) String() string {
 func (*SceneInfoS2C) ProtoMessage() {}
 
 func (x *SceneInfoS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[5]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +927,7 @@ func (x *SceneInfoS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SceneInfoS2C.ProtoReflect.Descriptor instead.
 func (*SceneInfoS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SceneInfoS2C) GetSceneInfo() []*SceneInfoComp {
@@ -601,19 +944,28 @@ func (x *SceneInfoS2C) GetChannelDirectory() *SceneChannelDirectory {
 	return nil
 }
 
+func (x *SceneInfoS2C) GetWorldMapOverview() *WorldMapOverview {
+	if x != nil {
+		return x.WorldMapOverview
+	}
+	return nil
+}
+
 type SceneInfoRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// true = 连同当前地图的分线目录一起要(SceneInfoS2C.channel_directory,docs/design/world-channel-switch.md §3)。
 	// 做成显式开关而不是默认附带:带目录要让 scene 节点多读一次 zone Redis、推送也更大,而压测机器人把
 	// SceneInfoC2S 当作高频的"动一下"在发 —— 不带本字段的请求,开销与改动前逐字节相同。
 	WithChannelDirectory bool `protobuf:"varint,1,opt,name=with_channel_directory,json=withChannelDirectory,proto3" json:"with_channel_directory,omitempty"`
+	// true = 连同本 zone 的大世界地图热度与灵潮总览一起要(SceneInfoS2C.world_map_overview,docs/design/world-map-play-v2.md §2.2)。
+	WithWorldMapOverview bool `protobuf:"varint,2,opt,name=with_world_map_overview,json=withWorldMapOverview,proto3" json:"with_world_map_overview,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *SceneInfoRequest) Reset() {
 	*x = SceneInfoRequest{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[6]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +977,7 @@ func (x *SceneInfoRequest) String() string {
 func (*SceneInfoRequest) ProtoMessage() {}
 
 func (x *SceneInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[6]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,12 +990,19 @@ func (x *SceneInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SceneInfoRequest.ProtoReflect.Descriptor instead.
 func (*SceneInfoRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SceneInfoRequest) GetWithChannelDirectory() bool {
 	if x != nil {
 		return x.WithChannelDirectory
+	}
+	return false
+}
+
+func (x *SceneInfoRequest) GetWithWorldMapOverview() bool {
+	if x != nil {
+		return x.WithWorldMapOverview
 	}
 	return false
 }
@@ -657,7 +1016,7 @@ type SceneInfoResponse struct {
 
 func (x *SceneInfoResponse) Reset() {
 	*x = SceneInfoResponse{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[7]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -669,7 +1028,7 @@ func (x *SceneInfoResponse) String() string {
 func (*SceneInfoResponse) ProtoMessage() {}
 
 func (x *SceneInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[7]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -682,7 +1041,7 @@ func (x *SceneInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SceneInfoResponse.ProtoReflect.Descriptor instead.
 func (*SceneInfoResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SceneInfoResponse) GetSceneInfo() []*SceneInfoComp {
@@ -708,7 +1067,7 @@ type ActorCreateS2C struct {
 
 func (x *ActorCreateS2C) Reset() {
 	*x = ActorCreateS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[8]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -720,7 +1079,7 @@ func (x *ActorCreateS2C) String() string {
 func (*ActorCreateS2C) ProtoMessage() {}
 
 func (x *ActorCreateS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[8]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -733,7 +1092,7 @@ func (x *ActorCreateS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActorCreateS2C.ProtoReflect.Descriptor instead.
 func (*ActorCreateS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ActorCreateS2C) GetEntity() uint64 {
@@ -801,7 +1160,7 @@ type ActorDestroyS2C struct {
 
 func (x *ActorDestroyS2C) Reset() {
 	*x = ActorDestroyS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[9]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -813,7 +1172,7 @@ func (x *ActorDestroyS2C) String() string {
 func (*ActorDestroyS2C) ProtoMessage() {}
 
 func (x *ActorDestroyS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[9]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -826,7 +1185,7 @@ func (x *ActorDestroyS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActorDestroyS2C.ProtoReflect.Descriptor instead.
 func (*ActorDestroyS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ActorDestroyS2C) GetEntity() uint64 {
@@ -845,7 +1204,7 @@ type ActorListCreateS2C struct {
 
 func (x *ActorListCreateS2C) Reset() {
 	*x = ActorListCreateS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[10]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -857,7 +1216,7 @@ func (x *ActorListCreateS2C) String() string {
 func (*ActorListCreateS2C) ProtoMessage() {}
 
 func (x *ActorListCreateS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[10]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -870,7 +1229,7 @@ func (x *ActorListCreateS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActorListCreateS2C.ProtoReflect.Descriptor instead.
 func (*ActorListCreateS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ActorListCreateS2C) GetActorList() []*ActorCreateS2C {
@@ -889,7 +1248,7 @@ type ActorListDestroyS2C struct {
 
 func (x *ActorListDestroyS2C) Reset() {
 	*x = ActorListDestroyS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[11]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -901,7 +1260,7 @@ func (x *ActorListDestroyS2C) String() string {
 func (*ActorListDestroyS2C) ProtoMessage() {}
 
 func (x *ActorListDestroyS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[11]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -914,7 +1273,7 @@ func (x *ActorListDestroyS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActorListDestroyS2C.ProtoReflect.Descriptor instead.
 func (*ActorListDestroyS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ActorListDestroyS2C) GetEntity() []uint64 {
@@ -942,7 +1301,7 @@ type TravelToZoneRequest struct {
 
 func (x *TravelToZoneRequest) Reset() {
 	*x = TravelToZoneRequest{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[12]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -954,7 +1313,7 @@ func (x *TravelToZoneRequest) String() string {
 func (*TravelToZoneRequest) ProtoMessage() {}
 
 func (x *TravelToZoneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[12]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -967,7 +1326,7 @@ func (x *TravelToZoneRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TravelToZoneRequest.ProtoReflect.Descriptor instead.
 func (*TravelToZoneRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TravelToZoneRequest) GetTargetZoneId() uint32 {
@@ -993,7 +1352,7 @@ type TravelToZoneResponse struct {
 
 func (x *TravelToZoneResponse) Reset() {
 	*x = TravelToZoneResponse{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[13]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1005,7 +1364,7 @@ func (x *TravelToZoneResponse) String() string {
 func (*TravelToZoneResponse) ProtoMessage() {}
 
 func (x *TravelToZoneResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[13]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1018,7 +1377,7 @@ func (x *TravelToZoneResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TravelToZoneResponse.ProtoReflect.Descriptor instead.
 func (*TravelToZoneResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{13}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TravelToZoneResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1038,7 +1397,7 @@ type SyncDigestEntry struct {
 
 func (x *SyncDigestEntry) Reset() {
 	*x = SyncDigestEntry{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[14]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1050,7 +1409,7 @@ func (x *SyncDigestEntry) String() string {
 func (*SyncDigestEntry) ProtoMessage() {}
 
 func (x *SyncDigestEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[14]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1063,7 +1422,7 @@ func (x *SyncDigestEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncDigestEntry.ProtoReflect.Descriptor instead.
 func (*SyncDigestEntry) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{14}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SyncDigestEntry) GetDomain() SyncDomain {
@@ -1088,7 +1447,7 @@ type GetSyncDigestRequest struct {
 
 func (x *GetSyncDigestRequest) Reset() {
 	*x = GetSyncDigestRequest{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[15]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1100,7 +1459,7 @@ func (x *GetSyncDigestRequest) String() string {
 func (*GetSyncDigestRequest) ProtoMessage() {}
 
 func (x *GetSyncDigestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[15]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1113,7 +1472,7 @@ func (x *GetSyncDigestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncDigestRequest.ProtoReflect.Descriptor instead.
 func (*GetSyncDigestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{15}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{18}
 }
 
 type SyncDigestS2C struct {
@@ -1127,7 +1486,7 @@ type SyncDigestS2C struct {
 
 func (x *SyncDigestS2C) Reset() {
 	*x = SyncDigestS2C{}
-	mi := &file_proto_scene_player_scene_proto_msgTypes[16]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1139,7 +1498,7 @@ func (x *SyncDigestS2C) String() string {
 func (*SyncDigestS2C) ProtoMessage() {}
 
 func (x *SyncDigestS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_scene_proto_msgTypes[16]
+	mi := &file_proto_scene_player_scene_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1152,7 +1511,7 @@ func (x *SyncDigestS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncDigestS2C.ProtoReflect.Descriptor instead.
 func (*SyncDigestS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{16}
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SyncDigestS2C) GetStatus() SyncDigestStatus {
@@ -1202,13 +1561,43 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\rupdated_at_ms\x18\x04 \x01(\x04R\vupdatedAtMs\x126\n" +
 	"\x17switch_cooldown_seconds\x18\x05 \x01(\rR\x15switchCooldownSeconds\x125\n" +
 	"\x17max_players_per_channel\x18\x06 \x01(\rR\x14maxPlayersPerChannel\x12%\n" +
-	"\x0eswitch_enabled\x18\a \x01(\bR\rswitchEnabled\"\x82\x01\n" +
+	"\x0eswitch_enabled\x18\a \x01(\bR\rswitchEnabled\"\xff\x02\n" +
+	"\x15WorldMapOverviewEntry\x12&\n" +
+	"\x0fscene_config_id\x18\x01 \x01(\rR\rsceneConfigId\x12,\n" +
+	"\x12total_player_count\x18\x02 \x01(\rR\x10totalPlayerCount\x12#\n" +
+	"\rchannel_count\x18\x03 \x01(\rR\fchannelCount\x121\n" +
+	"\n" +
+	"heat_level\x18\x04 \x01(\x0e2\x12.WorldMapHeatLevelR\theatLevel\x120\n" +
+	"\x14recommended_scene_id\x18\x05 \x01(\x04R\x12recommendedSceneId\x124\n" +
+	"\x16recommended_channel_no\x18\x06 \x01(\rR\x14recommendedChannelNo\x12\x1e\n" +
+	"\vis_tide_map\x18\a \x01(\bR\tisTideMap\x120\n" +
+	"\x14has_mystery_merchant\x18\b \x01(\bR\x12hasMysteryMerchant\"\xc1\x02\n" +
+	"\x11WorldTideSnapshot\x12\x16\n" +
+	"\x06active\x18\x01 \x01(\bR\x06active\x12\x19\n" +
+	"\bround_id\x18\x02 \x01(\x04R\aroundId\x12&\n" +
+	"\x0fscene_config_id\x18\x03 \x01(\rR\rsceneConfigId\x120\n" +
+	"\x14recommended_scene_id\x18\x04 \x01(\x04R\x12recommendedSceneId\x124\n" +
+	"\x16recommended_channel_no\x18\x05 \x01(\rR\x14recommendedChannelNo\x12 \n" +
+	"\fstarts_at_ms\x18\x06 \x01(\x04R\n" +
+	"startsAtMs\x12\x1c\n" +
+	"\n" +
+	"ends_at_ms\x18\a \x01(\x04R\bendsAtMs\x12)\n" +
+	"\x11next_starts_at_ms\x18\b \x01(\x04R\x0enextStartsAtMs\"\x8b\x02\n" +
+	"\x10WorldMapOverview\x12\x17\n" +
+	"\azone_id\x18\x01 \x01(\rR\x06zoneId\x12\"\n" +
+	"\rupdated_at_ms\x18\x02 \x01(\x04R\vupdatedAtMs\x12$\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\x12*\n" +
+	"\x04maps\x18\x04 \x03(\v2\x16.WorldMapOverviewEntryR\x04maps\x12&\n" +
+	"\x04tide\x18\x05 \x01(\v2\x12.WorldTideSnapshotR\x04tide\x12@\n" +
+	"\x1ddaily_hotspot_scene_config_id\x18\x06 \x01(\rR\x19dailyHotspotSceneConfigId\"\xc3\x01\n" +
 	"\fSceneInfoS2C\x12-\n" +
 	"\n" +
 	"scene_info\x18\x01 \x03(\v2\x0e.SceneInfoCompR\tsceneInfo\x12C\n" +
-	"\x11channel_directory\x18\x02 \x01(\v2\x16.SceneChannelDirectoryR\x10channelDirectory\"H\n" +
+	"\x11channel_directory\x18\x02 \x01(\v2\x16.SceneChannelDirectoryR\x10channelDirectory\x12?\n" +
+	"\x12world_map_overview\x18\x03 \x01(\v2\x11.WorldMapOverviewR\x10worldMapOverview\"\x7f\n" +
 	"\x10SceneInfoRequest\x124\n" +
-	"\x16with_channel_directory\x18\x01 \x01(\bR\x14withChannelDirectory\"B\n" +
+	"\x16with_channel_directory\x18\x01 \x01(\bR\x14withChannelDirectory\x125\n" +
+	"\x17with_world_map_overview\x18\x02 \x01(\bR\x14withWorldMapOverview\"B\n" +
 	"\x11SceneInfoResponse\x12-\n" +
 	"\n" +
 	"scene_info\x18\x01 \x03(\v2\x0e.SceneInfoCompR\tsceneInfo\"\x86\x02\n" +
@@ -1252,7 +1641,12 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x18SCENE_CHANNEL_STATE_BUSY\x10\x02\x12\x1c\n" +
 	"\x18SCENE_CHANNEL_STATE_FULL\x10\x03\x12\x1f\n" +
 	"\x1bSCENE_CHANNEL_STATE_CLOSING\x10\x04\x12#\n" +
-	"\x1fSCENE_CHANNEL_STATE_UNAVAILABLE\x10\x05*K\n" +
+	"\x1fSCENE_CHANNEL_STATE_UNAVAILABLE\x10\x05*\x98\x01\n" +
+	"\x11WorldMapHeatLevel\x12 \n" +
+	"\x1cWORLD_MAP_HEAT_LEVEL_UNKNOWN\x10\x00\x12\x1e\n" +
+	"\x1aWORLD_MAP_HEAT_LEVEL_QUIET\x10\x01\x12\x1f\n" +
+	"\x1bWORLD_MAP_HEAT_LEVEL_ACTIVE\x10\x02\x12 \n" +
+	"\x1cWORLD_MAP_HEAT_LEVEL_CROWDED\x10\x03*K\n" +
 	"\tActorType\x12\x13\n" +
 	"\x0fACTOR_TYPE_NONE\x10\x00\x12\x15\n" +
 	"\x11ACTOR_TYPE_PLAYER\x10\x01\x12\x12\n" +
@@ -1299,78 +1693,86 @@ func file_proto_scene_player_scene_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_scene_proto_rawDescData
 }
 
-var file_proto_scene_player_scene_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_scene_player_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_proto_scene_player_scene_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_proto_scene_player_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_proto_scene_player_scene_proto_goTypes = []any{
 	(SceneChannelState)(0),        // 0: SceneChannelState
-	(ActorType)(0),                // 1: ActorType
-	(SyncDomain)(0),               // 2: SyncDomain
-	(SyncDigestStatus)(0),         // 3: SyncDigestStatus
-	(*EnterSceneC2SRequest)(nil),  // 4: EnterSceneC2SRequest
-	(*EnterSceneC2SResponse)(nil), // 5: EnterSceneC2SResponse
-	(*EnterSceneS2C)(nil),         // 6: EnterSceneS2C
-	(*SceneChannelInfo)(nil),      // 7: SceneChannelInfo
-	(*SceneChannelDirectory)(nil), // 8: SceneChannelDirectory
-	(*SceneInfoS2C)(nil),          // 9: SceneInfoS2C
-	(*SceneInfoRequest)(nil),      // 10: SceneInfoRequest
-	(*SceneInfoResponse)(nil),     // 11: SceneInfoResponse
-	(*ActorCreateS2C)(nil),        // 12: ActorCreateS2C
-	(*ActorDestroyS2C)(nil),       // 13: ActorDestroyS2C
-	(*ActorListCreateS2C)(nil),    // 14: ActorListCreateS2C
-	(*ActorListDestroyS2C)(nil),   // 15: ActorListDestroyS2C
-	(*TravelToZoneRequest)(nil),   // 16: TravelToZoneRequest
-	(*TravelToZoneResponse)(nil),  // 17: TravelToZoneResponse
-	(*SyncDigestEntry)(nil),       // 18: SyncDigestEntry
-	(*GetSyncDigestRequest)(nil),  // 19: GetSyncDigestRequest
-	(*SyncDigestS2C)(nil),         // 20: SyncDigestS2C
-	(*SceneInfoComp)(nil),         // 21: SceneInfoComp
-	(*base.TipInfoMessage)(nil),   // 22: TipInfoMessage
-	(*component.Transform)(nil),   // 23: Transform
-	(*base.Empty)(nil),            // 24: Empty
+	(WorldMapHeatLevel)(0),        // 1: WorldMapHeatLevel
+	(ActorType)(0),                // 2: ActorType
+	(SyncDomain)(0),               // 3: SyncDomain
+	(SyncDigestStatus)(0),         // 4: SyncDigestStatus
+	(*EnterSceneC2SRequest)(nil),  // 5: EnterSceneC2SRequest
+	(*EnterSceneC2SResponse)(nil), // 6: EnterSceneC2SResponse
+	(*EnterSceneS2C)(nil),         // 7: EnterSceneS2C
+	(*SceneChannelInfo)(nil),      // 8: SceneChannelInfo
+	(*SceneChannelDirectory)(nil), // 9: SceneChannelDirectory
+	(*WorldMapOverviewEntry)(nil), // 10: WorldMapOverviewEntry
+	(*WorldTideSnapshot)(nil),     // 11: WorldTideSnapshot
+	(*WorldMapOverview)(nil),      // 12: WorldMapOverview
+	(*SceneInfoS2C)(nil),          // 13: SceneInfoS2C
+	(*SceneInfoRequest)(nil),      // 14: SceneInfoRequest
+	(*SceneInfoResponse)(nil),     // 15: SceneInfoResponse
+	(*ActorCreateS2C)(nil),        // 16: ActorCreateS2C
+	(*ActorDestroyS2C)(nil),       // 17: ActorDestroyS2C
+	(*ActorListCreateS2C)(nil),    // 18: ActorListCreateS2C
+	(*ActorListDestroyS2C)(nil),   // 19: ActorListDestroyS2C
+	(*TravelToZoneRequest)(nil),   // 20: TravelToZoneRequest
+	(*TravelToZoneResponse)(nil),  // 21: TravelToZoneResponse
+	(*SyncDigestEntry)(nil),       // 22: SyncDigestEntry
+	(*GetSyncDigestRequest)(nil),  // 23: GetSyncDigestRequest
+	(*SyncDigestS2C)(nil),         // 24: SyncDigestS2C
+	(*SceneInfoComp)(nil),         // 25: SceneInfoComp
+	(*base.TipInfoMessage)(nil),   // 26: TipInfoMessage
+	(*component.Transform)(nil),   // 27: Transform
+	(*base.Empty)(nil),            // 28: Empty
 }
 var file_proto_scene_player_scene_proto_depIdxs = []int32{
-	21, // 0: EnterSceneC2SRequest.scene_info:type_name -> SceneInfoComp
-	22, // 1: EnterSceneC2SResponse.error_message:type_name -> TipInfoMessage
-	21, // 2: EnterSceneS2C.scene_info:type_name -> SceneInfoComp
+	25, // 0: EnterSceneC2SRequest.scene_info:type_name -> SceneInfoComp
+	26, // 1: EnterSceneC2SResponse.error_message:type_name -> TipInfoMessage
+	25, // 2: EnterSceneS2C.scene_info:type_name -> SceneInfoComp
 	0,  // 3: SceneChannelInfo.state:type_name -> SceneChannelState
-	7,  // 4: SceneChannelDirectory.channels:type_name -> SceneChannelInfo
-	21, // 5: SceneInfoS2C.scene_info:type_name -> SceneInfoComp
-	8,  // 6: SceneInfoS2C.channel_directory:type_name -> SceneChannelDirectory
-	21, // 7: SceneInfoResponse.scene_info:type_name -> SceneInfoComp
-	23, // 8: ActorCreateS2C.transform:type_name -> Transform
-	1,  // 9: ActorCreateS2C.actor_type:type_name -> ActorType
-	12, // 10: ActorListCreateS2C.actor_list:type_name -> ActorCreateS2C
-	22, // 11: TravelToZoneResponse.error_message:type_name -> TipInfoMessage
-	2,  // 12: SyncDigestEntry.domain:type_name -> SyncDomain
-	3,  // 13: SyncDigestS2C.status:type_name -> SyncDigestStatus
-	18, // 14: SyncDigestS2C.entries:type_name -> SyncDigestEntry
-	4,  // 15: SceneSceneClientPlayer.EnterScene:input_type -> EnterSceneC2SRequest
-	6,  // 16: SceneSceneClientPlayer.NotifyEnterScene:input_type -> EnterSceneS2C
-	10, // 17: SceneSceneClientPlayer.SceneInfoC2S:input_type -> SceneInfoRequest
-	9,  // 18: SceneSceneClientPlayer.NotifySceneInfo:input_type -> SceneInfoS2C
-	12, // 19: SceneSceneClientPlayer.NotifyActorCreate:input_type -> ActorCreateS2C
-	13, // 20: SceneSceneClientPlayer.NotifyActorDestroy:input_type -> ActorDestroyS2C
-	14, // 21: SceneSceneClientPlayer.NotifyActorListCreate:input_type -> ActorListCreateS2C
-	15, // 22: SceneSceneClientPlayer.NotifyActorListDestroy:input_type -> ActorListDestroyS2C
-	16, // 23: SceneSceneClientPlayer.TravelToZone:input_type -> TravelToZoneRequest
-	19, // 24: SceneSceneClientPlayer.GetSyncDigest:input_type -> GetSyncDigestRequest
-	20, // 25: SceneSceneClientPlayer.NotifySyncDigest:input_type -> SyncDigestS2C
-	5,  // 26: SceneSceneClientPlayer.EnterScene:output_type -> EnterSceneC2SResponse
-	24, // 27: SceneSceneClientPlayer.NotifyEnterScene:output_type -> Empty
-	24, // 28: SceneSceneClientPlayer.SceneInfoC2S:output_type -> Empty
-	24, // 29: SceneSceneClientPlayer.NotifySceneInfo:output_type -> Empty
-	24, // 30: SceneSceneClientPlayer.NotifyActorCreate:output_type -> Empty
-	24, // 31: SceneSceneClientPlayer.NotifyActorDestroy:output_type -> Empty
-	24, // 32: SceneSceneClientPlayer.NotifyActorListCreate:output_type -> Empty
-	24, // 33: SceneSceneClientPlayer.NotifyActorListDestroy:output_type -> Empty
-	17, // 34: SceneSceneClientPlayer.TravelToZone:output_type -> TravelToZoneResponse
-	24, // 35: SceneSceneClientPlayer.GetSyncDigest:output_type -> Empty
-	24, // 36: SceneSceneClientPlayer.NotifySyncDigest:output_type -> Empty
-	26, // [26:37] is the sub-list for method output_type
-	15, // [15:26] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	8,  // 4: SceneChannelDirectory.channels:type_name -> SceneChannelInfo
+	1,  // 5: WorldMapOverviewEntry.heat_level:type_name -> WorldMapHeatLevel
+	10, // 6: WorldMapOverview.maps:type_name -> WorldMapOverviewEntry
+	11, // 7: WorldMapOverview.tide:type_name -> WorldTideSnapshot
+	25, // 8: SceneInfoS2C.scene_info:type_name -> SceneInfoComp
+	9,  // 9: SceneInfoS2C.channel_directory:type_name -> SceneChannelDirectory
+	12, // 10: SceneInfoS2C.world_map_overview:type_name -> WorldMapOverview
+	25, // 11: SceneInfoResponse.scene_info:type_name -> SceneInfoComp
+	27, // 12: ActorCreateS2C.transform:type_name -> Transform
+	2,  // 13: ActorCreateS2C.actor_type:type_name -> ActorType
+	16, // 14: ActorListCreateS2C.actor_list:type_name -> ActorCreateS2C
+	26, // 15: TravelToZoneResponse.error_message:type_name -> TipInfoMessage
+	3,  // 16: SyncDigestEntry.domain:type_name -> SyncDomain
+	4,  // 17: SyncDigestS2C.status:type_name -> SyncDigestStatus
+	22, // 18: SyncDigestS2C.entries:type_name -> SyncDigestEntry
+	5,  // 19: SceneSceneClientPlayer.EnterScene:input_type -> EnterSceneC2SRequest
+	7,  // 20: SceneSceneClientPlayer.NotifyEnterScene:input_type -> EnterSceneS2C
+	14, // 21: SceneSceneClientPlayer.SceneInfoC2S:input_type -> SceneInfoRequest
+	13, // 22: SceneSceneClientPlayer.NotifySceneInfo:input_type -> SceneInfoS2C
+	16, // 23: SceneSceneClientPlayer.NotifyActorCreate:input_type -> ActorCreateS2C
+	17, // 24: SceneSceneClientPlayer.NotifyActorDestroy:input_type -> ActorDestroyS2C
+	18, // 25: SceneSceneClientPlayer.NotifyActorListCreate:input_type -> ActorListCreateS2C
+	19, // 26: SceneSceneClientPlayer.NotifyActorListDestroy:input_type -> ActorListDestroyS2C
+	20, // 27: SceneSceneClientPlayer.TravelToZone:input_type -> TravelToZoneRequest
+	23, // 28: SceneSceneClientPlayer.GetSyncDigest:input_type -> GetSyncDigestRequest
+	24, // 29: SceneSceneClientPlayer.NotifySyncDigest:input_type -> SyncDigestS2C
+	6,  // 30: SceneSceneClientPlayer.EnterScene:output_type -> EnterSceneC2SResponse
+	28, // 31: SceneSceneClientPlayer.NotifyEnterScene:output_type -> Empty
+	28, // 32: SceneSceneClientPlayer.SceneInfoC2S:output_type -> Empty
+	28, // 33: SceneSceneClientPlayer.NotifySceneInfo:output_type -> Empty
+	28, // 34: SceneSceneClientPlayer.NotifyActorCreate:output_type -> Empty
+	28, // 35: SceneSceneClientPlayer.NotifyActorDestroy:output_type -> Empty
+	28, // 36: SceneSceneClientPlayer.NotifyActorListCreate:output_type -> Empty
+	28, // 37: SceneSceneClientPlayer.NotifyActorListDestroy:output_type -> Empty
+	21, // 38: SceneSceneClientPlayer.TravelToZone:output_type -> TravelToZoneResponse
+	28, // 39: SceneSceneClientPlayer.GetSyncDigest:output_type -> Empty
+	28, // 40: SceneSceneClientPlayer.NotifySyncDigest:output_type -> Empty
+	30, // [30:41] is the sub-list for method output_type
+	19, // [19:30] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_scene_proto_init() }
@@ -1384,8 +1786,8 @@ func file_proto_scene_player_scene_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_scene_proto_rawDesc), len(file_proto_scene_player_scene_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   17,
+			NumEnums:      5,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

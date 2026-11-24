@@ -98,6 +98,14 @@ extern const ::google::protobuf::internal::ClassDataFull EquipmentEffects_ManaRe
 #else
 extern const EquipmentEffects_ManaReductionBpsEntry_DoNotUseGlobalsTypeInternal EquipmentEffects_ManaReductionBpsEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SeasonSealEffect;
+struct SeasonSealEffectGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SeasonSealEffectGlobalsTypeInternal SeasonSealEffect_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SeasonSealEffect_class_data_;
+#else
+extern const SeasonSealEffectGlobalsTypeInternal SeasonSealEffect_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -107,6 +115,320 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealEffect final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SeasonSealEffect) */ {
+ public:
+  inline SeasonSealEffect() : SeasonSealEffect(nullptr) {}
+  ~SeasonSealEffect() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SeasonSealEffect* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SeasonSealEffect));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SeasonSealEffect(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SeasonSealEffect(const SeasonSealEffect& from) : SeasonSealEffect(nullptr, from) {}
+  inline SeasonSealEffect(SeasonSealEffect&& from) noexcept : SeasonSealEffect(nullptr, ::std::move(from)) {}
+  inline SeasonSealEffect& operator=(const SeasonSealEffect& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SeasonSealEffect& operator=(SeasonSealEffect&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SeasonSealEffect& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SeasonSealEffect>(&SeasonSealEffect_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(SeasonSealEffect& a, SeasonSealEffect& b) { a.Swap(&b); }
+  inline void Swap(SeasonSealEffect* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SeasonSealEffect* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SeasonSealEffect* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SeasonSealEffect>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SeasonSealEffect& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SeasonSealEffect& from) { SeasonSealEffect::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SeasonSealEffect* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SeasonSealEffect"; }
+
+  explicit SeasonSealEffect(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SeasonSealEffect(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SeasonSealEffect& from);
+  SeasonSealEffect(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SeasonSealEffect&& from) noexcept
+      : SeasonSealEffect(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 10,
+    kSeasonIdFieldNumber = 1,
+    kSealIdFieldNumber = 2,
+    kEffectIdFieldNumber = 3,
+    kBonusBpsFieldNumber = 4,
+    kCapBpsFieldNumber = 5,
+    kPerRoundLimitFieldNumber = 6,
+    kBattleLimitFieldNumber = 7,
+    kActiveRoundsFieldNumber = 8,
+    kHealthThresholdBpsFieldNumber = 9,
+  };
+  // string name = 10;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 seal_id = 2;
+  void clear_seal_id() ;
+  [[nodiscard]] ::uint32_t seal_id() const;
+  void set_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_seal_id() const;
+  void _internal_set_seal_id(::uint32_t value);
+
+  public:
+  // uint32 effect_id = 3;
+  void clear_effect_id() ;
+  [[nodiscard]] ::uint32_t effect_id() const;
+  void set_effect_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_id() const;
+  void _internal_set_effect_id(::uint32_t value);
+
+  public:
+  // uint32 bonus_bps = 4;
+  void clear_bonus_bps() ;
+  [[nodiscard]] ::uint32_t bonus_bps() const;
+  void set_bonus_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bonus_bps() const;
+  void _internal_set_bonus_bps(::uint32_t value);
+
+  public:
+  // uint32 cap_bps = 5;
+  void clear_cap_bps() ;
+  [[nodiscard]] ::uint32_t cap_bps() const;
+  void set_cap_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cap_bps() const;
+  void _internal_set_cap_bps(::uint32_t value);
+
+  public:
+  // uint32 per_round_limit = 6;
+  void clear_per_round_limit() ;
+  [[nodiscard]] ::uint32_t per_round_limit() const;
+  void set_per_round_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_per_round_limit() const;
+  void _internal_set_per_round_limit(::uint32_t value);
+
+  public:
+  // uint32 battle_limit = 7;
+  void clear_battle_limit() ;
+  [[nodiscard]] ::uint32_t battle_limit() const;
+  void set_battle_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_limit() const;
+  void _internal_set_battle_limit(::uint32_t value);
+
+  public:
+  // uint32 active_rounds = 8;
+  void clear_active_rounds() ;
+  [[nodiscard]] ::uint32_t active_rounds() const;
+  void set_active_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_rounds() const;
+  void _internal_set_active_rounds(::uint32_t value);
+
+  public:
+  // uint32 health_threshold_bps = 9;
+  void clear_health_threshold_bps() ;
+  [[nodiscard]] ::uint32_t health_threshold_bps() const;
+  void set_health_threshold_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_health_threshold_bps() const;
+  void _internal_set_health_threshold_bps(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SeasonSealEffect)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 37,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SeasonSealEffect& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t season_id_;
+    ::uint32_t seal_id_;
+    ::uint32_t effect_id_;
+    ::uint32_t bonus_bps_;
+    ::uint32_t cap_bps_;
+    ::uint32_t per_round_limit_;
+    ::uint32_t battle_limit_;
+    ::uint32_t active_rounds_;
+    ::uint32_t health_threshold_bps_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto;
+};
 // -------------------------------------------------------------------
 
 class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects_ManaReductionBpsEntry_DoNotUse final
@@ -312,7 +634,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentArtifactSource final : pub
   [[nodiscard]] static const EquipmentArtifactSource& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentArtifactSource>(&EquipmentArtifactSource_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(EquipmentArtifactSource& a, EquipmentArtifactSource& b) { a.Swap(&b); }
   inline void Swap(EquipmentArtifactSource* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -708,6 +1030,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   enum : int {
     kArtifactsFieldNumber = 14,
     kSupportSourcesFieldNumber = 15,
+    kSeasonSealFieldNumber = 17,
     kPhysicalAttackBpsFieldNumber = 1,
     kMagicAttackBpsFieldNumber = 2,
     kMaxHealthBpsFieldNumber = 3,
@@ -719,6 +1042,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     kPhysicalResistBpsFieldNumber = 9,
     kMagicResistBpsFieldNumber = 10,
     kSupportSourcesCompleteFieldNumber = 16,
+    kSeasonMaxHealthBpsFieldNumber = 18,
+    kSeasonDefenseBpsFieldNumber = 19,
     kAilmentHitBpsFieldNumber = 11,
     kAilmentResistBpsFieldNumber = 12,
     kManaReductionBpsFieldNumber = 13,
@@ -763,6 +1088,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   private:
   const ::google::protobuf::RepeatedPtrField<::SupportEffectSource>& _internal_support_sources() const;
   ::google::protobuf::RepeatedPtrField<::SupportEffectSource>* PROTOBUF_NONNULL _internal_mutable_support_sources();
+
+  public:
+  // .SeasonSealEffect season_seal = 17;
+  [[nodiscard]] bool has_season_seal()
+      const;
+  void clear_season_seal() ;
+  [[nodiscard]] const ::SeasonSealEffect& season_seal() const;
+  [[nodiscard]] ::SeasonSealEffect* PROTOBUF_NULLABLE release_season_seal();
+  ::SeasonSealEffect* PROTOBUF_NONNULL mutable_season_seal();
+  void set_allocated_season_seal(::SeasonSealEffect* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_season_seal(::SeasonSealEffect* PROTOBUF_NULLABLE value);
+  ::SeasonSealEffect* PROTOBUF_NULLABLE unsafe_arena_release_season_seal();
+
+  private:
+  const ::SeasonSealEffect& _internal_season_seal() const;
+  ::SeasonSealEffect* PROTOBUF_NONNULL _internal_mutable_season_seal();
 
   public:
   // uint32 physical_attack_bps = 1;
@@ -875,6 +1216,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   void _internal_set_support_sources_complete(bool value);
 
   public:
+  // uint32 season_max_health_bps = 18;
+  void clear_season_max_health_bps() ;
+  [[nodiscard]] ::uint32_t season_max_health_bps() const;
+  void set_season_max_health_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_max_health_bps() const;
+  void _internal_set_season_max_health_bps(::uint32_t value);
+
+  public:
+  // uint32 season_defense_bps = 19;
+  void clear_season_defense_bps() ;
+  [[nodiscard]] ::uint32_t season_defense_bps() const;
+  void set_season_defense_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_defense_bps() const;
+  void _internal_set_season_defense_bps(::uint32_t value);
+
+  public:
   // map<uint32, uint32> ailment_hit_bps = 11;
   [[nodiscard]] int ailment_hit_bps_size()
       const;
@@ -927,8 +1288,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
-                          5, 0,
+      ::google::protobuf::internal::TcParseTable<5, 19,
+                          6, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -958,6 +1319,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::EquipmentArtifactSource > artifacts_;
     ::google::protobuf::RepeatedPtrField< ::SupportEffectSource > support_sources_;
+    ::SeasonSealEffect* PROTOBUF_NULLABLE season_seal_;
     ::uint32_t physical_attack_bps_;
     ::uint32_t magic_attack_bps_;
     ::uint32_t max_health_bps_;
@@ -969,6 +1331,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     ::uint32_t physical_resist_bps_;
     ::uint32_t magic_resist_bps_;
     bool support_sources_complete_;
+    ::uint32_t season_max_health_bps_;
+    ::uint32_t season_defense_bps_;
     ::google::protobuf::internal::MapField<EquipmentEffects_AilmentHitBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> ailment_hit_bps_;
     ::google::protobuf::internal::MapField<EquipmentEffects_AilmentResistBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> ailment_resist_bps_;
     ::google::protobuf::internal::MapField<EquipmentEffects_ManaReductionBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> mana_reduction_bps_;
@@ -1004,7 +1368,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
 inline void EquipmentEffects::clear_physical_attack_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_attack_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t EquipmentEffects::physical_attack_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_attack_bps)
@@ -1012,7 +1376,7 @@ inline ::uint32_t EquipmentEffects::physical_attack_bps() const {
 }
 inline void EquipmentEffects::set_physical_attack_bps(::uint32_t value) {
   _internal_set_physical_attack_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_attack_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_attack_bps() const {
@@ -1028,7 +1392,7 @@ inline void EquipmentEffects::_internal_set_physical_attack_bps(::uint32_t value
 inline void EquipmentEffects::clear_magic_attack_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_attack_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t EquipmentEffects::magic_attack_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_attack_bps)
@@ -1036,7 +1400,7 @@ inline ::uint32_t EquipmentEffects::magic_attack_bps() const {
 }
 inline void EquipmentEffects::set_magic_attack_bps(::uint32_t value) {
   _internal_set_magic_attack_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_attack_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_attack_bps() const {
@@ -1052,7 +1416,7 @@ inline void EquipmentEffects::_internal_set_magic_attack_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t EquipmentEffects::max_health_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.max_health_bps)
@@ -1060,7 +1424,7 @@ inline ::uint32_t EquipmentEffects::max_health_bps() const {
 }
 inline void EquipmentEffects::set_max_health_bps(::uint32_t value) {
   _internal_set_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.max_health_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_max_health_bps() const {
@@ -1076,7 +1440,7 @@ inline void EquipmentEffects::_internal_set_max_health_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_speed_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.speed_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t EquipmentEffects::speed_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.speed_bps)
@@ -1084,7 +1448,7 @@ inline ::uint32_t EquipmentEffects::speed_bps() const {
 }
 inline void EquipmentEffects::set_speed_bps(::uint32_t value) {
   _internal_set_speed_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.speed_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_speed_bps() const {
@@ -1100,7 +1464,7 @@ inline void EquipmentEffects::_internal_set_speed_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_outgoing_heal_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outgoing_heal_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t EquipmentEffects::outgoing_heal_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.outgoing_heal_bps)
@@ -1108,7 +1472,7 @@ inline ::uint32_t EquipmentEffects::outgoing_heal_bps() const {
 }
 inline void EquipmentEffects::set_outgoing_heal_bps(::uint32_t value) {
   _internal_set_outgoing_heal_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.outgoing_heal_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_outgoing_heal_bps() const {
@@ -1124,7 +1488,7 @@ inline void EquipmentEffects::_internal_set_outgoing_heal_bps(::uint32_t value) 
 inline void EquipmentEffects::clear_shield_capacity_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shield_capacity_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t EquipmentEffects::shield_capacity_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.shield_capacity_bps)
@@ -1132,7 +1496,7 @@ inline ::uint32_t EquipmentEffects::shield_capacity_bps() const {
 }
 inline void EquipmentEffects::set_shield_capacity_bps(::uint32_t value) {
   _internal_set_shield_capacity_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.shield_capacity_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_shield_capacity_bps() const {
@@ -1148,7 +1512,7 @@ inline void EquipmentEffects::_internal_set_shield_capacity_bps(::uint32_t value
 inline void EquipmentEffects::clear_physical_crit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_crit_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t EquipmentEffects::physical_crit_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_crit_bps)
@@ -1156,7 +1520,7 @@ inline ::uint32_t EquipmentEffects::physical_crit_bps() const {
 }
 inline void EquipmentEffects::set_physical_crit_bps(::uint32_t value) {
   _internal_set_physical_crit_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_crit_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_crit_bps() const {
@@ -1172,7 +1536,7 @@ inline void EquipmentEffects::_internal_set_physical_crit_bps(::uint32_t value) 
 inline void EquipmentEffects::clear_magic_crit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_crit_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t EquipmentEffects::magic_crit_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_crit_bps)
@@ -1180,7 +1544,7 @@ inline ::uint32_t EquipmentEffects::magic_crit_bps() const {
 }
 inline void EquipmentEffects::set_magic_crit_bps(::uint32_t value) {
   _internal_set_magic_crit_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_crit_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_crit_bps() const {
@@ -1196,7 +1560,7 @@ inline void EquipmentEffects::_internal_set_magic_crit_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_physical_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_resist_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t EquipmentEffects::physical_resist_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_resist_bps)
@@ -1204,7 +1568,7 @@ inline ::uint32_t EquipmentEffects::physical_resist_bps() const {
 }
 inline void EquipmentEffects::set_physical_resist_bps(::uint32_t value) {
   _internal_set_physical_resist_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_resist_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_resist_bps() const {
@@ -1220,7 +1584,7 @@ inline void EquipmentEffects::_internal_set_physical_resist_bps(::uint32_t value
 inline void EquipmentEffects::clear_magic_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_resist_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t EquipmentEffects::magic_resist_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_resist_bps)
@@ -1228,7 +1592,7 @@ inline ::uint32_t EquipmentEffects::magic_resist_bps() const {
 }
 inline void EquipmentEffects::set_magic_resist_bps(::uint32_t value) {
   _internal_set_magic_resist_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_resist_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_resist_bps() const {
@@ -1250,7 +1614,7 @@ inline int EquipmentEffects::ailment_hit_bps_size() const {
 inline void EquipmentEffects::clear_ailment_hit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ailment_hit_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_ailment_hit_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1266,7 +1630,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_ailment_hit_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.ailment_hit_bps)
   return _internal_mutable_ailment_hit_bps();
 }
@@ -1281,7 +1645,7 @@ inline int EquipmentEffects::ailment_resist_bps_size() const {
 inline void EquipmentEffects::clear_ailment_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ailment_resist_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_ailment_resist_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1297,7 +1661,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_ailment_resist_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.ailment_resist_bps)
   return _internal_mutable_ailment_resist_bps();
 }
@@ -1312,7 +1676,7 @@ inline int EquipmentEffects::mana_reduction_bps_size() const {
 inline void EquipmentEffects::clear_mana_reduction_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mana_reduction_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_mana_reduction_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1328,7 +1692,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_mana_reduction_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.mana_reduction_bps)
   return _internal_mutable_mana_reduction_bps();
 }
@@ -1442,7 +1806,7 @@ EquipmentEffects::_internal_mutable_support_sources() {
 inline void EquipmentEffects::clear_support_sources_complete() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.support_sources_complete_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline bool EquipmentEffects::support_sources_complete() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.support_sources_complete)
@@ -1450,7 +1814,7 @@ inline bool EquipmentEffects::support_sources_complete() const {
 }
 inline void EquipmentEffects::set_support_sources_complete(bool value) {
   _internal_set_support_sources_complete(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.support_sources_complete)
 }
 inline bool EquipmentEffects::_internal_support_sources_complete() const {
@@ -1460,6 +1824,436 @@ inline bool EquipmentEffects::_internal_support_sources_complete() const {
 inline void EquipmentEffects::_internal_set_support_sources_complete(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.support_sources_complete_ = value;
+}
+
+// .SeasonSealEffect season_seal = 17;
+inline bool EquipmentEffects::has_season_seal() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.season_seal_ != nullptr);
+  return value;
+}
+inline void EquipmentEffects::clear_season_seal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_seal_ != nullptr) _impl_.season_seal_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::SeasonSealEffect& EquipmentEffects::_internal_season_seal() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SeasonSealEffect* p = _impl_.season_seal_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SeasonSealEffect>(&::SeasonSealEffect_globals_);
+}
+inline const ::SeasonSealEffect& EquipmentEffects::season_seal() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentEffects.season_seal)
+  return _internal_season_seal();
+}
+inline void EquipmentEffects::unsafe_arena_set_allocated_season_seal(
+    ::SeasonSealEffect* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_seal_);
+  }
+  _impl_.season_seal_ = reinterpret_cast<::SeasonSealEffect*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:EquipmentEffects.season_seal)
+}
+inline ::SeasonSealEffect* PROTOBUF_NULLABLE EquipmentEffects::release_season_seal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SeasonSealEffect* released = _impl_.season_seal_;
+  _impl_.season_seal_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SeasonSealEffect* PROTOBUF_NULLABLE EquipmentEffects::unsafe_arena_release_season_seal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipmentEffects.season_seal)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SeasonSealEffect* temp = _impl_.season_seal_;
+  _impl_.season_seal_ = nullptr;
+  return temp;
+}
+inline ::SeasonSealEffect* PROTOBUF_NONNULL EquipmentEffects::_internal_mutable_season_seal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_seal_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SeasonSealEffect>(GetArena());
+    _impl_.season_seal_ = reinterpret_cast<::SeasonSealEffect*>(p);
+  }
+  return _impl_.season_seal_;
+}
+inline ::SeasonSealEffect* PROTOBUF_NONNULL EquipmentEffects::mutable_season_seal()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::SeasonSealEffect* _msg = _internal_mutable_season_seal();
+  // @@protoc_insertion_point(field_mutable:EquipmentEffects.season_seal)
+  return _msg;
+}
+inline void EquipmentEffects::set_allocated_season_seal(::SeasonSealEffect* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_seal_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.season_seal_ = reinterpret_cast<::SeasonSealEffect*>(value);
+  // @@protoc_insertion_point(field_set_allocated:EquipmentEffects.season_seal)
+}
+
+// uint32 season_max_health_bps = 18;
+inline void EquipmentEffects::clear_season_max_health_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_max_health_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t EquipmentEffects::season_max_health_bps() const {
+  // @@protoc_insertion_point(field_get:EquipmentEffects.season_max_health_bps)
+  return _internal_season_max_health_bps();
+}
+inline void EquipmentEffects::set_season_max_health_bps(::uint32_t value) {
+  _internal_set_season_max_health_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:EquipmentEffects.season_max_health_bps)
+}
+inline ::uint32_t EquipmentEffects::_internal_season_max_health_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_max_health_bps_;
+}
+inline void EquipmentEffects::_internal_set_season_max_health_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_max_health_bps_ = value;
+}
+
+// uint32 season_defense_bps = 19;
+inline void EquipmentEffects::clear_season_defense_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_defense_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t EquipmentEffects::season_defense_bps() const {
+  // @@protoc_insertion_point(field_get:EquipmentEffects.season_defense_bps)
+  return _internal_season_defense_bps();
+}
+inline void EquipmentEffects::set_season_defense_bps(::uint32_t value) {
+  _internal_set_season_defense_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:EquipmentEffects.season_defense_bps)
+}
+inline ::uint32_t EquipmentEffects::_internal_season_defense_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_defense_bps_;
+}
+inline void EquipmentEffects::_internal_set_season_defense_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_defense_bps_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SeasonSealEffect
+
+// uint32 season_id = 1;
+inline void SeasonSealEffect::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SeasonSealEffect::season_id() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.season_id)
+  return _internal_season_id();
+}
+inline void SeasonSealEffect::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.season_id)
+}
+inline ::uint32_t SeasonSealEffect::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void SeasonSealEffect::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint32 seal_id = 2;
+inline void SeasonSealEffect::clear_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SeasonSealEffect::seal_id() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.seal_id)
+  return _internal_seal_id();
+}
+inline void SeasonSealEffect::set_seal_id(::uint32_t value) {
+  _internal_set_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.seal_id)
+}
+inline ::uint32_t SeasonSealEffect::_internal_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seal_id_;
+}
+inline void SeasonSealEffect::_internal_set_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seal_id_ = value;
+}
+
+// uint32 effect_id = 3;
+inline void SeasonSealEffect::clear_effect_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t SeasonSealEffect::effect_id() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.effect_id)
+  return _internal_effect_id();
+}
+inline void SeasonSealEffect::set_effect_id(::uint32_t value) {
+  _internal_set_effect_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.effect_id)
+}
+inline ::uint32_t SeasonSealEffect::_internal_effect_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_id_;
+}
+inline void SeasonSealEffect::_internal_set_effect_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_id_ = value;
+}
+
+// uint32 bonus_bps = 4;
+inline void SeasonSealEffect::clear_bonus_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SeasonSealEffect::bonus_bps() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.bonus_bps)
+  return _internal_bonus_bps();
+}
+inline void SeasonSealEffect::set_bonus_bps(::uint32_t value) {
+  _internal_set_bonus_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.bonus_bps)
+}
+inline ::uint32_t SeasonSealEffect::_internal_bonus_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_bps_;
+}
+inline void SeasonSealEffect::_internal_set_bonus_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_bps_ = value;
+}
+
+// uint32 cap_bps = 5;
+inline void SeasonSealEffect::clear_cap_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cap_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t SeasonSealEffect::cap_bps() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.cap_bps)
+  return _internal_cap_bps();
+}
+inline void SeasonSealEffect::set_cap_bps(::uint32_t value) {
+  _internal_set_cap_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.cap_bps)
+}
+inline ::uint32_t SeasonSealEffect::_internal_cap_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cap_bps_;
+}
+inline void SeasonSealEffect::_internal_set_cap_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cap_bps_ = value;
+}
+
+// uint32 per_round_limit = 6;
+inline void SeasonSealEffect::clear_per_round_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_round_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t SeasonSealEffect::per_round_limit() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.per_round_limit)
+  return _internal_per_round_limit();
+}
+inline void SeasonSealEffect::set_per_round_limit(::uint32_t value) {
+  _internal_set_per_round_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.per_round_limit)
+}
+inline ::uint32_t SeasonSealEffect::_internal_per_round_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.per_round_limit_;
+}
+inline void SeasonSealEffect::_internal_set_per_round_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_round_limit_ = value;
+}
+
+// uint32 battle_limit = 7;
+inline void SeasonSealEffect::clear_battle_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t SeasonSealEffect::battle_limit() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.battle_limit)
+  return _internal_battle_limit();
+}
+inline void SeasonSealEffect::set_battle_limit(::uint32_t value) {
+  _internal_set_battle_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.battle_limit)
+}
+inline ::uint32_t SeasonSealEffect::_internal_battle_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_limit_;
+}
+inline void SeasonSealEffect::_internal_set_battle_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_limit_ = value;
+}
+
+// uint32 active_rounds = 8;
+inline void SeasonSealEffect::clear_active_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t SeasonSealEffect::active_rounds() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.active_rounds)
+  return _internal_active_rounds();
+}
+inline void SeasonSealEffect::set_active_rounds(::uint32_t value) {
+  _internal_set_active_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.active_rounds)
+}
+inline ::uint32_t SeasonSealEffect::_internal_active_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_rounds_;
+}
+inline void SeasonSealEffect::_internal_set_active_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_rounds_ = value;
+}
+
+// uint32 health_threshold_bps = 9;
+inline void SeasonSealEffect::clear_health_threshold_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.health_threshold_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t SeasonSealEffect::health_threshold_bps() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.health_threshold_bps)
+  return _internal_health_threshold_bps();
+}
+inline void SeasonSealEffect::set_health_threshold_bps(::uint32_t value) {
+  _internal_set_health_threshold_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.health_threshold_bps)
+}
+inline ::uint32_t SeasonSealEffect::_internal_health_threshold_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.health_threshold_bps_;
+}
+inline void SeasonSealEffect::_internal_set_health_threshold_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.health_threshold_bps_ = value;
+}
+
+// string name = 10;
+inline void SeasonSealEffect::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SeasonSealEffect::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonSealEffect::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.name)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonSealEffect::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:SeasonSealEffect.name)
+  return _s;
+}
+inline const ::std::string& SeasonSealEffect::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void SeasonSealEffect::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonSealEffect::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonSealEffect::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonSealEffect.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonSealEffect::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonSealEffect.name)
 }
 
 // -------------------------------------------------------------------

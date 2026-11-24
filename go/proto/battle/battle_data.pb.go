@@ -896,6 +896,7 @@ type BattlePlayerSnapshot struct {
 	SkillRanks       map[uint32]uint32           `protobuf:"bytes,21,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	PetCaptureSlots  uint32                      `protobuf:"varint,22,opt,name=pet_capture_slots,json=petCaptureSlots,proto3" json:"pet_capture_slots,omitempty"` // scene 核定的本局可捕捉数量；旧快照缺省为0。
 	EquipmentEffects *component.EquipmentEffects `protobuf:"bytes,23,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"` // 仅人物装备，宝宝不继承。
+	ActiveSeasonId   uint32                      `protobuf:"varint,24,opt,name=active_season_id,json=activeSeasonId,proto3" json:"active_season_id,omitempty"`    // 开局由 scene 冻结的当前赛季编号（0 = 无活跃赛季）；引擎据此复核赛季限定技能。
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1089,6 +1090,13 @@ func (x *BattlePlayerSnapshot) GetEquipmentEffects() *component.EquipmentEffects
 		return x.EquipmentEffects
 	}
 	return nil
+}
+
+func (x *BattlePlayerSnapshot) GetActiveSeasonId() uint32 {
+	if x != nil {
+		return x.ActiveSeasonId
+	}
+	return 0
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -1310,6 +1318,8 @@ type BattleActorState struct {
 	PetCultivation       *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`                    // 宝宝独立条目贡献，开局快照冻结。
 	SupportEffects       *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                    // 仅本人可见；来源及中立预览由本轮真实状态生成。
 	CompetitiveTemporary bool                             `protobuf:"varint,42,opt,name=competitive_temporary,json=competitiveTemporary,proto3" json:"competitive_temporary,omitempty"` // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
+	IsBoss               bool                             `protobuf:"varint,43,opt,name=is_boss,json=isBoss,proto3" json:"is_boss,omitempty"`                                           // true = 首领单位（来自 MonsterTable.is_boss）；不可被复制技能选中，客户端选目标阶段置灰。
+	SeasonSealState      *BattleArtifactState             `protobuf:"bytes,44,opt,name=season_seal_state,json=seasonSealState,proto3" json:"season_seal_state,omitempty"`               // 单槽赛季印的局内次数状态（不占用永久法宝 item_id 列表，下发客户端前清除）。
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1638,6 +1648,20 @@ func (x *BattleActorState) GetCompetitiveTemporary() bool {
 	return false
 }
 
+func (x *BattleActorState) GetIsBoss() bool {
+	if x != nil {
+		return x.IsBoss
+	}
+	return false
+}
+
+func (x *BattleActorState) GetSeasonSealState() *BattleArtifactState {
+	if x != nil {
+		return x.SeasonSealState
+	}
+	return nil
+}
+
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
 type BattleArtifactState struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
@@ -1819,6 +1843,7 @@ type BattleEventItem struct {
 	InstigatorId         uint64 `protobuf:"varint,21,opt,name=instigator_id,json=instigatorId,proto3" json:"instigator_id,omitempty"` // 催动者与原持续效果施加者分别保留。
 	ArtifactItemId       uint64 `protobuf:"varint,22,opt,name=artifact_item_id,json=artifactItemId,proto3" json:"artifact_item_id,omitempty"`
 	ArtifactEffectId     uint32 `protobuf:"varint,23,opt,name=artifact_effect_id,json=artifactEffectId,proto3" json:"artifact_effect_id,omitempty"`
+	SeasonSealId         uint32 `protobuf:"varint,24,opt,name=season_seal_id,json=seasonSealId,proto3" json:"season_seal_id,omitempty"` // 非 0 表示本次 BATTLE_EVENT_ARTIFACT 由单槽赛季印触发（artifact_item_id 为 0）。
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -2010,6 +2035,13 @@ func (x *BattleEventItem) GetArtifactItemId() uint64 {
 func (x *BattleEventItem) GetArtifactEffectId() uint32 {
 	if x != nil {
 		return x.ArtifactEffectId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetSeasonSealId() uint32 {
+	if x != nil {
+		return x.SeasonSealId
 	}
 	return 0
 }
@@ -3024,7 +3056,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xd4\a\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xfe\a\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -3053,7 +3085,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\vskill_ranks\x18\x15 \x03(\v2%.BattlePlayerSnapshot.SkillRanksEntryR\n" +
 	"skillRanks\x12*\n" +
 	"\x11pet_capture_slots\x18\x16 \x01(\rR\x0fpetCaptureSlots\x12>\n" +
-	"\x11equipment_effects\x18\x17 \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x1a=\n" +
+	"\x11equipment_effects\x18\x17 \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x12(\n" +
+	"\x10active_season_id\x18\x18 \x01(\rR\x0eactiveSeasonId\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xd4\x05\n" +
@@ -3080,7 +3113,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13combat_pet_table_id\x18\x10 \x01(\rR\x10combatPetTableId\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xbc\x10\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x97\x11\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -3131,7 +3164,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0eentry_max_mana\x18' \x01(\x04R\fentryMaxMana\x12?\n" +
 	"\x0fpet_cultivation\x18) \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x12>\n" +
 	"\x0fsupport_effects\x18( \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\x123\n" +
-	"\x15competitive_temporary\x18* \x01(\bR\x14competitiveTemporary\x1aF\n" +
+	"\x15competitive_temporary\x18* \x01(\bR\x14competitiveTemporary\x12\x17\n" +
+	"\ais_boss\x18+ \x01(\bR\x06isBoss\x12@\n" +
+	"\x11season_seal_state\x18, \x01(\v2\x14.BattleArtifactStateR\x0fseasonSealState\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
@@ -3157,7 +3192,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"actionType\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x1b\n" +
 	"\ttarget_id\x18\x03 \x01(\x04R\btargetId\x12\"\n" +
-	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\xf1\x06\n" +
+	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\x97\a\n" +
 	"\x0fBattleEventItem\x120\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\x0e2\x11.eBattleEventTypeR\teventType\x12\x1b\n" +
@@ -3185,7 +3220,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rdamage_origin\x18\x14 \x01(\rR\fdamageOrigin\x12#\n" +
 	"\rinstigator_id\x18\x15 \x01(\x04R\finstigatorId\x12(\n" +
 	"\x10artifact_item_id\x18\x16 \x01(\x04R\x0eartifactItemId\x12,\n" +
-	"\x12artifact_effect_id\x18\x17 \x01(\rR\x10artifactEffectIdB\r\n" +
+	"\x12artifact_effect_id\x18\x17 \x01(\rR\x10artifactEffectId\x12$\n" +
+	"\x0eseason_seal_id\x18\x18 \x01(\rR\fseasonSealIdB\r\n" +
 	"\v_mana_delta\"W\n" +
 	"\x13BattleMonsterDefeat\x12*\n" +
 	"\x11monster_config_id\x18\x01 \x01(\rR\x0fmonsterConfigId\x12\x14\n" +
@@ -3415,26 +3451,27 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	14, // 20: BattleActorState.artifact_states:type_name -> BattleArtifactState
 	38, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
 	39, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
-	1,  // 23: BattleAction.action_type:type_name -> eBattleActionType
-	2,  // 24: BattleEventItem.event_type:type_name -> eBattleEventType
-	3,  // 25: BattleEventItem.hit_kind:type_name -> eBattleHitKind
-	18, // 26: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
-	19, // 27: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
-	20, // 28: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
-	4,  // 29: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	10, // 30: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	10, // 31: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	23, // 32: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	17, // 33: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	18, // 34: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
-	5,  // 35: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	25, // 36: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
-	26, // 37: RankedMatchContext.members:type_name -> RankedMemberLoadout
-	38, // [38:38] is the sub-list for method output_type
-	38, // [38:38] is the sub-list for method input_type
-	38, // [38:38] is the sub-list for extension type_name
-	38, // [38:38] is the sub-list for extension extendee
-	0,  // [0:38] is the sub-list for field type_name
+	14, // 23: BattleActorState.season_seal_state:type_name -> BattleArtifactState
+	1,  // 24: BattleAction.action_type:type_name -> eBattleActionType
+	2,  // 25: BattleEventItem.event_type:type_name -> eBattleEventType
+	3,  // 26: BattleEventItem.hit_kind:type_name -> eBattleHitKind
+	18, // 27: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
+	19, // 28: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
+	20, // 29: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
+	4,  // 30: BattleSettlementData.outcome:type_name -> eBattleOutcome
+	10, // 31: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	10, // 32: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	23, // 33: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	17, // 34: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	18, // 35: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
+	5,  // 36: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	25, // 37: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	26, // 38: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	39, // [39:39] is the sub-list for method output_type
+	39, // [39:39] is the sub-list for method input_type
+	39, // [39:39] is the sub-list for extension type_name
+	39, // [39:39] is the sub-list for extension extendee
+	0,  // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }

@@ -15,6 +15,7 @@ struct ActorActionCombatStateTableSnapshot;
 struct ActorActionStateTableSnapshot;
 struct AfkPassRuleTableSnapshot;
 struct AppearanceRuleTableSnapshot;
+struct AppearanceSeriesTableSnapshot;
 struct AttributeAllocRatioTableSnapshot;
 struct AttributeAutoPlanTableSnapshot;
 struct AttributeDimensionTableSnapshot;
@@ -60,6 +61,8 @@ struct RankedPresetTableSnapshot;
 struct RankedRuleTableSnapshot;
 struct RewardTableSnapshot;
 struct RoleNameRuleTableSnapshot;
+struct SeasonRuleTableSnapshot;
+struct SeasonSealTableSnapshot;
 struct SkillTableSnapshot;
 struct SkillPermissionTableSnapshot;
 struct TestTableSnapshot;
@@ -72,7 +75,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "ece0013ccbb6f3b0";
+inline constexpr std::string_view kTableSchemaDigest = "0f6757d95603c861";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -100,6 +103,8 @@ struct TableSet {
     std::shared_ptr<const AfkPassRuleTableSnapshot> afkPassRuleTable;
 
     std::shared_ptr<const AppearanceRuleTableSnapshot> appearanceRuleTable;
+
+    std::shared_ptr<const AppearanceSeriesTableSnapshot> appearanceSeriesTable;
 
     std::shared_ptr<const AttributeAllocRatioTableSnapshot> attributeAllocRatioTable;
 
@@ -190,6 +195,10 @@ struct TableSet {
     std::shared_ptr<const RewardTableSnapshot> rewardTable;
 
     std::shared_ptr<const RoleNameRuleTableSnapshot> roleNameRuleTable;
+
+    std::shared_ptr<const SeasonRuleTableSnapshot> seasonRuleTable;
+
+    std::shared_ptr<const SeasonSealTableSnapshot> seasonSealTable;
 
     std::shared_ptr<const SkillTableSnapshot> skillTable;
 

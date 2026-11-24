@@ -77,8 +77,13 @@ message PlayerProfileComp
 	string trial_appearance_id = 8;
 	// 当前试用到期的 Unix 秒;0 = 无试用中;<= 现在 = 已到期(下次加载或 Tick 自动清理并广播还原)。
 	uint64 trial_expires_at = 9;
-	// 永久形象切换序号(每次消耗角色形象卡成功切换永久形象时递增),用于可靠同步到 data_service 账号角色目录。
+	// 永久形象切换序号(每次成功变更永久形象时递增),用于可靠同步到 data_service 账号角色目录。
 	uint64 appearance_switch_seq = 10;
+	// 已永久拥有的角色形象位图(docs/rules/bit-storage-and-table-ids.md):
+	// 第 i 位对应 CharacterAppearance 表经导表器分配的 bit_index i(低位在前,末尾全 0 字节不写)。
+	// 置 1 表示该角色已永久拥有对应形象,可随时 0 消耗免费切换;高位未知 bit 混跑时原样透传不截断。
+	// 当前永久形象 appearance_id(若存在于配表)天然视作已拥有,并在首次切换离场时自动补位落盘。
+	bytes appearance_owned_bits = 11;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

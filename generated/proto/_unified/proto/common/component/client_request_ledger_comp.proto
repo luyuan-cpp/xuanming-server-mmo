@@ -35,6 +35,8 @@ message ClientRequestRecord {
   uint64 material_reward_revision = 10; // 材料自选：首次成功后的独立水位。
   uint32 crafting_material_count = 11;  // 材料自选首次实际领取的打造材料数。
   uint32 enhancement_stone_count = 12;  // 材料自选首次实际领取的强化石数。
+  uint32 season_catchup_points = 13;    // 赛季印追赶：首次实际补齐的进度点数。
+  uint64 season_catchup_spent = 14;     // 赛季印追赶：首次实际扣除的货币数。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随游戏日重置。

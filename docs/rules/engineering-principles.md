@@ -62,6 +62,10 @@
 - 已发布协议、持久化数据、外部配置和滚动升级接缝优先向后兼容。破坏性变更必须有版本、迁移、灰度与回滚方案，并验证新旧版本并存窗口。
 - 关键路径提供结构化日志、低基数指标和必要追踪；日志通过受控关联标识定位请求、阶段和结果，但不得使用 `player_id` 等高基数值作指标 label。
 - 性能优化必须由 profiling、benchmark 或压测数据驱动；先修算法、I/O 和数据结构瓶颈，不以牺牲正确性和可读性换未经测量的微优化。
+- **禁止用定时器掩盖时序问题**（移植自 `xuanming-server` `CLAUDE.md §16.10`）：Timer / Tick / Delay / `time.Sleep` 不得用于掩盖本可确定的依赖就绪或初始化顺序；判别口诀为**“到期后假设成功的是掩盖（禁止），到期后重查权威的是兜底（有界 deadline 必需）”**。
+- **推送不承担正确性**（移植自 `xuanming-server` `protocol-ordering-rules.md`）：RPC 响应应自洽完整，异步推送不向发起者重复投递，且每个客户端展示状态必须具备权威查询拉取兜底（界面进入 / 断线重连 / 切前台 / 主动 resync / watchdog 触发），防止异步推送丢失导致状态永久漂移。
+- **数据库广度与深度双守卫及默认只报告清理**（移植自 `xuanming-server` `CLAUDE.md §9.24`）：新增集合序列化列须控制写入侧字节上限（使用 `go/shared/dbguard.CheckPayload` 提供 80% 预警与超限 fail-closed），表行数与 `AVG_ROW_LENGTH` 走 `dbguard.Guard.Check` 估算观测不阻断启动，运维语义保留期清理默认 `report_only`（COUNT 与 DELETE 共享同一 WHERE）。
+- **崩溃与 P0 事故独立建档关闭门禁**（移植自 `xuanming-server` `CLAUDE.md §16.9`）：凡确认崩溃、runtime fatal、未恢复 panic、数据损坏/回档、脑裂或大面积不可用 P0，当次按 [docs/incidents/template.md](../incidents/template.md) 建档并登记 [docs/incidents/index.md](../incidents/index.md)，关闭审核清单全部满足前不得标记已关闭。
 
 ## 4. 测试与评审（§11.4）
 

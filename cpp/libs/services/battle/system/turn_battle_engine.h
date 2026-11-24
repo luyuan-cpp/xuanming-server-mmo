@@ -148,7 +148,11 @@ private:
     void ExecuteConfiguredSkill(BattleActorState& actor, const BattleAction& action,
                                  const SkillTable& row, TurnResultS2C& result,
                                  BattleDamageOrigin origin = BattleDamageOrigin::Direct,
-                                 double scale = 1.0);
+                                 double scale = 1.0, uint32_t rankOverride = 0);
+    bool HasValidConfiguredTarget(const BattleActorState& caster, const SkillTable& row) const;
+    bool IsSkillCopyableFor(const BattleActorState& caster, const SkillTable& row) const;
+    bool HasCopyableSkillFor(const BattleActorState& caster, const BattleActorState& target) const;
+    std::optional<uint32_t> SelectCopiedSkillId(const BattleActorState& caster, const BattleActorState& target);
     double ConfiguredValue(const BattleActorState& caster, const BattleActorState& target,
                             const BuffTable& row, const EffectContext& context) const;
     void ApplyConfiguredEffect(BattleActorState& caster, BattleActorState& target, uint32_t buffId,
@@ -178,6 +182,9 @@ private:
     uint32_t EquipmentManaCategory(const SkillTable& skill) const;
     std::vector<int> AvailableArtifacts(const BattleActorState& actor, uint32_t effect) const;
     void UseArtifact(BattleActorState& actor, int index, uint64_t targetId, uint64_t value,
+                       TurnResultS2C& result);
+    bool SeasonSealAvailable(const BattleActorState& actor, uint32_t effect) const;
+    void UseSeasonSeal(BattleActorState& actor, uint64_t targetId, uint64_t value,
                        TurnResultS2C& result);
     void EquipmentDefend(BattleActorState& actor, TurnResultS2C& result);
     uint64_t EquipmentReduceDamage(BattleActorState& source, BattleActorState& target,

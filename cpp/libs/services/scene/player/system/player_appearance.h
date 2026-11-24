@@ -1,10 +1,11 @@
 #pragma once
 
-// 角色形象切换（商城 10 元角色形象卡）与 1 小时免费试用（bit 位图存储）。
+// 角色形象永久收藏衣柜（已拥有免费切换 / 形象卡买断解锁）与 1 小时免费试用（bit 位图存储）。
 // 设计文档: docs/design/character-appearance-switch.md。
 //
 // 事实源:
-//   - 永久形象: PlayerProfileComp.appearance_id(角色唯一永久形象,不设衣柜;切形象扣 1 张角色形象卡并覆盖)
+//   - 当前永久形象: PlayerProfileComp.appearance_id(同时隐式视作已拥有,兼容旧存档零迁移)
+//   - 永久已拥有位图: PlayerProfileComp.appearance_owned_bits(按 CharacterAppearance 主键 bit_index 存位)
 //   - 试用位图与试用态: PlayerProfileComp.appearance_trial_used_bits / trial_appearance_id / trial_expires_at
 //   - 幂等防重: ClientRequestLedgerComp(kSwitchAppearance = 7, kStartAppearanceTrial = 8),随同一次存盘提交
 //   - 选角目录同步: 存盘提交后 OnSaveCommitted 异步调用 DataService.UpdateRoleAppearance(瞬时失败由 Tick 退避重试)
@@ -14,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 
 #include "engine/core/type_define/type_define.h"
 #include "entt/src/entt/entity/entity.hpp"
@@ -51,11 +53,19 @@ public:
 	// 组装面板完整状态(永久/生效/试用/倒计时墙钟/规则价格/可用形象卡数/bit 位图/可选列表)。
 	static void FillInfo(entt::entity player, uint64_t nowUnixSec, PlayerAppearanceInfo &info);
 
-	// 消耗角色形象卡永久切换唯一形象(带 client_request_id 幂等防重)。成功返回 kSuccess。
+	// 切换永久形象:已拥有免费切换(不扣卡);未拥有时仅在 expect_free_switch=false 且 card_unlockable=1 时扣形象卡买断解锁。
+	// 成功返回 kSuccess,带 client_request_id 幂等防重。
 	static uint32_t SwitchAppearance(entt::entity player,
 									 const SwitchAppearanceRequest &request,
 									 uint64_t nowUnixSec,
 									 SwitchAppearanceResponse &response);
+
+	// 服务端内部权威授形入口(供排位/副本/活动解锁调用,不对外开放 RPC):
+	// 仅在 appearance_owned_bits 置位并推送状态通知,不修改当前永久外观或进行中的试用;已拥有时幂等返回 kSuccess。
+	static uint32_t GrantAppearance(entt::entity player,
+									std::string_view appearanceId,
+									uint64_t nowUnixSec,
+									bool *alreadyOwned = nullptr);
 
 	// 开启目标形象 1 小时免费试用(按 CharacterAppearance bit_index 记位,每形象每角色限 1 次,带幂等键)。
 	static uint32_t StartTrial(entt::entity player,

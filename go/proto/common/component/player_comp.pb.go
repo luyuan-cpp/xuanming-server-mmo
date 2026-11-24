@@ -349,8 +349,13 @@ type PlayerProfileComp struct {
 	TrialAppearanceId string `protobuf:"bytes,8,opt,name=trial_appearance_id,json=trialAppearanceId,proto3" json:"trial_appearance_id,omitempty"`
 	// 当前试用到期的 Unix 秒;0 = 无试用中;<= 现在 = 已到期(下次加载或 Tick 自动清理并广播还原)。
 	TrialExpiresAt uint64 `protobuf:"varint,9,opt,name=trial_expires_at,json=trialExpiresAt,proto3" json:"trial_expires_at,omitempty"`
-	// 永久形象切换序号(每次消耗角色形象卡成功切换永久形象时递增),用于可靠同步到 data_service 账号角色目录。
+	// 永久形象切换序号(每次成功变更永久形象时递增),用于可靠同步到 data_service 账号角色目录。
 	AppearanceSwitchSeq uint64 `protobuf:"varint,10,opt,name=appearance_switch_seq,json=appearanceSwitchSeq,proto3" json:"appearance_switch_seq,omitempty"`
+	// 已永久拥有的角色形象位图(docs/rules/bit-storage-and-table-ids.md):
+	// 第 i 位对应 CharacterAppearance 表经导表器分配的 bit_index i(低位在前,末尾全 0 字节不写)。
+	// 置 1 表示该角色已永久拥有对应形象,可随时 0 消耗免费切换;高位未知 bit 混跑时原样透传不截断。
+	// 当前永久形象 appearance_id(若存在于配表)天然视作已拥有,并在首次切换离场时自动补位落盘。
+	AppearanceOwnedBits []byte `protobuf:"bytes,11,opt,name=appearance_owned_bits,json=appearanceOwnedBits,proto3" json:"appearance_owned_bits,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -453,6 +458,13 @@ func (x *PlayerProfileComp) GetAppearanceSwitchSeq() uint64 {
 		return x.AppearanceSwitchSeq
 	}
 	return 0
+}
+
+func (x *PlayerProfileComp) GetAppearanceOwnedBits() []byte {
+	if x != nil {
+		return x.AppearanceOwnedBits
+	}
+	return nil
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:
@@ -627,7 +639,7 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\x12-\n" +
 	"\x13afk_pass_expires_at\x18\x02 \x01(\x04R\x10afkPassExpiresAt\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"\x9b\x03\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\xcf\x03\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
@@ -641,7 +653,8 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x13trial_appearance_id\x18\b \x01(\tR\x11trialAppearanceId\x12(\n" +
 	"\x10trial_expires_at\x18\t \x01(\x04R\x0etrialExpiresAt\x122\n" +
 	"\x15appearance_switch_seq\x18\n" +
-	" \x01(\x04R\x13appearanceSwitchSeq\"\xaf\x01\n" +
+	" \x01(\x04R\x13appearanceSwitchSeq\x122\n" +
+	"\x15appearance_owned_bits\x18\v \x01(\fR\x13appearanceOwnedBits\"\xaf\x01\n" +
 	"\x0ePlayerRenameOp\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +

@@ -613,7 +613,28 @@
         "AppearanceTrialAlreadyUsed": 33003,
         "AppearanceNoActiveTrial": 33004,
         "AppearanceFrozen": 33005,
-        "AppearanceUnavailable": 33006
+        "AppearanceUnavailable": 33006,
+        "AppearanceNotCardUnlockable": 33007,
+        "AppearanceAlreadyOwned": 33008,
+        "AppearanceNotOwned": 33009
+      }
+    },
+    "season_error": {
+      "base": 34000,
+      "width": 1000,
+      "ids": {
+        "SeasonNotOpen": 34000,
+        "SeasonMismatch": 34001,
+        "SeasonSealInvalid": 34002,
+        "SeasonSealAlreadyEquipped": 34003,
+        "SeasonSealAlreadyMax": 34004,
+        "SeasonCatchupDisabled": 34005,
+        "SeasonCatchupPriceChanged": 34006,
+        "SeasonCatchupCurrencyNotEnough": 34007,
+        "SeasonFrozen": 34008,
+        "SeasonInBattle": 34009,
+        "SeasonSkillNoUpgrade": 34010,
+        "SeasonUnavailable": 34011
       }
     }
   },
