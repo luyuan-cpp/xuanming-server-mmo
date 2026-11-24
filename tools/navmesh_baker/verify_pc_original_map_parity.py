@@ -116,7 +116,7 @@ def build_manifest(server_root: Path, client_catalog_path: Path) -> dict:
         require(num_id not in fest_set, f"{map_id}: unexpected collision with festival_maps")
         require(num_id not in auth_set, f"{map_id}: unexpected collision with authored_maps")
 
-        maps_out.append({
+        map_item = {
             "mapId": map_id,
             "numericMapId": num_id,
             "name": entry["name"],
@@ -143,7 +143,28 @@ def build_manifest(server_root: Path, client_catalog_path: Path) -> dict:
             "serverEntryTeleportStatus": "NOT_REGISTERED_IN_WORLD_OR_BASESCENE",
             "productionTravelEnabled": False,
             "relatedExistingServerSceneNote": RELATED_EXISTING_SCENE_NOTES.get(map_id, ""),
-        })
+        }
+        if entry.get("pcOriginalSourceNativeSha256"):
+            map_item["pcOriginalSourceNativeSha256"] = entry["pcOriginalSourceNativeSha256"]
+            map_item["pcOriginalSourceNativeBytes"] = int(entry["pcOriginalSourceNativeBytes"])
+        if entry.get("appearances"):
+            map_item["clientDefaultAppearance"] = entry["defaultAppearance"]
+            map_item["clientAppearances"] = [
+                {
+                    "id": a["id"],
+                    "displayName": a.get("displayName", a["id"]),
+                    "artStage": a["artStage"],
+                    "revision": a["revision"],
+                    "resourceRoot": a["resourceRoot"],
+                    "hasAlpha": bool(a["hasAlpha"]),
+                    "tileFormat": a["tileFormat"],
+                    "sourceNativeSha256": a["sourceNativeSha256"],
+                    "sourceNativeBytes": int(a["sourceNativeBytes"]),
+                    "tilesManifestSha256": a["tilesManifestSha256"],
+                }
+                for a in entry["appearances"]
+            ]
+        maps_out.append(map_item)
 
     unavailable_out = []
     for gap in catalog["unavailableMaps"]:

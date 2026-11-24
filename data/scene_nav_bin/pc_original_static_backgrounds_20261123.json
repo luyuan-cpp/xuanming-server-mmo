@@ -7,7 +7,7 @@
   "productionTravelEnabled": false,
   "sourceContainerSha256": "724b3f9b1018951ac21d502a798d54b1b86d0a04250f01e1524add33525dc07f",
   "clientCatalogPath": "Assets/Resources/World/PcOriginalPreview20261123/catalog.json",
-  "clientCatalogSha256": "4f14fa40756c74b7ca8fdc6a9827aae6530c6bae519415be0745ed460ef9a93c",
+  "clientCatalogSha256": "f53a373e0b381d00f90101489ab7f263e5c6d5078c9114a9b99fbefb62e40a72",
   "clientCatalogRevision": "pc-original-20261123",
   "existingServerInventory": {
     "baseSceneIds": [
@@ -1115,22 +1115,22 @@
       "numericMapId": 28002,
       "name": "地图 28002",
       "clientPreviewStatus": "ready_local_preview_only",
-      "artStage": "pc_original_static_back",
-      "isTemporaryOriginal": true,
+      "artStage": "qdao_redrawn_static_back",
+      "isTemporaryOriginal": false,
       "replaceableByQdaoArt": true,
       "nativePixels": [
         3000,
         1800
       ],
       "sourceBranch": "gbits",
-      "sourceNativeSha256": "d4f9e5d5556fb8bccc0ef27f112e956b253e35daa4965641a87a47f32a81748f",
-      "sourceNativeBytes": 7843148,
-      "clientCatalogRevision": "pc-original-20261123",
-      "clientResourceRoot": "World/PcOriginalPreview20261123/28002/pc-original-20261123/",
-      "clientTileFormat": "jpg_q90_native_1024_grid",
+      "sourceNativeSha256": "367aee7302e076f2e68870d5a126fce8d8402380a50c46a7f30d4ebc499e570e",
+      "sourceNativeBytes": 10852105,
+      "clientCatalogRevision": "qdao-spring-v002",
+      "clientResourceRoot": "World/PcOriginalPreview20261123/28002/qdao-spring-v002/",
+      "clientTileFormat": "png_rgba_native_1024_grid",
       "clientTileCount": 6,
-      "clientHasAlpha": false,
-      "clientTilesManifestSha256": "e10b2fe067e68f846b6680463d548ce5207ee9b19c6611bd9c5294afa3b36b5b",
+      "clientHasAlpha": true,
+      "clientTilesManifestSha256": "add00adca016301ec4b99a18d97205a048960be038213891b5fb8bcf6d3458b6",
       "serverBaseSceneRegistered": false,
       "serverWorldRegistered": false,
       "serverFestivalNavRegistered": false,
@@ -1139,7 +1139,36 @@
       "serverCollisionStatus": "UNPROVEN_STATIC_BACK_ONLY",
       "serverEntryTeleportStatus": "NOT_REGISTERED_IN_WORLD_OR_BASESCENE",
       "productionTravelEnabled": false,
-      "relatedExistingServerSceneNote": ""
+      "relatedExistingServerSceneNote": "",
+      "pcOriginalSourceNativeSha256": "d4f9e5d5556fb8bccc0ef27f112e956b253e35daa4965641a87a47f32a81748f",
+      "pcOriginalSourceNativeBytes": 7843148,
+      "clientDefaultAppearance": "spring",
+      "clientAppearances": [
+        {
+          "id": "spring",
+          "displayName": "春节",
+          "artStage": "qdao_redrawn_static_back",
+          "revision": "qdao-spring-v002",
+          "resourceRoot": "World/PcOriginalPreview20261123/28002/qdao-spring-v002/",
+          "hasAlpha": true,
+          "tileFormat": "png_rgba_native_1024_grid",
+          "sourceNativeSha256": "367aee7302e076f2e68870d5a126fce8d8402380a50c46a7f30d4ebc499e570e",
+          "sourceNativeBytes": 10852105,
+          "tilesManifestSha256": "add00adca016301ec4b99a18d97205a048960be038213891b5fb8bcf6d3458b6"
+        },
+        {
+          "id": "midautumn",
+          "displayName": "中秋",
+          "artStage": "qdao_redrawn_static_back",
+          "revision": "qdao-midautumn-v002",
+          "resourceRoot": "World/PcOriginalPreview20261123/28002/qdao-midautumn-v002/",
+          "hasAlpha": true,
+          "tileFormat": "png_rgba_native_1024_grid",
+          "sourceNativeSha256": "c7e15bcd00a22a1f185bd8952a513d67abb43f146865da25f7cce9a3aa5209f8",
+          "sourceNativeBytes": 10877607,
+          "tilesManifestSha256": "ec652d9e3366c33f4df64b9366ba46a06facbb5865d0f0b8d21e3b8fde97f0e7"
+        }
+      ]
     },
     {
       "mapId": "41081",
