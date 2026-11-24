@@ -56,6 +56,8 @@ enum class ClientRequestKind : uint8_t
 	kSwitchAppearance = 7,        // SceneAppearanceClientPlayer.SwitchAppearance:消费角色形象卡永久切换形象
 	kStartAppearanceTrial = 8,    // SceneAppearanceClientPlayer.StartAppearanceTrial:开启某形象 1 小时试用(位图记账)
 	kCatchupSeasonSeal = 9,       // SceneSeasonClientPlayer.CatchupSeasonSeal:小额灵石快捷追赶赛季印进度
+	kClaimTrialJournalMilestone = 10, // SceneTrialJournalClientPlayer.ClaimTrialJournalMilestone:领取试炼志战法印里程碑奖励
+	kRedeemBoundArtifactVoucher = 11, // SceneTrialJournalClientPlayer.RedeemBoundArtifactVoucher:使用自用法宝拓印兑换绑定法宝
 	kCount
 };
 
@@ -73,7 +75,8 @@ enum class ClientRequestVerdict : uint8_t
 inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhance_equip", "buy_mystery_merchant_goods",
 														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward",
 														  "buy_afk_pass", "switch_appearance", "start_appearance_trial",
-														  "catchup_season_seal"};
+														  "catchup_season_seal", "claim_trial_journal_milestone",
+														  "redeem_bound_artifact_voucher"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -108,6 +111,11 @@ struct ClientRequestResult
 	uint32_t enhancementStoneCount{0};
 	uint32_t seasonCatchupPoints{0};
 	uint64_t seasonCatchupSpent{0};
+	uint32_t trialMilestoneId{0};
+	uint32_t trialMilestoneSandCount{0};
+	uint32_t trialMilestoneVoucherCount{0};
+	uint64_t redeemedArtifactItemId{0};
+	uint32_t redeemedArtifactConfigId{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

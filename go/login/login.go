@@ -27,6 +27,7 @@ import (
 	"shared/drainproof"
 	"shared/generated/table"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -348,6 +349,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 			reflection.Register(grpcServer)
 		}
 	})
+	server.AddOptions(grpckeepalive.ServerOption(0, 0))
 
 	// 必须在 MustNewServer 之后:它内部的 SetUp → prometheus.StartAgent 才打开 go-zero 指标的
 	// 全局开关,在那之前写的样本会被直接丢弃(理由与告警口径见 PrimeCreatePlayerMetrics)。

@@ -271,6 +271,14 @@ extern const ::google::protobuf::internal::ClassDataFull BattleSettlementData_cl
 #else
 extern const BattleSettlementDataGlobalsTypeInternal BattleSettlementData_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleTrialJournalFacts;
+struct BattleTrialJournalFactsGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleTrialJournalFactsGlobalsTypeInternal BattleTrialJournalFacts_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleTrialJournalFacts_class_data_;
+#else
+extern const BattleTrialJournalFactsGlobalsTypeInternal BattleTrialJournalFacts_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RankedMatchContext;
 struct RankedMatchContextGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -294,6 +302,14 @@ extern RankedPresetSelectionGlobalsTypeInternal RankedPresetSelection_globals_;
 extern const ::google::protobuf::internal::ClassDataFull RankedPresetSelection_class_data_;
 #else
 extern const RankedPresetSelectionGlobalsTypeInternal RankedPresetSelection_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TrialBattleContext;
+struct TrialBattleContextGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TrialBattleContextGlobalsTypeInternal TrialBattleContext_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TrialBattleContext_class_data_;
+#else
+extern const TrialBattleContextGlobalsTypeInternal TrialBattleContext_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
@@ -689,6 +705,255 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialBattleContext final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:TrialBattleContext) */ {
+ public:
+  inline TrialBattleContext() : TrialBattleContext(nullptr) {}
+  ~TrialBattleContext() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TrialBattleContext* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TrialBattleContext));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TrialBattleContext(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TrialBattleContext(const TrialBattleContext& from) : TrialBattleContext(nullptr, from) {}
+  inline TrialBattleContext(TrialBattleContext&& from) noexcept : TrialBattleContext(nullptr, ::std::move(from)) {}
+  inline TrialBattleContext& operator=(const TrialBattleContext& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TrialBattleContext& operator=(TrialBattleContext&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TrialBattleContext& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TrialBattleContext>(&TrialBattleContext_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(TrialBattleContext& a, TrialBattleContext& b) { a.Swap(&b); }
+  inline void Swap(TrialBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TrialBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TrialBattleContext* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TrialBattleContext>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TrialBattleContext& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TrialBattleContext& from) { TrialBattleContext::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TrialBattleContext* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "TrialBattleContext"; }
+
+  explicit TrialBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TrialBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TrialBattleContext& from);
+  TrialBattleContext(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TrialBattleContext&& from) noexcept
+      : TrialBattleContext(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kJournalEntryIdFieldNumber = 1,
+    kTrialRuleVersionFieldNumber = 2,
+    kSeasonIdFieldNumber = 3,
+    kGuardMonsterTableIdFieldNumber = 4,
+    kGuardStanceBuffIdFieldNumber = 5,
+  };
+  // uint32 journal_entry_id = 1;
+  void clear_journal_entry_id() ;
+  [[nodiscard]] ::uint32_t journal_entry_id() const;
+  void set_journal_entry_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_journal_entry_id() const;
+  void _internal_set_journal_entry_id(::uint32_t value);
+
+  public:
+  // uint32 trial_rule_version = 2;
+  void clear_trial_rule_version() ;
+  [[nodiscard]] ::uint32_t trial_rule_version() const;
+  void set_trial_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_rule_version() const;
+  void _internal_set_trial_rule_version(::uint32_t value);
+
+  public:
+  // uint32 season_id = 3;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 guard_monster_table_id = 4;
+  void clear_guard_monster_table_id() ;
+  [[nodiscard]] ::uint32_t guard_monster_table_id() const;
+  void set_guard_monster_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_guard_monster_table_id() const;
+  void _internal_set_guard_monster_table_id(::uint32_t value);
+
+  public:
+  // uint32 guard_stance_buff_id = 5;
+  void clear_guard_stance_buff_id() ;
+  [[nodiscard]] ::uint32_t guard_stance_buff_id() const;
+  void set_guard_stance_buff_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_guard_stance_buff_id() const;
+  void _internal_set_guard_stance_buff_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:TrialBattleContext)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TrialBattleContext& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t journal_entry_id_;
+    ::uint32_t trial_rule_version_;
+    ::uint32_t season_id_;
+    ::uint32_t guard_monster_table_id_;
+    ::uint32_t guard_stance_buff_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedPresetSelection final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:RankedPresetSelection) */ {
  public:
@@ -895,6 +1160,463 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedPresetSelection final : publi
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t character_preset_id_;
     ::uint32_t pet_preset_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTrialJournalFacts final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattleTrialJournalFacts) */ {
+ public:
+  inline BattleTrialJournalFacts() : BattleTrialJournalFacts(nullptr) {}
+  ~BattleTrialJournalFacts() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleTrialJournalFacts* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleTrialJournalFacts));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleTrialJournalFacts(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleTrialJournalFacts(const BattleTrialJournalFacts& from) : BattleTrialJournalFacts(nullptr, from) {}
+  inline BattleTrialJournalFacts(BattleTrialJournalFacts&& from) noexcept : BattleTrialJournalFacts(nullptr, ::std::move(from)) {}
+  inline BattleTrialJournalFacts& operator=(const BattleTrialJournalFacts& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleTrialJournalFacts& operator=(BattleTrialJournalFacts&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleTrialJournalFacts& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleTrialJournalFacts>(&BattleTrialJournalFacts_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(BattleTrialJournalFacts& a, BattleTrialJournalFacts& b) { a.Swap(&b); }
+  inline void Swap(BattleTrialJournalFacts* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleTrialJournalFacts* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleTrialJournalFacts* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleTrialJournalFacts>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleTrialJournalFacts& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleTrialJournalFacts& from) { BattleTrialJournalFacts::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleTrialJournalFacts* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattleTrialJournalFacts"; }
+
+  explicit BattleTrialJournalFacts(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleTrialJournalFacts(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleTrialJournalFacts& from);
+  BattleTrialJournalFacts(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleTrialJournalFacts&& from) noexcept
+      : BattleTrialJournalFacts(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kUsedArtifactEffectIdsFieldNumber = 14,
+    kTeammateNamesFieldNumber = 16,
+    kJournalEntryIdFieldNumber = 1,
+    kTrialRuleVersionFieldNumber = 2,
+    kInitialHumanCountFieldNumber = 3,
+    kSeasonIdFieldNumber = 4,
+    kBossGuardHealTotalFieldNumber = 6,
+    kSelfOrPetEverDiedFieldNumber = 5,
+    kGuardStanceDispelledFieldNumber = 7,
+    kTeamDealtPhysicalDirectDamageFieldNumber = 8,
+    kTeamDealtMagicDirectDamageFieldNumber = 9,
+    kGuardSurvivedFieldNumber = 10,
+    kSelfTriggeredShieldBreakFieldNumber = 11,
+    kSelfTriggeredAntiControlOrSeasonSkillFieldNumber = 12,
+    kBossWindHitUnprotectedDeathFieldNumber = 17,
+    kUsedPetTableIdFieldNumber = 13,
+    kUsedSeasonSealIdFieldNumber = 15,
+    kDealtYangBellPhysicalDamageFieldNumber = 18,
+    kDealtYinDrumMagicDamageFieldNumber = 19,
+    kFinishedInEbbTideFieldNumber = 20,
+  };
+  // repeated uint32 used_artifact_effect_ids = 14;
+  [[nodiscard]] int used_artifact_effect_ids_size()
+      const;
+  private:
+  int _internal_used_artifact_effect_ids_size() const;
+
+  public:
+  void clear_used_artifact_effect_ids() ;
+  [[nodiscard]] ::uint32_t used_artifact_effect_ids(int index) const;
+  void set_used_artifact_effect_ids(int index, ::uint32_t value);
+  void add_used_artifact_effect_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& used_artifact_effect_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_used_artifact_effect_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_used_artifact_effect_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_used_artifact_effect_ids();
+
+  public:
+  // repeated string teammate_names = 16;
+  [[nodiscard]] int teammate_names_size()
+      const;
+  private:
+  int _internal_teammate_names_size() const;
+
+  public:
+  void clear_teammate_names() ;
+  [[nodiscard]] const ::std::string& teammate_names(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_teammate_names(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_teammate_names(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_teammate_names();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_teammate_names(Arg_&& value, Args_... args);
+  [[nodiscard]] const
+      ::google::protobuf::RepeatedPtrField<::std::string>&
+      teammate_names() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::std::string>*
+      PROTOBUF_NONNULL
+      mutable_teammate_names();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_teammate_names() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_teammate_names();
+
+  public:
+  // uint32 journal_entry_id = 1;
+  void clear_journal_entry_id() ;
+  [[nodiscard]] ::uint32_t journal_entry_id() const;
+  void set_journal_entry_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_journal_entry_id() const;
+  void _internal_set_journal_entry_id(::uint32_t value);
+
+  public:
+  // uint32 trial_rule_version = 2;
+  void clear_trial_rule_version() ;
+  [[nodiscard]] ::uint32_t trial_rule_version() const;
+  void set_trial_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_rule_version() const;
+  void _internal_set_trial_rule_version(::uint32_t value);
+
+  public:
+  // uint32 initial_human_count = 3;
+  void clear_initial_human_count() ;
+  [[nodiscard]] ::uint32_t initial_human_count() const;
+  void set_initial_human_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_initial_human_count() const;
+  void _internal_set_initial_human_count(::uint32_t value);
+
+  public:
+  // uint32 season_id = 4;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint64 boss_guard_heal_total = 6;
+  void clear_boss_guard_heal_total() ;
+  [[nodiscard]] ::uint64_t boss_guard_heal_total() const;
+  void set_boss_guard_heal_total(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_boss_guard_heal_total() const;
+  void _internal_set_boss_guard_heal_total(::uint64_t value);
+
+  public:
+  // bool self_or_pet_ever_died = 5;
+  void clear_self_or_pet_ever_died() ;
+  [[nodiscard]] bool self_or_pet_ever_died() const;
+  void set_self_or_pet_ever_died(bool value);
+
+  private:
+  bool _internal_self_or_pet_ever_died() const;
+  void _internal_set_self_or_pet_ever_died(bool value);
+
+  public:
+  // bool guard_stance_dispelled = 7;
+  void clear_guard_stance_dispelled() ;
+  [[nodiscard]] bool guard_stance_dispelled() const;
+  void set_guard_stance_dispelled(bool value);
+
+  private:
+  bool _internal_guard_stance_dispelled() const;
+  void _internal_set_guard_stance_dispelled(bool value);
+
+  public:
+  // bool team_dealt_physical_direct_damage = 8;
+  void clear_team_dealt_physical_direct_damage() ;
+  [[nodiscard]] bool team_dealt_physical_direct_damage() const;
+  void set_team_dealt_physical_direct_damage(bool value);
+
+  private:
+  bool _internal_team_dealt_physical_direct_damage() const;
+  void _internal_set_team_dealt_physical_direct_damage(bool value);
+
+  public:
+  // bool team_dealt_magic_direct_damage = 9;
+  void clear_team_dealt_magic_direct_damage() ;
+  [[nodiscard]] bool team_dealt_magic_direct_damage() const;
+  void set_team_dealt_magic_direct_damage(bool value);
+
+  private:
+  bool _internal_team_dealt_magic_direct_damage() const;
+  void _internal_set_team_dealt_magic_direct_damage(bool value);
+
+  public:
+  // bool guard_survived = 10;
+  void clear_guard_survived() ;
+  [[nodiscard]] bool guard_survived() const;
+  void set_guard_survived(bool value);
+
+  private:
+  bool _internal_guard_survived() const;
+  void _internal_set_guard_survived(bool value);
+
+  public:
+  // bool self_triggered_shield_break = 11;
+  void clear_self_triggered_shield_break() ;
+  [[nodiscard]] bool self_triggered_shield_break() const;
+  void set_self_triggered_shield_break(bool value);
+
+  private:
+  bool _internal_self_triggered_shield_break() const;
+  void _internal_set_self_triggered_shield_break(bool value);
+
+  public:
+  // bool self_triggered_anti_control_or_season_skill = 12;
+  void clear_self_triggered_anti_control_or_season_skill() ;
+  [[nodiscard]] bool self_triggered_anti_control_or_season_skill() const;
+  void set_self_triggered_anti_control_or_season_skill(bool value);
+
+  private:
+  bool _internal_self_triggered_anti_control_or_season_skill() const;
+  void _internal_set_self_triggered_anti_control_or_season_skill(bool value);
+
+  public:
+  // bool boss_wind_hit_unprotected_death = 17;
+  void clear_boss_wind_hit_unprotected_death() ;
+  [[nodiscard]] bool boss_wind_hit_unprotected_death() const;
+  void set_boss_wind_hit_unprotected_death(bool value);
+
+  private:
+  bool _internal_boss_wind_hit_unprotected_death() const;
+  void _internal_set_boss_wind_hit_unprotected_death(bool value);
+
+  public:
+  // uint32 used_pet_table_id = 13;
+  void clear_used_pet_table_id() ;
+  [[nodiscard]] ::uint32_t used_pet_table_id() const;
+  void set_used_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_used_pet_table_id() const;
+  void _internal_set_used_pet_table_id(::uint32_t value);
+
+  public:
+  // uint32 used_season_seal_id = 15;
+  void clear_used_season_seal_id() ;
+  [[nodiscard]] ::uint32_t used_season_seal_id() const;
+  void set_used_season_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_used_season_seal_id() const;
+  void _internal_set_used_season_seal_id(::uint32_t value);
+
+  public:
+  // bool dealt_yang_bell_physical_damage = 18;
+  void clear_dealt_yang_bell_physical_damage() ;
+  [[nodiscard]] bool dealt_yang_bell_physical_damage() const;
+  void set_dealt_yang_bell_physical_damage(bool value);
+
+  private:
+  bool _internal_dealt_yang_bell_physical_damage() const;
+  void _internal_set_dealt_yang_bell_physical_damage(bool value);
+
+  public:
+  // bool dealt_yin_drum_magic_damage = 19;
+  void clear_dealt_yin_drum_magic_damage() ;
+  [[nodiscard]] bool dealt_yin_drum_magic_damage() const;
+  void set_dealt_yin_drum_magic_damage(bool value);
+
+  private:
+  bool _internal_dealt_yin_drum_magic_damage() const;
+  void _internal_set_dealt_yin_drum_magic_damage(bool value);
+
+  public:
+  // bool finished_in_ebb_tide = 20;
+  void clear_finished_in_ebb_tide() ;
+  [[nodiscard]] bool finished_in_ebb_tide() const;
+  void set_finished_in_ebb_tide(bool value);
+
+  private:
+  bool _internal_finished_in_ebb_tide() const;
+  void _internal_set_finished_in_ebb_tide(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattleTrialJournalFacts)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 20,
+                          0, 62,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleTrialJournalFacts& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> used_artifact_effect_ids_;
+    ::google::protobuf::internal::CachedSize _used_artifact_effect_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField<::std::string> teammate_names_;
+    ::uint32_t journal_entry_id_;
+    ::uint32_t trial_rule_version_;
+    ::uint32_t initial_human_count_;
+    ::uint32_t season_id_;
+    ::uint64_t boss_guard_heal_total_;
+    bool self_or_pet_ever_died_;
+    bool guard_stance_dispelled_;
+    bool team_dealt_physical_direct_damage_;
+    bool team_dealt_magic_direct_damage_;
+    bool guard_survived_;
+    bool self_triggered_shield_break_;
+    bool self_triggered_anti_control_or_season_skill_;
+    bool boss_wind_hit_unprotected_death_;
+    ::uint32_t used_pet_table_id_;
+    ::uint32_t used_season_seal_id_;
+    bool dealt_yang_bell_physical_damage_;
+    bool dealt_yin_drum_magic_damage_;
+    bool finished_in_ebb_tide_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4871,6 +5593,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kDefeatedMonstersFieldNumber = 15,
     kCurrencyGainsFieldNumber = 16,
     kCapturedPetTableIdsFieldNumber = 20,
+    kTrialFactsFieldNumber = 25,
     kBattleIdFieldNumber = 1,
     kPlayerIdFieldNumber = 2,
     kOutcomeFieldNumber = 3,
@@ -5013,6 +5736,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   private:
   const ::google::protobuf::RepeatedField<::uint32_t>& _internal_captured_pet_table_ids() const;
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_captured_pet_table_ids();
+
+  public:
+  // .BattleTrialJournalFacts trial_facts = 25;
+  [[nodiscard]] bool has_trial_facts()
+      const;
+  void clear_trial_facts() ;
+  [[nodiscard]] const ::BattleTrialJournalFacts& trial_facts() const;
+  [[nodiscard]] ::BattleTrialJournalFacts* PROTOBUF_NULLABLE release_trial_facts();
+  ::BattleTrialJournalFacts* PROTOBUF_NONNULL mutable_trial_facts();
+  void set_allocated_trial_facts(::BattleTrialJournalFacts* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_trial_facts(::BattleTrialJournalFacts* PROTOBUF_NULLABLE value);
+  ::BattleTrialJournalFacts* PROTOBUF_NULLABLE unsafe_arena_release_trial_facts();
+
+  private:
+  const ::BattleTrialJournalFacts& _internal_trial_facts() const;
+  ::BattleTrialJournalFacts* PROTOBUF_NONNULL _internal_mutable_trial_facts();
 
   public:
   // uint64 battle_id = 1;
@@ -5199,8 +5938,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
-                          5, 0,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          6, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5235,6 +5974,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     ::google::protobuf::RepeatedPtrField< ::BattleCurrencyGain > currency_gains_;
     ::google::protobuf::RepeatedField<::uint32_t> captured_pet_table_ids_;
     ::google::protobuf::internal::CachedSize _captured_pet_table_ids_cached_byte_size_;
+    ::BattleTrialJournalFacts* PROTOBUF_NULLABLE trial_facts_;
     ::uint64_t battle_id_;
     ::uint64_t player_id_;
     int outcome_;
@@ -13397,7 +14137,7 @@ BattleRewardConfig::_internal_mutable_profiles() {
 inline void BattleSettlementData::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t BattleSettlementData::battle_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.battle_id)
@@ -13405,7 +14145,7 @@ inline ::uint64_t BattleSettlementData::battle_id() const {
 }
 inline void BattleSettlementData::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.battle_id)
 }
 inline ::uint64_t BattleSettlementData::_internal_battle_id() const {
@@ -13421,7 +14161,7 @@ inline void BattleSettlementData::_internal_set_battle_id(::uint64_t value) {
 inline void BattleSettlementData::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t BattleSettlementData::player_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.player_id)
@@ -13429,7 +14169,7 @@ inline ::uint64_t BattleSettlementData::player_id() const {
 }
 inline void BattleSettlementData::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.player_id)
 }
 inline ::uint64_t BattleSettlementData::_internal_player_id() const {
@@ -13445,7 +14185,7 @@ inline void BattleSettlementData::_internal_set_player_id(::uint64_t value) {
 inline void BattleSettlementData::clear_outcome() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::eBattleOutcome BattleSettlementData::outcome() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.outcome)
@@ -13453,7 +14193,7 @@ inline ::eBattleOutcome BattleSettlementData::outcome() const {
 }
 inline void BattleSettlementData::set_outcome(::eBattleOutcome value) {
   _internal_set_outcome(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.outcome)
 }
 inline ::eBattleOutcome BattleSettlementData::_internal_outcome() const {
@@ -13469,7 +14209,7 @@ inline void BattleSettlementData::_internal_set_outcome(::eBattleOutcome value) 
 inline void BattleSettlementData::clear_player_team_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_team_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t BattleSettlementData::player_team_index() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.player_team_index)
@@ -13477,7 +14217,7 @@ inline ::uint32_t BattleSettlementData::player_team_index() const {
 }
 inline void BattleSettlementData::set_player_team_index(::uint32_t value) {
   _internal_set_player_team_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.player_team_index)
 }
 inline ::uint32_t BattleSettlementData::_internal_player_team_index() const {
@@ -13493,7 +14233,7 @@ inline void BattleSettlementData::_internal_set_player_team_index(::uint32_t val
 inline void BattleSettlementData::clear_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t BattleSettlementData::health() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.health)
@@ -13501,7 +14241,7 @@ inline ::uint64_t BattleSettlementData::health() const {
 }
 inline void BattleSettlementData::set_health(::uint64_t value) {
   _internal_set_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.health)
 }
 inline ::uint64_t BattleSettlementData::_internal_health() const {
@@ -13517,7 +14257,7 @@ inline void BattleSettlementData::_internal_set_health(::uint64_t value) {
 inline void BattleSettlementData::clear_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t BattleSettlementData::mana() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.mana)
@@ -13525,7 +14265,7 @@ inline ::uint64_t BattleSettlementData::mana() const {
 }
 inline void BattleSettlementData::set_mana(::uint64_t value) {
   _internal_set_mana(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.mana)
 }
 inline ::uint64_t BattleSettlementData::_internal_mana() const {
@@ -13541,7 +14281,7 @@ inline void BattleSettlementData::_internal_set_mana(::uint64_t value) {
 inline void BattleSettlementData::clear_exp_gain() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_gain_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t BattleSettlementData::exp_gain() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.exp_gain)
@@ -13549,7 +14289,7 @@ inline ::uint64_t BattleSettlementData::exp_gain() const {
 }
 inline void BattleSettlementData::set_exp_gain(::uint64_t value) {
   _internal_set_exp_gain(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.exp_gain)
 }
 inline ::uint64_t BattleSettlementData::_internal_exp_gain() const {
@@ -13565,7 +14305,7 @@ inline void BattleSettlementData::_internal_set_exp_gain(::uint64_t value) {
 inline void BattleSettlementData::clear_gold_gain() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_gain_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t BattleSettlementData::gold_gain() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.gold_gain)
@@ -13573,7 +14313,7 @@ inline ::uint64_t BattleSettlementData::gold_gain() const {
 }
 inline void BattleSettlementData::set_gold_gain(::uint64_t value) {
   _internal_set_gold_gain(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.gold_gain)
 }
 inline ::uint64_t BattleSettlementData::_internal_gold_gain() const {
@@ -13699,7 +14439,7 @@ BattleSettlementData::_internal_mutable_items_gained() {
 inline void BattleSettlementData::clear_is_dead() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_dead_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline bool BattleSettlementData::is_dead() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.is_dead)
@@ -13707,7 +14447,7 @@ inline bool BattleSettlementData::is_dead() const {
 }
 inline void BattleSettlementData::set_is_dead(bool value) {
   _internal_set_is_dead(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.is_dead)
 }
 inline bool BattleSettlementData::_internal_is_dead() const {
@@ -13723,7 +14463,7 @@ inline void BattleSettlementData::_internal_set_is_dead(bool value) {
 inline void BattleSettlementData::clear_fled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.fled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline bool BattleSettlementData::fled() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.fled)
@@ -13731,7 +14471,7 @@ inline bool BattleSettlementData::fled() const {
 }
 inline void BattleSettlementData::set_fled(bool value) {
   _internal_set_fled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.fled)
 }
 inline bool BattleSettlementData::_internal_fled() const {
@@ -13747,7 +14487,7 @@ inline void BattleSettlementData::_internal_set_fled(bool value) {
 inline void BattleSettlementData::clear_total_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t BattleSettlementData::total_rounds() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.total_rounds)
@@ -13755,7 +14495,7 @@ inline ::uint32_t BattleSettlementData::total_rounds() const {
 }
 inline void BattleSettlementData::set_total_rounds(::uint32_t value) {
   _internal_set_total_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.total_rounds)
 }
 inline ::uint32_t BattleSettlementData::_internal_total_rounds() const {
@@ -13936,7 +14676,7 @@ BattleSettlementData::_internal_mutable_currency_gains() {
 inline void BattleSettlementData::clear_finished_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t BattleSettlementData::finished_at_ms() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.finished_at_ms)
@@ -13944,7 +14684,7 @@ inline ::uint64_t BattleSettlementData::finished_at_ms() const {
 }
 inline void BattleSettlementData::set_finished_at_ms(::uint64_t value) {
   _internal_set_finished_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.finished_at_ms)
 }
 inline ::uint64_t BattleSettlementData::_internal_finished_at_ms() const {
@@ -13960,7 +14700,7 @@ inline void BattleSettlementData::_internal_set_finished_at_ms(::uint64_t value)
 inline void BattleSettlementData::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t BattleSettlementData::match_mode() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.match_mode)
@@ -13968,7 +14708,7 @@ inline ::uint32_t BattleSettlementData::match_mode() const {
 }
 inline void BattleSettlementData::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.match_mode)
 }
 inline ::uint32_t BattleSettlementData::_internal_match_mode() const {
@@ -13984,7 +14724,7 @@ inline void BattleSettlementData::_internal_set_match_mode(::uint32_t value) {
 inline void BattleSettlementData::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t BattleSettlementData::battle_config_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.battle_config_id)
@@ -13992,7 +14732,7 @@ inline ::uint32_t BattleSettlementData::battle_config_id() const {
 }
 inline void BattleSettlementData::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.battle_config_id)
 }
 inline ::uint32_t BattleSettlementData::_internal_battle_config_id() const {
@@ -14059,7 +14799,7 @@ BattleSettlementData::_internal_mutable_captured_pet_table_ids() {
 inline void BattleSettlementData::clear_competitive_ranked() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.competitive_ranked_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline bool BattleSettlementData::competitive_ranked() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.competitive_ranked)
@@ -14067,7 +14807,7 @@ inline bool BattleSettlementData::competitive_ranked() const {
 }
 inline void BattleSettlementData::set_competitive_ranked(bool value) {
   _internal_set_competitive_ranked(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.competitive_ranked)
 }
 inline bool BattleSettlementData::_internal_competitive_ranked() const {
@@ -14083,7 +14823,7 @@ inline void BattleSettlementData::_internal_set_competitive_ranked(bool value) {
 inline void BattleSettlementData::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t BattleSettlementData::season_id() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.season_id)
@@ -14091,7 +14831,7 @@ inline ::uint32_t BattleSettlementData::season_id() const {
 }
 inline void BattleSettlementData::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.season_id)
 }
 inline ::uint32_t BattleSettlementData::_internal_season_id() const {
@@ -14107,7 +14847,7 @@ inline void BattleSettlementData::_internal_set_season_id(::uint32_t value) {
 inline void BattleSettlementData::clear_ranked_rule_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_rule_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t BattleSettlementData::ranked_rule_version() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.ranked_rule_version)
@@ -14115,7 +14855,7 @@ inline ::uint32_t BattleSettlementData::ranked_rule_version() const {
 }
 inline void BattleSettlementData::set_ranked_rule_version(::uint32_t value) {
   _internal_set_ranked_rule_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.ranked_rule_version)
 }
 inline ::uint32_t BattleSettlementData::_internal_ranked_rule_version() const {
@@ -14131,7 +14871,7 @@ inline void BattleSettlementData::_internal_set_ranked_rule_version(::uint32_t v
 inline void BattleSettlementData::clear_participated() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.participated_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline bool BattleSettlementData::participated() const {
   // @@protoc_insertion_point(field_get:BattleSettlementData.participated)
@@ -14139,7 +14879,7 @@ inline bool BattleSettlementData::participated() const {
 }
 inline void BattleSettlementData::set_participated(bool value) {
   _internal_set_participated(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BattleSettlementData.participated)
 }
 inline bool BattleSettlementData::_internal_participated() const {
@@ -14149,6 +14889,104 @@ inline bool BattleSettlementData::_internal_participated() const {
 inline void BattleSettlementData::_internal_set_participated(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.participated_ = value;
+}
+
+// .BattleTrialJournalFacts trial_facts = 25;
+inline bool BattleSettlementData::has_trial_facts() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.trial_facts_ != nullptr);
+  return value;
+}
+inline void BattleSettlementData::clear_trial_facts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.trial_facts_ != nullptr) _impl_.trial_facts_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::BattleTrialJournalFacts& BattleSettlementData::_internal_trial_facts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleTrialJournalFacts* p = _impl_.trial_facts_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleTrialJournalFacts>(&::BattleTrialJournalFacts_globals_);
+}
+inline const ::BattleTrialJournalFacts& BattleSettlementData::trial_facts() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.trial_facts)
+  return _internal_trial_facts();
+}
+inline void BattleSettlementData::unsafe_arena_set_allocated_trial_facts(
+    ::BattleTrialJournalFacts* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.trial_facts_);
+  }
+  _impl_.trial_facts_ = reinterpret_cast<::BattleTrialJournalFacts*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleSettlementData.trial_facts)
+}
+inline ::BattleTrialJournalFacts* PROTOBUF_NULLABLE BattleSettlementData::release_trial_facts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleTrialJournalFacts* released = _impl_.trial_facts_;
+  _impl_.trial_facts_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleTrialJournalFacts* PROTOBUF_NULLABLE BattleSettlementData::unsafe_arena_release_trial_facts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleSettlementData.trial_facts)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleTrialJournalFacts* temp = _impl_.trial_facts_;
+  _impl_.trial_facts_ = nullptr;
+  return temp;
+}
+inline ::BattleTrialJournalFacts* PROTOBUF_NONNULL BattleSettlementData::_internal_mutable_trial_facts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.trial_facts_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleTrialJournalFacts>(GetArena());
+    _impl_.trial_facts_ = reinterpret_cast<::BattleTrialJournalFacts*>(p);
+  }
+  return _impl_.trial_facts_;
+}
+inline ::BattleTrialJournalFacts* PROTOBUF_NONNULL BattleSettlementData::mutable_trial_facts()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::BattleTrialJournalFacts* _msg = _internal_mutable_trial_facts();
+  // @@protoc_insertion_point(field_mutable:BattleSettlementData.trial_facts)
+  return _msg;
+}
+inline void BattleSettlementData::set_allocated_trial_facts(::BattleTrialJournalFacts* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.trial_facts_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.trial_facts_ = reinterpret_cast<::BattleTrialJournalFacts*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleSettlementData.trial_facts)
 }
 
 // -------------------------------------------------------------------
@@ -15006,6 +15844,689 @@ inline bool BattleParticipationFact::_internal_no_action_opportunity() const {
 inline void BattleParticipationFact::_internal_set_no_action_opportunity(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.no_action_opportunity_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TrialBattleContext
+
+// uint32 journal_entry_id = 1;
+inline void TrialBattleContext::clear_journal_entry_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.journal_entry_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t TrialBattleContext::journal_entry_id() const {
+  // @@protoc_insertion_point(field_get:TrialBattleContext.journal_entry_id)
+  return _internal_journal_entry_id();
+}
+inline void TrialBattleContext::set_journal_entry_id(::uint32_t value) {
+  _internal_set_journal_entry_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:TrialBattleContext.journal_entry_id)
+}
+inline ::uint32_t TrialBattleContext::_internal_journal_entry_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.journal_entry_id_;
+}
+inline void TrialBattleContext::_internal_set_journal_entry_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.journal_entry_id_ = value;
+}
+
+// uint32 trial_rule_version = 2;
+inline void TrialBattleContext::clear_trial_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t TrialBattleContext::trial_rule_version() const {
+  // @@protoc_insertion_point(field_get:TrialBattleContext.trial_rule_version)
+  return _internal_trial_rule_version();
+}
+inline void TrialBattleContext::set_trial_rule_version(::uint32_t value) {
+  _internal_set_trial_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:TrialBattleContext.trial_rule_version)
+}
+inline ::uint32_t TrialBattleContext::_internal_trial_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_rule_version_;
+}
+inline void TrialBattleContext::_internal_set_trial_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_rule_version_ = value;
+}
+
+// uint32 season_id = 3;
+inline void TrialBattleContext::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t TrialBattleContext::season_id() const {
+  // @@protoc_insertion_point(field_get:TrialBattleContext.season_id)
+  return _internal_season_id();
+}
+inline void TrialBattleContext::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:TrialBattleContext.season_id)
+}
+inline ::uint32_t TrialBattleContext::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TrialBattleContext::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint32 guard_monster_table_id = 4;
+inline void TrialBattleContext::clear_guard_monster_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_monster_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TrialBattleContext::guard_monster_table_id() const {
+  // @@protoc_insertion_point(field_get:TrialBattleContext.guard_monster_table_id)
+  return _internal_guard_monster_table_id();
+}
+inline void TrialBattleContext::set_guard_monster_table_id(::uint32_t value) {
+  _internal_set_guard_monster_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:TrialBattleContext.guard_monster_table_id)
+}
+inline ::uint32_t TrialBattleContext::_internal_guard_monster_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guard_monster_table_id_;
+}
+inline void TrialBattleContext::_internal_set_guard_monster_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_monster_table_id_ = value;
+}
+
+// uint32 guard_stance_buff_id = 5;
+inline void TrialBattleContext::clear_guard_stance_buff_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_stance_buff_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TrialBattleContext::guard_stance_buff_id() const {
+  // @@protoc_insertion_point(field_get:TrialBattleContext.guard_stance_buff_id)
+  return _internal_guard_stance_buff_id();
+}
+inline void TrialBattleContext::set_guard_stance_buff_id(::uint32_t value) {
+  _internal_set_guard_stance_buff_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:TrialBattleContext.guard_stance_buff_id)
+}
+inline ::uint32_t TrialBattleContext::_internal_guard_stance_buff_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guard_stance_buff_id_;
+}
+inline void TrialBattleContext::_internal_set_guard_stance_buff_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_stance_buff_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattleTrialJournalFacts
+
+// uint32 journal_entry_id = 1;
+inline void BattleTrialJournalFacts::clear_journal_entry_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.journal_entry_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t BattleTrialJournalFacts::journal_entry_id() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.journal_entry_id)
+  return _internal_journal_entry_id();
+}
+inline void BattleTrialJournalFacts::set_journal_entry_id(::uint32_t value) {
+  _internal_set_journal_entry_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.journal_entry_id)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_journal_entry_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.journal_entry_id_;
+}
+inline void BattleTrialJournalFacts::_internal_set_journal_entry_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.journal_entry_id_ = value;
+}
+
+// uint32 trial_rule_version = 2;
+inline void BattleTrialJournalFacts::clear_trial_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t BattleTrialJournalFacts::trial_rule_version() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.trial_rule_version)
+  return _internal_trial_rule_version();
+}
+inline void BattleTrialJournalFacts::set_trial_rule_version(::uint32_t value) {
+  _internal_set_trial_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.trial_rule_version)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_trial_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_rule_version_;
+}
+inline void BattleTrialJournalFacts::_internal_set_trial_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_rule_version_ = value;
+}
+
+// uint32 initial_human_count = 3;
+inline void BattleTrialJournalFacts::clear_initial_human_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.initial_human_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t BattleTrialJournalFacts::initial_human_count() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.initial_human_count)
+  return _internal_initial_human_count();
+}
+inline void BattleTrialJournalFacts::set_initial_human_count(::uint32_t value) {
+  _internal_set_initial_human_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.initial_human_count)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_initial_human_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.initial_human_count_;
+}
+inline void BattleTrialJournalFacts::_internal_set_initial_human_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.initial_human_count_ = value;
+}
+
+// uint32 season_id = 4;
+inline void BattleTrialJournalFacts::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t BattleTrialJournalFacts::season_id() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.season_id)
+  return _internal_season_id();
+}
+inline void BattleTrialJournalFacts::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.season_id)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void BattleTrialJournalFacts::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// bool self_or_pet_ever_died = 5;
+inline void BattleTrialJournalFacts::clear_self_or_pet_ever_died() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_or_pet_ever_died_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool BattleTrialJournalFacts::self_or_pet_ever_died() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.self_or_pet_ever_died)
+  return _internal_self_or_pet_ever_died();
+}
+inline void BattleTrialJournalFacts::set_self_or_pet_ever_died(bool value) {
+  _internal_set_self_or_pet_ever_died(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.self_or_pet_ever_died)
+}
+inline bool BattleTrialJournalFacts::_internal_self_or_pet_ever_died() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_or_pet_ever_died_;
+}
+inline void BattleTrialJournalFacts::_internal_set_self_or_pet_ever_died(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_or_pet_ever_died_ = value;
+}
+
+// uint64 boss_guard_heal_total = 6;
+inline void BattleTrialJournalFacts::clear_boss_guard_heal_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_guard_heal_total_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BattleTrialJournalFacts::boss_guard_heal_total() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.boss_guard_heal_total)
+  return _internal_boss_guard_heal_total();
+}
+inline void BattleTrialJournalFacts::set_boss_guard_heal_total(::uint64_t value) {
+  _internal_set_boss_guard_heal_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.boss_guard_heal_total)
+}
+inline ::uint64_t BattleTrialJournalFacts::_internal_boss_guard_heal_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boss_guard_heal_total_;
+}
+inline void BattleTrialJournalFacts::_internal_set_boss_guard_heal_total(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_guard_heal_total_ = value;
+}
+
+// bool guard_stance_dispelled = 7;
+inline void BattleTrialJournalFacts::clear_guard_stance_dispelled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_stance_dispelled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool BattleTrialJournalFacts::guard_stance_dispelled() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.guard_stance_dispelled)
+  return _internal_guard_stance_dispelled();
+}
+inline void BattleTrialJournalFacts::set_guard_stance_dispelled(bool value) {
+  _internal_set_guard_stance_dispelled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.guard_stance_dispelled)
+}
+inline bool BattleTrialJournalFacts::_internal_guard_stance_dispelled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guard_stance_dispelled_;
+}
+inline void BattleTrialJournalFacts::_internal_set_guard_stance_dispelled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_stance_dispelled_ = value;
+}
+
+// bool team_dealt_physical_direct_damage = 8;
+inline void BattleTrialJournalFacts::clear_team_dealt_physical_direct_damage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_dealt_physical_direct_damage_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool BattleTrialJournalFacts::team_dealt_physical_direct_damage() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.team_dealt_physical_direct_damage)
+  return _internal_team_dealt_physical_direct_damage();
+}
+inline void BattleTrialJournalFacts::set_team_dealt_physical_direct_damage(bool value) {
+  _internal_set_team_dealt_physical_direct_damage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.team_dealt_physical_direct_damage)
+}
+inline bool BattleTrialJournalFacts::_internal_team_dealt_physical_direct_damage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_dealt_physical_direct_damage_;
+}
+inline void BattleTrialJournalFacts::_internal_set_team_dealt_physical_direct_damage(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_dealt_physical_direct_damage_ = value;
+}
+
+// bool team_dealt_magic_direct_damage = 9;
+inline void BattleTrialJournalFacts::clear_team_dealt_magic_direct_damage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_dealt_magic_direct_damage_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool BattleTrialJournalFacts::team_dealt_magic_direct_damage() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.team_dealt_magic_direct_damage)
+  return _internal_team_dealt_magic_direct_damage();
+}
+inline void BattleTrialJournalFacts::set_team_dealt_magic_direct_damage(bool value) {
+  _internal_set_team_dealt_magic_direct_damage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.team_dealt_magic_direct_damage)
+}
+inline bool BattleTrialJournalFacts::_internal_team_dealt_magic_direct_damage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_dealt_magic_direct_damage_;
+}
+inline void BattleTrialJournalFacts::_internal_set_team_dealt_magic_direct_damage(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_dealt_magic_direct_damage_ = value;
+}
+
+// bool guard_survived = 10;
+inline void BattleTrialJournalFacts::clear_guard_survived() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_survived_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline bool BattleTrialJournalFacts::guard_survived() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.guard_survived)
+  return _internal_guard_survived();
+}
+inline void BattleTrialJournalFacts::set_guard_survived(bool value) {
+  _internal_set_guard_survived(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.guard_survived)
+}
+inline bool BattleTrialJournalFacts::_internal_guard_survived() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.guard_survived_;
+}
+inline void BattleTrialJournalFacts::_internal_set_guard_survived(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.guard_survived_ = value;
+}
+
+// bool self_triggered_shield_break = 11;
+inline void BattleTrialJournalFacts::clear_self_triggered_shield_break() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_triggered_shield_break_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool BattleTrialJournalFacts::self_triggered_shield_break() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.self_triggered_shield_break)
+  return _internal_self_triggered_shield_break();
+}
+inline void BattleTrialJournalFacts::set_self_triggered_shield_break(bool value) {
+  _internal_set_self_triggered_shield_break(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.self_triggered_shield_break)
+}
+inline bool BattleTrialJournalFacts::_internal_self_triggered_shield_break() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_triggered_shield_break_;
+}
+inline void BattleTrialJournalFacts::_internal_set_self_triggered_shield_break(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_triggered_shield_break_ = value;
+}
+
+// bool self_triggered_anti_control_or_season_skill = 12;
+inline void BattleTrialJournalFacts::clear_self_triggered_anti_control_or_season_skill() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_triggered_anti_control_or_season_skill_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool BattleTrialJournalFacts::self_triggered_anti_control_or_season_skill() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.self_triggered_anti_control_or_season_skill)
+  return _internal_self_triggered_anti_control_or_season_skill();
+}
+inline void BattleTrialJournalFacts::set_self_triggered_anti_control_or_season_skill(bool value) {
+  _internal_set_self_triggered_anti_control_or_season_skill(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.self_triggered_anti_control_or_season_skill)
+}
+inline bool BattleTrialJournalFacts::_internal_self_triggered_anti_control_or_season_skill() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_triggered_anti_control_or_season_skill_;
+}
+inline void BattleTrialJournalFacts::_internal_set_self_triggered_anti_control_or_season_skill(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_triggered_anti_control_or_season_skill_ = value;
+}
+
+// uint32 used_pet_table_id = 13;
+inline void BattleTrialJournalFacts::clear_used_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t BattleTrialJournalFacts::used_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.used_pet_table_id)
+  return _internal_used_pet_table_id();
+}
+inline void BattleTrialJournalFacts::set_used_pet_table_id(::uint32_t value) {
+  _internal_set_used_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.used_pet_table_id)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_used_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.used_pet_table_id_;
+}
+inline void BattleTrialJournalFacts::_internal_set_used_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_pet_table_id_ = value;
+}
+
+// repeated uint32 used_artifact_effect_ids = 14;
+inline int BattleTrialJournalFacts::_internal_used_artifact_effect_ids_size() const {
+  return _internal_used_artifact_effect_ids().size();
+}
+inline int BattleTrialJournalFacts::used_artifact_effect_ids_size() const {
+  return _internal_used_artifact_effect_ids_size();
+}
+inline void BattleTrialJournalFacts::clear_used_artifact_effect_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_artifact_effect_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t BattleTrialJournalFacts::used_artifact_effect_ids(int index) const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.used_artifact_effect_ids)
+  return _internal_used_artifact_effect_ids().Get(index);
+}
+inline void BattleTrialJournalFacts::set_used_artifact_effect_ids(int index, ::uint32_t value) {
+  _internal_mutable_used_artifact_effect_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.used_artifact_effect_ids)
+}
+inline void BattleTrialJournalFacts::add_used_artifact_effect_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_used_artifact_effect_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:BattleTrialJournalFacts.used_artifact_effect_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& BattleTrialJournalFacts::used_artifact_effect_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleTrialJournalFacts.used_artifact_effect_ids)
+  return _internal_used_artifact_effect_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattleTrialJournalFacts::mutable_used_artifact_effect_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:BattleTrialJournalFacts.used_artifact_effect_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_used_artifact_effect_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+BattleTrialJournalFacts::_internal_used_artifact_effect_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.used_artifact_effect_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+BattleTrialJournalFacts::_internal_mutable_used_artifact_effect_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.used_artifact_effect_ids_;
+}
+
+// uint32 used_season_seal_id = 15;
+inline void BattleTrialJournalFacts::clear_used_season_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_season_seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t BattleTrialJournalFacts::used_season_seal_id() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.used_season_seal_id)
+  return _internal_used_season_seal_id();
+}
+inline void BattleTrialJournalFacts::set_used_season_seal_id(::uint32_t value) {
+  _internal_set_used_season_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.used_season_seal_id)
+}
+inline ::uint32_t BattleTrialJournalFacts::_internal_used_season_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.used_season_seal_id_;
+}
+inline void BattleTrialJournalFacts::_internal_set_used_season_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_season_seal_id_ = value;
+}
+
+// repeated string teammate_names = 16;
+inline int BattleTrialJournalFacts::_internal_teammate_names_size() const {
+  return _internal_teammate_names().size();
+}
+inline int BattleTrialJournalFacts::teammate_names_size() const {
+  return _internal_teammate_names_size();
+}
+inline void BattleTrialJournalFacts::clear_teammate_names() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.teammate_names_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::std::string* PROTOBUF_NONNULL BattleTrialJournalFacts::add_teammate_names()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s =
+      _internal_mutable_teammate_names()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add_mutable:BattleTrialJournalFacts.teammate_names)
+  return _s;
+}
+inline const ::std::string& BattleTrialJournalFacts::teammate_names(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.teammate_names)
+  return _internal_teammate_names().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL BattleTrialJournalFacts::mutable_teammate_names(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattleTrialJournalFacts.teammate_names)
+  return _internal_mutable_teammate_names()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void BattleTrialJournalFacts::set_teammate_names(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_teammate_names()->Mutable(index),
+      ::std::forward<Arg_>(value), args... );
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.teammate_names)
+}
+template <typename Arg_, typename... Args_>
+inline void BattleTrialJournalFacts::add_teammate_names(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(
+      ::google::protobuf::MessageLite::internal_visibility(), GetArena(),
+      *_internal_mutable_teammate_names(), ::std::forward<Arg_>(value),
+      args... );
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:BattleTrialJournalFacts.teammate_names)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& BattleTrialJournalFacts::teammate_names()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleTrialJournalFacts.teammate_names)
+  return _internal_teammate_names();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+BattleTrialJournalFacts::mutable_teammate_names() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:BattleTrialJournalFacts.teammate_names)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_teammate_names();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+BattleTrialJournalFacts::_internal_teammate_names() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.teammate_names_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+BattleTrialJournalFacts::_internal_mutable_teammate_names() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.teammate_names_;
+}
+
+// bool boss_wind_hit_unprotected_death = 17;
+inline void BattleTrialJournalFacts::clear_boss_wind_hit_unprotected_death() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_wind_hit_unprotected_death_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline bool BattleTrialJournalFacts::boss_wind_hit_unprotected_death() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.boss_wind_hit_unprotected_death)
+  return _internal_boss_wind_hit_unprotected_death();
+}
+inline void BattleTrialJournalFacts::set_boss_wind_hit_unprotected_death(bool value) {
+  _internal_set_boss_wind_hit_unprotected_death(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.boss_wind_hit_unprotected_death)
+}
+inline bool BattleTrialJournalFacts::_internal_boss_wind_hit_unprotected_death() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boss_wind_hit_unprotected_death_;
+}
+inline void BattleTrialJournalFacts::_internal_set_boss_wind_hit_unprotected_death(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_wind_hit_unprotected_death_ = value;
+}
+
+// bool dealt_yang_bell_physical_damage = 18;
+inline void BattleTrialJournalFacts::clear_dealt_yang_bell_physical_damage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dealt_yang_bell_physical_damage_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline bool BattleTrialJournalFacts::dealt_yang_bell_physical_damage() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.dealt_yang_bell_physical_damage)
+  return _internal_dealt_yang_bell_physical_damage();
+}
+inline void BattleTrialJournalFacts::set_dealt_yang_bell_physical_damage(bool value) {
+  _internal_set_dealt_yang_bell_physical_damage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.dealt_yang_bell_physical_damage)
+}
+inline bool BattleTrialJournalFacts::_internal_dealt_yang_bell_physical_damage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.dealt_yang_bell_physical_damage_;
+}
+inline void BattleTrialJournalFacts::_internal_set_dealt_yang_bell_physical_damage(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dealt_yang_bell_physical_damage_ = value;
+}
+
+// bool dealt_yin_drum_magic_damage = 19;
+inline void BattleTrialJournalFacts::clear_dealt_yin_drum_magic_damage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dealt_yin_drum_magic_damage_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline bool BattleTrialJournalFacts::dealt_yin_drum_magic_damage() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.dealt_yin_drum_magic_damage)
+  return _internal_dealt_yin_drum_magic_damage();
+}
+inline void BattleTrialJournalFacts::set_dealt_yin_drum_magic_damage(bool value) {
+  _internal_set_dealt_yin_drum_magic_damage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.dealt_yin_drum_magic_damage)
+}
+inline bool BattleTrialJournalFacts::_internal_dealt_yin_drum_magic_damage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.dealt_yin_drum_magic_damage_;
+}
+inline void BattleTrialJournalFacts::_internal_set_dealt_yin_drum_magic_damage(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.dealt_yin_drum_magic_damage_ = value;
+}
+
+// bool finished_in_ebb_tide = 20;
+inline void BattleTrialJournalFacts::clear_finished_in_ebb_tide() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.finished_in_ebb_tide_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline bool BattleTrialJournalFacts::finished_in_ebb_tide() const {
+  // @@protoc_insertion_point(field_get:BattleTrialJournalFacts.finished_in_ebb_tide)
+  return _internal_finished_in_ebb_tide();
+}
+inline void BattleTrialJournalFacts::set_finished_in_ebb_tide(bool value) {
+  _internal_set_finished_in_ebb_tide(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:BattleTrialJournalFacts.finished_in_ebb_tide)
+}
+inline bool BattleTrialJournalFacts::_internal_finished_in_ebb_tide() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.finished_in_ebb_tide_;
+}
+inline void BattleTrialJournalFacts::_internal_set_finished_in_ebb_tide(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.finished_in_ebb_tide_ = value;
 }
 
 #ifdef __GNUC__

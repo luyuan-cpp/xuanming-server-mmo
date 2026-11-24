@@ -68,6 +68,9 @@
 #include "skillpermission_table.h"
 #include "test_table.h"
 #include "testmultikey_table.h"
+#include "trialjournalentry_table.h"
+#include "trialjournalmilestone_table.h"
+#include "trialjournalseal_table.h"
 #include "world_table.h"
 #include "zonegroup_table.h"
 
@@ -83,9 +86,9 @@ LoadSuccessCallback loadSuccessCallback;
 
 namespace {
 
-constexpr std::size_t kTableCount = 61;
+constexpr std::size_t kTableCount = 64;
 
-constexpr std::array<std::string_view, 61> kTableNames = {
+constexpr std::array<std::string_view, 64> kTableNames = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -145,12 +148,15 @@ constexpr std::array<std::string_view, 61> kTableNames = {
     "SkillPermission",
     "Test",
     "TestMultiKey",
+    "TrialJournalEntry",
+    "TrialJournalMilestone",
+    "TrialJournalSeal",
     "World",
     "ZoneGroup",
 };
 
 
-constexpr std::array<std::string_view, 15> kHotReloadableTables = {
+constexpr std::array<std::string_view, 18> kHotReloadableTables = {
     "ActivitySchedule",
     "ActivityVitalityReward",
     "ActivityVitalityRule",
@@ -166,6 +172,9 @@ constexpr std::array<std::string_view, 15> kHotReloadableTables = {
     "SeasonSeal",
     "Skill",
     "SkillPermission",
+    "TrialJournalEntry",
+    "TrialJournalMilestone",
+    "TrialJournalSeal",
 };
 
 
@@ -294,6 +303,12 @@ std::shared_ptr<TableSet> CaptureManagersAsTableSet(const TableBundleIdentity& i
 
     set->testMultiKeyTable = TestMultiKeyTableManager::Instance().CurrentSnapshot();
 
+    set->trialJournalEntryTable = TrialJournalEntryTableManager::Instance().CurrentSnapshot();
+
+    set->trialJournalMilestoneTable = TrialJournalMilestoneTableManager::Instance().CurrentSnapshot();
+
+    set->trialJournalSealTable = TrialJournalSealTableManager::Instance().CurrentSnapshot();
+
     set->worldTable = WorldTableManager::Instance().CurrentSnapshot();
 
     set->zoneGroupTable = ZoneGroupTableManager::Instance().CurrentSnapshot();
@@ -421,6 +436,12 @@ void InstallTableSetIntoManagers(const TableSet& set) {
 
     TestMultiKeyTableManager::Instance().InstallSnapshot(set.testMultiKeyTable);
 
+    TrialJournalEntryTableManager::Instance().InstallSnapshot(set.trialJournalEntryTable);
+
+    TrialJournalMilestoneTableManager::Instance().InstallSnapshot(set.trialJournalMilestoneTable);
+
+    TrialJournalSealTableManager::Instance().InstallSnapshot(set.trialJournalSealTable);
+
     WorldTableManager::Instance().InstallSnapshot(set.worldTable);
 
     ZoneGroupTableManager::Instance().InstallSnapshot(set.zoneGroupTable);
@@ -489,8 +510,11 @@ void LoadTableAt(std::size_t index) {
     case 56: SkillPermissionTableManager::Instance().Load(); break;
     case 57: TestTableManager::Instance().Load(); break;
     case 58: TestMultiKeyTableManager::Instance().Load(); break;
-    case 59: WorldTableManager::Instance().Load(); break;
-    case 60: ZoneGroupTableManager::Instance().Load(); break;
+    case 59: TrialJournalEntryTableManager::Instance().Load(); break;
+    case 60: TrialJournalMilestoneTableManager::Instance().Load(); break;
+    case 61: TrialJournalSealTableManager::Instance().Load(); break;
+    case 62: WorldTableManager::Instance().Load(); break;
+    case 63: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -723,9 +747,18 @@ bool LoadTableIntoSetAt(const std::size_t index,
         return TestMultiKeyTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.testMultiKeyTable, err);
     case 59:
+        return TrialJournalEntryTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.trialJournalEntryTable, err);
+    case 60:
+        return TrialJournalMilestoneTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.trialJournalMilestoneTable, err);
+    case 61:
+        return TrialJournalSealTableManager::ParseSnapshotFromDir(
+            configDir, useBinary, target.trialJournalSealTable, err);
+    case 62:
         return WorldTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.worldTable, err);
-    case 60:
+    case 63:
         return ZoneGroupTableManager::ParseSnapshotFromDir(
             configDir, useBinary, target.zoneGroupTable, err);
     default:
@@ -892,6 +925,12 @@ void InvokeTablesLoadSuccess() {
 
     TestMultiKeyTableManager::Instance().LoadSuccess();
 
+    TrialJournalEntryTableManager::Instance().LoadSuccess();
+
+    TrialJournalMilestoneTableManager::Instance().LoadSuccess();
+
+    TrialJournalSealTableManager::Instance().LoadSuccess();
+
     WorldTableManager::Instance().LoadSuccess();
 
     ZoneGroupTableManager::Instance().LoadSuccess();
@@ -1021,6 +1060,12 @@ void LoadTables() {
     TestTableManager::Instance().Load();
 
     TestMultiKeyTableManager::Instance().Load();
+
+    TrialJournalEntryTableManager::Instance().Load();
+
+    TrialJournalMilestoneTableManager::Instance().Load();
+
+    TrialJournalSealTableManager::Instance().Load();
 
     WorldTableManager::Instance().Load();
 

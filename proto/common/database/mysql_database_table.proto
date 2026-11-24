@@ -19,6 +19,7 @@ import "proto/common/component/client_request_ledger_comp.proto";
 import "proto/common/component/player_item_hold_comp.proto";
 import "proto/common/component/player_mail_outbox_comp.proto";
 import "proto/common/component/player_season_comp.proto";
+import "proto/common/component/player_trial_journal_comp.proto";
 import "proto/common/component/time_comp.proto";
 import "proto/common/component/buff_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
@@ -215,6 +216,10 @@ message player_database
   // 放 GROWTH 组：与技能、加点、宠物同组，一次存盘所有脏行同事务提交（满足 I3 原子性）。
   // 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取下一个空闲号 30，后续新字段从 31 起。
   PlayerSeasonComp season_component = 30 [(OptionPersistGroup) = 3];  // GROWTH
+  // 五行试炼志 V2（战法印永久位图、可比规则最佳回合与复盘快照、赛季隔离卷与里程碑位图；docs/design/long-term-progression-v2.md）。
+  // 放 GROWTH 组：与技能、加点、宠物、赛季印同组，一次存盘所有脏行同事务提交（满足 I3 原子性）。
+  // 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取下一个空闲号 31，后续新字段从 32 起。
+  PlayerTrialJournalComp trial_journal_component = 31 [(OptionPersistGroup) = 3];  // GROWTH
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

@@ -221,6 +221,20 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		commerceEngine = &commerce.Engine{Repo: &data.CommerceRepo{DB: db, Ops: assets.Ops}, IDs: seg, OpIDs: assets.OpIDs,
 			Policy:  commerce.Policy{Items: c.Commerce.ItemConfigs, ItemTitles: titles, Pets: c.Commerce.PetConfigs, Currencies: c.Commerce.CurrencyTypes, AllowInstances: c.Commerce.AllowInstances},
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
+		if c.Commerce.PlayerTrade.Mode != "" {
+			commerceEngine.PlayerTradeGuard = &commerce.PlayerTradeGuard{
+				Policy: commerce.PlayerTradePolicy{
+					Mode:                         c.Commerce.PlayerTrade.Mode,
+					ConsumableItems:              c.Commerce.PlayerTrade.ConsumableItems,
+					MaxDailyCurrencyAmount:       c.Commerce.PlayerTrade.MaxDailyCurrencyAmount,
+					MinFriendDurationMs:          c.Commerce.PlayerTrade.MinFriendDurationMs,
+					MaxReferenceDeviationPct:     c.Commerce.PlayerTrade.MaxReferenceDeviationPct,
+					CoolingLockDurationMs:        c.Commerce.PlayerTrade.CoolingLockDurationMs,
+					AllowAcquaintanceCoolingLock: c.Commerce.PlayerTrade.AllowAcquaintanceCoolingLock,
+				},
+				Prices: &commerce.SQLReferencePriceReader{DB: db},
+			}
+		}
 		commerceEngine.Roles = roles
 		// 合同推进与收据 ACK 按片分工(缺口清单第 16 条,docs/design/jubaozhai-market.md §15.8)。成员表只圈本 zone:
 		// 同一个 zone 的 trade 副本连同一个库。本副本的身份在 etcd 注册之后由 BindWorkMember 补上。

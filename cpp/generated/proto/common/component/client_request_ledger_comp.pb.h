@@ -487,6 +487,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kEnhancementStoneCountFieldNumber = 12,
     kSeasonCatchupSpentFieldNumber = 14,
     kSeasonCatchupPointsFieldNumber = 13,
+    kTrialMilestoneIdFieldNumber = 15,
+    kTrialMilestoneSandCountFieldNumber = 16,
+    kTrialMilestoneVoucherCountFieldNumber = 17,
+    kRedeemedArtifactItemIdFieldNumber = 18,
+    kRedeemedArtifactConfigIdFieldNumber = 19,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -633,11 +638,61 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_season_catchup_points(::uint32_t value);
 
   public:
+  // uint32 trial_milestone_id = 15;
+  void clear_trial_milestone_id() ;
+  [[nodiscard]] ::uint32_t trial_milestone_id() const;
+  void set_trial_milestone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_milestone_id() const;
+  void _internal_set_trial_milestone_id(::uint32_t value);
+
+  public:
+  // uint32 trial_milestone_sand_count = 16;
+  void clear_trial_milestone_sand_count() ;
+  [[nodiscard]] ::uint32_t trial_milestone_sand_count() const;
+  void set_trial_milestone_sand_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_milestone_sand_count() const;
+  void _internal_set_trial_milestone_sand_count(::uint32_t value);
+
+  public:
+  // uint32 trial_milestone_voucher_count = 17;
+  void clear_trial_milestone_voucher_count() ;
+  [[nodiscard]] ::uint32_t trial_milestone_voucher_count() const;
+  void set_trial_milestone_voucher_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_milestone_voucher_count() const;
+  void _internal_set_trial_milestone_voucher_count(::uint32_t value);
+
+  public:
+  // uint64 redeemed_artifact_item_id = 18;
+  void clear_redeemed_artifact_item_id() ;
+  [[nodiscard]] ::uint64_t redeemed_artifact_item_id() const;
+  void set_redeemed_artifact_item_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_redeemed_artifact_item_id() const;
+  void _internal_set_redeemed_artifact_item_id(::uint64_t value);
+
+  public:
+  // uint32 redeemed_artifact_config_id = 19;
+  void clear_redeemed_artifact_config_id() ;
+  [[nodiscard]] ::uint32_t redeemed_artifact_config_id() const;
+  void set_redeemed_artifact_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_redeemed_artifact_config_id() const;
+  void _internal_set_redeemed_artifact_config_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
+      ::google::protobuf::internal::TcParseTable<5, 19,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -680,6 +735,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint32_t enhancement_stone_count_;
     ::uint64_t season_catchup_spent_;
     ::uint32_t season_catchup_points_;
+    ::uint32_t trial_milestone_id_;
+    ::uint32_t trial_milestone_sand_count_;
+    ::uint32_t trial_milestone_voucher_count_;
+    ::uint64_t redeemed_artifact_item_id_;
+    ::uint32_t redeemed_artifact_config_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1330,6 +1390,126 @@ inline ::uint64_t ClientRequestRecord::_internal_season_catchup_spent() const {
 inline void ClientRequestRecord::_internal_set_season_catchup_spent(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_catchup_spent_ = value;
+}
+
+// uint32 trial_milestone_id = 15;
+inline void ClientRequestRecord::clear_trial_milestone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t ClientRequestRecord::trial_milestone_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_id)
+  return _internal_trial_milestone_id();
+}
+inline void ClientRequestRecord::set_trial_milestone_id(::uint32_t value) {
+  _internal_set_trial_milestone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_id)
+}
+inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_milestone_id_;
+}
+inline void ClientRequestRecord::_internal_set_trial_milestone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_id_ = value;
+}
+
+// uint32 trial_milestone_sand_count = 16;
+inline void ClientRequestRecord::clear_trial_milestone_sand_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_sand_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t ClientRequestRecord::trial_milestone_sand_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_sand_count)
+  return _internal_trial_milestone_sand_count();
+}
+inline void ClientRequestRecord::set_trial_milestone_sand_count(::uint32_t value) {
+  _internal_set_trial_milestone_sand_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_sand_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_sand_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_milestone_sand_count_;
+}
+inline void ClientRequestRecord::_internal_set_trial_milestone_sand_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_sand_count_ = value;
+}
+
+// uint32 trial_milestone_voucher_count = 17;
+inline void ClientRequestRecord::clear_trial_milestone_voucher_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_voucher_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t ClientRequestRecord::trial_milestone_voucher_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_voucher_count)
+  return _internal_trial_milestone_voucher_count();
+}
+inline void ClientRequestRecord::set_trial_milestone_voucher_count(::uint32_t value) {
+  _internal_set_trial_milestone_voucher_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_voucher_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_voucher_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_milestone_voucher_count_;
+}
+inline void ClientRequestRecord::_internal_set_trial_milestone_voucher_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_milestone_voucher_count_ = value;
+}
+
+// uint64 redeemed_artifact_item_id = 18;
+inline void ClientRequestRecord::clear_redeemed_artifact_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redeemed_artifact_item_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t ClientRequestRecord::redeemed_artifact_item_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.redeemed_artifact_item_id)
+  return _internal_redeemed_artifact_item_id();
+}
+inline void ClientRequestRecord::set_redeemed_artifact_item_id(::uint64_t value) {
+  _internal_set_redeemed_artifact_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.redeemed_artifact_item_id)
+}
+inline ::uint64_t ClientRequestRecord::_internal_redeemed_artifact_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.redeemed_artifact_item_id_;
+}
+inline void ClientRequestRecord::_internal_set_redeemed_artifact_item_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redeemed_artifact_item_id_ = value;
+}
+
+// uint32 redeemed_artifact_config_id = 19;
+inline void ClientRequestRecord::clear_redeemed_artifact_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redeemed_artifact_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t ClientRequestRecord::redeemed_artifact_config_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.redeemed_artifact_config_id)
+  return _internal_redeemed_artifact_config_id();
+}
+inline void ClientRequestRecord::set_redeemed_artifact_config_id(::uint32_t value) {
+  _internal_set_redeemed_artifact_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.redeemed_artifact_config_id)
+}
+inline ::uint32_t ClientRequestRecord::_internal_redeemed_artifact_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.redeemed_artifact_config_id_;
+}
+inline void ClientRequestRecord::_internal_set_redeemed_artifact_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.redeemed_artifact_config_id_ = value;
 }
 
 // -------------------------------------------------------------------

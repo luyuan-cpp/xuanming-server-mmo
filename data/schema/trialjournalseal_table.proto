@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+// TrialJournalSeal 表的权威 schema。源表 data/TrialJournalSeal.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 五行试炼志 V2 战法印表（攻/守/巧多维解题，设计见 docs/design/long-term-progression-v2.md）：
+//   - id 列带 (cfg_bit_index) = true，经导表器 trialjournalseal_mapping.json 映射为永久紧凑位序，
+//     供 PlayerTrialJournalComp.lit_seal_bits 落盘（严禁复用已删 ID）。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TrialJournalSealTable {
+  option (cfg_sheet)         = "TrialJournalSeal";
+  option (cfg_source_file)   = "TrialJournalSeal.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+  option (cfg_hot_reload)    = true;
+
+  // 战法印永久主键 ID（经 cfg_bit_index 映射到 PlayerTrialJournalComp.lit_seal_bits）
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 所属关卡格 ID（FK -> TrialJournalEntry.id）
+  uint32 entry_id = 2 [(cfg_fk) = "TrialJournalEntry", (cfg_index) = true];
+  // 印记定位分类（1=通/破阵，2=守/无损，3=巧/机制解题，4=速/速破）
+  uint32 seal_slot_kind = 3;
+  // 权威判定条件枚举（1=有效通关，2=速破<=param回合，3=人宠全程零倒地，4=首领零有效回春治疗，5=驱散护势或双系直伤，6..12=卷二/卷三扩展）
+  uint32 condition_type = 4;
+  // 条件附加参数（如速破回合上限 7，其余为 0）
+  uint32 condition_param = 5;
+  // 是否启用（停用置 false，保留旧位，不计入有效分母）
+  bool enabled = 6;
+  // 印记短名（如 破阵 / 速破 / 断愈 / 破势 / 无损）
+  string title = 7;
+  // 印记条件说明文案
+  string desc = 8;
+}

@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -512,6 +513,19 @@ private:
 
     void BindDungeonMonsterAis();
     void FillDungeonMonsterAiActions();
+    void RecordTrialDirectDamage(const BattleActorState& source, const BattleActorState& target,
+                                 uint32_t damageType, uint64_t dealtOrAbsorbed);
+    void RecordTrialMonsterHeal(const BattleActorState& source, const BattleActorState& target,
+                                uint64_t healed);
+
+    // 五行试炼志 V2 局内权威战法事实（仅内存确定性累积，不消耗 RNG）
+    std::set<uint64_t> everDiedActors;
+    uint64_t bossGuardHealTotal = 0;
+    bool guardStanceDispelled = false;
+    bool teamADealtPhysicalDirectDamage = false;
+    bool teamADealtMagicDirectDamage = false;
+    std::set<uint64_t> shieldBreakPlayers;
+    std::set<uint64_t> antiControlOrSeasonSkillPlayers;
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始

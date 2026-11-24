@@ -133,7 +133,128 @@ func (m *Matcher) Find(elems []textnorm.Elem) []Hit {
 			}
 		})
 	}
+	// 叠字绕过防御(移植自 xuanming-server/pkg/namecheck/variants.go v2 变体):
+	// 仅在输入存在连续相同非跳过字符时,对折叠连续重复后的序列再扫一遍(如 "管理理员" / "笨笨蛋" / "aavv"),
+	// 词库字典树本身不折叠,因此不影响本身含叠字的词条。
+	if collapsed, hasCollapse := collapseRepeats(elems); hasCollapse {
+		allowOrig := spansToOrig(elems, allowed)
+		seen := make(map[Hit]struct{}, len(hits))
+		for _, h := range hits {
+			seen[h] = struct{}{}
+		}
+		added := false
+		for start := range collapsed {
+			m.deny.walkCollapsed(collapsed, start, func(end int, term [modeEnd]Category, contiguous bool) {
+				origStart, origEnd := collapsed[start].startOrig, collapsed[end].endOrig
+				if OrigCovered(allowOrig, origStart, origEnd) {
+					return
+				}
+				add := func(category Category) {
+					h := Hit{Start: origStart, End: origEnd, Category: category}
+					if _, dup := seen[h]; dup {
+						return
+					}
+					seen[h] = struct{}{}
+					hits = append(hits, h)
+					added = true
+				}
+				if c := term[ModeSub]; c != CategoryUnspecified {
+					add(c)
+				}
+				if c := term[ModePrefix]; c != CategoryUnspecified && start == 0 {
+					add(c)
+				}
+				if c := term[ModeToken]; c != CategoryUnspecified && contiguous && collapsedTokenBounded(collapsed, start, end) {
+					add(c)
+				}
+			})
+		}
+		if added {
+			sort.SliceStable(hits, func(i, j int) bool {
+				if hits[i].Start != hits[j].Start {
+					return hits[i].Start < hits[j].Start
+				}
+				return hits[i].End < hits[j].End
+			})
+		}
+	}
 	return hits
+}
+
+type collapsedElem struct {
+	r          rune
+	startOrig  int32
+	endOrig    int32
+	skipBefore bool
+	skipInside bool
+}
+
+func collapseRepeats(elems []textnorm.Elem) ([]collapsedElem, bool) {
+	out := make([]collapsedElem, 0, len(elems))
+	hasCollapse := false
+	pendingSkip := false
+	for _, e := range elems {
+		if e.Skip {
+			pendingSkip = true
+			continue
+		}
+		if n := len(out); n > 0 && out[n-1].r == e.R {
+			out[n-1].endOrig = e.Orig
+			if pendingSkip {
+				out[n-1].skipInside = true
+			}
+			hasCollapse = true
+			pendingSkip = false
+			continue
+		}
+		out = append(out, collapsedElem{
+			r:          e.R,
+			startOrig:  e.Orig,
+			endOrig:    e.Orig,
+			skipBefore: pendingSkip,
+		})
+		pendingSkip = false
+	}
+	return out, hasCollapse
+}
+
+func spansToOrig(elems []textnorm.Elem, spans []span) []OrigSpan {
+	if len(spans) == 0 {
+		return nil
+	}
+	out := make([]OrigSpan, 0, len(spans))
+	for _, s := range spans {
+		out = append(out, OrigSpan{Start: elems[s.start].Orig, End: elems[s.end].Orig})
+	}
+	return out
+}
+
+func collapsedTokenBounded(elems []collapsedElem, start, end int) bool {
+	if start > 0 && !elems[start].skipBefore && textnorm.IsASCIIAlnum(elems[start-1].r) {
+		return false
+	}
+	if end+1 < len(elems) && !elems[end+1].skipBefore && textnorm.IsASCIIAlnum(elems[end+1].r) {
+		return false
+	}
+	return true
+}
+
+func (t *trie) walkCollapsed(elems []collapsedElem, start int, visit func(end int, term [modeEnd]Category, contiguous bool)) {
+	node := int32(0)
+	contiguous := true
+	for i := start; i < len(elems); i++ {
+		if (i > start && elems[i].skipBefore) || elems[i].skipInside {
+			contiguous = false
+		}
+		next, ok := t.child(node, elems[i].r)
+		if !ok {
+			return
+		}
+		node = next
+		if t.term[node] != ([modeEnd]Category{}) {
+			visit(i, t.term[node], contiguous)
+		}
+	}
 }
 
 // tokenBounded 判断 [start, end] 前后是否都不紧挨英文字母或数字(「整词」的边界)。

@@ -72,4 +72,6 @@ message ItemComp
 	// presence:只在 has_equip() 时拷贝,不要无条件 mutable_equip()。
 	// 镜像 ItemEntry.equip(字段 14),两边必须同改(bag_marshal 的转换函数)。
 	EquipInstanceData equip = 5;
+	// 仅自用绑定标记：true = 不可交易、不可上架集市/聚宝斋、不可赠送（用于五行试炼志拓印兑换的自用法宝等）。
+	bool bound = 6;
 }

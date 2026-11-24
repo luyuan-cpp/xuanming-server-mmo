@@ -1,0 +1,59 @@
+# ────────────────────────────────────────────────────────────────
+# Prebuilt runtime Dockerfile for Go micro-services (host cross-compile mode).
+# Ported from xuanming-server/deploy/services/Dockerfile.prebuilt.
+#
+# 与 deploy/k8s/Dockerfile.go-svc 产出完全一致的运行层镜像（同一 alpine digest、
+# uid/gid 10001、/generated/tables 小写归一化、OCI LABEL、/app/BUILD_INFO），
+# 但不在容器内重复执行 go mod download / go build，而是接收宿主交叉编译好的静态二进制
+# （--build-context prebuilt=<stageDir>，内置 /service），让本地/快照重建从分钟级降到秒级。
+#
+# 正式发布版本（-Version）仍由 go_svc_image.ps1 强制走容器内构建（Dockerfile.go-svc）
+# 以遵守 docs/design/release-packaging-standard-20260914.md §2.6 可复现口径。
+# ────────────────────────────────────────────────────────────────
+
+FROM scratch AS prebuilt
+FROM scratch AS tables
+
+# 与 Dockerfile.go-svc 钉死完全相同的 alpine 补丁版本与多平台 index digest。
+FROM alpine:3.20.10@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 10001 mmorpg \
+    && adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G mmorpg mmorpg \
+    && mkdir -p /app /generated/tables /run/snowflake \
+    && chown 10001:10001 /run/snowflake
+
+WORKDIR /app
+
+COPY --from=tables / /generated/tables/
+RUN set -e; cd /generated/tables; for f in *.json; do \
+      [ -e "$f" ] || continue; \
+      lower="$(printf '%s' "$f" | tr 'A-Z' 'a-z')"; \
+      [ "$f" = "$lower" ] || mv "$f" "$lower"; \
+    done
+
+ARG SERVICE
+COPY ${SERVICE}/etc/ /app/etc/
+COPY ${SERVICE}/data*/ /app/data/
+
+COPY --from=prebuilt /service /app/service
+RUN chmod 0755 /app/service
+
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo" \
+      org.opencontainers.image.title="${SERVICE}"
+
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
+
+USER 10001:10001
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/service"]

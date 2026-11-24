@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS commerce_consignment (
   market_zone BIGINT NOT NULL,
   asset_kind VARCHAR(16) NOT NULL,
   asset_currency_type INT NULL,
-  escrow_reference VARCHAR(20) NOT NULL,
+  escrow_reference VARCHAR(32) NOT NULL,
   escrow_proof VARCHAR(64) NOT NULL,
   request_digest VARCHAR(64) NOT NULL,
   title VARCHAR(128) NOT NULL,
@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS commerce_consignment (
   sale_end_ms BIGINT NOT NULL,
   state VARCHAR(24) NOT NULL,
   current_order_sn VARCHAR(36) NULL,
+  designated_buyer_account VARBINARY(191) NULL,
   created_ms BIGINT NOT NULL,
   UNIQUE(escrow_reference),
   INDEX idx_consignment_state(state,listing_id),
@@ -189,7 +190,7 @@ CREATE TABLE IF NOT EXISTS commerce_consignment_order (
   buyer_owner_revision VARBINARY(20) NOT NULL,
   request_id VARBINARY(128) NOT NULL,
   seller_account VARBINARY(191) NOT NULL,
-  escrow_reference VARCHAR(20) NOT NULL,
+  escrow_reference VARCHAR(32) NOT NULL,
   escrow_proof VARCHAR(64) NOT NULL,
   fee_bps INT NOT NULL,
   cooling_ms BIGINT NOT NULL,
@@ -206,10 +207,12 @@ CREATE TABLE IF NOT EXISTS commerce_seller_income (
   reserved_fen BIGINT NOT NULL DEFAULT 0,
   paid_fen BIGINT NOT NULL DEFAULT 0,
   forfeited_fen BIGINT NOT NULL DEFAULT 0,
+  dispute_frozen_fen BIGINT NOT NULL DEFAULT 0,
+  dispute_case_id VARCHAR(64) NULL,
   available_ms BIGINT NOT NULL,
   INDEX idx_seller_income(account,order_sn),
   CHECK(gross_fen>0), CHECK(fee_fen>=0 AND net_fen>=0), CHECK(fee_fen+net_fen=gross_fen),
-  CHECK(reserved_fen>=0 AND paid_fen>=0 AND forfeited_fen>=0 AND reserved_fen+paid_fen+forfeited_fen<=net_fen)
+  CHECK(reserved_fen>=0 AND paid_fen>=0 AND forfeited_fen>=0 AND dispute_frozen_fen>=0 AND reserved_fen+paid_fen+forfeited_fen+dispute_frozen_fen<=net_fen)
 );
 CREATE TABLE IF NOT EXISTS commerce_withdrawal (
   withdrawal_id VARCHAR(36) PRIMARY KEY,
@@ -279,7 +282,7 @@ CREATE TABLE IF NOT EXISTS commerce_reversal_receipt (
   PRIMARY KEY (order_sn, revision)
 );
 
--- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-21 起换新(寄售争议收入扣罚列 forfeited_fen 与人工单处置)，之前装的库须重装。
+-- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-24 起换新(G-1 托管引用 VARCHAR(32)、G-2 逐单争议冻结 dispute_frozen_fen/dispute_case_id、定向买家 designated_buyer_account)，之前装的库须重装。
 -- INSERT IGNORE:整份文件可重跑。K8s 的 mall-schema Job 每次部署都执行它(writer_authority -ddl-file 只收幂等语句)。
 -- 重跑不升级已有的库:表已存在就跳过,戳也不改;结构对不对由 SchemaVerifier 在商城启动时核,对不上拒启,要清库重装。
-INSERT IGNORE INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v3-manual-resolution');
+INSERT IGNORE INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v4-dispute-and-tiered-notice');

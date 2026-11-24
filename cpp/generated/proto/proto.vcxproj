@@ -498,4 +498,10 @@
     <ClInclude Include="common\component\player_season_comp.pb.h" />
     <ClInclude Include="scene\player_season.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\player_trial_journal_comp.pb.cc" />
+    <ClCompile Include="scene\player_trial_journal.pb.cc" />
+    <ClInclude Include="common\component\player_trial_journal_comp.pb.h" />
+    <ClInclude Include="scene\player_trial_journal.pb.h" />
+  </ItemGroup>
 </Project>

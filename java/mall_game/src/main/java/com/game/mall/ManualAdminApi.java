@@ -99,6 +99,20 @@ public final class ManualAdminApi {
      */
     public record ResolveConsignment(String requestId, String listingId, String action, String reason) {}
 
+    /**
+     * 逐单争议冻结 / 释放卖家收益(与 RmbConsignmentStore.withdraw 共用账号锁 commerce_seller_guard)。
+     * action 取值:
+     * - FREEZE_DISPUTE: 按 amountFen 冻结尚未预留/未出款/未没收的可用净额并登记 caseId，阻止该部分提现；
+     * - RELEASE_DISPUTE: 释放已冻结的 amountFen（全部释放后清空 dispute_case_id），恢复按原冷静期可提现。
+     */
+    public record ResolveIncomeDispute(
+        String requestId,
+        String orderId,
+        String action,
+        long amountFen,
+        String caseId,
+        String reason) {}
+
     /** 人工单处置结果，按 (actor, requestId) 幂等持久化在 commerce_admin_command。 */
     public record Resolution(
         String targetType,

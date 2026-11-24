@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 # 只解析正式源码与调用镜像命令桩；不调用Go/Docker/native，不冒构建通过。
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
@@ -51,6 +51,36 @@ Test-Case '镜像构建Interface确实传入registrar module和完整ENTRY' {
         $full=[IO.Path]::GetFullPath($taskRoot);$allowed=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
         if(-not $full.StartsWith($allowed,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $full) -notlike 'mmorpg-registrar-image-*'){throw '夹具清理路径非法'}
         Remove-Item -LiteralPath $full -Recurse -Force
+    }
+}
+Test-Case 'host预编译模式复用相同alpine运行基镜像并通过prebuilt命名上下文打包' {
+    $root=Join-Path $PSScriptRoot '../../..'
+    $mainDf=Get-Content -LiteralPath (Join-Path $root 'deploy/k8s/Dockerfile.go-svc') -Raw
+    $preDf=Get-Content -LiteralPath (Join-Path $root 'deploy/k8s/Dockerfile.go-svc.prebuilt') -Raw
+    $alpineRe=[regex]'FROM\s+(alpine:[^\s]+)'
+    $m1=$alpineRe.Match($mainDf); $m2=$alpineRe.Match($preDf)
+    Assert-True -Condition ($m1.Success -and $m2.Success -and $m1.Groups[1].Value -ceq $m2.Groups[1].Value) -Because 'prebuilt 运行基镜像 digest 必须与 Dockerfile.go-svc 完全一致'
+    Assert-Match -Text $preDf -Pattern 'USER 10001:10001' -Because 'prebuilt 必须保持非 root 10001 运行'
+    Assert-Match -Text $preDf -Pattern 'COPY --from=prebuilt /service /app/service' -Because 'prebuilt 必须从命名上下文拷入宿主编译二进制'
+
+    foreach($name in @('Get-ImageFullName','Invoke-BuildAll')){
+        $definition=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
+        Set-Item -Path "Function:script:$name" -Value $definition.Body.GetScriptBlock()
+    }
+    $taskRoot=Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-prebuilt-image-'+[Guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($taskRoot);[IO.File]::WriteAllText((Join-Path $taskRoot 'fixture.json'),'{}')
+    try{
+        $TablesDir=$taskRoot;$Dockerfile=$source;$PrebuiltDockerfile=Join-Path $root 'deploy/k8s/Dockerfile.go-svc.prebuilt';$BuildMode='host';$GoRoot=Join-Path $PSScriptRoot '../../../go';$Registry='fixture.invalid';$Tag='fixture';$BuildVersion='fixture';$BuildCommit='fixture';$BuildTime='2000-01-01T00:00:00Z';$DockerCommand='Invoke-HostModeDockerFixture';$DryRun=$false
+        $Catalogue=[ordered]@{'login'=$Catalogue['login']}
+        $script:HostCompileCalled=$false
+        function Invoke-HostGoCrossCompile { param($ServiceDir,$Entry,$OutputPath) $script:HostCompileCalled=$true; [IO.File]::WriteAllText($OutputPath,'stub') }
+        function Invoke-HostModeDockerFixture { $script:CapturedHostArgs=@($args);$global:LASTEXITCODE=0 }
+        Invoke-BuildAll
+        Assert-True -Condition $script:HostCompileCalled -Because 'host 模式必须调用宿主交叉编译'
+        Assert-True -Condition ($script:CapturedHostArgs -contains $PrebuiltDockerfile) -Because 'host 模式必须使用 Dockerfile.go-svc.prebuilt'
+        Assert-True -Condition (@($script:CapturedHostArgs | Where-Object { $_ -like 'prebuilt=*' }).Count -eq 1) -Because 'host 模式必须传入 prebuilt 命名上下文'
+    } finally {
+        Remove-Item -LiteralPath $taskRoot -Recurse -Force
     }
 }
 exit (Complete-TestRun -SuiteName 'registrar真实镜像工件')

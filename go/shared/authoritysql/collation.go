@@ -15,6 +15,13 @@ import (
 	"strconv"
 )
 
+const (
+	// MinTiDBMajor / MinTiDBMinor 是权威 SQL 强依赖的 TiDB 最低版本（v7.4 起才真正支持 utf8mb4_0900_ai_ci，
+	// 低版本静默回退到 utf8mb4_bin 且不报错）。
+	MinTiDBMajor = 7
+	MinTiDBMinor = 4
+)
+
 var (
 	// 同时兼容 SELECT VERSION() 的 "-TiDB-v8.5.2" 与 SELECT tidb_version() 的 "Release Version: v8.5.2"。
 	tidbSemverRe       = regexp.MustCompile(`(?:-TiDB-|Release Version:\s*)v(\d+)\.(\d+)\.(\d+)`)

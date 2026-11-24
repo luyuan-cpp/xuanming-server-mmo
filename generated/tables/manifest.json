@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "0f6757d95603c861",
-  "version": 56,
-  "content_digest": "9aa3cdb6a95c89a9b8241d44f1c5065c1d7376e7b7f9eb962b9e2bb622984d0d",
-  "generated_at": "2026-11-24T04:19:14Z",
+  "schema_digest": "8a3cb14b8c44ed4e",
+  "version": 57,
+  "content_digest": "648dab43b08f96842501896d935879ab2c50652d7700193de00f3c0db28adc24",
+  "generated_at": "2026-11-24T06:41:19Z",
   "source_rev": {
-    "commit": "8774ec0c364c72728b47e77e104f6ac781fcdbb2",
+    "commit": "8168394562ab094bf883e5fc6cf005fb2d4890c7",
     "data_dirty": true
   },
-  "table_count": 61,
+  "table_count": 64,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -914,24 +914,24 @@
       "name": "Item",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 134,
+      "rows": 136,
       "source": {
         "file": "Item.xlsx",
-        "size": 13985,
-        "sha256": "1b63cc46a8fb6f3ecb4dc5ab8cdb92983ac42a90eac5ef3b5d7b60b9a2f039d7"
+        "size": 14315,
+        "sha256": "e16c9f60aa14d48f6c092436cffef6bd82fd812de4ea85bac38e8cecbf8fd12a"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 51613,
-          "sha256": "883281d6b8904226a7d7d5c7fa45c2997a8bfa36101f5491bb69745bb17f10ef"
+          "size": 52732,
+          "sha256": "bc667a960504841f12fdd2564fd8977ac4db492f2803953638d982e3efd37991"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 11298,
-          "sha256": "03b84c59635f552a37282c3a6b8b44ac43d80ab7c0f5de1e73e3e89e087bc036"
+          "size": 11689,
+          "sha256": "bb4821f5d29a7cc755a8b07a9f999c82b8672fa86bb407eb0b0e68c8033b93dc"
         }
       ]
     },
@@ -1482,6 +1482,81 @@
           "file": "testmultikey.pb",
           "size": 563,
           "sha256": "01f8898595d6c55d6171ad325263302047a46c0aa83c08d087bf3dd71545401c"
+        }
+      ]
+    },
+    {
+      "name": "TrialJournalEntry",
+      "hot_reload": true,
+      "ids_permanent": true,
+      "rows": 4,
+      "source": {
+        "file": "TrialJournalEntry.xlsx",
+        "size": 5931,
+        "sha256": "5fb7de8dcae29b343ff89f080f6fad45d49ef462f9052bb4b501793e9797abef"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "trialjournalentry.json",
+          "size": 2243,
+          "sha256": "2b5773fbda53941b8e61351497693ab5666de7553a839a69fd1c7a51563ab97c"
+        },
+        {
+          "kind": "binary",
+          "file": "trialjournalentry.pb",
+          "size": 1011,
+          "sha256": "af1fe5f5334a7a69efed44089c1af4de343b7b12224ad44be2a99bdc18659cd0"
+        }
+      ]
+    },
+    {
+      "name": "TrialJournalMilestone",
+      "hot_reload": true,
+      "ids_permanent": true,
+      "rows": 4,
+      "source": {
+        "file": "TrialJournalMilestone.xlsx",
+        "size": 6043,
+        "sha256": "48acde660a3f9c0e82d76f5ab5702dbbe0f266de4700f6b484181a535b724d8d"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "trialjournalmilestone.json",
+          "size": 1893,
+          "sha256": "2415782de455e6afe14cd9e3197e050e3f9da5da26e3da816ccd1b31b5e1eb6a"
+        },
+        {
+          "kind": "binary",
+          "file": "trialjournalmilestone.pb",
+          "size": 977,
+          "sha256": "c44a3aeb46deb489637e16adeb249350c3e74ee2882c41030875221ed326354b"
+        }
+      ]
+    },
+    {
+      "name": "TrialJournalSeal",
+      "hot_reload": true,
+      "ids_permanent": true,
+      "rows": 12,
+      "source": {
+        "file": "TrialJournalSeal.xlsx",
+        "size": 5828,
+        "sha256": "5d7bd683f8ed9e1720b7b3179b8145dfe2c13357d2e8b932d5e8188ada115c14"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "trialjournalseal.json",
+          "size": 2787,
+          "sha256": "968dc9c978d012a123351283b556aaf4ff86ab19b9cd35c12fd1e38217ff822f"
+        },
+        {
+          "kind": "binary",
+          "file": "trialjournalseal.pb",
+          "size": 975,
+          "sha256": "e64f3c183e900f023d23e0de6da7256f2956a4f49915a4355adc496202b4ff91"
         }
       ]
     },

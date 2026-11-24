@@ -41,6 +41,7 @@ type RmbConsignments struct {
 	Mall                         *Mall
 	Directory                    RoleTradeAuthority
 	Sealer                       RoleSealer
+	Credits                      *SellerCreditService
 	CurrencyTypes                []uint32
 	deliveryCursor, returnCursor string
 	sealAfter                    map[uint64]int
@@ -521,14 +522,31 @@ func (s *RmbConsignments) refundRole(ctx context.Context, r *tradepb.TradeCommer
 // settleRoleDelivery 记下过户完成。过户已提交,这一步失败下一轮重放 Transfer 拿收据再来。
 func (s *RmbConsignments) settleRoleDelivery(ctx context.Context, r *tradepb.TradeCommerceRecord) error {
 	delete(s.sealAfter, r.CommerceId)
-	return s.save(ctx, r, func(_ *sql.Tx, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) error {
+	var transferredPlayer uint64
+	var newBuyerAccount string
+	var nextRevision uint64
+	err := s.save(ctx, r, func(_ *sql.Tx, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) error {
 		if w.Stage != "rmb_delivery" {
 			return ErrConflict
 		}
+		transferredPlayer = w.Rmb.CharacterPlayerId
+		newBuyerAccount = w.Rmb.BuyerAccount
+		nextRevision = w.Rmb.SellerOwnerRevision + 1
 		w.Stage = "rmb_delivered"
 		r.Status = Settled
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	// 角色过户落定后主动清空新持有者的卖家信用档位（即使该步瞬时失败，GetProfile 仍会按权威 owner_revision 懒重算兜底）。
+	if s.Credits != nil && transferredPlayer != 0 && newBuyerAccount != "" && nextRevision != 0 {
+		if _, resetErr := s.Credits.OnCharacterTransferred(ctx, transferredPlayer, newBuyerAccount, nextRevision, s.Engine.now()); resetErr != nil {
+			logx.Errorf("[Commerce] Seller credit reset after character transfer failed player_id=%d next_rev=%d: %v",
+				transferredPlayer, nextRevision, resetErr)
+		}
+	}
+	return nil
 }
 
 // buyerAccountFull 是进交付之前挡一下:只有角色寄售才要名额。不算数,名额的判定在过户第 1 步,满位的出口是 refundRole。

@@ -111,6 +111,10 @@ set(SOURCE_FILES
     code/seasonrule_table.cpp
     code/seasonseal_table.cpp
     code/seasonseal_table_fk.cpp
+    code/trialjournalentry_table.cpp
+    code/trialjournalseal_table.cpp
+    code/trialjournalseal_table_fk.cpp
+    code/trialjournalmilestone_table.cpp
     code/mysterymerchantspot_table.cpp
     code/item_table_fk.cpp
     code/attributerule_table.cpp
@@ -186,12 +190,16 @@ set(SOURCE_FILES
     proto/characterappearance_table.pb.cc
     proto/seasonrule_table.pb.cc
     proto/seasonseal_table.pb.cc
+    proto/trialjournalentry_table.pb.cc
+    proto/trialjournalseal_table.pb.cc
+    proto/trialjournalmilestone_table.pb.cc
     proto/mysterymerchantspot_table.pb.cc
     proto/tip/mystery_merchant_error_tip.pb.cc
     proto/tip/payment_error_tip.pb.cc
     proto/tip/afk_pass_error_tip.pb.cc
     proto/tip/appearance_error_tip.pb.cc
     proto/tip/season_error_tip.pb.cc
+    proto/tip/trial_journal_error_tip.pb.cc
     proto/tip/chat_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc

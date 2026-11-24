@@ -207,7 +207,12 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
             event->set_artifact_item_id(artifact.item_id()); event->set_artifact_effect_id(effect);
             if (part == saved.remaining_capacity()) RemoveConfiguredBuff(target, id, result);
         }
-        if (removed > 0) UseArtifact(source, index, target.actor_id(), removed, result);
+        if (removed > 0) {
+            UseArtifact(source, index, target.actor_id(), removed, result);
+            if (source.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                shieldBreakPlayers.insert(source.actor_id());
+            }
+        }
     }
     if (effect != 0 && SeasonSealAvailable(source, effect)) {
         const auto& seal = source.equipment_effects().season_seal();
@@ -229,7 +234,12 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
             event->set_season_seal_id(seal.seal_id());
             if (part == saved.remaining_capacity()) RemoveConfiguredBuff(target, id, result);
         }
-        if (removed > 0) UseSeasonSeal(source, target.actor_id(), removed, result);
+        if (removed > 0) {
+            UseSeasonSeal(source, target.actor_id(), removed, result);
+            if (source.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                shieldBreakPlayers.insert(source.actor_id());
+            }
+        }
     }
 }
 
@@ -368,6 +378,9 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
     if (normal && kind <= 6) for (const int index : AvailableArtifacts(target, 8)) {
         resist += target.equipment_effects().artifacts(index).bonus_bps();
         UseArtifact(target, index, target.actor_id(), target.equipment_effects().artifacts(index).bonus_bps(), result);
+        if (target.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            antiControlOrSeasonSkillPlayers.insert(target.actor_id());
+        }
     }
     const double chance = equipbattle::AilmentChance(row.application_chance(), hit, resist,
         100.0 * combat.resist_all_ailment(), 100.0 * caster.combat().ignore_ailment_resist(), kind == 7);

@@ -1,0 +1,32 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "TrialJournalEntryTableOuterClass";
+option java_multiple_files = true;
+
+
+message TrialJournalEntryTable {
+	uint32 id = 1;
+	uint32 chapter_id = 2;
+	uint32 season_id = 3;
+	uint32 source_kind = 4;
+	uint32 difficulty = 5;
+	string variant_key = 6;
+	uint32 rule_version = 7;
+	string rule_version_name = 8;
+	bool enabled = 9;
+	uint32 sort_order = 10;
+	string display_name = 11;
+	string chapter_name = 12;
+	string icon_key = 13;
+	uint32 unlock_mode = 14;
+	string jump_target = 15;
+	string desc = 16;
+}
+
+message TrialJournalEntryTableData {
+	repeated TrialJournalEntryTable data = 1;
+}

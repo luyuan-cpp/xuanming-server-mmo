@@ -103,6 +103,12 @@ const (
 	// 玩家消耗灵石补齐本季单槽赛季印进度（与免费同封顶上限）的扣款流水。correlation_id = 客户端幂等键 client_request_id。
 	// 只追加,不复用旧编号。
 	TransactionType_TX_SEASON_SEAL_CATCHUP TransactionType = 35
+	// ── 五行试炼志里程碑领取与拓印兑换(docs/design/long-term-progression-v2.md)───
+	//
+	// 一次性试炼志里程碑发放仅自用重铸砂/仅自用法宝拓印，以及消耗拓印定向兑换仅自用法宝的流水。
+	// correlation_id = 客户端幂等键 client_request_id。只追加,不复用旧编号。
+	TransactionType_TX_TRIAL_JOURNAL_MILESTONE TransactionType = 36
+	TransactionType_TX_TRIAL_ARTIFACT_REDEEM   TransactionType = 37
 )
 
 // Enum value maps for TransactionType.
@@ -144,44 +150,48 @@ var (
 		33: "TX_ROLE_RENAME",
 		34: "TX_APPEARANCE_SWITCH",
 		35: "TX_SEASON_SEAL_CATCHUP",
+		36: "TX_TRIAL_JOURNAL_MILESTONE",
+		37: "TX_TRIAL_ARTIFACT_REDEEM",
 	}
 	TransactionType_value = map[string]int32{
-		"TX_UNKNOWN":               0,
-		"TX_TRADE":                 1,
-		"TX_MAIL_ATTACHMENT":       2,
-		"TX_AUCTION_SELL":          3,
-		"TX_AUCTION_BUY":           4,
-		"TX_GUILD_BANK_DEPOSIT":    5,
-		"TX_GUILD_BANK_WITHDRAW":   6,
-		"TX_QUEST_REWARD":          7,
-		"TX_SYSTEM_GRANT":          8,
-		"TX_GM_GRANT":              9,
-		"TX_GM_DEDUCT":             10,
-		"TX_SHOP_BUY":              11,
-		"TX_SHOP_SELL":             12,
-		"TX_ITEM_DESTROY":          13,
-		"TX_CURRENCY_ADD":          14,
-		"TX_CURRENCY_DEDUCT":       15,
-		"TX_ROLLBACK_RESTORE":      16,
-		"TX_CLAWBACK":              17,
-		"TX_DEFERRED_CLAWBACK":     18,
-		"TX_BATCH_RECALL":          19,
-		"TX_ITEM_AWARD":            20,
-		"TX_QUEST_COMPLETE":        21,
-		"TX_LEVEL_UP":              22,
-		"TX_BUFF_GAIN":             23,
-		"TX_GUILD_DONATE":          24,
-		"TX_GUILD_SHOP":            25,
-		"TX_GUILD_ACTIVITY_REWARD": 26,
-		"TX_EQUIP_ENHANCE":         27,
-		"TX_EQUIP_INLAY":           28,
-		"TX_EQUIP_GEM_REMOVE":      29,
-		"TX_AUCTION_RETURN":        30,
-		"TX_PAYMENT_REVERSAL":      31,
-		"TX_AFK_PASS_BUY":          32,
-		"TX_ROLE_RENAME":           33,
-		"TX_APPEARANCE_SWITCH":     34,
-		"TX_SEASON_SEAL_CATCHUP":   35,
+		"TX_UNKNOWN":                 0,
+		"TX_TRADE":                   1,
+		"TX_MAIL_ATTACHMENT":         2,
+		"TX_AUCTION_SELL":            3,
+		"TX_AUCTION_BUY":             4,
+		"TX_GUILD_BANK_DEPOSIT":      5,
+		"TX_GUILD_BANK_WITHDRAW":     6,
+		"TX_QUEST_REWARD":            7,
+		"TX_SYSTEM_GRANT":            8,
+		"TX_GM_GRANT":                9,
+		"TX_GM_DEDUCT":               10,
+		"TX_SHOP_BUY":                11,
+		"TX_SHOP_SELL":               12,
+		"TX_ITEM_DESTROY":            13,
+		"TX_CURRENCY_ADD":            14,
+		"TX_CURRENCY_DEDUCT":         15,
+		"TX_ROLLBACK_RESTORE":        16,
+		"TX_CLAWBACK":                17,
+		"TX_DEFERRED_CLAWBACK":       18,
+		"TX_BATCH_RECALL":            19,
+		"TX_ITEM_AWARD":              20,
+		"TX_QUEST_COMPLETE":          21,
+		"TX_LEVEL_UP":                22,
+		"TX_BUFF_GAIN":               23,
+		"TX_GUILD_DONATE":            24,
+		"TX_GUILD_SHOP":              25,
+		"TX_GUILD_ACTIVITY_REWARD":   26,
+		"TX_EQUIP_ENHANCE":           27,
+		"TX_EQUIP_INLAY":             28,
+		"TX_EQUIP_GEM_REMOVE":        29,
+		"TX_AUCTION_RETURN":          30,
+		"TX_PAYMENT_REVERSAL":        31,
+		"TX_AFK_PASS_BUY":            32,
+		"TX_ROLE_RENAME":             33,
+		"TX_APPEARANCE_SWITCH":       34,
+		"TX_SEASON_SEAL_CATCHUP":     35,
+		"TX_TRIAL_JOURNAL_MILESTONE": 36,
+		"TX_TRIAL_ARTIFACT_REDEEM":   37,
 	}
 )
 
@@ -453,7 +463,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\x97\x06\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xd5\x06\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -492,7 +502,9 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x0fTX_AFK_PASS_BUY\x10 \x12\x12\n" +
 	"\x0eTX_ROLE_RENAME\x10!\x12\x18\n" +
 	"\x14TX_APPEARANCE_SWITCH\x10\"\x12\x1a\n" +
-	"\x16TX_SEASON_SEAL_CATCHUP\x10#B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x16TX_SEASON_SEAL_CATCHUP\x10#\x12\x1e\n" +
+	"\x1aTX_TRIAL_JOURNAL_MILESTONE\x10$\x12\x1c\n" +
+	"\x18TX_TRIAL_ARTIFACT_REDEEM\x10%B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

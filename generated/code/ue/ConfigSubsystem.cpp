@@ -92,6 +92,9 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
 	TestTable = NewObject<UTestTable>(this);
 	TestMultiKeyTable = NewObject<UTestMultiKeyTable>(this);
+	TrialJournalEntryTable = NewObject<UTrialJournalEntryTable>(this);
+	TrialJournalMilestoneTable = NewObject<UTrialJournalMilestoneTable>(this);
+	TrialJournalSealTable = NewObject<UTrialJournalSealTable>(this);
 	WorldTable = NewObject<UWorldTable>(this);
 	ZoneGroupTable = NewObject<UZoneGroupTable>(this);
 }
@@ -157,6 +160,9 @@ void UConfigSubsystem::Deinitialize()
 	SkillPermissionTable = nullptr;
 	TestTable = nullptr;
 	TestMultiKeyTable = nullptr;
+	TrialJournalEntryTable = nullptr;
+	TrialJournalMilestoneTable = nullptr;
+	TrialJournalSealTable = nullptr;
 	WorldTable = nullptr;
 	ZoneGroupTable = nullptr;
 	ConfigDir.Reset();
@@ -227,6 +233,9 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		USkillPermissionTable::FileName(),
 		UTestTable::FileName(),
 		UTestMultiKeyTable::FileName(),
+		UTrialJournalEntryTable::FileName(),
+		UTrialJournalMilestoneTable::FileName(),
+		UTrialJournalSealTable::FileName(),
 		UWorldTable::FileName(),
 		UZoneGroupTable::FileName()
 	};
@@ -1058,6 +1067,48 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!TestMultiKeyTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TrialJournalEntryTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalEntry] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TrialJournalEntryTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TrialJournalMilestoneTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalMilestone] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TrialJournalMilestoneTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TrialJournalSealTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalSeal] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TrialJournalSealTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2299,6 +2350,66 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!TestMultiKeyTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TrialJournalEntryTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalEntry] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTrialJournalEntryTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalEntry] 取不到 %s"), UTrialJournalEntryTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TrialJournalEntryTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TrialJournalMilestoneTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalMilestone] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTrialJournalMilestoneTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalMilestone] 取不到 %s"), UTrialJournalMilestoneTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TrialJournalMilestoneTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TrialJournalSealTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalSeal] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTrialJournalSealTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TrialJournalSeal] 取不到 %s"), UTrialJournalSealTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TrialJournalSealTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

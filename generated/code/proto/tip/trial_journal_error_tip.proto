@@ -1,0 +1,30 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum trial_journal_error {
+  kTrial_journal_errorOK = 0;
+
+  kTrialJournalUnavailable = 35000;
+
+  kTrialJournalFrozen = 35001;
+
+  kTrialJournalInBattle = 35002;
+
+  kTrialJournalMilestoneNotFound = 35003;
+
+  kTrialJournalMilestoneNotReached = 35004;
+
+  kTrialJournalMilestoneAlreadyClaimed = 35005;
+
+  kTrialJournalBagFull = 35006;
+
+  kTrialJournalVoucherNotEnough = 35007;
+
+  kTrialJournalArtifactInvalid = 35008;
+
+};

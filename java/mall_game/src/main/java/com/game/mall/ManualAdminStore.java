@@ -44,6 +44,8 @@ public class ManualAdminStore {
     private static final Set<String> ORDER_ACTIONS = Set.of("RETRY_REVERSAL", "MARK_REVERSED", "MARK_DELIVERED", "CREATE_REFUND");
     private static final Set<String> REFUND_ACTIONS = Set.of("RETRY_REFUND", "MARK_REFUNDED", "MARK_REVOKED");
     private static final Set<String> CONSIGNMENT_ACTIONS = Set.of("RETURN_TO_SELLER", "UNFREEZE_INCOME", "FORFEIT_INCOME");
+    private static final Set<String> DISPUTE_ACTIONS = Set.of("FREEZE_DISPUTE", "RELEASE_DISPUTE");
+    private static final String CASE_ID_PATTERN = "[A-Za-z0-9_-]{3,64}";
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
@@ -498,7 +500,7 @@ public class ManualAdminStore {
                         throw new CommerceException(503, "seller income accounting invariant broken");
                     }
                     if (jdbc.update(
-                            "UPDATE commerce_seller_income SET forfeited_fen=forfeited_fen+?,available_ms=? "
+                            "UPDATE commerce_seller_income SET forfeited_fen=forfeited_fen+?,dispute_frozen_fen=0,dispute_case_id=NULL,available_ms=? "
                                 + "WHERE order_sn=? AND reserved_fen=0 AND paid_fen+forfeited_fen+?=net_fen",
                             remaining, Long.MAX_VALUE, currentOrderId, remaining) != 1) {
                         throw new CommerceException(409, "seller income changed concurrently");
@@ -516,6 +518,84 @@ public class ManualAdminStore {
             afterCommit(() -> LOG.warn("manual consignment resolved: actor={} listing={} order={} action={} resultingState={} reason={}",
                 actor, in.listingId(), currentOrderId, in.action(), resultingState, reason));
             return new ManualAdminApi.Resolution("CONSIGNMENT", in.listingId(), in.action(), resultingState, reason, now);
+        });
+    }
+
+    /**
+     * 逐单争议冻结 / 释放卖家收入。
+     * 锁序严格沿用 commerce_admin_command → oms_order → commerce_seller_guard → commerce_seller_income，
+     * 与 RmbConsignmentStore.withdraw 共用同一账号锁，彻底防止争议与并发提现竞态双花。
+     */
+    public ManualAdminApi.Resolution resolveIncomeDispute(String actor, ManualAdminApi.ResolveIncomeDispute in) {
+        if (in == null || in.orderId() == null || !in.orderId().matches(PaymentPolicy.ORDER)
+            || in.action() == null || !DISPUTE_ACTIONS.contains(in.action())
+            || in.amountFen() < 1 || in.amountFen() > CommerceStore.MAX_AMOUNT_MINOR
+            || in.caseId() == null || !in.caseId().matches(CASE_ID_PATTERN)) {
+            throw new CommerceException(400, "invalid income dispute request");
+        }
+        String reason = requireReason(in.reason());
+        return command(actor, in.requestId(), "income_dispute", in, "INCOME_DISPUTE", in.orderId(), () -> {
+            var orderRows = jdbc.queryForList("SELECT status,sku_id FROM oms_order WHERE order_sn=? FOR UPDATE", in.orderId());
+            if (orderRows.size() != 1) {
+                throw new CommerceException(404, "order not found");
+            }
+            if (((Number) orderRows.getFirst().get("sku_id")).longValue() != 0) {
+                throw new CommerceException(409, "dispute freeze only applies to consignment orders");
+            }
+            var sellerAccounts = jdbc.query("SELECT account FROM commerce_seller_income WHERE order_sn=?",
+                (row, n) -> row.getBytes(1), in.orderId());
+            if (sellerAccounts.size() != 1) {
+                throw new CommerceException(404, "seller income record not found");
+            }
+            lockSeller(sellerAccounts.getFirst());
+            var incomeRows = jdbc.queryForList(
+                "SELECT net_fen,reserved_fen,paid_fen,forfeited_fen,dispute_frozen_fen,dispute_case_id "
+                    + "FROM commerce_seller_income WHERE order_sn=? FOR UPDATE",
+                in.orderId());
+            if (incomeRows.size() != 1) {
+                throw new CommerceException(503, "seller income record missing under seller lock");
+            }
+            var income = incomeRows.getFirst();
+            long net = ((Number) income.get("net_fen")).longValue();
+            long reserved = ((Number) income.get("reserved_fen")).longValue();
+            long paid = ((Number) income.get("paid_fen")).longValue();
+            long forfeited = ((Number) income.get("forfeited_fen")).longValue();
+            long disputeFrozen = ((Number) income.get("dispute_frozen_fen")).longValue();
+            long now = clock.millis();
+            String resultingState;
+            switch (in.action()) {
+                case "FREEZE_DISPUTE" -> {
+                    long availableToFreeze = net - reserved - paid - forfeited - disputeFrozen;
+                    if (availableToFreeze < in.amountFen()) {
+                        throw new CommerceException(409, "free seller income insufficient to freeze; funds may already be reserved or paid out");
+                    }
+                    if (jdbc.update(
+                            "UPDATE commerce_seller_income SET dispute_frozen_fen=dispute_frozen_fen+?,dispute_case_id=? "
+                                + "WHERE order_sn=? AND net_fen-reserved_fen-paid_fen-forfeited_fen-dispute_frozen_fen>=?",
+                            in.amountFen(), in.caseId(), in.orderId(), in.amountFen()) != 1) {
+                        throw new CommerceException(409, "seller income changed concurrently");
+                    }
+                    resultingState = "DISPUTE_FROZEN:" + (disputeFrozen + in.amountFen());
+                }
+                case "RELEASE_DISPUTE" -> {
+                    if (disputeFrozen < in.amountFen()) {
+                        throw new CommerceException(409, "dispute release exceeds currently frozen amount");
+                    }
+                    long remainingFrozen = disputeFrozen - in.amountFen();
+                    String nextCase = remainingFrozen == 0 ? null : in.caseId();
+                    if (jdbc.update(
+                            "UPDATE commerce_seller_income SET dispute_frozen_fen=dispute_frozen_fen-?,dispute_case_id=? "
+                                + "WHERE order_sn=? AND dispute_frozen_fen>=?",
+                            in.amountFen(), nextCase, in.orderId(), in.amountFen()) != 1) {
+                        throw new CommerceException(409, "seller income changed concurrently");
+                    }
+                    resultingState = remainingFrozen == 0 ? "DISPUTE_RELEASED" : "DISPUTE_FROZEN:" + remainingFrozen;
+                }
+                default -> throw new CommerceException(400, "unsupported income dispute action");
+            }
+            afterCommit(() -> LOG.warn("seller income dispute updated: actor={} order={} action={} amountFen={} caseId={} resultingState={} reason={}",
+                actor, in.orderId(), in.action(), in.amountFen(), in.caseId(), resultingState, reason));
+            return new ManualAdminApi.Resolution("INCOME_DISPUTE", in.orderId(), in.action(), resultingState, reason, now);
         });
     }
 

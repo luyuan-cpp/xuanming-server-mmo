@@ -19,6 +19,7 @@
 #include "player_season_handler.h"
 #include "player_skill_handler.h"
 #include "player_state_attribute_sync_handler.h"
+#include "player_trial_journal_handler.h"
 #include "s2s_player_scene_handler.h"
 class SceneClientPlayerCommonImpl : public SceneClientPlayerCommon {};
 class SceneActivityClientPlayerImpl : public SceneActivityClientPlayer {};
@@ -37,6 +38,7 @@ class SceneSceneClientPlayerImpl : public SceneSceneClientPlayer {};
 class SceneSeasonClientPlayerImpl : public SceneSeasonClientPlayer {};
 class SceneSkillClientPlayerImpl : public SceneSkillClientPlayer {};
 class ScenePlayerSyncImpl : public ScenePlayerSync {};
+class SceneTrialJournalClientPlayerImpl : public SceneTrialJournalClientPlayer {};
 class SceneScenePlayerImpl : public SceneScenePlayer {};
 
 std::unordered_map<std::string, std::unique_ptr<PlayerService>> gPlayerService;
@@ -60,5 +62,6 @@ void InitPlayerService()
     gPlayerService.emplace("SceneSeasonClientPlayer", std::make_unique<SceneSeasonClientPlayerHandler>(std::make_unique<SceneSeasonClientPlayerImpl>()));
     gPlayerService.emplace("SceneSkillClientPlayer", std::make_unique<SceneSkillClientPlayerHandler>(std::make_unique<SceneSkillClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayerSync", std::make_unique<ScenePlayerSyncHandler>(std::make_unique<ScenePlayerSyncImpl>()));
+    gPlayerService.emplace("SceneTrialJournalClientPlayer", std::make_unique<SceneTrialJournalClientPlayerHandler>(std::make_unique<SceneTrialJournalClientPlayerImpl>()));
     gPlayerService.emplace("SceneScenePlayer", std::make_unique<SceneScenePlayerHandler>(std::make_unique<SceneScenePlayerImpl>()));
 }

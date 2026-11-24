@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "0f6757d95603c861";
+    public static final String SCHEMA_DIGEST = "8a3cb14b8c44ed4e";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -27,7 +27,10 @@ public class TableLoader {
             "SeasonRule",
             "SeasonSeal",
             "Skill",
-            "SkillPermission"
+            "SkillPermission",
+            "TrialJournalEntry",
+            "TrialJournalMilestone",
+            "TrialJournalSeal"
     );
 
     public static boolean isHotReloadable(String tableName) {
@@ -160,6 +163,12 @@ public class TableLoader {
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
 
+        TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
+
+        TrialJournalMilestoneTableManager.getInstance().load(configDir, useBinary);
+
+        TrialJournalSealTableManager.getInstance().load(configDir, useBinary);
+
         WorldTableManager.getInstance().load(configDir, useBinary);
 
         ZoneGroupTableManager.getInstance().load(configDir, useBinary);
@@ -179,7 +188,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(61);
+        CountDownLatch latch = new CountDownLatch(64);
 
         new Thread(() -> {
             try {
@@ -773,6 +782,36 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TrialJournalEntry table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TrialJournalMilestoneTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TrialJournalMilestone table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TrialJournalSealTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TrialJournalSeal table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 WorldTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load World table", e);
@@ -928,6 +967,12 @@ public class TableLoader {
         TestTableManager.getInstance().load(configDir, useBinary);
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
+
+        TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
+
+        TrialJournalMilestoneTableManager.getInstance().load(configDir, useBinary);
+
+        TrialJournalSealTableManager.getInstance().load(configDir, useBinary);
 
         WorldTableManager.getInstance().load(configDir, useBinary);
 

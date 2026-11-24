@@ -185,6 +185,8 @@ set(SOURCE_FILES
     scene/player_appearance.pb.cc
     common/component/player_season_comp.pb.cc
     scene/player_season.pb.cc
+    common/component/player_trial_journal_comp.pb.cc
+    scene/player_trial_journal.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

@@ -126,6 +126,13 @@ enum TransactionType
   // 玩家消耗灵石补齐本季单槽赛季印进度（与免费同封顶上限）的扣款流水。correlation_id = 客户端幂等键 client_request_id。
   // 只追加,不复用旧编号。
   TX_SEASON_SEAL_CATCHUP = 35;
+
+  // ── 五行试炼志里程碑领取与拓印兑换(docs/design/long-term-progression-v2.md)───
+  //
+  // 一次性试炼志里程碑发放仅自用重铸砂/仅自用法宝拓印，以及消耗拓印定向兑换仅自用法宝的流水。
+  // correlation_id = 客户端幂等键 client_request_id。只追加,不复用旧编号。
+  TX_TRIAL_JOURNAL_MILESTONE = 36;
+  TX_TRIAL_ARTIFACT_REDEEM = 37;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

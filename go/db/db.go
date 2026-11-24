@@ -24,6 +24,7 @@ import (
 	"shared/drainproof"
 	"shared/etcdwatch"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/serverbase"
 	"strings"
@@ -181,7 +182,7 @@ func main() {
 		}
 	})
 	// 存盘请求带着这名玩家排着的全部审计记录,可以超过 gRPC 缺省的 4 MiB 接收上限(docs/design/player-audit-outbox.md §5.1)。
-	s.AddOptions(grpc.MaxRecvMsgSize(playerstore.MaxSaveRequestBytes))
+	s.AddOptions(grpc.MaxRecvMsgSize(playerstore.MaxSaveRequestBytes), grpckeepalive.ServerOption(0, 0))
 	// 拦截器顺序是有意的(先加的在外层):
 	//   grpcstats → killswitch → serverbase → handler
 	// grpcstats 放最外层,被关停的请求也照样计入总量(否则一开闸就像"没人调用");

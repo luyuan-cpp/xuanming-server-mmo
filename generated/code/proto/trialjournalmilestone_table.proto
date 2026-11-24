@@ -1,0 +1,31 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "TrialJournalMilestoneTableOuterClass";
+option java_multiple_files = true;
+
+
+message TrialJournalMilestoneTable {
+	uint32 id = 1;
+	uint32 scope_chapter_id = 2;
+	uint32 season_id = 3;
+	uint32 required_seals = 4;
+	uint32 bound_sand_count = 5;
+	uint32 bound_artifact_voucher_count = 6;
+	string badge_key = 7;
+	string badge_name = 8;
+	string commentary_key = 9;
+	string commentary_title = 10;
+	string commentary_body = 11;
+	string grant_appearance_id = 12;
+	bool enabled = 13;
+	string title = 14;
+	string desc = 15;
+}
+
+message TrialJournalMilestoneTableData {
+	repeated TrialJournalMilestoneTable data = 1;
+}

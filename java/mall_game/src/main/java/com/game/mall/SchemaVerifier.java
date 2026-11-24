@@ -24,21 +24,21 @@ final class SchemaVerifier {
         Map.entry("commerce_refund_receipt", "channel,payment_transaction_id,transaction_id,order_sn,amount_minor,currency"),
         Map.entry("commerce_abnormal_payment", "channel,transaction_id,order_sn,reason,created_ms"),
         Map.entry("commerce_mock_transaction", "kind,order_sn,request_id,transaction_id,payment_transaction_id,amount_minor,currency,created_ms,applied"),
-        Map.entry("commerce_consignment", "listing_id,seller_player_id,seller_account,market_zone,asset_kind,asset_currency_type,escrow_reference,escrow_proof,request_digest,title,price_fen,fee_bps,cooling_ms,notice_end_ms,sale_end_ms,state,current_order_sn,created_ms"),
+        Map.entry("commerce_consignment", "listing_id,seller_player_id,seller_account,market_zone,asset_kind,asset_currency_type,escrow_reference,escrow_proof,request_digest,title,price_fen,fee_bps,cooling_ms,notice_end_ms,sale_end_ms,state,current_order_sn,designated_buyer_account,created_ms"),
         Map.entry("commerce_consignment_order", "order_sn,listing_id,buyer_account,buyer_owner_revision,request_id,seller_account,escrow_reference,escrow_proof,fee_bps,cooling_ms"),
         Map.entry("commerce_consignment_return", "listing_id,return_proof"),
         Map.entry("commerce_seller_guard", "account"),
-        Map.entry("commerce_seller_income", "order_sn,account,gross_fen,fee_fen,net_fen,reserved_fen,paid_fen,forfeited_fen,available_ms"),
+        Map.entry("commerce_seller_income", "order_sn,account,gross_fen,fee_fen,net_fen,reserved_fen,paid_fen,forfeited_fen,dispute_frozen_fen,dispute_case_id,available_ms"),
         Map.entry("commerce_withdrawal", "withdrawal_id,account,request_id,amount_fen,state,channel,transaction_id,created_ms"),
         Map.entry("commerce_withdrawal_allocation", "withdrawal_id,order_sn,amount_fen"),
         Map.entry("commerce_withdrawal_receipt", "withdrawal_id,channel,transaction_id,amount_fen,successful"),
         Map.entry("commerce_mock_payout", "withdrawal_id,request_id,transaction_id,amount_fen,successful,created_ms,applied"),
         Map.entry("commerce_request_nonce", "caller_role,nonce,expires_ms"));
     /**
-     * 存储合同戳,与 schema.sql 末行一致。2026-11-21 起换新:寄售卖家收入增加 forfeited_fen 及 CHECK 约束,
-     * 供人工单处置精确扣罚争议收入。下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
+     * 存储合同戳,与 schema.sql 末行一致。2026-11-24 起换新:托管引用放宽至 VARCHAR(32) 兼容 trade:<uint64>,
+     * 寄售增加 designated_buyer_account,卖家收入增加 dispute_frozen_fen / dispute_case_id 及 CHECK 约束。
      */
-    static final String STORAGE_CONTRACT = "mall-game-official-sku-v3-manual-resolution";
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v4-dispute-and-tiered-notice";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
@@ -53,8 +53,11 @@ final class SchemaVerifier {
                     ResultSetMetaData metadata = rows.getMetaData();
                     for (int i = 1; i <= metadata.getColumnCount(); i++) {
                         String column = metadata.getColumnName(i).toLowerCase(Locale.ROOT);
-                        if (Set.of("actor", "account", "buyer_account", "buyer_owner_revision", "seller_account", "request_id", "channel", "transaction_id", "payment_transaction_id", "nonce").contains(column) && metadata.getColumnType(i) != Types.VARBINARY) {
+                        if (Set.of("actor", "account", "buyer_account", "buyer_owner_revision", "seller_account", "designated_buyer_account", "request_id", "channel", "transaction_id", "payment_transaction_id", "nonce").contains(column) && metadata.getColumnType(i) != Types.VARBINARY) {
                             throw new IllegalStateException("商城不透明标识列必须使用 VARBINARY: " + table.getKey() + "." + column);
+                        }
+                        if (column.equals("escrow_reference") && metadata.getPrecision(i) < 32) {
+                            throw new IllegalStateException("托管引用列宽必须至少 32 字节以容纳 trade:<uint64>: " + table.getKey() + "." + column);
                         }
                         if (column.equals("buyer_owner_revision") && metadata.getPrecision(i) != 20) {
                             throw new IllegalStateException("订单归属修订必须为规范uint64的VARBINARY(20)");
@@ -64,7 +67,7 @@ final class SchemaVerifier {
                                 && metadata.isNullable(i) != ResultSetMetaData.columnNullable) {
                             throw new IllegalStateException("付款回执的订单列必须可空，才能记录异常付款");
                         }
-                        if (Set.of("price_minor", "pay_amount", "amount_minor", "product_price_minor", "price_fen", "gross_fen", "fee_fen", "net_fen", "reserved_fen", "paid_fen", "forfeited_fen", "amount_fen").contains(column) && metadata.getColumnType(i) != Types.BIGINT) {
+                        if (Set.of("price_minor", "pay_amount", "amount_minor", "product_price_minor", "price_fen", "gross_fen", "fee_fen", "net_fen", "reserved_fen", "paid_fen", "forfeited_fen", "dispute_frozen_fen", "amount_fen").contains(column) && metadata.getColumnType(i) != Types.BIGINT) {
                             throw new IllegalStateException("商城金额列必须为最小单位 BIGINT: " + table.getKey() + "." + column);
                         }
                     }

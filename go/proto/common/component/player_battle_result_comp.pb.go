@@ -148,10 +148,14 @@ type PlayerBattleResult struct {
 	BattleConfigId uint32                        `protobuf:"varint,16,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 战斗配置号;0 = 结算原件没带
 	// 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
 	// (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
-	ItemsMailed              bool   `protobuf:"varint,17,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
-	ExpGain                  uint64 `protobuf:"varint,18,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`                                                        // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
-	MaterialCreditUnitsAdded uint32 `protobuf:"varint,19,opt,name=material_credit_units_added,json=materialCreditUnitsAdded,proto3" json:"material_credit_units_added,omitempty"` // 本局实际新增的装备材料可领额度(0 或 10)
-	SeasonId                 uint32 `protobuf:"varint,20,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                                     // 论剑排位赛季编号(非排位为 0)
+	ItemsMailed              bool     `protobuf:"varint,17,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
+	ExpGain                  uint64   `protobuf:"varint,18,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`                                                        // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
+	MaterialCreditUnitsAdded uint32   `protobuf:"varint,19,opt,name=material_credit_units_added,json=materialCreditUnitsAdded,proto3" json:"material_credit_units_added,omitempty"` // 本局实际新增的装备材料可领额度(0 或 10)
+	SeasonId                 uint32   `protobuf:"varint,20,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                                     // 论剑排位赛季编号(非排位为 0)
+	TrialJournalEntryId      uint32   `protobuf:"varint,21,opt,name=trial_journal_entry_id,json=trialJournalEntryId,proto3" json:"trial_journal_entry_id,omitempty"`                // 五行试炼志关联关卡格 ID(0 = 非试炼志对局，结算页据此决定是否显示「看试炼志」)
+	TrialNewlyLitSealIds     []uint32 `protobuf:"varint,22,rep,packed,name=trial_newly_lit_seal_ids,json=trialNewlyLitSealIds,proto3" json:"trial_newly_lit_seal_ids,omitempty"`    // 本局首次点亮的战法印 ID 列表
+	TrialNewSoloBest         bool     `protobuf:"varint,23,opt,name=trial_new_solo_best,json=trialNewSoloBest,proto3" json:"trial_new_solo_best,omitempty"`                         // 本局是否刷新单人最少回合纪录
+	TrialNewCoopBest         bool     `protobuf:"varint,24,opt,name=trial_new_coop_best,json=trialNewCoopBest,proto3" json:"trial_new_coop_best,omitempty"`                         // 本局是否刷新好友合战最快回合纪录
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -326,6 +330,34 @@ func (x *PlayerBattleResult) GetSeasonId() uint32 {
 	return 0
 }
 
+func (x *PlayerBattleResult) GetTrialJournalEntryId() uint32 {
+	if x != nil {
+		return x.TrialJournalEntryId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTrialNewlyLitSealIds() []uint32 {
+	if x != nil {
+		return x.TrialNewlyLitSealIds
+	}
+	return nil
+}
+
+func (x *PlayerBattleResult) GetTrialNewSoloBest() bool {
+	if x != nil {
+		return x.TrialNewSoloBest
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetTrialNewCoopBest() bool {
+	if x != nil {
+		return x.TrialNewCoopBest
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -388,7 +420,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xfc\x05\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xc7\a\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -415,7 +447,11 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\fitems_mailed\x18\x11 \x01(\bR\vitemsMailed\x12\x19\n" +
 	"\bexp_gain\x18\x12 \x01(\x04R\aexpGain\x12=\n" +
 	"\x1bmaterial_credit_units_added\x18\x13 \x01(\rR\x18materialCreditUnitsAdded\x12\x1b\n" +
-	"\tseason_id\x18\x14 \x01(\rR\bseasonId\"o\n" +
+	"\tseason_id\x18\x14 \x01(\rR\bseasonId\x123\n" +
+	"\x16trial_journal_entry_id\x18\x15 \x01(\rR\x13trialJournalEntryId\x126\n" +
+	"\x18trial_newly_lit_seal_ids\x18\x16 \x03(\rR\x14trialNewlyLitSealIds\x12-\n" +
+	"\x13trial_new_solo_best\x18\x17 \x01(\bR\x10trialNewSoloBest\x12-\n" +
+	"\x13trial_new_coop_best\x18\x18 \x01(\bR\x10trialNewCoopBest\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

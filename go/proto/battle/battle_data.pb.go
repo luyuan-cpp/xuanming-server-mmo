@@ -2376,7 +2376,9 @@ type BattleSettlementData struct {
 	SeasonId          uint32 `protobuf:"varint,22,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                              // 冻结的赛季编号(非排位为 0)
 	RankedRuleVersion uint32 `protobuf:"varint,23,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"` // 冻结的排位规则版本(非排位为 0)
 	// 本人是否达成排位有效参与(由 battle 房间在终局前按统一参与事实冻结,非排位恒为 false)。
-	Participated  bool `protobuf:"varint,24,opt,name=participated,proto3" json:"participated,omitempty"`
+	Participated bool `protobuf:"varint,24,opt,name=participated,proto3" json:"participated,omitempty"`
+	// 五行试炼志 V2 权威战法事实与轻量阵容快照(由 battle 引擎在终局前按真实事件冻结,非试炼志关联局留空)。
+	TrialFacts    *BattleTrialJournalFacts `protobuf:"bytes,25,opt,name=trial_facts,json=trialFacts,proto3" json:"trial_facts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2577,6 +2579,13 @@ func (x *BattleSettlementData) GetParticipated() bool {
 		return x.Participated
 	}
 	return false
+}
+
+func (x *BattleSettlementData) GetTrialFacts() *BattleTrialJournalFacts {
+	if x != nil {
+		return x.TrialFacts
+	}
+	return nil
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -3015,6 +3024,279 @@ func (x *BattleParticipationFact) GetNoActionOpportunity() bool {
 	return false
 }
 
+// ---- 五行试炼志 V2 开局冻结上下文与终局权威事实(docs/design/long-term-progression-v2.md) ----
+type TrialBattleContext struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	JournalEntryId      uint32                 `protobuf:"varint,1,opt,name=journal_entry_id,json=journalEntryId,proto3" json:"journal_entry_id,omitempty"`                  // TrialJournalEntry.id（0 = 非试炼志格）
+	TrialRuleVersion    uint32                 `protobuf:"varint,2,opt,name=trial_rule_version,json=trialRuleVersion,proto3" json:"trial_rule_version,omitempty"`            // 开局冻结的可比规则版本
+	SeasonId            uint32                 `protobuf:"varint,3,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                      // 赛季卷对应赛季号（永久卷为 0）
+	GuardMonsterTableId uint32                 `protobuf:"varint,4,opt,name=guard_monster_table_id,json=guardMonsterTableId,proto3" json:"guard_monster_table_id,omitempty"` // 可选：回春/护势等特殊护卫怪物表 ID（0 = 任意非首领怪物）
+	GuardStanceBuffId   uint32                 `protobuf:"varint,5,opt,name=guard_stance_buff_id,json=guardStanceBuffId,proto3" json:"guard_stance_buff_id,omitempty"`       // 可选：护势护卫状态 Buff 表 ID（0 = 任意敌方增益驱散均视为有效驱散）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *TrialBattleContext) Reset() {
+	*x = TrialBattleContext{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrialBattleContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrialBattleContext) ProtoMessage() {}
+
+func (x *TrialBattleContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrialBattleContext.ProtoReflect.Descriptor instead.
+func (*TrialBattleContext) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *TrialBattleContext) GetJournalEntryId() uint32 {
+	if x != nil {
+		return x.JournalEntryId
+	}
+	return 0
+}
+
+func (x *TrialBattleContext) GetTrialRuleVersion() uint32 {
+	if x != nil {
+		return x.TrialRuleVersion
+	}
+	return 0
+}
+
+func (x *TrialBattleContext) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *TrialBattleContext) GetGuardMonsterTableId() uint32 {
+	if x != nil {
+		return x.GuardMonsterTableId
+	}
+	return 0
+}
+
+func (x *TrialBattleContext) GetGuardStanceBuffId() uint32 {
+	if x != nil {
+		return x.GuardStanceBuffId
+	}
+	return 0
+}
+
+type BattleTrialJournalFacts struct {
+	state                                 protoimpl.MessageState `protogen:"open.v1"`
+	JournalEntryId                        uint32                 `protobuf:"varint,1,opt,name=journal_entry_id,json=journalEntryId,proto3" json:"journal_entry_id,omitempty"`
+	TrialRuleVersion                      uint32                 `protobuf:"varint,2,opt,name=trial_rule_version,json=trialRuleVersion,proto3" json:"trial_rule_version,omitempty"`
+	InitialHumanCount                     uint32                 `protobuf:"varint,3,opt,name=initial_human_count,json=initialHumanCount,proto3" json:"initial_human_count,omitempty"`
+	SeasonId                              uint32                 `protobuf:"varint,4,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SelfOrPetEverDied                     bool                   `protobuf:"varint,5,opt,name=self_or_pet_ever_died,json=selfOrPetEverDied,proto3" json:"self_or_pet_ever_died,omitempty"`                                                                  // 本人或本人出战宝宝本场任一时刻触发过死亡（复活不清除）
+	BossGuardHealTotal                    uint64                 `protobuf:"varint,6,opt,name=boss_guard_heal_total,json=bossGuardHealTotal,proto3" json:"boss_guard_heal_total,omitempty"`                                                                 // 敌方护卫对首领实际造成的有效气血恢复总量
+	GuardStanceDispelled                  bool                   `protobuf:"varint,7,opt,name=guard_stance_dispelled,json=guardStanceDispelled,proto3" json:"guard_stance_dispelled,omitempty"`                                                             // 己方本场成功驱散过敌方护势状态
+	TeamDealtPhysicalDirectDamage         bool                   `protobuf:"varint,8,opt,name=team_dealt_physical_direct_damage,json=teamDealtPhysicalDirectDamage,proto3" json:"team_dealt_physical_direct_damage,omitempty"`                              // 己方本场对敌方造成过 >0 物理直接伤害
+	TeamDealtMagicDirectDamage            bool                   `protobuf:"varint,9,opt,name=team_dealt_magic_direct_damage,json=teamDealtMagicDirectDamage,proto3" json:"team_dealt_magic_direct_damage,omitempty"`                                       // 己方本场对敌方造成过 >0 法术直接伤害
+	GuardSurvived                         bool                   `protobuf:"varint,10,opt,name=guard_survived,json=guardSurvived,proto3" json:"guard_survived,omitempty"`                                                                                   // 终局时敌方护卫仍存活（供护卫救援卷三判定）
+	SelfTriggeredShieldBreak              bool                   `protobuf:"varint,11,opt,name=self_triggered_shield_break,json=selfTriggeredShieldBreak,proto3" json:"self_triggered_shield_break,omitempty"`                                              // 本人触发破盾法宝/赛季印产生 >0 实际削盾
+	SelfTriggeredAntiControlOrSeasonSkill bool                   `protobuf:"varint,12,opt,name=self_triggered_anti_control_or_season_skill,json=selfTriggeredAntiControlOrSeasonSkill,proto3" json:"self_triggered_anti_control_or_season_skill,omitempty"` // 本人触发清心符、成功净化或施放当季免费赛季技能
+	UsedPetTableId                        uint32                 `protobuf:"varint,13,opt,name=used_pet_table_id,json=usedPetTableId,proto3" json:"used_pet_table_id,omitempty"`                                                                            // 本人开局出战宝宝种类（0=无宠）
+	UsedArtifactEffectIds                 []uint32               `protobuf:"varint,14,rep,packed,name=used_artifact_effect_ids,json=usedArtifactEffectIds,proto3" json:"used_artifact_effect_ids,omitempty"`                                                // 本人开局佩戴的法宝效果 ID（至多 2 个，升序）
+	UsedSeasonSealId                      uint32                 `protobuf:"varint,15,opt,name=used_season_seal_id,json=usedSeasonSealId,proto3" json:"used_season_seal_id,omitempty"`                                                                      // 本人开局生效的赛季印 ID（0=无）
+	TeammateNames                         []string               `protobuf:"bytes,16,rep,name=teammate_names,json=teammateNames,proto3" json:"teammate_names,omitempty"`                                                                                    // 入场冻结的同队其他真人展示名（至多 4 名）
+	BossWindHitUnprotectedDeath           bool                   `protobuf:"varint,17,opt,name=boss_wind_hit_unprotected_death,json=bossWindHitUnprotectedDeath,proto3" json:"boss_wind_hit_unprotected_death,omitempty"`                                   // 卷二八仙岛风击倒地标记
+	DealtYangBellPhysicalDamage           bool                   `protobuf:"varint,18,opt,name=dealt_yang_bell_physical_damage,json=dealtYangBellPhysicalDamage,proto3" json:"dealt_yang_bell_physical_damage,omitempty"`                                   // 卷二碧渊水宫阳钟阶段物理击伤标记
+	DealtYinDrumMagicDamage               bool                   `protobuf:"varint,19,opt,name=dealt_yin_drum_magic_damage,json=dealtYinDrumMagicDamage,proto3" json:"dealt_yin_drum_magic_damage,omitempty"`                                               // 卷二碧渊水宫阴鼓阶段法术击伤标记
+	FinishedInEbbTide                     bool                   `protobuf:"varint,20,opt,name=finished_in_ebb_tide,json=finishedInEbbTide,proto3" json:"finished_in_ebb_tide,omitempty"`                                                                   // 卷二月汐湾退潮窗口终结标记
+	unknownFields                         protoimpl.UnknownFields
+	sizeCache                             protoimpl.SizeCache
+}
+
+func (x *BattleTrialJournalFacts) Reset() {
+	*x = BattleTrialJournalFacts{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleTrialJournalFacts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleTrialJournalFacts) ProtoMessage() {}
+
+func (x *BattleTrialJournalFacts) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleTrialJournalFacts.ProtoReflect.Descriptor instead.
+func (*BattleTrialJournalFacts) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *BattleTrialJournalFacts) GetJournalEntryId() uint32 {
+	if x != nil {
+		return x.JournalEntryId
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetTrialRuleVersion() uint32 {
+	if x != nil {
+		return x.TrialRuleVersion
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetInitialHumanCount() uint32 {
+	if x != nil {
+		return x.InitialHumanCount
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetSelfOrPetEverDied() bool {
+	if x != nil {
+		return x.SelfOrPetEverDied
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetBossGuardHealTotal() uint64 {
+	if x != nil {
+		return x.BossGuardHealTotal
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetGuardStanceDispelled() bool {
+	if x != nil {
+		return x.GuardStanceDispelled
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetTeamDealtPhysicalDirectDamage() bool {
+	if x != nil {
+		return x.TeamDealtPhysicalDirectDamage
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetTeamDealtMagicDirectDamage() bool {
+	if x != nil {
+		return x.TeamDealtMagicDirectDamage
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetGuardSurvived() bool {
+	if x != nil {
+		return x.GuardSurvived
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetSelfTriggeredShieldBreak() bool {
+	if x != nil {
+		return x.SelfTriggeredShieldBreak
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetSelfTriggeredAntiControlOrSeasonSkill() bool {
+	if x != nil {
+		return x.SelfTriggeredAntiControlOrSeasonSkill
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetUsedPetTableId() uint32 {
+	if x != nil {
+		return x.UsedPetTableId
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetUsedArtifactEffectIds() []uint32 {
+	if x != nil {
+		return x.UsedArtifactEffectIds
+	}
+	return nil
+}
+
+func (x *BattleTrialJournalFacts) GetUsedSeasonSealId() uint32 {
+	if x != nil {
+		return x.UsedSeasonSealId
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetTeammateNames() []string {
+	if x != nil {
+		return x.TeammateNames
+	}
+	return nil
+}
+
+func (x *BattleTrialJournalFacts) GetBossWindHitUnprotectedDeath() bool {
+	if x != nil {
+		return x.BossWindHitUnprotectedDeath
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetDealtYangBellPhysicalDamage() bool {
+	if x != nil {
+		return x.DealtYangBellPhysicalDamage
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetDealtYinDrumMagicDamage() bool {
+	if x != nil {
+		return x.DealtYinDrumMagicDamage
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetFinishedInEbbTide() bool {
+	if x != nil {
+		return x.FinishedInEbbTide
+	}
+	return false
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -3244,7 +3526,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xba\a\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xf5\a\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -3271,7 +3553,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12competitive_ranked\x18\x15 \x01(\bR\x11competitiveRanked\x12\x1b\n" +
 	"\tseason_id\x18\x16 \x01(\rR\bseasonId\x12.\n" +
 	"\x13ranked_rule_version\x18\x17 \x01(\rR\x11rankedRuleVersion\x12\"\n" +
-	"\fparticipated\x18\x18 \x01(\bR\fparticipated\"u\n" +
+	"\fparticipated\x18\x18 \x01(\bR\fparticipated\x129\n" +
+	"\vtrial_facts\x18\x19 \x01(\v2\x18.BattleTrialJournalFactsR\n" +
+	"trialFacts\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -3307,7 +3591,35 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fentered_room\x18\x02 \x01(\bR\venteredRoom\x124\n" +
 	"\x16manual_action_accepted\x18\x03 \x01(\bR\x14manualActionAccepted\x122\n" +
 	"\x15explicit_auto_enabled\x18\x04 \x01(\bR\x13explicitAutoEnabled\x122\n" +
-	"\x15no_action_opportunity\x18\x05 \x01(\bR\x13noActionOpportunity*\x86\x01\n" +
+	"\x15no_action_opportunity\x18\x05 \x01(\bR\x13noActionOpportunity\"\xef\x01\n" +
+	"\x12TrialBattleContext\x12(\n" +
+	"\x10journal_entry_id\x18\x01 \x01(\rR\x0ejournalEntryId\x12,\n" +
+	"\x12trial_rule_version\x18\x02 \x01(\rR\x10trialRuleVersion\x12\x1b\n" +
+	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x123\n" +
+	"\x16guard_monster_table_id\x18\x04 \x01(\rR\x13guardMonsterTableId\x12/\n" +
+	"\x14guard_stance_buff_id\x18\x05 \x01(\rR\x11guardStanceBuffId\"\xde\b\n" +
+	"\x17BattleTrialJournalFacts\x12(\n" +
+	"\x10journal_entry_id\x18\x01 \x01(\rR\x0ejournalEntryId\x12,\n" +
+	"\x12trial_rule_version\x18\x02 \x01(\rR\x10trialRuleVersion\x12.\n" +
+	"\x13initial_human_count\x18\x03 \x01(\rR\x11initialHumanCount\x12\x1b\n" +
+	"\tseason_id\x18\x04 \x01(\rR\bseasonId\x120\n" +
+	"\x15self_or_pet_ever_died\x18\x05 \x01(\bR\x11selfOrPetEverDied\x121\n" +
+	"\x15boss_guard_heal_total\x18\x06 \x01(\x04R\x12bossGuardHealTotal\x124\n" +
+	"\x16guard_stance_dispelled\x18\a \x01(\bR\x14guardStanceDispelled\x12H\n" +
+	"!team_dealt_physical_direct_damage\x18\b \x01(\bR\x1dteamDealtPhysicalDirectDamage\x12B\n" +
+	"\x1eteam_dealt_magic_direct_damage\x18\t \x01(\bR\x1ateamDealtMagicDirectDamage\x12%\n" +
+	"\x0eguard_survived\x18\n" +
+	" \x01(\bR\rguardSurvived\x12=\n" +
+	"\x1bself_triggered_shield_break\x18\v \x01(\bR\x18selfTriggeredShieldBreak\x12Z\n" +
+	"+self_triggered_anti_control_or_season_skill\x18\f \x01(\bR%selfTriggeredAntiControlOrSeasonSkill\x12)\n" +
+	"\x11used_pet_table_id\x18\r \x01(\rR\x0eusedPetTableId\x127\n" +
+	"\x18used_artifact_effect_ids\x18\x0e \x03(\rR\x15usedArtifactEffectIds\x12-\n" +
+	"\x13used_season_seal_id\x18\x0f \x01(\rR\x10usedSeasonSealId\x12%\n" +
+	"\x0eteammate_names\x18\x10 \x03(\tR\rteammateNames\x12D\n" +
+	"\x1fboss_wind_hit_unprotected_death\x18\x11 \x01(\bR\x1bbossWindHitUnprotectedDeath\x12D\n" +
+	"\x1fdealt_yang_bell_physical_damage\x18\x12 \x01(\bR\x1bdealtYangBellPhysicalDamage\x12<\n" +
+	"\x1bdealt_yin_drum_magic_damage\x18\x13 \x01(\bR\x17dealtYinDrumMagicDamage\x12/\n" +
+	"\x14finished_in_ebb_tide\x18\x14 \x01(\bR\x11finishedInEbbTide*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
@@ -3384,7 +3696,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                   // 0: eBattleActorType
 	(EBattleActionType)(0),                  // 1: eBattleActionType
@@ -3415,42 +3727,44 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*RankedMemberLoadout)(nil),             // 26: RankedMemberLoadout
 	(*RankedMatchContext)(nil),              // 27: RankedMatchContext
 	(*BattleParticipationFact)(nil),         // 28: BattleParticipationFact
-	nil,                                     // 29: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                     // 30: BattlePetSnapshot.SkillRanksEntry
-	nil,                                     // 31: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                     // 32: BattleActorState.SkillRanksEntry
-	nil,                                     // 33: BattleActorState.AbilityUseCountsEntry
-	nil,                                     // 34: BattleActorState.RoundEffectUsageEntry
-	(*component.BaseAttributesComp)(nil),    // 35: BaseAttributesComp
-	(*component.CombatAttributes)(nil),      // 36: CombatAttributes
-	(*component.EquipmentEffects)(nil),      // 37: EquipmentEffects
-	(*component.PetCultivationEffects)(nil), // 38: PetCultivationEffects
-	(*component.SupportEffectSummary)(nil),  // 39: SupportEffectSummary
+	(*TrialBattleContext)(nil),              // 29: TrialBattleContext
+	(*BattleTrialJournalFacts)(nil),         // 30: BattleTrialJournalFacts
+	nil,                                     // 31: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                     // 32: BattlePetSnapshot.SkillRanksEntry
+	nil,                                     // 33: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                     // 34: BattleActorState.SkillRanksEntry
+	nil,                                     // 35: BattleActorState.AbilityUseCountsEntry
+	nil,                                     // 36: BattleActorState.RoundEffectUsageEntry
+	(*component.BaseAttributesComp)(nil),    // 37: BaseAttributesComp
+	(*component.CombatAttributes)(nil),      // 38: CombatAttributes
+	(*component.EquipmentEffects)(nil),      // 39: EquipmentEffects
+	(*component.PetCultivationEffects)(nil), // 40: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 41: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	35, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	37, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	9,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	10, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	8,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
 	12, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	36, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	29, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	37, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
-	35, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	30, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	38, // 10: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	38, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	31, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	39, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
+	37, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	32, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	40, // 10: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
 	0,  // 11: BattleActorState.actor_type:type_name -> eBattleActorType
-	35, // 12: BattleActorState.attributes:type_name -> BaseAttributesComp
+	37, // 12: BattleActorState.attributes:type_name -> BaseAttributesComp
 	9,  // 13: BattleActorState.buffs:type_name -> BattleBuffEntry
-	31, // 14: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	36, // 15: BattleActorState.combat:type_name -> CombatAttributes
-	32, // 16: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	33, // 17: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	34, // 18: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	37, // 19: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	33, // 14: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	38, // 15: BattleActorState.combat:type_name -> CombatAttributes
+	34, // 16: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	35, // 17: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	36, // 18: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	39, // 19: BattleActorState.equipment_effects:type_name -> EquipmentEffects
 	14, // 20: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	38, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
-	39, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	40, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	41, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
 	14, // 23: BattleActorState.season_seal_state:type_name -> BattleArtifactState
 	1,  // 24: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 25: BattleEventItem.event_type:type_name -> eBattleEventType
@@ -3464,14 +3778,15 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	23, // 33: BattleSettlementData.pets:type_name -> BattlePetSettlementData
 	17, // 34: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
 	18, // 35: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
-	5,  // 36: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	25, // 37: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
-	26, // 38: RankedMatchContext.members:type_name -> RankedMemberLoadout
-	39, // [39:39] is the sub-list for method output_type
-	39, // [39:39] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	30, // 36: BattleSettlementData.trial_facts:type_name -> BattleTrialJournalFacts
+	5,  // 37: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	25, // 38: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	26, // 39: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	40, // [40:40] is the sub-list for method output_type
+	40, // [40:40] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -3487,7 +3802,7 @@ func file_proto_battle_battle_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   27,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

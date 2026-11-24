@@ -15,6 +15,7 @@
 #include "system/equipment_battle_rules.h"
 #include "system/pet_cultivation_rules.h"
 #include "system/season_rules.h"
+#include "system/trial_journal_rules.h"
 #include "modules/currency/constants/currency.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -230,6 +231,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     rng.seed(request.seed());
     roundIndex = 1;
     outcome = BATTLE_OUTCOME_ONGOING;
+    everDiedActors.clear();
+    bossGuardHealTotal = 0;
+    guardStanceDispelled = false;
+    teamADealtPhysicalDirectDamage = false;
+    teamADealtMagicDirectDamage = false;
+    shieldBreakPlayers.clear();
+    antiControlOrSeasonSkillPlayers.clear();
 
     // 回合上限:DungeonTable.time_limit(秒)换算,缺省 300 回合
     maxRounds = kDefaultMaxRounds;
@@ -1257,6 +1265,9 @@ void TurnBattleEngine::BindBattleScripts() {
                         if (std::find(owned.begin(), owned.end(), skillId) == owned.end()) {
                             actor.add_skill_table_ids(skillId);
                         }
+                        if (const auto* row = dataProvider->FindSkill(skillId); row != nullptr && row->battle_model() == 1) {
+                            (*actor.mutable_skill_ranks())[skillId] = 1;
+                        }
                     }
                 }
                 break;
@@ -1670,6 +1681,9 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
         return context.actualDamage > 0;
     }
     const uint64_t dealt = ApplyDamage(target, finalDamage);
+    if (hitKind != BATTLE_HIT_COUNTER) {
+        RecordTrialDirectDamage(attacker, target, combatdamage::kPhysicalDamage, dealt);
+    }
 
     auto* damageEvent =
         AppendEvent(result, BATTLE_EVENT_DAMAGE, attacker.actor_id(), target.actor_id());
@@ -1912,6 +1926,7 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
             ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
         } else {
         const uint64_t dealt = ApplyDamage(target, finalDamage);
+        RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
 
         auto* damageEvent =
             AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), target.actor_id());
@@ -2178,6 +2193,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
                 ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
             } else {
             const uint64_t dealt = ApplyDamage(target, finalDamage);
+            RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
 
             auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), target.actor_id());
             damageEvent->set_skill_table_id(skillRow.id());
@@ -2202,6 +2218,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
             ResolveConfiguredHeal(actor, target, ClassSkillHealAmount(actor, skillRow, rank, target), context, result);
         } else {
         const uint64_t healed = ApplyHeal(target, ClassSkillHealAmount(actor, skillRow, rank, target));
+        RecordTrialMonsterHeal(actor, target, healed);
         // 满血也发一条(value = 0):演出要知道这一下奶给了谁
         auto* healEvent = AppendEvent(result, BATTLE_EVENT_HEAL, actor.actor_id(), target.actor_id());
         healEvent->set_skill_table_id(skillRow.id());
@@ -2225,7 +2242,10 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
     }
 
     if (skillRow.dispel_count() > 0) {
-        DispelDebuffs(target, skillRow.dispel_count(), result);
+        if (DispelDebuffs(target, skillRow.dispel_count(), result) > 0 &&
+            actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == target.team_index()) {
+            antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
+        }
     }
 
     // 增减益:幅度 = 表里的基础幅度 × 辅助等级系数,施加时算定后存进局内 buff
@@ -2855,6 +2875,9 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
         }
         const uint64_t healed = ApplyHeal(actor, healAmount);
         if (healed > 0) {
+            if (const auto* source = FindActor(entry.caster_id()); source != nullptr) {
+                RecordTrialMonsterHeal(*source, actor, healed);
+            }
             auto* tickEvent =
                 AppendEvent(result, BATTLE_EVENT_BUFF_TICK, entry.caster_id(), actor.actor_id());
             tickEvent->set_buff_table_id(buffRow.id());
@@ -3209,7 +3232,33 @@ void TurnBattleEngine::HandleDeath(BattleActorState& target, uint64_t sourceActo
         }
         for (const auto id : remove) RemoveConfiguredBuff(target, id, result);
     }
+    everDiedActors.insert(target.actor_id());
     AppendEvent(result, BATTLE_EVENT_DEATH, target.actor_id(), target.actor_id());
+}
+
+void TurnBattleEngine::RecordTrialDirectDamage(const BattleActorState& source, const BattleActorState& target,
+                                               uint32_t damageType, uint64_t dealtOrAbsorbed) {
+    if (dealtOrAbsorbed == 0 || source.team_index() != 0 || target.team_index() != 1) {
+        return;
+    }
+    if (damageType == combatdamage::kPhysicalDamage) {
+        teamADealtPhysicalDirectDamage = true;
+    } else if (damageType == combatdamage::kMagicDamage) {
+        teamADealtMagicDirectDamage = true;
+    }
+}
+
+void TurnBattleEngine::RecordTrialMonsterHeal(const BattleActorState& source, const BattleActorState& target,
+                                              uint64_t healed) {
+    if (healed == 0 || source.actor_type() != BATTLE_ACTOR_TYPE_MONSTER ||
+        target.actor_type() != BATTLE_ACTOR_TYPE_MONSTER || !target.is_boss() ||
+        source.actor_id() == target.actor_id()) {
+        return;
+    }
+    const uint32_t guardMonsterId = createRequest.trial_context().guard_monster_table_id();
+    if (guardMonsterId == 0 || source.monster_table_id() == guardMonsterId) {
+        bossGuardHealTotal = SaturatingAdd(bossGuardHealTotal, healed);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3488,6 +3537,83 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         IsActorActive(*actor)) {
         for (const auto& defeat : defeatedMonsters) {
             *settlement.add_defeated_monsters() = defeat;
+        }
+    }
+
+    // 五行试炼志 V2：冻结权威战法事实与轻量阵容快照（不查配置表、不掷随机）。
+    if (createRequest.has_trial_context() && createRequest.trial_context().journal_entry_id() != 0) {
+        const auto& ctx = createRequest.trial_context();
+        auto* facts = settlement.mutable_trial_facts();
+        facts->set_journal_entry_id(ctx.journal_entry_id());
+        facts->set_trial_rule_version(ctx.trial_rule_version());
+        facts->set_season_id(ctx.season_id());
+
+        uint32_t humanCount = 0;
+        std::vector<std::pair<uint64_t, std::string>> teammates;
+        for (const auto& snapshot : createRequest.players()) {
+            if (snapshot.team_index() != actor->team_index()) {
+                continue;
+            }
+            ++humanCount;
+            if (snapshot.player_id() == playerId) {
+                if (!snapshot.pets().empty()) {
+                    const auto& pet = snapshot.pets(0);
+                    facts->set_used_pet_table_id(pet.combat_pet_table_id() != 0 ? pet.combat_pet_table_id()
+                                                                                : pet.pet_table_id());
+                }
+            } else {
+                teammates.emplace_back(snapshot.player_id(), snapshot.player_name());
+            }
+        }
+        facts->set_initial_human_count(humanCount);
+        std::sort(teammates.begin(), teammates.end(),
+                  [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+        const size_t maxNames = std::min<size_t>(teammates.size(), trialjournal::kMaxCoopTeammates);
+        for (size_t i = 0; i < maxNames; ++i) {
+            if (!teammates[i].second.empty()) {
+                facts->add_teammate_names(teammates[i].second);
+            }
+        }
+
+        bool selfOrPetDied = everDiedActors.contains(playerId);
+        bool guardSurvived = false;
+        for (const auto& other : actors) {
+            if (other.actor_type() == BATTLE_ACTOR_TYPE_PET && other.owner_player_id() == playerId &&
+                everDiedActors.contains(other.actor_id())) {
+                selfOrPetDied = true;
+            }
+            if (other.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && other.team_index() != actor->team_index() &&
+                !other.is_boss() && !other.is_dead() &&
+                (ctx.guard_monster_table_id() == 0 || other.monster_table_id() == ctx.guard_monster_table_id())) {
+                guardSurvived = true;
+            }
+        }
+        facts->set_self_or_pet_ever_died(selfOrPetDied);
+        facts->set_boss_guard_heal_total(bossGuardHealTotal);
+        facts->set_guard_stance_dispelled(guardStanceDispelled);
+        facts->set_team_dealt_physical_direct_damage(teamADealtPhysicalDirectDamage);
+        facts->set_team_dealt_magic_direct_damage(teamADealtMagicDirectDamage);
+        facts->set_guard_survived(guardSurvived);
+        facts->set_self_triggered_shield_break(shieldBreakPlayers.contains(playerId));
+        facts->set_self_triggered_anti_control_or_season_skill(
+            antiControlOrSeasonSkillPlayers.contains(playerId));
+
+        std::vector<uint32_t> artifactEffects;
+        for (const auto& artifact : actor->equipment_effects().artifacts()) {
+            if (artifact.effect_id() >= trialjournal::kMinArtifactEffectId &&
+                artifact.effect_id() <= trialjournal::kMaxArtifactEffectId) {
+                artifactEffects.push_back(artifact.effect_id());
+            }
+        }
+        std::sort(artifactEffects.begin(), artifactEffects.end());
+        if (artifactEffects.size() > trialjournal::kMaxArtifactSlots) {
+            artifactEffects.resize(trialjournal::kMaxArtifactSlots);
+        }
+        for (const uint32_t effectId : artifactEffects) {
+            facts->add_used_artifact_effect_ids(effectId);
+        }
+        if (actor->equipment_effects().has_season_seal()) {
+            facts->set_used_season_seal_id(actor->equipment_effects().season_seal().seal_id());
         }
     }
     return settlement;

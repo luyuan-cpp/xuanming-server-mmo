@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+// TrialJournalEntry 表的权威 schema。源表 data/TrialJournalEntry.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 五行试炼志 V2 关卡格目录表（设计见 docs/design/long-term-progression-v2.md）：
+//   - 表级 (cfg_ids_permanent) = true：上线后禁止物理删行或复用旧 ID，下架请将 enabled 置 false。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TrialJournalEntryTable {
+  option (cfg_sheet)         = "TrialJournalEntry";
+  option (cfg_source_file)   = "TrialJournalEntry.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+  option (cfg_hot_reload)    = true;
+
+  // 关卡格稳定业务 ID（101..104 卷一破阵试炼；201..203 预留卷二三境明雷；301.. 预留卷三季游）
+  uint32 id = 1;
+  // 所属卷编号（1=卷一·破阵试炼，2=卷二·三境明雷，3=卷三·季游奇谈）
+  uint32 chapter_id = 2 [(cfg_index) = true];
+  // 所属赛季编号（0=永久卷，>0=赛季隔离卷，遵循 bit-storage-and-table-ids.md §1）
+  uint32 season_id = 3;
+  // 玩法来源类型（1=常驻首领试炼，2=野外明雷首领，3=轮换PVE，4=轮换PVP，5=人宠会武）
+  uint32 source_kind = 4;
+  // 难度档（0=不区分，1=普通，2=困难）
+  uint32 difficulty = 5;
+  // 护卫或机制变体键（如 rejuvenation / bulwark / wind_eye / water_mirror / tide）
+  string variant_key = 6;
+  // 当前可比规则版本（平衡大改时显式递增，避免旧版成绩与新版混比）
+  uint32 rule_version = 7;
+  // 当前规则版本展示名（如 首测规则）
+  string rule_version_name = 8;
+  // 是否在当前目录生效（下架置 false，保留旧位与旧档兼容）
+  bool enabled = 9;
+  // 同卷内展示排序（升序）
+  uint32 sort_order = 10;
+  // 关卡格展示名（如 普通·回春）
+  string display_name = 11;
+  // 卷名称（如 卷一 · 破阵试炼）
+  string chapter_name = 12;
+  // 客户端图标键（不带 Assets/Resources 前缀与扩展名）
+  string icon_key = 13;
+  // 准入模式（0=基础战斗准入直接开放，1=任意普通破阵格通关印点亮后解锁困难）
+  uint32 unlock_mode = 14;
+  // 客户端「前往试炼」跳转参数（如 boss_trial:normal:rejuvenation）
+  string jump_target = 15;
+  // 关卡机制简介
+  string desc = 16;
+}

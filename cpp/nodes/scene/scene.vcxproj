@@ -263,6 +263,8 @@
     <ClInclude Include="handler\rpc\player\player_appearance_handler.h" />
     <ClCompile Include="handler\rpc\player\player_season_handler.cpp" />
     <ClInclude Include="handler\rpc\player\player_season_handler.h" />
+    <ClCompile Include="handler\rpc\player\player_trial_journal_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_trial_journal_handler.h" />
     <ClCompile Include="handler\rpc\player\player_battle_result_handler.cpp" />
     <ClInclude Include="handler\rpc\player\player_battle_result_handler.h" />
   </ItemGroup>

@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "0f6757d95603c861"
+const SchemaDigest = "8a3cb14b8c44ed4e"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -27,6 +27,9 @@ var hotReloadableTables = map[string]bool{
 	"SeasonSeal": true,
 	"Skill": true,
 	"SkillPermission": true,
+	"TrialJournalEntry": true,
+	"TrialJournalMilestone": true,
+	"TrialJournalSeal": true,
 }
 
 var allTableNames = []string{
@@ -89,6 +92,9 @@ var allTableNames = []string{
 	"SkillPermission",
 	"Test",
 	"TestMultiKey",
+	"TrialJournalEntry",
+	"TrialJournalMilestone",
+	"TrialJournalSeal",
 	"World",
 	"ZoneGroup",
 }
@@ -176,6 +182,9 @@ type TableSet struct {
 	SkillPermission *SkillPermissionTableManager
 	Test *TestTableManager
 	TestMultiKey *TestMultiKeyTableManager
+	TrialJournalEntry *TrialJournalEntryTableManager
+	TrialJournalMilestone *TrialJournalMilestoneTableManager
+	TrialJournalSeal *TrialJournalSealTableManager
 	World *WorldTableManager
 	ZoneGroup *ZoneGroupTableManager
 }
@@ -259,6 +268,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		SkillPermission: NewSkillPermissionTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
+		TrialJournalEntry: NewTrialJournalEntryTableManager(),
+		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
+		TrialJournalSeal: NewTrialJournalSealTableManager(),
 		World: NewWorldTableManager(),
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
@@ -438,6 +450,15 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare TestMultiKey table failed: %w", err)
+	}
+	if err := ts.TrialJournalEntry.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TrialJournalEntry table failed: %w", err)
+	}
+	if err := ts.TrialJournalMilestone.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TrialJournalMilestone table failed: %w", err)
+	}
+	if err := ts.TrialJournalSeal.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TrialJournalSeal table failed: %w", err)
 	}
 	if err := ts.World.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare World table failed: %w", err)
@@ -632,6 +653,15 @@ func Commit(ts *TableSet) {
 	if ts.TestMultiKey != nil {
 		TestMultiKeyTableManagerInstance.swapSnapshot(ts.TestMultiKey.snap.Load())
 	}
+	if ts.TrialJournalEntry != nil {
+		TrialJournalEntryTableManagerInstance.swapSnapshot(ts.TrialJournalEntry.snap.Load())
+	}
+	if ts.TrialJournalMilestone != nil {
+		TrialJournalMilestoneTableManagerInstance.swapSnapshot(ts.TrialJournalMilestone.snap.Load())
+	}
+	if ts.TrialJournalSeal != nil {
+		TrialJournalSealTableManagerInstance.swapSnapshot(ts.TrialJournalSeal.snap.Load())
+	}
 	if ts.World != nil {
 		WorldTableManagerInstance.swapSnapshot(ts.World.snap.Load())
 	}
@@ -741,11 +771,14 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		SkillPermission: NewSkillPermissionTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
+		TrialJournalEntry: NewTrialJournalEntryTableManager(),
+		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
+		TrialJournalSeal: NewTrialJournalSealTableManager(),
 		World: NewWorldTableManager(),
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(61)
+	wg.Add(64)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1098,6 +1131,24 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load TestMultiKey table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TrialJournalEntry.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TrialJournalEntry table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TrialJournalMilestone.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TrialJournalMilestone table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TrialJournalSeal.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TrialJournalSeal table: %v", err)
 		}
 	}()
 	go func() {

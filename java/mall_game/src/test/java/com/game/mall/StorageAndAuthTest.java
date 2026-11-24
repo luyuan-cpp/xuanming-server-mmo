@@ -34,6 +34,10 @@ class StorageAndAuthTest {
             assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source), "缺 forfeited_fen 列的 v2 合同戳");
         }
         try (var f = new CommerceFixture()) {
+            f.jdbc.update("UPDATE commerce_schema_version SET storage_contract='mall-game-official-sku-v3-manual-resolution'");
+            assertThrows(IllegalStateException.class, () -> SchemaVerifier.verify(f.jdbc, f.source), "缺 dispute_frozen_fen/designated_buyer_account 与 VARCHAR(32) escrow_reference 的 v3 合同戳");
+        }
+        try (var f = new CommerceFixture()) {
             f.jdbc.execute("DROP TABLE commerce_refund_receipt");
             f.jdbc.execute("CREATE TABLE commerce_refund_receipt (order_sn VARCHAR(36) PRIMARY KEY,channel VARCHAR(32) NOT NULL,transaction_id VARCHAR(128) NOT NULL,amount_minor BIGINT NOT NULL,currency VARCHAR(16) NOT NULL,UNIQUE(channel,transaction_id))");
             assertThrows(Exception.class, () -> SchemaVerifier.verify(f.jdbc, f.source));

@@ -122,15 +122,16 @@ func (p Policy) Snapshot(v *assetpb.AssetSnapshot) bool {
 }
 
 type Engine struct {
-	Repo    *data.CommerceRepo
-	IDs     IDs
-	OpIDs   IDs
-	Policy  Policy
-	Applier assetop.Applier
-	Ledger  assetop.LedgerReader
-	Now     func() time.Time
-	Roles   RoleLocker
-	Rmb     *RmbConsignments
+	Repo             *data.CommerceRepo
+	IDs              IDs
+	OpIDs            IDs
+	Policy           Policy
+	PlayerTradeGuard *PlayerTradeGuard
+	Applier          assetop.Applier
+	Ledger           assetop.LedgerReader
+	Now              func() time.Time
+	Roles            RoleLocker
+	Rmb              *RmbConsignments
 	// Owns 判本副本是否负责一片后台工作(合同推进、收据 ACK,见 schedule.go)。装配层启动时写一次(生产是
 	// svc 的 workshard.Membership.Owns),之后只读;nil(单测、单副本)= 全部片归本副本,行为与分工前相同。
 	Owns func(key string) bool
@@ -313,6 +314,11 @@ func (e *Engine) CreatePlayerTrade(ctx context.Context, me uint64, in *tradepb.C
 	}
 	if err := e.Policy.Selection(in.BuyerAssets); err != nil {
 		return nil, err
+	}
+	if e.PlayerTradeGuard != nil {
+		if _, err := e.PlayerTradeGuard.Evaluate(ctx, me, in.BuyerPlayerId, in.SellerAssets, in.BuyerAssets, e.now()); err != nil {
+			return nil, err
+		}
 	}
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 2, Status: Escrowing, SellerPlayerId: me, BuyerPlayerId: in.BuyerPlayerId, ExpiresMs: e.now() + 15*60*1000}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.SellerAssets, BuyerAssets: in.BuyerAssets, Stage: "offer_escrow"})
 }

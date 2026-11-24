@@ -276,6 +276,8 @@ type CreateBattleRequest struct {
 	TeamScripts []*BattleTeamScript `protobuf:"bytes,17,rep,name=team_scripts,json=teamScripts,proto3" json:"team_scripts,omitempty"`
 	// 论剑排位冻结上下文(非排位留空)。season_id != 0 时启用排位引擎规则:临时竞技宝宝、同速确定性随机、回合上限判平与参与事实冻结。
 	RankedContext *RankedMatchContext `protobuf:"bytes,18,opt,name=ranked_context,json=rankedContext,proto3" json:"ranked_context,omitempty"`
+	// 五行试炼志 V2 开局冻结上下文(非试炼志关联局留空)。
+	TrialContext  *TrialBattleContext `protobuf:"bytes,19,opt,name=trial_context,json=trialContext,proto3" json:"trial_context,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,6 +434,13 @@ func (x *CreateBattleRequest) GetTeamScripts() []*BattleTeamScript {
 func (x *CreateBattleRequest) GetRankedContext() *RankedMatchContext {
 	if x != nil {
 		return x.RankedContext
+	}
+	return nil
+}
+
+func (x *CreateBattleRequest) GetTrialContext() *TrialBattleContext {
+	if x != nil {
+		return x.TrialContext
 	}
 	return nil
 }
@@ -1539,7 +1548,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\anode_id\x18\t \x01(\rR\x06nodeId\x12\x1f\n" +
 	"\vinstance_id\x18\n" +
 	" \x01(\tR\n" +
-	"instanceId\"\xd3\x06\n" +
+	"instanceId\"\x8d\a\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -1561,7 +1570,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x13spectate_visibility\x18\x0f \x01(\x0e2\x14.eSpectateVisibilityR\x12spectateVisibility\x12#\n" +
 	"\rrecord_replay\x18\x10 \x01(\bR\frecordReplay\x124\n" +
 	"\fteam_scripts\x18\x11 \x03(\v2\x11.BattleTeamScriptR\vteamScripts\x12:\n" +
-	"\x0eranked_context\x18\x12 \x01(\v2\x13.RankedMatchContextR\rrankedContext\"\xff\x01\n" +
+	"\x0eranked_context\x18\x12 \x01(\v2\x13.RankedMatchContextR\rrankedContext\x128\n" +
+	"\rtrial_context\x18\x13 \x01(\v2\x13.TrialBattleContextR\ftrialContext\"\xff\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +
@@ -1705,10 +1715,11 @@ var file_proto_battle_battle_node_proto_goTypes = []any{
 	(ESpectateVisibility)(0),                 // 22: eSpectateVisibility
 	(*BattleTeamScript)(nil),                 // 23: BattleTeamScript
 	(*RankedMatchContext)(nil),               // 24: RankedMatchContext
-	(*base.TipInfoMessage)(nil),              // 25: TipInfoMessage
-	(*BattleRouting)(nil),                    // 26: BattleRouting
-	(*BattleAssignedS2C)(nil),                // 27: BattleAssignedS2C
-	(*base.Empty)(nil),                       // 28: Empty
+	(*TrialBattleContext)(nil),               // 25: TrialBattleContext
+	(*base.TipInfoMessage)(nil),              // 26: TipInfoMessage
+	(*BattleRouting)(nil),                    // 27: BattleRouting
+	(*BattleAssignedS2C)(nil),                // 28: BattleAssignedS2C
+	(*base.Empty)(nil),                       // 29: Empty
 }
 var file_proto_battle_battle_node_proto_depIdxs = []int32{
 	8,  // 0: ObserverExitOriginal.add:type_name -> AddObserverRequest
@@ -1717,38 +1728,39 @@ var file_proto_battle_battle_node_proto_depIdxs = []int32{
 	22, // 3: CreateBattleRequest.spectate_visibility:type_name -> eSpectateVisibility
 	23, // 4: CreateBattleRequest.team_scripts:type_name -> BattleTeamScript
 	24, // 5: CreateBattleRequest.ranked_context:type_name -> RankedMatchContext
-	25, // 6: CreateBattleResponse.error_message:type_name -> TipInfoMessage
-	0,  // 7: QueryBattleCreationResponse.state:type_name -> BattleCreationState
-	26, // 8: AddObserverRequest.routing:type_name -> BattleRouting
-	25, // 9: AddObserverResponse.error_message:type_name -> TipInfoMessage
-	1,  // 10: QueryObserverResponse.state:type_name -> ObserverAdmissionState
-	25, // 11: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	27, // 12: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	25, // 13: AttachRelayGateResponse.error_message:type_name -> TipInfoMessage
-	25, // 14: PromoteSpectateBroadcastResponse.error_message:type_name -> TipInfoMessage
-	12, // 15: BattleNode.QueryObserver:input_type -> QueryObserverRequest
-	6,  // 16: BattleNode.QueryBattleCreation:input_type -> QueryBattleCreationRequest
-	3,  // 17: BattleNode.CreateBattle:input_type -> CreateBattleRequest
-	5,  // 18: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
-	8,  // 19: BattleNode.AddObserver:input_type -> AddObserverRequest
-	10, // 20: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
-	14, // 21: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
-	16, // 22: BattleNode.AttachRelayGate:input_type -> AttachRelayGateRequest
-	18, // 23: BattleNode.PromoteSpectateBroadcast:input_type -> PromoteSpectateBroadcastRequest
-	13, // 24: BattleNode.QueryObserver:output_type -> QueryObserverResponse
-	7,  // 25: BattleNode.QueryBattleCreation:output_type -> QueryBattleCreationResponse
-	4,  // 26: BattleNode.CreateBattle:output_type -> CreateBattleResponse
-	28, // 27: BattleNode.DestroyBattle:output_type -> Empty
-	9,  // 28: BattleNode.AddObserver:output_type -> AddObserverResponse
-	11, // 29: BattleNode.RemoveObserver:output_type -> RemoveObserverResponse
-	15, // 30: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
-	17, // 31: BattleNode.AttachRelayGate:output_type -> AttachRelayGateResponse
-	19, // 32: BattleNode.PromoteSpectateBroadcast:output_type -> PromoteSpectateBroadcastResponse
-	24, // [24:33] is the sub-list for method output_type
-	15, // [15:24] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	25, // 6: CreateBattleRequest.trial_context:type_name -> TrialBattleContext
+	26, // 7: CreateBattleResponse.error_message:type_name -> TipInfoMessage
+	0,  // 8: QueryBattleCreationResponse.state:type_name -> BattleCreationState
+	27, // 9: AddObserverRequest.routing:type_name -> BattleRouting
+	26, // 10: AddObserverResponse.error_message:type_name -> TipInfoMessage
+	1,  // 11: QueryObserverResponse.state:type_name -> ObserverAdmissionState
+	26, // 12: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	28, // 13: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	26, // 14: AttachRelayGateResponse.error_message:type_name -> TipInfoMessage
+	26, // 15: PromoteSpectateBroadcastResponse.error_message:type_name -> TipInfoMessage
+	12, // 16: BattleNode.QueryObserver:input_type -> QueryObserverRequest
+	6,  // 17: BattleNode.QueryBattleCreation:input_type -> QueryBattleCreationRequest
+	3,  // 18: BattleNode.CreateBattle:input_type -> CreateBattleRequest
+	5,  // 19: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
+	8,  // 20: BattleNode.AddObserver:input_type -> AddObserverRequest
+	10, // 21: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
+	14, // 22: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
+	16, // 23: BattleNode.AttachRelayGate:input_type -> AttachRelayGateRequest
+	18, // 24: BattleNode.PromoteSpectateBroadcast:input_type -> PromoteSpectateBroadcastRequest
+	13, // 25: BattleNode.QueryObserver:output_type -> QueryObserverResponse
+	7,  // 26: BattleNode.QueryBattleCreation:output_type -> QueryBattleCreationResponse
+	4,  // 27: BattleNode.CreateBattle:output_type -> CreateBattleResponse
+	29, // 28: BattleNode.DestroyBattle:output_type -> Empty
+	9,  // 29: BattleNode.AddObserver:output_type -> AddObserverResponse
+	11, // 30: BattleNode.RemoveObserver:output_type -> RemoveObserverResponse
+	15, // 31: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
+	17, // 32: BattleNode.AttachRelayGate:output_type -> AttachRelayGateResponse
+	19, // 33: BattleNode.PromoteSpectateBroadcast:output_type -> PromoteSpectateBroadcastResponse
+	25, // [25:34] is the sub-list for method output_type
+	16, // [16:25] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_node_proto_init() }

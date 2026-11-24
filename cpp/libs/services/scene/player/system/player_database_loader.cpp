@@ -47,6 +47,8 @@
 #include "mail_outbox_rules.h"
 // 赛季印（单槽赛季装备栏）持久状态（docs/design/season-skills-and-seal-design.md）。
 #include "proto/common/component/player_season_comp.pb.h"
+// 五行试炼志 V2 持久状态（docs/design/long-term-progression-v2.md）。
+#include "proto/common/component/player_trial_journal_comp.pb.h"
 // 实时技能冷却与下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):按需状态,随存档保留。
 #include "proto/common/component/time_comp.pb.h"
 #include "combat/skill/system/skill.h"
@@ -271,6 +273,8 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player).LoadFromProto(message.currency());
 	// 赛季印持久状态（字段 30）：旧存档没有该字段默认为空合法，加载无条件挂上，须早于属性重算以纳入本季轻属性。
 	tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player, message.season_component());
+	// 五行试炼志持久状态（字段 31）：旧存档没有该字段默认为空合法，原样挂上，保留位图未知高位与历史版本纪录。
+	tlsEcs.actorRegistry.emplace<PlayerTrialJournalComp>(player, message.trial_journal_component());
 	// 技能:只剔除 id 为 0 / 重复的坏条目(其余条目原样携带,按本版本技能表生效)+ 按当前职业补初始技能。
 	// 必须在属性重算之前 —— 被动技能的加成是重算的输入之一(docs/design/class-skills.md §3.2 / §7)
 	PlayerSkillSystem::InitializeOnLoad(player);
@@ -323,6 +327,7 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	// 待寄邮件缺失同样整份拒存:补一份空表落盘,等于把已经属于玩家、还没寄出的物品抹掉。
 	const auto* mailOutbox = FindPersistedComp<PlayerMailOutboxComp>(player, "PlayerMailOutboxComp", missing);
 	const auto* seasonComp = FindPersistedComp<PlayerSeasonComp>(player, "PlayerSeasonComp", missing);
+	const auto* trialJournalComp = FindPersistedComp<PlayerTrialJournalComp>(player, "PlayerTrialJournalComp", missing);
 	const auto* currency = FindPersistedComp<CurrencyComp>(player, "CurrencyComp", missing);
 	const auto* currencyRuntime = FindPersistedComp<PlayerCurrencyComp>(player, "PlayerCurrencyComp", missing);
 	// 顶层未知字段缺了载体同样整份拒存:补空等于把新版本写进来的整列抹掉(混版本设计 §4.2 L1)。
@@ -391,6 +396,8 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_mail_outbox()->CopyFrom(*mailOutbox);
 	// 赛季印与历史赛季归档：与货币、账本同一次存盘提交，位置保持在 currency CopyFrom/SaveToProto 之外。
 	message.mutable_season_component()->CopyFrom(*seasonComp);
+	// 五行试炼志持久状态：与货币、背包、幂等账本同一次存盘提交，位置保持在 currency CopyFrom/SaveToProto 之外。
+	message.mutable_trial_journal_component()->CopyFrom(*trialJournalComp);
 	// 技能冷却与下线保留的 Buff:按需状态,缺组件 = 没有,写空、不补建。输出可能是上一次的快照,所以缺组件时要清掉。
 	// 位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	if (const auto* cooldowns = tlsEcs.actorRegistry.try_get<CooldownTimeListComp>(player))

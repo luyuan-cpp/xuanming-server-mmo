@@ -35,6 +35,7 @@ import (
 	"shared/dsclient"
 	"shared/etcdwatch"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	sharedregistry "shared/noderegistry"
 	"shared/safego"
@@ -162,6 +163,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	s.AddUnaryInterceptors(
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 		kill.UnaryServerInterceptor(),

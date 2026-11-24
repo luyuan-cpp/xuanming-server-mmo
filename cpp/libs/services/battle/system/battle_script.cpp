@@ -165,6 +165,27 @@ bool CheckAction(const BattleScriptRole& role, const BattleScriptRule& rule, con
             return Fail(error, where + ": skill " + Num(rule.skill_id()) +
                                    " cannot be cast in turn battles (passive, toggle or channel)");
         }
+        if (row->battle_model() == 1) {
+            if (row->class_id() != 0) {
+                if (role.actor_type() != BATTLE_ACTOR_TYPE_NONE && role.actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
+                    return Fail(error, where + ": class skill " + Num(rule.skill_id()) + " needs a role that accepts players");
+                }
+                if (role.class_id() != 0 && role.class_id() != row->class_id()) {
+                    return Fail(error, where + ": class skill " + Num(rule.skill_id()) + " belongs to class " +
+                                           Num(row->class_id()) + " but the role only accepts class " + Num(role.class_id()));
+                }
+            }
+            if (side == BATTLE_SCRIPT_TARGET_ENGINE_PICK) {
+                return true;
+            }
+            const auto team = static_cast<classskill::TargetTeam>(row->target_team());
+            const bool sideMatches = (team == classskill::TargetTeam::kEnemy && side == BATTLE_SCRIPT_TARGET_ENEMY) ||
+                                     (team == classskill::TargetTeam::kAlly && side == BATTLE_SCRIPT_TARGET_ALLY) ||
+                                     (team == classskill::TargetTeam::kSelf && side == BATTLE_SCRIPT_TARGET_SELF);
+            return sideMatches ? true
+                               : Fail(error, where + ": configured skill " + Num(rule.skill_id()) +
+                                                 " target side does not match its target_team " + Num(row->target_team()));
+        }
         if (row->class_id() == 0) {
             // 老技能没有敌我语义(ValidateSkillTarget 不分阵营,伤害照打):只许打敌方,免得剧本把伤害打到自己人身上
             return side == BATTLE_SCRIPT_TARGET_ENEMY
@@ -343,11 +364,16 @@ bool CheckBattleScriptSide(const BattleScript& script, eBattleScriptSide side, c
             }
             const auto* row = data.FindSkill(rule.skill_id());
             const std::string ruleWhere = roleWhere + " rule " + Num(rule.priority());
-            // 怪物没有职业、也没有法力(Monster 表无法力列,开局法力为 0):只能放零耗蓝的老技能
+            // 怪物没有职业、也没有法力(Monster 表无法力列,开局法力为 0):只能放零耗蓝的非职业老技能或现代技能
             if (row == nullptr || row->class_id() != 0) {
                 return Fail(error, ruleWhere + ": monsters can only cast legacy skills");
             }
-            if (TurnBattleEngine::LegacySkillManaCost(*row) != 0) {
+            if (row->battle_model() == 1) {
+                if (row->mana_percent() > 0) {
+                    return Fail(error, ruleWhere + ": monsters have no mana but skill " + Num(rule.skill_id()) +
+                                           " costs mana");
+                }
+            } else if (TurnBattleEngine::LegacySkillManaCost(*row) != 0) {
                 return Fail(error, ruleWhere + ": monsters have no mana but skill " + Num(rule.skill_id()) +
                                        " costs mana");
             }

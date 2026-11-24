@@ -225,6 +225,9 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     auto targets = SelectConfiguredTargets(actor, row, action.target_id());
     if (origin == BattleDamageOrigin::Confusion) targets = {action.target_id()};
     if (targets.empty()) return;
+    if (normal && actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && row.season_id() > 0) {
+        antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
+    }
     EffectContext context;
     context.skillId = row.id();
     context.rank = rankOverride > 0 ? rankOverride : ConfiguredRank(actor, row);
@@ -367,7 +370,24 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                     (b == nullptr || b->battle_op() != static_cast<uint32_t>(BattleEffectOp::Control));
             });
             const size_t limit = row.effect_count() == 0 ? ids.size() : std::min<size_t>(ids.size(), row.effect_count());
-            for (size_t i = 0; i < limit; ++i) RemoveConfiguredBuff(receiver, ids[i], result);
+            for (size_t i = 0; i < limit; ++i) {
+                if (op == BattleEffectOp::DispelBuff && caster.team_index() == 0 &&
+                    receiver.team_index() == 1 && receiver.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+                    const int buffIdx = FindBuffIndex(receiver, ids[i]);
+                    if (buffIdx >= 0) {
+                        const uint32_t targetBuffId = createRequest.trial_context().guard_stance_buff_id();
+                        if (targetBuffId == 0 || receiver.buffs(buffIdx).buff_table_id() == targetBuffId) {
+                            guardStanceDispelled = true;
+                        }
+                    }
+                }
+                RemoveConfiguredBuff(receiver, ids[i], result);
+            }
+            if (op == BattleEffectOp::DispelDebuff && limit > 0 &&
+                caster.team_index() == receiver.team_index() &&
+                caster.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                antiControlOrSeasonSkillPlayers.insert(caster.actor_id());
+            }
             break;
         }
         case BattleEffectOp::ConsumePeriodic: case BattleEffectOp::ExtendPeriodic: {
@@ -524,6 +544,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
         }
     }
     const uint64_t healed = ApplyHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
+    RecordTrialMonsterHeal(source, target, healed);
     for (const auto& [index, gain] : contributions) UseArtifact(source, index, target.actor_id(), gain, result);
     auto* event = AppendEvent(result, BATTLE_EVENT_HEAL, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(healed);
@@ -638,6 +659,9 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     remaining = EquipmentReduceDamage(source, target, remaining, context, result);
     const uint64_t dealt = std::min(target.attributes().health(), remaining);
     target.mutable_attributes()->set_health(target.attributes().health() - dealt);
+    if (context.origin == BattleDamageOrigin::Direct) {
+        RecordTrialDirectDamage(source, target, damageType, AddSafe(dealt, absorbed));
+    }
     auto* event = AppendEvent(result, BATTLE_EVENT_DAMAGE, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(dealt); event->set_absorbed(absorbed);
     event->set_target_health_after(target.attributes().health()); event->set_target_mana_after(target.attributes().mana());

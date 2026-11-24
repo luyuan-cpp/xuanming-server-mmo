@@ -58,6 +58,12 @@ param(
     # 只对 push-all / release-all 有效:每推完一个镜像回读 registry digest,合并写进这个 JSON
     # ({ "<repo:tag>": "<repo@sha256:...>" })。tag 只是别名,部署 / 回滚要按 digest 定位。留空 = 不记录。
     [string]$DigestsOut = "",
+    # 镜像编译模式（移植自 xuanming-server Build-Images-Host）：
+    #   incontainer（默认）：沿用 Dockerfile.go-svc 容器内编译，正式发布（-Version）强制使用；
+    #   host：宿主 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 复用增量编译缓存，再用 Dockerfile.go-svc.prebuilt
+    #         秒级打包（仅限本地/快照快速迭代，挂 -Version 时拒绝以保证发布构建可复现）。
+    [ValidateSet("incontainer", "host")]
+    [string]$BuildMode = "incontainer",
     [switch]$DryRun
 )
 
@@ -68,6 +74,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = Resolve-Path (Join-Path $ScriptDir "../..")
 $GoRoot    = Join-Path $RepoRoot "go"
 $Dockerfile = Join-Path $RepoRoot "deploy/k8s/Dockerfile.go-svc"
+$PrebuiltDockerfile = Join-Path $RepoRoot "deploy/k8s/Dockerfile.go-svc.prebuilt"
 # 策划表(各 Go 服务 TableDir 默认 ../../generated/tables),随镜像打包
 $TablesDir = Join-Path $RepoRoot "generated/tables"
 
@@ -105,6 +112,9 @@ if ([string]::IsNullOrWhiteSpace($Tag)) {
 #     三处对不上(如 -Version v1.2.3 -Tag latest 或 -Tag v1.2.4-<sha>),回滚与复盘按 tag 找到的不是它声称的那一版。
 # publish_images.ps1 传的 -Tag 就是同一个函数算出来的,不受影响。
 if ($ReleaseVersion -and $Command -in @("build-all", "release-all")) {
+    if ($BuildMode -ceq "host") {
+        throw "Official release build (-Version $ReleaseVersion) requires -BuildMode incontainer for reproducible container compilation."
+    }
     if (-not $script:ReleaseStamp.Ok) {
         throw "发布版本 $ReleaseVersion 需要可追溯的 git commit:$($script:ReleaseStamp.Reason)"
     }
@@ -269,9 +279,43 @@ function Get-ExternalBuildContexts {
     return $contexts
 }
 
+function Invoke-HostGoCrossCompile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ServiceDir,
+        [Parameter(Mandatory = $true)][string]$Entry,
+        [Parameter(Mandatory = $true)][string]$OutputPath
+    )
+    $expectedGo = "go1.27.2"
+    Push-Location $ServiceDir
+    try {
+        $actualGo = ((& go env GOVERSION) | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $actualGo -cne $expectedGo) {
+            throw "host build mode requires go env GOVERSION=$expectedGo, got '$actualGo' (switch to -BuildMode incontainer if host Go differs)"
+        }
+        $prevGOOS = $env:GOOS; $prevGOARCH = $env:GOARCH; $prevCGO = $env:CGO_ENABLED; $prevTC = $env:GOTOOLCHAIN
+        try {
+            $env:GOOS = "linux"
+            $env:GOARCH = "amd64"
+            $env:CGO_ENABLED = "0"
+            $env:GOTOOLCHAIN = "local"
+            $ldflags = "-s -w -X shared/buildinfo.Version=$BuildVersion -X shared/buildinfo.Commit=$BuildCommit -X shared/buildinfo.BuildTime=$BuildTime"
+            & go build -trimpath "-ldflags=$ldflags" -o $OutputPath $Entry
+            if ($LASTEXITCODE -ne 0) {
+                throw "host go build failed in $ServiceDir ($Entry)"
+            }
+        } finally {
+            $env:GOOS = $prevGOOS; $env:GOARCH = $prevGOARCH; $env:CGO_ENABLED = $prevCGO; $env:GOTOOLCHAIN = $prevTC
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
 function Invoke-BuildAll {
-    if (-not (Test-Path $Dockerfile)) {
-        throw "Dockerfile not found: $Dockerfile"
+    $useHostMode = ($BuildMode -ceq "host")
+    $activeDockerfile = if ($useHostMode) { $PrebuiltDockerfile } else { $Dockerfile }
+    if (-not (Test-Path $activeDockerfile)) {
+        throw "Dockerfile not found: $activeDockerfile"
     }
     if (-not (Test-Path (Join-Path $TablesDir "*.json"))) {
         throw "策划表目录不存在或没有 *.json:$TablesDir。Go 服务镜像必须带表(TableDir=../../generated/tables),请先导表。"
@@ -282,41 +326,60 @@ function Invoke-BuildAll {
         $info = $kv.Value
         $fullImage = Get-ImageFullName -ImageName $info.ImageName
 
-        Write-Host "[build] $svc -> $fullImage" -ForegroundColor Cyan
+        Write-Host "[build] $svc -> $fullImage (mode=$(if ($useHostMode) { 'host' } else { 'incontainer' }))" -ForegroundColor Cyan
 
-        $buildArgs = @(
-            "build",
-            "-f", $Dockerfile,
-            "--build-arg", "SERVICE=$($info.Dir)",
-            "--build-arg", "ENTRY=$($info.Entry)",
-            "--build-arg", "BUILD_VERSION=$BuildVersion",
-            "--build-arg", "BUILD_COMMIT=$BuildCommit",
-            "--build-arg", "BUILD_TIME=$BuildTime",
-            # 与 Dockerfile 里的 LABEL 同值,命令行再传一次:发布脚本按这个 label 核对 revision == 当前 commit,
-            # 不依赖 Dockerfile 那行 LABEL 有没有被改掉。
-            "--label", "org.opencontainers.image.revision=$BuildCommit"
-        )
-        # 宿主设置了 GOPROXY(buildenv.ps1 → goproxy.cn)就透传给 Dockerfile 的 ARG GOPROXY,
-        # 否则 builder 阶段走 proxy.golang.org,国内网络下 `go mod download` 会超时。
-        if (-not [string]::IsNullOrWhiteSpace($env:GOPROXY)) {
-            $buildArgs += @("--build-arg", "GOPROXY=$($env:GOPROXY)")
-        }
-        # 仓库外本地 replace 模块以命名上下文带入(2026-09-17 起没有服务需要,正常返回空)
-        $buildArgs += @(Get-ExternalBuildContexts -ServiceDir (Join-Path $GoRoot $info.Dir))
-        # 策划表:仓库根 generated/tables 不在 go/ 里,固定以命名上下文 tables 带入
-        # (Dockerfile.go-svc 的 `FROM scratch AS tables` 占位 stage)。
-        # 找不到直接 throw:没有表的 login / player-locator / scene-manager 镜像起来就 CrashLoop。
-        $buildArgs += @("--build-context", "tables=$TablesDir")
-        $buildArgs += @("-t", $fullImage, $GoRoot)
-
-        if ($DryRun) {
-            Write-Host "  [dry-run] $DockerCommand $($buildArgs -join ' ')" -ForegroundColor DarkGray
-        } else {
-            & $DockerCommand @buildArgs
-            if ($LASTEXITCODE -ne 0) {
-                throw "Docker build failed for $svc"
+        $stageDir = $null
+        try {
+            $buildArgs = @(
+                "build",
+                "-f", $activeDockerfile,
+                "--build-arg", "SERVICE=$($info.Dir)",
+                "--build-arg", "BUILD_VERSION=$BuildVersion",
+                "--build-arg", "BUILD_COMMIT=$BuildCommit",
+                "--build-arg", "BUILD_TIME=$BuildTime",
+                # 与 Dockerfile 里的 LABEL 同值,命令行再传一次:发布脚本按这个 label 核对 revision == 当前 commit,
+                # 不依赖 Dockerfile 那行 LABEL 有没有被改掉。
+                "--label", "org.opencontainers.image.revision=$BuildCommit"
+            )
+            if ($useHostMode) {
+                $stageDir = Join-Path ([IO.Path]::GetTempPath()) ("mmorpg-prebuilt-$svc-" + [Guid]::NewGuid().ToString("N"))
+                $binPath = Join-Path $stageDir "service"
+                if ($DryRun) {
+                    Write-Host "  [dry-run] host GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ($($info.Dir) $($info.Entry)) -> $binPath" -ForegroundColor DarkGray
+                } else {
+                    $null = New-Item -ItemType Directory -Force -Path $stageDir
+                    Invoke-HostGoCrossCompile -ServiceDir (Join-Path $GoRoot $info.Dir) -Entry $info.Entry -OutputPath $binPath
+                }
+                $buildArgs += @("--build-context", "prebuilt=$stageDir")
+            } else {
+                $buildArgs += @("--build-arg", "ENTRY=$($info.Entry)")
+                # 宿主设置了 GOPROXY(buildenv.ps1 → goproxy.cn)就透传给 Dockerfile 的 ARG GOPROXY,
+                # 否则 builder 阶段走 proxy.golang.org,国内网络下 `go mod download` 会超时。
+                if (-not [string]::IsNullOrWhiteSpace($env:GOPROXY)) {
+                    $buildArgs += @("--build-arg", "GOPROXY=$($env:GOPROXY)")
+                }
+                # 仓库外本地 replace 模块以命名上下文带入(2026-09-17 起没有服务需要,正常返回空)
+                $buildArgs += @(Get-ExternalBuildContexts -ServiceDir (Join-Path $GoRoot $info.Dir))
             }
-            Write-Host "  [ok] $fullImage" -ForegroundColor Green
+            # 策划表:仓库根 generated/tables 不在 go/ 里,固定以命名上下文 tables 带入
+            # (Dockerfile.go-svc 的 `FROM scratch AS tables` 占位 stage)。
+            # 找不到直接 throw:没有表的 login / player-locator / scene-manager 镜像起来就 CrashLoop。
+            $buildArgs += @("--build-context", "tables=$TablesDir")
+            $buildArgs += @("-t", $fullImage, $GoRoot)
+
+            if ($DryRun) {
+                Write-Host "  [dry-run] $DockerCommand $($buildArgs -join ' ')" -ForegroundColor DarkGray
+            } else {
+                & $DockerCommand @buildArgs
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Docker build failed for $svc"
+                }
+                Write-Host "  [ok] $fullImage" -ForegroundColor Green
+            }
+        } finally {
+            if ($stageDir -and (Test-Path -LiteralPath $stageDir)) {
+                Remove-Item -LiteralPath $stageDir -Recurse -Force
+            }
         }
     }
 }

@@ -559,8 +559,12 @@ type PlayerDatabase struct {
 	// 放 GROWTH 组：与技能、加点、宠物同组，一次存盘所有脏行同事务提交（满足 I3 原子性）。
 	// 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取下一个空闲号 30，后续新字段从 31 起。
 	SeasonComponent *component.PlayerSeasonComp `protobuf:"bytes,30,opt,name=season_component,json=seasonComponent,proto3" json:"season_component,omitempty"` // GROWTH
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 五行试炼志 V2（战法印永久位图、可比规则最佳回合与复盘快照、赛季隔离卷与里程碑位图；docs/design/long-term-progression-v2.md）。
+	// 放 GROWTH 组：与技能、加点、宠物、赛季印同组，一次存盘所有脏行同事务提交（满足 I3 原子性）。
+	// 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取下一个空闲号 31，后续新字段从 32 起。
+	TrialJournalComponent *component.PlayerTrialJournalComp `protobuf:"bytes,31,opt,name=trial_journal_component,json=trialJournalComponent,proto3" json:"trial_journal_component,omitempty"` // GROWTH
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -771,6 +775,13 @@ func (x *PlayerDatabase) GetSavedBuffs() []*component.SavedBuffComp {
 func (x *PlayerDatabase) GetSeasonComponent() *component.PlayerSeasonComp {
 	if x != nil {
 		return x.SeasonComponent
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetTrialJournalComponent() *component.PlayerTrialJournalComp {
+	if x != nil {
+		return x.TrialJournalComponent
 	}
 	return nil
 }
@@ -988,7 +999,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/component/player_season_comp.proto\x1a&proto/common/component/time_comp.proto\x1a&proto/common/component/buff_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/component/player_season_comp.proto\x1a6proto/common/component/player_trial_journal_comp.proto\x1a&proto/common/component/time_comp.proto\x1a&proto/common/component/buff_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -1028,7 +1039,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf0\r\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc8\x0e\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -1062,7 +1073,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x0fskill_cooldowns\x18\x1c \x01(\v2\x15.CooldownTimeListCompB\x05\xc8\xfe\xa4\x02\x06R\x0eskillCooldowns\x126\n" +
 	"\vsaved_buffs\x18\x1d \x03(\v2\x0e.SavedBuffCompB\x05\xc8\xfe\xa4\x02\x06R\n" +
 	"savedBuffs\x12C\n" +
-	"\x10season_component\x18\x1e \x01(\v2\x11.PlayerSeasonCompB\x05\xc8\xfe\xa4\x02\x03R\x0fseasonComponent:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"\x10season_component\x18\x1e \x01(\v2\x11.PlayerSeasonCompB\x05\xc8\xfe\xa4\x02\x03R\x0fseasonComponent\x12V\n" +
+	"\x17trial_journal_component\x18\x1f \x01(\v2\x17.PlayerTrialJournalCompB\x05\xc8\xfe\xa4\x02\x03R\x15trialJournalComponent:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -1136,6 +1148,7 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.CooldownTimeListComp)(nil),      // 33: CooldownTimeListComp
 	(*component.SavedBuffComp)(nil),             // 34: SavedBuffComp
 	(*component.PlayerSeasonComp)(nil),          // 35: PlayerSeasonComp
+	(*component.PlayerTrialJournalComp)(nil),    // 36: PlayerTrialJournalComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	10, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -1164,11 +1177,12 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	33, // 23: player_database.skill_cooldowns:type_name -> CooldownTimeListComp
 	34, // 24: player_database.saved_buffs:type_name -> SavedBuffComp
 	35, // 25: player_database.season_component:type_name -> PlayerSeasonComp
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	36, // 26: player_database.trial_journal_component:type_name -> PlayerTrialJournalComp
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

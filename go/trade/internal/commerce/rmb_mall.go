@@ -10,19 +10,20 @@ import (
 
 // 以下是商城HTTP契约适配，不是玩家持久化模型；账号只由已认证的trade入口注入。
 type rmbListing struct {
-	ID        string `json:"listingId"`
-	Seller    string `json:"sellerPlayerId"`
-	Zone      uint32 `json:"marketZone"`
-	Kind      string `json:"assetKind"`
-	Title     string `json:"title"`
-	Price     uint64 `json:"priceFen"`
-	Fee       uint32 `json:"feeBps"`
-	Cooling   uint64 `json:"coolingMs"`
-	NoticeEnd uint64 `json:"noticeEndMs"`
-	SaleEnd   uint64 `json:"saleEndMs"`
-	State     string `json:"state"`
-	Phase     string `json:"phase"`
-	Order     string `json:"orderId"`
+	ID              string `json:"listingId"`
+	Seller          string `json:"sellerPlayerId"`
+	Zone            uint32 `json:"marketZone"`
+	Kind            string `json:"assetKind"`
+	Title           string `json:"title"`
+	Price           uint64 `json:"priceFen"`
+	Fee             uint32 `json:"feeBps"`
+	Cooling         uint64 `json:"coolingMs"`
+	NoticeEnd       uint64 `json:"noticeEndMs"`
+	SaleEnd         uint64 `json:"saleEndMs"`
+	State           string `json:"state"`
+	Phase           string `json:"phase"`
+	Order           string `json:"orderId"`
+	DesignatedBuyer string `json:"designatedBuyerAccount,omitempty"`
 }
 
 func canonicalID(raw string) (uint64, error) {
@@ -208,14 +209,16 @@ func (m *Mall) RmbIncomes(ctx context.Context, account, after string, limit uint
 	}
 	var out struct {
 		Incomes []struct {
-			Order     string `json:"orderId"`
-			Gross     uint64 `json:"grossFen"`
-			Fee       uint64 `json:"feeFen"`
-			Net       uint64 `json:"netFen"`
-			Reserved  uint64 `json:"reservedFen"`
-			Paid      uint64 `json:"paidFen"`
-			Forfeited uint64 `json:"forfeitedFen"`
-			Available uint64 `json:"availableMs"`
+			Order         string `json:"orderId"`
+			Gross         uint64 `json:"grossFen"`
+			Fee           uint64 `json:"feeFen"`
+			Net           uint64 `json:"netFen"`
+			Reserved      uint64 `json:"reservedFen"`
+			Paid          uint64 `json:"paidFen"`
+			Forfeited     uint64 `json:"forfeitedFen"`
+			DisputeFrozen uint64 `json:"disputeFrozenFen"`
+			DisputeCase   string `json:"disputeCaseId"`
+			Available     uint64 `json:"availableMs"`
 		} `json:"incomes"`
 	}
 	if err := m.consignmentCall(ctx, "incomes", map[string]any{"account": account, "afterOrderId": after, "limit": min(max(limit, 1), 100)}, &out); err != nil {
@@ -226,7 +229,7 @@ func (m *Mall) RmbIncomes(ctx context.Context, account, after string, limit uint
 	}
 	v := &tradepb.ListSellerIncomesResponse{}
 	for _, r := range out.Incomes {
-		if !mallOrderID.MatchString(r.Order) || r.Gross > 9_000_000_000_000_000 || r.Fee > r.Gross || r.Net != r.Gross-r.Fee || r.Paid > r.Net || r.Reserved > r.Net-r.Paid || r.Forfeited > r.Net-r.Paid-r.Reserved {
+		if !mallOrderID.MatchString(r.Order) || r.Gross > 9_000_000_000_000_000 || r.Fee > r.Gross || r.Net != r.Gross-r.Fee || r.Paid > r.Net || r.Reserved > r.Net-r.Paid || r.Forfeited > r.Net-r.Paid-r.Reserved || r.DisputeFrozen > r.Net-r.Paid-r.Reserved-r.Forfeited {
 			return nil, errors.New("收入原件非法")
 		}
 		v.Incomes = append(v.Incomes, &tradepb.RmbSellerIncome{OrderId: r.Order, GrossFen: r.Gross, FeeFen: r.Fee, NetFen: r.Net, ReservedFen: r.Reserved, PaidFen: r.Paid, AvailableMs: r.Available})

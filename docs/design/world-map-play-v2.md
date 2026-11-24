@@ -1,7 +1,7 @@
 # 《五行奇谈》世界地图生态、双层潮汐聚人与低人口在场感设计（V2）
 
-> 日期：2026-11-23  
-> 状态：**设计方案落盘（尚未写代码、未改协议/配表、未运行编译或联机验收）**  
+> 日期：2026-11-23（UI 交接补充：2026-11-24）  
+> 状态：**M1 全部后端与客户端逻辑代码已落地并验证（Go `scene_manager` / C++ `scene` / Java `xuanming-server-mmo` / Unity `mmorpg-client` 纯 C# 绑定层）；高保真大地图与灵潮 UI 按 §7 交由 Codex 承接美术切图与 uGUI 拼装**  
 > 与 V1 的关系：本稿依据负责人 2026-11-23 确认的四项定调（根治 V1 的 5 个硬伤、开服严控「1 主城 + 2~3 野外」、采用「双层潮汐 + 地图热度」自然聚堆、构建极低人口「异步在场感」）全面替代 [world-map-play-v1.md](world-map-play-v1.md) 的“野外走路拾取核心装备材料”路线；V1 原稿保留作历史候选记录。
 
 ---
@@ -230,3 +230,132 @@
 1. **新图 `八景岛`、`月汐湾` 的场景身份**：是原地替换旧场景 2 / 3（推荐，保持开服只有 1+3 张常驻图不稀释人口），还是独立新 ID 与旧图并存？
 2. **微观「五行灵潮」节奏**：默认每 **60 分钟**轮换（持续 40 分钟，与现行整点神秘商人完美同步），还是每 **90 分钟**轮换？
 3. **赶海与仙弈残局的轻奖励边界**：一期是只发**银两 + 灵兽口粮 + 风物印记/称号**（零碰装备体系，最稳妥），还是允许附带极少量**仅自用重铸砂**（鼓励玩家试词条，同时设位图/轮次硬上限）？
+
+---
+
+## 7. 高保真大地图与灵潮/热度 UI 交接规格（交付 Codex，方案 B）
+
+> 适用范围：本节面向承担 UI 美术切图与 Unity uGUI 高保真拼装的 **Codex** 会话。服务端（C++ / Go / Java）与客户端网络、协议、配表、状态机及纯 C# 视图模型已全部实现并编译验证完毕；**Codex 只负责按 `D:\work\image\designs` 既有画风制作效果图、无字透明切图并完成 uGUI 皮肤与布局接入，严禁修改协议、网络层与传送状态机**。
+
+### 7.1 视觉基准与风格硬约束（必读参考）
+
+制作前先查阅以下本地真相源，保持全游戏道家 Q 版视觉统一：
+
+| 参考路径 | 作用与约束 |
+|---|---|
+| `D:\work\image\designs\README.md`、`D:\work\image\docs\QDAO_ART_DIRECTION.md` | 全项目统一定调：**圆润 Q 版明净道家手绘水墨玉金风**；主色为青绿/玉色、米白宣纸、暖古金勾边（`#B87A24` / `#EBD8A8`），朱红（`#C23B22`）仅用于灵潮高优角标/闹热强调，墨青灰（`#5D7670`）用于清幽与次要说明；禁止暗黑科幻、霓虹发光、西方奇幻金属框。 |
+| `D:\work\image\designs\world-map-original-20260925\world-map-original_2560x1080.png` 与 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapOriginal/Fidelity20261016/world_skin.png` | **现役 2560×1080 舆图底图（`五行奇谈 · 山海舆图`）**；本次直接沿用此底图叠加顶部灵潮横幅、实景锚点底座、热度/状态小印章与底部收放抽屉，**不重画整张世界大陆底图**。 |
+| `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapOriginal/Fidelity20261016/destination_plate.png` | 现役 418×64 底部「当前位置」牌资产（已有透明边缘）。 |
+| `D:\work\image\designs\appearance-ui-v1\ui\CONTROL-USAGE.md`、`D:\work\image\designs\ui-art-delivery-20261123\README.md` | **无字透明控件交付规范**：所有运行时 PNG 控件、印章、横幅、按钮**必须 100% 无烘焙文字与数字**，真实 RGBA 透明底，提供 `CONTROL-USAGE.md` 逐件列明画布像素、拉伸模式（`horizontal_only_verified` / `fixed_size_only` / `nine_slice_verified`）、Sprite Border（L/R/T/B）与实测缩放宽度。 |
+
+### 7.2 字段契约与客户端已就绪绑定接口（唯一真相源）
+
+#### 1) 协议字段（`proto/scene/player_scene.proto`，已双端生成）
+
+- 请求：`SceneInfoRequest`（`MessageIds.SceneInfoC2S = 43`），按需置 `with_world_map_overview = 2`（由 `SceneChannelClient.RequestOverview()` 唯一管理，**严禁在别处重新 `RegisterNotify(31/43)`**）。
+- 推送：`SceneInfoS2C`（`MessageIds.NotifySceneInfo = 31`），挂载 `WorldMapOverview world_map_overview = 3`：
+  - `WorldMapOverview`：`zone_id`、`updated_at_ms`、`server_time_ms`、`repeated WorldMapOverviewEntry maps`、`WorldTideSnapshot tide`、`daily_hotspot_scene_config_id`。
+  - `WorldTideSnapshot`：`active`、`round_id`、`scene_config_id`、`recommended_scene_id`、`recommended_channel_no`、`starts_at_ms`、`ends_at_ms`、`next_starts_at_ms`。
+  - `WorldMapOverviewEntry`：`scene_config_id`、`total_player_count`、`channel_count`、`WorldMapHeatLevel heat_level`（`0=UNKNOWN / 1=QUIET 清幽 / 2=ACTIVE 有人 / 3=CROWDED 热闹`）、`recommended_scene_id`、`recommended_channel_no`、`is_tide_map`、`has_mystery_merchant`。
+
+#### 2) 客户端纯 C# 视图模型与宿主接口（已实现并通过编译与单测，直接绑定）
+
+| 类 / 文件 | 现成接口 | UI 用途 |
+|---|---|---|
+| `WorldMapOverviewModels`（`Assets/Scripts/Game/WorldTravel/WorldMapOverviewModels.cs`） | `EstimateServerNowMs(overview, elapsedSeconds)` | 结合 `CityTravelUiRoot.OverviewAgeSeconds` 本地每秒估算服务端时间，驱动倒计时走秒，**零额外发包**。 |
+| `WorldMapOverviewModels` | `BuildTideBanner(overview, currentSceneConfigId, mapNameResolver, serverNowMs, canTravelToTideMap, busy)` → `WorldMapTideBannerView` | 直接吐出顶部灵潮横幅全部绑定字段：`Visible`（无数据时整条隐藏）、`Active`（涌动/休歇双态）、`Headline`、`CountdownText`（`剩余 MM:SS` / `下轮倒计时 MM:SS`）、`CanQuickTravel`、`ActionLabel`（`立即前往` / `已在此地` / `正在传送…`）。 |
+| `WorldMapOverviewModels` | `BuildPinView(overview, sceneConfigId, currentSceneConfigId, onlineAvailable)` → `WorldMapPinView` | 直接吐出单张地图锚点的结构化状态：`HasOverviewEntry`、`HeatLevel`、`HeatLabel`（`热闹`/`有人`/`清幽`）、`TotalPlayerCount`、`ChannelCount`、`IsCurrentScene`、`IsTideMap`、`IsDailyHotspot`、`HasMysteryMerchant`、`RecommendedSceneId`、`RecommendedChannelNo`。 |
+| `WorldMapOverviewModels` | `ShouldShowMapEntryTideBadge(overview, currentSceneConfigId, dismissedTideRoundId)` | 主界面 HUD「地图」入口角标判定（本轮灵潮进行中、玩家未在灵潮图、且本轮未打开过地图时为 `true`）。 |
+| `WorldMapOverviewModels` | `FormatDestinationBadges(overview, sceneConfigId)` / `FormatDestinationHint(overview, sceneConfigId)` | 抽屉详情与预览区的兜底标签串与推荐落脚线提示。 |
+| `SceneChannelClient`（`Assets/Scripts/Game/WorldTravel/SceneChannelClient.cs`） | `Overview`、`HasOverview`、`OverviewReceivedAt`、`OverviewAgeSeconds`、`RequestOverview(bool force = false)` | 总览缓存与按需拉取（内置 `MinListIntervalSeconds = 2.5f` 防限流节流，断线自动清零）。 |
+| `CityTravelUiRoot`（`Assets/Scripts/UI/Ugui/Gameplay/CityTravelUiRoot.cs`） | `CurrentOverview`、`OverviewAgeSeconds`、`ShouldShowTideHudBadge`、`MarkCurrentTideSeen()`、`RequestRefreshOverview()`、`RequestQuickTravelToTide(out string error)`、`RequestTravelToScene(uint sceneConfigId, ulong sceneId, out string error)` | 地图窗宿主全部读写与一键发车入口；`Toggle()` 打开地图窗时已自动调用 `MarkCurrentTideSeen()` 与 `RequestOverview()`。 |
+| `CityTravelUiRoot` | `FilterOnlineDestinations(all)` / `FilterGalleryDestinations(all)` | 将目的地拆成 **「游历」（联机正式开放图）** 与 **「览景」（40+ `clientOnly` 静态/节庆赏景图）** 两个分段页签，保留 `CreateDestinations()` 全量返回值不变以兼容既有单测。 |
+| `MysteryMerchantWindow` / `MysteryMerchantUiRoot` | `MysteryMerchantShopView.TargetMapName`、`DescribeHeadline`、`DescribeEmpty` | 神秘商人跨图现身时自动显示 `正在 碧渊水宫 · 2线 · MM:SS 后离开` 与 `前往 碧渊水宫 · 2线` 按钮，点击复用 `CityTravelUiRoot.RequestTravelToScene` 一键直达；同图时 `TargetMapName == ""` 保持旧文案逐字不变。 |
+
+### 7.3 `world_skin.png`（2560×1080，左上原点）避让区与锚点映射表
+
+#### 既有底图固定元素（必须避让，不可遮挡）
+- 顶部中央牌匾（`五行奇谈 / 山海舆图`）：`x=930..1630, y=0..130`
+- 右上圆形关闭按钮（`CloseCityTravel`）：`(2435, 12, 93, 93)`
+- 左下「当前位置」牌（`OpenCityTravelOptions` / `CityTravelCurrent`）：`(60, 970, 420, 76)`，地名槽 `(278, 984, 170, 40)`
+- 右下两颗功能按钮：`修行试炼` `(1895, 960, 305, 80)`、`云外秘境` `(2218, 960, 304, 80)`
+
+#### 推荐新增叠加层坐标（2560×1080 左上原点，供效果图与 uGUI 参考）
+- **顶部灵潮横幅**（紧贴标题牌匾下方，不盖地标）：居中约 `x=820..1740, y=126..198`（宽 920×高 72，横向三段拉伸）；左侧放灵潮印章图标与 `Headline`（如 `灵潮涌动 · 碧渊水宫`），中段放 `CountdownText`（`剩余 34:50`），右侧放无字主按钮 `立即前往`（休潮期或 `IsOnTargetMap` 时按钮隐藏或切为淡色 `已在此地` 态）。
+- **底图可交互大世界锚点**（只为真实 `SceneConfigId` 生成可点击锚点，**严禁给底图其余 18 个纯美术地名编造传送点**）：
+
+| `SceneConfigId` | 正式地图名 | 底图对应视觉地标（2560×1080 锚点中心建议） | 开放态规则 |
+|---|---|---|---|
+| `1` | 主城（天墉城 / 归元城） | 中央环水城与五桥：`x=1265, y=545` | 正式开放可点选/传送；显示热度徽章 + 当前所在标记 +（若有）神秘商人印章 |
+| `2` | 八仙岛 | 北部岛屿地标「听雨洲」：`x=1375, y=248` | 正式开放可点选/传送；显示热度徽章 + 灵潮/今日旺地/神秘商人三枚小印章（按布尔显隐） |
+| `5` | 碧渊水宫 | 西北水泽地标「玄潮泽」：`x=925, y=252` | 正式开放可点选/传送；同上（灵潮中时底座叠加玉金涟漪光环） |
+| `3`（预留） | 东海渔村 / 月汐湾 | 东北港湾地标「月汐湾」：`x=1775, y=245` | **按 `CurrentMapCatalog.FindForOnline(3)?.CanTravelOnline` 动态决定**：未开放时可隐藏或呈灰态不可点，开放后自动生效无需改图 |
+
+- **底部收放抽屉（`WorldTravelOptions`）**：继续由左下「当前位置」牌或点击任一锚点展开，顶部拆为 **「游历」（正式联机图，默认）** 与 **「览景」（40+ 静态/节庆图）** 双页签；抽屉展开时预览图与底部详情区不遮挡顶部灵潮横幅。
+
+### 7.4 Codex 美术资产与 uGUI 交付清单
+
+建议目录：`D:\work\image\designs\world-map-play-v2-ui\`（同步说明导出到客户端 `mmorpg-client/Assets/Resources/UI/Ugui/WorldMapV2/`）。
+
+1. **高保真整屏定版预览（2560×1080 PNG，至少 3 张）**：
+   - `preview_01_tide_active_2560x1080.png`：默认打开大地图态——`world_skin.png` 上叠加顶部「灵潮涌动 · 碧渊水宫 · 剩余 34:50 · [立即前往]」横幅，底图钉住 1/2/5 三枚高保真玉金锚点（其中碧渊水宫亮起灵潮光环 + 神秘商人印章 + `有人` 徽章，主城标 `热闹` + 当前所在，八仙岛标 `清幽`）。
+   - `preview_02_drawer_travel_and_gallery_2560x1080.png`：休潮期（横幅切为温和米玉色 `灵潮休歇 · 下轮倒计时 18:20`）+ 展开底部抽屉态，展示「游历 / 览景」双页签、地图预览、景色按钮、本区/跨区切换与「推荐落脚 1线」提示区。
+   - `preview_03_merchant_cross_map_2560x1080.png`：神秘商人跨图现身态（`MysteryMerchantWindow` 标题栏与空货架说明含 `碧渊水宫 · 2线` 及底栏一键前往主按钮视觉精修参考，与大地图同一画风）。
+2. **无字透明 PNG 控件与印章切图（`ui\` 目录，真实 RGBA 透明底、零文字）+ `ui\CONTROL-USAGE.md`**：
+   - `tide_banner_active.png`（约 920×72，`horizontal_only_verified`）：灵潮涌动态顶部玉金朱穗横幅底板。
+   - `tide_banner_resting.png`（约 920×72，`horizontal_only_verified`）：灵潮休歇态淡青宣纸横幅底板。
+   - `tide_quick_travel_btn.png`（约 220×56，`horizontal_only_verified`）：横幅右侧暖金朱边主按钮底板。
+   - `map_pin_base_normal.png` / `map_pin_base_selected.png` / `map_pin_base_tide.png`（`fixed_size_only`）：地图锚点玉牌底座（常规 / 当前选中 / 灵潮激活态玉金水波环）。
+   - `heat_pill_crowded.png`（朱红暖金）/ `heat_pill_active.png`（青绿玉色）/ `heat_pill_quiet.png`（淡墨宣纸）（`horizontal_only_verified`）：三档热度胶囊底板。
+   - `seal_tide.png`（灵潮纹印）/ `seal_hotspot.png`（日轮旺地印）/ `seal_merchant.png`（行商锦囊/金算盘印）（128×128 或 256×256，`fixed_size_only`）：无字小印章图标。
+   - `drawer_tab_normal.png` / `drawer_tab_active.png`（`horizontal_only_verified`）：抽屉「游历 / 览景」分段页签。
+   - `hud_tide_dot.png`（64×64，`fixed_size_only`）：主界面 HUD「地图」按钮右上角灵潮脉动小角标。
+
+### 7.5 客户端 uGUI 接入验收与既有单测红线
+
+Codex 将切图接入 `mmorpg-client` 时必须守住以下红线：
+
+1. **禁止改动的逻辑边界**：不得修改 `.proto`、生成代码、`SceneChannelClient`、网络发包/限流逻辑、`CityTravelRequest` 状态机或任何服务端文件。
+2. **老服/无总览降级**：当 `CurrentOverview == null` 或 `Tide == null` 时，顶部灵潮横幅、锚点热度胶囊与三枚小印章必须自动隐藏，不得显示空底板或报错。
+3. **保留既有测试控件名与初始行为**（不得破坏 `CityTravelWindowTests`、`MysteryMerchantWindowTests`、`WorldMapOverviewTests`）：
+   - `CityTravelWindow` 必须保留按钮/文本名：`CloseCityTravel`、`OpenCityTravelOptions`、`CloseCityTravelOptions`、`WorldMapTrials`、`WorldMapSecretRealms`、`TravelToSelectedCity`、`DayAppearance`、`FestivalAppearance`、`TravelZoneCycle`、`CityDestination_<SceneConfigId>`、`CityTravelCurrent`、`SelectedDestinationName`、`SelectedDestinationDescription`、`DestinationAppearanceHint`、`CityTravelStatus`、`SelectedMapPreview`、`Destinations`（`ScrollRect` + `RectMask2D`）。
+   - `CityTravelWindow.Show(...)` 初次打开时 `WorldTravelOptions`（`TravelToSelectedCity` 的父节点）必须保持 `activeSelf == false`（由 `OriginalMapEntrypoints_KeepTravelControlsReachableWithoutChangingTheirPurpose` 断言守卫）；点击地图锚点或左下 `OpenCityTravelOptions` 再展开或选中。
+   - 新增锚点建议统一命名 `WorldMapPin_<SceneConfigId>`、顶部灵潮横幅 `WorldMapTideBanner`、一键前往按钮 `WorldMapTideQuickTravel`，并补充对应 EditMode 单测断言（灵潮激活/休歇/无数据隐藏、点击锚点选中、游历/览景切页不漏不串）。
+4. **编验门禁**：接入完成后必须在 `mmorpg-client` 跑通 `pwsh -NoProfile -File tools/client_compile_check.ps1` 与 EditMode `MmorpgClient.Tests.EditMode.Tianyong` 编译/测试（含 `CityTravelWindowTests`、`MysteryMerchantWindowTests`、`WorldMapOverviewTests`），并在多分辨率（16:9 / 21:9 2560×1080）下无裁切遮挡。
+
+### 7.6 可直接复制给 Codex 的任务指令
+
+```text
+请按《五行奇谈》世界地图玩法 V2（M1）的 UI 交接规格，为大地图（灵潮横幅 + 底图锚点 + 热度/旺地/神秘商人印章 + 游历/览景双页签 + HUD 地图灵潮角标）制作高保真视觉设计与无字切图，并接入 Unity 客户端 uGUI。
+
+【先读真相源（不要猜字段与画风）】
+1. 设计与字段契约：d:\luyuan\xuanming-server-mmo-cpp\docs\design\world-map-play-v2.md（重点读 §7 整节）
+2. 画风与切图规范：
+   - D:\work\image\designs\README.md
+   - D:\work\image\docs\QDAO_ART_DIRECTION.md
+   - D:\work\image\designs\appearance-ui-v1\ui\CONTROL-USAGE.md
+   - D:\work\image\designs\world-map-original-20260925\map-names.json
+   - d:\luyuan\mmorpg-client\Assets\Resources\UI\Ugui\WorldMapOriginal\Fidelity20261016\world_skin.png
+3. 客户端已就绪的纯 C# 逻辑层（直接绑定，禁止改协议/网络/传送状态机）：
+   - d:\luyuan\mmorpg-client\Assets\Scripts\Game\WorldTravel\WorldMapOverviewModels.cs（BuildTideBanner / BuildPinView / EstimateServerNowMs / ShouldShowMapEntryTideBadge）
+   - d:\luyuan\mmorpg-client\Assets\Scripts\Game\WorldTravel\SceneChannelClient.cs（Overview / OverviewAgeSeconds / RequestOverview）
+   - d:\luyuan\mmorpg-client\Assets\Scripts\UI\Ugui\Gameplay\CityTravelUiRoot.cs（CurrentOverview / OverviewAgeSeconds / ShouldShowTideHudBadge / RequestQuickTravelToTide / RequestTravelToScene / FilterOnlineDestinations / FilterGalleryDestinations）
+   - d:\luyuan\mmorpg-client\Assets\Scripts\UI\Ugui\Gameplay\CityTravelWindow.cs
+   - d:\luyuan\mmorpg-client\Assets\Scripts\UI\Ugui\Gameplay\MysteryMerchantWindow.cs
+
+【核心交付物】
+1. 资产输出到 D:\work\image\designs\world-map-play-v2-ui\：
+   - 3 张 2560×1080 高保真整屏预览图（灵潮激活态大地图、休潮期展开「游历/览景」抽屉态、神秘商人跨图前往精修参考态）；
+   - ui\ 目录下的全部无字透明 RGBA PNG 控件与小印章（顶部灵潮横幅激活/休歇两态、立即前往按钮、地图锚点三态底座、热闹/有人/清幽三档热度胶囊、灵潮/今日旺地/神秘商人三枚小印章、游历/览景页签、HUD 地图灵潮角标），以及记录尺寸/拉伸模式/Sprite Border/安全区的 ui\CONTROL-USAGE.md。
+2. 切图导入 d:\luyuan\mmorpg-client\Assets\Resources\UI\Ugui\WorldMapV2\（附对应 .meta 与正确 Sprite Border），并在 CityTravelWindow.cs / CityTravelUiRoot.cs 中完成 uGUI 接入：
+   - 沿用 world_skin.png，避让原图牌匾/关闭/当前位置/试炼/云外秘境五个既有区域；
+   - 将当前正式开放的 1（主城/归元城）、2（八仙岛）、5（碧渊水宫）以锚点钉在对应地标上，3（月汐湾）按 CanTravelOnline 动态显隐，严禁给底图其余 18 个纯美术地名编造可传送入口；
+   - 顶部灵潮横幅绑定 BuildTideBanner 并结合 OverviewAgeSeconds + EstimateServerNowMs 每秒刷新倒计时，点击「立即前往」调 CityTravelUiRoot.RequestQuickTravelToTide；无总览或无灵潮数据时横幅与角标整条自动隐藏；
+   - 主界面 HUD「地图」入口右上角绑定 CityTravelUiRoot.ShouldShowTideHudBadge；
+   - 底部抽屉用 FilterOnlineDestinations / FilterGalleryDestinations 拆出「游历 / 览景」双页签，同时完整保留 CityTravelWindowTests / MysteryMerchantWindowTests / WorldMapOverviewTests 断言的全部控件名与 Show() 默认收起抽屉的行为。
+
+【硬性禁止与验收】
+- 运行时 PNG 切图严禁烘焙任何文字或数字（全部文字/数字由 TMP 动态渲染）。
+- 禁止修改任何服务端代码、.proto、导表或客户端网络/状态机；禁止触碰工作区中其他功能的未提交改动；不要执行 git commit 或 git push。
+- 完成后运行 pwsh -NoProfile -File tools/client_compile_check.ps1 并补充/验证 EditMode 测试（CityTravelWindowTests、MysteryMerchantWindowTests、WorldMapOverviewTests），最后汇报新增/修改文件清单、验收截图路径与未覆盖项。
+```

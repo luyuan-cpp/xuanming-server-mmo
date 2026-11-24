@@ -636,6 +636,21 @@
         "SeasonSkillNoUpgrade": 34010,
         "SeasonUnavailable": 34011
       }
+    },
+    "trial_journal_error": {
+      "base": 35000,
+      "width": 1000,
+      "ids": {
+        "TrialJournalUnavailable": 35000,
+        "TrialJournalFrozen": 35001,
+        "TrialJournalInBattle": 35002,
+        "TrialJournalMilestoneNotFound": 35003,
+        "TrialJournalMilestoneNotReached": 35004,
+        "TrialJournalMilestoneAlreadyClaimed": 35005,
+        "TrialJournalBagFull": 35006,
+        "TrialJournalVoucherNotEnough": 35007,
+        "TrialJournalArtifactInvalid": 35008
+      }
     }
   },
   "legacy_ids": {

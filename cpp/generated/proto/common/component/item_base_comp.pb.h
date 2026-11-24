@@ -1190,6 +1190,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
     kConfigIdFieldNumber = 2,
     kSizeFieldNumber = 3,
     kAcquireSeqFieldNumber = 4,
+    kBoundFieldNumber = 6,
   };
   // .EquipInstanceData equip = 5;
   [[nodiscard]] bool has_equip()
@@ -1247,11 +1248,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
   void _internal_set_acquire_seq(::uint64_t value);
 
   public:
+  // bool bound = 6;
+  void clear_bound() ;
+  [[nodiscard]] bool bound() const;
+  void set_bound(bool value);
+
+  private:
+  bool _internal_bound() const;
+  void _internal_set_bound(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1285,6 +1296,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
     ::uint32_t config_id_;
     ::uint32_t size_;
     ::uint64_t acquire_seq_;
+    bool bound_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1896,6 +1908,30 @@ inline void ItemComp::set_allocated_equip(::EquipInstanceData* PROTOBUF_NULLABLE
 
   _impl_.equip_ = reinterpret_cast<::EquipInstanceData*>(value);
   // @@protoc_insertion_point(field_set_allocated:ItemComp.equip)
+}
+
+// bool bound = 6;
+inline void ItemComp::clear_bound() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bound_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool ItemComp::bound() const {
+  // @@protoc_insertion_point(field_get:ItemComp.bound)
+  return _internal_bound();
+}
+inline void ItemComp::set_bound(bool value) {
+  _internal_set_bound(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ItemComp.bound)
+}
+inline bool ItemComp::_internal_bound() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bound_;
+}
+inline void ItemComp::_internal_set_bound(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bound_ = value;
 }
 
 #ifdef __GNUC__

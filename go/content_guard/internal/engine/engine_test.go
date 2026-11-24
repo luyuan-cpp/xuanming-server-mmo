@@ -190,3 +190,35 @@ func TestContactAdDetectionAndAllowlist(t *testing.T) {
 		t.Fatalf("private label got %+v, want Pass", got)
 	}
 }
+
+func TestHomoglyphRepeatedAndZalgoHardening(t *testing.T) {
+	e := New()
+	e.Swap(4, &wordlist.Lexicon{
+		Deny: []wordlist.Entry{
+			{Word: "笨蛋", Category: wordlist.CategoryAbuse, Mode: wordlist.ModeSub},
+			{Word: "av", Category: wordlist.CategoryPorn, Mode: wordlist.ModeToken},
+		},
+	})
+	// 西里尔/希腊同形字绕过内置前缀 gm 与整词 av。
+	if got := e.Check(SceneName, "gм001"); got.Verdict != VerdictReject || got.Category != wordlist.CategoryImpersonation {
+		t.Fatalf("cyrillic gm bypass: %+v", got)
+	}
+	if got := e.Check(SceneChat, "看αv"); got.Verdict != VerdictReject || got.Category != wordlist.CategoryPorn {
+		t.Fatalf("greek av bypass: %+v", got)
+	}
+	// 叠字绕过打码必须盖满整段重复字符。
+	if got := e.Check(SceneChat, "你个笨笨蛋"); got.Verdict != VerdictMasked || got.Masked != "你个***" {
+		t.Fatalf("repeated abuse mask: %+v, want 你个***", got)
+	}
+	// Zalgo 连续组合记号超限(>2)在所有场景一律拒绝,正常 1~2 个组合记号照常放行。
+	zalgo := "a" + string([]rune{0x0300, 0x0301, 0x0302}) + "b"
+	for _, scene := range []SceneClass{SceneName, SceneNotice, SceneChat, ScenePrivateLabel} {
+		if got := e.Check(scene, zalgo); got.Verdict != VerdictReject {
+			t.Errorf("scene %d must reject Zalgo text, got %+v", scene, got)
+		}
+	}
+	normalAccented := "a" + string([]rune{0x0300, 0x0301}) + "b"
+	if got := e.Check(SceneChat, normalAccented); got.Verdict != VerdictPass {
+		t.Fatalf("normal 2 combining marks must pass, got %+v", got)
+	}
+}

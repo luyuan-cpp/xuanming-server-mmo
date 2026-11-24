@@ -23,6 +23,7 @@ import (
 
 	"shared/authoritysql"
 	"shared/clusterredis"
+	"shared/dbguard"
 	"shared/dbplacement"
 	"shared/drainproof"
 	"shared/dsclient"
@@ -357,6 +358,11 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 		return nil, fmt.Errorf("player_inbox: build maintenance loops: %w", err)
 	}
 	sc.Loops.RelayAdmission = relay
+	schemaName := c.MySQL.DBName
+	if schemaName == "" {
+		schemaName = "mmorpg_player_inbox"
+	}
+	sc.Loops.CapacityGuard = dbguard.New(sc.DB, schemaName, inbox.TableBudgets(), nil)
 	sc.background = []backgroundTask{
 		{name: "player_inbox.scenenode.watcher", run: func(ctx context.Context) { sc.SceneNodes.Run(ctx, sc.Etcd) }},
 		{name: "player_inbox.maintenance", run: sc.Loops.Run},

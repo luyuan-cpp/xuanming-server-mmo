@@ -101,3 +101,21 @@ func TestFoldSurvivesInvalidUTF8(t *testing.T) {
 		t.Fatalf("kept(invalid) = %q, want %q", got, "ab")
 	}
 }
+
+func TestFoldNormalizesHomoglyphsWithoutTouchingDigits(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"cyrillic gm", "gм01", "gm01"},
+		{"cyrillic admin", "аdmіn", "admin"},
+		{"greek av", "αv", "av"},
+		{"digits preserved for contact detection", "13900139000", "13900139000"},
+	}
+	for _, c := range cases {
+		if got := kept(c.in); got != c.want {
+			t.Errorf("%s: kept(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+}

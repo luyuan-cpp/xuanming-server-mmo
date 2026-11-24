@@ -43,6 +43,7 @@
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include "proto/scene/player_state_attribute_sync.pb.h"
+#include "proto/scene/player_trial_journal.pb.h"
 #include "proto/scene/s2s_player_scene.pb.h"
 #include "proto/scene/scene.pb.h"
 #include "proto/scene/scene_admin.pb.h"
@@ -94,6 +95,7 @@
 #include "rpc/service_metadata/player_season_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
+#include "rpc/service_metadata/player_trial_journal_service_metadata.h"
 #include "rpc/service_metadata/s2s_player_scene_service_metadata.h"
 #include "rpc/service_metadata/scene_service_metadata.h"
 #include "rpc/service_metadata/scene_admin_service_metadata.h"
@@ -408,7 +410,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 456,
+static_assert(kMaxRpcMethodCount == 459,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -2184,6 +2186,23 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneTrialJournalClientPlayer ---
+    gRpcMethodRegistry[SceneTrialJournalClientPlayerGetTrialJournalMessageId] = RpcMethodMeta{
+        "SceneTrialJournalClientPlayer", "GetTrialJournal",
+        std::make_unique<::GetTrialJournalRequest>(),
+        std::make_unique<::GetTrialJournalResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId] = RpcMethodMeta{
+        "SceneTrialJournalClientPlayer", "ClaimTrialJournalMilestone",
+        std::make_unique<::ClaimTrialJournalMilestoneRequest>(),
+        std::make_unique<::ClaimTrialJournalMilestoneResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId] = RpcMethodMeta{
+        "SceneTrialJournalClientPlayer", "RedeemBoundArtifactVoucher",
+        std::make_unique<::RedeemBoundArtifactVoucherRequest>(),
+        std::make_unique<::RedeemBoundArtifactVoucherResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneScenePlayer ---
     gRpcMethodRegistry[SceneScenePlayerEnterSceneMessageId] = RpcMethodMeta{
         "SceneScenePlayer", "EnterScene",
@@ -2780,6 +2799,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:
+	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:
+	case SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId:
+	case SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId:
 	case ClientPlayerTeamCreateTeamMessageId:
 	case ClientPlayerTeamGetMyTeamMessageId:
 	case ClientPlayerTeamApplyJoinTeamMessageId:

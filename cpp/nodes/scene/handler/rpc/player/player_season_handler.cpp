@@ -18,6 +18,7 @@ void SceneSeasonClientPlayerHandler::GetSeasonState(entt::entity player,const ::
 		response->mutable_error_message()->set_id(err);
 	}
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneSeasonClientPlayerHandler::EquipSeasonSeal(entt::entity player,const ::EquipSeasonSealRequest* request,
@@ -26,6 +27,7 @@ void SceneSeasonClientPlayerHandler::EquipSeasonSeal(entt::entity player,const :
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerSeasonSystem::EquipSeal(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneSeasonClientPlayerHandler::CatchupSeasonSeal(entt::entity player,const ::CatchupSeasonSealRequest* request,
@@ -34,4 +36,5 @@ void SceneSeasonClientPlayerHandler::CatchupSeasonSeal(entt::entity player,const
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerSeasonSystem::Catchup(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }

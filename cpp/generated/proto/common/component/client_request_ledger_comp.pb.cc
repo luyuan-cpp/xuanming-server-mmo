@@ -212,11 +212,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294443008,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
+      19,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -283,6 +283,37 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.season_catchup_spent_), 12>(),
        {112, 12, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_)}},
+      // uint32 trial_milestone_id = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.trial_milestone_id_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_id_)}},
+      // uint32 trial_milestone_sand_count = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_sand_count_)}},
+      // uint32 trial_milestone_voucher_count = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_voucher_count_)}},
+      // uint64 redeemed_artifact_item_id = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_item_id_)}},
+      // uint32 redeemed_artifact_config_id = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -315,6 +346,16 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 season_catchup_spent = 14;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 trial_milestone_id = 15;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 trial_milestone_sand_count = 16;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_sand_count_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 trial_milestone_voucher_count = 17;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_voucher_count_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 redeemed_artifact_item_id = 18;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_item_id_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 redeemed_artifact_config_id = 19;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -342,7 +383,12 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         crafting_material_count_{0u},
         enhancement_stone_count_{0u},
         season_catchup_spent_{::uint64_t{0u}},
-        season_catchup_points_{0u} {}
+        season_catchup_points_{0u},
+        trial_milestone_id_{0u},
+        trial_milestone_sand_count_{0u},
+        trial_milestone_voucher_count_{0u},
+        redeemed_artifact_item_id_{::uint64_t{0u}},
+        redeemed_artifact_config_id_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -622,7 +668,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        17, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -637,6 +683,11 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhancement_stone_count_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.season_catchup_points_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.season_catchup_spent_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.trial_milestone_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.trial_milestone_sand_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.trial_milestone_voucher_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.redeemed_artifact_item_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.redeemed_artifact_config_id_),
         1,
         2,
         0,
@@ -651,6 +702,11 @@ const ::uint32_t
         11,
         13,
         12,
+        14,
+        15,
+        16,
+        17,
+        18,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         7, // hasbit index offset
@@ -678,8 +734,8 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {31, sizeof(::EquipmentMaterialRewardLedger)},
-        {42, sizeof(::ClientRequestLedgerComp)},
+        {41, sizeof(::EquipmentMaterialRewardLedger)},
+        {52, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -690,7 +746,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\361\002\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\240\004\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -699,21 +755,26 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "_reward_revision\030\n \001(\004\022\037\n\027crafting_mater"
     "ial_count\030\013 \001(\r\022\037\n\027enhancement_stone_cou"
     "nt\030\014 \001(\r\022\035\n\025season_catchup_points\030\r \001(\r\022"
-    "\034\n\024season_catchup_spent\030\016 \001(\004\"z\n\035Equipme"
-    "ntMaterialRewardLedger\022\030\n\020day_starts_at_"
-    "ms\030\001 \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017availa"
-    "ble_units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\"\243\001\n\027Cl"
-    "ientRequestLedgerComp\022%\n\007records\030\001 \003(\0132\024"
-    ".ClientRequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026"
-    "\n\016forge_revision\030\003 \001(\004\0227\n\017material_rewar"
-    "d\030\004 \001(\0132\036.EquipmentMaterialRewardLedgerB"
-    "\022Z\020common/componentb\006proto3"
+    "\034\n\024season_catchup_spent\030\016 \001(\004\022\032\n\022trial_m"
+    "ilestone_id\030\017 \001(\r\022\"\n\032trial_milestone_san"
+    "d_count\030\020 \001(\r\022%\n\035trial_milestone_voucher"
+    "_count\030\021 \001(\r\022!\n\031redeemed_artifact_item_i"
+    "d\030\022 \001(\004\022#\n\033redeemed_artifact_config_id\030\023"
+    " \001(\r\"z\n\035EquipmentMaterialRewardLedger\022\030\n"
+    "\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned_today\030"
+    "\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n\010revisi"
+    "on\030\004 \001(\004\"\243\001\n\027ClientRequestLedgerComp\022%\n\007"
+    "records\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010n"
+    "ext_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n"
+    "\017material_reward\030\004 \001(\0132\036.EquipmentMateri"
+    "alRewardLedgerB\022Z\020common/componentb\006prot"
+    "o3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    747,
+    922,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -763,9 +824,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, season_catchup_points_) -
+           offsetof(Impl_, redeemed_artifact_config_id_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::season_catchup_points_));
+               sizeof(Impl_::redeemed_artifact_config_id_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -780,9 +841,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, season_catchup_points_) -
+           offsetof(Impl_, redeemed_artifact_config_id_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::season_catchup_points_));
+               sizeof(Impl_::redeemed_artifact_config_id_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -841,10 +902,15 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.equipment_item_id_) -
         reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.equipment_item_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.forge_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.season_catchup_points_) -
-        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.season_catchup_points_));
+        reinterpret_cast<char*>(&_impl_.trial_milestone_sand_count_) -
+        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.trial_milestone_sand_count_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.trial_milestone_voucher_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.redeemed_artifact_config_id_) -
+        reinterpret_cast<char*>(&_impl_.trial_milestone_voucher_count_)) + sizeof(_impl_.redeemed_artifact_config_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -994,6 +1060,51 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint32 trial_milestone_id = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_trial_milestone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_trial_milestone_id(), target);
+    }
+  }
+
+  // uint32 trial_milestone_sand_count = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_trial_milestone_sand_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_trial_milestone_sand_count(), target);
+    }
+  }
+
+  // uint32 trial_milestone_voucher_count = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_trial_milestone_voucher_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_trial_milestone_voucher_count(), target);
+    }
+  }
+
+  // uint64 redeemed_artifact_item_id = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_redeemed_artifact_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_redeemed_artifact_item_id(), target);
+    }
+  }
+
+  // uint32 redeemed_artifact_config_id = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_redeemed_artifact_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_redeemed_artifact_config_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1076,7 +1187,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 forge_revision = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_forge_revision() != 0) {
@@ -1117,6 +1228,43 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       if (this_._internal_season_catchup_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_season_catchup_points());
+      }
+    }
+    // uint32 trial_milestone_id = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_trial_milestone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_trial_milestone_id());
+      }
+    }
+    // uint32 trial_milestone_sand_count = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_trial_milestone_sand_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_trial_milestone_sand_count());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    // uint32 trial_milestone_voucher_count = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_trial_milestone_voucher_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_trial_milestone_voucher_count());
+      }
+    }
+    // uint64 redeemed_artifact_item_id = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_redeemed_artifact_item_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_redeemed_artifact_item_id());
+      }
+    }
+    // uint32 redeemed_artifact_config_id = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_redeemed_artifact_config_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_redeemed_artifact_config_id());
       }
     }
   }
@@ -1183,7 +1331,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_forge_revision() != 0) {
         _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
@@ -1214,6 +1362,33 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.season_catchup_points_ = from._impl_.season_catchup_points_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_trial_milestone_id() != 0) {
+        _this->_impl_.trial_milestone_id_ = from._impl_.trial_milestone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_trial_milestone_sand_count() != 0) {
+        _this->_impl_.trial_milestone_sand_count_ = from._impl_.trial_milestone_sand_count_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_trial_milestone_voucher_count() != 0) {
+        _this->_impl_.trial_milestone_voucher_count_ = from._impl_.trial_milestone_voucher_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_redeemed_artifact_item_id() != 0) {
+        _this->_impl_.redeemed_artifact_item_id_ = from._impl_.redeemed_artifact_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_redeemed_artifact_config_id() != 0) {
+        _this->_impl_.redeemed_artifact_config_id_ = from._impl_.redeemed_artifact_config_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1236,8 +1411,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_)
-      + sizeof(ClientRequestRecord::_impl_.season_catchup_points_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_)
+      + sizeof(ClientRequestRecord::_impl_.redeemed_artifact_config_id_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

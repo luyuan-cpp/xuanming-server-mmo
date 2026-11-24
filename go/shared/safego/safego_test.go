@@ -261,3 +261,21 @@ func TestRunConcurrent(t *testing.T) {
 		t.Fatalf("safego_panic_total{point=%q} = %v, 期望 %d", point, got, n)
 	}
 }
+
+func TestLoopUpdatesLivenessHeartbeat(t *testing.T) {
+	logtest.NewCollector(t)
+
+	const point = "test.loop.liveness"
+	before := float64(time.Now().Unix() - 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var rounds atomic.Int32
+	Loop(ctx, point, 2*time.Millisecond, func(context.Context) {
+		rounds.Add(1)
+	})
+
+	waitFor(t, 5*time.Second, "loop heartbeat updated", func() bool {
+		return rounds.Load() >= 1 && testutil.ToFloat64(loopLastRoundUnix.WithLabelValues(point)) >= before
+	})
+}

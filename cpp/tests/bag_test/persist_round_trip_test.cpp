@@ -635,6 +635,33 @@ protected:
         seasonRecord->set_catchup_points(1);
         seasonRecord->set_revision(2);
 
+        // 五行试炼志 V2（long-term-progression-v2.md）：覆盖全六层嵌套消息未知字段携带。
+        auto &trialJournal = *db.mutable_trial_journal_component();
+        trialJournal.set_lit_seal_bits(std::string(1, '\x05'));
+        trialJournal.set_claimed_milestone_bits(std::string(1, '\x01'));
+        trialJournal.set_state_revision(3);
+        auto *trialRecord = trialJournal.add_records();
+        trialRecord->set_entry_id(101);
+        trialRecord->set_rule_version(1);
+        auto *soloBest = trialRecord->mutable_solo_best();
+        soloBest->set_best_rounds(6);
+        soloBest->set_achieved_at_ms(1900000000100);
+        auto *loadout = soloBest->mutable_loadout();
+        loadout->set_pet_table_id(petTableId);
+        loadout->add_artifact_effect_ids(1);
+        loadout->add_artifact_effect_ids(8);
+        loadout->set_season_seal_id(101);
+        auto *coopBest = trialRecord->mutable_coop_best();
+        coopBest->set_best_rounds(5);
+        coopBest->set_party_size(2);
+        coopBest->set_achieved_at_ms(1900000000200);
+        coopBest->set_pet_table_id(petTableId);
+        coopBest->add_teammate_names("partner-a");
+        auto *seasonArchive = trialJournal.add_season_records();
+        seasonArchive->set_season_id(1);
+        seasonArchive->add_lit_seal_ids(3011);
+        seasonArchive->add_claimed_milestone_ids(301);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

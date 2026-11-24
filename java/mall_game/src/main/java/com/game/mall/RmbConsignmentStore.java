@@ -58,8 +58,14 @@ public class RmbConsignmentStore {
 
     public RmbConsignmentApi.Listing register(RmbConsignmentApi.Escrow input) {
         if (input == null) { throw invalid(); }
-        player(input.listingId()); player(input.sellerPlayerId()); player(input.escrowReference());
+        player(input.listingId()); player(input.sellerPlayerId()); escrowReference(input.escrowReference());
         account(input.sellerAccount()); proof(input.escrowProof());
+        if (input.designatedBuyerAccount() != null) {
+            account(input.designatedBuyerAccount());
+            if (input.designatedBuyerAccount().equals(input.sellerAccount())) {
+                throw new CommerceException(409, "定向买家不能与卖家相同");
+            }
+        }
         if (input.marketZone() < 1 || input.marketZone() > 0xffff_ffffL || input.assetKind() == null
             || !Set.of("ITEMS", "CURRENCY", "PET", "CHARACTER").contains(input.assetKind())
             || input.priceFen() < 1 || input.priceFen() > CommerceStore.MAX_AMOUNT_MINOR || input.title() == null
@@ -69,18 +75,19 @@ public class RmbConsignmentStore {
         } else if (input.assetCurrencyType() != null) { throw invalid(); }
         String digest = digest(input);
         long now = clock.millis();
-        long notice = Math.addExact(now, rules.getNoticeMs());
+        long notice = Math.addExact(now, rules.noticeMsFor(input.assetKind(), input.priceFen()));
         long end = Math.addExact(notice, rules.getSaleMs());
+        byte[] designatedBuyerBytes = input.designatedBuyerAccount() == null ? null : bytes(input.designatedBuyerAccount());
         try {
             return Objects.requireNonNull(tx.execute(status -> {
                 // listing主键和唯一托管引用共同串行化首次登记，不接管不同资产的旧listing。
                 jdbc.update("INSERT INTO commerce_consignment(listing_id,seller_player_id,seller_account,market_zone,asset_kind,"
                     + "asset_currency_type,escrow_reference,escrow_proof,request_digest,title,price_fen,fee_bps,cooling_ms,"
-                    + "notice_end_ms,sale_end_ms,state,created_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'LISTED',?)"
+                    + "notice_end_ms,sale_end_ms,state,designated_buyer_account,created_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'LISTED',?,?)"
                     + " ON DUPLICATE KEY UPDATE listing_id=listing_id", input.listingId(), input.sellerPlayerId(),
                     bytes(input.sellerAccount()), input.marketZone(), input.assetKind(), input.assetCurrencyType(),
                     input.escrowReference(), input.escrowProof(), digest, input.title(), input.priceFen(), rules.getFeeBps(),
-                    rules.getCoolingMs(), notice, end, now);
+                    rules.getCoolingMs(), notice, end, designatedBuyerBytes, now);
                 var rows = listing(input.listingId(), true);
                 if (rows.isEmpty() || !rows.getFirst().digest().equals(digest)) {
                     throw new CommerceException(409, "寄售编号或托管引用已用于不同条款");
@@ -125,6 +132,9 @@ public class RmbConsignmentStore {
         CommerceIdentity.revision(input.buyerOwnerRevision());
         var value = requireListing(input.listingId());
         if (value.sellerAccount().equals(input.buyerAccount())) { throw new CommerceException(409, "同账号不能购买自己的角色或资产"); }
+        if (value.view().designatedBuyerAccount() != null && !value.view().designatedBuyerAccount().equals(input.buyerAccount())) {
+            throw new CommerceException(409, "该定向寄售仅限指定买家购买");
+        }
         long now = clock.millis();
         if (!value.view().state().equals("LISTED") || now < value.view().noticeEndMs() || now >= value.view().saleEndMs()) {
             throw new CommerceException(409, "寄售仍在公示、已结束或已被占用");
@@ -259,7 +269,7 @@ public class RmbConsignmentStore {
     }
     public void returned(RmbConsignmentApi.ReturnReceipt input) {
         if (input == null) { throw invalid(); }
-        player(input.listingId()); player(input.escrowReference()); proof(input.escrowProof()); proof(input.returnProof());
+        player(input.listingId()); escrowReference(input.escrowReference()); proof(input.escrowProof()); proof(input.returnProof());
         tx.executeWithoutResult(status -> {
             var original = requireListing(input.listingId());
             if (!original.escrowReference().equals(input.escrowReference()) || !original.escrowProof().equals(input.escrowProof())) {
@@ -301,20 +311,20 @@ public class RmbConsignmentStore {
                 return withdrawal((String) prior.getFirst().get("withdrawal_id"), input.account(), false);
             }
             var funds = jdbc.query("SELECT * FROM commerce_seller_income WHERE account=? AND available_ms<=? "
-                + "AND net_fen-reserved_fen-paid_fen-forfeited_fen>0 ORDER BY order_sn LIMIT 100 FOR UPDATE",
+                + "AND net_fen-reserved_fen-paid_fen-forfeited_fen-dispute_frozen_fen>0 ORDER BY order_sn LIMIT 100 FOR UPDATE",
                 (row, index) -> income(row), bytes(input.account()), clock.millis());
             long remaining = input.amountFen();
-            for (var row : funds) { remaining -= Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen()); }
+            for (var row : funds) { remaining -= Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen() - row.disputeFrozenFen()); }
             if (remaining != 0) { throw new CommerceException(409, "可提现收入不足或本次分配超过100单上限"); }
             String id = UUID.randomUUID().toString();
             jdbc.update("INSERT INTO commerce_withdrawal(withdrawal_id,account,request_id,amount_fen,state,created_ms)"
                 + " VALUES(?,?,?,?,'REQUESTED',?)", id, bytes(input.account()), bytes(input.requestId()), input.amountFen(), clock.millis());
             remaining = input.amountFen();
             for (var row : funds) {
-                long amount = Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen());
+                long amount = Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen() - row.disputeFrozenFen());
                 if (amount == 0) { break; }
                 if (jdbc.update("UPDATE commerce_seller_income SET reserved_fen=reserved_fen+? WHERE order_sn=? "
-                        + "AND net_fen-reserved_fen-paid_fen-forfeited_fen>=?", amount, row.orderId(), amount) != 1) {
+                        + "AND net_fen-reserved_fen-paid_fen-forfeited_fen-dispute_frozen_fen>=?", amount, row.orderId(), amount) != 1) {
                     throw new CommerceException(503, "收入预留并发状态异常");
                 }
                 jdbc.update("INSERT INTO commerce_withdrawal_allocation(withdrawal_id,order_sn,amount_fen) VALUES(?,?,?)",
@@ -407,16 +417,18 @@ public class RmbConsignmentStore {
         String state = row.getString("state");
         long notice = row.getLong("notice_end_ms"), end = row.getLong("sale_end_ms"), now = clock.millis();
         String phase = state.equals("LISTED") ? (now < notice ? "PUBLIC_NOTICE" : now < end ? "ON_SALE" : "ENDED") : state;
+        byte[] designatedBytes = row.getBytes("designated_buyer_account");
+        String designatedBuyer = designatedBytes == null ? null : text(designatedBytes);
         var view = new RmbConsignmentApi.Listing(row.getString("listing_id"), row.getString("seller_player_id"), row.getLong("market_zone"),
             row.getString("asset_kind"), row.getString("title"), row.getLong("price_fen"), row.getInt("fee_bps"),
-            row.getLong("cooling_ms"), notice, end, state, phase, row.getString("current_order_sn"));
+            row.getLong("cooling_ms"), notice, end, state, phase, row.getString("current_order_sn"), designatedBuyer);
         return new Stored(view, text(row.getBytes("seller_account")), row.getString("escrow_reference"),
             row.getString("escrow_proof"), row.getString("request_digest"));
     }
     private static RmbConsignmentApi.Income income(ResultSet row) throws SQLException {
         return new RmbConsignmentApi.Income(row.getString("order_sn"), row.getLong("gross_fen"), row.getLong("fee_fen"),
             row.getLong("net_fen"), row.getLong("reserved_fen"), row.getLong("paid_fen"), row.getLong("available_ms"),
-            row.getLong("forfeited_fen"));
+            row.getLong("forfeited_fen"), row.getLong("dispute_frozen_fen"), row.getString("dispute_case_id"));
     }
     private static void requireCurrentOrder(Stored value, String orderId, String state) {
         if (!state.equals(value.view().state()) || !orderId.equals(value.view().orderId())) {
@@ -435,6 +447,12 @@ public class RmbConsignmentStore {
     static void player(String value) {
         try { HmacAuthentication.requirePlayer(value); }
         catch (CommerceException invalidPlayer) { throw invalid(); }
+    }
+    /** 兼容 trade 服务生成的规范格式 trade:<uint64> 以及历史纯规范 uint64 引用，拒绝其它前缀或非规范数字。 */
+    static void escrowReference(String value) {
+        if (value == null || value.isEmpty() || value.length() > 32) { throw invalid(); }
+        String numeric = value.startsWith("trade:") ? value.substring("trade:".length()) : value;
+        player(numeric);
     }
     static void request(String value) { if (value == null || !value.matches("[A-Za-z0-9_-]{8,128}")) { throw invalid(); } }
     private static void proof(String value) { if (value == null || !value.matches("[0-9a-f]{64}")) { throw invalid(); } }

@@ -1,0 +1,57 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+
+// 五行试炼志 V2 持久化组件（设计见 docs/design/long-term-progression-v2.md）。
+// 挂在 player_database 字段 31（GROWTH 组），与战斗结算、背包资产、幂等账本同一次存盘事务提交。
+//
+// 位图纪律（docs/rules/bit-storage-and-table-ids.md）：
+//   - 永久战法印与永久里程碑均采用紧凑 bytes 位图（经导表器 cfg_bit_index 映射），
+//     老版本读盘遇到更高位 bit 时整段 bytes 原样保存并回写，天然免疫灰度/回滚高位截断；
+//   - 统计有效印数与分母时严禁直接按字节数 popcount，必须遍历当前有效目录行过滤；
+//   - 卷三（赛季轮换）严禁写入永久单调位图，独立存放在 season_records 按 season_id 隔离。
+
+// 刷新最佳回合时的轻量策略复盘快照（仅 4 个整型来源，零大对象膨胀）。
+message TrialJournalLoadoutSnapshot {
+  uint32 pet_table_id = 1;                // 出战宝宝种类 ID（Pet.id；0=未带宝宝）
+  repeated uint32 artifact_effect_ids = 2; // 开局佩戴的法宝效果 ID（EquipArtifact.id 1..8，至多 2 个，升序）
+  uint32 season_seal_id = 3;              // 当局生效的赛季印 ID（SeasonSeal.id；0=无）
+}
+
+// 单人最佳回合纪录（仅入场恰好 1 名真人，一人队亦同）。
+message TrialJournalSoloRecord {
+  uint32 best_rounds = 1;
+  uint64 achieved_at_ms = 2;
+  TrialJournalLoadoutSnapshot loadout = 3;
+}
+
+// 好友合战最快回合纪录（入场 2..5 名真人，仅保存在本人私藏手记中，不建全服野队竞速榜）。
+message TrialJournalCoopRecord {
+  uint32 best_rounds = 1;
+  uint32 party_size = 2;
+  uint64 achieved_at_ms = 3;
+  uint32 pet_table_id = 4;
+  repeated string teammate_names = 5; // 开局冻结的同队其他成员展示名（至多 4 名，已脱敏）
+}
+
+// 单个（关卡格, 可比规则版本）的最佳纪录；records 下标不承载顺序语义（AGENTS.md §11.6）。
+message TrialJournalEntryRecord {
+  uint32 entry_id = 1;
+  uint32 rule_version = 2;
+  TrialJournalSoloRecord solo_best = 3;
+  TrialJournalCoopRecord coop_best = 4;
+}
+
+// 卷三（季游奇谈）按赛季隔离的轻档案，严禁混入永久单调全局位图。
+message SeasonTrialJournalArchive {
+  uint32 season_id = 1;
+  repeated uint32 lit_seal_ids = 2;
+  repeated uint32 claimed_milestone_ids = 3;
+}
+
+message PlayerTrialJournalComp {
+  bytes lit_seal_bits = 1;           // 永久卷战法印紧凑位图（键 = TrialJournalSeal.id 导表 bit_index）
+  bytes claimed_milestone_bits = 2;  // 永久卷里程碑领取紧凑位图（键 = TrialJournalMilestone.id 导表 bit_index）
+  uint64 state_revision = 3;         // 单调写修订号（防旧响应覆盖客户端较新快照）
+  repeated TrialJournalEntryRecord records = 4;
+  repeated SeasonTrialJournalArchive season_records = 5;
+}

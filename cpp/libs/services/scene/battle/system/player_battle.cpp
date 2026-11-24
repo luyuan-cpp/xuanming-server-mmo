@@ -2,6 +2,8 @@
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_equipment_material_reward.h"
 #include "player/system/player_season.h"
+#include "player/system/player_trial_journal.h"
+#include "proto/common/component/player_trial_journal_comp.pb.h"
 #include "player/system/player_attribute.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_appearance.h"
@@ -2139,7 +2141,8 @@ PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, c
 // itemsMailed:granted 这批掉落两个包都放不下、整批改投了邮件(battle-overflow-mail.md);照常列进 items_gained。
 void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::BattleSettlementData& settlement,
                         const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed,
-                        const bool itemsMailed)
+                        const bool itemsMailed,
+                        const PlayerTrialJournalSystem::SettlementDelta* trialDelta = nullptr)
 {
     const uint64_t battleId = settlement.battle_id();
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
@@ -2152,6 +2155,16 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
     }
     auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, TimeSystem::NowMillisecondsUTC());
     entry.set_items_mailed(itemsMailed);
+    if (trialDelta != nullptr && trialDelta->entryId != 0)
+    {
+        entry.set_trial_journal_entry_id(trialDelta->entryId);
+        for (const uint32_t sealId : trialDelta->newlyLitSealIds)
+        {
+            entry.add_trial_newly_lit_seal_ids(sealId);
+        }
+        entry.set_trial_new_solo_best(trialDelta->newSoloBest);
+        entry.set_trial_new_coop_best(trialDelta->newCoopBest);
+    }
     const bool truncated = entry.lines_truncated();
     const int currencyLines = entry.currencies_size();
     const int gainedLines = entry.items_gained_size();
@@ -2467,6 +2480,19 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             seasonProgressCandidate, seasonPointsIncreased) != kSuccess) return false;
     }
 
+    // 五行试炼志 V2：同一收件箱原子入账，先制备候选并记录本局增量回显（不改写材料日额度）。
+    const bool creditsTrialJournal = PlayerTrialJournalSystem::HasJournalUpdate(settlement);
+    PlayerTrialJournalComp trialJournalCandidate;
+    std::string trialJournalBefore;
+    PlayerTrialJournalSystem::SettlementDelta trialJournalDelta;
+    if (creditsTrialJournal) {
+        const auto* trialJournalComp = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
+        if (trialJournalComp == nullptr) return false;
+        trialJournalBefore = trialJournalComp->SerializeAsString();
+        if (PlayerTrialJournalSystem::PrepareBattleCredit(*trialJournalComp, settlement, settlementNowMs,
+            trialJournalCandidate, trialJournalDelta) != kSuccess) return false;
+    }
+
     const auto inboxIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
     if (!inboxIdentity) return false;
     const auto originalIdentity = inboxIdentity->SerializeAsString();
@@ -2555,9 +2581,12 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
         auto* currentLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
         auto* currentSeason = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+        auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
         if (creditsMaterialReward && (currentLedger == nullptr || currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) return kInvalidParameter;
         if (creditsSeasonProgress && (currentSeason == nullptr || currentSeason->SerializeAsString() != seasonProgressBefore))
+            return kInvalidParameter;
+        if (creditsTrialJournal && (currentTrialJournal == nullptr || currentTrialJournal->SerializeAsString() != trialJournalBefore))
             return kInvalidParameter;
         if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
             (changesPets && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
@@ -2567,9 +2596,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             return kInvalidParameter;
         const auto error = creditCurrencies();
         if (error != kSuccess) return error;
-        // 此处之后只有无失败的候选发布；额度、赛季印进度与货币、背包、收件箱水位同一次存盘。
+        // 此处之后只有无失败的候选发布；额度、赛季印进度、试炼志进度与货币、背包、收件箱水位同一次存盘。
         if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
         if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
+        if (creditsTrialJournal && trialJournalDelta.changed) currentTrialJournal->Swap(&trialJournalCandidate);
         return kSuccess;
     };
     // 两包都放不下时这一局的掉落整批改投邮件(docs/design/battle-overflow-mail.md):在任何副作用之前备好待寄条目
@@ -2710,7 +2740,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // (docs/design/battle-result-recovery.md §5)。记实际入账:剔除被封禁项之后的掉落(两包都放不下而改投邮件的
     // 那一批也算:它已经是玩家的,经邮件领取)、未被封禁的币种、按实际持有夹紧的消耗。
     RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption,
-                       /*itemsMailed=*/!mailed.empty());
+                       /*itemsMailed=*/!mailed.empty(),
+                       creditsTrialJournal ? &trialJournalDelta : nullptr);
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 }
 

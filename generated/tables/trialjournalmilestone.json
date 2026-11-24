@@ -1,0 +1,55 @@
+{
+ "data": [
+  {
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 2,
+   "desc": "卷一累计点亮 3 枚战法印，获赠 2 份仅自用重铸砂，可自由试换一次词条并留回旋余地。",
+   "enabled": true,
+   "id": 101,
+   "required_seals": 3,
+   "scope_chapter_id": 1,
+   "season_id": 0,
+   "title": "初涉破阵"
+  },
+  {
+   "badge_key": "badge_trial_sword",
+   "badge_name": "破阵试剑",
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 0,
+   "desc": "卷一累计点亮 6 枚战法印，获赠 1 张自用法宝拓印与名片印戳「破阵试剑」。",
+   "enabled": true,
+   "id": 102,
+   "required_seals": 6,
+   "scope_chapter_id": 1,
+   "season_id": 0,
+   "title": "破阵试剑"
+  },
+  {
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 2,
+   "desc": "卷一累计点亮 9 枚战法印，获赠 1 张自用法宝拓印与 2 份仅自用重铸砂。",
+   "enabled": true,
+   "id": 103,
+   "required_seals": 9,
+   "scope_chapter_id": 1,
+   "season_id": 0,
+   "title": "攻守兼备"
+  },
+  {
+   "badge_key": "badge_trial_master",
+   "badge_name": "破阵尽墨",
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 0,
+   "commentary_body": "枪穗上的旧船绳又沾了墨。你在卷一里把快攻、守心、断愈和破势全试了一遍——我原先总以为赢就是抢先一步，如今在败局册末页补了一句：肯换手路的人，比只押一招的人难缠得多。下回演武场见，可别让我半步。",
+   "commentary_key": "commentary_tingyun_trial_v1",
+   "commentary_title": "祝停云·破阵跋",
+   "desc": "卷一 12 印全亮，获赠第 3 张自用法宝拓印、名片印戳「破阵尽墨」与留灯院评语《祝停云·破阵跋》。",
+   "enabled": true,
+   "id": 104,
+   "required_seals": 12,
+   "scope_chapter_id": 1,
+   "season_id": 0,
+   "title": "破阵尽墨"
+  }
+ ]
+}

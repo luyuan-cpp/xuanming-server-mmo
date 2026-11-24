@@ -50,6 +50,10 @@ message PlayerBattleResult {
   uint64 exp_gain = 18;       // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
   uint32 material_credit_units_added = 19; // 本局实际新增的装备材料可领额度(0 或 10)
   uint32 season_id = 20;      // 论剑排位赛季编号(非排位为 0)
+  uint32 trial_journal_entry_id = 21; // 五行试炼志关联关卡格 ID(0 = 非试炼志对局，结算页据此决定是否显示「看试炼志」)
+  repeated uint32 trial_newly_lit_seal_ids = 22; // 本局首次点亮的战法印 ID 列表
+  bool trial_new_solo_best = 23; // 本局是否刷新单人最少回合纪录
+  bool trial_new_coop_best = 24; // 本局是否刷新好友合战最快回合纪录
 }
 
 message PlayerBattleResultComp {

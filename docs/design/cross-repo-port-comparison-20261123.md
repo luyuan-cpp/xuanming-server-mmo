@@ -1,9 +1,9 @@
 # 双仓双向方案对比与移植设计（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 
-> 日期：2026-11-23  
+> 日期：2026-11-23（Batch 2 & Batch 3 非战斗全量对齐更新：2026-11-24）  
 > 范围：`D:\luyuan\xuanming-server`（Pandora Go/Kratos/UE DS）↔ `D:\luyuan\xuanming-server-mmo-cpp`（MMO C++/Go-zero/Java）  
-> 状态：Tier 1 基础设施/防护补丁已完成双仓代码移植与单测验证；Tier 2 大架构方案已落盘待负责人拍板后分批实施。  
-> Java 独立版（`xuanming-server-mmo`）状态：本批未改动任何客户端可见 proto / 帧 / 配表契约，Java 版无需契约同步；Tier 2 涉及跨服契约项须同步更新 `PARITY.md`。
+> 状态：Tier 1、Batch 2 与 Batch 3（除战斗域外全量非战斗对齐）全部非破坏性、可闭环基础设施/内容安全/观测/认证能力已完成双向代码接线与单测验证；跨服务重架构项保留在 Tier 3 待拍板。  
+> Java 独立版（`xuanming-server-mmo`）状态：Tier 1 与 Batch 2 未改动任何客户端可见 proto / 帧 / 配表契约；Batch 3 的 `go/content_guard` 增强（西里尔/希腊同形字折叠、叠字绕过、Zalgo 拒绝）保持既有 `testdata/vectors.json` 20 条共享向量 100% 兼容，若后续将新反绕过向量纳入共享向量表须同步 `xuanming-server-mmo` 与 `PARITY.md`。
 
 ---
 
@@ -49,23 +49,49 @@
 | A3 | **统一数据库容量与大字段守卫 `dbguard`** | `pkg/dbguard/{dbguard,payload,sweep}.go` | `go/shared/dbguard/` + `CheckPayload` 接入 `go/player_inbox/internal/inbox/registry.go` | 补齐 `information_schema.TABLES` 行数/字节/`AVG_ROW_LENGTH` 估算监控、写入侧 80% 预警/100% fail-closed 三档 `CheckPayload` 分布直方图、`SweepTable` 单 WHERE `report_only` 封装与 `SweepCutoffMs` 护栏（全英文日志符合 `AGENTS.md §2`） |
 | A4 | **崩溃与 P0 事故独立建档体系 + 工程红线补齐** | `docs/incidents/{index,template}.md`、`CLAUDE.md §9.24/§16.9/§16.10`、`protocol-ordering-rules.md` | `docs/incidents/{index,template}.md`、`docs/rules/engineering-principles.md` | 建立独立 P0 事故模板、索引与关闭审核清单；补齐“禁止用定时器掩盖时序问题”“推送不承担正确性”“数据库广度/深度双守卫”条款 |
 
-### 2.3 Tier 2 大架构级待拍板候选清单
+### 2.2.1 Batch 2 新增落地双向移植清单（2026-11-24，单仓严格控制在 <30 文件）
 
-#### B → A（`mmo-cpp` 优于 `xuanming-server`，需 `decision-revisit` 后实施）
+#### B → A 新增落地（`xuanming-server`）
+- **B8 存活集合理性闸门（`pkg/liveview`）**：接入 `hub_allocator`（`HubConf.LiveViewHold` + `reconcileShardTopology`），防御控制面空列表或 ≥4 分片骤降过半导致整区批量误标 draining。
+- **B9 K8s Secret 环境变量单一来源（`pkg/secretenv`）**：接入 `pkg/config`（`DSNEnv`/`PasswordEnv`/`SecretEnv`）、`pkg/mysqlx`、`pkg/redisx`，杜绝双源冲突与密钥泄漏。
+- **B10 物理连接级强读会话固定（`pkg/mysqlx/pin.go`）**：每条物理连接建连固定 TiDB 7 项强读变量 + 500ms 空闲复用探活 + MySQL 主库降从隔离，并在 `owner`/`login` 的 `RequireTiDB=true` 路径自动开启。
+- **B11 K8s 真集群 NetworkPolicy 实测探针（`tools/scripts/k8s_netpol_probe.ps1`）**：配套契约测试并登记至 `ci_backend.ps1`。
 
-1. **63 位打散永久号段发号器（`idsegment` + 双独立 etcd + 全局号源登记处 mTLS）**：替代 `xuanming-server` 依赖墙钟 Epoch 与单 etcd 的 `pkg/snowflake/etcdnode`，根除时钟回拨与重启号段隔离窗口问题。
-2. **可靠玩家持久收件箱服务落地（`go/player_inbox` + `inboxcontract` + `inboxshard`）**：`xuanming-server` 目前仅有调研文档 `reliable-player-inbox-20261014.md`，好友/交易/系统通知仍存在“DB 提交后发 Kafka 丢窗”，可按 B 仓现役契约落盘。
-3. **HRW 无状态后台分片（`workshard`）+ 存活集合理性闸门（`liveview`）**：替代多处单 Leader 后台循环瓶颈，并在 `hub_allocator` / `ds_allocator` 防御 etcd 瞬时空视图/过半失联误判。
-4. **物理连接级 `authoritysql` 会话固定 + `dbplacement` 逻辑库在线搬迁**：升级 `xuanming-server` 从启动期一次性校验到每条物理连接固定强读变量、500ms 空闲活性探测与不停服逻辑库迁移。
-5. **K8s Secret 环境变量单一来源注入（`secretenv`）+ `gameday` 全服统一 05:00 游戏日/周 + `Tip.xlsx` 单轴错误码自动生成 + `k8s_netpol_probe.ps1` 真实网络策略探针**。
+#### A → B 新增落地（`xuanming-server-mmo-cpp`）
+- **A5 `authoritysql.AssertCurrentSession` 零额外往返强启 TiDB `≥ v7.4` 门禁**：直接校验已查出的 `SELECT tidb_version()`，全仓权威库服务自动获益（补回归单测）。
+- **A6 补齐全部剩余 13 个直连 `zrpc` Go 服务 `MaxConnectionAge=15m` 轮换**：覆盖 `chat` / `client_rpc_router` / `content_guard` / `data_service` / `db` / `friend` / `guild` / `login` / `match` / `player_inbox` / `player_locator` / `scene_manager` / `trade`，达成 Go 服务 16/16 全覆盖。
+- **A7 `player_inbox` 维护主循环接入 `dbguard.Guard.Check`**：仅在维护领导者任期内每小时只读巡检 `player_inbox_stream` / `player_inbox_item` / `player_inbox_audit` 容量与行宽预算。
+- **A8 宿主秒级交叉编译镜像构建（`deploy/k8s/Dockerfile.go-svc.prebuilt` + `go_svc_image.ps1 -BuildMode host`）**：复用同一 alpine digest 与 `10001` 非 root 运行层；正式 `-Version` 发布强制走 `incontainer` 保可复现，本地/快照可用 `host` 并校验 `go1.27.2`（已补契约单测）。
+- **A9 只读全库容量/索引/大字段/压测快照门禁 CLI（`tools/dbcheck`）**：支持表登记校验、清理索引前导列校验、outbox 精确计数、`-snapshot/-compare`、`-size-check/-top-rows` 与只读 `-pending`（fake driver 单测强制断言零写操作）。
 
-#### A → B（`xuanming-server` 优于 `mmo-cpp`，需跨服务/双端评估后实施）
+### 2.2.2 Batch 3 非战斗全量双向对齐清单（2026-11-24，严格排除战斗）
 
-1. **线性一致独立 `owner` 归属权威服务（TiDB 单事务 `owner_epoch` + `ds_instance_lease` 实例级聚合续租 + `admit_not_before` 屏障 + `PENDING/ADMITTED`）**：替代 B 仓当前依赖 Redis 非线性一致的 `ownerepoch` / `handofffence`。
-2. **全库无界增长与清理索引发布前置机械门禁 CLI（`dbcheck`）**：扫描全部 `mmorpg_*` 逻辑库，未登记表、缺前缀清理索引、outbox 堆积、大字段体检及压测前后行数 `-snapshot/-compare` 直接 FAIL（只读永不 DELETE）。
-3. **非对称 RS256/Ed25519 JWKS 票据与编译期信任域类型隔离（`pkg/auth/domains.go` + `dsticket.go` + 有界 JTI 防重放）**：替代 B 仓 Gate / Battle 的对称 HMAC 共享密钥模式，支持三段式无停服密钥轮换。
-4. **Region → Cell → Cell 内分片三层确定性算点路由（`cellroute` + `AtomicTable`）**：服务 B 仓 D-15 的 DAU 1 亿 / CCU 2000 万扩展目标。
-5. **宿主 Go 交叉编译 + `Dockerfile.prebuilt` scratch 镜像秒级构建（`-BuildMode host`）与免 Docker 策划一键栈（`local_infra.ps1`）**。
+#### B → A 新增落地（`xuanming-server`）
+- **B12 繁简折叠 + 变体联系方式/外链引流检测 + `chat` 真实接线**：将 `go/content_guard/internal/{textnorm/t2s.txt,contact/detector.go}` 移植至 `xuanming-server/pkg/namecheck`（繁简只用于敏感词/引流匹配，不污染唯一键 `Fold`），并替换 `services/social/chat` 的朴素 `strings.ReplaceAll` 为 `pkg/namecheck` 自动机 + `LexiconDir` fail-closed 加载 + `RejectContactAd` 开关。
+- **B13 带内服务端故障指标修复（`pkg/middleware/metrics.go`）**：对齐 `go/shared/serverbase`，`server hop` 的带内 `ERR_INTERNAL`/`ERR_UNAVAILABLE`/`ERR_UNKNOWN`/`ERR_TIMEOUT` 归入 `server_err`/`timeout` 桶而非误记为 `ok`。
+- **B14 按需按方法 RPC 流量画像（`pkg/grpcstats`）**：移植 `go/shared/grpcstats` 为 Kratos 中间件并接入 `pkg/grpcserver.MustNewServer`（关闭时仅一次 `atomic.Bool` Load）。
+- **B15 口令 Argon2id PHC + KDF 并发信号量 + 防枚举伪校验（`pkg/passwd` + `login`）**：对齐 `go/login` `PasswordProvider`，支持 bcrypt/Argon2id 双校验与参数上下界校验、分算法 KDF 并发限流（满载返 `ErrUnavailable` 不误扣失败配额），并在未知账号分支接入 `DummyVerify`。
+- **B16 构建版本 VCS BuildInfo 回落（`pkg/version`）**：对齐 `go/shared/buildinfo`，未注入 `-ldflags -X` 时自动读取 `vcs.revision`(12 位)/`vcs.time`/`-dirty` 并归一空值。
+
+#### A → B 新增落地（`xuanming-server-mmo-cpp`）
+- **A10 `go/content_guard` 三项反绕过加固**：移植 `xuanming-server/pkg/namecheck` 的**西里尔/希腊视觉同形字折叠**（`textnorm.go`，刻意保留数字不破坏 `contact` 引流检测）、**连续叠字绕过折叠扫描**（`wordlist/matcher.go`，破 `管理理员`/`加微微微信`/`笨笨蛋`/`aavv`，词库不折叠保双字母词语义）与 **Zalgo 连续组合记号上限（`>2` 拒收）**（`engine/engine.go`）；20 条共享向量全过。
+- **A11 `go/shared/safego` 后台循环存活心跳指标**：合入 `xuanming-server/pkg/safego/liveness.go` 能力（`safego_loop_last_round_unix{point}` + `TouchLoop`），全仓 `safego.Loop` 自动获得后台静默卡死可观测性。
+
+### 2.3 Tier 3 大架构级待拍板候选清单
+
+#### B → A（需 `decision-revisit` 或联动 UE 客户端）
+
+1. **63 位打散永久号段发号器（`idsegment` + 双独立 etcd + 全局号源登记处 mTLS）**：推翻 `CLAUDE.md §9.11`，须先写 `decision-revisit`。
+2. **可靠玩家持久收件箱全服务（`go/player_inbox`）**：需新服务端口/库与 UE 客户端补拉协议。
+3. **`Tip.xlsx` 单轴错误码自动生成 + `dbplacement` 在线搬库**：涉及全服 proto/表与客户端联动。
+4. **`gameday`（05:00 游戏日/周）与 `workshard`（无状态 HRW 分片）**：待 `xuanming-server` 出现真实 05:00 重置或高争用多副本后台任务时再按需接线，不提前落空包。
+
+#### A → B（需跨 C++/Go/Java/Unity 协同拍板）
+
+1. **线性一致独立 `owner` 归属权威服务（TiDB 单事务 `owner_epoch` + `ds_instance_lease` + `admit_not_before` + `PENDING/ADMITTED`）**：替代 B 仓 Redis `ownerepoch`/`handofffence`。
+2. **非对称 RS256/Ed25519 JWKS 票据与编译期信任域类型隔离 + 有界 JTI 防重放**：替代 Gate / Battle 对称 HMAC 共享密钥。
+3. **Region → Cell → Shard 三层确定性算点路由（`cellroute` + `AtomicTable`）**：服务 D-15 百万级 CCU 演进。
+4. **免 Docker 策划一键栈（`local_infra.ps1`）**：独立工具体系，按本地开发需要另行立项。
 
 ---
 

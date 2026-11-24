@@ -38,6 +38,7 @@
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
+#include "proto/scene/player_trial_journal.pb.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "thread_context/ecs_context.h"
@@ -76,7 +77,8 @@ namespace scene_handoff_gate
 			service == SceneBattleResultClientPlayer::descriptor() ||
 			service == SceneAfkPassClientPlayer::descriptor() ||
 			service == SceneAppearanceClientPlayer::descriptor() ||
-			service == SceneSeasonClientPlayer::descriptor())
+			service == SceneSeasonClientPlayer::descriptor() ||
+			service == SceneTrialJournalClientPlayer::descriptor())
 		{
 			return true;
 		}

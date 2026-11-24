@@ -47,6 +47,7 @@ import (
 	"shared/buildinfo"
 	"shared/clockcheck"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/serverbase"
@@ -272,6 +273,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("player_inbox RPC construction failed: %w", err)
 	}
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	s.AddUnaryInterceptors(serverbase.PublicationAdmission(root, relay, map[string]bool{
 		inboxpb.PlayerInbox_FetchItems_FullMethodName:              true,
 		inboxpb.PlayerInbox_AckItems_FullMethodName:                true,

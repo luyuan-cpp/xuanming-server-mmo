@@ -49,6 +49,7 @@ import (
 	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/releasetrack"
@@ -325,6 +326,7 @@ func runTrade(c config.Config) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("trade RPC 构造失败: %w", err)
 	}
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	// go-zero 自带拦截器在 NewServer 里已先加入,位于下面这条链的外层。
 	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)
 	if authErr != nil {

@@ -61,7 +61,14 @@ const EventGoroutinePanic = "goroutine_panic"
 // 绝不能拼进 player_id / scene_id 之类运行期值(仓库 CLAUDE.md §9)。
 var panicTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Name: "safego_panic_total",
-	Help: "safego 兜住的 panic 次数,按点位。压测期应恒 0。",
+	Help: "Total panics recovered by safego per point. Should remain 0 during load tests.",
+}, []string{"point"})
+
+// loopLastRoundUnix 记录后台循环最近一次完成轮次的 Unix 秒级时间戳(移植自 xuanming-server/pkg/safego/liveness.go),
+// 用于检测后台循环卡死(未 panic 但也不再推进):time() - safego_loop_last_round_unix > 3 * interval 即告警。
+var loopLastRoundUnix = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "safego_loop_last_round_unix",
+	Help: "Unix timestamp (seconds) of the last completed safego loop round per point.",
 }, []string{"point"})
 
 var registerOnce sync.Once
@@ -70,13 +77,21 @@ var registerOnce sync.Once
 // 本包被所有服务 import,init 期 MustRegister 撞名会直接让进程起不来。
 func register() {
 	registerOnce.Do(func() {
-		if err := prometheus.Register(panicTotal); err != nil {
-			var already prometheus.AlreadyRegisteredError
-			if !errors.As(err, &already) {
-				logx.Errorf("[safego] Failed to register metrics: %v", err)
+		for _, c := range []prometheus.Collector{panicTotal, loopLastRoundUnix} {
+			if err := prometheus.Register(c); err != nil {
+				var already prometheus.AlreadyRegisteredError
+				if !errors.As(err, &already) {
+					logx.Errorf("[safego] Failed to register metrics: %v", err)
+				}
 			}
 		}
 	})
+}
+
+// TouchLoop 刷新指定后台循环的存活心跳时间戳(自定义 select 循环也可显式调用)。
+func TouchLoop(point string) {
+	register()
+	loopLastRoundUnix.WithLabelValues(point).Set(float64(time.Now().Unix()))
 }
 
 // Run 同步执行 fn 并兜住 panic,返回 fn 是否**正常跑完**。
@@ -126,6 +141,7 @@ func Loop(ctx context.Context, point string, interval time.Duration, round func(
 	}
 
 	Go(point, func() {
+		TouchLoop(point)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -136,6 +152,7 @@ func Loop(ctx context.Context, point string, interval time.Duration, round func(
 			case <-ticker.C:
 				// 每一轮各自 recover:单轮炸掉不影响下一轮。
 				Run(point, func() { round(ctx) })
+				TouchLoop(point)
 			}
 		}
 	})

@@ -424,3 +424,6 @@ const ClientPlayerTeamConfirmRankedPresetMessageId = 452
 const SceneSeasonClientPlayerGetSeasonStateMessageId = 453
 const SceneSeasonClientPlayerEquipSeasonSealMessageId = 454
 const SceneSeasonClientPlayerCatchupSeasonSealMessageId = 455
+const SceneTrialJournalClientPlayerGetTrialJournalMessageId = 456
+const SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId = 457
+const SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId = 458

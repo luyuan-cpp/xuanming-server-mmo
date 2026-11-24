@@ -157,6 +157,10 @@ type CommerceConf struct {
 	PetConfigs     []uint32          `json:",optional"`
 	CurrencyTypes  []uint32          `json:",optional"`
 	AllowInstances bool              `json:",optional"`
+	// PlayerTrade 控制游戏内当面交易防骗策略（docs/design/equipment-economy-charter.md §2.3）。
+	// Mode 为空表示未启用额外收紧；"strict_consumables"(方案 A) 仅放开低价耗材与小额银两互助；
+	// "acquaintance_locked"(方案 B) 强制熟人好友时长与近 7 日参考价偏离保护。
+	PlayerTrade PlayerTradeConf `json:",optional"`
 	// ManualResolutionSecretEnv:人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract,运维工具 commercefix 调)
 	// 的 serviceauth 密钥所在的环境变量名,调用方只有 ManualResolutionCaller,不与别的调用方共用。空 = 入口关闭,一律 PermissionDenied。
 	// 只写变量名;密钥值由部署从 K8s Secret 注入,不进 yaml / ConfigMap(2026-11-11,jubaozhai-market.md §15.7.1)。
@@ -164,6 +168,17 @@ type CommerceConf struct {
 	// ManualResolutionEnvironment:本部署的环境名(例如 prod-global、staging-global),1~64 个 ASCII 字母、数字或 . _ -。
 	// 工具的 -expect-target 要与它逐字相等,连错环境时服务端回 target_mismatch;开了入口却没写有效值时入口保持关闭。
 	ManualResolutionEnvironment string `json:",optional"`
+}
+
+// PlayerTradeConf 是游戏内当面交易防骗配置项。
+type PlayerTradeConf struct {
+	Mode                         string   `json:",optional"`
+	ConsumableItems              []uint32 `json:",optional"`
+	MaxDailyCurrencyAmount       uint64   `json:",optional"`
+	MinFriendDurationMs          uint64   `json:",optional"`
+	MaxReferenceDeviationPct     uint32   `json:",optional"`
+	CoolingLockDurationMs        uint64   `json:",optional"`
+	AllowAcquaintanceCoolingLock bool     `json:",optional"`
 }
 
 // ManualResolutionCaller 是 TradeAdmin.ListManualContracts / ResolveManualContract 唯一接受的 serviceauth 调用方。
@@ -641,6 +656,14 @@ func (c *Config) Validate() error {
 		for _, currency := range c.Commerce.CurrencyTypes {
 			if !IsTradableCurrency(currency) {
 				return errors.New("交易货币只允许金币0与显式启用钻石1，绑定币禁售")
+			}
+		}
+		if mode := c.Commerce.PlayerTrade.Mode; mode != "" {
+			if mode != "strict_consumables" && mode != "acquaintance_locked" {
+				return fmt.Errorf("Commerce.PlayerTrade.Mode(%q) 必须为空、strict_consumables 或 acquaintance_locked", mode)
+			}
+			if c.Commerce.PlayerTrade.MaxReferenceDeviationPct >= 100 {
+				return fmt.Errorf("Commerce.PlayerTrade.MaxReferenceDeviationPct(%d) 必须小于 100", c.Commerce.PlayerTrade.MaxReferenceDeviationPct)
 			}
 		}
 		if err := c.AssetOp.validateRecovery(); err != nil {

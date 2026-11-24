@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+// TrialJournalMilestone 表的权威 schema。源表 data/TrialJournalMilestone.xlsx。
+//
+// 本文件不参与 protoc 编译，也不进任何语言的构建；导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved（data/AGENTS.md）。
+//
+// 五行试炼志 V2 一次性里程碑表（设计见 docs/design/long-term-progression-v2.md）：
+//   - id 列带 (cfg_bit_index) = true，领取状态归属本业务表，不绑公共 Reward 表（bit-storage-and-table-ids.md §2）；
+//   - 恒产 0 垂直打造料/百炼石，仅产仅自用重铸砂、仅自用法宝拓印、名片印戳、人物评语及终极专属永久形象。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TrialJournalMilestoneTable {
+  option (cfg_sheet)         = "TrialJournalMilestone";
+  option (cfg_source_file)   = "TrialJournalMilestone.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+  option (cfg_hot_reload)    = true;
+
+  // 里程碑永久主键 ID（经 cfg_bit_index 映射到 PlayerTrialJournalComp.claimed_milestone_bits）
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 计数范围（0=全部永久卷汇总，1=卷一，2=卷二，3=卷三赛季隔离）
+  uint32 scope_chapter_id = 2 [(cfg_index) = true];
+  // 赛季编号（0=永久里程碑，>0=对应赛季）
+  uint32 season_id = 3;
+  // 需点亮的有效战法印数量门槛
+  uint32 required_seals = 4;
+  // 赠送的仅自用重铸砂数量（Item 3403；0=不发）
+  uint32 bound_sand_count = 5;
+  // 赠送的仅自用法宝拓印数量（Item 3404；0=不发）
+  uint32 bound_artifact_voucher_count = 6;
+  // 解锁的名片印戳键（空=无）
+  string badge_key = 7;
+  // 解锁的名片印戳展示名（空=无）
+  string badge_name = 8;
+  // 解锁的留灯院人物短评键（空=无）
+  string commentary_key = 9;
+  // 解锁的人物短评标题（空=无）
+  string commentary_title = 10;
+  // 人物短评正文（仅叙事展示，零数值加成）
+  string commentary_body = 11;
+  // 终极专属永久形象稳定 ID（空=无；非空须为 CharacterAppearance 中启用且 card_unlockable=0 的玩法专属形象）
+  string grant_appearance_id = 12;
+  // 是否启用（下架置 false）
+  bool enabled = 13;
+  // 里程碑标题
+  string title = 14;
+  // 里程碑说明
+  string desc = 15;
+}

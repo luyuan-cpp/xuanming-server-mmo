@@ -300,7 +300,9 @@ type ItemComp struct {
 	// 搬运(穿脱 / 邮件回流 / 交易退回)靠它保证不重掷。所以存盘 / 读盘必须保留
 	// presence:只在 has_equip() 时拷贝,不要无条件 mutable_equip()。
 	// 镜像 ItemEntry.equip(字段 14),两边必须同改(bag_marshal 的转换函数)。
-	Equip         *EquipInstanceData `protobuf:"bytes,5,opt,name=equip,proto3" json:"equip,omitempty"`
+	Equip *EquipInstanceData `protobuf:"bytes,5,opt,name=equip,proto3" json:"equip,omitempty"`
+	// 仅自用绑定标记：true = 不可交易、不可上架集市/聚宝斋、不可赠送（用于五行试炼志拓印兑换的自用法宝等）。
+	Bound         bool `protobuf:"varint,6,opt,name=bound,proto3" json:"bound,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -370,6 +372,13 @@ func (x *ItemComp) GetEquip() *EquipInstanceData {
 	return nil
 }
 
+func (x *ItemComp) GetBound() bool {
+	if x != nil {
+		return x.Bound
+	}
+	return false
+}
+
 var File_proto_common_component_item_base_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
@@ -391,14 +400,15 @@ const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
 	"\aaffixes\x18\x01 \x03(\v2\v.EquipAffixR\aaffixes\x12#\n" +
 	"\renhance_level\x18\x02 \x01(\rR\fenhanceLevel\x12\x1d\n" +
 	"\x04gems\x18\x03 \x03(\v2\t.EquipGemR\x04gems\x125\n" +
-	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\"\x9f\x01\n" +
+	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\"\xb5\x01\n" +
 	"\bItemComp\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\rR\x04size\x12\x1f\n" +
 	"\vacquire_seq\x18\x04 \x01(\x04R\n" +
 	"acquireSeq\x12(\n" +
-	"\x05equip\x18\x05 \x01(\v2\x12.EquipInstanceDataR\x05equipB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x05equip\x18\x05 \x01(\v2\x12.EquipInstanceDataR\x05equip\x12\x14\n" +
+	"\x05bound\x18\x06 \x01(\bR\x05boundB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_item_base_comp_proto_rawDescOnce sync.Once

@@ -353,6 +353,8 @@ message BattleSettlementData {
   uint32 ranked_rule_version = 23; // 冻结的排位规则版本(非排位为 0)
   // 本人是否达成排位有效参与(由 battle 房间在终局前按统一参与事实冻结,非排位恒为 false)。
   bool participated = 24;
+  // 五行试炼志 V2 权威战法事实与轻量阵容快照(由 battle 引擎在终局前按真实事件冻结,非试炼志关联局留空)。
+  BattleTrialJournalFacts trial_facts = 25;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -429,4 +431,36 @@ message BattleParticipationFact {
   bool manual_action_accepted = 3;     // 服务端至少接受过一次本人人物或宝宝有效手动指令
   bool explicit_auto_enabled = 4;      // 进房后玩家显式开启过合法自动战斗
   bool no_action_opportunity = 5;      // 进房后在首次可操作机会前即阵亡/被全控/对局结束
+}
+
+// ---- 五行试炼志 V2 开局冻结上下文与终局权威事实(docs/design/long-term-progression-v2.md) ----
+message TrialBattleContext {
+  uint32 journal_entry_id = 1;       // TrialJournalEntry.id（0 = 非试炼志格）
+  uint32 trial_rule_version = 2;     // 开局冻结的可比规则版本
+  uint32 season_id = 3;              // 赛季卷对应赛季号（永久卷为 0）
+  uint32 guard_monster_table_id = 4; // 可选：回春/护势等特殊护卫怪物表 ID（0 = 任意非首领怪物）
+  uint32 guard_stance_buff_id = 5;   // 可选：护势护卫状态 Buff 表 ID（0 = 任意敌方增益驱散均视为有效驱散）
+}
+
+message BattleTrialJournalFacts {
+  uint32 journal_entry_id = 1;
+  uint32 trial_rule_version = 2;
+  uint32 initial_human_count = 3;
+  uint32 season_id = 4;
+  bool self_or_pet_ever_died = 5;              // 本人或本人出战宝宝本场任一时刻触发过死亡（复活不清除）
+  uint64 boss_guard_heal_total = 6;            // 敌方护卫对首领实际造成的有效气血恢复总量
+  bool guard_stance_dispelled = 7;             // 己方本场成功驱散过敌方护势状态
+  bool team_dealt_physical_direct_damage = 8;  // 己方本场对敌方造成过 >0 物理直接伤害
+  bool team_dealt_magic_direct_damage = 9;     // 己方本场对敌方造成过 >0 法术直接伤害
+  bool guard_survived = 10;                    // 终局时敌方护卫仍存活（供护卫救援卷三判定）
+  bool self_triggered_shield_break = 11;       // 本人触发破盾法宝/赛季印产生 >0 实际削盾
+  bool self_triggered_anti_control_or_season_skill = 12; // 本人触发清心符、成功净化或施放当季免费赛季技能
+  uint32 used_pet_table_id = 13;               // 本人开局出战宝宝种类（0=无宠）
+  repeated uint32 used_artifact_effect_ids = 14; // 本人开局佩戴的法宝效果 ID（至多 2 个，升序）
+  uint32 used_season_seal_id = 15;             // 本人开局生效的赛季印 ID（0=无）
+  repeated string teammate_names = 16;         // 入场冻结的同队其他真人展示名（至多 4 名）
+  bool boss_wind_hit_unprotected_death = 17;   // 卷二八仙岛风击倒地标记
+  bool dealt_yang_bell_physical_damage = 18;   // 卷二碧渊水宫阳钟阶段物理击伤标记
+  bool dealt_yin_drum_magic_damage = 19;       // 卷二碧渊水宫阴鼓阶段法术击伤标记
+  bool finished_in_ebb_tide = 20;              // 卷二月汐湾退潮窗口终结标记
 }

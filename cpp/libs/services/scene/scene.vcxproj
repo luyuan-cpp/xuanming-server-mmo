@@ -106,6 +106,7 @@
     <ClInclude Include="player\system\afk_pass.h" />
     <ClInclude Include="player\system\afk_pass_rules.h" />
     <ClInclude Include="player\system\player_season.h" />
+    <ClInclude Include="player\system\player_trial_journal.h" />
     <ClInclude Include="player\system\player_rename.h" />
     <ClInclude Include="player\system\player_rename_rules.h" />
     <ClInclude Include="player\system\player_landing.h" />
@@ -205,6 +206,7 @@
     <ClCompile Include="player\system\afk_pass.cpp" />
     <ClCompile Include="player\system\player_appearance.cpp" />
     <ClCompile Include="player\system\player_season.cpp" />
+    <ClCompile Include="player\system\player_trial_journal.cpp" />
     <ClCompile Include="player\system\player_rename.cpp" />
     <ClCompile Include="player\system\player_landing.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />

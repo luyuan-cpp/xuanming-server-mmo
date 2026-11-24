@@ -4905,3 +4905,19 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - `skill_test.exe`：**98/98 PASS**；`cross_zone_test.exe`（`*HandoffGate*:*Freeze*`）：**32/32 PASS**；
   - `mmorpg-client` 同步 61 张裁剪表、`SceneSeasonClientPlayerRpc.cs`、`MessageIds.cs`（453–455）、`TipFaults.cs`（含 34011）与全部生成 C# Proto，`client_compile_check.ps1` 0 错误。
 - **双版对账（AGENTS §12）**：已同步登记至 `xuanming-server-mmo/PARITY.md`（标明 C++ 权威版已实现，Java 版待同步与实现）；未执行 `git commit` / `git push`，未触碰工作区既有未提交改动。
+
+
+## 2026-11-24 大世界地图玩法 V2（M1 续：客户端纯 C# UI 绑定层收口 + Codex 方案 B 高保真 UI 交接规格）
+
+- **客户端纯 C# 视图与宿主绑定层（`mmorpg-client`，为 Codex UI 拼装收齐零网络逻辑依赖接口）**：
+  - `Assets/Scripts/Game/WorldTravel/WorldMapOverviewModels.cs`：新增 `WorldMapTideBannerView`、`WorldMapPinView` 以及纯函数 `EstimateServerNowMs`、`FormatMinutesSeconds`、`BuildTideBanner`（涌动/休歇/同图/倒计时归零/无数据隐藏）、`BuildPinView`（热度/灵潮/旺地/神秘商人/推荐聚人线）与 `ShouldShowMapEntryTideBadge`（按轮次消标、下轮重亮）。
+  - `Assets/Scripts/Game/WorldTravel/SceneChannelClient.cs`：新增 `OverviewReceivedAt` 与同源时钟的 `OverviewAgeSeconds`（断线同步清零）。
+  - `Assets/Scripts/UI/Ugui/Gameplay/CityTravelUiRoot.cs`：暴露 `CurrentOverview`、`OverviewAgeSeconds`、`ShouldShowTideHudBadge`、`MarkCurrentTideSeen()`（`Toggle()` 打开地图自动消标）、`RequestRefreshOverview()`、`RequestQuickTravelToTide(out string)` 以及 `FilterOnlineDestinations` / `FilterGalleryDestinations`（「游历/览景」分栏）；`Bind()` / `HandleDisconnected()` 同步重置已读轮次。
+  - `Assets/Scripts/UI/Ugui/Gameplay/MysteryMerchantWindow.cs`：抽取 `LocationText`，使 `DescribeHeadline` 与 `DescribeEmpty` 在跨图时完整展示目标地图名 + 线号（如 `正在 碧渊水宫 · 2线 · 12:34 后离开`），`TargetMapName` 为空时保持旧文案逐字兼容。
+  - `Assets/Tests/EditMode/Tianyong/WorldMapOverviewTests.cs`：补充 `TideBannerPinViewAndHudBadge_CoverActiveRestingDismissalAndCountdown`、时钟龄期与跨图神秘商人标题/空态断言。
+- **高保真 UI 交接单（方案 B）**：在 [world-map-play-v2.md](design/world-map-play-v2.md) 追加 `§7 高保真大地图与灵潮/热度 UI 交接规格（交付 Codex，方案 B）`，完整固化 `D:\work\image\designs` 美术与无字切图规范、协议与 C# 接口表、`world_skin.png` 2560×1080 避让区与 1/2/5/3 锚点映射、3 张预览图 + 11 类无字控件切图清单、既有 EditMode 测试控件名红线，以及可直接复制给 Codex 的任务指令。
+- **实测结果**：
+  - `pwsh -NoProfile -File tools/client_compile_check.ps1`：`exit=0, files=636, errors=0`；
+  - Roslyn 离线编译 `MmorpgClient.Tests.EditMode.Tianyong`（64 个测试文件，含 `WorldMapOverviewTests.cs`、`CityTravelWindowTests.cs`、`MysteryMerchantWindowTests.cs`）：`exit=0, errors=0`；
+  - 临时 `.NET 10` 控制台自检实跑 `WorldMapOverviewModels` 全部 12 组纯逻辑断言：`PURE_CSHARP_WORLD_MAP_MODELS_PASS 12/12`（临时目录已自动清理）。
+- **未覆盖与提交状态**：因本机 Unity 编辑器占用 `Temp/UnityLockfile`，未跑 Unity Batchmode EditMode Test Runner 实测 uGUI 树；三仓均未执行 `git commit` / `git push`，未触碰并行会话未提交改动。

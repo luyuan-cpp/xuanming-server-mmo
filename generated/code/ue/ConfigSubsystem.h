@@ -88,6 +88,9 @@
 #include "SkillPermissionTable.h"
 #include "TestTable.h"
 #include "TestMultiKeyTable.h"
+#include "TrialJournalEntryTable.h"
+#include "TrialJournalMilestoneTable.h"
+#include "TrialJournalSealTable.h"
 #include "WorldTable.h"
 #include "ZoneGroupTable.h"
 
@@ -128,7 +131,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 61;
+	static constexpr int32 TableCount = 64;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -357,6 +360,15 @@ public:
 	UTestMultiKeyTable* GetTestMultiKeyTable() const { return TestMultiKeyTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTrialJournalEntryTable* GetTrialJournalEntryTable() const { return TrialJournalEntryTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTrialJournalMilestoneTable* GetTrialJournalMilestoneTable() const { return TrialJournalMilestoneTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTrialJournalSealTable* GetTrialJournalSealTable() const { return TrialJournalSealTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UWorldTable* GetWorldTable() const { return WorldTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -481,6 +493,12 @@ private:
 	TObjectPtr<UTestTable> TestTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTestMultiKeyTable> TestMultiKeyTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTrialJournalEntryTable> TrialJournalEntryTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTrialJournalMilestoneTable> TrialJournalMilestoneTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTrialJournalSealTable> TrialJournalSealTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UWorldTable> WorldTable;
 	UPROPERTY(Transient)

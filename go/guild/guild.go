@@ -50,6 +50,7 @@ import (
 	"shared/grpcstats"
 	"shared/idsegment"
 	"shared/kafkautil"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/releasetrack"
 	"shared/rolefence"
@@ -560,6 +561,7 @@ func main() {
 	})
 	// 必须在 MustNewServer 之后:go-zero 指标的全局开关由它内部的 SetUp → StartAgent 打开,之前写的样本会被丢弃
 	// (理由与告警口径见 server.PrimeGuildInternalMetrics)。
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	server.PrimeGuildInternalMetrics()
 	svc.PrimeMergedZoneMetrics()
 	// 连接池指标 mmorpg_sql_pool_*{sql_client="guild",pool="primary"}:只有帮会库这一个池,抓取时现取 DBStats。

@@ -304,6 +304,9 @@ func AssertCurrentSession(ctx context.Context, db *sql.DB, backend Backend) erro
 	if err := db.QueryRowContext(ctx, "SELECT tidb_version()").Scan(&version); err != nil {
 		return errors.New("权威SQL必须连接TiDB")
 	}
+	if err := tidbVersionAtLeast(version, MinTiDBMajor, MinTiDBMinor); err != nil {
+		return err
+	}
 	var mode, isolation, replica, consistency, snapshot string
 	var stale, low int64
 	if err := db.QueryRowContext(ctx, tidbSessionSQL).Scan(&mode, &isolation, &stale, &low, &replica, &consistency, &snapshot); err != nil || !tidbSessionPinned(mode, isolation, stale, low, replica, consistency, snapshot) {

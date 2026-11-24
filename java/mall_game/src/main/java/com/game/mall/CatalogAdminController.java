@@ -42,6 +42,11 @@ public final class CatalogAdminController {
         return manual.resolveConsignment(actor(request), input);
     }
 
+    @PostMapping("/internal/admin/manual/incomes/dispute")
+    public ManualAdminApi.Resolution resolveIncomeDispute(HttpServletRequest request, @RequestBody ManualAdminApi.ResolveIncomeDispute input) {
+        return manual.resolveIncomeDispute(actor(request), input);
+    }
+
     @PostMapping("/internal/admin/skus/list")
     public CatalogAdminApi.Skus list(HttpServletRequest request, @RequestBody DeliveryApi.SkuPage input) {
         actor(request);

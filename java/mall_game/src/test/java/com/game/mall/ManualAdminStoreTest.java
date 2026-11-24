@@ -210,6 +210,53 @@ class ManualAdminStoreTest {
         }
     }
 
+    @Test void G2_逐单争议冻结与提现同账号锁拦截_支持部分冻结与释放审计() {
+        try (var f = new CommerceFixture()) {
+            var manual = manual(f);
+            var props = new RmbConsignmentProperties();
+            props.setNoticeMs(0);
+            props.setCoolingMs(0);
+            props.validate();
+            var rmb = new RmbConsignmentStore(f.jdbc, f.manager, CLOCK, props, (RmbConsignmentStore.PayoutEvidenceVerifier) null);
+            var orders = new CommerceStore(f.jdbc, f.manager, CLOCK, f.props, rmb);
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props, rmb);
+
+            // 生成一笔净额 950 分的卖家收益
+            rmb.register(new RmbConsignmentApi.Escrow("9101", "15", "seller-dispute", 1, "ITEMS", null, "trade:9101", ESCROW_PROOF, 1000, "托管材料"));
+            var order = orders.createConsignment(new RmbConsignmentApi.Buy("9101", "25", "buyer-dispute", "buy-dispute-001", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(order.orderId(), "test", "cpay-dispute-1", 1000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(order.orderId(), "5101", "DELIVERED", PROOF));
+
+            // 争议冻结 400 分（幂等重放不重复加冻）
+            var freezeCmd = new ManualAdminApi.ResolveIncomeDispute("dispute-frz-001", order.orderId(), "FREEZE_DISPUTE", 400, "CASE-2026-001", "buyer complaint");
+            var frozen = manual.resolveIncomeDispute(ACTOR, freezeCmd);
+            assertEquals("DISPUTE_FROZEN:400", frozen.resultingState());
+            assertEquals(frozen, manual.resolveIncomeDispute(ACTOR, freezeCmd));
+            var incomeAfterFreeze = rmb.incomes(new RmbConsignmentApi.IncomePage("seller-dispute", "", 10)).incomes().getFirst();
+            assertEquals(400, incomeAfterFreeze.disputeFrozenFen());
+            assertEquals("CASE-2026-001", incomeAfterFreeze.disputeCaseId());
+
+            // 此时仅剩 550 分可提现：提 551 分被拒，提 550 分成功
+            refuses(409, () -> rmb.withdraw(new RmbConsignmentApi.Withdraw("seller-dispute", "wd-too-much-001", 551)));
+            var wd1 = rmb.withdraw(new RmbConsignmentApi.Withdraw("seller-dispute", "wd-ok-550", 550));
+            assertEquals(550, wd1.amountFen());
+
+            // 再尝试冻结超出剩余自由额的资金必须 fail-closed 拒绝（不能假装冻结在途提现款）
+            refuses(409, () -> manual.resolveIncomeDispute(ACTOR,
+                new ManualAdminApi.ResolveIncomeDispute("dispute-frz-002", order.orderId(), "FREEZE_DISPUTE", 1, "CASE-2026-002", "over-freeze")));
+
+            // 争议释放 400 分后，dispute_case_id 清空，剩余 400 分恢复可提现
+            var released = manual.resolveIncomeDispute(ACTOR,
+                new ManualAdminApi.ResolveIncomeDispute("dispute-rel-001", order.orderId(), "RELEASE_DISPUTE", 400, "CASE-2026-001", "dispute rejected"));
+            assertEquals("DISPUTE_RELEASED", released.resultingState());
+            var incomeAfterRelease = rmb.incomes(new RmbConsignmentApi.IncomePage("seller-dispute", "", 10)).incomes().getFirst();
+            assertEquals(0, incomeAfterRelease.disputeFrozenFen());
+            assertNull(incomeAfterRelease.disputeCaseId());
+            var wd2 = rmb.withdraw(new RmbConsignmentApi.Withdraw("seller-dispute", "wd-ok-400", 400));
+            assertEquals(400, wd2.amountFen());
+        }
+    }
+
     private static ManualAdminStore manual(CommerceFixture f) {
         return new ManualAdminStore(f.jdbc, f.manager, new ObjectMapper(), CLOCK);
     }

@@ -22,6 +22,7 @@ import (
 	"shared/clockcheck"
 	"shared/generated/table"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/leader"
 	sharedregistry "shared/noderegistry"
@@ -238,6 +239,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 	defer s.Stop()
 

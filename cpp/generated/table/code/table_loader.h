@@ -67,6 +67,9 @@ struct SkillTableSnapshot;
 struct SkillPermissionTableSnapshot;
 struct TestTableSnapshot;
 struct TestMultiKeyTableSnapshot;
+struct TrialJournalEntryTableSnapshot;
+struct TrialJournalMilestoneTableSnapshot;
+struct TrialJournalSealTableSnapshot;
 struct WorldTableSnapshot;
 struct ZoneGroupTableSnapshot;
 
@@ -75,7 +78,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "0f6757d95603c861";
+inline constexpr std::string_view kTableSchemaDigest = "8a3cb14b8c44ed4e";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -207,6 +210,12 @@ struct TableSet {
     std::shared_ptr<const TestTableSnapshot> testTable;
 
     std::shared_ptr<const TestMultiKeyTableSnapshot> testMultiKeyTable;
+
+    std::shared_ptr<const TrialJournalEntryTableSnapshot> trialJournalEntryTable;
+
+    std::shared_ptr<const TrialJournalMilestoneTableSnapshot> trialJournalMilestoneTable;
+
+    std::shared_ptr<const TrialJournalSealTableSnapshot> trialJournalSealTable;
 
     std::shared_ptr<const WorldTableSnapshot> worldTable;
 

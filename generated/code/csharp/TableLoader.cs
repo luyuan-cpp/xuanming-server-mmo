@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 61;
+        public const int TableCount = 64;
 
         private static Action s_loadSuccessCallback;
 
@@ -97,6 +97,9 @@ namespace MmorpgClient.Table
                 SkillPermissionTableManager.FileName(useBinary),
                 TestTableManager.FileName(useBinary),
                 TestMultiKeyTableManager.FileName(useBinary),
+                TrialJournalEntryTableManager.FileName(useBinary),
+                TrialJournalMilestoneTableManager.FileName(useBinary),
+                TrialJournalSealTableManager.FileName(useBinary),
                 WorldTableManager.FileName(useBinary),
                 ZoneGroupTableManager.FileName(useBinary),
             };
@@ -165,6 +168,9 @@ namespace MmorpgClient.Table
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
             TestTableManager.Instance.Load(configDir, useBinary);
             TestMultiKeyTableManager.Instance.Load(configDir, useBinary);
+            TrialJournalEntryTableManager.Instance.Load(configDir, useBinary);
+            TrialJournalMilestoneTableManager.Instance.Load(configDir, useBinary);
+            TrialJournalSealTableManager.Instance.Load(configDir, useBinary);
             WorldTableManager.Instance.Load(configDir, useBinary);
             ZoneGroupTableManager.Instance.Load(configDir, useBinary);
             InvokeLoadSuccess();
@@ -309,6 +315,12 @@ namespace MmorpgClient.Table
                 TestTableManager.Instance.LoadFromBytes, TestTableManager.Instance.LoadFromJson);
             LoadOne(TestMultiKeyTableManager.FileName(useBinary), byteProvider, useBinary,
                 TestMultiKeyTableManager.Instance.LoadFromBytes, TestMultiKeyTableManager.Instance.LoadFromJson);
+            LoadOne(TrialJournalEntryTableManager.FileName(useBinary), byteProvider, useBinary,
+                TrialJournalEntryTableManager.Instance.LoadFromBytes, TrialJournalEntryTableManager.Instance.LoadFromJson);
+            LoadOne(TrialJournalMilestoneTableManager.FileName(useBinary), byteProvider, useBinary,
+                TrialJournalMilestoneTableManager.Instance.LoadFromBytes, TrialJournalMilestoneTableManager.Instance.LoadFromJson);
+            LoadOne(TrialJournalSealTableManager.FileName(useBinary), byteProvider, useBinary,
+                TrialJournalSealTableManager.Instance.LoadFromBytes, TrialJournalSealTableManager.Instance.LoadFromJson);
             LoadOne(WorldTableManager.FileName(useBinary), byteProvider, useBinary,
                 WorldTableManager.Instance.LoadFromBytes, WorldTableManager.Instance.LoadFromJson);
             LoadOne(ZoneGroupTableManager.FileName(useBinary), byteProvider, useBinary,

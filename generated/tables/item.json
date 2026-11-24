@@ -2377,6 +2377,44 @@
    "id": 3402,
    "max_stack_size": 99,
    "name": "角色形象卡"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "仅自用重铸砂：用于定向替换基础装或首饰的一条已安装词条（1砂+20银两），不可交易。",
+   "equip_class": 0,
+   "equip_kind": 0,
+   "equip_level": 0,
+   "equip_profile": 0,
+   "forge_material_count": 0,
+   "forge_material_id": 0,
+   "icon_key": "UI/Icons/item_reforge_sand",
+   "id": 3403,
+   "max_stack_size": 9999,
+   "name": "重铸砂"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "仅自用法宝拓印：可在五行试炼志中消耗1张，定向兑换任意一件仅自用法宝（允许同名第二件），不可交易或拆解。",
+   "equip_class": 0,
+   "equip_kind": 0,
+   "equip_level": 0,
+   "equip_profile": 0,
+   "forge_material_count": 0,
+   "forge_material_id": 0,
+   "icon_key": "UI/Icons/item_bound_artifact_voucher",
+   "id": 3404,
+   "max_stack_size": 99,
+   "name": "自用法宝拓印"
   }
  ]
 }

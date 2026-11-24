@@ -39,6 +39,7 @@ import (
 	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	sharedregistry "shared/noderegistry"
 	"shared/releasetrack"
@@ -249,6 +250,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	// 拦截器链作用于同一 server 上的全部 service(MatchService、MatchInternal、ClientPlayerTeam、TeamAuthority、
 	// RoleFenceParticipant),顺序不变:gateIdentity 先验 gate 签名;onlineEntry 按生成的客户端方法集合准入
 	// (docs/design/gate-online-identity.md §9.2):客户端方法必须带完整原身份,验签原件放进 ctx、原角色归属捕获进 ctx

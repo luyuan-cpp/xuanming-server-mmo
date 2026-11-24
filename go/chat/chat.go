@@ -31,6 +31,7 @@ import (
 	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/roleidentity"
@@ -197,6 +198,7 @@ func runChat(c config.Config) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("chat RPC 构造失败: %w", err)
 	}
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	// go-zero 自带的 trace / recover / stat / prometheus / breaker / shedding / timeout 拦截器
 	// 在 NewServer 里已先加入,位于下面这条链的外层;"grpcstats 最外"指本服务自己的链内。
 	gateIdentity, authErr := callerauth.GateInterceptor(os.Getenv)

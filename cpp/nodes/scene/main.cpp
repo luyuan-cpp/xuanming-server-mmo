@@ -42,6 +42,7 @@
 #include "player/system/afk_pass.h"
 #include "player/system/player_appearance.h"
 #include "player/system/player_season.h"
+#include "player/system/player_trial_journal.h"
 #include "player/system/player_rename.h"
 
 #include <chrono>
@@ -139,6 +140,11 @@ namespace
                     err = "scene SeasonRule / SeasonSeal table validation failed";
                     return false;
                 }
+                if (!PlayerTrialJournalSystem::ValidateTables())
+                {
+                    err = "scene TrialJournalEntry / TrialJournalSeal / TrialJournalMilestone table validation failed";
+                    return false;
+                }
                 return true;
             }
 
@@ -152,6 +158,7 @@ namespace
                 PlayerAppearanceSystem::ValidateTables();
                 AfkPassSystem::ValidateTables();
                 PlayerSeasonSystem::ValidateTables();
+                PlayerTrialJournalSystem::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

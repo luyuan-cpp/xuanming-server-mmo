@@ -10,6 +10,7 @@ import (
 
 	"player_inbox/internal/metrics"
 
+	"shared/dbguard"
 	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -98,6 +99,8 @@ type ShardOwnership interface {
 type Loops struct {
 	// 启动前显式绑定;通知与对账承接历史工作,归 RELAY。后台循环里没有 SOURCE 类的写(原来的清理循环已删除)。
 	RelayAdmission *drainproof.Session
+	// CapacityGuard 可选：仅在维护领导者任期内每小时巡检一次 information_schema 容量与行宽预算（只读告警，不删数据）。
+	CapacityGuard *dbguard.Guard
 	// ReconcileOwnership 在 Run 之前绑定。nil = 本副本负责全部分片,只用于单副本部署与单测;
 	// 多副本部署时必须绑定,否则每个副本都会对账全部分片(只读,结论不错,但读量随副本数翻倍)。
 	ReconcileOwnership ShardOwnership
@@ -159,6 +162,15 @@ func (l *Loops) Run(ctx context.Context) {
 	metrics.ResetReconcileInconsistent()
 }
 
+// TableBudgets 返回 mmorpg_player_inbox 三张业务表的只读容量巡检预算（广度+深度双监控）。
+func TableBudgets() []dbguard.TableBudget {
+	return []dbguard.TableBudget{
+		{Table: streamTable, MaxRows: 5_000_000, MaxBytes: 2 << 30, MaxAvgRowBytes: 2048},
+		{Table: itemTable, MaxRows: 50_000_000, MaxBytes: 40 << 30, MaxAvgRowBytes: 8192},
+		{Table: auditTable, MaxRows: 50_000_000, MaxBytes: 20 << 30, MaxAvgRowBytes: 4096},
+	}
+}
+
 // whileLeader 在任期内跑补发、gauge;lctx 取消(丢锁 / 关停)后等它们全部退出再返回,
 // 这样选主器释放锁、装配层关库时不会有在途轮次。
 func (l *Loops) whileLeader(lctx context.Context) {
@@ -166,6 +178,11 @@ func (l *Loops) whileLeader(lctx context.Context) {
 	var wg sync.WaitGroup
 	every(lctx, &wg, "player_inbox.notify_resend", l.cfg.NotifyInterval, l.notifyRound)
 	every(lctx, &wg, "player_inbox.gauges", l.cfg.GaugeInterval, l.gaugeRound)
+	if l.CapacityGuard != nil {
+		every(lctx, &wg, "player_inbox.db_capacity_guard", time.Hour, func(rctx context.Context) {
+			l.CapacityGuard.Check(rctx)
+		})
+	}
 	<-lctx.Done()
 	wg.Wait()
 	metrics.ResetScanGauges()

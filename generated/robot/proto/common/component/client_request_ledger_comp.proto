@@ -37,6 +37,11 @@ message ClientRequestRecord {
   uint32 enhancement_stone_count = 12;  // 材料自选首次实际领取的强化石数。
   uint32 season_catchup_points = 13;    // 赛季印追赶：首次实际补齐的进度点数。
   uint64 season_catchup_spent = 14;     // 赛季印追赶：首次实际扣除的货币数。
+  uint32 trial_milestone_id = 15;            // 五行试炼志里程碑领取：首次领取的里程碑 ID。
+  uint32 trial_milestone_sand_count = 16;    // 五行试炼志里程碑领取：首次发放的仅自用重铸砂数量。
+  uint32 trial_milestone_voucher_count = 17; // 五行试炼志里程碑领取：首次发放的仅自用法宝拓印数量。
+  uint64 redeemed_artifact_item_id = 18;     // 五行试炼志拓印兑换：首次产出的仅自用法宝实例 ID。
+  uint32 redeemed_artifact_config_id = 19;   // 五行试炼志拓印兑换：首次兑换的法宝模板 ID。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随游戏日重置。

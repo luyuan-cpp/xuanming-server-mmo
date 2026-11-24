@@ -1,0 +1,124 @@
+{
+ "data": [
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关普通·回春（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 101,
+   "id": 1011,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 7,
+   "condition_type": 2,
+   "desc": "7 回合内有效通关普通·回春",
+   "enabled": true,
+   "entry_id": 101,
+   "id": 1012,
+   "seal_slot_kind": 4,
+   "title": "速破"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 4,
+   "desc": "全场未让首领获得有效回春治疗并有效通关",
+   "enabled": true,
+   "entry_id": 101,
+   "id": 1013,
+   "seal_slot_kind": 3,
+   "title": "断愈"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关普通·护势（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 102,
+   "id": 1021,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 7,
+   "condition_type": 2,
+   "desc": "7 回合内有效通关普通·护势",
+   "enabled": true,
+   "entry_id": 102,
+   "id": 1022,
+   "seal_slot_kind": 4,
+   "title": "速破"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "本场成功驱散护势，或物法双系均造成有效直伤并通关",
+   "enabled": true,
+   "entry_id": 102,
+   "id": 1023,
+   "seal_slot_kind": 3,
+   "title": "破势"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关困难·回春（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 103,
+   "id": 1031,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "困难·回春中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 103,
+   "id": 1032,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 4,
+   "desc": "困难·回春中首领全程未获有效回春治疗并通关",
+   "enabled": true,
+   "entry_id": 103,
+   "id": 1033,
+   "seal_slot_kind": 3,
+   "title": "断愈"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关困难·护势（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 104,
+   "id": 1041,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "困难·护势中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 104,
+   "id": 1042,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "困难·护势中成功驱散护势或物法双系均造成有效直伤并通关",
+   "enabled": true,
+   "entry_id": 104,
+   "id": 1043,
+   "seal_slot_kind": 3,
+   "title": "破势"
+  }
+ ]
+}

@@ -362,3 +362,15 @@ func TestTiDBAssertRefusesMySQL(t *testing.T) {
 		t.Fatalf("tidb 档必须拒绝 MySQL: %v", err)
 	}
 }
+
+func TestTiDBAssertRefusesOldTiDBVersion(t *testing.T) {
+	conn := &backendFakeConn{answer: func(query string) ([]string, []driver.Value, error) {
+		if query == "SELECT tidb_version()" {
+			return fakeColumns(1), []driver.Value{[]byte("Release Version: v7.3.0")}, nil
+		}
+		return tidbAnswer(query)
+	}}
+	if err := AssertCurrentSession(context.Background(), pinnedDB(t, conn, BackendTiDB), BackendTiDB); err == nil || !strings.Contains(err.Error(), "below required") {
+		t.Fatalf("tidb 档必须拒绝低于 v7.4 的 TiDB: %v", err)
+	}
+}

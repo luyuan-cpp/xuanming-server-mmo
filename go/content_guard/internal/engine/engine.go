@@ -113,6 +113,10 @@ func (e *Engine) Current() *Snapshot {
 	return e.current.Load()
 }
 
+// maxCombiningRun 允许的连续组合记号数上限(移植自 xuanming-server/pkg/namecheck)。
+// 正常带音标字符(如重音字母/越南语)最多叠加 2 个组合记号;超过即属 Zalgo 刷屏,会撑爆客户端 UI。
+const maxCombiningRun = 2
+
 // Check 判定一段文字。空文字直接放行。
 func (e *Engine) Check(class SceneClass, text string) Result {
 	snapshot := e.current.Load()
@@ -121,6 +125,9 @@ func (e *Engine) Check(class SceneClass, text string) Result {
 		return result
 	}
 	elems, orig := textnorm.Fold(text)
+	if hasExcessiveCombiningMarks(orig, maxCombiningRun) {
+		return Result{Verdict: VerdictReject, Category: wordlist.CategoryOther, Version: snapshot.Version}
+	}
 	hits := snapshot.Matcher.Find(elems)
 	masked := false
 	for _, hit := range hits {
@@ -148,6 +155,22 @@ func (e *Engine) Check(class SceneClass, text string) Result {
 		result.Masked = string(orig)
 	}
 	return result
+}
+
+// hasExcessiveCombiningMarks 判断原文是否存在超过上限的连续组合记号(Zalgo 文本)。
+func hasExcessiveCombiningMarks(orig []rune, maxRun int) bool {
+	run := 0
+	for _, r := range orig {
+		if textnorm.IsMark(r) {
+			run++
+			if run > maxRun {
+				return true
+			}
+			continue
+		}
+		run = 0
+	}
+	return false
 }
 
 // maskSpan 把 orig[start..end] 换成 *,并把紧跟其后的组合记号一并盖掉(不让它落在 * 上)。

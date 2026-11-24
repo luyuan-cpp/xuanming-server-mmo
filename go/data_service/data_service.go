@@ -33,6 +33,7 @@ import (
 	"shared/drainproof"
 	"shared/etcdwatch"
 	"shared/grpcstats"
+	"shared/grpckeepalive"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -494,6 +495,7 @@ func runDataService(c config.Config) (runErr error) {
 	// killswitch 命中即短路,handler 根本不会被调用;
 	// serverbase 放最内层,只观测真正跑过 handler 的结果,不会把"被人为关停"
 	// 误记成一次业务故障。
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
 	s.AddUnaryInterceptors(ks.UnaryServerInterceptor())
 	// 请求顶层带 player_id 的方法,之后各层与 handler 的日志都带上它(docs/design/distributed-tracing.md §6.2)。

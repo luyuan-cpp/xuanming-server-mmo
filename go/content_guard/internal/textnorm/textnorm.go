@@ -50,11 +50,30 @@ type Elem struct {
 	Skip bool
 }
 
+// confusables 将视觉上与拉丁小写字母难以区分的西里尔/希腊/兼容同形字折到 ASCII 拉丁小写
+// (移植自 xuanming-server/pkg/namecheck/normalize.go,防 "аdmin" / "gм" / "αv" 类跨脚本绕过)。
+// 刻意不折 '0'→'o' / '1'→'l':contact 引流检测依赖保留数字串识别手机号与 QQ/微信号。
+var confusables = map[rune]rune{
+	// 西里尔小写 → 拉丁
+	'а': 'a', 'в': 'b', 'с': 'c', 'ԁ': 'd', 'е': 'e', 'ѕ': 's',
+	'һ': 'h', 'і': 'i', 'ј': 'j', 'к': 'k', 'ӏ': 'l', 'м': 'm',
+	'н': 'h', 'о': 'o', 'р': 'p', 'т': 't', 'у': 'y', 'х': 'x',
+	'ү': 'y', 'ғ': 'f', 'ԛ': 'q', 'ѡ': 'w', 'ѵ': 'v', 'ᴦ': 'r',
+	// 希腊小写 → 拉丁
+	'α': 'a', 'β': 'b', 'ε': 'e', 'ζ': 'z', 'η': 'n', 'ι': 'i',
+	'κ': 'k', 'ν': 'v', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'υ': 'u',
+	'χ': 'x', 'γ': 'y', 'μ': 'u', 'σ': 'o', 'ϲ': 'c', 'ϳ': 'j',
+	// 其它常见冒充字形
+	'ǀ': 'l', 'ɩ': 'l', 'ɑ': 'a', 'ɡ': 'g', 'ɪ': 'i', 'ʏ': 'y',
+	'ʙ': 'b', 'ʜ': 'h', 'ᴏ': 'o',
+}
+
 // Fold 把原文逐字符折叠。顺序固定:
 //  1. NFKD:全角 → 半角,带圈数字、上下标 → 数字,兼容字形 → 正字,带音标的字母拆成字母加组合记号;
 //  2. 转小写;
 //  3. 繁体 → 简体;
-//  4. 标出可跳过的字符(组合记号在这一步被标成可跳过,所以 é 能对上词库里的 e)。
+//  4. 西里尔/希腊同形字 → 拉丁小写;
+//  5. 标出可跳过的字符(组合记号在这一步被标成可跳过,所以 é 能对上词库里的 e)。
 //
 // 返回折叠后的序列和原文的字符数组(打码在后者上做)。非法 UTF-8 的字节在第二个返回值里是 U+FFFD,
 // 按符号处理(可跳过);gRPC 入口的 string 字段本来就拒收非法 UTF-8,这里只保证不崩。
@@ -65,7 +84,7 @@ func Fold(text string) ([]Elem, []rune) {
 	var decomposed []byte
 	for i, r := range orig {
 		if r < utf8.RuneSelf {
-			// ASCII 不受 NFKD 和繁简影响,直接走。
+			// ASCII 不受 NFKD、繁简与跨脚本同形字影响,直接走。
 			if r >= 'A' && r <= 'Z' {
 				r += 'a' - 'A'
 			}
@@ -80,6 +99,9 @@ func Fold(text string) ([]Elem, []rune) {
 			folded = unicode.ToLower(folded)
 			if simplified, ok := t2s[folded]; ok {
 				folded = simplified
+			}
+			if mapped, ok := confusables[folded]; ok {
+				folded = mapped
 			}
 			elems = append(elems, Elem{R: folded, Orig: int32(i), Skip: Skippable(folded)})
 		}

@@ -425,3 +425,39 @@ func TestIsTradableCurrencyIsGoldAndDiamondOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestPlayerTradeGuardConfigValidation(t *testing.T) {
+	base := func() Config {
+		c := validConfig()
+		c.Market.Scope = ScopeGlobal
+		c.AssetOp.Enabled = true
+		c.AssetOp.SecretEnv = AssetOpSecretEnvPrefix + "TRADE"
+		return c
+	}
+
+	c := base()
+	c.Commerce.PlayerTrade.Mode = "strict_consumables"
+	if err := c.Validate(); err != nil {
+		t.Fatalf("strict_consumables should be valid: %v", err)
+	}
+
+	c = base()
+	c.Commerce.PlayerTrade.Mode = "acquaintance_locked"
+	c.Commerce.PlayerTrade.MaxReferenceDeviationPct = 50
+	if err := c.Validate(); err != nil {
+		t.Fatalf("acquaintance_locked with 50%% should be valid: %v", err)
+	}
+
+	c = base()
+	c.Commerce.PlayerTrade.Mode = "unknown_mode"
+	if err := c.Validate(); err == nil {
+		t.Error("unknown player trade mode must fail validation")
+	}
+
+	c = base()
+	c.Commerce.PlayerTrade.Mode = "acquaintance_locked"
+	c.Commerce.PlayerTrade.MaxReferenceDeviationPct = 100
+	if err := c.Validate(); err == nil {
+		t.Error("MaxReferenceDeviationPct >= 100 must fail validation")
+	}
+}

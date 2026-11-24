@@ -7,12 +7,26 @@ public final class RmbConsignmentApi {
     private RmbConsignmentApi() {}
     public record Escrow(String listingId, String sellerPlayerId, String sellerAccount, long marketZone,
                          String assetKind, Integer assetCurrencyType, String escrowReference, String escrowProof,
-                         long priceFen, String title) {}
+                         long priceFen, String title, String designatedBuyerAccount) {
+        public Escrow(String listingId, String sellerPlayerId, String sellerAccount, long marketZone,
+                      String assetKind, Integer assetCurrencyType, String escrowReference, String escrowProof,
+                      long priceFen, String title) {
+            this(listingId, sellerPlayerId, sellerAccount, marketZone, assetKind, assetCurrencyType,
+                escrowReference, escrowProof, priceFen, title, null);
+        }
+    }
     public record Page(String afterListingId, int limit) {}
     public record Get(String listingId) {}
     public record Listing(String listingId, String sellerPlayerId, long marketZone, String assetKind, String title,
                           long priceFen, int feeBps, long coolingMs, long noticeEndMs, long saleEndMs,
-                          String state, String phase, String orderId) {}
+                          String state, String phase, String orderId, String designatedBuyerAccount) {
+        public Listing(String listingId, String sellerPlayerId, long marketZone, String assetKind, String title,
+                       long priceFen, int feeBps, long coolingMs, long noticeEndMs, long saleEndMs,
+                       String state, String phase, String orderId) {
+            this(listingId, sellerPlayerId, marketZone, assetKind, title, priceFen, feeBps, coolingMs,
+                noticeEndMs, saleEndMs, state, phase, orderId, null);
+        }
+    }
     public record Listings(List<Listing> listings) {}
     public record Buy(String listingId, String buyerPlayerId, String buyerAccount, String requestId,
                       String buyerOwnerRevision) {}
@@ -21,10 +35,15 @@ public final class RmbConsignmentApi {
     public record OrderPage(String account, String afterOrderId, int limit) {}
     public record IncomePage(String account, String afterOrderId, int limit) {}
     public record Income(String orderId, long grossFen, long feeFen, long netFen, long reservedFen,
-                         long paidFen, long availableMs, long forfeitedFen) {
+                         long paidFen, long availableMs, long forfeitedFen, long disputeFrozenFen,
+                         String disputeCaseId) {
         public Income(String orderId, long grossFen, long feeFen, long netFen, long reservedFen,
                       long paidFen, long availableMs) {
-            this(orderId, grossFen, feeFen, netFen, reservedFen, paidFen, availableMs, 0L);
+            this(orderId, grossFen, feeFen, netFen, reservedFen, paidFen, availableMs, 0L, 0L, null);
+        }
+        public Income(String orderId, long grossFen, long feeFen, long netFen, long reservedFen,
+                      long paidFen, long availableMs, long forfeitedFen) {
+            this(orderId, grossFen, feeFen, netFen, reservedFen, paidFen, availableMs, forfeitedFen, 0L, null);
         }
     }
     public record Incomes(List<Income> incomes) {}

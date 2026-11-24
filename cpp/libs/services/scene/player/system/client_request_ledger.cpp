@@ -103,6 +103,11 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.enhancementStoneCount = record->enhancement_stone_count();
 	result.seasonCatchupPoints = record->season_catchup_points();
 	result.seasonCatchupSpent = record->season_catchup_spent();
+	result.trialMilestoneId = record->trial_milestone_id();
+	result.trialMilestoneSandCount = record->trial_milestone_sand_count();
+	result.trialMilestoneVoucherCount = record->trial_milestone_voucher_count();
+	result.redeemedArtifactItemId = record->redeemed_artifact_item_id();
+	result.redeemedArtifactConfigId = record->redeemed_artifact_config_id();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -134,6 +139,11 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_enhancement_stone_count(result.enhancementStoneCount);
 	record->set_season_catchup_points(result.seasonCatchupPoints);
 	record->set_season_catchup_spent(result.seasonCatchupSpent);
+	record->set_trial_milestone_id(result.trialMilestoneId);
+	record->set_trial_milestone_sand_count(result.trialMilestoneSandCount);
+	record->set_trial_milestone_voucher_count(result.trialMilestoneVoucherCount);
+	record->set_redeemed_artifact_item_id(result.redeemedArtifactItemId);
+	record->set_redeemed_artifact_config_id(result.redeemedArtifactConfigId);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

@@ -303,6 +303,62 @@ class RmbConsignmentStoreTest {
         }
     }
 
+    @Test void G1_托管引用接受trade前缀规范uint64并拒绝非法前缀_退回回执全链通过() {
+        try (var f = new Fixture()) {
+            String tradeRef = "trade:18446744073709551615";
+            var listing = f.rmb.register(new RmbConsignmentApi.Escrow("8801", "101", SELLER, 1, "ITEMS", null,
+                tradeRef, PROOF, 500, "跨端托管材料"));
+            assertEquals("8801", listing.listingId());
+            f.rmb.cancel(new RmbConsignmentApi.Cancel("8801", SELLER));
+            var pending = f.rmb.returns(new DeliveryApi.Poll(20)).entries().getFirst().intent();
+            assertEquals(tradeRef, pending.escrowReference());
+            var receipt = new RmbConsignmentApi.ReturnReceipt("8801", tradeRef, PROOF, "d".repeat(64));
+            f.rmb.returned(receipt);
+            f.rmb.returned(receipt); // 幂等重放
+            assertTrue(f.rmb.returns(new DeliveryApi.Poll(20)).entries().isEmpty());
+            for (String badRef : List.of("trade:", "trade:0", "trade:01", "trade:abc", "other:123", "trade:18446744073709551616")) {
+                rejects(400, () -> f.rmb.register(new RmbConsignmentApi.Escrow("8802", "101", SELLER, 1, "ITEMS", null,
+                    badRef, PROOF, 500, "非法引用")));
+            }
+        }
+    }
+
+    @Test void 分层公示与定向买家单_小额标准品走短公示_高价及宠角走长公示_定向单仅指定买家可买() {
+        try (var f = new Fixture()) {
+            f.rules.setNoticeMs(172_800_000L); // 48h
+            f.rules.setSmallBatchMaxPriceFen(5_000L); // <= 50 元
+            f.rules.setSmallBatchNoticeMs(7_200_000L); // 2h
+            f.rules.validate();
+            long now = f.clock.millis();
+
+            // 1) 小额标准 ITEMS 批次：2 小时短公示
+            var smallItems = f.rmb.register(new RmbConsignmentApi.Escrow("7001", "101", SELLER, 1, "ITEMS", null,
+                "trade:7001", PROOF, 5_000L, "小额材料包"));
+            assertEquals(now + 7_200_000L, smallItems.noticeEndMs());
+
+            // 2) 超额 ITEMS 批次：完整 48 小时公示
+            var largeItems = f.rmb.register(new RmbConsignmentApi.Escrow("7002", "101", SELLER, 1, "ITEMS", null,
+                "trade:7002", PROOF, 5_001L, "大额材料包"));
+            assertEquals(now + 172_800_000L, largeItems.noticeEndMs());
+
+            // 3) 宠物与角色即使价格很低，也强制走完整 48 小时公示防盗号
+            var pet = f.rmb.register(new RmbConsignmentApi.Escrow("7003", "101", SELLER, 1, "PET", null,
+                "trade:7003", PROOF, 100L, "神宠"));
+            assertEquals(now + 172_800_000L, pet.noticeEndMs());
+
+            // 4) 定向买家单：非指定买家拒买，指定买家公示结束后可买；禁止定向给自己
+            rejects(409, () -> f.rmb.register(new RmbConsignmentApi.Escrow("7004", "101", SELLER, 1, "ITEMS", null,
+                "trade:7004", PROOF, 1_000L, "自买定向", SELLER)));
+            var targeted = f.rmb.register(new RmbConsignmentApi.Escrow("7005", "101", SELLER, 1, "ITEMS", null,
+                "trade:7005", PROOF, 1_000L, "熟人定向材料", BUYER));
+            assertEquals(BUYER, targeted.designatedBuyerAccount());
+            f.clock.advance(7_200_000L);
+            rejects(409, () -> f.orders.createConsignment(new RmbConsignmentApi.Buy("7005", "209", "路人买家", "other-buyer-req-1", "1")));
+            var okOrder = f.orders.createConsignment(new RmbConsignmentApi.Buy("7005", "201", BUYER, "designated-buyer-req-1", "1"));
+            assertEquals("AWAITING_PAYMENT", okOrder.state());
+        }
+    }
+
     private static Object attemptWithdrawal(RmbConsignmentStore store, String request) {
         try { return store.withdraw(new RmbConsignmentApi.Withdraw(SELLER, request, 95)); }
         catch (CommerceException rejected) { return rejected; }

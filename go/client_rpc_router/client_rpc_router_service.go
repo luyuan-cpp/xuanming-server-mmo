@@ -25,6 +25,7 @@ import (
 
 	"shared/buildinfo"
 	"shared/clockcheck"
+	"shared/grpckeepalive"
 	"shared/grpcstats"
 	sharedregistry "shared/noderegistry"
 	"shared/releasetrack"
@@ -93,6 +94,7 @@ func main() {
 	// 所以不像 match 那样挂 sessionInterceptor;挂流量统计与热关停。
 	// 热关停拦截器只管本跳的方法:Forward 是转发信封、受保护,只有精确到 Forward 的规则才能整体关掉路由服;
 	// 通配规则由 Forward 逻辑按目标方法判。
+	s.AddOptions(grpckeepalive.ServerOption(0, 0))
 	s.AddUnaryInterceptors(
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 		svcCtx.KillSwitch.UnaryServerInterceptor(),

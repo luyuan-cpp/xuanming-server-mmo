@@ -258,39 +258,65 @@ UI 入口仍挂在「首领试炼 → 五行试炼志」（同时可在大世界
 
 ### 6.2 另一台电脑 Codex 的 Unity UI 制作交接
 
-> 以下内容可直接复制给另一台电脑的 Codex 启动离线演示制作；先用明确标注「UI 演示数据」的本地数据跑通全部交互，待 Gemini 交付同版协议绑定后再替换真实数据源。
+> **当前进展（2026-11-24）**：C++ 服务端权威配表、协议（456–458）、Battle 引擎战法事实冻结、Scene 持久化/结算/里程碑/法宝拓印系统与单测，以及 `mmorpg-client` 侧的客户端表数据、Protobuf 生成类、RPC 桩与纯 C# 适配层（`TrialJournalClient` / `TrialJournalModels` / `TrialJournalClientTests`）**均已完成并通过编译/单测门禁**。
+> 以下提示词可直接复制给 Codex，按 `D:\work\image\designs` 风格直接制作 Unity uGUI 界面与美术组件，并直接对接现有纯 C# 适配层（无需重写网络、幂等键或状态修订逻辑）。
 
 ```text
-请按 docs/design/long-term-progression-v2.md 为《五行奇谈》制作「五行试炼志」Unity UI、美术组件与交互逻辑。
-视觉沿用项目横屏道家 Q 版风格（暖米白纸底、深玉绿页签、细金线印框），适配手机安全区与多分辨率（1280×720 / 1920×1080 / 2560×1080），保持底板无字、文本独立分层。
+请按 docs/design/long-term-progression-v2.md 为《五行奇谈》制作「五行试炼志」Unity UI、美术组件与交互逻辑（只做 UI 表现与接线，不改动服务端或纯 C# 网络适配层）。
+
+【视觉风格锚点（严格对齐 D:\work\image\designs）】
+1. 主视觉基准：
+   - 面板与纸底/页签/金线边框锚点：D:\work\image\designs\mail-ui-v1\01-mail-event.png、D:\work\image\designs\team-ui-v2\team-ui-v2.png
+   - 2560×1080 等比 contain 导出规范（≥48px 安全透明边距）、底角分层云气与 39 套通用控件规范：D:\work\image\designs\ui-redesign-20261123\（见其 README.md 与 overview.png）
+   - 暖米白手记阅读层 / 徽章印戳 / 卷册质感参考：D:\work\image\designs\appearance-chronicle-v2\ 与 D:\work\image\designs\ui-art-delivery-20261123\（可复用的已导入切图位于 mmorpg-client/Assets/Resources/UI/Ugui/AppearanceChronicleV2/）
+   - 挑战关卡卡片 / 里程碑轨道 / 结算印记风格参考：D:\work\image\designs\lunjian-ui-v1\
+   - 法宝拓印兑换卡片风格参考：D:\work\image\designs\equipment-ui-20261117\
+2. 画布与合规要求：
+   - 横屏道家 Q 版风格（暖米白纸底、深玉绿页签、细金线印框），保持底板无字、文本独立分层；
+   - 适配手机安全区（Screen.safeArea 与微信/抖音小游戏右上角胶囊避让）及多分辨率（1280×720 / 1920×1080 / 2560×1080）；
+   - 严守 WebGL2（小游戏单线程禁阻塞）与 iOS/Android IL2CPP 约束，触控交互不依赖鼠标 Hover；所有新增/修改的资源与脚本同步 .meta，完成后执行 tools/client_compile_check.ps1。
+
+【已就绪的 Unity 纯 C# 代码与生成物（直接对接，禁止手改 Generated 目录）】
+- 生成 RPC 桩：Assets/Scripts/Net/Generated/Rpc/SceneTrialJournalClientPlayerRpc.cs
+  - GetTrialJournalMessageId = 456
+  - ClaimTrialJournalMilestoneMessageId = 457
+  - RedeemBoundArtifactVoucherMessageId = 458
+- 生成 Proto 与错误码：
+  - Assets/Scripts/Proto/Generated/PlayerTrialJournal.cs（TrialJournalSnapshot / TrialJournalChapterView / TrialJournalEntryView [含 SoloRecorded / SoloBest / CoopRecorded / CoopBest / HasLegacyRecordOnly] / TrialJournalSealView / TrialJournalMilestoneView / TrialRedeemableArtifactOption）
+  - Assets/Scripts/Proto/Generated/PlayerTrialJournalComp.cs（TrialJournalSoloRecord / TrialJournalCoopRecord / TrialJournalLoadoutSnapshot）
+  - Assets/Scripts/Proto/Generated/TrialJournalErrorTip.cs（trial_journal_error: 35000–35008）
+  - Assets/Scripts/Proto/Generated/PlayerBattleResultComp.cs（结算页行内字段：TrialJournalEntryId / TrialNewlyLitSealIds / TrialNewSoloBest / TrialNewCoopBest）
+- 生成配表管理器（只按 id 现查 FindById，禁止长期缓存表行引用）：
+  - TrialJournalEntryTableManager / TrialJournalSealTableManager / TrialJournalMilestoneTableManager
+- 纯 C# 业务适配层（已过编译检查，UI 直接订阅与调用）：
+  - Assets/Scripts/Game/TrialJournal/TrialJournalClient.cs
+    - 属性：Snapshot / SnapshotPending / ActionPending / RequiresReconnect / Status / StatusIsError / Ready / ClaimableMilestoneCount
+    - 方法：RequestSnapshot(force) / ClaimMilestone(milestoneId) / RedeemArtifactVoucher(artifactItemConfigId) / HandleSceneEntered() / HandleBattleSettled() / Tick()
+    - 事件：Changed / Notice / MilestoneClaimed / ArtifactRedeemed（UI 在 OnDisable/OnDestroy 对称退订）
+  - Assets/Scripts/Game/TrialJournal/TrialJournalModels.cs
+    - 方法：DescribeTip / SealSlotLabel / FindChapter / FindEntry / FindMilestone / FilterMilestones / CountClaimableMilestones / CanRedeemAnyArtifact / FormatSoloLoadoutSummary / FormatCoopSummary / CollectUnlockedCommentaries
 
 【页面入口与结构（一页式手记，不做多套冗余整页）】
-1. 入口：既有「首领试炼」页加「五行试炼志」按钮；战斗结算页当本局带有权威试炼标识时显示次要按钮「看试炼志」（若本局新点亮了战法印，在结算页行内直接展示新亮印记名，无弹窗打断）。主城不加红点或催促提示。
+1. 入口：既有「首领试炼」页加「五行试炼志」按钮；战斗结算页当 PlayerBattleResult.TrialJournalEntryId != 0 时显示次要按钮「看试炼志」（若 TrialNewlyLitSealIds 非空或刷新纪录，在结算页行内直接展示新亮印记名/新纪录标签，无弹窗打断）。主城不加红点或催促提示。
 2. 顶栏：返回、标题「五行试炼志」、顶部卷册切换页签：
-   - 首发激活「卷一 · 破阵试炼」；预留由目录数据驱动的「卷二 · 三境明雷」「卷三 · 季游奇谈」（服务端目录未开放的卷自动隐藏，不显示灰色空壳）。
-   - 右侧紧凑进度条：当前卷已点亮印记数 / 当前卷有效总印数（如 6/12），点击展开下方或侧栏「印记里程碑」条。
+   - 首发激活「卷一 · 破阵试炼」；预留由 Snapshot.Chapters 驱动的「卷二 · 三境明雷」「卷三 · 季游奇谈」（服务端目录未开放的卷自动隐藏，不显示灰色空壳）。
+   - 右侧紧凑进度条：当前卷 LitSealCount / TotalSealCount（如 6/12），可领里程碑时给克制高光提示，点击展开下方或侧栏「印记里程碑」抽屉。
 3. 主体两栏（窄屏自动上下布局并支持纵向滚动）：
-   - 左/上区 · 关卡格列表：首发 4 格（普通·回春 / 普通·护势 / 困难·回春 / 困难·护势）。每格卡片显示难度与护卫图标、3 枚小印章图标（通 / 速或守 / 巧，空框=未点亮，实金印=已点亮），以及单人最好回合角标（如「单人 6 回合」）。
+   - 左/上区 · 关卡格列表：首发 4 格（101 普通·回春 / 102 普通·护势 / 103 困难·回春 / 104 困难·护势）。每格卡片显示难度与护卫图标、3 枚小印章图标（按 SealSlotLabel：通 / 速或守 / 巧，空框=未点亮，实金印=已点亮），以及单人最好回合角标（SoloRecorded ? $"单人 {SoloBest.BestRounds} 回合" : ""）。
    - 右/下区 · 当前选中格详情：
      ① 3 枚战法印详细条件与完成状态（文字与图形双标识，不只靠红绿颜色）；
      ② 「我的战绩与复盘」卡片：
-        - 单人最佳：显示「最好 6 回合」及当次复盘小标签（出战宝宝图标+名、2 件法宝图标+名、赛季印图标+名；缺项不占位），以及当前规则版本号；
-        - 好友合战：显示「合战最快 5 回合（2 人）」及当时队友名；无记录显示「和好友通关即可留下合战纪录」；
-     ③ 唯一主按钮「前往试炼」：跳转既有首领试炼准备页并预选该难度与护卫（不直接开战、不拆队、不扣资源；未解锁困难时禁用并就地显示服务端原因）。
+        - 单人最佳：SoloRecorded 时显示「最好 N 回合」与 TrialJournalModels.FormatSoloLoadoutSummary(SoloBest.Loadout, ...) 复盘标签及 RuleVersionName；若 HasLegacyRecordOnly 为 true 显示 TrialJournalModels.LegacyRecordOnlyHint；
+        - 好友合战：CoopRecorded 时显示 TrialJournalModels.FormatCoopSummary(CoopBest)；无记录显示「和好友通关即可留下合战纪录」；
+     ③ 唯一主按钮「前往试炼」：按 Entry.JumpTarget 跳转既有首领试炼准备页并预选该难度与护卫（不直接开战、不拆队、不扣资源；!CanEnter 时禁用并就地显示 EnterBlockedReason）。
 4. 里程碑与法宝拓印兑换轻抽屉：
-   - 点击卷进度条展开当前卷里程碑（3 / 6 / 9 / 12 印）及终极「试炼宗师（18 印专属形象预览）」。
-   - 状态区分：未达标 / 可领取（干净高亮按钮「收取」，不主动弹窗）/ 已领取。领取前展示自用标签（「仅自用重铸砂」「仅自用法宝拓印」），领完含人物评语的档位时原地开放「读评语」轻阅读层（沿用人物志暖米白读故事样式，读/跳过均零副作用）。
-   - 持有「自用法宝拓印」≥ 1 时，在里程碑抽屉或法宝页提供「拓印换法宝」轻弹窗：列出 8 件 V1 法宝效果、当前已拥有件数（允许兑换同名第二件）、清晰标明「兑换所得法宝仅自用、不可交易或拆解」，二次确认后带唯一 client_request_id 提交。
+   - 点击卷进度条展开当前卷里程碑（M101 3印 / M102 6印 / M103 9印 / M104 12印）与后续全永久汇总里程碑。
+   - 状态区分：未达标 / 可领取（Claimable == true 时高亮按钮「收取」，不主动弹窗）/ 已领取。领取前展示自用标签（「仅自用重铸砂」「仅自用法宝拓印」），领完含 CommentaryTitle 的档位（如 M104《祝停云·破阵跋》）原地开放「读评语」轻阅读层（沿用 appearance-chronicle-v2 暖米白读故事样式，读/跳过均零副作用）。
+   - 当 TrialJournalModels.CanRedeemAnyArtifact(Snapshot) 为真（VoucherBalance >= 1）时，开放「拓印换法宝」轻弹窗：遍历 Snapshot.RedeemableArtifacts（8 件 V1 法宝 3301–3308），显示名称、效果说明、当前 OwnedCount（允许兑换同名第二件）、清晰标明「兑换所得法宝仅自用、不可交易或拆解」，二次确认后调用 client.RedeemArtifactVoucher(option.ItemConfigId)。
 
 【必须覆盖的交互与异常态】
-- 首次加载（「正在翻开试炼志」，不假显示 0/12）、刷新中保留旧内容、真空档 / 部分点亮 / 满印（12/12）、规则换代（「本版暂无纪录，已点亮战法印永久保留」）、背包满领里程碑被拒（不改已领态，给去整理背包提示）、领取/兑换处理中禁用连点与超时恢复、查询失败/断线重试、切换角色清空视图与在途回包。
-- 离线演示须内置可切换样例菜单：
-  ① 真空档（0/12）；
-  ② 进度中（6/12，普通·回春单人 6 回合「灵狐 + 破阵刃 + 聚息援印」，普通·护势好友合战 5 回合「同队：清风」，M101 已领、M102 可领 1 张拓印）；
-  ③ 演示点击收取 M102 → 获得 1 张自用法宝拓印 → 打开「拓印换法宝」兑换一件护心珠；
-  ④ 满印（12/12，已解锁《祝停云·破阵跋》可点开阅读）；
-  ⑤ 背包满拒绝态与断线重试态。
-所有离线演示状态明确标「UI 演示数据」，严禁在 UI 侧计算战斗判定、改写背包或伪造发奖。
+- 首次加载（「正在翻开试炼志」，不假显示 0/12）、刷新中保留旧内容、真空档 / 部分点亮 / 满印（12/12）、规则换代（HasLegacyRecordOnly）、背包满领里程碑被拒（不改已领态，展示 TrialJournalModels.DescribeTip 并提示整理背包）、ActionPending 期间禁用连点、RequiresReconnect 断线重连恢复提示、切换角色清空视图。
+- 离线预览/验收模式须内置可切换样例菜单并明确标「UI 演示数据」，覆盖：① 真空档（0/12）；② 进度中（6/12，含单人/合战复盘与 M102 可领）；③ 领取 M102 → 拓印换法宝流程；④ 满印（12/12 + 《祝停云·破阵跋》阅读）；⑤ 背包满与断线重试态。严禁在 UI 侧计算战斗判定、改写背包或伪造发奖。
 ```
 
 ---

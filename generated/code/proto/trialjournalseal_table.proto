@@ -1,0 +1,24 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "TrialJournalSealTableOuterClass";
+option java_multiple_files = true;
+
+
+message TrialJournalSealTable {
+	uint32 id = 1;
+	uint32 entry_id = 2;
+	uint32 seal_slot_kind = 3;
+	uint32 condition_type = 4;
+	uint32 condition_param = 5;
+	bool enabled = 6;
+	string title = 7;
+	string desc = 8;
+}
+
+message TrialJournalSealTableData {
+	repeated TrialJournalSealTable data = 1;
+}

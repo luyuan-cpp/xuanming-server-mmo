@@ -257,3 +257,41 @@ func TestFindOnEmptyOrSymbolOnlyText(t *testing.T) {
 		}
 	}
 }
+
+func TestRepeatedRuneBypassDefense(t *testing.T) {
+	lex := &Lexicon{
+		Deny: []Entry{
+			deny("加微信", CategoryAd, ModeSub),
+			deny("笨蛋", CategoryAbuse, ModeSub),
+			deny("av", CategoryPorn, ModeToken),
+			deny("qq", CategoryAd, ModeSub), // 词库本身含叠字,不得因输入折叠失效
+		},
+		Allow: []string{"臭豆腐"},
+	}
+	// 内置词叠字绕过: "管理理员"
+	if hits := find(lex, "管理理员"); len(hits) == 0 || hits[0].Category != CategoryImpersonation {
+		t.Fatalf("repeated built-in word missed: %+v", hits)
+	}
+	// 引流词叠字绕过: "加微微微信"
+	if hits := find(lex, "加微微微信"); len(hits) == 0 || hits[0].Start != 0 || hits[0].End != 4 {
+		t.Fatalf("repeated ad word span wrong: %+v", hits)
+	}
+	// 叠字打码覆盖整段重复字符: "笨笨蛋" 应覆盖 [0..2]
+	if hits := find(lex, "笨笨蛋"); len(hits) == 0 || hits[0].Start != 0 || hits[0].End != 2 {
+		t.Fatalf("repeated abuse span should cover full run: %+v", hits)
+	}
+	// 整词连续叠字命中 "aavv",但带空格 "a a v" 保持不命中 ModeToken
+	if hits := find(lex, "看aavv吗"); len(hits) == 0 || hits[0].Category != CategoryPorn {
+		t.Fatalf("contiguous repeated token missed: %+v", hits)
+	}
+	if hits := find(lex, "a a v"); len(hits) != 0 {
+		t.Fatalf("non-contiguous repeated token must not match: %+v", hits)
+	}
+	// 词库本身含叠字的词照常命中 "qq",不误伤单个 "q"
+	if hits := find(lex, "qq"); len(hits) == 0 || hits[0].Category != CategoryAd {
+		t.Fatalf("double-letter deny word qq missed: %+v", hits)
+	}
+	if hits := find(lex, "q"); len(hits) != 0 {
+		t.Fatalf("single q must not match double-letter deny word qq: %+v", hits)
+	}
+}
