@@ -5013,3 +5013,30 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Go `match`：`go test -count=1 ./internal/catalog/... ./internal/ranked/... ./internal/team/... ./internal/authority/... ./internal/logic/...` **5/5 包全部 PASS**。
   - Unity `mmorpg-client`：`tools/client_compile_check.ps1` **exit=0, files=678, errors=0**；Roslyn + NUnit 实跑 `SeasonClientTests` + `CoreGameplayLoopTests` + `TrialJournalClientTests` + `RankedClientTests` **13/13 PASS（failed=0）**。
 - **未执行范围**：未执行 `git commit` / `git push`；未启动完整多进程栈做实网双端联机；Java 独立服与 Unity 新 UGUI 窗口交由后续对齐与 ChatGPT 实施。
+
+
+## 2026-11-24 全服赛季战队锦标赛《群仙问道赛》V1 设计定稿、全链路双版服务端实现、Unity 非 UI 网络层与 ChatGPT UI 交接
+
+- **玩法定稿与交接文档**：
+  - 落盘设计文档 [season-team-tournament-v1.md](design/season-team-tournament-v1.md)（完整覆盖 `AGENTS.md §10.4` 六段分析与项目定位 4 项自检）及给 ChatGPT/Codex 的 UI 制作与联调规格书 [season-team-tournament-v1-ui-handoff.md](design/season-team-tournament-v1-ui-handoff.md)，已刷新 `docs/README.md` 索引并通过 `gen_docs_index.py --check`。
+  - 核心规则：正式真实养成 3 首发 + 1 替补（配置表可扩至 5V5 + 2 替补）、全服跨区组队、零付费报名/零押注赌博；每赛季 4 阶段（`REGISTRATION` 42 天 → `QUALIFIER` 7 天宽时间窗自由完赛最多 6 场、同对手重复遇上限 → `KNOCKOUT` 2 天按有效报名队数动态 0/2/4/8/16 单败淘汰与轮空晋级、打满回合 4 级确定性平局决胜、L2 全服公开观战与强制录播 → `SETTLED` 5 天展示领奖后自动开启 `season_id + 1`）；奖励 100% 绑定自用道具（重铸砂 `3403` / 悟道残页 `3406` / 灵兽口粮 `20`）+ 绑定银两 + 赛季/永久荣誉称号徽章与冠军殿堂，辅以全服每人每季 1 票免费助威。
+- **权威配表、错误码与协议生成（`xuanming-server-mmo-cpp`）**：
+  - 新增 `data/schema/{tournamentrule,tournamentreward}_table.proto` 与 `data/{TournamentRule,TournamentReward}.xlsx`（含 7 档奖励配置）；`data/tip/Tip.xlsx` 追加 15 个 `MatchTournament*` 错误码（`16037..16051`）。
+  - `proto/match/match_service.proto` 新增 `MATCH_MODE_SEASON_TOURNAMENT = 11`（避开帮战预留位 9/10）与 11 条 RPC（`465..475`）；`proto/match/match_authority.proto` 新增 7 张 SQL 权威表（`match_tournament_{season,squad,member,invite,match,cheer,reward}`）。
+  - 执行 `gen_schema_index.py` + `dev.bat gen` 导出全量 68 表与多语言代码；补齐 `cpp/generated/table/{table.vcxproj,table.vcxproj.filters,CMakeLists.txt}` 登记。
+- **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+  - Go `match`：新增 `internal/tournament/{catalog,rules,rules_test}.go`、`internal/authority/{tournament,tournament_test}.go`、`internal/logic/tournamentlogic.go`；接入 `authority/{store,schema,direct_admission}.go`（`kind=4` 支持替补出战直通开局）、`logic/{spectate_visibility,battle_replay_policy,gather,rating}.go`（公开 L2 推荐观战、强制录播、对半阵营切分与战果入账分流）、`constants/errors{,_test}.go`、`svc/servicecontext.go`（热更新/内容安全/邮件投递）与 `match_service.go`（`OwnsWork("tournament:driver")` 周期驱动状态机）。
+  - Go `mail`：`internal/data/repo.go` 注册 `SenderKind("match") = 6`。
+  - C++ `scene`：`player_equipment_material_reward.cpp` 放行 `MATCH_MODE_SEASON_TOURNAMENT` 计入日常材料账，补齐 `player_equipment_material_reward_test.cpp` 单测。
+- **独立 Java 服务端对账（`xuanming-server-mmo`）**：
+  - 执行 `ContractSync.java` 全量同步（`proto=142, schema=68, table_data=68`）并通过 `--check`。
+  - `game-match` 新增 `match_feature_tables.proto` 7 表、`com.game.match.tournament.{TournamentTables,TournamentRules,TournamentStore,TournamentService}`、`MatchMethods` 补齐 465–475（33 方法）、`MatchModes`/`SpectateVisibilityPolicy`/`MatchFeatureConfiguration`/`RatingStore` 战果分流与 `TournamentParityTest`；`game-mail` 同步 `MailStore.sender("match") = 6` 与 `MailConfiguration` 签名角色；`game-scene` `EquipmentCraftService.isEligibleBattle` 放行 `MATCH_MODE_SEASON_TOURNAMENT`；同步更新 `PARITY.md` 标为已对齐。
+- **Unity 客户端非 UI 网络层（`mmorpg-client`）**：
+  - 执行 `gen.bat client` 同步 68 表、83 proto 与 178 MessageId；新增纯 C# `Assets/Scripts/Game/Tournament/{TournamentModels,TournamentClient}.cs`（覆盖 465–475 全部 11 条协议、`RpcGuard` 限流与 `(connection, player, generation)` 切号防串线）并挂载 `GameClient.Tournament`；新增 `Assets/Tests/EditMode/Tournament/TournamentClientTests.cs` 及全套 `.meta`（UGUI 窗口与美术按交接规格交由 ChatGPT 制作）。
+- **实际验证结果**：
+  - 静态与契约门禁：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`gen_schema_index.py --check` **PASS（68 表）**、`gen_docs_index.py --check` **PASS**、`ContractSync.java --check` **PASS**。
+  - Go 服务端：`go/match`（`internal/{tournament,constants,authority,logic,server}` 5 包）与 `go/mail`（`internal/data`）`go test -count=1` 全部 **PASS**。
+  - C++ 服务端（串行 MSBuild Debug x64 `/m:1`）：`proto.lib`、`table.lib`、`rpc.lib`、`grpc_client.lib`、`core.lib`、`scene.lib`、`scene.exe`、`bag_test.exe` 全部 0 错误编过；`bag_test.exe --gtest_filter=*EquipmentMaterialReward*` **17/17 PASS**；`scene.exe --validate-tables generated/tables` 通过 `manifest` `schema_digest` 与 68 表加载外键校验，但被同工作区并行会话未收尾的 `PlayerAppearance` 校验钩子（`missing bit_index mapping for id=2199667602`）拦截，本次未触碰他人并行改动。
+  - Java 服务端：`game-proto`/`game-table`/`game-mail`/`game-match`/`game-scene` `clean install` 0 错误；`game-match` 6 套件（含 `TournamentParityTest` 2/2、`MatchApplicationContextTest` 等）**58/58 PASS**；`game-scene` `MysteryMerchantAndEquipmentCraftTest` **3/3 PASS**。
+  - Unity 客户端：`tools/client_compile_check.ps1` **exit=0, files=680, errors=0**；Roslyn + NUnit 实跑 `TournamentClientTests` **2/2 PASS**。
+- **未执行范围**：未启动完整 Docker/TiDB/Redis/Kafka 多进程栈做实网联调与压测；Unity 侧未搭建 UGUI 窗口/Prefab（交 ChatGPT 按交接文档制作）；未执行 `git commit` / `git push`，三仓并行未提交改动均完整保留。

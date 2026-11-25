@@ -92,3 +92,63 @@
    - *配置表误删系列或引用未启用系列*：导表 `(cfg_fk) = "AppearanceSeries"` + C++/Java `ValidateTables` / `AppearanceTables.from` 启动强校验（已启用角色若 `series_id != 0` 须命中已启用系列，且启用系列 `series_key` 唯一非空）。
    - *客户端伪造解锁读合篇*：`AppearanceSeriesModels.TryGetUnlockedEpilogue` 与 `AppearancePanelState.OpenSeriesEpilogue` 均以权威 `completed == true` 为前提，进入合篇层时清除待确认扣卡态，防误扣卡。
 5. **执行步骤**：补表 schema 与 xlsx 补丁 → 导表 + protogen + 登记 C++ `table.vcxproj`/`CMakeLists.txt` → 实现 C++ 与 Java 系列校验/聚合与单测 → 同步 Unity 客户端表/协议、实现纯 C# `AppearanceSeriesModels` / `AppearancePanelState` 与单测 → 全量静态检查、编译与定向测试验证。
+
+## 7. 批次二·终章：全员人物志配表化（9 位现役角色）与前后端契约闭环（2026-11-24）
+
+### 7.1 需求分析
+
+1. **补齐全部现役 9 位角色的人物志**：原首版仅在客户端硬编码 3 位人物志（陆照禾、祝停云、桑听雨），其余 5 位常规角色（冰剑少女、火符少年、莲花医者、天音少女、水龙书生）与五行试炼志 18 印专属角色（星阵宗师 `20_star_formation_master_girl`）均显示“暂无人物志”。现补齐全部 9 位现役角色的人物档案名、小名、人物小传与一段往事，且保持纯叙事、零属性加成。
+2. **清理已删角色残留引用**：祝停云往事《纸也赢过一回》中曾提及已移除的 `17_ghost_script_calligrapher_boy`（闻砚生），统一替换为同在归元城与留灯院往来的现役角色「沈澄」（水龙书生 `15_water_dragon_scholar_boy`），同时与「水火冰锋」合篇《霜火沧澜试》形成角色联动。
+3. **人物志迁入权威配置表单一事实源**：将人物志文案从客户端硬编码迁至 `CharacterAppearance` 权威配表（全字段 `common` owner，双服校验 + 客户端本地 `.pb` 查表），后续策划改字或新增角色传记只需改表并热更，无需重编客户端代码，且**不增加网络协议包体积**。
+
+### 7.2 设计分析
+
+1. **配表 Schema 增量**（`data/schema/characterappearance_table.proto`，字段号 `10..14` 顺序追加，不动既有 `1..9` 及永久位序 `cfg_bit_index`）：
+   - `string archive_name = 10;` — 人物档案名（空串表示该形象暂无人物志）
+   - `string nickname = 11;` — 人物小名/别称（可留空）
+   - `string biography_summary = 12;` — 人物小传摘要
+   - `string story_title = 13;` — 人物往事篇名
+   - `string story_body = 14;` — 人物往事正文（段落间以 `\n\n` 分隔）
+2. **零网络协议变更**：沿用 `proto/scene/player_appearance.proto`（RPC 442–447），不在 `CharacterAppearanceEntry` 透传长文案，避免每次拉取快照或状态推送膨胀。
+3. **全员 9 位现役人物档案总表**：
+   | `id` | `appearance_id` | 原形象名 | 所属系列 | 档案名（小名） | 往事篇名 |
+   |---:|---|---|---|---|---|
+   | 2 | `00_reference_topright_boy` | 金发带Q道童 | 1 · 留灯院旧友 | 陆照禾（阿禾） | 《第四只碗》 |
+   | 3 | `01_ice_sword_girl` | 冰剑少女 | 2 · 水火冰锋 | 霜见雪 | 《霜阶扫雪》 |
+   | 4 | `02_fire_talisman_boy` | 火符少年 | 2 · 水火冰锋 | 许炽（小炽） | 《焦边朱砂》 |
+   | 5 | `03_lotus_healer_girl` | 莲花医者 | 3 · 清音济世 | 苏青莲 | 《药包双结》 |
+   | 7 | `05_celestial_musician_girl` | 天音少女 | 3 · 清音济世 | 林知音 | 《廊下试弦》 |
+   | 8 | `09_bamboo_archer_girl` | 竹弓少女 | 1 · 留灯院旧友 | 桑听雨 | 《没有画的那一页》 |
+   | 9 | `10_crimson_spear_girl` | 赤枪少女 | 1 · 留灯院旧友 | 祝停云 | 《纸也赢过一回》 |
+   | 10 | `15_water_dragon_scholar_boy` | 水龙书生 | 2 · 水火冰锋 | 沈澄 | 《半盏未凉》 |
+   | 11 | `20_star_formation_master_girl` | 星阵宗师 | 0 · 试炼志 18 印专属 | 星璇 | 《十八星印》 |
+4. **双服务端启动强校验**（C++ `PlayerAppearanceSystem::ValidateTables` 与 Java `AppearanceTables.from` 保持一致）：
+   - 任意行允许 `archive_name` / `biography_summary` / `story_title` / `story_body` 四项全空（表示为“暂无人物志”）；
+   - 若四项或 `nickname` 任一非空，则四项核心字段（`archive_name`、`biography_summary`、`story_title`、`story_body`）必须**同时非空**，否则启动表校验 fail-closed 拒启，杜绝半残传记进入线上。
+5. **客户端热更安全查表**（`mmorpg-client/Assets/Scripts/Game/Appearance/AppearanceBiography.cs`）：
+   - `AppearanceBiographyCatalog` 遵守「不长期缓存 `*TableManager` 行引用」规则，每次按原始 `rawAppearanceId`（`StringComparer.Ordinal`，绝不经 `ResolveVisualId`）即时遍历 `CharacterAppearanceTableManager.Instance.FindAll()`；
+   - 表已加载时完全以当前快照为唯一事实源（支持热更立即生效，且表内留空人物志字段时精确返回 `false`）；仅在表尚未加载（`Count == 0` 的极简纯 C# 测试上下文）时回退至同源只读内置目录。
+
+### 7.3 思想分析
+
+- **单一事实源优于双份维护**：不另起 `CharacterBiography.xlsx` 并行表，直接复用 `CharacterAppearance` 的永久主键、导出流水线、外键与客户端 `.pb` 裁剪同步，减少表索引维护和跨表对齐风险。
+- **Fail-closed 配表校验**：文案虽由客户端渲染，但在双服务端表校验阶段拦住半残字段，确保任何导表合并事故在启动体检即暴露。
+- **不破坏既有状态机边界**：阅读层仍纯只读、零写请求、精确匹配原始 `appearance_id`、无档案条目仍可自动收起人物背景区。
+
+### 7.4 漏洞分析与防线
+
+| 潜在风险 | 防护措施 |
+|---|---|
+| 策划填了档案名却漏填小传或往事正文，导致客户端点开空弹层 | C++ `ValidateTables()` 与 Java `AppearanceTables.from()` 均做四项同空/同全校验；客户端 `TryGetByRawAppearanceId` 也只认四项齐全的行 |
+| 客户端缓存表行引用导致表热更后仍显示旧文案 | `AppearanceBiographyCatalog` 每次现查 `CharacterAppearanceTableManager.Instance.FindAll()` 快照，不跨调用缓存 `CharacterAppearanceTable` 实例 |
+| 历史视觉替代 ID（如 `QdaoHeadbandBoy`、`28_moon_rabbit_artificer`）误命中新传记 | 查找仅按原始 `row.AppearanceId` 精确 `Ordinal` 相等，绝不调用 `QdaoCharacterCatalog.ResolveVisualId` |
+| 既有测试断言“未写传记角色隐藏背景区”因全员补齐而失效 | 表驱动下，任意未在配表写传记的扩展 ID 或将某行传记留空的测试快照均继续精确返回 `false`，验证用例改用无传记条目覆盖该边界 |
+| `CharacterAppearance.xlsx` 升级字段时破坏 `cfg_bit_index` 位序或 `permanent_ids` 台账 | 只追加字段 `10..14`，不改动既有 `id`（`2,3,4,5,7,8,9,10,11`）及 `characterappearance_mapping.json` |
+
+### 7.5 步骤分析与执行步骤
+
+1. 更新 `data/schema/characterappearance_table.proto`（追加字段 `10..14`）、更新 `tools/scripts/appearance_switch_xlsx_patch.py` 与 `data/CharacterAppearance.xlsx` 全 9 行人物志数据；执行 `dev.bat export` 与 `gen_schema_index.py`。
+2. 在 C++ `player_appearance.cpp` 增加人物志完整性校验，在 `player_appearance_test.cpp` 补充全 9 人配表、半残拦截与全空放行用例；跑 `test_cpp_no_raw_pointer_member.py`、串行 `msbuild /m:1` 编译 `table`/`scene`/`bag_test` 并运行 `bag_test` 与 `scene.exe --validate-tables`。
+3. 在 Java 独立服运行 `ContractSync.java` 同步契约，更新 `AppearanceTables.java`、`AppearanceFeatureTest.java` 与 `PARITY.md`，执行 `mvnw.cmd -B -pl game-table,game-scene -am clean test`。
+4. 在 Unity 客户端运行 `tools/sync_tables.ps1` 同步最新 `characterappearance.pb` 与生成表类；改造 `AppearanceBiography.cs` 接入 `CharacterAppearanceTableManager`；更新 `AppearanceClientTests.cs`、`AppearanceChronicle.proj`/`Program.cs` 与 `AppearanceUiVerification.cs`；执行 `client_compile_check.ps1`、Unity EditMode 单测、`AppearanceUiVerification.CaptureAll` 截图验收与 `AppearanceChronicle.proj` 检查。
+5. 输出 `AppearanceSeriesV1` 完整 UI 美术切图与 ChatGPT 生成细节清单。

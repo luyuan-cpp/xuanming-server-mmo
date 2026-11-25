@@ -127,6 +127,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 战斗
 
 - [battle-art-prompts.md](design/battle-art-prompts.md) — 战斗美术生图提示词包与资产契约 v1
+- [battle-festival-beast-implementation-contract.md](design/battle-festival-beast-implementation-contract.md) — 「瑞兽迎春」活动实现设计与 UI Codex 独立接口契约
 - [battle-festival-beast-logic-handoff.md](design/battle-festival-beast-logic-handoff.md) — 瑞兽迎春：Gemini 逻辑实现交接
 - [battle-festival-beast-ui-handoff.md](design/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
 - [battle-festival-beast-v1.md](design/battle-festival-beast-v1.md) — 瑞兽迎春：轻量活动首发 V1
@@ -334,6 +335,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [horizontal-scale-logical-db.md](design/horizontal-scale-logical-db.md) — 全层水平扩展:逻辑库自治、角色护栏、目录分片、不停服迁移、多地域
 - [jeecg-gm-administration.md](design/jeecg-gm-administration.md) — 独立 JeecgBoot GM 管理系统
 - [jubaozhai-rmb-consignment-plan.md](design/jubaozhai-rmb-consignment-plan.md) — 聚宝斋人民币寄售：买卖主流程分步计划（D-17 mall 路线）
+- [linearizable-owner-authority.md](design/linearizable-owner-authority.md) — 线性一致 SQL 玩家归属权威与重连状态机设计（`go/shared/ownerauthority`）
 - [location-release-binding.md](design/location-release-binding.md) — 删 location 绑定"持有者已释放"(审计 §2.1 修复)
 - [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
 - [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2.1 终版）
@@ -357,6 +359,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
 - [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)
 - [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
+- [region-cell-routing-alignment.md](design/region-cell-routing-alignment.md) — Region → Cell 确定性蜂窝路由对齐设计（`go/shared/cellroute`）
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05）
 - [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全
 - [replace-legacy-current-maps-with-qdao-nav-20261124.md](design/replace-legacy-current-maps-with-qdao-nav-20261124.md) — 退役旧版 12.5 GB 三图（`CurrentMaps20261009`）、接通八景岛/月汐湾双端导航与主城临时替代方案
