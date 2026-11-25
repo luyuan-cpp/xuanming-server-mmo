@@ -20,6 +20,7 @@ import (
 type playmodeSnapshot struct {
     data   []*pb.PlayModeTable
     kvData map[uint32]*pb.PlayModeTable
+    idxAllowedTeamSizes map[uint32][]*pb.PlayModeTable
     idxBattleConfigId map[uint32][]*pb.PlayModeTable
 }
 
@@ -41,6 +42,7 @@ func NewPlayModeTableManager() *PlayModeTableManager {
     m := &PlayModeTableManager{}
     m.snap.Store(&playmodeSnapshot{
         kvData: make(map[uint32]*pb.PlayModeTable),
+        idxAllowedTeamSizes: make(map[uint32][]*pb.PlayModeTable),
         idxBattleConfigId: make(map[uint32][]*pb.PlayModeTable),
     })
     return m
@@ -86,11 +88,15 @@ func (m *PlayModeTableManager) loadSnapshot(configDir string, useBinary bool) (*
 
     snap := &playmodeSnapshot{
         kvData: make(map[uint32]*pb.PlayModeTable, len(container.Data)),
+        idxAllowedTeamSizes: make(map[uint32][]*pb.PlayModeTable),
         idxBattleConfigId: make(map[uint32][]*pb.PlayModeTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        for _, elem := range row.AllowedTeamSizes {
+            snap.idxAllowedTeamSizes[elem] = append(snap.idxAllowedTeamSizes[elem], row)
+        }
         snap.idxBattleConfigId[row.BattleConfigId] = append(snap.idxBattleConfigId[row.BattleConfigId], row)
     }
 
@@ -107,6 +113,12 @@ func (m *PlayModeTableManager) FindById(id uint32) (*pb.PlayModeTable, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
+}
+
+
+func (m *PlayModeTableManager) FindByAllowedTeamSizesIndex(key uint32) []*pb.PlayModeTable {
+    snap := m.snap.Load()
+    return snap.idxAllowedTeamSizes[key]
 }
 
 
@@ -132,6 +144,12 @@ func (m *PlayModeTableManager) Exists(id uint32) bool {
 func (m *PlayModeTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *PlayModeTableManager) CountByAllowedTeamSizesIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxAllowedTeamSizes[key])
 }
 
 

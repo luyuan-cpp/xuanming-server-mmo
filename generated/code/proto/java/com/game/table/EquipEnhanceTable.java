@@ -147,6 +147,17 @@ private static final long serialVersionUID = 0L;
     return level_;
   }
 
+  public static final int PITY_LIMIT_FIELD_NUMBER = 10;
+  private int pityLimit_ = 0;
+  /**
+   * <code>uint32 pity_limit = 10;</code>
+   * @return The pityLimit.
+   */
+  @java.lang.Override
+  public int getPityLimit() {
+    return pityLimit_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -188,6 +199,9 @@ private static final long serialVersionUID = 0L;
     if (level_ != 0) {
       output.writeUInt32(9, level_);
     }
+    if (pityLimit_ != 0) {
+      output.writeUInt32(10, pityLimit_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -227,6 +241,10 @@ private static final long serialVersionUID = 0L;
     if (level_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(9, level_);
+    }
+    if (pityLimit_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(10, pityLimit_);
     }
     return size;
   }
@@ -270,6 +288,8 @@ private static final long serialVersionUID = 0L;
         != other.getProfileId()) return false;
     if (getLevel()
         != other.getLevel()) return false;
+    if (getPityLimit()
+        != other.getPityLimit()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -300,6 +320,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getProfileId();
     hash = (37 * hash) + LEVEL_FIELD_NUMBER;
     hash = (53 * hash) + getLevel();
+    hash = (37 * hash) + PITY_LIMIT_FIELD_NUMBER;
+    hash = (53 * hash) + getPityLimit();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -440,6 +462,7 @@ private static final long serialVersionUID = 0L;
       materialCount_ = 0;
       profileId_ = 0;
       level_ = 0;
+      pityLimit_ = 0;
       return this;
     }
 
@@ -500,6 +523,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000100) != 0)) {
         result.level_ = level_;
       }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.pityLimit_ = pityLimit_;
+      }
     }
 
     @java.lang.Override
@@ -540,6 +566,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getLevel() != 0) {
         setLevel(other.getLevel());
+      }
+      if (other.getPityLimit() != 0) {
+        setPityLimit(other.getPityLimit());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -612,6 +641,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000100;
               break;
             } // case 72
+            case 80: {
+              pityLimit_ = input.readUInt32();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 80
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -913,6 +947,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearLevel() {
       bitField0_ = (bitField0_ & ~0x00000100);
       level_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int pityLimit_ ;
+    /**
+     * <code>uint32 pity_limit = 10;</code>
+     * @return The pityLimit.
+     */
+    @java.lang.Override
+    public int getPityLimit() {
+      return pityLimit_;
+    }
+    /**
+     * <code>uint32 pity_limit = 10;</code>
+     * @param value The pityLimit to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPityLimit(int value) {
+
+      pityLimit_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 pity_limit = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPityLimit() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      pityLimit_ = 0;
       onChanged();
       return this;
     }

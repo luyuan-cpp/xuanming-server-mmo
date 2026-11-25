@@ -228,12 +228,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayModeTable final : public ::goog
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAllowedTeamSizesFieldNumber = 6,
     kIdFieldNumber = 1,
     kMatchModeFieldNumber = 2,
     kBattleConfigIdFieldNumber = 3,
     kEnabledFieldNumber = 4,
     kTeamSizeMaxFieldNumber = 5,
   };
+  // repeated uint32 allowed_team_sizes = 6;
+  [[nodiscard]] int allowed_team_sizes_size()
+      const;
+  private:
+  int _internal_allowed_team_sizes_size() const;
+
+  public:
+  void clear_allowed_team_sizes() ;
+  [[nodiscard]] ::uint32_t allowed_team_sizes(int index) const;
+  void set_allowed_team_sizes(int index, ::uint32_t value);
+  void add_allowed_team_sizes(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& allowed_team_sizes()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_allowed_team_sizes();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_allowed_team_sizes() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_allowed_team_sizes();
+
+  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -288,7 +309,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayModeTable final : public ::goog
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -317,6 +338,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayModeTable final : public ::goog
         const PlayModeTable& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> allowed_team_sizes_;
+    ::google::protobuf::internal::CachedSize _allowed_team_sizes_cached_byte_size_;
     ::uint32_t id_;
     ::uint32_t match_mode_;
     ::uint32_t battle_config_id_;
@@ -560,7 +583,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayModeTableData final : public ::
 inline void PlayModeTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint32_t PlayModeTable::id() const {
   // @@protoc_insertion_point(field_get:PlayModeTable.id)
@@ -568,7 +591,7 @@ inline ::uint32_t PlayModeTable::id() const {
 }
 inline void PlayModeTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:PlayModeTable.id)
 }
 inline ::uint32_t PlayModeTable::_internal_id() const {
@@ -584,7 +607,7 @@ inline void PlayModeTable::_internal_set_id(::uint32_t value) {
 inline void PlayModeTable::clear_match_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.match_mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t PlayModeTable::match_mode() const {
   // @@protoc_insertion_point(field_get:PlayModeTable.match_mode)
@@ -592,7 +615,7 @@ inline ::uint32_t PlayModeTable::match_mode() const {
 }
 inline void PlayModeTable::set_match_mode(::uint32_t value) {
   _internal_set_match_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:PlayModeTable.match_mode)
 }
 inline ::uint32_t PlayModeTable::_internal_match_mode() const {
@@ -608,7 +631,7 @@ inline void PlayModeTable::_internal_set_match_mode(::uint32_t value) {
 inline void PlayModeTable::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t PlayModeTable::battle_config_id() const {
   // @@protoc_insertion_point(field_get:PlayModeTable.battle_config_id)
@@ -616,7 +639,7 @@ inline ::uint32_t PlayModeTable::battle_config_id() const {
 }
 inline void PlayModeTable::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:PlayModeTable.battle_config_id)
 }
 inline ::uint32_t PlayModeTable::_internal_battle_config_id() const {
@@ -632,7 +655,7 @@ inline void PlayModeTable::_internal_set_battle_config_id(::uint32_t value) {
 inline void PlayModeTable::clear_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline bool PlayModeTable::enabled() const {
   // @@protoc_insertion_point(field_get:PlayModeTable.enabled)
@@ -640,7 +663,7 @@ inline bool PlayModeTable::enabled() const {
 }
 inline void PlayModeTable::set_enabled(bool value) {
   _internal_set_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayModeTable.enabled)
 }
 inline bool PlayModeTable::_internal_enabled() const {
@@ -652,11 +675,62 @@ inline void PlayModeTable::_internal_set_enabled(bool value) {
   _impl_.enabled_ = value;
 }
 
+// repeated uint32 allowed_team_sizes = 6;
+inline int PlayModeTable::_internal_allowed_team_sizes_size() const {
+  return _internal_allowed_team_sizes().size();
+}
+inline int PlayModeTable::allowed_team_sizes_size() const {
+  return _internal_allowed_team_sizes_size();
+}
+inline void PlayModeTable::clear_allowed_team_sizes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allowed_team_sizes_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t PlayModeTable::allowed_team_sizes(int index) const {
+  // @@protoc_insertion_point(field_get:PlayModeTable.allowed_team_sizes)
+  return _internal_allowed_team_sizes().Get(index);
+}
+inline void PlayModeTable::set_allowed_team_sizes(int index, ::uint32_t value) {
+  _internal_mutable_allowed_team_sizes()->Set(index, value);
+  // @@protoc_insertion_point(field_set:PlayModeTable.allowed_team_sizes)
+}
+inline void PlayModeTable::add_allowed_team_sizes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_allowed_team_sizes()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:PlayModeTable.allowed_team_sizes)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& PlayModeTable::allowed_team_sizes() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PlayModeTable.allowed_team_sizes)
+  return _internal_allowed_team_sizes();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL PlayModeTable::mutable_allowed_team_sizes()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:PlayModeTable.allowed_team_sizes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_allowed_team_sizes();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+PlayModeTable::_internal_allowed_team_sizes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allowed_team_sizes_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+PlayModeTable::_internal_mutable_allowed_team_sizes() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.allowed_team_sizes_;
+}
+
 // uint32 team_size_max = 5;
 inline void PlayModeTable::clear_team_size_max() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_size_max_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t PlayModeTable::team_size_max() const {
   // @@protoc_insertion_point(field_get:PlayModeTable.team_size_max)
@@ -664,7 +738,7 @@ inline ::uint32_t PlayModeTable::team_size_max() const {
 }
 inline void PlayModeTable::set_team_size_max(::uint32_t value) {
   _internal_set_team_size_max(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayModeTable.team_size_max)
 }
 inline ::uint32_t PlayModeTable::_internal_team_size_max() const {

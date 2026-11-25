@@ -29,6 +29,24 @@ public:
     static void UpgradeSkill(entt::entity player,
         const ::UpgradeSkillRequest* request,
         ::UpgradeSkillResponse* response);
+    static void GetSkillCraftingState(entt::entity player,
+        const ::GetSkillCraftingStateRequest* request,
+        ::GetSkillCraftingStateResponse* response);
+    static void CraftSkillBook(entt::entity player,
+        const ::CraftSkillBookRequest* request,
+        ::CraftSkillBookResponse* response);
+    static void LearnSkillBook(entt::entity player,
+        const ::LearnSkillBookRequest* request,
+        ::LearnSkillBookResponse* response);
+    static void DismantleSkillBook(entt::entity player,
+        const ::DismantleSkillBookRequest* request,
+        ::DismantleSkillBookResponse* response);
+    static void SetCraftProxyStall(entt::entity player,
+        const ::SetCraftProxyStallRequest* request,
+        ::SetCraftProxyStallResponse* response);
+    static void ListCraftProxyStalls(entt::entity player,
+        const ::ListCraftProxyStallsRequest* request,
+        ::ListCraftProxyStallsResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -76,6 +94,60 @@ public:
             UpgradeSkill(player,
                 static_cast<const ::UpgradeSkillRequest*>(request),
                 static_cast<::UpgradeSkillResponse*>(response));
+			}
+            break;
+        case 5:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetSkillCraftingStateResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetSkillCraftingState(player,
+                static_cast<const ::GetSkillCraftingStateRequest*>(request),
+                static_cast<::GetSkillCraftingStateResponse*>(response));
+			}
+            break;
+        case 6:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::CraftSkillBookResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            CraftSkillBook(player,
+                static_cast<const ::CraftSkillBookRequest*>(request),
+                static_cast<::CraftSkillBookResponse*>(response));
+			}
+            break;
+        case 7:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::LearnSkillBookResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            LearnSkillBook(player,
+                static_cast<const ::LearnSkillBookRequest*>(request),
+                static_cast<::LearnSkillBookResponse*>(response));
+			}
+            break;
+        case 8:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::DismantleSkillBookResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            DismantleSkillBook(player,
+                static_cast<const ::DismantleSkillBookRequest*>(request),
+                static_cast<::DismantleSkillBookResponse*>(response));
+			}
+            break;
+        case 9:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SetCraftProxyStallResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SetCraftProxyStall(player,
+                static_cast<const ::SetCraftProxyStallRequest*>(request),
+                static_cast<::SetCraftProxyStallResponse*>(response));
+			}
+            break;
+        case 10:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ListCraftProxyStallsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ListCraftProxyStalls(player,
+                static_cast<const ::ListCraftProxyStallsRequest*>(request),
+                static_cast<::ListCraftProxyStallsResponse*>(response));
 			}
             break;
         default:

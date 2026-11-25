@@ -107,6 +107,8 @@ message TrialJournalSnapshot {
   repeated TrialJournalChapterView chapters = 11;
   repeated TrialJournalMilestoneView milestones = 12;
   repeated TrialRedeemableArtifactOption redeemable_artifacts = 13;
+  // true = 本角色已通关任意普通难度首领试炼，具备困难难度首领试炼准入资格（组队困难需全员均为 true）。
+  bool hard_boss_trial_unlocked = 14;
 }
 
 message GetTrialJournalRequest {}

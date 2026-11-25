@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include "core/utils/proto/proto_field_checker.h"
+#include "modules/id_segment/guid_segment_registry.h"
 #include "network/network_constants.h"
 #include "player/system/player_pet.h"
 #include "player/system/pet_entry_rules.h"
@@ -121,5 +122,45 @@ TEST_F(PetEntriesTest, FullCatalogTargetPassesSceneFieldThresholdAndEmptyTargetC
  ASSERT_FALSE(cleared.has_error_message());
  EXPECT_EQ(cleared.entries().remaining_points(), 20u);
  EXPECT_TRUE(Pet().entry_allocated().empty());
+}
+
+TEST_F(PetEntriesTest, StarterPetGrantedOnceForEmptyPlayerAndNeverDuplicated) {
+ auto& seg = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+ seg.Reset();
+ GuidSegmentClient::Options opt;
+ opt.mixIds = false;
+ opt.kindName = "item";
+ opt.initialStep = 1000;
+ ASSERT_TRUE(seg.Enable(opt, [](const std::string&, uint32_t) { return true; },
+  [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; }));
+ seg.Warm();
+ seg.OnResponse(0, 500001, 500099);
+ ASSERT_TRUE(seg.IsReady());
+
+ // 1. 老号已有宠物：仅置一次性标记，不重复发灵狐
+ auto& existingComp = tlsEcs.actorRegistry.get<PlayerPetComp>(player);
+ ASSERT_EQ(existingComp.pets_size(), 1);
+ EXPECT_FALSE(PetSystem::EnsureStarterPetGranted(player));
+ EXPECT_TRUE(existingComp.starter_pet_granted());
+ EXPECT_EQ(existingComp.pets_size(), 1);
+
+ // 2. 无宠新号：发放 1 只灵狐(table_id=1)并自动出战
+ entt::entity rookie = tlsEcs.actorRegistry.create();
+ tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(rookie).epoch = 1;
+ tlsEcs.actorRegistry.emplace<PlayerPetComp>(rookie);
+ tlsEcs.actorRegistry.emplace<LevelComp>(rookie).set_level(1);
+
+ EXPECT_TRUE(PetSystem::EnsureStarterPetGranted(rookie));
+ const auto& rookieComp = tlsEcs.actorRegistry.get<PlayerPetComp>(rookie);
+ ASSERT_EQ(rookieComp.pets_size(), 1);
+ EXPECT_EQ(rookieComp.pets(0).pet_table_id(), PetSystem::kStarterPetTableId);
+ EXPECT_EQ(rookieComp.active_pet_id(), rookieComp.pets(0).pet_id());
+ EXPECT_TRUE(rookieComp.starter_pet_granted());
+
+ // 3. 再次调用（即便清空宠栏模拟放生）也不再补发
+ tlsEcs.actorRegistry.get<PlayerPetComp>(rookie).clear_pets();
+ EXPECT_FALSE(PetSystem::EnsureStarterPetGranted(rookie));
+ EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerPetComp>(rookie).pets_size(), 0);
+ tlsEcs.actorRegistry.destroy(rookie);
 }
 }

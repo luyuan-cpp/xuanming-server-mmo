@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "8a3cb14b8c44ed4e";
+    public static final String SCHEMA_DIGEST = "2d08ed0321d964c6";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -18,6 +18,7 @@ public class TableLoader {
             "ActivityVitalityRule",
             "Buff",
             "Cooldown",
+            "EquipAffixQuality",
             "GuildDonate",
             "GuildShop",
             "MessageLimiter",
@@ -28,6 +29,7 @@ public class TableLoader {
             "SeasonSeal",
             "Skill",
             "SkillPermission",
+            "SkillScrollCraft",
             "TrialJournalEntry",
             "TrialJournalMilestone",
             "TrialJournalSeal"
@@ -86,6 +88,8 @@ public class TableLoader {
         DungeonTableManager.getInstance().load(configDir, useBinary);
 
         EquipAffixPoolTableManager.getInstance().load(configDir, useBinary);
+
+        EquipAffixQualityTableManager.getInstance().load(configDir, useBinary);
 
         EquipAffixRuleTableManager.getInstance().load(configDir, useBinary);
 
@@ -159,9 +163,15 @@ public class TableLoader {
 
         SkillPermissionTableManager.getInstance().load(configDir, useBinary);
 
+        SkillScrollCraftTableManager.getInstance().load(configDir, useBinary);
+
         TestTableManager.getInstance().load(configDir, useBinary);
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
+
+        TournamentRewardTableManager.getInstance().load(configDir, useBinary);
+
+        TournamentRuleTableManager.getInstance().load(configDir, useBinary);
 
         TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
 
@@ -188,7 +198,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(64);
+        CountDownLatch latch = new CountDownLatch(68);
 
         new Thread(() -> {
             try {
@@ -395,6 +405,16 @@ public class TableLoader {
                 EquipAffixPoolTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load EquipAffixPool table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                EquipAffixQualityTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load EquipAffixQuality table", e);
             } finally {
                 latch.countDown();
             }
@@ -762,6 +782,16 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                SkillScrollCraftTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load SkillScrollCraft table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 TestTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Test table", e);
@@ -775,6 +805,26 @@ public class TableLoader {
                 TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load TestMultiKey table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TournamentRewardTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TournamentReward table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                TournamentRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load TournamentRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -892,6 +942,8 @@ public class TableLoader {
 
         EquipAffixPoolTableManager.getInstance().load(configDir, useBinary);
 
+        EquipAffixQualityTableManager.getInstance().load(configDir, useBinary);
+
         EquipAffixRuleTableManager.getInstance().load(configDir, useBinary);
 
         EquipArtifactTableManager.getInstance().load(configDir, useBinary);
@@ -964,9 +1016,15 @@ public class TableLoader {
 
         SkillPermissionTableManager.getInstance().load(configDir, useBinary);
 
+        SkillScrollCraftTableManager.getInstance().load(configDir, useBinary);
+
         TestTableManager.getInstance().load(configDir, useBinary);
 
         TestMultiKeyTableManager.getInstance().load(configDir, useBinary);
+
+        TournamentRewardTableManager.getInstance().load(configDir, useBinary);
+
+        TournamentRuleTableManager.getInstance().load(configDir, useBinary);
 
         TrialJournalEntryTableManager.getInstance().load(configDir, useBinary);
 

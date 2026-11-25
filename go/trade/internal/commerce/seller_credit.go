@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"sync"
 
 	dspb "proto/data_service"
@@ -38,6 +39,7 @@ const (
 	positiveDelta                         = 2
 	negativePenalty                       = 6
 	violationPenalty                      = 25
+	maxKnownSellerDevices                 = 8 // 单持有周期内最多保留的常用设备指纹数（有界防膨胀）
 )
 
 // RoleOwnershipLookup 查询角色当前权威持有账号与单调递增的过户修订号 owner_revision。
@@ -54,6 +56,7 @@ type SellerCreditKey struct {
 }
 
 // SellerCreditProfile 是某角色在当前持有周期内的对外店铺评分档案。
+// LastIP / LastDeviceID 仅供服务端内部比对与防刷分判定，不得直接下发给其他玩家或作为 Prometheus 标签。
 type SellerCreditProfile struct {
 	SellerPlayerID       uint64
 	OwnerAccount         string
@@ -66,20 +69,40 @@ type SellerCreditProfile struct {
 	NeutralReviews       uint64
 	NegativeReviews      uint64
 	ViolationCount       uint64
+	EnvCreditCleared     bool     // true 表示检测到异地陌生新设备登录（私下卖号/借号/盗号风险），历史正面信用已直接清 0
+	EnvResetCount        uint64   // 本持有周期内触发异地换机清 0 的次数
+	LastEnvChangedAtMs   uint64   // 最近一次触发异地换机清 0 的时刻（毫秒）
+	LastIP               string   // 最近一次规范化的卖家登录/操作 IP（仅服务端内部使用）
+	LastDeviceID         string   // 最近一次规范化的卖家设备指纹（仅服务端内部使用）
+	KnownDevices         []string // 当前持有周期内已登记的常用设备指纹（上限 maxKnownSellerDevices，过户或异地换机重置）
 	CreditScore          uint32 // [0, 100]
 	StarRatingTenths     uint32 // [10, 50] => 1.0★ ~ 5.0★
 	PositiveRateBps      uint32 // [0, 10000] 万分比好评率
 	RiskTier             SellerRiskTier
 }
 
-// CompletedTradeFact 描述一笔经官方托管真实完成的交易事实。
+// SellerEnvironmentEvent 描述卖家一次登录或交易操作时由服务端可信网关/会话采集的环境信息。
+type SellerEnvironmentEvent struct {
+	SellerPlayerID uint64
+	OwnerAccount   string
+	OwnerRevision  uint64
+	IP             string
+	DeviceID       string
+	ObservedAtMs   uint64
+}
+
+// CompletedTradeFact 描述一笔经官方托管真实完成的交易事实（含可选的服务端可信 IP/设备指纹用于防刷分）。
 type CompletedTradeFact struct {
 	OrderID             string
 	SellerPlayerID      uint64
 	SellerAccount       string
 	SellerOwnerRevision uint64
+	SellerIP            string
+	SellerDeviceID      string
 	BuyerPlayerID       uint64
 	BuyerAccount        string
+	BuyerIP             string
+	BuyerDeviceID       string
 	AmountMinor         uint64
 	SettledAtMs         uint64
 }
@@ -98,8 +121,10 @@ type SellerReviewRecord struct {
 	SellerOwnerRevision uint64
 	BuyerPlayerID       uint64
 	BuyerAccount        string
+	BuyerIP             string
+	BuyerDeviceID       string
 	Rating              SellerReviewRating
-	CountedForScore     bool // 因防刷分窗口或低于最低计分金额时为 false（留痕但不涨分）
+	CountedForScore     bool // 因同 IP/同设备、防刷分窗口或低于最低计分金额时为 false（留痕但不涨分）
 	CreatedAtMs         uint64
 }
 
@@ -114,12 +139,14 @@ type SellerViolationRecord struct {
 	RecordedAtMs        uint64
 }
 
-// SellerCreditPolicy 控制防刷分窗口与最低有效计分门槛。
+// SellerCreditPolicy 控制防刷分窗口、最低有效计分门槛与异地换机清零后的防突击好评冷静期。
 type SellerCreditPolicy struct {
 	ReviewWindowMs                  uint64
 	PairScoreWindowMs               uint64
 	MaxScoredReviewsPerPairInWindow int
 	MinScoreAmountMinor             uint64
+	// PostEnvChangeScoreCooldownMs 卖家触发异地换机清 0 后的一段防刷分冷静期内，新好评不涨分（0 表示关闭）。
+	PostEnvChangeScoreCooldownMs uint64
 }
 
 func (p SellerCreditPolicy) normalized() SellerCreditPolicy {
@@ -142,17 +169,42 @@ type SellerCreditStore interface {
 	SaveProfile(ctx context.Context, profile SellerCreditProfile) error
 	MarkOrderCompleted(ctx context.Context, orderID string, key SellerCreditKey) (inserted bool, err error)
 	GetReviewByOrder(ctx context.Context, orderID string) (*SellerReviewRecord, bool, error)
-	CountPairScoredReviews(ctx context.Context, key SellerCreditKey, buyerKey string, sinceMs, nowMs uint64) (int, error)
+	// CountPairScoredReviews 统计窗口内来自同一买家账号、同一买家 IP 或同一买家设备的已计分评价数，防多小号同机/同网刷分。
+	CountPairScoredReviews(ctx context.Context, key SellerCreditKey, buyerKey, buyerIP, buyerDeviceID string, sinceMs, nowMs uint64) (int, error)
 	SaveReview(ctx context.Context, rec SellerReviewRecord) error
 	HasViolation(ctx context.Context, caseID string) (bool, error)
 	SaveViolation(ctx context.Context, rec SellerViolationRecord) error
 }
 
-// SellerCreditService 维护类店铺卖家信用评分，并在角色过户/换人时强制清空历史信用。
+// SellerCreditService 维护类店铺卖家信用评分，并在角色官方过户换人时强制清空、异地换陌生新设备时直接清 0 并严格防刷分。
 type SellerCreditService struct {
 	Store     SellerCreditStore
 	Ownership RoleOwnershipLookup
 	Policy    SellerCreditPolicy
+}
+
+func normalizeEnvToken(raw string) string {
+	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+func rememberKnownDevice(devices []string, device string) []string {
+	if device == "" || containsString(devices, device) {
+		return devices
+	}
+	out := append(append([]string(nil), devices...), device)
+	if len(out) > maxKnownSellerDevices {
+		out = out[len(out)-maxKnownSellerDevices:]
+	}
+	return out
 }
 
 func newInitialProfile(playerID uint64, account string, revision uint64, changed bool, nowMs uint64) SellerCreditProfile {
@@ -173,7 +225,12 @@ func newInitialProfile(playerID uint64, account string, revision uint64, changed
 }
 
 func recomputeCreditMetrics(p *SellerCreditProfile) {
-	score := int64(DefaultSellerInitialScore) +
+	baseScore := int64(DefaultSellerInitialScore)
+	if p.EnvCreditCleared {
+		// 异地陌生新设备触发直接清 0 后，新起点基准为 0（而非回弹到 60），必须重新从 0 积累真实好评。
+		baseScore = 0
+	}
+	score := baseScore +
 		int64(p.PositiveReviews)*positiveDelta -
 		int64(p.NegativeReviews)*negativePenalty -
 		int64(p.ViolationCount)*violationPenalty
@@ -192,7 +249,7 @@ func recomputeCreditMetrics(p *SellerCreditProfile) {
 		p.PositiveRateBps = 0
 	}
 
-	if totalRated == 0 && p.ViolationCount == 0 {
+	if !p.EnvCreditCleared && totalRated == 0 && p.ViolationCount == 0 {
 		p.StarRatingTenths = DefaultSellerInitialStarTenths
 	} else {
 		p.StarRatingTenths = 10 + (p.CreditScore*40+50)/100
@@ -201,7 +258,7 @@ func recomputeCreditMetrics(p *SellerCreditProfile) {
 	switch {
 	case p.ViolationCount > 0 || p.CreditScore < 40:
 		p.RiskTier = SellerRiskTierRestricted
-	case p.CompletedOrders < 5 || (p.OwnershipChanged && p.CompletedOrders < 10):
+	case p.CompletedOrders < 5 || (p.OwnershipChanged && p.CompletedOrders < 10) || (p.EnvCreditCleared && p.CompletedOrders < 10):
 		p.RiskTier = SellerRiskTierNewOrTransferred
 	case p.CompletedOrders >= 20 && p.CreditScore >= 85 && p.PositiveRateBps >= 9500:
 		p.RiskTier = SellerRiskTierTrusted
@@ -239,7 +296,7 @@ func (s *SellerCreditService) ensureEpochProfile(ctx context.Context, playerID u
 	return fresh, nil
 }
 
-// OnCharacterTransferred 在角色完成官方过户/换账号时主动清空新持有周期的信用档案并标记换人重算。
+// OnCharacterTransferred 在角色完成官方过户/换账号时主动清空新持有周期的信用档案（含环境基线与扣分计数）并标记换人重算。
 func (s *SellerCreditService) OnCharacterTransferred(ctx context.Context, playerID uint64, newAccount string, newOwnerRevision uint64, nowMs uint64) (SellerCreditProfile, error) {
 	if s == nil || s.Store == nil {
 		return SellerCreditProfile{}, errors.New("卖家信用存储未装配")
@@ -252,6 +309,67 @@ func (s *SellerCreditService) OnCharacterTransferred(ctx context.Context, player
 		return SellerCreditProfile{}, err
 	}
 	return fresh, nil
+}
+
+// RecordSellerEnvironment 记录卖家一次可信登录/挂单环境（IP 与设备指纹）：
+// - 首次采集只写入基线，不扣分不清零；
+// - 单纯换 IP（如坐高铁回家、出差、切 5G/Wi-Fi，但设备未变）绝不影响信用；
+// - 同 IP 下切换设备（如家里同 Wi-Fi 手机切电脑）或切回已登记的常用设备不影响信用；
+// - 一旦同时命中「从未见过的陌生新设备」且「IP 也发生变化」（私下卖号/外地借号/盗号换机）：
+//   直接将历史成交、好评、中评与信用分清 0（EnvCreditCleared=true, CreditScore=0, 1.0★, Restricted），
+//   并将常用设备表重置为仅当前新设备；但保留原有 NegativeReviews 与 ViolationCount，严禁借异地换机洗白黑历史！
+func (s *SellerCreditService) RecordSellerEnvironment(ctx context.Context, ev SellerEnvironmentEvent) (profile SellerCreditProfile, cleared bool, err error) {
+	if s == nil || s.Store == nil {
+		return SellerCreditProfile{}, false, errors.New("卖家信用服务未装配")
+	}
+	ip := normalizeEnvToken(ev.IP)
+	device := normalizeEnvToken(ev.DeviceID)
+	if ev.SellerPlayerID == 0 || ev.OwnerRevision == 0 || ev.OwnerAccount == "" || (ip == "" && device == "") {
+		return SellerCreditProfile{}, false, ErrInvalid
+	}
+	profile, err = s.ensureEpochProfile(ctx, ev.SellerPlayerID, ev.OwnerAccount, ev.OwnerRevision, ev.ObservedAtMs)
+	if err != nil {
+		return SellerCreditProfile{}, false, err
+	}
+	ipChanged := ip != "" && profile.LastIP != "" && ip != profile.LastIP
+	hasDeviceBaseline := len(profile.KnownDevices) > 0 || profile.LastDeviceID != ""
+	isUnknownNewDevice := device != "" && hasDeviceBaseline && !containsString(profile.KnownDevices, device) && device != profile.LastDeviceID
+
+	updated := false
+	if ip != "" && profile.LastIP != ip {
+		profile.LastIP = ip
+		updated = true
+	}
+	// 命中「陌生新设备 + IP 同时变化」：私下卖号 / 外地借号 / 盗号换机 -> 直接清 0 正面信用与分数！
+	if isUnknownNewDevice && ipChanged {
+		profile.CompletedOrders = 0
+		profile.PositiveReviews = 0
+		profile.NeutralReviews = 0
+		// 刻意不清空 NegativeReviews 与 ViolationCount，防止劣迹账号借异地换机洗白黑历史。
+		profile.EnvCreditCleared = true
+		profile.EnvResetCount++
+		profile.LastEnvChangedAtMs = ev.ObservedAtMs
+		profile.LastDeviceID = device
+		profile.KnownDevices = []string{device}
+		recomputeCreditMetrics(&profile)
+		cleared = true
+		updated = true
+	} else if device != "" {
+		if profile.LastDeviceID != device {
+			profile.LastDeviceID = device
+			updated = true
+		}
+		if !containsString(profile.KnownDevices, device) {
+			profile.KnownDevices = rememberKnownDevice(profile.KnownDevices, device)
+			updated = true
+		}
+	}
+	if updated {
+		if err := s.Store.SaveProfile(ctx, profile); err != nil {
+			return SellerCreditProfile{}, false, err
+		}
+	}
+	return profile, cleared, nil
 }
 
 // GetProfile 返回卖家在当前权威持有者周期下的店铺信用档案。
@@ -306,7 +424,7 @@ func (s *SellerCreditService) RecordCompletedTrade(ctx context.Context, fact Com
 // SubmitReview 处理买家对已完成托管订单的一次评价：
 // - 绑定原成交时的 SellerOwnerRevision，角色过户后的迟到评价绝不污染新持有者信用；
 // - 禁止同账号自评、禁止重复改评刷分、强制评价窗口期；
-// - 同一买家↔同一卖家 7 天滚动窗口内超出上限或低于最低计分金额时只留痕不涨信用分。
+// - 防刷分：买卖双方同 IP/同设备、或同一买家账号/IP/设备在 7 天窗口内超限、或低于最低计分金额、或处于换环境后好评冷静期时，一律留痕但不计分。
 func (s *SellerCreditService) SubmitReview(ctx context.Context, in SellerReviewRequest, nowMs uint64) (SellerReviewRecord, SellerCreditProfile, bool, error) {
 	if s == nil || s.Store == nil {
 		return SellerReviewRecord{}, SellerCreditProfile{}, false, errors.New("卖家信用服务未装配")
@@ -345,20 +463,44 @@ func (s *SellerCreditService) SubmitReview(ctx context.Context, in SellerReviewR
 	if buyerKey == "" {
 		buyerKey = "player:" + strconv.FormatUint(t.BuyerPlayerID, 10)
 	}
+	sellerIP := normalizeEnvToken(t.SellerIP)
+	if sellerIP == "" {
+		sellerIP = profile.LastIP
+	}
+	sellerDev := normalizeEnvToken(t.SellerDeviceID)
+	if sellerDev == "" {
+		sellerDev = profile.LastDeviceID
+	}
+	buyerIP := normalizeEnvToken(t.BuyerIP)
+	buyerDev := normalizeEnvToken(t.BuyerDeviceID)
+
 	var windowStart uint64
 	if nowMs > policy.PairScoreWindowMs {
 		windowStart = nowMs - policy.PairScoreWindowMs
 	}
-	pairCount, err := s.Store.CountPairScoredReviews(ctx, key, buyerKey, windowStart, nowMs)
+	pairCount, err := s.Store.CountPairScoredReviews(ctx, key, buyerKey, buyerIP, buyerDev, windowStart, nowMs)
 	if err != nil {
 		return SellerReviewRecord{}, SellerCreditProfile{}, false, err
 	}
 
 	counted := true
+	// 1) 买卖双方同 IP 或同设备互评：防自开小号或工作室同机刷分。
+	if (sellerIP != "" && buyerIP != "" && sellerIP == buyerIP) ||
+		(sellerDev != "" && buyerDev != "" && sellerDev == buyerDev) {
+		counted = false
+	}
+	// 2) 低于最低计分金额的好评不涨分（防 1 银两刷五星）。
 	if in.Rating == SellerRatingPositive && t.AmountMinor < policy.MinScoreAmountMinor {
 		counted = false
 	}
+	// 3) 同一买家账号、同一买家 IP 或同一买家设备在 7 天窗口内超出计分次数上限。
 	if pairCount >= policy.MaxScoredReviewsPerPairInWindow {
+		counted = false
+	}
+	// 4) 卖家触发异地换机清 0 后进入防刷分冷静期时，短期突击好评不涨分。
+	if in.Rating == SellerRatingPositive && policy.PostEnvChangeScoreCooldownMs > 0 &&
+		profile.LastEnvChangedAtMs > 0 && nowMs >= profile.LastEnvChangedAtMs &&
+		nowMs-profile.LastEnvChangedAtMs < policy.PostEnvChangeScoreCooldownMs {
 		counted = false
 	}
 
@@ -368,6 +510,8 @@ func (s *SellerCreditService) SubmitReview(ctx context.Context, in SellerReviewR
 		SellerOwnerRevision: t.SellerOwnerRevision,
 		BuyerPlayerID:       t.BuyerPlayerID,
 		BuyerAccount:        buyerKey,
+		BuyerIP:             buyerIP,
+		BuyerDeviceID:       buyerDev,
 		Rating:              in.Rating,
 		CountedForScore:     counted,
 		CreatedAtMs:         nowMs,
@@ -489,13 +633,19 @@ func (m *MemorySellerCreditStore) GetReviewByOrder(_ context.Context, orderID st
 	return &r, true, nil
 }
 
-func (m *MemorySellerCreditStore) CountPairScoredReviews(_ context.Context, key SellerCreditKey, buyerKey string, sinceMs, nowMs uint64) (int, error) {
+func (m *MemorySellerCreditStore) CountPairScoredReviews(_ context.Context, key SellerCreditKey, buyerKey, buyerIP, buyerDeviceID string, sinceMs, nowMs uint64) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	count := 0
 	for _, r := range m.reviews {
-		if r.SellerPlayerID == key.SellerPlayerID && r.SellerOwnerRevision == key.OwnerRevision &&
-			r.BuyerAccount == buyerKey && r.CountedForScore && r.CreatedAtMs >= sinceMs && r.CreatedAtMs <= nowMs {
+		if r.SellerPlayerID != key.SellerPlayerID || r.SellerOwnerRevision != key.OwnerRevision ||
+			!r.CountedForScore || r.CreatedAtMs < sinceMs || r.CreatedAtMs > nowMs {
+			continue
+		}
+		sameBuyer := r.BuyerAccount == buyerKey ||
+			(buyerIP != "" && r.BuyerIP != "" && r.BuyerIP == buyerIP) ||
+			(buyerDeviceID != "" && r.BuyerDeviceID != "" && r.BuyerDeviceID == buyerDeviceID)
+		if sameBuyer {
 			count++
 		}
 	}

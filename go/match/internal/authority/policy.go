@@ -33,6 +33,8 @@ func (s *Store) EnsureGlobalPolicy(ctx context.Context, c config.Config) error {
 	// 人数档真人 PVP 的组队限制（2026-11-05）：开战提交事务按它复核组队成员评分差（RequirePartyRatingGapTx）；
 	// v1 同时标记「每侧 5 人不收 4 人队」这条代码规则（team.CheckPvpPartySize），改规则要升版本号。
 	parts = append(parts, "pvp-party-rules/v1", strconv.FormatUint(uint64(c.GlobalMatch.PartyRatingGapMax), 10))
+	// 论剑排位硬上限分差窗口（docs/design/ranked-play-season-ui-candidate.md §2.3）：PVP_TEAM 永不退化为 +Inf。
+	parts = append(parts, "ranked-spread-cap/v1")
 	mac := hmac.New(sha256.New, s.Secret)
 	_, _ = mac.Write([]byte(strings.Join(parts, "\n")))
 	digest := mac.Sum(nil)

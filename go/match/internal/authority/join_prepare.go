@@ -79,7 +79,7 @@ func (s *Store) prepareJoinOnce(ctx context.Context, offered *pb.MatchAuthorityT
 	if err = s.requireMatchEntryTx(ctx, tx, []*pb.MatchAuthorityTicketRecord{actor}, nil); err != nil {
 		return nil, nil, false, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", offered.PlayerId, []byte{}); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", offered.PlayerId, []byte{}, []byte{}); err != nil {
 		return nil, nil, false, err
 	}
 	current, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", offered.PlayerId))
@@ -121,7 +121,10 @@ func (s *Store) prepareJoinOnce(ctx context.Context, offered *pb.MatchAuthorityT
 	if _, err = tx.ExecContext(ctx, "INSERT INTO match_join_intent(player_id,request_id,ticket_record,cancelled,request_high,request_low,owner_account,owner_revision,spectator_exit,exit_prepared,request_payload,state) VALUES(?,?,?,0,?,?,?,?,?,1,?,1)", original.PlayerId, original.RequestId, originalRaw, high, low, original.OwnerAccount, original.OwnerRevision, exitRaw, raw); err != nil {
 		return nil, nil, false, err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=0,formation_id=0,team_id=0,owner_account=?,owner_revision=? WHERE player_id=?", original.Ticket, original.RequestId, original.Mode, original.ConfigId, original.TeamSize, original.OwnerAccount, original.OwnerRevision, original.PlayerId); err != nil {
+	if original.RankedContext == nil {
+		original.RankedContext = []byte{}
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=0,formation_id=0,team_id=0,owner_account=?,owner_revision=?,ranked_context=? WHERE player_id=?", original.Ticket, original.RequestId, original.Mode, original.ConfigId, original.TeamSize, original.OwnerAccount, original.OwnerRevision, original.RankedContext, original.PlayerId); err != nil {
 		return nil, nil, false, err
 	}
 	return original, exit, true, tx.Commit()

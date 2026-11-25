@@ -666,8 +666,13 @@ type PrepareBattleRequest struct {
 	BattleNodeId      uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`                // 写进 InBattleComp(日志/排障用)
 	DeadlineMs        uint64                 `protobuf:"varint,4,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                        // 战斗作废期限(Unix 毫秒),scene reaper 依据
 	PrepareDeadlineMs uint64                 `protobuf:"varint,5,opt,name=prepare_deadline_ms,json=prepareDeadlineMs,proto3" json:"prepare_deadline_ms,omitempty"` // 备战作废期限(Unix 毫秒):CreateBattle 确认前 reaper 按它解冻(二期,设计 cross-zone-matchmaking.md §10);0 = 沿用 deadline_ms
-	// 论剑排位冻结上下文(非排位留空)。season_id != 0 时 scene 从空数据构建竞技快照并跳过背包预留,校验失败一律拒开局。
+	// 排位/免费预设上下文(非排位且非预设娱乐场留空)。仅 use_free_preset=true 时 scene 从免费预设构建临时快照并跳过背包预留;
+	// 正式人宠会武(season_id != 0 && !use_free_preset)使用本人真实养成快照。
 	RankedContext *battle.RankedMatchContext `protobuf:"bytes,6,opt,name=ranked_context,json=rankedContext,proto3" json:"ranked_context,omitempty"`
+	// 开局冻结的副本模板 ID(DungeonTable.id)，用于 scene 权威校验困难首领试炼解锁与试炼局规则；0 = 旧发送方未填。
+	BattleConfigId uint32 `protobuf:"varint,7,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	// 开局冻结的匹配模式(match.MatchMode 枚举值)；0 = 旧发送方未填。
+	MatchMode     uint32 `protobuf:"varint,8,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -742,6 +747,20 @@ func (x *PrepareBattleRequest) GetRankedContext() *battle.RankedMatchContext {
 		return x.RankedContext
 	}
 	return nil
+}
+
+func (x *PrepareBattleRequest) GetBattleConfigId() uint32 {
+	if x != nil {
+		return x.BattleConfigId
+	}
+	return 0
+}
+
+func (x *PrepareBattleRequest) GetMatchMode() uint32 {
+	if x != nil {
+		return x.MatchMode
+	}
+	return 0
 }
 
 type PrepareBattleResponse struct {
@@ -962,7 +981,7 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"c\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x121\n" +
-	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\x83\x02\n" +
+	"\x14placement_generation\x18\x02 \x01(\x04R\x13placementGeneration\"\xcc\x02\n" +
 	"\x14PrepareBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +
@@ -970,7 +989,10 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\vdeadline_ms\x18\x04 \x01(\x04R\n" +
 	"deadlineMs\x12.\n" +
 	"\x13prepare_deadline_ms\x18\x05 \x01(\x04R\x11prepareDeadlineMs\x12:\n" +
-	"\x0eranked_context\x18\x06 \x01(\v2\x13.RankedMatchContextR\rrankedContext\"\xad\x01\n" +
+	"\x0eranked_context\x18\x06 \x01(\v2\x13.RankedMatchContextR\rrankedContext\x12(\n" +
+	"\x10battle_config_id\x18\a \x01(\rR\x0ebattleConfigId\x12\x1d\n" +
+	"\n" +
+	"match_mode\x18\b \x01(\rR\tmatchMode\"\xad\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +

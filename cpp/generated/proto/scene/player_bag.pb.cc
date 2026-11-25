@@ -85,6 +85,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::EquipFixedAffixInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::EquipAffixQualityInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::CraftMasteryInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::EquipFixedAffixSlotInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::EquipArtifactInfo
@@ -1077,7 +1081,7 @@ constexpr auto GetEquipmentMaterialRewardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1201,7 +1205,7 @@ constexpr auto GetEquipmentCraftRulesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1528,7 +1532,7 @@ constexpr auto EquipmentCraftMaterial::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -1591,11 +1595,11 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1626,6 +1630,26 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentCraftChoice, _impl_.affix_id_), 4>(),
        {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.affix_id_)}},
+      // bool use_guarantee_charm = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentCraftChoice, _impl_.use_guarantee_charm_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.use_guarantee_charm_)}},
+      // bool allow_bound_materials = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentCraftChoice, _impl_.allow_bound_materials_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.allow_bound_materials_)}},
+      // uint64 proxy_master_player_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftChoice, _impl_.proxy_master_player_id_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.proxy_master_player_id_)}},
+      // optional uint32 expected_polish_pity_count = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentCraftChoice, _impl_.expected_polish_pity_count_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.expected_polish_pity_count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -1641,6 +1665,14 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
       {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.affix_slot_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 affix_id = 5;
       {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.affix_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool use_guarantee_charm = 6;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.use_guarantee_charm_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool allow_bound_materials = 7;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.allow_bound_materials_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 proxy_master_player_id = 8;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.proxy_master_player_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // optional uint32 expected_polish_pity_count = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.expected_polish_pity_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1657,7 +1689,11 @@ inline constexpr EquipmentCraftChoice::Impl_::Impl_(
         config_id_{0u},
         item_id_{::uint64_t{0u}},
         affix_slot_{0u},
-        affix_id_{0u} {}
+        affix_id_{0u},
+        use_guarantee_charm_{false},
+        allow_bound_materials_{false},
+        expected_polish_pity_count_{0u},
+        proxy_master_player_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr EquipmentCraftChoice::EquipmentCraftChoice(::_pbi::ConstantInitialized,
@@ -1700,7 +1736,7 @@ constexpr auto EquipmentCraftChoice::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -2072,11 +2108,11 @@ constexpr EquipFixedAffixInfo::ParseTableT_ EquipFixedAffixInfo::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      24, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4278190080,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      24,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2088,12 +2124,12 @@ constexpr EquipFixedAffixInfo::ParseTableT_ EquipFixedAffixInfo::InternalGenerat
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 affix_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.affix_id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.affix_id_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.affix_id_)}},
       // uint32 pool = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.pool_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.pool_), 4>(),
+       {16, 4, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.pool_)}},
       // string name = 3;
       {::_pbi::TcParser::FastUS1,
@@ -2104,33 +2140,88 @@ constexpr EquipFixedAffixInfo::ParseTableT_ EquipFixedAffixInfo::InternalGenerat
        {34, 1, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.description_)}},
       // uint32 value_bps = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.value_bps_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.value_bps_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.value_bps_)}},
       // uint32 source_cap_bps = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.source_cap_bps_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.source_cap_bps_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.source_cap_bps_)}},
       // uint32 effect = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.effect_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.effect_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_)}},
       // uint32 effect_param = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.effect_param_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.effect_param_), 8>(),
+       {64, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_param_)}},
       // uint32 unit = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.unit_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.unit_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.unit_)}},
       // uint32 material_config_id = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.material_config_id_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.material_config_id_), 10>(),
+       {80, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_config_id_)}},
       // uint32 material_count = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.material_count_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.material_count_), 11>(),
+       {88, 11, 0,
         PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_count_)}},
+      // uint32 quality_tier = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.quality_tier_), 12>(),
+       {96, 12, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_tier_)}},
+      // string quality_name = 13;
+      {::_pbi::TcParser::FastUS1,
+       {106, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_name_)}},
+      // uint32 quality_ratio_pct = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.quality_ratio_pct_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_ratio_pct_)}},
+      // uint32 max_value_bps = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipFixedAffixInfo, _impl_.max_value_bps_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.max_value_bps_)}},
+      // uint32 polish_pity_count = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_pity_count_)}},
+      // uint32 polish_pity_limit = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_pity_limit_)}},
+      // bool polish_exempt = 18;
+      {::_pbi::TcParser::FastV8S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_exempt_)}},
+      // uint32 polish_material_config_id = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_material_config_id_)}},
+      // uint32 polish_material_count = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 20, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_material_count_)}},
+      // uint64 polish_gold_cost = 21;
+      {::_pbi::TcParser::FastV64S2,
+       {424, 19, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_gold_cost_)}},
+      // uint32 reforge_material_config_id = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_material_config_id_)}},
+      // uint32 reforge_material_count = 23;
+      {::_pbi::TcParser::FastV32S2,
+       {440, 23, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_material_count_)}},
+      // uint64 reforge_gold_cost = 24;
+      {::_pbi::TcParser::FastV64S2,
+       {448, 22, 0,
+        PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_gold_cost_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -2139,34 +2230,61 @@ constexpr EquipFixedAffixInfo::ParseTableT_ EquipFixedAffixInfo::InternalGenerat
       65535, 65535
     }}, {{
       // uint32 affix_id = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.affix_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.affix_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 pool = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.pool_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.pool_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 3;
       {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string description = 4;
       {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.description_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 value_bps = 5;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.value_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.value_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 source_cap_bps = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.source_cap_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.source_cap_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 effect = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 effect_param = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_param_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.effect_param_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 unit = 9;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.unit_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.unit_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 material_config_id = 10;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_config_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_config_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 material_count = 11;
-      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 quality_tier = 12;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_tier_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string quality_name = 13;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 quality_ratio_pct = 14;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.quality_ratio_pct_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_value_bps = 15;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.max_value_bps_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 polish_pity_count = 16;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_pity_count_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 polish_pity_limit = 17;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_pity_limit_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool polish_exempt = 18;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_exempt_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 polish_material_config_id = 19;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_material_config_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 polish_material_count = 20;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_material_count_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 polish_gold_cost = 21;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.polish_gold_cost_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 reforge_material_config_id = 22;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_material_config_id_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 reforge_material_count = 23;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_material_count_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 reforge_gold_cost = 24;
+      {PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_gold_cost_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
-      "\23\0\0\4\13\0\0\0\0\0\0\0\0\0\0\0"
+      "\23\0\0\4\13\0\0\0\0\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "EquipFixedAffixInfo"
       "name"
       "description"
+      "quality_name"
     }},
   };
 }
@@ -2182,6 +2300,9 @@ inline constexpr EquipFixedAffixInfo::Impl_::Impl_(
         description_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        quality_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         affix_id_{0u},
         pool_{0u},
         value_bps_{0u},
@@ -2190,7 +2311,19 @@ inline constexpr EquipFixedAffixInfo::Impl_::Impl_(
         effect_param_{0u},
         unit_{0u},
         material_config_id_{0u},
-        material_count_{0u} {}
+        material_count_{0u},
+        quality_tier_{0u},
+        quality_ratio_pct_{0u},
+        max_value_bps_{0u},
+        polish_pity_count_{0u},
+        polish_pity_limit_{0u},
+        polish_exempt_{false},
+        polish_material_config_id_{0u},
+        polish_gold_cost_{::uint64_t{0u}},
+        polish_material_count_{0u},
+        reforge_material_config_id_{0u},
+        reforge_gold_cost_{::uint64_t{0u}},
+        reforge_material_count_{0u} {}
 
 template <typename>
 constexpr EquipFixedAffixInfo::EquipFixedAffixInfo(::_pbi::ConstantInitialized,
@@ -2296,11 +2429,11 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2347,9 +2480,18 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
       {::_pbi::TcParser::FastUS1,
        {74, 1, 0,
         PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.material_icon_key_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 pity_limit = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipEnhancePreview, _impl_.pity_limit_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_limit_)}},
+      // uint32 current_pity_count = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipEnhancePreview, _impl_.current_pity_count_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.current_pity_count_)}},
+      // bool pity_guaranteed_next = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipEnhancePreview, _impl_.pity_guaranteed_next_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -2374,6 +2516,12 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.fail_level_loss_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string material_icon_key = 9;
       {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.material_icon_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 pity_limit = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_limit_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 current_pity_count = 11;
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.current_pity_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool pity_guaranteed_next = 12;
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -2402,7 +2550,10 @@ inline constexpr EquipEnhancePreview::Impl_::Impl_(
         material_config_id_{0u},
         material_count_{0u},
         bonus_permyriad_{0u},
-        fail_level_loss_{0u} {}
+        fail_level_loss_{0u},
+        pity_limit_{0u},
+        current_pity_count_{0u},
+        pity_guaranteed_next_{false} {}
 
 template <typename>
 constexpr EquipEnhancePreview::EquipEnhancePreview(::_pbi::ConstantInitialized,
@@ -2866,7 +3017,7 @@ constexpr auto EquipArtifactInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -2917,6 +3068,189 @@ const ::_pbi::ClassData* EquipArtifactInfo_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class EquipAffixQualityInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipAffixQualityInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_._has_bits_);
+};
+
+constexpr EquipAffixQualityInfo::ParseTableT_ EquipAffixQualityInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipAffixQualityInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 quality_tier = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipAffixQualityInfo, _impl_.quality_tier_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.quality_tier_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.name_)}},
+      // uint32 ratio_pct = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipAffixQualityInfo, _impl_.ratio_pct_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.ratio_pct_)}},
+      // uint32 apprentice_rate_bps = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipAffixQualityInfo, _impl_.apprentice_rate_bps_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.apprentice_rate_bps_)}},
+      // uint32 artisan_rate_bps = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipAffixQualityInfo, _impl_.artisan_rate_bps_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.artisan_rate_bps_)}},
+      // uint32 master_rate_bps = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipAffixQualityInfo, _impl_.master_rate_bps_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.master_rate_bps_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 quality_tier = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.quality_tier_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 ratio_pct = 3;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.ratio_pct_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 apprentice_rate_bps = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.apprentice_rate_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 artisan_rate_bps = 5;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.artisan_rate_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 master_rate_bps = 6;
+      {PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.master_rate_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+      "\25\0\4\0\0\0\0\0"
+      "EquipAffixQualityInfo"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr EquipAffixQualityInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        quality_tier_{0u},
+        ratio_pct_{0u},
+        apprentice_rate_bps_{0u},
+        artisan_rate_bps_{0u},
+        master_rate_bps_{0u} {}
+
+template <typename>
+constexpr EquipAffixQualityInfo::EquipAffixQualityInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipAffixQualityInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipAffixQualityInfo(arena);
+}
+constexpr auto EquipAffixQualityInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EquipAffixQualityInfo), alignof(EquipAffixQualityInfo));
+}
+constexpr auto EquipAffixQualityInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipAffixQualityInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipAffixQualityInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipAffixQualityInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipAffixQualityInfo>(), &EquipAffixQualityInfo::ByteSizeLong,
+              &EquipAffixQualityInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[28],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipAffixQualityInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipAffixQualityInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipAffixQualityInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipAffixQualityInfo::InternalGenerateClassData_(
+            _default, &EquipAffixQualityInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipAffixQualityInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipAffixQualityInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipAffixQualityInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipAffixQualityInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipAffixQualityInfoGlobalsTypeInternal EquipAffixQualityInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipAffixQualityInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipAffixQualityInfo_globals_.GetClassData();
+#else
+  return EquipAffixQualityInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class EnhanceEquipRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<EnhanceEquipRequest>()._impl_._has_bits_);
@@ -2929,11 +3263,11 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2943,7 +3277,10 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::EnhanceEquipRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // optional uint32 expected_pity_count = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnhanceEquipRequest, _impl_.expected_pity_count_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_)}},
       // uint64 item_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnhanceEquipRequest, _impl_.item_id_), 0>(),
        {8, 0, 0,
@@ -2965,6 +3302,8 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_level_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 client_request_id = 3;
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // optional uint32 expected_pity_count = 4;
+      {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -2979,7 +3318,8 @@ inline constexpr EnhanceEquipRequest::Impl_::Impl_(
       : _cached_size_{0},
         item_id_{::uint64_t{0u}},
         client_request_id_{::uint64_t{0u}},
-        expected_level_{0u} {}
+        expected_level_{0u},
+        expected_pity_count_{0u} {}
 
 template <typename>
 constexpr EnhanceEquipRequest::EnhanceEquipRequest(::_pbi::ConstantInitialized,
@@ -3069,6 +3409,183 @@ const ::_pbi::ClassData* EnhanceEquipRequest_get_class_data() {
   return EnhanceEquipRequest_globals_.GetClassData();
 #else
   return EnhanceEquipRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CraftMasteryInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CraftMasteryInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_._has_bits_);
+};
+
+constexpr CraftMasteryInfo::ParseTableT_ CraftMasteryInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CraftMasteryInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 tier = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftMasteryInfo, _impl_.tier_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.tier_)}},
+      // string tier_name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.tier_name_)}},
+      // uint32 exp = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftMasteryInfo, _impl_.exp_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.exp_)}},
+      // uint32 next_tier_exp = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftMasteryInfo, _impl_.next_tier_exp_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.next_tier_exp_)}},
+      // uint32 top_quality_rate_bps = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CraftMasteryInfo, _impl_.top_quality_rate_bps_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.top_quality_rate_bps_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 tier = 1;
+      {PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.tier_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string tier_name = 2;
+      {PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.tier_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 exp = 3;
+      {PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.exp_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 next_tier_exp = 4;
+      {PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.next_tier_exp_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 top_quality_rate_bps = 5;
+      {PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.top_quality_rate_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+      "\20\0\11\0\0\0\0\0"
+      "CraftMasteryInfo"
+      "tier_name"
+    }},
+  };
+}
+
+
+inline constexpr CraftMasteryInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        tier_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        tier_{0u},
+        exp_{0u},
+        next_tier_exp_{0u},
+        top_quality_rate_bps_{0u} {}
+
+template <typename>
+constexpr CraftMasteryInfo::CraftMasteryInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CraftMasteryInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CraftMasteryInfo(arena);
+}
+constexpr auto CraftMasteryInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CraftMasteryInfo), alignof(CraftMasteryInfo));
+}
+constexpr auto CraftMasteryInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CraftMasteryInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CraftMasteryInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CraftMasteryInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CraftMasteryInfo>(), &CraftMasteryInfo::ByteSizeLong,
+              &CraftMasteryInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[29],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CraftMasteryInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CraftMasteryInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CraftMasteryInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CraftMasteryInfo::InternalGenerateClassData_(
+            _default, &CraftMasteryInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CraftMasteryInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CraftMasteryInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CraftMasteryInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CraftMasteryInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CraftMasteryInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CraftMasteryInfoGlobalsTypeInternal CraftMasteryInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CraftMasteryInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CraftMasteryInfo_globals_.GetClassData();
+#else
+  return CraftMasteryInfo_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3184,7 +3701,7 @@ constexpr auto ClaimEquipmentMaterialRewardRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3641,7 +4158,7 @@ constexpr auto PreviewEquipmentCraftRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[36],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -3704,11 +4221,11 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
     {
       PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      23, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4286578688,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      23,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -3720,8 +4237,8 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // bool available = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.available_), 8>(),
-       {8, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.available_), 10>(),
+       {8, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_)}},
       // string unavailable_reason = 2;
       {::_pbi::TcParser::FastUS1,
@@ -3748,12 +4265,12 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
        {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_units_)}},
       // uint32 batch_units = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), 10>(),
-       {64, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), 9>(),
+       {64, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_units_)}},
       // uint64 revision = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.revision_), 11>(),
-       {72, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.revision_), 8>(),
+       {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_)}},
       // .EquipmentCraftMaterial crafting_material = 10;
       {::_pbi::TcParser::FastMtS1,
@@ -3764,9 +4281,58 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
        {90, 2, 1,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_)}},
       // bool can_claim = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), 9>(),
-       {96, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), 11>(),
+       {96, 11, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.can_claim_)}},
+      // uint32 lifetime_earned = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.lifetime_earned_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.lifetime_earned_)}},
+      // uint32 lifetime_limit = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.lifetime_limit_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.lifetime_limit_)}},
+      // uint32 tradable_earned_total = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.tradable_earned_total_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.tradable_earned_total_)}},
+      // uint32 tradable_lifetime_limit = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 16, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.tradable_lifetime_limit_)}},
+      // uint64 available_tradable_units = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 17, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_tradable_units_)}},
+      // uint32 batch_tradable_units = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 19, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_tradable_units_)}},
+      // bool weekly_phase_active = 19;
+      {::_pbi::TcParser::FastV8S2,
+       {408, 12, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.weekly_phase_active_)}},
+      // uint64 week_starts_at_ms = 20;
+      {::_pbi::TcParser::FastV64S2,
+       {416, 18, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.week_starts_at_ms_)}},
+      // uint64 next_week_reset_at_ms = 21;
+      {::_pbi::TcParser::FastV64S2,
+       {424, 21, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.next_week_reset_at_ms_)}},
+      // uint32 earned_this_week = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 20, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.earned_this_week_)}},
+      // uint32 weekly_limit = 23;
+      {::_pbi::TcParser::FastV32S2,
+       {440, 22, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.weekly_limit_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -3774,7 +4340,7 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
       65535, 65535
     }}, {{
       // bool available = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string unavailable_reason = 2;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.unavailable_reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 day_starts_at_ms = 3;
@@ -3788,15 +4354,37 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
       // uint64 available_units = 7;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_units_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 batch_units = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 revision = 9;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .EquipmentCraftMaterial crafting_material = 10;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.crafting_material_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .EquipmentCraftMaterial enhancement_stone = 11;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool can_claim = 12;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 lifetime_earned = 13;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.lifetime_earned_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 lifetime_limit = 14;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.lifetime_limit_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tradable_earned_total = 15;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.tradable_earned_total_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tradable_lifetime_limit = 16;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.tradable_lifetime_limit_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 available_tradable_units = 17;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_tradable_units_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 batch_tradable_units = 18;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_tradable_units_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool weekly_phase_active = 19;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.weekly_phase_active_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 week_starts_at_ms = 20;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.week_starts_at_ms_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_week_reset_at_ms = 21;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.next_week_reset_at_ms_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 earned_this_week = 22;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.earned_this_week_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_limit = 23;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.weekly_limit_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3811,7 +4399,7 @@ constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardS
         #endif
     }},
     {{
-      "\37\0\22\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\37\0\22\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "EquipmentMaterialRewardSnapshot"
       "unavailable_reason"
     }},
@@ -3833,10 +4421,21 @@ inline constexpr EquipmentMaterialRewardSnapshot::Impl_::Impl_(
         earned_today_{0u},
         daily_limit_{0u},
         available_units_{::uint64_t{0u}},
+        revision_{::uint64_t{0u}},
+        batch_units_{0u},
         available_{false},
         can_claim_{false},
-        batch_units_{0u},
-        revision_{::uint64_t{0u}} {}
+        weekly_phase_active_{false},
+        lifetime_earned_{0u},
+        lifetime_limit_{0u},
+        tradable_earned_total_{0u},
+        tradable_lifetime_limit_{0u},
+        available_tradable_units_{::uint64_t{0u}},
+        week_starts_at_ms_{::uint64_t{0u}},
+        batch_tradable_units_{0u},
+        earned_this_week_{0u},
+        next_week_reset_at_ms_{::uint64_t{0u}},
+        weekly_limit_{0u} {}
 
 template <typename>
 constexpr EquipmentMaterialRewardSnapshot::EquipmentMaterialRewardSnapshot(::_pbi::ConstantInitialized,
@@ -3879,7 +4478,7 @@ constexpr auto EquipmentMaterialRewardSnapshot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4242,7 +4841,7 @@ constexpr auto EquipFixedAffixSlotInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4412,7 +5011,7 @@ constexpr auto CommitEquipmentCraftRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[38],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4762,7 +5361,7 @@ constexpr auto GetEquipmentMaterialRewardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -4825,11 +5424,11 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_._has_bits_),
       0, // no _extensions_
-      23, 248,  // max_field_number, fast_idx_mask
+      27, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4286578688,  // skipmap
+      4160749568,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      23,  // num_field_entries
+      27,  // num_field_entries
       7,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -4841,24 +5440,24 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 item_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BagItemInfo, _impl_.item_id_), 11>(),
-       {8, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BagItemInfo, _impl_.item_id_), 12>(),
+       {8, 12, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.item_id_)}},
       // uint32 config_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.config_id_), 12>(),
-       {16, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.config_id_), 13>(),
+       {16, 13, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.config_id_)}},
       // uint32 count = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.count_), 13>(),
-       {24, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.count_), 14>(),
+       {24, 14, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.count_)}},
       // uint32 max_stack = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.max_stack_), 14>(),
-       {32, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.max_stack_), 15>(),
+       {32, 15, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.max_stack_)}},
       // uint32 equip_kind = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_kind_), 15>(),
-       {40, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_kind_), 16>(),
+       {40, 16, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_kind_)}},
       // string name = 6;
       {::_pbi::TcParser::FastUS1,
@@ -4873,12 +5472,12 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
        {66, 6, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.icon_key_)}},
       // uint32 equip_level = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_level_), 16>(),
-       {72, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_level_), 17>(),
+       {72, 17, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_level_)}},
       // uint32 equip_class = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_class_), 17>(),
-       {80, 17, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.equip_class_), 18>(),
+       {80, 18, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_class_)}},
       // string equip_class_name = 11;
       {::_pbi::TcParser::FastUS1,
@@ -4893,16 +5492,16 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
        {106, 1, 1,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.affixes_)}},
       // uint32 enhance_level = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.enhance_level_), 18>(),
-       {112, 18, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.enhance_level_), 19>(),
+       {112, 19, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_level_)}},
       // uint32 enhance_max_level = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.enhance_max_level_), 19>(),
-       {120, 19, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagItemInfo, _impl_.enhance_max_level_), 20>(),
+       {120, 20, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_max_level_)}},
       // .EquipEnhancePreview enhance_next = 16;
       {::_pbi::TcParser::FastMtS2,
-       {386, 8, 2,
+       {386, 9, 2,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_next_)}},
       // repeated .EquipGemSocketInfo gem_sockets = 17;
       {::_pbi::TcParser::FastMtR2,
@@ -4910,19 +5509,19 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_sockets_)}},
       // uint32 gem_type = 18;
       {::_pbi::TcParser::FastV32S2,
-       {400, 20, 0,
+       {400, 21, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_type_)}},
       // .EquipAttrLineInfo gem_attr = 19;
       {::_pbi::TcParser::FastMtS2,
-       {410, 9, 4,
+       {410, 10, 4,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_attr_)}},
       // uint32 enhance_bonus_permyriad = 20;
       {::_pbi::TcParser::FastV32S2,
-       {416, 21, 0,
+       {416, 22, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_bonus_permyriad_)}},
       // uint32 equip_profile = 21;
       {::_pbi::TcParser::FastV32S2,
-       {424, 22, 0,
+       {424, 23, 0,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_profile_)}},
       // repeated .EquipFixedAffixSlotInfo fixed_affix_slots = 22;
       {::_pbi::TcParser::FastMtR2,
@@ -4930,12 +5529,24 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.fixed_affix_slots_)}},
       // .EquipArtifactInfo artifact = 23;
       {::_pbi::TcParser::FastMtS2,
-       {442, 10, 6,
+       {442, 11, 6,
         PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.artifact_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 enhance_pity_count = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 24, 0,
+        PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_pity_count_)}},
+      // bool bound = 25;
+      {::_pbi::TcParser::FastV8S2,
+       {456, 26, 0,
+        PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.bound_)}},
+      // string crafter_name = 26;
+      {::_pbi::TcParser::FastUS2,
+       {466, 8, 0,
+        PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.crafter_name_)}},
+      // uint64 crafter_player_id = 27;
+      {::_pbi::TcParser::FastV64S2,
+       {472, 25, 0,
+        PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.crafter_player_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -4944,15 +5555,15 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
       65535, 65535
     }}, {{
       // uint64 item_id = 1;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.item_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.item_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 config_id = 2;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.config_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.config_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 count = 3;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.count_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_stack = 4;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.max_stack_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.max_stack_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 equip_kind = 5;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_kind_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_kind_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 6;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.name_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string description = 7;
@@ -4960,9 +5571,9 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
       // string icon_key = 8;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.icon_key_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 equip_level = 9;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_level_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_level_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 equip_class = 10;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_class_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_class_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string equip_class_name = 11;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_class_name_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated .EquipAttrLineInfo base_attrs = 12;
@@ -4970,25 +5581,33 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
       // repeated .EquipAttrLineInfo affixes = 13;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.affixes_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 enhance_level = 14;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_level_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_level_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 enhance_max_level = 15;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_max_level_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_max_level_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .EquipEnhancePreview enhance_next = 16;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_next_), _Internal::kHasBitsOffset + 8, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_next_), _Internal::kHasBitsOffset + 9, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .EquipGemSocketInfo gem_sockets = 17;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_sockets_), _Internal::kHasBitsOffset + 2, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 gem_type = 18;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_type_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_type_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .EquipAttrLineInfo gem_attr = 19;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_attr_), _Internal::kHasBitsOffset + 9, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.gem_attr_), _Internal::kHasBitsOffset + 10, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 enhance_bonus_permyriad = 20;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_bonus_permyriad_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_bonus_permyriad_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 equip_profile = 21;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_profile_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_profile_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .EquipFixedAffixSlotInfo fixed_affix_slots = 22;
       {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.fixed_affix_slots_), _Internal::kHasBitsOffset + 3, 5, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // .EquipArtifactInfo artifact = 23;
-      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.artifact_), _Internal::kHasBitsOffset + 10, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.artifact_), _Internal::kHasBitsOffset + 11, 6, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 enhance_pity_count = 24;
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_pity_count_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool bound = 25;
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.bound_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string crafter_name = 26;
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.crafter_name_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 crafter_player_id = 27;
+      {PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.crafter_player_id_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5028,12 +5647,13 @@ constexpr BagItemInfo::ParseTableT_ BagItemInfo::InternalGenerateParseTable_(con
         #endif
     }},
     {{
-      "\13\0\0\0\0\0\4\13\10\0\0\20\0\0\0\0\0\0\0\0\0\0\0\0"
+      "\13\0\0\0\0\0\4\13\10\0\0\20\0\0\0\0\0\0\0\0\0\0\0\0\0\0\14\0\0\0\0\0"
       "BagItemInfo"
       "name"
       "description"
       "icon_key"
       "equip_class_name"
+      "crafter_name"
     }},
   };
 }
@@ -5075,6 +5695,9 @@ inline constexpr BagItemInfo::Impl_::Impl_(
         equip_class_name_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        crafter_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         enhance_next_{nullptr},
         gem_attr_{nullptr},
         artifact_{nullptr},
@@ -5089,7 +5712,10 @@ inline constexpr BagItemInfo::Impl_::Impl_(
         enhance_max_level_{0u},
         gem_type_{0u},
         enhance_bonus_permyriad_{0u},
-        equip_profile_{0u} {}
+        equip_profile_{0u},
+        enhance_pity_count_{0u},
+        crafter_player_id_{::uint64_t{0u}},
+        bound_{false} {}
 
 template <typename>
 constexpr BagItemInfo::BagItemInfo(::_pbi::ConstantInitialized,
@@ -5294,7 +5920,7 @@ constexpr auto EquipmentCraftRecipe::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -5357,12 +5983,12 @@ constexpr EquipmentCraftPreview::ParseTableT_ EquipmentCraftPreview::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
-      3,  // num_aux_entries
+      12,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -5374,49 +6000,82 @@ constexpr EquipmentCraftPreview::ParseTableT_ EquipmentCraftPreview::InternalGen
       {::_pbi::TcParser::MiniParse, {}},
       // .EquipmentCraftChoice choice = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 1, 0,
+       {10, 2, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.choice_)}},
       // bytes rules_fingerprint = 2;
       {::_pbi::TcParser::FastBS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.rules_fingerprint_)}},
       // uint64 expected_forge_revision = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftPreview, _impl_.expected_forge_revision_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftPreview, _impl_.expected_forge_revision_), 6>(),
+       {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.expected_forge_revision_)}},
       // .BagItemInfo result = 4;
       {::_pbi::TcParser::FastMtS1,
-       {34, 2, 1,
+       {34, 3, 1,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.result_)}},
       // .EquipmentCraftMaterial material = 5;
       {::_pbi::TcParser::FastMtS1,
-       {42, 3, 2,
+       {42, 4, 2,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.material_)}},
       // bool available = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentCraftPreview, _impl_.available_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentCraftPreview, _impl_.available_), 9>(),
+       {48, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.available_)}},
       // uint32 unavailable_tip = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentCraftPreview, _impl_.unavailable_tip_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentCraftPreview, _impl_.unavailable_tip_), 8>(),
+       {56, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.unavailable_tip_)}},
+      // uint64 gold_cost = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftPreview, _impl_.gold_cost_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.gold_cost_)}},
+      // .EquipmentCraftMaterial extra_material = 9;
+      {::_pbi::TcParser::FastMtS1,
+       {74, 5, 3,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.extra_material_)}},
+      // uint64 proxy_fee_gold = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftPreview, _impl_.proxy_fee_gold_), 11>(),
+       {80, 11, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.proxy_fee_gold_)}},
+      // string proxy_master_name = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.proxy_master_name_)}},
+      // bool will_bind_item = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentCraftPreview, _impl_.will_bind_item_), 10>(),
+       {96, 10, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.will_bind_item_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // .EquipmentCraftChoice choice = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.choice_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.choice_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bytes rules_fingerprint = 2;
       {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.rules_fingerprint_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 expected_forge_revision = 3;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.expected_forge_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.expected_forge_revision_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .BagItemInfo result = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.result_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.result_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .EquipmentCraftMaterial material = 5;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.material_), _Internal::kHasBitsOffset + 3, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.material_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool available = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.available_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.available_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 unavailable_tip = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.unavailable_tip_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.unavailable_tip_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 gold_cost = 8;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.gold_cost_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .EquipmentCraftMaterial extra_material = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.extra_material_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 proxy_fee_gold = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.proxy_fee_gold_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string proxy_master_name = 11;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.proxy_master_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool will_bind_item = 12;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.will_bind_item_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5434,8 +6093,16 @@ constexpr EquipmentCraftPreview::ParseTableT_ EquipmentCraftPreview::InternalGen
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::EquipmentCraftMaterial_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentCraftMaterial>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentCraftMaterial_globals_},
+        #endif
     }},
     {{
+      "\25\0\0\0\0\0\0\0\0\0\0\21\0\0\0\0"
+      "EquipmentCraftPreview"
+      "proxy_master_name"
     }},
   };
 }
@@ -5448,12 +6115,19 @@ inline constexpr EquipmentCraftPreview::Impl_::Impl_(
         rules_fingerprint_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        proxy_master_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         choice_{nullptr},
         result_{nullptr},
         material_{nullptr},
+        extra_material_{nullptr},
         expected_forge_revision_{::uint64_t{0u}},
+        gold_cost_{::uint64_t{0u}},
+        unavailable_tip_{0u},
         available_{false},
-        unavailable_tip_{0u} {}
+        will_bind_item_{false},
+        proxy_fee_gold_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr EquipmentCraftPreview::EquipmentCraftPreview(::_pbi::ConstantInitialized,
@@ -5496,7 +6170,7 @@ constexpr auto EquipmentCraftPreview::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -6529,7 +7203,7 @@ constexpr auto PreviewEquipmentCraftResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[37],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -6923,12 +7597,12 @@ constexpr GetEquipmentCraftRulesResponse::ParseTableT_ GetEquipmentCraftRulesRes
     {
       PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
-      3,  // num_aux_entries
+      7,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -6940,15 +7614,15 @@ constexpr GetEquipmentCraftRulesResponse::ParseTableT_ GetEquipmentCraftRulesRes
       {::_pbi::TcParser::MiniParse, {}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 3, 0,
+       {10, 4, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.error_message_)}},
       // bytes rules_fingerprint = 2;
       {::_pbi::TcParser::FastBS1,
-       {18, 2, 0,
+       {18, 3, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.rules_fingerprint_)}},
       // uint64 forge_revision = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetEquipmentCraftRulesResponse, _impl_.forge_revision_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetEquipmentCraftRulesResponse, _impl_.forge_revision_), 6>(),
+       {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_revision_)}},
       // repeated .EquipmentCraftRecipe recipes = 4;
       {::_pbi::TcParser::FastMtR1,
@@ -6958,21 +7632,31 @@ constexpr GetEquipmentCraftRulesResponse::ParseTableT_ GetEquipmentCraftRulesRes
       {::_pbi::TcParser::FastMtR1,
        {42, 1, 2,
         PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.affixes_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .EquipAffixQualityInfo quality_tiers = 6;
+      {::_pbi::TcParser::FastMtR1,
+       {50, 2, 3,
+        PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.quality_tiers_)}},
+      // .CraftMasteryInfo forge_mastery = 7;
+      {::_pbi::TcParser::FastMtS1,
+       {58, 5, 4,
+        PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_mastery_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .TipInfoMessage error_message = 1;
-      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bytes rules_fingerprint = 2;
-      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.rules_fingerprint_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.rules_fingerprint_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 forge_revision = 3;
-      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_revision_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .EquipmentCraftRecipe recipes = 4;
       {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.recipes_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .EquipFixedAffixInfo affixes = 5;
       {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.affixes_), _Internal::kHasBitsOffset + 1, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .EquipAffixQualityInfo quality_tiers = 6;
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.quality_tiers_), _Internal::kHasBitsOffset + 2, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .CraftMasteryInfo forge_mastery = 7;
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_mastery_), _Internal::kHasBitsOffset + 5, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -6989,6 +7673,16 @@ constexpr GetEquipmentCraftRulesResponse::ParseTableT_ GetEquipmentCraftRulesRes
         {::_pbi::TcParser::GetTable<::EquipFixedAffixInfo>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::EquipFixedAffixInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipAffixQualityInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipAffixQualityInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::CraftMasteryInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::CraftMasteryInfo_globals_},
         #endif
     }},
     {{
@@ -7011,10 +7705,16 @@ inline constexpr GetEquipmentCraftRulesResponse::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.affixes_)>()
          }
         ,
+        quality_tiers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::GetEquipmentCraftRulesResponse,
+            PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.quality_tiers_)>()
+         }
+        ,
         rules_fingerprint_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         error_message_{nullptr},
+        forge_mastery_{nullptr},
         forge_revision_{::uint64_t{0u}} {}
 
 template <typename>
@@ -7058,7 +7758,7 @@ constexpr auto GetEquipmentCraftRulesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -7452,11 +8152,11 @@ constexpr EnhanceEquipResponse::ParseTableT_ EnhanceEquipResponse::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      8,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -7466,7 +8166,10 @@ constexpr EnhanceEquipResponse::ParseTableT_ EnhanceEquipResponse::InternalGener
       ::_pbi::TcParser::GetTable<::EnhanceEquipResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 enhance_pity_limit = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnhanceEquipResponse, _impl_.enhance_pity_limit_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_pity_limit_)}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 0, 0,
@@ -7491,7 +8194,10 @@ constexpr EnhanceEquipResponse::ParseTableT_ EnhanceEquipResponse::InternalGener
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EnhanceEquipResponse, _impl_.replayed_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.replayed_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 enhance_pity_count = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnhanceEquipResponse, _impl_.enhance_pity_count_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_pity_count_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -7507,6 +8213,10 @@ constexpr EnhanceEquipResponse::ParseTableT_ EnhanceEquipResponse::InternalGener
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_level_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool replayed = 6;
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 enhance_pity_count = 7;
+      {PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_pity_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 enhance_pity_limit = 8;
+      {PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_pity_limit_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7540,7 +8250,9 @@ inline constexpr EnhanceEquipResponse::Impl_::Impl_(
         equipment_{nullptr},
         enhance_level_{0u},
         success_{false},
-        replayed_{false} {}
+        replayed_{false},
+        enhance_pity_count_{0u},
+        enhance_pity_limit_{0u} {}
 
 template <typename>
 constexpr EnhanceEquipResponse::EnhanceEquipResponse(::_pbi::ConstantInitialized,
@@ -7646,12 +8358,12 @@ constexpr CommitEquipmentCraftResponse::ParseTableT_ CommitEquipmentCraftRespons
     {
       PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
-      3,  // num_aux_entries
+      14,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -7666,32 +8378,32 @@ constexpr CommitEquipmentCraftResponse::ParseTableT_ CommitEquipmentCraftRespons
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.error_message_)}},
       // uint64 client_request_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.client_request_id_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.client_request_id_), 4>(),
+       {16, 4, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.client_request_id_)}},
       // .CommitEquipmentCraftResponse.Outcome outcome = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CommitEquipmentCraftResponse, _impl_.outcome_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CommitEquipmentCraftResponse, _impl_.outcome_), 6>(),
+       {24, 6, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.outcome_)}},
       // bool durable = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommitEquipmentCraftResponse, _impl_.durable_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommitEquipmentCraftResponse, _impl_.durable_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.durable_)}},
       // bool replayed = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommitEquipmentCraftResponse, _impl_.replayed_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommitEquipmentCraftResponse, _impl_.replayed_), 8>(),
+       {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.replayed_)}},
       // uint64 item_id = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.item_id_), 7>(),
-       {48, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.item_id_), 5>(),
+       {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.item_id_)}},
       // uint64 result_forge_revision = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.result_forge_revision_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.result_forge_revision_), 10>(),
+       {56, 10, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_forge_revision_)}},
       // uint64 current_forge_revision = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.current_forge_revision_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CommitEquipmentCraftResponse, _impl_.current_forge_revision_), 11>(),
+       {64, 11, 0,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.current_forge_revision_)}},
       // .BagInfo bag = 9;
       {::_pbi::TcParser::FastMtS1,
@@ -7701,10 +8413,22 @@ constexpr CommitEquipmentCraftResponse::ParseTableT_ CommitEquipmentCraftRespons
       {::_pbi::TcParser::FastMtS1,
        {82, 2, 2,
         PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.equipment_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 result_quality_tier = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CommitEquipmentCraftResponse, _impl_.result_quality_tier_), 12>(),
+       {88, 12, 0,
+        PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_quality_tier_)}},
+      // uint32 result_polish_pity_count = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CommitEquipmentCraftResponse, _impl_.result_polish_pity_count_), 13>(),
+       {96, 13, 0,
+        PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_polish_pity_count_)}},
+      // bool guaranteed_by_pity = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CommitEquipmentCraftResponse, _impl_.guaranteed_by_pity_), 9>(),
+       {104, 9, 0,
+        PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.guaranteed_by_pity_)}},
+      // .CraftMasteryInfo forge_mastery = 14;
+      {::_pbi::TcParser::FastMtS1,
+       {114, 3, 3,
+        PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.forge_mastery_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -7712,23 +8436,31 @@ constexpr CommitEquipmentCraftResponse::ParseTableT_ CommitEquipmentCraftRespons
       // .TipInfoMessage error_message = 1;
       {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 client_request_id = 2;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .CommitEquipmentCraftResponse.Outcome outcome = 3;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.outcome_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.outcome_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // bool durable = 4;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.durable_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.durable_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool replayed = 5;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 item_id = 6;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.item_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.item_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 result_forge_revision = 7;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_forge_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_forge_revision_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 current_forge_revision = 8;
-      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.current_forge_revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.current_forge_revision_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .BagInfo bag = 9;
       {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.bag_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .BagInfo equipment = 10;
       {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.equipment_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 result_quality_tier = 11;
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_quality_tier_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 result_polish_pity_count = 12;
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_polish_pity_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool guaranteed_by_pity = 13;
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.guaranteed_by_pity_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .CraftMasteryInfo forge_mastery = 14;
+      {PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.forge_mastery_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7746,6 +8478,11 @@ constexpr CommitEquipmentCraftResponse::ParseTableT_ CommitEquipmentCraftRespons
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::BagInfo_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::CraftMasteryInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::CraftMasteryInfo_globals_},
+        #endif
     }},
     {{
     }},
@@ -7760,13 +8497,17 @@ inline constexpr CommitEquipmentCraftResponse::Impl_::Impl_(
         error_message_{nullptr},
         bag_{nullptr},
         equipment_{nullptr},
+        forge_mastery_{nullptr},
         client_request_id_{::uint64_t{0u}},
+        item_id_{::uint64_t{0u}},
         outcome_{static_cast< ::CommitEquipmentCraftResponse_Outcome >(0)},
         durable_{false},
         replayed_{false},
-        item_id_{::uint64_t{0u}},
+        guaranteed_by_pity_{false},
         result_forge_revision_{::uint64_t{0u}},
-        current_forge_revision_{::uint64_t{0u}} {}
+        current_forge_revision_{::uint64_t{0u}},
+        result_quality_tier_{0u},
+        result_polish_pity_count_{0u} {}
 
 template <typename>
 constexpr CommitEquipmentCraftResponse::CommitEquipmentCraftResponse(::_pbi::ConstantInitialized,
@@ -7809,7 +8550,7 @@ constexpr auto CommitEquipmentCraftResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -8029,7 +8770,7 @@ constexpr auto ClaimEquipmentMaterialRewardResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -8136,7 +8877,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_._has_bits_),
-        12, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.next_level_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.success_rate_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.cost_gold_),
@@ -8146,6 +8887,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.bonus_permyriad_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.fail_level_loss_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.material_icon_key_),
+        PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.pity_limit_),
+        PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.current_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.pity_guaranteed_next_),
         2,
         3,
         4,
@@ -8155,9 +8899,12 @@ const ::uint32_t
         7,
         8,
         1,
+        9,
+        10,
+        11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_._has_bits_),
-        26, // hasbit index offset
+        30, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.item_id_),
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.count_),
@@ -8181,29 +8928,37 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.equip_profile_),
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.fixed_affix_slots_),
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.artifact_),
-        11,
+        PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.enhance_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.bound_),
+        PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.crafter_name_),
+        PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_.crafter_player_id_),
         12,
         13,
         14,
         15,
+        16,
         4,
         5,
         6,
-        16,
         17,
+        18,
         7,
         0,
         1,
-        18,
         19,
-        8,
-        2,
         20,
         9,
+        2,
         21,
-        22,
-        3,
         10,
+        22,
+        23,
+        3,
+        11,
+        24,
+        26,
+        8,
+        25,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagSlotInfo, _impl_._has_bits_),
         7, // hasbit index offset
@@ -8318,28 +9073,34 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.item_id_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.expected_level_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.expected_pity_count_),
         0,
         2,
         1,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_._has_bits_),
-        9, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.bag_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.equipment_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.success_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.enhance_level_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.enhance_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_.enhance_pity_limit_),
         0,
         1,
         2,
         4,
         3,
         5,
+        6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::InlayGemRequest, _impl_._has_bits_),
         6, // hasbit index offset
@@ -8392,7 +9153,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_._has_bits_),
-        14, // hasbit index offset
+        27, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.affix_id_),
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.pool_),
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.name_),
@@ -8404,17 +9165,71 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.unit_),
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.material_config_id_),
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.material_count_),
-        2,
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.quality_tier_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.quality_name_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.quality_ratio_pct_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.max_value_bps_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_pity_limit_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_exempt_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_material_config_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_material_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.polish_gold_cost_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.reforge_material_config_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.reforge_material_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipFixedAffixInfo, _impl_.reforge_gold_cost_),
         3,
+        4,
         0,
         1,
-        4,
         5,
         6,
         7,
         8,
         9,
         10,
+        11,
+        12,
+        2,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        20,
+        19,
+        21,
+        23,
+        22,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.quality_tier_),
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.ratio_pct_),
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.apprentice_rate_bps_),
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.artisan_rate_bps_),
+        PROTOBUF_FIELD_OFFSET(::EquipAffixQualityInfo, _impl_.master_rate_bps_),
+        1,
+        0,
+        2,
+        3,
+        4,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_.tier_),
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_.tier_name_),
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_.exp_),
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_.next_tier_exp_),
+        PROTOBUF_FIELD_OFFSET(::CraftMasteryInfo, _impl_.top_quality_rate_bps_),
+        1,
+        0,
+        2,
+        3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipFixedAffixSlotInfo, _impl_._has_bits_),
         6, // hasbit index offset
@@ -8447,17 +9262,25 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_._has_bits_),
-        8, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.operation_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.item_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.affix_slot_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.affix_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.use_guarantee_charm_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.allow_bound_materials_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.proxy_master_player_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.expected_polish_pity_count_),
         0,
         1,
         2,
         3,
         4,
+        5,
+        6,
+        8,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftMaterial, _impl_._has_bits_),
         9, // hasbit index offset
@@ -8485,20 +9308,24 @@ const ::uint32_t
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_._has_bits_),
-        8, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.rules_fingerprint_),
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.forge_revision_),
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.recipes_),
         PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.affixes_),
-        3,
-        2,
+        PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.quality_tiers_),
+        PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.forge_mastery_),
         4,
+        3,
+        6,
         0,
         1,
+        2,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_._has_bits_),
-        10, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.choice_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.rules_fingerprint_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.expected_forge_revision_),
@@ -8506,13 +9333,23 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.material_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.available_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.unavailable_tip_),
-        1,
-        0,
-        4,
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.gold_cost_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.extra_material_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.proxy_fee_gold_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.proxy_master_name_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftPreview, _impl_.will_bind_item_),
         2,
-        3,
-        5,
+        0,
         6,
+        3,
+        4,
+        9,
+        8,
+        7,
+        5,
+        11,
+        1,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PreviewEquipmentCraftRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -8538,7 +9375,7 @@ const ::uint32_t
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_._has_bits_),
-        13, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.outcome_),
@@ -8549,19 +9386,27 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.current_forge_revision_),
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.bag_),
         PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.equipment_),
+        PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.result_quality_tier_),
+        PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.result_polish_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.guaranteed_by_pity_),
+        PROTOBUF_FIELD_OFFSET(::CommitEquipmentCraftResponse, _impl_.forge_mastery_),
         0,
-        3,
         4,
-        5,
         6,
         7,
         8,
-        9,
+        5,
+        10,
+        11,
         1,
         2,
+        12,
+        13,
+        9,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_._has_bits_),
-        15, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.available_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.unavailable_reason_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.day_starts_at_ms_),
@@ -8574,18 +9419,40 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.crafting_material_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.can_claim_),
-        8,
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.lifetime_earned_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.lifetime_limit_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.tradable_earned_total_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.tradable_lifetime_limit_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.available_tradable_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.batch_tradable_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.weekly_phase_active_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.week_starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.next_week_reset_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.earned_this_week_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.weekly_limit_),
+        10,
         0,
         3,
         4,
         5,
         6,
         7,
-        10,
-        11,
+        9,
+        8,
         1,
         2,
-        9,
+        11,
+        13,
+        14,
+        15,
+        16,
+        17,
+        19,
+        12,
+        18,
+        21,
+        20,
+        22,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetEquipmentMaterialRewardResponse, _impl_._has_bits_),
@@ -8634,47 +9501,49 @@ static const ::_pbi::MigrationSchema
         {21, sizeof(::EquipSlotInfo)},
         {30, sizeof(::EquipGemSocketInfo)},
         {47, sizeof(::EquipEnhancePreview)},
-        {68, sizeof(::BagItemInfo)},
-        {117, sizeof(::BagSlotInfo)},
-        {128, sizeof(::BagLayoutInfo)},
-        {141, sizeof(::BagHeldItemInfo)},
-        {148, sizeof(::BagInfo)},
-        {159, sizeof(::GetBagRequest)},
-        {164, sizeof(::GetBagResponse)},
-        {171, sizeof(::SortBagRequest)},
-        {176, sizeof(::SortBagResponse)},
-        {185, sizeof(::EquipItemRequest)},
-        {192, sizeof(::EquipItemResponse)},
-        {201, sizeof(::UnequipItemRequest)},
-        {206, sizeof(::UnequipItemResponse)},
-        {215, sizeof(::GmGrantItemRequest)},
-        {222, sizeof(::GmGrantItemResponse)},
-        {229, sizeof(::EnhanceEquipRequest)},
-        {238, sizeof(::EnhanceEquipResponse)},
-        {253, sizeof(::InlayGemRequest)},
-        {262, sizeof(::InlayGemResponse)},
-        {271, sizeof(::RemoveGemRequest)},
-        {278, sizeof(::RemoveGemResponse)},
-        {287, sizeof(::RetrieveTemporaryItemsRequest)},
-        {294, sizeof(::RetrieveTemporaryItemsResponse)},
-        {303, sizeof(::EquipFixedAffixInfo)},
-        {328, sizeof(::EquipFixedAffixSlotInfo)},
-        {337, sizeof(::EquipArtifactInfo)},
-        {358, sizeof(::EquipmentCraftChoice)},
-        {371, sizeof(::EquipmentCraftMaterial)},
-        {386, sizeof(::EquipmentCraftRecipe)},
-        {395, sizeof(::GetEquipmentCraftRulesRequest)},
-        {396, sizeof(::GetEquipmentCraftRulesResponse)},
-        {409, sizeof(::EquipmentCraftPreview)},
-        {426, sizeof(::PreviewEquipmentCraftRequest)},
-        {431, sizeof(::PreviewEquipmentCraftResponse)},
-        {438, sizeof(::CommitEquipmentCraftRequest)},
-        {449, sizeof(::CommitEquipmentCraftResponse)},
-        {472, sizeof(::EquipmentMaterialRewardSnapshot)},
-        {499, sizeof(::GetEquipmentMaterialRewardRequest)},
-        {500, sizeof(::GetEquipmentMaterialRewardResponse)},
-        {507, sizeof(::ClaimEquipmentMaterialRewardRequest)},
-        {518, sizeof(::ClaimEquipmentMaterialRewardResponse)},
+        {74, sizeof(::BagItemInfo)},
+        {131, sizeof(::BagSlotInfo)},
+        {142, sizeof(::BagLayoutInfo)},
+        {155, sizeof(::BagHeldItemInfo)},
+        {162, sizeof(::BagInfo)},
+        {173, sizeof(::GetBagRequest)},
+        {178, sizeof(::GetBagResponse)},
+        {185, sizeof(::SortBagRequest)},
+        {190, sizeof(::SortBagResponse)},
+        {199, sizeof(::EquipItemRequest)},
+        {206, sizeof(::EquipItemResponse)},
+        {215, sizeof(::UnequipItemRequest)},
+        {220, sizeof(::UnequipItemResponse)},
+        {229, sizeof(::GmGrantItemRequest)},
+        {236, sizeof(::GmGrantItemResponse)},
+        {243, sizeof(::EnhanceEquipRequest)},
+        {254, sizeof(::EnhanceEquipResponse)},
+        {273, sizeof(::InlayGemRequest)},
+        {282, sizeof(::InlayGemResponse)},
+        {291, sizeof(::RemoveGemRequest)},
+        {298, sizeof(::RemoveGemResponse)},
+        {307, sizeof(::RetrieveTemporaryItemsRequest)},
+        {314, sizeof(::RetrieveTemporaryItemsResponse)},
+        {323, sizeof(::EquipFixedAffixInfo)},
+        {374, sizeof(::EquipAffixQualityInfo)},
+        {389, sizeof(::CraftMasteryInfo)},
+        {402, sizeof(::EquipFixedAffixSlotInfo)},
+        {411, sizeof(::EquipArtifactInfo)},
+        {432, sizeof(::EquipmentCraftChoice)},
+        {453, sizeof(::EquipmentCraftMaterial)},
+        {468, sizeof(::EquipmentCraftRecipe)},
+        {477, sizeof(::GetEquipmentCraftRulesRequest)},
+        {478, sizeof(::GetEquipmentCraftRulesResponse)},
+        {495, sizeof(::EquipmentCraftPreview)},
+        {522, sizeof(::PreviewEquipmentCraftRequest)},
+        {527, sizeof(::PreviewEquipmentCraftResponse)},
+        {534, sizeof(::CommitEquipmentCraftRequest)},
+        {545, sizeof(::CommitEquipmentCraftResponse)},
+        {576, sizeof(::EquipmentMaterialRewardSnapshot)},
+        {625, sizeof(::GetEquipmentMaterialRewardRequest)},
+        {626, sizeof(::GetEquipmentMaterialRewardResponse)},
+        {633, sizeof(::ClaimEquipmentMaterialRewardRequest)},
+        {644, sizeof(::ClaimEquipmentMaterialRewardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -8706,6 +9575,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::RetrieveTemporaryItemsRequest_globals_,
         &::RetrieveTemporaryItemsResponse_globals_,
         &::EquipFixedAffixInfo_globals_,
+        &::EquipAffixQualityInfo_globals_,
+        &::CraftMasteryInfo_globals_,
         &::EquipFixedAffixSlotInfo_globals_,
         &::EquipArtifactInfo_globals_,
         &::EquipmentCraftChoice_globals_,
@@ -8739,186 +9610,231 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "socket\030\001 \001(\r\022\020\n\010gem_type\030\002 \001(\r\022\025\n\rgem_co"
     "nfig_id\030\003 \001(\r\022\020\n\010gem_name\030\004 \001(\t\022\024\n\014gem_i"
     "con_key\030\005 \001(\t\022 \n\004attr\030\006 \001(\0132\022.EquipAttrL"
-    "ineInfo\022\014\n\004name\030\007 \001(\t\"\352\001\n\023EquipEnhancePr"
+    "ineInfo\022\014\n\004name\030\007 \001(\t\"\270\002\n\023EquipEnhancePr"
     "eview\022\022\n\nnext_level\030\001 \001(\r\022\024\n\014success_rat"
     "e\030\002 \001(\r\022\021\n\tcost_gold\030\003 \001(\004\022\032\n\022material_c"
     "onfig_id\030\004 \001(\r\022\025\n\rmaterial_name\030\005 \001(\t\022\026\n"
     "\016material_count\030\006 \001(\r\022\027\n\017bonus_permyriad"
     "\030\007 \001(\r\022\027\n\017fail_level_loss\030\010 \001(\r\022\031\n\021mater"
-    "ial_icon_key\030\t \001(\t\"\200\005\n\013BagItemInfo\022\017\n\007it"
-    "em_id\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\r\n\005count\030"
-    "\003 \001(\r\022\021\n\tmax_stack\030\004 \001(\r\022\022\n\nequip_kind\030\005"
-    " \001(\r\022\014\n\004name\030\006 \001(\t\022\023\n\013description\030\007 \001(\t\022"
-    "\020\n\010icon_key\030\010 \001(\t\022\023\n\013equip_level\030\t \001(\r\022\023"
-    "\n\013equip_class\030\n \001(\r\022\030\n\020equip_class_name\030"
-    "\013 \001(\t\022&\n\nbase_attrs\030\014 \003(\0132\022.EquipAttrLin"
-    "eInfo\022#\n\007affixes\030\r \003(\0132\022.EquipAttrLineIn"
-    "fo\022\025\n\renhance_level\030\016 \001(\r\022\031\n\021enhance_max"
-    "_level\030\017 \001(\r\022*\n\014enhance_next\030\020 \001(\0132\024.Equ"
-    "ipEnhancePreview\022(\n\013gem_sockets\030\021 \003(\0132\023."
-    "EquipGemSocketInfo\022\020\n\010gem_type\030\022 \001(\r\022$\n\010"
-    "gem_attr\030\023 \001(\0132\022.EquipAttrLineInfo\022\037\n\027en"
-    "hance_bonus_permyriad\030\024 \001(\r\022\025\n\requip_pro"
-    "file\030\025 \001(\r\0223\n\021fixed_affix_slots\030\026 \003(\0132\030."
-    "EquipFixedAffixSlotInfo\022$\n\010artifact\030\027 \001("
-    "\0132\022.EquipArtifactInfo\"K\n\013BagSlotInfo\022\014\n\004"
-    "slot\030\001 \001(\r\022\017\n\007item_id\030\002 \001(\004\022\r\n\005width\030\003 \001"
-    "(\r\022\016\n\006height\030\004 \001(\r\"\207\001\n\rBagLayoutInfo\022\020\n\010"
-    "bag_type\030\001 \001(\r\022\020\n\010capacity\030\002 \001(\r\022\033\n\005slot"
-    "s\030\003 \003(\0132\014.BagSlotInfo\022\020\n\010can_sort\030\004 \001(\010\022"
-    "#\n\013equip_slots\030\005 \003(\0132\016.EquipSlotInfo\"3\n\017"
-    "BagHeldItemInfo\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005co"
-    "unt\030\002 \001(\004\"\215\001\n\007BagInfo\022\033\n\005items\030\001 \003(\0132\014.B"
-    "agItemInfo\022\036\n\006layout\030\002 \001(\0132\016.BagLayoutIn"
-    "fo\022\037\n\010currency\030\003 \001(\0132\r.CurrencyComp\022$\n\nh"
-    "eld_items\030\004 \003(\0132\020.BagHeldItemInfo\"!\n\rGet"
-    "BagRequest\022\020\n\010bag_type\030\001 \001(\r\"O\n\016GetBagRe"
-    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\"\n\016SortBag"
-    "Request\022\020\n\010bag_type\030\001 \001(\r\"a\n\017SortBagResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n\007changed\030\003"
-    " \001(\010\"M\n\020EquipItemRequest\022\017\n\007item_id\030\001 \001("
-    "\004\022\030\n\013target_slot\030\002 \001(\rH\000\210\001\001B\016\n\014_target_s"
-    "lot\"o\n\021EquipItemResponse\022&\n\rerror_messag"
-    "e\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010."
-    "BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"%\n\022"
-    "UnequipItemRequest\022\017\n\007item_id\030\001 \001(\004\"q\n\023U"
-    "nequipItemResponse\022&\n\rerror_message\030\001 \001("
+    "ial_icon_key\030\t \001(\t\022\022\n\npity_limit\030\n \001(\r\022\032"
+    "\n\022current_pity_count\030\013 \001(\r\022\034\n\024pity_guara"
+    "nteed_next\030\014 \001(\010\"\334\005\n\013BagItemInfo\022\017\n\007item"
+    "_id\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\r\n\005count\030\003 "
+    "\001(\r\022\021\n\tmax_stack\030\004 \001(\r\022\022\n\nequip_kind\030\005 \001"
+    "(\r\022\014\n\004name\030\006 \001(\t\022\023\n\013description\030\007 \001(\t\022\020\n"
+    "\010icon_key\030\010 \001(\t\022\023\n\013equip_level\030\t \001(\r\022\023\n\013"
+    "equip_class\030\n \001(\r\022\030\n\020equip_class_name\030\013 "
+    "\001(\t\022&\n\nbase_attrs\030\014 \003(\0132\022.EquipAttrLineI"
+    "nfo\022#\n\007affixes\030\r \003(\0132\022.EquipAttrLineInfo"
+    "\022\025\n\renhance_level\030\016 \001(\r\022\031\n\021enhance_max_l"
+    "evel\030\017 \001(\r\022*\n\014enhance_next\030\020 \001(\0132\024.Equip"
+    "EnhancePreview\022(\n\013gem_sockets\030\021 \003(\0132\023.Eq"
+    "uipGemSocketInfo\022\020\n\010gem_type\030\022 \001(\r\022$\n\010ge"
+    "m_attr\030\023 \001(\0132\022.EquipAttrLineInfo\022\037\n\027enha"
+    "nce_bonus_permyriad\030\024 \001(\r\022\025\n\requip_profi"
+    "le\030\025 \001(\r\0223\n\021fixed_affix_slots\030\026 \003(\0132\030.Eq"
+    "uipFixedAffixSlotInfo\022$\n\010artifact\030\027 \001(\0132"
+    "\022.EquipArtifactInfo\022\032\n\022enhance_pity_coun"
+    "t\030\030 \001(\r\022\r\n\005bound\030\031 \001(\010\022\024\n\014crafter_name\030\032"
+    " \001(\t\022\031\n\021crafter_player_id\030\033 \001(\004\"K\n\013BagSl"
+    "otInfo\022\014\n\004slot\030\001 \001(\r\022\017\n\007item_id\030\002 \001(\004\022\r\n"
+    "\005width\030\003 \001(\r\022\016\n\006height\030\004 \001(\r\"\207\001\n\rBagLayo"
+    "utInfo\022\020\n\010bag_type\030\001 \001(\r\022\020\n\010capacity\030\002 \001"
+    "(\r\022\033\n\005slots\030\003 \003(\0132\014.BagSlotInfo\022\020\n\010can_s"
+    "ort\030\004 \001(\010\022#\n\013equip_slots\030\005 \003(\0132\016.EquipSl"
+    "otInfo\"3\n\017BagHeldItemInfo\022\021\n\tconfig_id\030\001"
+    " \001(\r\022\r\n\005count\030\002 \001(\004\"\215\001\n\007BagInfo\022\033\n\005items"
+    "\030\001 \003(\0132\014.BagItemInfo\022\036\n\006layout\030\002 \001(\0132\016.B"
+    "agLayoutInfo\022\037\n\010currency\030\003 \001(\0132\r.Currenc"
+    "yComp\022$\n\nheld_items\030\004 \003(\0132\020.BagHeldItemI"
+    "nfo\"!\n\rGetBagRequest\022\020\n\010bag_type\030\001 \001(\r\"O"
+    "\n\016GetBagResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\""
+    "\"\n\016SortBagRequest\022\020\n\010bag_type\030\001 \001(\r\"a\n\017S"
+    "ortBagResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n"
+    "\007changed\030\003 \001(\010\"M\n\020EquipItemRequest\022\017\n\007it"
+    "em_id\030\001 \001(\004\022\030\n\013target_slot\030\002 \001(\rH\000\210\001\001B\016\n"
+    "\014_target_slot\"o\n\021EquipItemResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003ba"
+    "g\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.B"
+    "agInfo\"%\n\022UnequipItemRequest\022\017\n\007item_id\030"
+    "\001 \001(\004\"q\n\023UnequipItemResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001("
+    "\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo"
+    "\"6\n\022GmGrantItemRequest\022\021\n\tconfig_id\030\001 \001("
+    "\r\022\r\n\005count\030\002 \001(\r\"T\n\023GmGrantItemResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
+    "\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\223\001\n\023EnhanceEquipR"
+    "equest\022\017\n\007item_id\030\001 \001(\004\022\026\n\016expected_leve"
+    "l\030\002 \001(\r\022\031\n\021client_request_id\030\003 \001(\004\022 \n\023ex"
+    "pected_pity_count\030\004 \001(\rH\000\210\001\001B\026\n\024_expecte"
+    "d_pity_count\"\344\001\n\024EnhanceEquipResponse\022&\n"
+    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n"
+    "\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132"
+    "\010.BagInfo\022\017\n\007success\030\004 \001(\010\022\025\n\renhance_le"
+    "vel\030\005 \001(\r\022\020\n\010replayed\030\006 \001(\010\022\032\n\022enhance_p"
+    "ity_count\030\007 \001(\r\022\032\n\022enhance_pity_limit\030\010 "
+    "\001(\r\"I\n\017InlayGemRequest\022\017\n\007item_id\030\001 \001(\004\022"
+    "\016\n\006socket\030\002 \001(\r\022\025\n\rgem_config_id\030\003 \001(\r\"n"
+    "\n\020InlayGemResponse\022&\n\rerror_message\030\001 \001("
     "\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInf"
-    "o\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"6\n\022GmGran"
-    "tItemRequest\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005count"
-    "\030\002 \001(\r\"T\n\023GmGrantItemResponse\022&\n\rerror_m"
-    "essage\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001"
-    "(\0132\010.BagInfo\"Y\n\023EnhanceEquipRequest\022\017\n\007i"
-    "tem_id\030\001 \001(\004\022\026\n\016expected_level\030\002 \001(\r\022\031\n\021"
-    "client_request_id\030\003 \001(\004\"\254\001\n\024EnhanceEquip"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequip"
-    "ment\030\003 \001(\0132\010.BagInfo\022\017\n\007success\030\004 \001(\010\022\025\n"
-    "\renhance_level\030\005 \001(\r\022\020\n\010replayed\030\006 \001(\010\"I"
-    "\n\017InlayGemRequest\022\017\n\007item_id\030\001 \001(\004\022\016\n\006so"
-    "cket\030\002 \001(\r\022\025\n\rgem_config_id\030\003 \001(\r\"n\n\020Inl"
-    "ayGemResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\t"
-    "equipment\030\003 \001(\0132\010.BagInfo\"3\n\020RemoveGemRe"
-    "quest\022\017\n\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 \001(\r\"o"
-    "\n\021RemoveGemResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagIn"
-    "fo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"B\n\035Retri"
-    "eveTemporaryItemsRequest\022\017\n\007item_id\030\001 \001("
-    "\004\022\020\n\010take_all\030\002 \001(\010\"|\n\036RetrieveTemporary"
-    "ItemsResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\t"
-    "temporary\030\003 \001(\0132\010.BagInfo\"\353\001\n\023EquipFixed"
-    "AffixInfo\022\020\n\010affix_id\030\001 \001(\r\022\014\n\004pool\030\002 \001("
-    "\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001(\t\022\021\n\t"
-    "value_bps\030\005 \001(\r\022\026\n\016source_cap_bps\030\006 \001(\r\022"
-    "\016\n\006effect\030\007 \001(\r\022\024\n\014effect_param\030\010 \001(\r\022\014\n"
-    "\004unit\030\t \001(\r\022\032\n\022material_config_id\030\n \001(\r\022"
-    "\026\n\016material_count\030\013 \001(\r\"]\n\027EquipFixedAff"
-    "ixSlotInfo\022\014\n\004slot\030\001 \001(\r\022\014\n\004pool\030\002 \001(\r\022&"
-    "\n\010selected\030\003 \001(\0132\024.EquipFixedAffixInfo\"\321"
-    "\001\n\021EquipArtifactInfo\022\021\n\teffect_id\030\001 \001(\r\022"
-    "\014\n\004name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\021\n\tbo"
-    "nus_bps\030\004 \001(\r\022\017\n\007cap_bps\030\005 \001(\r\022\027\n\017per_ro"
-    "und_limit\030\006 \001(\r\022\024\n\014battle_limit\030\007 \001(\r\022\025\n"
-    "\ractive_rounds\030\010 \001(\r\022\034\n\024health_threshold"
-    "_bps\030\t \001(\r\"\326\001\n\024EquipmentCraftChoice\0222\n\to"
-    "peration\030\001 \001(\0162\037.EquipmentCraftChoice.Op"
-    "eration\022\021\n\tconfig_id\030\002 \001(\r\022\017\n\007item_id\030\003 "
-    "\001(\004\022\022\n\naffix_slot\030\004 \001(\r\022\020\n\010affix_id\030\005 \001("
-    "\r\"@\n\tOperation\022\017\n\013UNSPECIFIED\020\000\022\017\n\013CREAT"
-    "E_ITEM\020\001\022\021\n\rINSTALL_AFFIX\020\002\"|\n\026Equipment"
-    "CraftMaterial\022\021\n\tconfig_id\030\001 \001(\r\022\014\n\004name"
-    "\030\002 \001(\t\022\020\n\010icon_key\030\003 \001(\t\022\r\n\005count\030\004 \001(\r\022"
-    "\r\n\005owned\030\005 \001(\004\022\021\n\tavailable\030\006 \001(\004\"i\n\024Equ"
-    "ipmentCraftRecipe\022\035\n\007product\030\001 \001(\0132\014.Bag"
-    "ItemInfo\022\032\n\022material_config_id\030\002 \001(\r\022\026\n\016"
-    "material_count\030\003 \001(\r\"\037\n\035GetEquipmentCraf"
-    "tRulesRequest\"\312\001\n\036GetEquipmentCraftRules"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\022\031\n\021rules_fingerprint\030\002 \001(\014\022\026\n\016f"
-    "orge_revision\030\003 \001(\004\022&\n\007recipes\030\004 \003(\0132\025.E"
-    "quipmentCraftRecipe\022%\n\007affixes\030\005 \003(\0132\024.E"
-    "quipFixedAffixInfo\"\357\001\n\025EquipmentCraftPre"
-    "view\022%\n\006choice\030\001 \001(\0132\025.EquipmentCraftCho"
-    "ice\022\031\n\021rules_fingerprint\030\002 \001(\014\022\037\n\027expect"
-    "ed_forge_revision\030\003 \001(\004\022\034\n\006result\030\004 \001(\0132"
-    "\014.BagItemInfo\022)\n\010material\030\005 \001(\0132\027.Equipm"
-    "entCraftMaterial\022\021\n\tavailable\030\006 \001(\010\022\027\n\017u"
-    "navailable_tip\030\007 \001(\r\"E\n\034PreviewEquipment"
-    "CraftRequest\022%\n\006choice\030\001 \001(\0132\025.Equipment"
-    "CraftChoice\"p\n\035PreviewEquipmentCraftResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022\'\n\007preview\030\002 \001(\0132\026.EquipmentCraftPr"
-    "eview\"\233\001\n\033CommitEquipmentCraftRequest\022%\n"
-    "\006choice\030\001 \001(\0132\025.EquipmentCraftChoice\022\031\n\021"
-    "rules_fingerprint\030\002 \001(\014\022\037\n\027expected_forg"
-    "e_revision\030\003 \001(\004\022\031\n\021client_request_id\030\004 "
-    "\001(\004\"\363\002\n\034CommitEquipmentCraftResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021"
-    "client_request_id\030\002 \001(\004\0226\n\007outcome\030\003 \001(\016"
-    "2%.CommitEquipmentCraftResponse.Outcome\022"
-    "\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\017\n\007it"
-    "em_id\030\006 \001(\004\022\035\n\025result_forge_revision\030\007 \001"
-    "(\004\022\036\n\026current_forge_revision\030\010 \001(\004\022\025\n\003ba"
-    "g\030\t \001(\0132\010.BagInfo\022\033\n\tequipment\030\n \001(\0132\010.B"
-    "agInfo\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECT"
-    "ED\020\001\022\013\n\007APPLIED\020\002\"\352\002\n\037EquipmentMaterialR"
-    "ewardSnapshot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022unav"
-    "ailable_reason\030\002 \001(\t\022\030\n\020day_starts_at_ms"
-    "\030\003 \001(\004\022\030\n\020next_reset_at_ms\030\004 \001(\004\022\024\n\014earn"
-    "ed_today\030\005 \001(\r\022\023\n\013daily_limit\030\006 \001(\r\022\027\n\017a"
-    "vailable_units\030\007 \001(\004\022\023\n\013batch_units\030\010 \001("
-    "\r\022\020\n\010revision\030\t \001(\004\0222\n\021crafting_material"
-    "\030\n \001(\0132\027.EquipmentCraftMaterial\0222\n\021enhan"
-    "cement_stone\030\013 \001(\0132\027.EquipmentCraftMater"
-    "ial\022\021\n\tcan_claim\030\014 \001(\010\"#\n!GetEquipmentMa"
-    "terialRewardRequest\"\200\001\n\"GetEquipmentMate"
-    "rialRewardResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\0222\n\010snapshot\030\002 \001(\0132 .E"
-    "quipmentMaterialRewardSnapshot\"\235\001\n#Claim"
-    "EquipmentMaterialRewardRequest\022\031\n\021client"
-    "_request_id\030\001 \001(\004\022\031\n\021expected_revision\030\002"
-    " \001(\004\022\037\n\027crafting_material_count\030\003 \001(\r\022\037\n"
-    "\027enhancement_stone_count\030\004 \001(\r\"\375\002\n$Claim"
-    "EquipmentMaterialRewardResponse\022&\n\rerror"
-    "_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clien"
-    "t_request_id\030\002 \001(\004\022>\n\007outcome\030\003 \001(\0162-.Cl"
-    "aimEquipmentMaterialRewardResponse.Outco"
-    "me\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\027\n"
-    "\017result_revision\030\006 \001(\004\022\030\n\020current_revisi"
-    "on\030\007 \001(\004\022\025\n\003bag\030\010 \001(\0132\010.BagInfo\0222\n\010snaps"
-    "hot\030\t \001(\0132 .EquipmentMaterialRewardSnaps"
-    "hot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECTED\020"
-    "\001\022\013\n\007APPLIED\020\0022\374\007\n\024SceneBagClientPlayer\022"
-    ")\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRespon"
-    "se\022,\n\007SortBag\022\017.SortBagRequest\032\020.SortBag"
-    "Response\0222\n\tEquipItem\022\021.EquipItemRequest"
-    "\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023.Un"
-    "equipItemRequest\032\024.UnequipItemResponse\0228"
-    "\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024.GmG"
-    "rantItemResponse\022;\n\014EnhanceEquip\022\024.Enhan"
-    "ceEquipRequest\032\025.EnhanceEquipResponse\022/\n"
-    "\010InlayGem\022\020.InlayGemRequest\032\021.InlayGemRe"
-    "sponse\0222\n\tRemoveGem\022\021.RemoveGemRequest\032\022"
-    ".RemoveGemResponse\022Y\n\026RetrieveTemporaryI"
-    "tems\022\036.RetrieveTemporaryItemsRequest\032\037.R"
-    "etrieveTemporaryItemsResponse\022Y\n\026GetEqui"
-    "pmentCraftRules\022\036.GetEquipmentCraftRules"
-    "Request\032\037.GetEquipmentCraftRulesResponse"
-    "\022V\n\025PreviewEquipmentCraft\022\035.PreviewEquip"
-    "mentCraftRequest\032\036.PreviewEquipmentCraft"
-    "Response\022S\n\024CommitEquipmentCraft\022\034.Commi"
-    "tEquipmentCraftRequest\032\035.CommitEquipment"
-    "CraftResponse\022e\n\032GetEquipmentMaterialRew"
-    "ard\022\".GetEquipmentMaterialRewardRequest\032"
-    "#.GetEquipmentMaterialRewardResponse\022k\n\034"
-    "ClaimEquipmentMaterialReward\022$.ClaimEqui"
-    "pmentMaterialRewardRequest\032%.ClaimEquipm"
-    "entMaterialRewardResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z"
-    "\005scene\200\001\001\230\324a\003b\006proto3"
+    "o\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"3\n\020Remove"
+    "GemRequest\022\017\n\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 "
+    "\001(\r\"o\n\021RemoveGemResponse\022&\n\rerror_messag"
+    "e\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010."
+    "BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"B\n\035"
+    "RetrieveTemporaryItemsRequest\022\017\n\007item_id"
+    "\030\001 \001(\004\022\020\n\010take_all\030\002 \001(\010\"|\n\036RetrieveTemp"
+    "oraryItemsResponse\022&\n\rerror_message\030\001 \001("
+    "\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInf"
+    "o\022\033\n\ttemporary\030\003 \001(\0132\010.BagInfo\"\321\004\n\023Equip"
+    "FixedAffixInfo\022\020\n\010affix_id\030\001 \001(\r\022\014\n\004pool"
+    "\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001("
+    "\t\022\021\n\tvalue_bps\030\005 \001(\r\022\026\n\016source_cap_bps\030\006"
+    " \001(\r\022\016\n\006effect\030\007 \001(\r\022\024\n\014effect_param\030\010 \001"
+    "(\r\022\014\n\004unit\030\t \001(\r\022\032\n\022material_config_id\030\n"
+    " \001(\r\022\026\n\016material_count\030\013 \001(\r\022\024\n\014quality_"
+    "tier\030\014 \001(\r\022\024\n\014quality_name\030\r \001(\t\022\031\n\021qual"
+    "ity_ratio_pct\030\016 \001(\r\022\025\n\rmax_value_bps\030\017 \001"
+    "(\r\022\031\n\021polish_pity_count\030\020 \001(\r\022\031\n\021polish_"
+    "pity_limit\030\021 \001(\r\022\025\n\rpolish_exempt\030\022 \001(\010\022"
+    "!\n\031polish_material_config_id\030\023 \001(\r\022\035\n\025po"
+    "lish_material_count\030\024 \001(\r\022\030\n\020polish_gold"
+    "_cost\030\025 \001(\004\022\"\n\032reforge_material_config_i"
+    "d\030\026 \001(\r\022\036\n\026reforge_material_count\030\027 \001(\r\022"
+    "\031\n\021reforge_gold_cost\030\030 \001(\004\"\236\001\n\025EquipAffi"
+    "xQualityInfo\022\024\n\014quality_tier\030\001 \001(\r\022\014\n\004na"
+    "me\030\002 \001(\t\022\021\n\tratio_pct\030\003 \001(\r\022\033\n\023apprentic"
+    "e_rate_bps\030\004 \001(\r\022\030\n\020artisan_rate_bps\030\005 \001"
+    "(\r\022\027\n\017master_rate_bps\030\006 \001(\r\"u\n\020CraftMast"
+    "eryInfo\022\014\n\004tier\030\001 \001(\r\022\021\n\ttier_name\030\002 \001(\t"
+    "\022\013\n\003exp\030\003 \001(\r\022\025\n\rnext_tier_exp\030\004 \001(\r\022\034\n\024"
+    "top_quality_rate_bps\030\005 \001(\r\"]\n\027EquipFixed"
+    "AffixSlotInfo\022\014\n\004slot\030\001 \001(\r\022\014\n\004pool\030\002 \001("
+    "\r\022&\n\010selected\030\003 \001(\0132\024.EquipFixedAffixInf"
+    "o\"\321\001\n\021EquipArtifactInfo\022\021\n\teffect_id\030\001 \001"
+    "(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\021\n"
+    "\tbonus_bps\030\004 \001(\r\022\017\n\007cap_bps\030\005 \001(\r\022\027\n\017per"
+    "_round_limit\030\006 \001(\r\022\024\n\014battle_limit\030\007 \001(\r"
+    "\022\025\n\ractive_rounds\030\010 \001(\r\022\034\n\024health_thresh"
+    "old_bps\030\t \001(\r\"\237\003\n\024EquipmentCraftChoice\0222"
+    "\n\toperation\030\001 \001(\0162\037.EquipmentCraftChoice"
+    ".Operation\022\021\n\tconfig_id\030\002 \001(\r\022\017\n\007item_id"
+    "\030\003 \001(\004\022\022\n\naffix_slot\030\004 \001(\r\022\020\n\010affix_id\030\005"
+    " \001(\r\022\033\n\023use_guarantee_charm\030\006 \001(\010\022\035\n\025all"
+    "ow_bound_materials\030\007 \001(\010\022\036\n\026proxy_master"
+    "_player_id\030\010 \001(\004\022\'\n\032expected_polish_pity"
+    "_count\030\t \001(\rH\000\210\001\001\"e\n\tOperation\022\017\n\013UNSPEC"
+    "IFIED\020\000\022\017\n\013CREATE_ITEM\020\001\022\021\n\rINSTALL_AFFI"
+    "X\020\002\022\021\n\rREFORGE_AFFIX\020\003\022\020\n\014POLISH_AFFIX\020\004"
+    "B\035\n\033_expected_polish_pity_count\"|\n\026Equip"
+    "mentCraftMaterial\022\021\n\tconfig_id\030\001 \001(\r\022\014\n\004"
+    "name\030\002 \001(\t\022\020\n\010icon_key\030\003 \001(\t\022\r\n\005count\030\004 "
+    "\001(\r\022\r\n\005owned\030\005 \001(\004\022\021\n\tavailable\030\006 \001(\004\"i\n"
+    "\024EquipmentCraftRecipe\022\035\n\007product\030\001 \001(\0132\014"
+    ".BagItemInfo\022\032\n\022material_config_id\030\002 \001(\r"
+    "\022\026\n\016material_count\030\003 \001(\r\"\037\n\035GetEquipment"
+    "CraftRulesRequest\"\243\002\n\036GetEquipmentCraftR"
+    "ulesResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\031\n\021rules_fingerprint\030\002 \001(\014\022"
+    "\026\n\016forge_revision\030\003 \001(\004\022&\n\007recipes\030\004 \003(\013"
+    "2\025.EquipmentCraftRecipe\022%\n\007affixes\030\005 \003(\013"
+    "2\024.EquipFixedAffixInfo\022-\n\rquality_tiers\030"
+    "\006 \003(\0132\026.EquipAffixQualityInfo\022(\n\rforge_m"
+    "astery\030\007 \001(\0132\021.CraftMasteryInfo\"\376\002\n\025Equi"
+    "pmentCraftPreview\022%\n\006choice\030\001 \001(\0132\025.Equi"
+    "pmentCraftChoice\022\031\n\021rules_fingerprint\030\002 "
+    "\001(\014\022\037\n\027expected_forge_revision\030\003 \001(\004\022\034\n\006"
+    "result\030\004 \001(\0132\014.BagItemInfo\022)\n\010material\030\005"
+    " \001(\0132\027.EquipmentCraftMaterial\022\021\n\tavailab"
+    "le\030\006 \001(\010\022\027\n\017unavailable_tip\030\007 \001(\r\022\021\n\tgol"
+    "d_cost\030\010 \001(\004\022/\n\016extra_material\030\t \001(\0132\027.E"
+    "quipmentCraftMaterial\022\026\n\016proxy_fee_gold\030"
+    "\n \001(\004\022\031\n\021proxy_master_name\030\013 \001(\t\022\026\n\016will"
+    "_bind_item\030\014 \001(\010\"E\n\034PreviewEquipmentCraf"
+    "tRequest\022%\n\006choice\030\001 \001(\0132\025.EquipmentCraf"
+    "tChoice\"p\n\035PreviewEquipmentCraftResponse"
+    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
+    "\022\'\n\007preview\030\002 \001(\0132\026.EquipmentCraftPrevie"
+    "w\"\233\001\n\033CommitEquipmentCraftRequest\022%\n\006cho"
+    "ice\030\001 \001(\0132\025.EquipmentCraftChoice\022\031\n\021rule"
+    "s_fingerprint\030\002 \001(\014\022\037\n\027expected_forge_re"
+    "vision\030\003 \001(\004\022\031\n\021client_request_id\030\004 \001(\004\""
+    "\370\003\n\034CommitEquipmentCraftResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clie"
+    "nt_request_id\030\002 \001(\004\0226\n\007outcome\030\003 \001(\0162%.C"
+    "ommitEquipmentCraftResponse.Outcome\022\017\n\007d"
+    "urable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\017\n\007item_i"
+    "d\030\006 \001(\004\022\035\n\025result_forge_revision\030\007 \001(\004\022\036"
+    "\n\026current_forge_revision\030\010 \001(\004\022\025\n\003bag\030\t "
+    "\001(\0132\010.BagInfo\022\033\n\tequipment\030\n \001(\0132\010.BagIn"
+    "fo\022\033\n\023result_quality_tier\030\013 \001(\r\022 \n\030resul"
+    "t_polish_pity_count\030\014 \001(\r\022\032\n\022guaranteed_"
+    "by_pity\030\r \001(\010\022(\n\rforge_mastery\030\016 \001(\0132\021.C"
+    "raftMasteryInfo\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022"
+    "\014\n\010REJECTED\020\001\022\013\n\007APPLIED\020\002\"\242\005\n\037Equipment"
+    "MaterialRewardSnapshot\022\021\n\tavailable\030\001 \001("
+    "\010\022\032\n\022unavailable_reason\030\002 \001(\t\022\030\n\020day_sta"
+    "rts_at_ms\030\003 \001(\004\022\030\n\020next_reset_at_ms\030\004 \001("
+    "\004\022\024\n\014earned_today\030\005 \001(\r\022\023\n\013daily_limit\030\006"
+    " \001(\r\022\027\n\017available_units\030\007 \001(\004\022\023\n\013batch_u"
+    "nits\030\010 \001(\r\022\020\n\010revision\030\t \001(\004\0222\n\021crafting"
+    "_material\030\n \001(\0132\027.EquipmentCraftMaterial"
+    "\0222\n\021enhancement_stone\030\013 \001(\0132\027.EquipmentC"
+    "raftMaterial\022\021\n\tcan_claim\030\014 \001(\010\022\027\n\017lifet"
+    "ime_earned\030\r \001(\r\022\026\n\016lifetime_limit\030\016 \001(\r"
+    "\022\035\n\025tradable_earned_total\030\017 \001(\r\022\037\n\027trada"
+    "ble_lifetime_limit\030\020 \001(\r\022 \n\030available_tr"
+    "adable_units\030\021 \001(\004\022\034\n\024batch_tradable_uni"
+    "ts\030\022 \001(\r\022\033\n\023weekly_phase_active\030\023 \001(\010\022\031\n"
+    "\021week_starts_at_ms\030\024 \001(\004\022\035\n\025next_week_re"
+    "set_at_ms\030\025 \001(\004\022\030\n\020earned_this_week\030\026 \001("
+    "\r\022\024\n\014weekly_limit\030\027 \001(\r\"#\n!GetEquipmentM"
+    "aterialRewardRequest\"\200\001\n\"GetEquipmentMat"
+    "erialRewardResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\0222\n\010snapshot\030\002 \001(\0132 ."
+    "EquipmentMaterialRewardSnapshot\"\235\001\n#Clai"
+    "mEquipmentMaterialRewardRequest\022\031\n\021clien"
+    "t_request_id\030\001 \001(\004\022\031\n\021expected_revision\030"
+    "\002 \001(\004\022\037\n\027crafting_material_count\030\003 \001(\r\022\037"
+    "\n\027enhancement_stone_count\030\004 \001(\r\"\375\002\n$Clai"
+    "mEquipmentMaterialRewardResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clie"
+    "nt_request_id\030\002 \001(\004\022>\n\007outcome\030\003 \001(\0162-.C"
+    "laimEquipmentMaterialRewardResponse.Outc"
+    "ome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\027"
+    "\n\017result_revision\030\006 \001(\004\022\030\n\020current_revis"
+    "ion\030\007 \001(\004\022\025\n\003bag\030\010 \001(\0132\010.BagInfo\0222\n\010snap"
+    "shot\030\t \001(\0132 .EquipmentMaterialRewardSnap"
+    "shot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECTED"
+    "\020\001\022\013\n\007APPLIED\020\0022\374\007\n\024SceneBagClientPlayer"
+    "\022)\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRespo"
+    "nse\022,\n\007SortBag\022\017.SortBagRequest\032\020.SortBa"
+    "gResponse\0222\n\tEquipItem\022\021.EquipItemReques"
+    "t\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023.U"
+    "nequipItemRequest\032\024.UnequipItemResponse\022"
+    "8\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024.Gm"
+    "GrantItemResponse\022;\n\014EnhanceEquip\022\024.Enha"
+    "nceEquipRequest\032\025.EnhanceEquipResponse\022/"
+    "\n\010InlayGem\022\020.InlayGemRequest\032\021.InlayGemR"
+    "esponse\0222\n\tRemoveGem\022\021.RemoveGemRequest\032"
+    "\022.RemoveGemResponse\022Y\n\026RetrieveTemporary"
+    "Items\022\036.RetrieveTemporaryItemsRequest\032\037."
+    "RetrieveTemporaryItemsResponse\022Y\n\026GetEqu"
+    "ipmentCraftRules\022\036.GetEquipmentCraftRule"
+    "sRequest\032\037.GetEquipmentCraftRulesRespons"
+    "e\022V\n\025PreviewEquipmentCraft\022\035.PreviewEqui"
+    "pmentCraftRequest\032\036.PreviewEquipmentCraf"
+    "tResponse\022S\n\024CommitEquipmentCraft\022\034.Comm"
+    "itEquipmentCraftRequest\032\035.CommitEquipmen"
+    "tCraftResponse\022e\n\032GetEquipmentMaterialRe"
+    "ward\022\".GetEquipmentMaterialRewardRequest"
+    "\032#.GetEquipmentMaterialRewardResponse\022k\n"
+    "\034ClaimEquipmentMaterialReward\022$.ClaimEqu"
+    "ipmentMaterialRewardRequest\032%.ClaimEquip"
+    "mentMaterialRewardResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016"
+    "Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[3] = {
@@ -8930,13 +9846,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    7701,
+    9502,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps,
     3,
-    45,
+    47,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fbag_2eproto::offsets,
@@ -8949,7 +9865,7 @@ EquipmentCraftChoice_Operation_descriptor() {
   return file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t EquipmentCraftChoice_Operation_internal_data_[] = {
-    196608u, 0u, };
+    327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CommitEquipmentCraftResponse_Outcome_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto);
@@ -10098,9 +11014,9 @@ EquipEnhancePreview::EquipEnhancePreview(
                offsetof(Impl_, next_level_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, next_level_),
-           offsetof(Impl_, fail_level_loss_) -
+           offsetof(Impl_, pity_guaranteed_next_) -
                offsetof(Impl_, next_level_) +
-               sizeof(Impl_::fail_level_loss_));
+               sizeof(Impl_::pity_guaranteed_next_));
 
   // @@protoc_insertion_point(copy_constructor:EquipEnhancePreview)
 }
@@ -10116,9 +11032,9 @@ inline void EquipEnhancePreview::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, next_level_),
            0,
-           offsetof(Impl_, fail_level_loss_) -
+           offsetof(Impl_, pity_guaranteed_next_) -
                offsetof(Impl_, next_level_) +
-               sizeof(Impl_::fail_level_loss_));
+               sizeof(Impl_::pity_guaranteed_next_));
 }
 EquipEnhancePreview::~EquipEnhancePreview() {
   // @@protoc_insertion_point(destructor:EquipEnhancePreview)
@@ -10183,7 +11099,11 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
         reinterpret_cast<char*>(&_impl_.bonus_permyriad_) -
         reinterpret_cast<char*>(&_impl_.next_level_)) + sizeof(_impl_.bonus_permyriad_));
   }
-  _impl_.fail_level_loss_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.fail_level_loss_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.pity_guaranteed_next_) -
+        reinterpret_cast<char*>(&_impl_.fail_level_loss_)) + sizeof(_impl_.pity_guaranteed_next_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10290,6 +11210,33 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
     }
   }
 
+  // uint32 pity_limit = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_pity_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_pity_limit(), target);
+    }
+  }
+
+  // uint32 current_pity_count = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_current_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_current_pity_count(), target);
+    }
+  }
+
+  // bool pity_guaranteed_next = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_pity_guaranteed_next() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          12, this_._internal_pity_guaranteed_next(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -10373,12 +11320,32 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint32 fail_level_loss = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_fail_level_loss() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_fail_level_loss());
+      }
+    }
+    // uint32 pity_limit = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_pity_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pity_limit());
+      }
+    }
+    // uint32 current_pity_count = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_current_pity_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_current_pity_count());
+      }
+    }
+    // bool pity_guaranteed_next = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_pity_guaranteed_next() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -10449,9 +11416,26 @@ void EquipEnhancePreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_fail_level_loss() != 0) {
-      _this->_impl_.fail_level_loss_ = from._impl_.fail_level_loss_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_fail_level_loss() != 0) {
+        _this->_impl_.fail_level_loss_ = from._impl_.fail_level_loss_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_pity_limit() != 0) {
+        _this->_impl_.pity_limit_ = from._impl_.pity_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_current_pity_count() != 0) {
+        _this->_impl_.current_pity_count_ = from._impl_.current_pity_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_pity_guaranteed_next() != 0) {
+        _this->_impl_.pity_guaranteed_next_ = from._impl_.pity_guaranteed_next_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -10476,8 +11460,8 @@ void EquipEnhancePreview::InternalSwap(EquipEnhancePreview* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.material_name_, &other->_impl_.material_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.material_icon_key_, &other->_impl_.material_icon_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.fail_level_loss_)
-      + sizeof(EquipEnhancePreview::_impl_.fail_level_loss_)
+      PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_)
+      + sizeof(EquipEnhancePreview::_impl_.pity_guaranteed_next_)
       - PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.next_level_)>(
           reinterpret_cast<char*>(&_impl_.next_level_),
           reinterpret_cast<char*>(&other->_impl_.next_level_));
@@ -10534,7 +11518,8 @@ PROTOBUF_NDEBUG_INLINE BagItemInfo::Impl_::Impl_(
         name_(arena, from.name_),
         description_(arena, from.description_),
         icon_key_(arena, from.icon_key_),
-        equip_class_name_(arena, from.equip_class_name_) {}
+        equip_class_name_(arena, from.equip_class_name_),
+        crafter_name_(arena, from.crafter_name_) {}
 
 BagItemInfo::BagItemInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -10551,22 +11536,22 @@ BagItemInfo::BagItemInfo(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.enhance_next_ = (CheckHasBit(cached_has_bits, 0x00000100U))
+  _impl_.enhance_next_ = (CheckHasBit(cached_has_bits, 0x00000200U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.enhance_next_)
                 : nullptr;
-  _impl_.gem_attr_ = (CheckHasBit(cached_has_bits, 0x00000200U))
+  _impl_.gem_attr_ = (CheckHasBit(cached_has_bits, 0x00000400U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.gem_attr_)
                 : nullptr;
-  _impl_.artifact_ = (CheckHasBit(cached_has_bits, 0x00000400U))
+  _impl_.artifact_ = (CheckHasBit(cached_has_bits, 0x00000800U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.artifact_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, item_id_),
-           offsetof(Impl_, equip_profile_) -
+           offsetof(Impl_, bound_) -
                offsetof(Impl_, item_id_) +
-               sizeof(Impl_::equip_profile_));
+               sizeof(Impl_::bound_));
 
   // @@protoc_insertion_point(copy_constructor:BagItemInfo)
 }
@@ -10597,16 +11582,17 @@ PROTOBUF_NDEBUG_INLINE BagItemInfo::Impl_::Impl_(
         name_(arena),
         description_(arena),
         icon_key_(arena),
-        equip_class_name_(arena) {}
+        equip_class_name_(arena),
+        crafter_name_(arena) {}
 
 inline void BagItemInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, enhance_next_),
            0,
-           offsetof(Impl_, equip_profile_) -
+           offsetof(Impl_, bound_) -
                offsetof(Impl_, enhance_next_) +
-               sizeof(Impl_::equip_profile_));
+               sizeof(Impl_::bound_));
 }
 BagItemInfo::~BagItemInfo() {
   // @@protoc_insertion_point(destructor:BagItemInfo)
@@ -10623,6 +11609,7 @@ inline void BagItemInfo::SharedDtor(MessageLite& self) {
   this_._impl_.description_.Destroy();
   this_._impl_.icon_key_.Destroy();
   this_._impl_.equip_class_name_.Destroy();
+  this_._impl_.crafter_name_.Destroy();
   delete this_._impl_.enhance_next_;
   delete this_._impl_.gem_attr_;
   delete this_._impl_.artifact_;
@@ -10689,29 +11676,37 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
       _impl_.equip_class_name_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      _impl_.crafter_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       ABSL_DCHECK(_impl_.enhance_next_ != nullptr);
       _impl_.enhance_next_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       ABSL_DCHECK(_impl_.gem_attr_ != nullptr);
       _impl_.gem_attr_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       ABSL_DCHECK(_impl_.artifact_ != nullptr);
       _impl_.artifact_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000f800U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000f000U)) {
     ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.equip_kind_) -
-        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.equip_kind_));
+        reinterpret_cast<char*>(&_impl_.max_stack_) -
+        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.max_stack_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
-    ::memset(&_impl_.equip_level_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.equip_kind_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.equip_profile_) -
-        reinterpret_cast<char*>(&_impl_.equip_level_)) + sizeof(_impl_.equip_profile_));
+        reinterpret_cast<char*>(&_impl_.equip_kind_)) + sizeof(_impl_.equip_profile_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+    ::memset(&_impl_.enhance_pity_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.bound_) -
+        reinterpret_cast<char*>(&_impl_.enhance_pity_count_)) + sizeof(_impl_.bound_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -10737,7 +11732,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 item_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_item_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10746,7 +11741,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 config_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10755,7 +11750,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 count = 3;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10764,7 +11759,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 max_stack = 4;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_max_stack() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10773,7 +11768,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 equip_kind = 5;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_equip_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10812,7 +11807,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 equip_level = 9;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_equip_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10821,7 +11816,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 equip_class = 10;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_equip_class() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10866,7 +11861,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 enhance_level = 14;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_enhance_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10875,7 +11870,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 enhance_max_level = 15;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_enhance_max_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10884,7 +11879,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // .EquipEnhancePreview enhance_next = 16;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         16, *this_._impl_.enhance_next_, this_._impl_.enhance_next_->GetCachedSize(), target,
         stream);
@@ -10904,7 +11899,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 gem_type = 18;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_gem_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10913,14 +11908,14 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // .EquipAttrLineInfo gem_attr = 19;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         19, *this_._impl_.gem_attr_, this_._impl_.gem_attr_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 enhance_bonus_permyriad = 20;
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (this_._internal_enhance_bonus_permyriad() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10929,7 +11924,7 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // uint32 equip_profile = 21;
-  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
     if (this_._internal_equip_profile() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10951,10 +11946,47 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
   }
 
   // .EquipArtifactInfo artifact = 23;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         23, *this_._impl_.artifact_, this_._impl_.artifact_->GetCachedSize(), target,
         stream);
+  }
+
+  // uint32 enhance_pity_count = 24;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_enhance_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_enhance_pity_count(), target);
+    }
+  }
+
+  // bool bound = 25;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_bound() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          25, this_._internal_bound(), target);
+    }
+  }
+
+  // string crafter_name = 26;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (!this_._internal_crafter_name().empty()) {
+      const ::std::string& _s = this_._internal_crafter_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BagItemInfo.crafter_name");
+      target = stream->WriteStringMaybeAliased(26, _s, target);
+    }
+  }
+
+  // uint64 crafter_player_id = 27;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_crafter_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          27, this_._internal_crafter_player_id(), target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -11041,105 +12073,134 @@ PROTOBUF_NOINLINE void BagItemInfo::Clear() {
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    // .EquipEnhancePreview enhance_next = 16;
+    // string crafter_name = 26;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (!this_._internal_crafter_name().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_crafter_name());
+      }
+    }
+    // .EquipEnhancePreview enhance_next = 16;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.enhance_next_);
     }
     // .EquipAttrLineInfo gem_attr = 19;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.gem_attr_);
     }
     // .EquipArtifactInfo artifact = 23;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.artifact_);
     }
     // uint64 item_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_item_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_item_id());
       }
     }
     // uint32 config_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_config_id());
       }
     }
     // uint32 count = 3;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_count());
       }
     }
     // uint32 max_stack = 4;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_max_stack() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_stack());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 equip_kind = 5;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_equip_kind() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_equip_kind());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // uint32 equip_level = 9;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_equip_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_equip_level());
       }
     }
     // uint32 equip_class = 10;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_equip_class() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_equip_class());
       }
     }
     // uint32 enhance_level = 14;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_enhance_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enhance_level());
       }
     }
     // uint32 enhance_max_level = 15;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_enhance_max_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enhance_max_level());
       }
     }
     // uint32 gem_type = 18;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_gem_type() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_gem_type());
       }
     }
     // uint32 enhance_bonus_permyriad = 20;
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_enhance_bonus_permyriad() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_enhance_bonus_permyriad());
       }
     }
     // uint32 equip_profile = 21;
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (this_._internal_equip_profile() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_equip_profile());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+    // uint32 enhance_pity_count = 24;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_enhance_pity_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_enhance_pity_count());
+      }
+    }
+    // uint64 crafter_player_id = 27;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_crafter_player_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_crafter_player_id());
+      }
+    }
+    // bool bound = 25;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_bound() != 0) {
+        total_size += 3;
       }
     }
   }
@@ -11221,6 +12282,15 @@ void BagItemInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (!from._internal_crafter_name().empty()) {
+        _this->_internal_set_crafter_name(from._internal_crafter_name());
+      } else {
+        if (_this->_impl_.crafter_name_.IsDefault()) {
+          _this->_internal_set_crafter_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       ABSL_DCHECK(from._impl_.enhance_next_ != nullptr);
       if (_this->_impl_.enhance_next_ == nullptr) {
         _this->_impl_.enhance_next_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.enhance_next_);
@@ -11228,7 +12298,7 @@ void BagItemInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.enhance_next_->MergeFrom(*from._impl_.enhance_next_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       ABSL_DCHECK(from._impl_.gem_attr_ != nullptr);
       if (_this->_impl_.gem_attr_ == nullptr) {
         _this->_impl_.gem_attr_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.gem_attr_);
@@ -11236,7 +12306,7 @@ void BagItemInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.gem_attr_->MergeFrom(*from._impl_.gem_attr_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       ABSL_DCHECK(from._impl_.artifact_ != nullptr);
       if (_this->_impl_.artifact_ == nullptr) {
         _this->_impl_.artifact_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.artifact_);
@@ -11244,66 +12314,83 @@ void BagItemInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.artifact_->MergeFrom(*from._impl_.artifact_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_item_id() != 0) {
         _this->_impl_.item_id_ = from._impl_.item_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_config_id() != 0) {
         _this->_impl_.config_id_ = from._impl_.config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_count() != 0) {
         _this->_impl_.count_ = from._impl_.count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_max_stack() != 0) {
         _this->_impl_.max_stack_ = from._impl_.max_stack_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_equip_kind() != 0) {
         _this->_impl_.equip_kind_ = from._impl_.equip_kind_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_equip_level() != 0) {
         _this->_impl_.equip_level_ = from._impl_.equip_level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_equip_class() != 0) {
         _this->_impl_.equip_class_ = from._impl_.equip_class_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_enhance_level() != 0) {
         _this->_impl_.enhance_level_ = from._impl_.enhance_level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_enhance_max_level() != 0) {
         _this->_impl_.enhance_max_level_ = from._impl_.enhance_max_level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_gem_type() != 0) {
         _this->_impl_.gem_type_ = from._impl_.gem_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (from._internal_enhance_bonus_permyriad() != 0) {
         _this->_impl_.enhance_bonus_permyriad_ = from._impl_.enhance_bonus_permyriad_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (from._internal_equip_profile() != 0) {
         _this->_impl_.equip_profile_ = from._impl_.equip_profile_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_enhance_pity_count() != 0) {
+        _this->_impl_.enhance_pity_count_ = from._impl_.enhance_pity_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_crafter_player_id() != 0) {
+        _this->_impl_.crafter_player_id_ = from._impl_.crafter_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_bound() != 0) {
+        _this->_impl_.bound_ = from._impl_.bound_;
       }
     }
   }
@@ -11334,9 +12421,10 @@ void BagItemInfo::InternalSwap(BagItemInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.equip_class_name_, &other->_impl_.equip_class_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.crafter_name_, &other->_impl_.crafter_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.equip_profile_)
-      + sizeof(BagItemInfo::_impl_.equip_profile_)
+      PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.bound_)
+      + sizeof(BagItemInfo::_impl_.bound_)
       - PROTOBUF_FIELD_OFFSET(BagItemInfo, _impl_.enhance_next_)>(
           reinterpret_cast<char*>(&_impl_.enhance_next_),
           reinterpret_cast<char*>(&other->_impl_.enhance_next_));
@@ -14959,9 +16047,9 @@ inline void EnhanceEquipRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_id_),
            0,
-           offsetof(Impl_, expected_level_) -
+           offsetof(Impl_, expected_pity_count_) -
                offsetof(Impl_, item_id_) +
-               sizeof(Impl_::expected_level_));
+               sizeof(Impl_::expected_pity_count_));
 }
 EnhanceEquipRequest::~EnhanceEquipRequest() {
   // @@protoc_insertion_point(destructor:EnhanceEquipRequest)
@@ -15011,10 +16099,10 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.expected_level_) -
-        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.expected_level_));
+        reinterpret_cast<char*>(&_impl_.expected_pity_count_) -
+        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.expected_pity_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -15066,6 +16154,13 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
     }
   }
 
+  // optional uint32 expected_pity_count = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+        4, this_._internal_expected_pity_count(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -15091,7 +16186,7 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 item_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_item_id() != 0) {
@@ -15113,6 +16208,11 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
             this_._internal_expected_level());
       }
     }
+    // optional uint32 expected_pity_count = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+          this_._internal_expected_pity_count());
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -15131,7 +16231,7 @@ void EnhanceEquipRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_item_id() != 0) {
         _this->_impl_.item_id_ = from._impl_.item_id_;
@@ -15146,6 +16246,9 @@ void EnhanceEquipRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       if (from._internal_expected_level() != 0) {
         _this->_impl_.expected_level_ = from._impl_.expected_level_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _this->_impl_.expected_pity_count_ = from._impl_.expected_pity_count_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -15166,8 +16269,8 @@ void EnhanceEquipRequest::InternalSwap(EnhanceEquipRequest* PROTOBUF_RESTRICT PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_level_)
-      + sizeof(EnhanceEquipRequest::_impl_.expected_level_)
+      PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_)
+      + sizeof(EnhanceEquipRequest::_impl_.expected_pity_count_)
       - PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.item_id_)>(
           reinterpret_cast<char*>(&_impl_.item_id_),
           reinterpret_cast<char*>(&other->_impl_.item_id_));
@@ -15227,9 +16330,9 @@ EnhanceEquipResponse::EnhanceEquipResponse(
                offsetof(Impl_, enhance_level_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, enhance_level_),
-           offsetof(Impl_, replayed_) -
+           offsetof(Impl_, enhance_pity_limit_) -
                offsetof(Impl_, enhance_level_) +
-               sizeof(Impl_::replayed_));
+               sizeof(Impl_::enhance_pity_limit_));
 
   // @@protoc_insertion_point(copy_constructor:EnhanceEquipResponse)
 }
@@ -15243,9 +16346,9 @@ inline void EnhanceEquipResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, replayed_) -
+           offsetof(Impl_, enhance_pity_limit_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::replayed_));
+               sizeof(Impl_::enhance_pity_limit_));
 }
 EnhanceEquipResponse::~EnhanceEquipResponse() {
   // @@protoc_insertion_point(destructor:EnhanceEquipResponse)
@@ -15312,10 +16415,10 @@ PROTOBUF_NOINLINE void EnhanceEquipResponse::Clear() {
       _impl_.equipment_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.enhance_level_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.replayed_) -
-        reinterpret_cast<char*>(&_impl_.enhance_level_)) + sizeof(_impl_.replayed_));
+        reinterpret_cast<char*>(&_impl_.enhance_pity_limit_) -
+        reinterpret_cast<char*>(&_impl_.enhance_level_)) + sizeof(_impl_.enhance_pity_limit_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -15388,6 +16491,24 @@ PROTOBUF_NOINLINE void EnhanceEquipResponse::Clear() {
     }
   }
 
+  // uint32 enhance_pity_count = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_enhance_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_enhance_pity_count(), target);
+    }
+  }
+
+  // uint32 enhance_pity_limit = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_enhance_pity_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_enhance_pity_limit(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -15413,7 +16534,7 @@ PROTOBUF_NOINLINE void EnhanceEquipResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // .TipInfoMessage error_message = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -15448,6 +16569,20 @@ PROTOBUF_NOINLINE void EnhanceEquipResponse::Clear() {
         total_size += 2;
       }
     }
+    // uint32 enhance_pity_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_enhance_pity_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_enhance_pity_count());
+      }
+    }
+    // uint32 enhance_pity_limit = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_enhance_pity_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_enhance_pity_limit());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -15467,7 +16602,7 @@ void EnhanceEquipResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
@@ -15507,6 +16642,16 @@ void EnhanceEquipResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.replayed_ = from._impl_.replayed_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_enhance_pity_count() != 0) {
+        _this->_impl_.enhance_pity_count_ = from._impl_.enhance_pity_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_enhance_pity_limit() != 0) {
+        _this->_impl_.enhance_pity_limit_ = from._impl_.enhance_pity_limit_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -15526,8 +16671,8 @@ void EnhanceEquipResponse::InternalSwap(EnhanceEquipResponse* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.replayed_)
-      + sizeof(EnhanceEquipResponse::_impl_.replayed_)
+      PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.enhance_pity_limit_)
+      + sizeof(EnhanceEquipResponse::_impl_.enhance_pity_limit_)
       - PROTOBUF_FIELD_OFFSET(EnhanceEquipResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));
@@ -17119,7 +18264,8 @@ PROTOBUF_NDEBUG_INLINE EquipFixedAffixInfo::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         name_(arena, from.name_),
-        description_(arena, from.description_) {}
+        description_(arena, from.description_),
+        quality_name_(arena, from.quality_name_) {}
 
 EquipFixedAffixInfo::EquipFixedAffixInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -17139,9 +18285,9 @@ EquipFixedAffixInfo::EquipFixedAffixInfo(
                offsetof(Impl_, affix_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, affix_id_),
-           offsetof(Impl_, material_count_) -
+           offsetof(Impl_, reforge_material_count_) -
                offsetof(Impl_, affix_id_) +
-               sizeof(Impl_::material_count_));
+               sizeof(Impl_::reforge_material_count_));
 
   // @@protoc_insertion_point(copy_constructor:EquipFixedAffixInfo)
 }
@@ -17150,16 +18296,17 @@ PROTOBUF_NDEBUG_INLINE EquipFixedAffixInfo::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         name_(arena),
-        description_(arena) {}
+        description_(arena),
+        quality_name_(arena) {}
 
 inline void EquipFixedAffixInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, affix_id_),
            0,
-           offsetof(Impl_, material_count_) -
+           offsetof(Impl_, reforge_material_count_) -
                offsetof(Impl_, affix_id_) +
-               sizeof(Impl_::material_count_));
+               sizeof(Impl_::reforge_material_count_));
 }
 EquipFixedAffixInfo::~EquipFixedAffixInfo() {
   // @@protoc_insertion_point(destructor:EquipFixedAffixInfo)
@@ -17174,6 +18321,7 @@ inline void EquipFixedAffixInfo::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.name_.Destroy();
   this_._impl_.description_.Destroy();
+  this_._impl_.quality_name_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -17211,23 +18359,31 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.description_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.quality_name_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.affix_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.effect_param_) -
-        reinterpret_cast<char*>(&_impl_.affix_id_)) + sizeof(_impl_.effect_param_));
+        reinterpret_cast<char*>(&_impl_.effect_) -
+        reinterpret_cast<char*>(&_impl_.affix_id_)) + sizeof(_impl_.effect_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    ::memset(&_impl_.unit_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.material_count_) -
-        reinterpret_cast<char*>(&_impl_.unit_)) + sizeof(_impl_.material_count_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.effect_param_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.polish_pity_count_) -
+        reinterpret_cast<char*>(&_impl_.effect_param_)) + sizeof(_impl_.polish_pity_count_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.polish_pity_limit_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.reforge_material_count_) -
+        reinterpret_cast<char*>(&_impl_.polish_pity_limit_)) + sizeof(_impl_.reforge_material_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -17253,7 +18409,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 affix_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_affix_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17262,7 +18418,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 pool = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_pool() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17291,7 +18447,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 value_bps = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_value_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17300,7 +18456,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 source_cap_bps = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_source_cap_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17309,7 +18465,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 effect = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_effect() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17318,7 +18474,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 effect_param = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_effect_param() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17327,7 +18483,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 unit = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_unit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17336,7 +18492,7 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 material_config_id = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_material_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17345,11 +18501,129 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
   }
 
   // uint32 material_count = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_material_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           11, this_._internal_material_count(), target);
+    }
+  }
+
+  // uint32 quality_tier = 12;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_quality_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_quality_tier(), target);
+    }
+  }
+
+  // string quality_name = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_quality_name().empty()) {
+      const ::std::string& _s = this_._internal_quality_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipFixedAffixInfo.quality_name");
+      target = stream->WriteStringMaybeAliased(13, _s, target);
+    }
+  }
+
+  // uint32 quality_ratio_pct = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_quality_ratio_pct() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_quality_ratio_pct(), target);
+    }
+  }
+
+  // uint32 max_value_bps = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_max_value_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_max_value_bps(), target);
+    }
+  }
+
+  // uint32 polish_pity_count = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_polish_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_polish_pity_count(), target);
+    }
+  }
+
+  // uint32 polish_pity_limit = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_polish_pity_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_polish_pity_limit(), target);
+    }
+  }
+
+  // bool polish_exempt = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_polish_exempt() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          18, this_._internal_polish_exempt(), target);
+    }
+  }
+
+  // uint32 polish_material_config_id = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_polish_material_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_polish_material_config_id(), target);
+    }
+  }
+
+  // uint32 polish_material_count = 20;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_polish_material_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_polish_material_count(), target);
+    }
+  }
+
+  // uint64 polish_gold_cost = 21;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_polish_gold_cost() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          21, this_._internal_polish_gold_cost(), target);
+    }
+  }
+
+  // uint32 reforge_material_config_id = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_reforge_material_config_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_reforge_material_config_id(), target);
+    }
+  }
+
+  // uint32 reforge_material_count = 23;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_reforge_material_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          23, this_._internal_reforge_material_count(), target);
+    }
+  }
+
+  // uint64 reforge_gold_cost = 24;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_reforge_gold_cost() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          24, this_._internal_reforge_gold_cost(), target);
     }
   }
 
@@ -17393,69 +18667,161 @@ PROTOBUF_NOINLINE void EquipFixedAffixInfo::Clear() {
                                         this_._internal_description());
       }
     }
-    // uint32 affix_id = 1;
+    // string quality_name = 13;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_quality_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_quality_name());
+      }
+    }
+    // uint32 affix_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_affix_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_affix_id());
       }
     }
     // uint32 pool = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_pool() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_pool());
       }
     }
     // uint32 value_bps = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_value_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_value_bps());
       }
     }
     // uint32 source_cap_bps = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_source_cap_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_source_cap_bps());
       }
     }
     // uint32 effect = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_effect() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_effect());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 effect_param = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_effect_param() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_effect_param());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 unit = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_unit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unit());
       }
     }
     // uint32 material_config_id = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_material_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_material_config_id());
       }
     }
     // uint32 material_count = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_material_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_material_count());
+      }
+    }
+    // uint32 quality_tier = 12;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_quality_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_quality_tier());
+      }
+    }
+    // uint32 quality_ratio_pct = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_quality_ratio_pct() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_quality_ratio_pct());
+      }
+    }
+    // uint32 max_value_bps = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_max_value_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_value_bps());
+      }
+    }
+    // uint32 polish_pity_count = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_polish_pity_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_polish_pity_count());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    // uint32 polish_pity_limit = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_polish_pity_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_polish_pity_limit());
+      }
+    }
+    // bool polish_exempt = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_polish_exempt() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 polish_material_config_id = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_polish_material_config_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_polish_material_config_id());
+      }
+    }
+    // uint64 polish_gold_cost = 21;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_polish_gold_cost() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_polish_gold_cost());
+      }
+    }
+    // uint32 polish_material_count = 20;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_polish_material_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_polish_material_count());
+      }
+    }
+    // uint32 reforge_material_config_id = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_reforge_material_config_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_reforge_material_config_id());
+      }
+    }
+    // uint64 reforge_gold_cost = 24;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_reforge_gold_cost() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_reforge_gold_cost());
+      }
+    }
+    // uint32 reforge_material_count = 23;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_reforge_material_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_reforge_material_count());
       }
     }
   }
@@ -17496,50 +18862,121 @@ void EquipFixedAffixInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_quality_name().empty()) {
+        _this->_internal_set_quality_name(from._internal_quality_name());
+      } else {
+        if (_this->_impl_.quality_name_.IsDefault()) {
+          _this->_internal_set_quality_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_affix_id() != 0) {
         _this->_impl_.affix_id_ = from._impl_.affix_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_pool() != 0) {
         _this->_impl_.pool_ = from._impl_.pool_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_value_bps() != 0) {
         _this->_impl_.value_bps_ = from._impl_.value_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_source_cap_bps() != 0) {
         _this->_impl_.source_cap_bps_ = from._impl_.source_cap_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_effect() != 0) {
         _this->_impl_.effect_ = from._impl_.effect_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_effect_param() != 0) {
         _this->_impl_.effect_param_ = from._impl_.effect_param_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_unit() != 0) {
         _this->_impl_.unit_ = from._impl_.unit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_material_config_id() != 0) {
         _this->_impl_.material_config_id_ = from._impl_.material_config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_material_count() != 0) {
         _this->_impl_.material_count_ = from._impl_.material_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_quality_tier() != 0) {
+        _this->_impl_.quality_tier_ = from._impl_.quality_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_quality_ratio_pct() != 0) {
+        _this->_impl_.quality_ratio_pct_ = from._impl_.quality_ratio_pct_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_max_value_bps() != 0) {
+        _this->_impl_.max_value_bps_ = from._impl_.max_value_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_polish_pity_count() != 0) {
+        _this->_impl_.polish_pity_count_ = from._impl_.polish_pity_count_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_polish_pity_limit() != 0) {
+        _this->_impl_.polish_pity_limit_ = from._impl_.polish_pity_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_polish_exempt() != 0) {
+        _this->_impl_.polish_exempt_ = from._impl_.polish_exempt_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_polish_material_config_id() != 0) {
+        _this->_impl_.polish_material_config_id_ = from._impl_.polish_material_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_polish_gold_cost() != 0) {
+        _this->_impl_.polish_gold_cost_ = from._impl_.polish_gold_cost_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_polish_material_count() != 0) {
+        _this->_impl_.polish_material_count_ = from._impl_.polish_material_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_reforge_material_config_id() != 0) {
+        _this->_impl_.reforge_material_config_id_ = from._impl_.reforge_material_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_reforge_gold_cost() != 0) {
+        _this->_impl_.reforge_gold_cost_ = from._impl_.reforge_gold_cost_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_reforge_material_count() != 0) {
+        _this->_impl_.reforge_material_count_ = from._impl_.reforge_material_count_;
       }
     }
   }
@@ -17564,15 +19001,687 @@ void EquipFixedAffixInfo::InternalSwap(EquipFixedAffixInfo* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.quality_name_, &other->_impl_.quality_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.material_count_)
-      + sizeof(EquipFixedAffixInfo::_impl_.material_count_)
+      PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.reforge_material_count_)
+      + sizeof(EquipFixedAffixInfo::_impl_.reforge_material_count_)
       - PROTOBUF_FIELD_OFFSET(EquipFixedAffixInfo, _impl_.affix_id_)>(
           reinterpret_cast<char*>(&_impl_.affix_id_),
           reinterpret_cast<char*>(&other->_impl_.affix_id_));
 }
 
 ::google::protobuf::Metadata EquipFixedAffixInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EquipAffixQualityInfo::EquipAffixQualityInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipAffixQualityInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipAffixQualityInfo)
+}
+PROTOBUF_NDEBUG_INLINE EquipAffixQualityInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipAffixQualityInfo& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+EquipAffixQualityInfo::EquipAffixQualityInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipAffixQualityInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipAffixQualityInfo_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EquipAffixQualityInfo* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, quality_tier_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, quality_tier_),
+           offsetof(Impl_, master_rate_bps_) -
+               offsetof(Impl_, quality_tier_) +
+               sizeof(Impl_::master_rate_bps_));
+
+  // @@protoc_insertion_point(copy_constructor:EquipAffixQualityInfo)
+}
+PROTOBUF_NDEBUG_INLINE EquipAffixQualityInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void EquipAffixQualityInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, quality_tier_),
+           0,
+           offsetof(Impl_, master_rate_bps_) -
+               offsetof(Impl_, quality_tier_) +
+               sizeof(Impl_::master_rate_bps_));
+}
+EquipAffixQualityInfo::~EquipAffixQualityInfo() {
+  // @@protoc_insertion_point(destructor:EquipAffixQualityInfo)
+  SharedDtor(*this);
+}
+inline void EquipAffixQualityInfo::SharedDtor(MessageLite& self) {
+  EquipAffixQualityInfo& this_ = static_cast<EquipAffixQualityInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipAffixQualityInfo_class_data_ =
+        EquipAffixQualityInfo::InternalGenerateClassData_(EquipAffixQualityInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipAffixQualityInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipAffixQualityInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipAffixQualityInfo_class_data_.tc_table);
+  return EquipAffixQualityInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipAffixQualityInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipAffixQualityInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipAffixQualityInfo_globals_));
+  return EquipAffixQualityInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipAffixQualityInfo::ParseTableT_
+    EquipAffixQualityInfo::_table_ =
+        EquipAffixQualityInfo::InternalGenerateParseTable_(EquipAffixQualityInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipAffixQualityInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipAffixQualityInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+    ::memset(&_impl_.quality_tier_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.master_rate_bps_) -
+        reinterpret_cast<char*>(&_impl_.quality_tier_)) + sizeof(_impl_.master_rate_bps_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipAffixQualityInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipAffixQualityInfo& this_ = static_cast<const EquipAffixQualityInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipAffixQualityInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipAffixQualityInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipAffixQualityInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 quality_tier = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_quality_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_quality_tier(), target);
+    }
+  }
+
+  // string name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipAffixQualityInfo.name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 ratio_pct = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_ratio_pct() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_ratio_pct(), target);
+    }
+  }
+
+  // uint32 apprentice_rate_bps = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_apprentice_rate_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_apprentice_rate_bps(), target);
+    }
+  }
+
+  // uint32 artisan_rate_bps = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_artisan_rate_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_artisan_rate_bps(), target);
+    }
+  }
+
+  // uint32 master_rate_bps = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_master_rate_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_master_rate_bps(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipAffixQualityInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipAffixQualityInfo::ByteSizeLong(const MessageLite& base) {
+  const EquipAffixQualityInfo& this_ = static_cast<const EquipAffixQualityInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipAffixQualityInfo::ByteSizeLong() const {
+  const EquipAffixQualityInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipAffixQualityInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint32 quality_tier = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_quality_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_quality_tier());
+      }
+    }
+    // uint32 ratio_pct = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_ratio_pct() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ratio_pct());
+      }
+    }
+    // uint32 apprentice_rate_bps = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_apprentice_rate_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_apprentice_rate_bps());
+      }
+    }
+    // uint32 artisan_rate_bps = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_artisan_rate_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_artisan_rate_bps());
+      }
+    }
+    // uint32 master_rate_bps = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_master_rate_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_master_rate_bps());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipAffixQualityInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipAffixQualityInfo*>(&to_msg);
+  auto& from = static_cast<const EquipAffixQualityInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipAffixQualityInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_quality_tier() != 0) {
+        _this->_impl_.quality_tier_ = from._impl_.quality_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_ratio_pct() != 0) {
+        _this->_impl_.ratio_pct_ = from._impl_.ratio_pct_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_apprentice_rate_bps() != 0) {
+        _this->_impl_.apprentice_rate_bps_ = from._impl_.apprentice_rate_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_artisan_rate_bps() != 0) {
+        _this->_impl_.artisan_rate_bps_ = from._impl_.artisan_rate_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_master_rate_bps() != 0) {
+        _this->_impl_.master_rate_bps_ = from._impl_.master_rate_bps_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipAffixQualityInfo::CopyFrom(const EquipAffixQualityInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipAffixQualityInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipAffixQualityInfo::InternalSwap(EquipAffixQualityInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.master_rate_bps_)
+      + sizeof(EquipAffixQualityInfo::_impl_.master_rate_bps_)
+      - PROTOBUF_FIELD_OFFSET(EquipAffixQualityInfo, _impl_.quality_tier_)>(
+          reinterpret_cast<char*>(&_impl_.quality_tier_),
+          reinterpret_cast<char*>(&other->_impl_.quality_tier_));
+}
+
+::google::protobuf::Metadata EquipAffixQualityInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CraftMasteryInfo::CraftMasteryInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CraftMasteryInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:CraftMasteryInfo)
+}
+PROTOBUF_NDEBUG_INLINE CraftMasteryInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::CraftMasteryInfo& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        tier_name_(arena, from.tier_name_) {}
+
+CraftMasteryInfo::CraftMasteryInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CraftMasteryInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CraftMasteryInfo_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CraftMasteryInfo* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, tier_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, tier_),
+           offsetof(Impl_, top_quality_rate_bps_) -
+               offsetof(Impl_, tier_) +
+               sizeof(Impl_::top_quality_rate_bps_));
+
+  // @@protoc_insertion_point(copy_constructor:CraftMasteryInfo)
+}
+PROTOBUF_NDEBUG_INLINE CraftMasteryInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        tier_name_(arena) {}
+
+inline void CraftMasteryInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, tier_),
+           0,
+           offsetof(Impl_, top_quality_rate_bps_) -
+               offsetof(Impl_, tier_) +
+               sizeof(Impl_::top_quality_rate_bps_));
+}
+CraftMasteryInfo::~CraftMasteryInfo() {
+  // @@protoc_insertion_point(destructor:CraftMasteryInfo)
+  SharedDtor(*this);
+}
+inline void CraftMasteryInfo::SharedDtor(MessageLite& self) {
+  CraftMasteryInfo& this_ = static_cast<CraftMasteryInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.tier_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CraftMasteryInfo_class_data_ =
+        CraftMasteryInfo::InternalGenerateClassData_(CraftMasteryInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CraftMasteryInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CraftMasteryInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CraftMasteryInfo_class_data_.tc_table);
+  return CraftMasteryInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CraftMasteryInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CraftMasteryInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CraftMasteryInfo_globals_));
+  return CraftMasteryInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CraftMasteryInfo::ParseTableT_
+    CraftMasteryInfo::_table_ =
+        CraftMasteryInfo::InternalGenerateParseTable_(CraftMasteryInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CraftMasteryInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:CraftMasteryInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.tier_name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.tier_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.top_quality_rate_bps_) -
+        reinterpret_cast<char*>(&_impl_.tier_)) + sizeof(_impl_.top_quality_rate_bps_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CraftMasteryInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CraftMasteryInfo& this_ = static_cast<const CraftMasteryInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CraftMasteryInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CraftMasteryInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:CraftMasteryInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 tier = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_tier(), target);
+    }
+  }
+
+  // string tier_name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_tier_name().empty()) {
+      const ::std::string& _s = this_._internal_tier_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "CraftMasteryInfo.tier_name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 exp = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_exp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_exp(), target);
+    }
+  }
+
+  // uint32 next_tier_exp = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_next_tier_exp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_next_tier_exp(), target);
+    }
+  }
+
+  // uint32 top_quality_rate_bps = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_top_quality_rate_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_top_quality_rate_bps(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:CraftMasteryInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CraftMasteryInfo::ByteSizeLong(const MessageLite& base) {
+  const CraftMasteryInfo& this_ = static_cast<const CraftMasteryInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CraftMasteryInfo::ByteSizeLong() const {
+  const CraftMasteryInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:CraftMasteryInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string tier_name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_tier_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_tier_name());
+      }
+    }
+    // uint32 tier = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier());
+      }
+    }
+    // uint32 exp = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_exp() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_exp());
+      }
+    }
+    // uint32 next_tier_exp = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_next_tier_exp() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_next_tier_exp());
+      }
+    }
+    // uint32 top_quality_rate_bps = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_top_quality_rate_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_top_quality_rate_bps());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CraftMasteryInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CraftMasteryInfo*>(&to_msg);
+  auto& from = static_cast<const CraftMasteryInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:CraftMasteryInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_tier_name().empty()) {
+        _this->_internal_set_tier_name(from._internal_tier_name());
+      } else {
+        if (_this->_impl_.tier_name_.IsDefault()) {
+          _this->_internal_set_tier_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_tier() != 0) {
+        _this->_impl_.tier_ = from._impl_.tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_exp() != 0) {
+        _this->_impl_.exp_ = from._impl_.exp_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_next_tier_exp() != 0) {
+        _this->_impl_.next_tier_exp_ = from._impl_.next_tier_exp_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_top_quality_rate_bps() != 0) {
+        _this->_impl_.top_quality_rate_bps_ = from._impl_.top_quality_rate_bps_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CraftMasteryInfo::CopyFrom(const CraftMasteryInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:CraftMasteryInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CraftMasteryInfo::InternalSwap(CraftMasteryInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.tier_name_, &other->_impl_.tier_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.top_quality_rate_bps_)
+      + sizeof(CraftMasteryInfo::_impl_.top_quality_rate_bps_)
+      - PROTOBUF_FIELD_OFFSET(CraftMasteryInfo, _impl_.tier_)>(
+          reinterpret_cast<char*>(&_impl_.tier_),
+          reinterpret_cast<char*>(&other->_impl_.tier_));
+}
+
+::google::protobuf::Metadata CraftMasteryInfo::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -18311,9 +20420,9 @@ inline void EquipmentCraftChoice::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, operation_),
            0,
-           offsetof(Impl_, affix_id_) -
+           offsetof(Impl_, proxy_master_player_id_) -
                offsetof(Impl_, operation_) +
-               sizeof(Impl_::affix_id_));
+               sizeof(Impl_::proxy_master_player_id_));
 }
 EquipmentCraftChoice::~EquipmentCraftChoice() {
   // @@protoc_insertion_point(destructor:EquipmentCraftChoice)
@@ -18363,11 +20472,12 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.operation_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.affix_id_) -
-        reinterpret_cast<char*>(&_impl_.operation_)) + sizeof(_impl_.affix_id_));
+        reinterpret_cast<char*>(&_impl_.expected_polish_pity_count_) -
+        reinterpret_cast<char*>(&_impl_.operation_)) + sizeof(_impl_.expected_polish_pity_count_));
   }
+  _impl_.proxy_master_player_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -18436,6 +20546,40 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
     }
   }
 
+  // bool use_guarantee_charm = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_use_guarantee_charm() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_use_guarantee_charm(), target);
+    }
+  }
+
+  // bool allow_bound_materials = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_allow_bound_materials() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          7, this_._internal_allow_bound_materials(), target);
+    }
+  }
+
+  // uint64 proxy_master_player_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_proxy_master_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_proxy_master_player_id(), target);
+    }
+  }
+
+  // optional uint32 expected_polish_pity_count = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+        9, this_._internal_expected_polish_pity_count(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -18461,7 +20605,7 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // .EquipmentCraftChoice.Operation operation = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_operation() != 0) {
@@ -18497,6 +20641,32 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
             this_._internal_affix_id());
       }
     }
+    // bool use_guarantee_charm = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_use_guarantee_charm() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool allow_bound_materials = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_allow_bound_materials() != 0) {
+        total_size += 2;
+      }
+    }
+    // optional uint32 expected_polish_pity_count = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+          this_._internal_expected_polish_pity_count());
+    }
+  }
+   {
+    // uint64 proxy_master_player_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_proxy_master_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_proxy_master_player_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -18515,7 +20685,7 @@ void EquipmentCraftChoice::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_operation() != 0) {
         _this->_impl_.operation_ = from._impl_.operation_;
@@ -18541,6 +20711,24 @@ void EquipmentCraftChoice::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.affix_id_ = from._impl_.affix_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_use_guarantee_charm() != 0) {
+        _this->_impl_.use_guarantee_charm_ = from._impl_.use_guarantee_charm_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_allow_bound_materials() != 0) {
+        _this->_impl_.allow_bound_materials_ = from._impl_.allow_bound_materials_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      _this->_impl_.expected_polish_pity_count_ = from._impl_.expected_polish_pity_count_;
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_proxy_master_player_id() != 0) {
+      _this->_impl_.proxy_master_player_id_ = from._impl_.proxy_master_player_id_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -18560,8 +20748,8 @@ void EquipmentCraftChoice::InternalSwap(EquipmentCraftChoice* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.affix_id_)
-      + sizeof(EquipmentCraftChoice::_impl_.affix_id_)
+      PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.proxy_master_player_id_)
+      + sizeof(EquipmentCraftChoice::_impl_.proxy_master_player_id_)
       - PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.operation_)>(
           reinterpret_cast<char*>(&_impl_.operation_),
           reinterpret_cast<char*>(&other->_impl_.operation_));
@@ -19276,7 +21464,7 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetEquipmentCraftRulesRequest::ParseTabl
 void GetEquipmentCraftRulesResponse::clear_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 GetEquipmentCraftRulesResponse::GetEquipmentCraftRulesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -19307,6 +21495,13 @@ PROTOBUF_NDEBUG_INLINE GetEquipmentCraftRulesResponse::Impl_::Impl_(
           , from.affixes_
         }
         ,
+        quality_tiers_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::GetEquipmentCraftRulesResponse,
+              PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.quality_tiers_)>()
+          , from.quality_tiers_
+        }
+        ,
         rules_fingerprint_(arena, from.rules_fingerprint_) {}
 
 GetEquipmentCraftRulesResponse::GetEquipmentCraftRulesResponse(
@@ -19324,8 +21519,11 @@ GetEquipmentCraftRulesResponse::GetEquipmentCraftRulesResponse(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.forge_mastery_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_)
                 : nullptr;
   _impl_.forge_revision_ = from._impl_.forge_revision_;
 
@@ -19343,6 +21541,11 @@ PROTOBUF_NDEBUG_INLINE GetEquipmentCraftRulesResponse::Impl_::Impl_(
         affixes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::GetEquipmentCraftRulesResponse,
             PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.affixes_)>()
+         }
+        ,
+        quality_tiers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::GetEquipmentCraftRulesResponse,
+            PROTOBUF_FIELD_OFFSET(::GetEquipmentCraftRulesResponse, _impl_.quality_tiers_)>()
          }
         ,
         rules_fingerprint_(arena) {}
@@ -19369,6 +21572,7 @@ inline void GetEquipmentCraftRulesResponse::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.rules_fingerprint_.Destroy();
   delete this_._impl_.error_message_;
+  delete this_._impl_.forge_mastery_;
   this_._impl_.~Impl_();
 }
 
@@ -19406,7 +21610,7 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.recipes_.Clear();
     }
@@ -19414,11 +21618,18 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
       _impl_.affixes_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      _impl_.rules_fingerprint_.ClearNonDefaultToEmpty();
+      _impl_.quality_tiers_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.rules_fingerprint_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.error_message_ != nullptr);
       _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.forge_mastery_ != nullptr);
+      _impl_.forge_mastery_->Clear();
     }
   }
   _impl_.forge_revision_ = ::uint64_t{0u};
@@ -19446,14 +21657,14 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .TipInfoMessage error_message = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
         stream);
   }
 
   // bytes rules_fingerprint = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_rules_fingerprint().empty()) {
       const ::std::string& _s = this_._internal_rules_fingerprint();
       target = stream->WriteBytesMaybeAliased(2, _s, target);
@@ -19461,7 +21672,7 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
   }
 
   // uint64 forge_revision = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -19495,6 +21706,26 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
     }
   }
 
+  // repeated .EquipAffixQualityInfo quality_tiers = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_quality_tiers_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_quality_tiers().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              6, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // .CraftMasteryInfo forge_mastery = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        7, *this_._impl_.forge_mastery_, this_._impl_.forge_mastery_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -19520,7 +21751,7 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // repeated .EquipmentCraftRecipe recipes = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_recipes_size();
@@ -19535,20 +21766,32 @@ PROTOBUF_NOINLINE void GetEquipmentCraftRulesResponse::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // bytes rules_fingerprint = 2;
+    // repeated .EquipAffixQualityInfo quality_tiers = 6;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1UL * this_._internal_quality_tiers_size();
+      for (const auto& msg : this_._internal_quality_tiers()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // bytes rules_fingerprint = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_rules_fingerprint().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
                                         this_._internal_rules_fingerprint());
       }
     }
     // .TipInfoMessage error_message = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
     }
+    // .CraftMasteryInfo forge_mastery = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.forge_mastery_);
+    }
     // uint64 forge_revision = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_forge_revision());
@@ -19573,7 +21816,7 @@ void GetEquipmentCraftRulesResponse::MergeImpl(::google::protobuf::MessageLite& 
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_recipes()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -19585,6 +21828,11 @@ void GetEquipmentCraftRulesResponse::MergeImpl(::google::protobuf::MessageLite& 
           from._internal_affixes());
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_internal_mutable_quality_tiers()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_quality_tiers());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_rules_fingerprint().empty()) {
         _this->_internal_set_rules_fingerprint(from._internal_rules_fingerprint());
       } else {
@@ -19593,7 +21841,7 @@ void GetEquipmentCraftRulesResponse::MergeImpl(::google::protobuf::MessageLite& 
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
         _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
@@ -19601,7 +21849,15 @@ void GetEquipmentCraftRulesResponse::MergeImpl(::google::protobuf::MessageLite& 
         _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.forge_mastery_ != nullptr);
+      if (_this->_impl_.forge_mastery_ == nullptr) {
+        _this->_impl_.forge_mastery_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_);
+      } else {
+        _this->_impl_.forge_mastery_->MergeFrom(*from._impl_.forge_mastery_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_forge_revision() != 0) {
         _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
       }
@@ -19628,6 +21884,7 @@ void GetEquipmentCraftRulesResponse::InternalSwap(GetEquipmentCraftRulesResponse
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.recipes_.InternalSwap(&other->_impl_.recipes_);
   _impl_.affixes_.InternalSwap(&other->_impl_.affixes_);
+  _impl_.quality_tiers_.InternalSwap(&other->_impl_.quality_tiers_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rules_fingerprint_, &other->_impl_.rules_fingerprint_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(GetEquipmentCraftRulesResponse, _impl_.forge_revision_)
@@ -19657,7 +21914,8 @@ PROTOBUF_NDEBUG_INLINE EquipmentCraftPreview::Impl_::Impl_(
     [[maybe_unused]] const ::EquipmentCraftPreview& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        rules_fingerprint_(arena, from.rules_fingerprint_) {}
+        rules_fingerprint_(arena, from.rules_fingerprint_),
+        proxy_master_name_(arena, from.proxy_master_name_) {}
 
 EquipmentCraftPreview::EquipmentCraftPreview(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -19674,22 +21932,25 @@ EquipmentCraftPreview::EquipmentCraftPreview(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.choice_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.choice_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.choice_)
                 : nullptr;
-  _impl_.result_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.result_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.result_)
                 : nullptr;
-  _impl_.material_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.material_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.material_)
+                : nullptr;
+  _impl_.extra_material_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.extra_material_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, expected_forge_revision_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, expected_forge_revision_),
-           offsetof(Impl_, unavailable_tip_) -
+           offsetof(Impl_, proxy_fee_gold_) -
                offsetof(Impl_, expected_forge_revision_) +
-               sizeof(Impl_::unavailable_tip_));
+               sizeof(Impl_::proxy_fee_gold_));
 
   // @@protoc_insertion_point(copy_constructor:EquipmentCraftPreview)
 }
@@ -19697,16 +21958,17 @@ PROTOBUF_NDEBUG_INLINE EquipmentCraftPreview::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        rules_fingerprint_(arena) {}
+        rules_fingerprint_(arena),
+        proxy_master_name_(arena) {}
 
 inline void EquipmentCraftPreview::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, choice_),
            0,
-           offsetof(Impl_, unavailable_tip_) -
+           offsetof(Impl_, proxy_fee_gold_) -
                offsetof(Impl_, choice_) +
-               sizeof(Impl_::unavailable_tip_));
+               sizeof(Impl_::proxy_fee_gold_));
 }
 EquipmentCraftPreview::~EquipmentCraftPreview() {
   // @@protoc_insertion_point(destructor:EquipmentCraftPreview)
@@ -19720,9 +21982,11 @@ inline void EquipmentCraftPreview::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.rules_fingerprint_.Destroy();
+  this_._impl_.proxy_master_name_.Destroy();
   delete this_._impl_.choice_;
   delete this_._impl_.result_;
   delete this_._impl_.material_;
+  delete this_._impl_.extra_material_;
   this_._impl_.~Impl_();
 }
 
@@ -19760,27 +22024,39 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.rules_fingerprint_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.proxy_master_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.choice_ != nullptr);
       _impl_.choice_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(_impl_.result_ != nullptr);
       _impl_.result_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.material_ != nullptr);
       _impl_.material_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.extra_material_ != nullptr);
+      _impl_.extra_material_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000070U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.expected_forge_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.unavailable_tip_) -
-        reinterpret_cast<char*>(&_impl_.expected_forge_revision_)) + sizeof(_impl_.unavailable_tip_));
+        reinterpret_cast<char*>(&_impl_.gold_cost_) -
+        reinterpret_cast<char*>(&_impl_.expected_forge_revision_)) + sizeof(_impl_.gold_cost_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.unavailable_tip_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.proxy_fee_gold_) -
+        reinterpret_cast<char*>(&_impl_.unavailable_tip_)) + sizeof(_impl_.proxy_fee_gold_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -19806,7 +22082,7 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .EquipmentCraftChoice choice = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.choice_, this_._impl_.choice_->GetCachedSize(), target,
         stream);
@@ -19821,7 +22097,7 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
   }
 
   // uint64 expected_forge_revision = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_expected_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -19830,21 +22106,21 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
   }
 
   // .BagItemInfo result = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *this_._impl_.result_, this_._impl_.result_->GetCachedSize(), target,
         stream);
   }
 
   // .EquipmentCraftMaterial material = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         5, *this_._impl_.material_, this_._impl_.material_->GetCachedSize(), target,
         stream);
   }
 
   // bool available = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_available() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -19853,11 +22129,55 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
   }
 
   // uint32 unavailable_tip = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_unavailable_tip() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           7, this_._internal_unavailable_tip(), target);
+    }
+  }
+
+  // uint64 gold_cost = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_gold_cost() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_gold_cost(), target);
+    }
+  }
+
+  // .EquipmentCraftMaterial extra_material = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.extra_material_, this_._impl_.extra_material_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 proxy_fee_gold = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_proxy_fee_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_proxy_fee_gold(), target);
+    }
+  }
+
+  // string proxy_master_name = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_proxy_master_name().empty()) {
+      const ::std::string& _s = this_._internal_proxy_master_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipmentCraftPreview.proxy_master_name");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // bool will_bind_item = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_will_bind_item() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          12, this_._internal_will_bind_item(), target);
     }
   }
 
@@ -19886,7 +22206,7 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // bytes rules_fingerprint = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_rules_fingerprint().empty()) {
@@ -19894,39 +22214,73 @@ PROTOBUF_NOINLINE void EquipmentCraftPreview::Clear() {
                                         this_._internal_rules_fingerprint());
       }
     }
-    // .EquipmentCraftChoice choice = 1;
+    // string proxy_master_name = 11;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_proxy_master_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_proxy_master_name());
+      }
+    }
+    // .EquipmentCraftChoice choice = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.choice_);
     }
     // .BagItemInfo result = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.result_);
     }
     // .EquipmentCraftMaterial material = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.material_);
     }
+    // .EquipmentCraftMaterial extra_material = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.extra_material_);
+    }
     // uint64 expected_forge_revision = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_expected_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_forge_revision());
       }
     }
+    // uint64 gold_cost = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_gold_cost() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gold_cost());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    // uint32 unavailable_tip = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_unavailable_tip() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unavailable_tip());
+      }
+    }
     // bool available = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_available() != 0) {
         total_size += 2;
       }
     }
-    // uint32 unavailable_tip = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_unavailable_tip() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_unavailable_tip());
+    // bool will_bind_item = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_will_bind_item() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 proxy_fee_gold = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_proxy_fee_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_proxy_fee_gold());
       }
     }
   }
@@ -19948,7 +22302,7 @@ void EquipmentCraftPreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_rules_fingerprint().empty()) {
         _this->_internal_set_rules_fingerprint(from._internal_rules_fingerprint());
@@ -19959,6 +22313,15 @@ void EquipmentCraftPreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_proxy_master_name().empty()) {
+        _this->_internal_set_proxy_master_name(from._internal_proxy_master_name());
+      } else {
+        if (_this->_impl_.proxy_master_name_.IsDefault()) {
+          _this->_internal_set_proxy_master_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.choice_ != nullptr);
       if (_this->_impl_.choice_ == nullptr) {
         _this->_impl_.choice_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.choice_);
@@ -19966,7 +22329,7 @@ void EquipmentCraftPreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.choice_->MergeFrom(*from._impl_.choice_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(from._impl_.result_ != nullptr);
       if (_this->_impl_.result_ == nullptr) {
         _this->_impl_.result_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.result_);
@@ -19974,7 +22337,7 @@ void EquipmentCraftPreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.result_->MergeFrom(*from._impl_.result_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.material_ != nullptr);
       if (_this->_impl_.material_ == nullptr) {
         _this->_impl_.material_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.material_);
@@ -19982,19 +22345,44 @@ void EquipmentCraftPreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.material_->MergeFrom(*from._impl_.material_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.extra_material_ != nullptr);
+      if (_this->_impl_.extra_material_ == nullptr) {
+        _this->_impl_.extra_material_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.extra_material_);
+      } else {
+        _this->_impl_.extra_material_->MergeFrom(*from._impl_.extra_material_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_expected_forge_revision() != 0) {
         _this->_impl_.expected_forge_revision_ = from._impl_.expected_forge_revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_gold_cost() != 0) {
+        _this->_impl_.gold_cost_ = from._impl_.gold_cost_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_unavailable_tip() != 0) {
+        _this->_impl_.unavailable_tip_ = from._impl_.unavailable_tip_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_available() != 0) {
         _this->_impl_.available_ = from._impl_.available_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_unavailable_tip() != 0) {
-        _this->_impl_.unavailable_tip_ = from._impl_.unavailable_tip_;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_will_bind_item() != 0) {
+        _this->_impl_.will_bind_item_ = from._impl_.will_bind_item_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_proxy_fee_gold() != 0) {
+        _this->_impl_.proxy_fee_gold_ = from._impl_.proxy_fee_gold_;
       }
     }
   }
@@ -20018,9 +22406,10 @@ void EquipmentCraftPreview::InternalSwap(EquipmentCraftPreview* PROTOBUF_RESTRIC
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.rules_fingerprint_, &other->_impl_.rules_fingerprint_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.proxy_master_name_, &other->_impl_.proxy_master_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.unavailable_tip_)
-      + sizeof(EquipmentCraftPreview::_impl_.unavailable_tip_)
+      PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.proxy_fee_gold_)
+      + sizeof(EquipmentCraftPreview::_impl_.proxy_fee_gold_)
       - PROTOBUF_FIELD_OFFSET(EquipmentCraftPreview, _impl_.choice_)>(
           reinterpret_cast<char*>(&_impl_.choice_),
           reinterpret_cast<char*>(&other->_impl_.choice_));
@@ -20859,13 +23248,16 @@ CommitEquipmentCraftResponse::CommitEquipmentCraftResponse(
   _impl_.equipment_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.equipment_)
                 : nullptr;
+  _impl_.forge_mastery_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, client_request_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, client_request_id_),
-           offsetof(Impl_, current_forge_revision_) -
+           offsetof(Impl_, result_polish_pity_count_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::current_forge_revision_));
+               sizeof(Impl_::result_polish_pity_count_));
 
   // @@protoc_insertion_point(copy_constructor:CommitEquipmentCraftResponse)
 }
@@ -20879,9 +23271,9 @@ inline void CommitEquipmentCraftResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, current_forge_revision_) -
+           offsetof(Impl_, result_polish_pity_count_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::current_forge_revision_));
+               sizeof(Impl_::result_polish_pity_count_));
 }
 CommitEquipmentCraftResponse::~CommitEquipmentCraftResponse() {
   // @@protoc_insertion_point(destructor:CommitEquipmentCraftResponse)
@@ -20897,6 +23289,7 @@ inline void CommitEquipmentCraftResponse::SharedDtor(MessageLite& self) {
   delete this_._impl_.error_message_;
   delete this_._impl_.bag_;
   delete this_._impl_.equipment_;
+  delete this_._impl_.forge_mastery_;
   this_._impl_.~Impl_();
 }
 
@@ -20934,7 +23327,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.error_message_ != nullptr);
       _impl_.error_message_->Clear();
@@ -20947,16 +23340,20 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
       ABSL_DCHECK(_impl_.equipment_ != nullptr);
       _impl_.equipment_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(_impl_.forge_mastery_ != nullptr);
+      _impl_.forge_mastery_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.item_id_) -
-        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.item_id_));
+        reinterpret_cast<char*>(&_impl_.durable_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.durable_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
-    ::memset(&_impl_.result_forge_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.current_forge_revision_) -
-        reinterpret_cast<char*>(&_impl_.result_forge_revision_)) + sizeof(_impl_.current_forge_revision_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    ::memset(&_impl_.replayed_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.result_polish_pity_count_) -
+        reinterpret_cast<char*>(&_impl_.replayed_)) + sizeof(_impl_.result_polish_pity_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -20989,7 +23386,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // uint64 client_request_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_client_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -20998,7 +23395,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // .CommitEquipmentCraftResponse.Outcome outcome = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_outcome() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -21007,7 +23404,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // bool durable = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_durable() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -21016,7 +23413,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // bool replayed = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_replayed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -21025,7 +23422,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // uint64 item_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_item_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -21034,7 +23431,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // uint64 result_forge_revision = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_result_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -21043,7 +23440,7 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   }
 
   // uint64 current_forge_revision = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_current_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -21062,6 +23459,40 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         10, *this_._impl_.equipment_, this_._impl_.equipment_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 result_quality_tier = 11;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_result_quality_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_result_quality_tier(), target);
+    }
+  }
+
+  // uint32 result_polish_pity_count = 12;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_result_polish_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_result_polish_pity_count(), target);
+    }
+  }
+
+  // bool guaranteed_by_pity = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_guaranteed_by_pity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          13, this_._internal_guaranteed_by_pity(), target);
+    }
+  }
+
+  // .CraftMasteryInfo forge_mastery = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        14, *this_._impl_.forge_mastery_, this_._impl_.forge_mastery_->GetCachedSize(), target,
         stream);
   }
 
@@ -21106,53 +23537,78 @@ PROTOBUF_NOINLINE void CommitEquipmentCraftResponse::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.equipment_);
     }
-    // uint64 client_request_id = 2;
+    // .CraftMasteryInfo forge_mastery = 14;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.forge_mastery_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_client_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_client_request_id());
       }
     }
+    // uint64 item_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_item_id());
+      }
+    }
     // .CommitEquipmentCraftResponse.Outcome outcome = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_outcome() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
       }
     }
     // bool durable = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_durable() != 0) {
         total_size += 2;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // bool replayed = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_replayed() != 0) {
         total_size += 2;
       }
     }
-    // uint64 item_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (this_._internal_item_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_item_id());
+    // bool guaranteed_by_pity = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_guaranteed_by_pity() != 0) {
+        total_size += 2;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 result_forge_revision = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_result_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_result_forge_revision());
       }
     }
     // uint64 current_forge_revision = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_current_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_current_forge_revision());
+      }
+    }
+    // uint32 result_quality_tier = 11;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_result_quality_tier() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_result_quality_tier());
+      }
+    }
+    // uint32 result_polish_pity_count = 12;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_result_polish_pity_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_result_polish_pity_count());
       }
     }
   }
@@ -21200,40 +23656,63 @@ void CommitEquipmentCraftResponse::MergeImpl(::google::protobuf::MessageLite& to
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      ABSL_DCHECK(from._impl_.forge_mastery_ != nullptr);
+      if (_this->_impl_.forge_mastery_ == nullptr) {
+        _this->_impl_.forge_mastery_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.forge_mastery_);
+      } else {
+        _this->_impl_.forge_mastery_->MergeFrom(*from._impl_.forge_mastery_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_client_request_id() != 0) {
         _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_outcome() != 0) {
-        _this->_impl_.outcome_ = from._impl_.outcome_;
-      }
-    }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (from._internal_durable() != 0) {
-        _this->_impl_.durable_ = from._impl_.durable_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_replayed() != 0) {
-        _this->_impl_.replayed_ = from._impl_.replayed_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_item_id() != 0) {
         _this->_impl_.item_id_ = from._impl_.item_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_outcome() != 0) {
+        _this->_impl_.outcome_ = from._impl_.outcome_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_durable() != 0) {
+        _this->_impl_.durable_ = from._impl_.durable_;
+      }
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_guaranteed_by_pity() != 0) {
+        _this->_impl_.guaranteed_by_pity_ = from._impl_.guaranteed_by_pity_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_result_forge_revision() != 0) {
         _this->_impl_.result_forge_revision_ = from._impl_.result_forge_revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_current_forge_revision() != 0) {
         _this->_impl_.current_forge_revision_ = from._impl_.current_forge_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_result_quality_tier() != 0) {
+        _this->_impl_.result_quality_tier_ = from._impl_.result_quality_tier_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_result_polish_pity_count() != 0) {
+        _this->_impl_.result_polish_pity_count_ = from._impl_.result_polish_pity_count_;
       }
     }
   }
@@ -21255,8 +23734,8 @@ void CommitEquipmentCraftResponse::InternalSwap(CommitEquipmentCraftResponse* PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.current_forge_revision_)
-      + sizeof(CommitEquipmentCraftResponse::_impl_.current_forge_revision_)
+      PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.result_polish_pity_count_)
+      + sizeof(CommitEquipmentCraftResponse::_impl_.result_polish_pity_count_)
       - PROTOBUF_FIELD_OFFSET(CommitEquipmentCraftResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));
@@ -21309,9 +23788,9 @@ EquipmentMaterialRewardSnapshot::EquipmentMaterialRewardSnapshot(
                offsetof(Impl_, day_starts_at_ms_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, day_starts_at_ms_),
-           offsetof(Impl_, revision_) -
+           offsetof(Impl_, weekly_limit_) -
                offsetof(Impl_, day_starts_at_ms_) +
-               sizeof(Impl_::revision_));
+               sizeof(Impl_::weekly_limit_));
 
   // @@protoc_insertion_point(copy_constructor:EquipmentMaterialRewardSnapshot)
 }
@@ -21326,9 +23805,9 @@ inline void EquipmentMaterialRewardSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_N
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, crafting_material_),
            0,
-           offsetof(Impl_, revision_) -
+           offsetof(Impl_, weekly_limit_) -
                offsetof(Impl_, crafting_material_) +
-               sizeof(Impl_::revision_));
+               sizeof(Impl_::weekly_limit_));
 }
 EquipmentMaterialRewardSnapshot::~EquipmentMaterialRewardSnapshot() {
   // @@protoc_insertion_point(destructor:EquipmentMaterialRewardSnapshot)
@@ -21399,10 +23878,15 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
         reinterpret_cast<char*>(&_impl_.available_units_) -
         reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.available_units_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.available_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.revision_) -
-        reinterpret_cast<char*>(&_impl_.available_)) + sizeof(_impl_.revision_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.tradable_earned_total_) -
+        reinterpret_cast<char*>(&_impl_.revision_)) + sizeof(_impl_.tradable_earned_total_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    ::memset(&_impl_.tradable_lifetime_limit_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.weekly_limit_) -
+        reinterpret_cast<char*>(&_impl_.tradable_lifetime_limit_)) + sizeof(_impl_.weekly_limit_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -21428,7 +23912,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // bool available = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_available() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -21492,7 +23976,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
   }
 
   // uint32 batch_units = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_batch_units() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -21501,7 +23985,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
   }
 
   // uint64 revision = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -21524,11 +24008,110 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
   }
 
   // bool can_claim = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_can_claim() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           12, this_._internal_can_claim(), target);
+    }
+  }
+
+  // uint32 lifetime_earned = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_lifetime_earned() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_lifetime_earned(), target);
+    }
+  }
+
+  // uint32 lifetime_limit = 14;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_lifetime_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_lifetime_limit(), target);
+    }
+  }
+
+  // uint32 tradable_earned_total = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_tradable_earned_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_tradable_earned_total(), target);
+    }
+  }
+
+  // uint32 tradable_lifetime_limit = 16;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_tradable_lifetime_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_tradable_lifetime_limit(), target);
+    }
+  }
+
+  // uint64 available_tradable_units = 17;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_available_tradable_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_available_tradable_units(), target);
+    }
+  }
+
+  // uint32 batch_tradable_units = 18;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_batch_tradable_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_batch_tradable_units(), target);
+    }
+  }
+
+  // bool weekly_phase_active = 19;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_weekly_phase_active() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          19, this_._internal_weekly_phase_active(), target);
+    }
+  }
+
+  // uint64 week_starts_at_ms = 20;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_week_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          20, this_._internal_week_starts_at_ms(), target);
+    }
+  }
+
+  // uint64 next_week_reset_at_ms = 21;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_next_week_reset_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          21, this_._internal_next_week_reset_at_ms(), target);
+    }
+  }
+
+  // uint32 earned_this_week = 22;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_earned_this_week() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_earned_this_week(), target);
+    }
+  }
+
+  // uint32 weekly_limit = 23;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_weekly_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          23, this_._internal_weekly_limit(), target);
     }
   }
 
@@ -21611,31 +24194,109 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    // bool available = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint64 revision = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_available() != 0) {
-        total_size += 2;
-      }
-    }
-    // bool can_claim = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_can_claim() != 0) {
-        total_size += 2;
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_revision());
       }
     }
     // uint32 batch_units = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_batch_units() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_batch_units());
       }
     }
-    // uint64 revision = 9;
+    // bool available = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_available() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool can_claim = 12;
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      if (this_._internal_revision() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_revision());
+      if (this_._internal_can_claim() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool weekly_phase_active = 19;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_weekly_phase_active() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 lifetime_earned = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_lifetime_earned() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_lifetime_earned());
+      }
+    }
+    // uint32 lifetime_limit = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_lifetime_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_lifetime_limit());
+      }
+    }
+    // uint32 tradable_earned_total = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_tradable_earned_total() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tradable_earned_total());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    // uint32 tradable_lifetime_limit = 16;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_tradable_lifetime_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tradable_lifetime_limit());
+      }
+    }
+    // uint64 available_tradable_units = 17;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_available_tradable_units() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_available_tradable_units());
+      }
+    }
+    // uint64 week_starts_at_ms = 20;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_week_starts_at_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_week_starts_at_ms());
+      }
+    }
+    // uint32 batch_tradable_units = 18;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_batch_tradable_units() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_batch_tradable_units());
+      }
+    }
+    // uint32 earned_this_week = 22;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_earned_this_week() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_earned_this_week());
+      }
+    }
+    // uint64 next_week_reset_at_ms = 21;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_next_week_reset_at_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_next_week_reset_at_ms());
+      }
+    }
+    // uint32 weekly_limit = 23;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_weekly_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_weekly_limit());
       }
     }
   }
@@ -21709,25 +24370,82 @@ void EquipmentMaterialRewardSnapshot::MergeImpl(::google::protobuf::MessageLite&
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_available() != 0) {
-        _this->_impl_.available_ = from._impl_.available_;
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_can_claim() != 0) {
-        _this->_impl_.can_claim_ = from._impl_.can_claim_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_batch_units() != 0) {
         _this->_impl_.batch_units_ = from._impl_.batch_units_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_available() != 0) {
+        _this->_impl_.available_ = from._impl_.available_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      if (from._internal_revision() != 0) {
-        _this->_impl_.revision_ = from._impl_.revision_;
+      if (from._internal_can_claim() != 0) {
+        _this->_impl_.can_claim_ = from._impl_.can_claim_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_weekly_phase_active() != 0) {
+        _this->_impl_.weekly_phase_active_ = from._impl_.weekly_phase_active_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_lifetime_earned() != 0) {
+        _this->_impl_.lifetime_earned_ = from._impl_.lifetime_earned_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_lifetime_limit() != 0) {
+        _this->_impl_.lifetime_limit_ = from._impl_.lifetime_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_tradable_earned_total() != 0) {
+        _this->_impl_.tradable_earned_total_ = from._impl_.tradable_earned_total_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_tradable_lifetime_limit() != 0) {
+        _this->_impl_.tradable_lifetime_limit_ = from._impl_.tradable_lifetime_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_available_tradable_units() != 0) {
+        _this->_impl_.available_tradable_units_ = from._impl_.available_tradable_units_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_week_starts_at_ms() != 0) {
+        _this->_impl_.week_starts_at_ms_ = from._impl_.week_starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_batch_tradable_units() != 0) {
+        _this->_impl_.batch_tradable_units_ = from._impl_.batch_tradable_units_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_earned_this_week() != 0) {
+        _this->_impl_.earned_this_week_ = from._impl_.earned_this_week_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_next_week_reset_at_ms() != 0) {
+        _this->_impl_.next_week_reset_at_ms_ = from._impl_.next_week_reset_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_weekly_limit() != 0) {
+        _this->_impl_.weekly_limit_ = from._impl_.weekly_limit_;
       }
     }
   }
@@ -21752,8 +24470,8 @@ void EquipmentMaterialRewardSnapshot::InternalSwap(EquipmentMaterialRewardSnapsh
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.unavailable_reason_, &other->_impl_.unavailable_reason_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_)
-      + sizeof(EquipmentMaterialRewardSnapshot::_impl_.revision_)
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.weekly_limit_)
+      + sizeof(EquipmentMaterialRewardSnapshot::_impl_.weekly_limit_)
       - PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.crafting_material_)>(
           reinterpret_cast<char*>(&_impl_.crafting_material_),
           reinterpret_cast<char*>(&other->_impl_.crafting_material_));

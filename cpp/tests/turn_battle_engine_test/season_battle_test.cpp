@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "memory_battle_data_provider.h"
+#include "system/combat_damage_rules.h"
 #include "system/turn_battle_engine.h"
 
 namespace {
@@ -252,4 +253,331 @@ TEST_F(SeasonBattleTest, SeasonSealOpeningDamageReductionAndDefendManaRestoreCoe
         }
     }
     EXPECT_TRUE(sawEnemySeal);
+}
+
+// ---- 赛季首领试炼（3 大首领 + 慢速重击）、护卫救援、物法易势 5V5 与防挂机参与事实 ----
+
+namespace {
+
+CreateBattleRequest MakeBossTrialRequest(uint64_t battleId, uint32_t dungeonId, uint32_t playerCount,
+                                         uint64_t playerSpeed = 100) {
+    CreateBattleRequest req;
+    req.set_battle_id(battleId);
+    req.set_match_mode(playerCount > 1 ? turnbattle::kMatchModePveTeam : turnbattle::kMatchModePveSolo);
+    req.set_battle_config_id(dungeonId);
+    req.set_seed(20261124ULL + battleId);
+    for (uint32_t i = 0; i < playerCount; ++i) {
+        auto* p = req.add_players();
+        p->set_player_id(30001ULL + i);
+        p->set_team_index(0);
+        p->set_player_name("TrialHero" + std::to_string(i));
+        p->set_level(60);
+        p->set_max_health(20000);
+        p->set_max_mana(5000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(5000);
+        p->mutable_base_attributes()->set_speed(playerSpeed);
+        p->set_physical_attack(500);
+        p->set_magic_attack(500);
+        p->set_defense(200);
+    }
+    return req;
+}
+
+void SetupBossTrialData(MemoryBattleDataProvider& data, uint32_t dungeonId, uint32_t trialKind,
+                        uint32_t difficulty, uint32_t roundLimit, uint64_t bossHp = 6000, uint64_t guardHp = 3000) {
+    data.AddBattleReward(0, "").set_exp_gain(100);
+    auto& d = data.AddDungeon(dungeonId);
+    d.Clear();
+    d.set_id(dungeonId);
+    d.set_boss_trial_kind(trialKind);
+    d.set_difficulty(difficulty);
+    d.set_round_limit(roundLimit);
+    data.SetDungeonMonsters(dungeonId, {101, 102});
+    data.SetDungeonMonstersPerPlayer(dungeonId, 2); // 验证试炼不按人数复制怪，而是缩放血量。
+    auto& boss = data.AddMonster(101);
+    boss.Clear();
+    boss.set_id(101);
+    boss.set_is_boss(1);
+    boss.set_health(bossHp);
+    boss.set_strength(300);
+    boss.set_armor(100);
+    boss.set_speed(900); // 故意比玩家快，验证慢速重击仍晚于低速玩家防御。
+    auto& guard = data.AddMonster(102);
+    guard.Clear();
+    guard.set_id(102);
+    guard.set_is_boss(0);
+    guard.set_health(guardHp);
+    guard.set_strength(120);
+    guard.set_armor(80);
+    guard.set_speed(600);
+}
+
+} // namespace
+
+TEST_F(SeasonBattleTest, BossTrialRejuvScalesHpNotCountAndSlowCleaveRespectsLowSpeedDefendAndStunCancel) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 102, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/2, /*roundLimit=*/15, 6000, 3000);
+    // 注册一个必定眩晕敌方的技能用于测控场取消重击。
+    auto& stunBuff = mem->AddBuff(8801);
+    stunBuff.Clear();
+    stunBuff.set_id(8801);
+    stunBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunBuff.set_duration(6.0); // 1 回合
+    auto& stunSkill = mem->AddSkill(8801);
+    stunSkill.Clear();
+    stunSkill.set_id(8801);
+    stunSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    stunSkill.add_targeting_mode(1);
+    stunSkill.add_effect(8801);
+    mem->SetSkillDamage(8801, 0);
+
+    // 2 人组队进本：只生成 2 只怪且血量 ×2（首领 12000、护卫 6000）。
+    auto req = MakeBossTrialRequest(5001, 102, /*playerCount=*/2, /*playerSpeed=*/100);
+    req.mutable_players(0)->add_skill_table_ids(8801);
+
+    // 对比三局完全相同种子：A 局 R2 被点名低速玩家防御，B 局不防御，C 局眩晕首领。
+    TurnBattleEngine engDefend(mem), engNoDefend(mem), engStun(mem);
+    ASSERT_TRUE(engDefend.Initialize(req));
+    ASSERT_TRUE(engNoDefend.Initialize(req));
+    ASSERT_TRUE(engStun.Initialize(req));
+
+    const auto initSnap = engDefend.BuildStateSnapshot();
+    uint64_t bossId = 0, guardId = 0;
+    uint32_t monsterCount = 0;
+    for (const auto& a : initSnap.actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            ++monsterCount;
+            if (a.is_boss()) {
+                bossId = a.actor_id();
+                EXPECT_EQ(a.max_health(), 12000u);
+            } else {
+                guardId = a.actor_id();
+                EXPECT_EQ(a.max_health(), 6000u);
+            }
+        }
+    }
+    ASSERT_EQ(monsterCount, 2u);
+    ASSERT_NE(bossId, 0u);
+    ASSERT_NE(guardId, 0u);
+
+    // 开局 R1 快照应预告 R2 首领慢速重击 + R2 困难回春护卫回血。
+    uint64_t cleaveTargetId = 0;
+    bool sawGuardHealTelegraph = false;
+    for (const auto& t : initSnap.telegraphs()) {
+        if (t.intent_kind() == turnbattle::kTelegraphKindSlowCleave && t.execute_round() == 2) {
+            cleaveTargetId = t.target_actor_id();
+        }
+        if (t.intent_kind() == turnbattle::kTelegraphKindGuardHeal && t.execute_round() == 2) {
+            sawGuardHealTelegraph = true;
+        }
+    }
+    ASSERT_NE(cleaveTargetId, 0u);
+    EXPECT_TRUE(sawGuardHealTelegraph);
+
+    // R1 三局均让首领受一点伤（测试 R2 护卫回血），双方常规执行。
+    for (auto* eng : {&engDefend, &engNoDefend, &engStun}) {
+        eng->SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+        eng->SubmitAction(30002, Command(BATTLE_ACTION_DEFEND));
+        eng->ResolveCurrentRound();
+    }
+
+    // R2：A 局被点名者防御（速度 100 远慢于首领 900），B 局不防御，C 局玩家1给首领挂眩晕。
+    const uint64_t hpBeforeDef = ActorOf(engDefend.BuildStateSnapshot(), cleaveTargetId).attributes().health();
+    const uint64_t hpBeforeNoDef = ActorOf(engNoDefend.BuildStateSnapshot(), cleaveTargetId).attributes().health();
+    ASSERT_EQ(hpBeforeDef, hpBeforeNoDef);
+
+    engDefend.SubmitAction(cleaveTargetId, Command(BATTLE_ACTION_DEFEND));
+    engDefend.SubmitAction(cleaveTargetId == 30001 ? 30002 : 30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r2Def = engDefend.ResolveCurrentRound();
+
+    engNoDefend.SubmitAction(cleaveTargetId, Command(BATTLE_ACTION_ATTACK, guardId));
+    engNoDefend.SubmitAction(cleaveTargetId == 30001 ? 30002 : 30001, Command(BATTLE_ACTION_DEFEND));
+    const auto r2NoDef = engNoDefend.ResolveCurrentRound();
+
+    engStun.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8801));
+    engStun.SubmitAction(30002, Command(BATTLE_ACTION_DEFEND));
+    const auto r2Stun = engStun.ResolveCurrentRound();
+
+    uint64_t bossDmgDef = 0, bossDmgNoDef = 0, bossDmgStun = 0;
+    uint64_t guardHealAmt = 0;
+    for (const auto& ev : r2Def.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == bossId && ev.target_id() == cleaveTargetId)
+            bossDmgDef += ev.value();
+        if (ev.event_type() == BATTLE_EVENT_HEAL && ev.source_id() == guardId && ev.target_id() == bossId)
+            guardHealAmt += ev.value();
+    }
+    for (const auto& ev : r2NoDef.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == bossId && ev.target_id() == cleaveTargetId)
+            bossDmgNoDef += ev.value();
+    }
+    for (const auto& ev : r2Stun.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == bossId)
+            bossDmgStun += ev.value();
+    }
+    EXPECT_GT(bossDmgNoDef, 0u);
+    EXPECT_GT(bossDmgDef, 0u);
+    EXPECT_LT(bossDmgDef, bossDmgNoDef) << "慢速重击晚于低速目标防御结算，防御必然减伤";
+    EXPECT_EQ(bossDmgStun, 0u) << "首领被眩晕控制时慢速重击必须直接取消且不回退普攻";
+    EXPECT_GT(guardHealAmt, 0u) << "困难难度回春护卫在 R2 与首领重击同轮回血";
+}
+
+TEST_F(SeasonBattleTest, BossTrialStanceAndBarrierAndDispelWorkCorrectly) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 103, turnbattle::kBossTrialKindBreakStance, /*difficulty=*/1, /*roundLimit=*/12, 10000, 4000);
+    auto& dispelSkill = mem->AddSkill(8802);
+    dispelSkill.Clear();
+    dispelSkill.set_id(8802);
+    dispelSkill.set_battle_model(1);
+    dispelSkill.set_caster_mask(1);
+    dispelSkill.set_ability_kind(1);
+    dispelSkill.set_unlock_level(1);
+    dispelSkill.set_max_rank(10);
+    dispelSkill.set_target_team(1); // 敌方
+    dispelSkill.set_max_targets(1);
+    dispelSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    dispelSkill.set_mana_percent(0.01);
+    dispelSkill.add_effect(88020);
+    auto& dispelBuff = mem->AddBuff(88020);
+    dispelBuff.Clear();
+    dispelBuff.set_id(88020);
+    dispelBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::DispelBuff));
+    dispelBuff.set_effect_count(1);
+
+    auto req = MakeBossTrialRequest(5002, 103, 1, 500);
+    req.mutable_players(0)->add_skill_table_ids(8802);
+    (*req.mutable_players(0)->mutable_skill_ranks())[8802] = 1;
+    req.mutable_trial_context()->set_journal_entry_id(1);
+
+    TurnBattleEngine eng(mem);
+    ASSERT_TRUE(eng.Initialize(req));
+    uint64_t bossId = 0;
+    for (const auto& a : eng.BuildStateSnapshot().actors()) {
+        if (a.is_boss()) bossId = a.actor_id();
+    }
+    ASSERT_NE(bossId, 0u);
+    // R1 护势护卫展开物理护势。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    eng.ResolveCurrentRound();
+    // R2 物理普攻吃 30% 物理护势减伤。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+    const auto r2 = eng.ResolveCurrentRound();
+    uint64_t dmgWithStance = 0;
+    for (const auto& ev : r2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 && ev.target_id() == bossId)
+            dmgWithStance += ev.value();
+    }
+    // R3 驱散首领护势。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 8802));
+    eng.ResolveCurrentRound();
+    // R4 护势刷新在慢速阶段（普通行动之后），玩家普攻打在无护势首领上伤害应更高，且试炼事实记录驱散成功。
+    eng.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, bossId));
+    const auto r4 = eng.ResolveCurrentRound();
+    uint64_t dmgWithoutStance = 0;
+    for (const auto& ev : r4.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 30001 && ev.target_id() == bossId)
+            dmgWithoutStance += ev.value();
+    }
+    EXPECT_GT(dmgWithoutStance, dmgWithStance);
+    EXPECT_TRUE(eng.BuildSettlement(30001).trial_facts().guard_stance_dispelled());
+}
+
+TEST_F(SeasonBattleTest, GuardianRescueFailsImmediatelyWhenGuardDiesEvenIfBossDies) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 109, turnbattle::kBossTrialKindGuardianRescue, /*difficulty=*/1, /*roundLimit=*/8, 50000, 1);
+    auto req = MakeBossTrialRequest(5003, 109, 1, 100);
+    TurnBattleEngine eng(mem);
+    ASSERT_TRUE(eng.Initialize(req));
+    const auto snap = eng.BuildStateSnapshot();
+    ASSERT_NE(snap.protected_guard_actor_id(), 0u);
+    uint64_t bossId = 0;
+    for (const auto& a : snap.actors()) {
+        if (a.is_boss()) bossId = a.actor_id();
+        if (a.actor_id() == snap.protected_guard_actor_id()) {
+            EXPECT_EQ(a.team_index(), 0u);
+        }
+    }
+    ASSERT_NE(bossId, 0u);
+    for (int r = 0; r < 3 && eng.Outcome() == BATTLE_OUTCOME_ONGOING; ++r) {
+        eng.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+        eng.ResolveCurrentRound();
+    }
+    EXPECT_EQ(eng.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN) << "待保护护卫阵亡必须立刻判负";
+}
+
+TEST_F(SeasonBattleTest, Polarity5v5RotatesEveryTwoRoundsBoostsMatchingDamageDrawsAt16AndTracksAntiAfk) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    auto& d = mem->AddDungeon(110);
+    d.Clear();
+    d.set_id(110);
+    d.set_boss_trial_kind(turnbattle::kBossTrialKindPolarity5v5);
+    d.set_round_limit(16);
+
+    CreateBattleRequest req;
+    req.set_battle_id(5004);
+    req.set_match_mode(turnbattle::kMatchModePolarity5v5);
+    req.set_battle_config_id(110);
+    req.set_seed(777);
+    const auto addP = [&](uint64_t pid, uint32_t team) {
+        auto* p = req.add_players();
+        p->set_player_id(pid);
+        p->set_team_index(team);
+        p->set_player_name("P" + std::to_string(pid));
+        p->set_level(60);
+        p->set_max_health(500000);
+        p->set_max_mana(5000);
+        p->mutable_base_attributes()->set_health(500000);
+        p->mutable_base_attributes()->set_mana(5000);
+        p->mutable_base_attributes()->set_speed(500);
+        p->set_physical_attack(1000);
+        p->set_magic_attack(1000);
+        p->set_defense(200);
+    };
+    addP(40001, 0);
+    addP(40002, 1);
+
+    TurnBattleEngine eng(mem);
+    ASSERT_TRUE(eng.Initialize(req));
+    const uint32_t r1Polarity = eng.BuildStateSnapshot().active_polarity();
+    ASSERT_TRUE(r1Polarity == combatdamage::kPhysicalDamage || r1Polarity == combatdamage::kMagicDamage);
+    EXPECT_EQ(eng.BuildStateSnapshot().next_polarity_switch_round(), 3u);
+
+    // 40001 手动攻击 4 个回合（含物理易势与法术易势段对比），40002 只防御且仅手动 1 回合（测试防挂机统计）。
+    uint64_t physDmgDuringPhysPolarity = 0;
+    uint64_t physDmgDuringMagicPolarity = 0;
+    for (int r = 1; r <= 16; ++r) {
+        const uint32_t curPolarity = eng.BuildStateSnapshot().active_polarity();
+        if (r <= 2) EXPECT_EQ(curPolarity, r1Polarity);
+        else if (r <= 4) EXPECT_NE(curPolarity, r1Polarity);
+
+        if (r <= 4) {
+            eng.SubmitAction(40001, Command(BATTLE_ACTION_ATTACK, 40002));
+        }
+        if (r == 1) {
+            eng.SubmitAction(40002, Command(BATTLE_ACTION_DEFEND));
+        } else {
+            // 40002 其余回合全程挂机防御（不手动提交）。
+            eng.SetActorAuto(40002, true);
+        }
+        const auto turn = eng.ResolveCurrentRound();
+        if (r == 2 || r == 4) {
+            for (const auto& ev : turn.events()) {
+                if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == 40001 && ev.target_id() == 40002) {
+                    if (curPolarity == combatdamage::kPhysicalDamage) physDmgDuringPhysPolarity = ev.value();
+                    else physDmgDuringMagicPolarity = ev.value();
+                }
+            }
+        }
+    }
+    EXPECT_EQ(eng.Outcome(), BATTLE_OUTCOME_DRAW) << "物法易势满 16 回合双方存活必须判平局";
+    EXPECT_GT(physDmgDuringPhysPolarity, physDmgDuringMagicPolarity) << "物理易势下物理直接伤害应按 ×1.15 放大";
+
+    const auto settleActive = eng.BuildSettlement(40001);
+    EXPECT_EQ(settleActive.total_rounds(), 16u);
+    EXPECT_EQ(settleActive.manual_action_rounds(), 4u);
+    EXPECT_TRUE(settleActive.effective_combat_contribution());
+    EXPECT_EQ(settleActive.boss_trial_kind(), turnbattle::kBossTrialKindPolarity5v5);
+
+    const auto settlePassive = eng.BuildSettlement(40002);
+    EXPECT_EQ(settlePassive.manual_action_rounds(), 1u);
 }

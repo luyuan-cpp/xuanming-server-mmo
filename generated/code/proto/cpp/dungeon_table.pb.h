@@ -234,6 +234,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
     kMaxTeamSizeFieldNumber = 3,
     kTimeLimitFieldNumber = 4,
     kAllowPetCaptureFieldNumber = 6,
+    kBossTrialKindFieldNumber = 7,
+    kDifficultyFieldNumber = 8,
+    kRoundLimitFieldNumber = 9,
   };
   // repeated uint32 monster = 5;
   [[nodiscard]] int monster_size()
@@ -305,11 +308,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
   void _internal_set_allow_pet_capture(::uint32_t value);
 
   public:
+  // uint32 boss_trial_kind = 7;
+  void clear_boss_trial_kind() ;
+  [[nodiscard]] ::uint32_t boss_trial_kind() const;
+  void set_boss_trial_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_boss_trial_kind() const;
+  void _internal_set_boss_trial_kind(::uint32_t value);
+
+  public:
+  // uint32 difficulty = 8;
+  void clear_difficulty() ;
+  [[nodiscard]] ::uint32_t difficulty() const;
+  void set_difficulty(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_difficulty() const;
+  void _internal_set_difficulty(::uint32_t value);
+
+  public:
+  // uint32 round_limit = 9;
+  void clear_round_limit() ;
+  [[nodiscard]] ::uint32_t round_limit() const;
+  void set_round_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_round_limit() const;
+  void _internal_set_round_limit(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:DungeonTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -345,6 +378,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
     ::uint32_t max_team_size_;
     ::uint32_t time_limit_;
     ::uint32_t allow_pet_capture_;
+    ::uint32_t boss_trial_kind_;
+    ::uint32_t difficulty_;
+    ::uint32_t round_limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -748,6 +784,78 @@ inline ::uint32_t DungeonTable::_internal_allow_pet_capture() const {
 inline void DungeonTable::_internal_set_allow_pet_capture(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_pet_capture_ = value;
+}
+
+// uint32 boss_trial_kind = 7;
+inline void DungeonTable::clear_boss_trial_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_trial_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t DungeonTable::boss_trial_kind() const {
+  // @@protoc_insertion_point(field_get:DungeonTable.boss_trial_kind)
+  return _internal_boss_trial_kind();
+}
+inline void DungeonTable::set_boss_trial_kind(::uint32_t value) {
+  _internal_set_boss_trial_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:DungeonTable.boss_trial_kind)
+}
+inline ::uint32_t DungeonTable::_internal_boss_trial_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boss_trial_kind_;
+}
+inline void DungeonTable::_internal_set_boss_trial_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_trial_kind_ = value;
+}
+
+// uint32 difficulty = 8;
+inline void DungeonTable::clear_difficulty() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.difficulty_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t DungeonTable::difficulty() const {
+  // @@protoc_insertion_point(field_get:DungeonTable.difficulty)
+  return _internal_difficulty();
+}
+inline void DungeonTable::set_difficulty(::uint32_t value) {
+  _internal_set_difficulty(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:DungeonTable.difficulty)
+}
+inline ::uint32_t DungeonTable::_internal_difficulty() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.difficulty_;
+}
+inline void DungeonTable::_internal_set_difficulty(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.difficulty_ = value;
+}
+
+// uint32 round_limit = 9;
+inline void DungeonTable::clear_round_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t DungeonTable::round_limit() const {
+  // @@protoc_insertion_point(field_get:DungeonTable.round_limit)
+  return _internal_round_limit();
+}
+inline void DungeonTable::set_round_limit(::uint32_t value) {
+  _internal_set_round_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:DungeonTable.round_limit)
+}
+inline ::uint32_t DungeonTable::_internal_round_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_limit_;
+}
+inline void DungeonTable::_internal_set_round_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_limit_ = value;
 }
 
 // -------------------------------------------------------------------

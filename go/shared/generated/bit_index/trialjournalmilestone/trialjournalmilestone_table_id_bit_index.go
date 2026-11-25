@@ -7,6 +7,12 @@ const (
 	ID_102 = 1
 	ID_103 = 2
 	ID_104 = 3
+	ID_201 = 4
+	ID_202 = 5
+	ID_203 = 6
+	ID_901 = 7
+	ID_301 = 8
+	ID_302 = 9
 )
 
-const BitmapCapacity = 4
+const BitmapCapacity = 10

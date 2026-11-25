@@ -47,10 +47,17 @@ bool ArmIds() {
     client.Warm(); client.OnResponse(0, 5300000, 5400000);
     return client.IsReady();
 }
-BattleSettlementData Battle(uint64_t id, uint32_t mode = match::MATCH_MODE_PVE_SOLO) {
+BattleSettlementData Battle(uint64_t id, uint32_t mode = match::MATCH_MODE_PVE_SOLO,
+                            uint32_t difficulty = 1, bool manualValid = true) {
     BattleSettlementData result;
     result.set_player_id(kPlayer); result.set_battle_id(id); result.set_match_mode(mode);
-    result.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN); result.set_player_team_index(0); result.set_total_rounds(3);
+    result.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN); result.set_player_team_index(0);
+    result.set_total_rounds(3);
+    result.set_battle_difficulty(difficulty);
+    if (manualValid) {
+        result.set_manual_action_rounds(2);
+        result.set_effective_combat_contribution(true);
+    }
     return result;
 }
 class EquipmentMaterialRewardTest : public testing::Test {
@@ -87,10 +94,18 @@ protected:
     }
     ClientRequestLedgerComp& Ledger() { return tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player); }
     Bag& Inventory() { return tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory]; }
-    void Credit(uint64_t id = 1, uint64_t now = kNow, uint32_t mode = match::MATCH_MODE_PVE_SOLO) {
+    void Credit(uint64_t id = 1, uint64_t now = kNow, uint32_t mode = match::MATCH_MODE_PVE_SOLO,
+                uint32_t difficulty = 1, Reward::BattleCreditDelta* deltaOut = nullptr) {
         ClientRequestLedgerComp candidate;
-        ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), Battle(id, mode), now, candidate));
+        ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), Battle(id, mode, difficulty), now, candidate, deltaOut));
         Ledger().Swap(&candidate);
+    }
+    uint32_t CountByBound(uint32_t configId, bool bound) {
+        uint32_t total = 0;
+        Inventory().ForEachItem([&](Guid, const ItemComp& item) {
+            if (item.config_id() == configId && item.bound() == bound) total += item.size();
+        });
+        return total;
     }
     ClaimEquipmentMaterialRewardRequest Request(uint32_t crafting, uint32_t stone, uint64_t key = 4001) {
         ClaimEquipmentMaterialRewardRequest request;
@@ -132,50 +147,161 @@ TEST_F(EquipmentMaterialRewardTest, QueryDoesNotCreateDailyAllowanceOrMutateLedg
     EXPECT_EQ(ClaimEquipmentMaterialRewardResponse::REJECTED, Claim(Request(20, 0)).outcome());
     EXPECT_EQ(before, Assets());
 }
-TEST_F(EquipmentMaterialRewardTest, Utc21BoundaryAndOverflowAreExplicit) {
+TEST_F(EquipmentMaterialRewardTest, Utc21DayAndMondayWeekBoundariesAreExplicit) {
     uint64_t start = 0, next = 0;
     ASSERT_TRUE(Reward::ResolveDay(kNow, start, next));
     EXPECT_EQ(kNow, start); EXPECT_EQ(kNow + kDay, next);
     ASSERT_TRUE(Reward::ResolveDay(kNow - 1, start, next)); EXPECT_EQ(kNow - kDay, start); EXPECT_EQ(kNow, next);
     EXPECT_FALSE(Reward::ResolveDay(std::numeric_limits<uint64_t>::max(), start, next));
     EXPECT_FALSE(Reward::ResolveDay(0, start, next));
+
+    // kNow = 2026-11-17 21:00 UTC = 2026-11-18 05:00 UTC+8（周三），本周周一 05:00 UTC+8 为 kNow - 2*kDay。
+    uint64_t weekStart = 0, weekNext = 0;
+    ASSERT_TRUE(Reward::ResolveWeek(kNow, weekStart, weekNext));
+    EXPECT_EQ(kNow - 2 * kDay, weekStart);
+    EXPECT_EQ(weekStart + 7 * kDay, weekNext);
+    // 周一 05:00 前 1 毫秒仍属于上一周。
+    ASSERT_TRUE(Reward::ResolveWeek(weekStart - 1, start, next));
+    EXPECT_EQ(weekStart - 7 * kDay, start);
+    EXPECT_EQ(weekStart, next);
+    EXPECT_FALSE(Reward::ResolveWeek(0, start, next));
+    EXPECT_FALSE(Reward::ResolveWeek(std::numeric_limits<uint64_t>::max(), start, next));
 }
-TEST_F(EquipmentMaterialRewardTest, SharedPvePvpDailyQuotaAndCrossDayUnclaimedBalance) {
-    Credit(1); Credit(2, kNow, match::MATCH_MODE_1V1); Credit(3, kNow, match::MATCH_MODE_PVP_TEAM);
-    EXPECT_EQ(20u, Ledger().material_reward().earned_today()); EXPECT_EQ(20u, Ledger().material_reward().available_units());
-    EXPECT_EQ(0u, Ledger().material_reward().revision());
-    Credit(4, kNow + kDay); EXPECT_EQ(30u, Ledger().material_reward().available_units());
-    EXPECT_EQ(10u, Ledger().material_reward().earned_today());
-    Credit(5, kNow); EXPECT_EQ(30u, Ledger().material_reward().available_units()); // 回拨不重置额度。
-    GetEquipmentMaterialRewardResponse response;
-    ASSERT_EQ(kSuccess, Reward::Get(player, kNow + kDay, response)); EXPECT_EQ(20u, response.snapshot().batch_units());
-    EXPECT_EQ(30u, response.snapshot().available_units());
+TEST_F(EquipmentMaterialRewardTest, TwoStageQuotaHasNoDailyCapInStage1AndSwitchesToWeekly100After660) {
+    // 阶段一：无日限，普通 PVE +10(1可交易)，困难 PVE +15(1可交易)，PVP 胜 +15(1可交易)，同一天连续累计。
+    Reward::BattleCreditDelta d1, d2, d3;
+    Credit(1, kNow, match::MATCH_MODE_PVE_SOLO, 1, &d1);
+    EXPECT_EQ(10u, d1.totalUnitsAdded); EXPECT_EQ(1u, d1.tradableUnitsAdded); EXPECT_FALSE(d1.pvpLossIneligible);
+    Credit(2, kNow, match::MATCH_MODE_PVE_TEAM, 2, &d2);
+    EXPECT_EQ(15u, d2.totalUnitsAdded); EXPECT_EQ(1u, d2.tradableUnitsAdded);
+    Credit(3, kNow, match::MATCH_MODE_PVP_TEAM, 1, &d3);
+    EXPECT_EQ(15u, d3.totalUnitsAdded); EXPECT_EQ(1u, d3.tradableUnitsAdded);
+    EXPECT_EQ(40u, Ledger().material_reward().lifetime_earned());
+    EXPECT_EQ(3u, Ledger().material_reward().tradable_earned_total());
+    EXPECT_EQ(40u, Ledger().material_reward().available_units());
+    EXPECT_EQ(3u, Ledger().material_reward().available_tradable_units());
+
+    // 推满第一阶段 660 份：用困难局(+15)推进到 655（此时可交易累计 44 < 60），
+    // 实测剩余 5 份尾数（<10）截断到 660 且不增可交易份数。
+    uint64_t battleId = 10;
+    while (Ledger().material_reward().lifetime_earned() < 655) {
+        Credit(++battleId, kNow, match::MATCH_MODE_PVE_TEAM, 2);
+    }
+    EXPECT_EQ(655u, Ledger().material_reward().lifetime_earned());
+    EXPECT_LT(Ledger().material_reward().tradable_earned_total(), 60u);
+    const uint32_t tradableBeforeTail = Ledger().material_reward().tradable_earned_total();
+    // 剩余 5 份尾数（<10）截断到 660 且即使未触及 60 上限也不增可交易份数。
+    Reward::BattleCreditDelta tail;
+    Credit(++battleId, kNow, match::MATCH_MODE_PVE_SOLO, 1, &tail);
+    EXPECT_EQ(5u, tail.totalUnitsAdded);
+    EXPECT_EQ(0u, tail.tradableUnitsAdded);
+    EXPECT_EQ(660u, Ledger().material_reward().lifetime_earned());
+    EXPECT_EQ(tradableBeforeTail, Ledger().material_reward().tradable_earned_total());
+
+    // 进入第二阶段：自动切换为每周 100 份全绑定（0 可交易）。
+    GetEquipmentMaterialRewardResponse snap;
+    ASSERT_EQ(kSuccess, Reward::Get(player, kNow, snap));
+    EXPECT_TRUE(snap.snapshot().weekly_phase_active());
+    EXPECT_EQ(0u, snap.snapshot().earned_this_week());
+    EXPECT_EQ(100u, snap.snapshot().weekly_limit());
+
+    for (int i = 0; i < 6; ++i) {
+        Reward::BattleCreditDelta w;
+        Credit(++battleId, kNow, match::MATCH_MODE_PVP_TEAM, 1, &w);
+        EXPECT_EQ(15u, w.totalUnitsAdded);
+        EXPECT_EQ(0u, w.tradableUnitsAdded);
+    }
+    EXPECT_EQ(90u, Ledger().material_reward().earned_this_week());
+    // 当周剩余 10 份截断封顶至 100。
+    Reward::BattleCreditDelta capWeek;
+    Credit(++battleId, kNow, match::MATCH_MODE_PVP_TEAM, 1, &capWeek);
+    EXPECT_EQ(10u, capWeek.totalUnitsAdded);
+    EXPECT_EQ(100u, Ledger().material_reward().earned_this_week());
+    // 已满本周上限不再加；时钟回拨到上一周也不重置；跨到下一周重新开放 100。
+    Reward::BattleCreditDelta fullWeek;
+    Credit(++battleId, kNow, match::MATCH_MODE_PVE_SOLO, 1, &fullWeek);
+    EXPECT_EQ(0u, fullWeek.totalUnitsAdded);
+    Reward::BattleCreditDelta rollback;
+    Credit(++battleId, kNow - 7 * kDay, match::MATCH_MODE_PVE_SOLO, 1, &rollback);
+    EXPECT_EQ(0u, rollback.totalUnitsAdded);
+    Reward::BattleCreditDelta nextWeek;
+    Credit(++battleId, kNow + 7 * kDay, match::MATCH_MODE_PVE_SOLO, 1, &nextWeek);
+    EXPECT_EQ(10u, nextWeek.totalUnitsAdded);
+    EXPECT_EQ(0u, nextWeek.tradableUnitsAdded);
+    EXPECT_EQ(10u, Ledger().material_reward().earned_this_week());
 }
-TEST_F(EquipmentMaterialRewardTest, OnlyEligibleCompletedBattlesGrantAndPrepareDoesNotMutateSource) {
+TEST_F(EquipmentMaterialRewardTest, OnlyEligibleCompletedBattlesAndAntiAfkPvpLossGrant) {
     auto battle = Battle(1); ClientRequestLedgerComp candidate;
     for (const auto mode : {match::MATCH_MODE_UNSPECIFIED, match::MATCH_MODE_PVP_CHALLENGE, match::MATCH_MODE_3V3}) {
         battle.set_match_mode(mode); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
     }
+    // PVE 败局不给。
     battle = Battle(1); battle.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
-    battle.set_match_mode(match::MATCH_MODE_1V1); EXPECT_TRUE(Reward::IsEligibleBattle(battle));
-    battle.set_outcome(BATTLE_OUTCOME_DRAW); EXPECT_TRUE(Reward::IsEligibleBattle(battle));
+    // PVP 胜局（含轮换物法易势 5V5）达标。
+    battle = Battle(1, match::MATCH_MODE_POLARITY_5V5); EXPECT_TRUE(Reward::IsEligibleBattle(battle));
+    // PVP 败局：满足 >=3 回合、>=2 手动回合、有效贡献才达标，且为全绑定 10 份（0 可交易）。
+    battle = Battle(2, match::MATCH_MODE_1V1); battle.set_outcome(BATTLE_OUTCOME_SIDE_B_WIN);
+    EXPECT_TRUE(Reward::IsEligibleBattle(battle));
+    Reward::BattleCreditDelta lossOk;
+    ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), battle, kNow, candidate, &lossOk));
+    EXPECT_EQ(10u, lossOk.totalUnitsAdded); EXPECT_EQ(0u, lossOk.tradableUnitsAdded); EXPECT_FALSE(lossOk.pvpLossIneligible);
+    // PVP 挂机败局（回合不足 / 手动回合不足 / 无有效贡献）均不达标，标记 pvpLossIneligible=true 且不占 660 上限。
+    auto afkShort = battle; afkShort.set_total_rounds(2);
+    EXPECT_FALSE(Reward::IsEligibleBattle(afkShort));
+    Reward::BattleCreditDelta afkDelta;
+    ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), afkShort, kNow, candidate, &afkDelta));
+    EXPECT_EQ(0u, afkDelta.totalUnitsAdded); EXPECT_TRUE(afkDelta.pvpLossIneligible);
+    auto afkAuto = battle; afkAuto.set_manual_action_rounds(1);
+    EXPECT_FALSE(Reward::IsEligibleBattle(afkAuto));
+    auto afkZeroContrib = battle; afkZeroContrib.set_effective_combat_contribution(false);
+    EXPECT_FALSE(Reward::IsEligibleBattle(afkZeroContrib));
+    // 逃跑 / 0 回合 / VOID 仍全部拒绝。
     battle.set_fled(true); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
     battle = Battle(1); battle.set_total_rounds(0); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
     battle = Battle(1); battle.set_outcome(BATTLE_OUTCOME_VOID); EXPECT_FALSE(Reward::IsEligibleBattle(battle));
     const auto before = Assets(); ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), Battle(9), kNow, candidate));
     EXPECT_EQ(10u, candidate.material_reward().available_units()); EXPECT_EQ(before, Assets());
 }
-TEST_F(EquipmentMaterialRewardTest, SplitClaimPublishesBothMaterialsAndLedgerTogether) {
-    Credit(1); Credit(2); const auto request = Request(7, 13); const auto reply = Claim(request);
+TEST_F(EquipmentMaterialRewardTest, SplitClaimPublishesTradableAndBoundStacksSeparatelyAndNeverMerges) {
+    Credit(1); Credit(2); // 累计 20 份，其中 2 份可交易 + 18 份绑定。
+    const auto request = Request(7, 13); const auto reply = Claim(request);
     ASSERT_EQ(ClaimEquipmentMaterialRewardResponse::APPLIED, reply.outcome());
     EXPECT_FALSE(reply.durable()); EXPECT_FALSE(reply.replayed()); EXPECT_EQ(1, persistCalls);
+    // 可交易优先给打造材料 3001：3001 得 2 可交易 + 5 绑定，3002 得 13 绑定。
     EXPECT_EQ(7u, Inventory().GetTotalItemCount(3001)); EXPECT_EQ(13u, Inventory().GetTotalItemCount(3002));
-    EXPECT_EQ(0u, Ledger().material_reward().available_units()); EXPECT_EQ(1u, reply.result_revision());
+    EXPECT_EQ(2u, CountByBound(3001, false)); EXPECT_EQ(5u, CountByBound(3001, true));
+    EXPECT_EQ(0u, CountByBound(3002, false)); EXPECT_EQ(13u, CountByBound(3002, true));
+    EXPECT_EQ(0u, Ledger().material_reward().available_units());
+    EXPECT_EQ(0u, Ledger().material_reward().available_tradable_units());
+    EXPECT_EQ(1u, reply.result_revision());
     EXPECT_TRUE(client_request_ledger::Validate(Ledger()).empty());
+    // 整理背包不得把可交易 3001 与绑定 3001 合并。
+    bool changed = false;
+    ASSERT_EQ(kSuccess, BagService::MergeAndCompact(player, Inventory(), CompactPolicy::kMergeOnly, &changed));
+    EXPECT_EQ(2u, CountByBound(3001, false)); EXPECT_EQ(5u, CountByBound(3001, true));
+    // 消耗 6 份 3001 时必须优先扣完 5 份绑定堆，再扣 1 份可交易堆（余 1 份可交易）。
+    ASSERT_EQ(kSuccess, BagService::RemoveItemsExact(player, Inventory(), {{3001, 6}}, TX_EQUIP_ENHANCE, 1));
+    EXPECT_EQ(0u, CountByBound(3001, true)); EXPECT_EQ(1u, CountByBound(3001, false));
+    // 重放幂等校验。
     const auto after = Assets(); auto replay = Claim(request);
     EXPECT_TRUE(replay.replayed()); EXPECT_EQ(reply.result_revision(), replay.result_revision()); EXPECT_EQ(after, Assets());
-    auto changed = request; changed.set_crafting_material_count(8); changed.set_enhancement_stone_count(12);
-    EXPECT_EQ(ClaimEquipmentMaterialRewardResponse::REJECTED, Claim(changed).outcome()); EXPECT_EQ(after, Assets());
+    auto changedReq = request; changedReq.set_crafting_material_count(8); changedReq.set_enhancement_stone_count(12);
+    EXPECT_EQ(ClaimEquipmentMaterialRewardResponse::REJECTED, Claim(changedReq).outcome()); EXPECT_EQ(after, Assets());
+}
+TEST_F(EquipmentMaterialRewardTest, LegacyUnmigratedBalanceRemainsClaimableAsBoundWithoutEating660Cap) {
+    auto* legacy = Ledger().mutable_material_reward();
+    legacy->set_day_starts_at_ms(kNow);
+    legacy->set_earned_today(20);
+    legacy->set_available_units(20);
+    legacy->set_migrated_to_v2(false);
+    ASSERT_TRUE(client_request_ledger::Validate(Ledger()).empty());
+    // 老余额 20 份直接作为绑定领取，且不占用新 660 额度。
+    const auto reply = Claim(Request(10, 10, 4100));
+    ASSERT_EQ(ClaimEquipmentMaterialRewardResponse::APPLIED, reply.outcome());
+    EXPECT_EQ(10u, CountByBound(3001, true)); EXPECT_EQ(0u, CountByBound(3001, false));
+    EXPECT_EQ(10u, CountByBound(3002, true)); EXPECT_EQ(0u, CountByBound(3002, false));
+    EXPECT_EQ(0u, Ledger().material_reward().lifetime_earned());
+    EXPECT_TRUE(Ledger().material_reward().migrated_to_v2());
 }
 TEST_F(EquipmentMaterialRewardTest, AllCraftingAndAllStoneAreLegalButArbitraryTotalsAreNot) {
     Credit(); auto before = Assets();
@@ -187,11 +313,13 @@ TEST_F(EquipmentMaterialRewardTest, AllCraftingAndAllStoneAreLegalButArbitraryTo
     EXPECT_EQ(10u, Inventory().GetTotalItemCount(3001)); EXPECT_EQ(10u, Inventory().GetTotalItemCount(3002));
 }
 TEST_F(EquipmentMaterialRewardTest, InsufficientRoomForSecondMaterialRollsBackWholeClaim) {
-    Credit(1); Credit(2); Inventory().SetCapacityForRestore(1);
+    Credit(1); Credit(2); // 2 可交易 + 18 绑定，领 (10,10) 产生 3 堆：3001可交易(2)、3001绑定(8)、3002绑定(10)。
+    Inventory().SetCapacityForRestore(2);
     const auto before = Assets(); EXPECT_NE(ClaimEquipmentMaterialRewardResponse::APPLIED, Claim(Request(10, 10)).outcome());
     EXPECT_EQ(before, Assets()); EXPECT_EQ(0, persistCalls);
-    Inventory().SetCapacityForRestore(2);
+    Inventory().SetCapacityForRestore(3);
     EXPECT_EQ(ClaimEquipmentMaterialRewardResponse::APPLIED, Claim(Request(10, 10)).outcome());
+    EXPECT_EQ(2u, CountByBound(3001, false)); EXPECT_EQ(8u, CountByBound(3001, true)); EXPECT_EQ(10u, CountByBound(3002, true));
 }
 TEST_F(EquipmentMaterialRewardTest, NewBattleCreditRejectsChangedBatchWithoutCreatingUnknownIntent) {
     Credit(1); const auto ten = Request(4, 6);
@@ -274,11 +402,14 @@ TEST_F(EquipmentMaterialRewardTest, MissingComponentsFrozenPlayerAndSaturatedRev
     EXPECT_FALSE(tlsEcs.actorRegistry.all_of<ClientRequestLedgerComp>(player));
 }
 TEST_F(EquipmentMaterialRewardTest, CorruptPersistedMaterialLedgerAndReceiptFailClosed) {
-    Credit(); auto malformed = Ledger(); malformed.mutable_material_reward()->set_earned_today(21);
+    Credit(); auto malformed = Ledger(); malformed.mutable_material_reward()->set_lifetime_earned(665);
     EXPECT_FALSE(client_request_ledger::Validate(malformed).empty());
     malformed = Ledger(); malformed.mutable_material_reward()->set_available_units(11);
     EXPECT_FALSE(client_request_ledger::Validate(malformed).empty());
-    malformed = Ledger(); malformed.mutable_material_reward()->set_day_starts_at_ms(kNow + 1);
+    malformed = Ledger(); malformed.mutable_material_reward()->set_available_tradable_units(5);
+    EXPECT_FALSE(client_request_ledger::Validate(malformed).empty());
+    malformed = Ledger(); malformed.mutable_material_reward()->set_week_starts_at_ms(kNow + 1);
+    malformed.mutable_material_reward()->set_earned_this_week(10);
     EXPECT_FALSE(client_request_ledger::Validate(malformed).empty());
     ASSERT_EQ(ClaimEquipmentMaterialRewardResponse::APPLIED, Claim(Request(4, 6)).outcome());
     malformed = Ledger(); malformed.mutable_records(0)->set_material_reward_revision(99);

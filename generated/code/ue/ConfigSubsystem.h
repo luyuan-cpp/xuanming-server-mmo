@@ -50,6 +50,7 @@
 #include "CooldownTable.h"
 #include "DungeonTable.h"
 #include "EquipAffixPoolTable.h"
+#include "EquipAffixQualityTable.h"
 #include "EquipAffixRuleTable.h"
 #include "EquipArtifactTable.h"
 #include "EquipAttributeTable.h"
@@ -86,8 +87,11 @@
 #include "SeasonSealTable.h"
 #include "SkillTable.h"
 #include "SkillPermissionTable.h"
+#include "SkillScrollCraftTable.h"
 #include "TestTable.h"
 #include "TestMultiKeyTable.h"
+#include "TournamentRewardTable.h"
+#include "TournamentRuleTable.h"
 #include "TrialJournalEntryTable.h"
 #include "TrialJournalMilestoneTable.h"
 #include "TrialJournalSealTable.h"
@@ -131,7 +135,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 64;
+	static constexpr int32 TableCount = 68;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -246,6 +250,9 @@ public:
 	UEquipAffixPoolTable* GetEquipAffixPoolTable() const { return EquipAffixPoolTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UEquipAffixQualityTable* GetEquipAffixQualityTable() const { return EquipAffixQualityTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UEquipAffixRuleTable* GetEquipAffixRuleTable() const { return EquipAffixRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -354,10 +361,19 @@ public:
 	USkillPermissionTable* GetSkillPermissionTable() const { return SkillPermissionTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	USkillScrollCraftTable* GetSkillScrollCraftTable() const { return SkillScrollCraftTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTestTable* GetTestTable() const { return TestTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTestMultiKeyTable* GetTestMultiKeyTable() const { return TestMultiKeyTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTournamentRewardTable* GetTournamentRewardTable() const { return TournamentRewardTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UTournamentRuleTable* GetTournamentRuleTable() const { return TournamentRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UTrialJournalEntryTable* GetTrialJournalEntryTable() const { return TrialJournalEntryTable; }
@@ -417,6 +433,8 @@ private:
 	TObjectPtr<UDungeonTable> DungeonTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipAffixPoolTable> EquipAffixPoolTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UEquipAffixQualityTable> EquipAffixQualityTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipAffixRuleTable> EquipAffixRuleTable;
 	UPROPERTY(Transient)
@@ -490,9 +508,15 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<USkillPermissionTable> SkillPermissionTable;
 	UPROPERTY(Transient)
+	TObjectPtr<USkillScrollCraftTable> SkillScrollCraftTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UTestTable> TestTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTestMultiKeyTable> TestMultiKeyTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTournamentRewardTable> TournamentRewardTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UTournamentRuleTable> TournamentRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UTrialJournalEntryTable> TrialJournalEntryTable;
 	UPROPERTY(Transient)

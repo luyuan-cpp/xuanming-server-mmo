@@ -46,4 +46,6 @@ message PlayerPetComp {
   uint32 last_purchase_pet_table_id = 4;
   uint64 last_purchase_pet_id = 5;
   uint64 last_purchase_price_gold = 6;
+  // true = 该角色已完成一次性起步灵狐判定（已发放或老号已有宠不再补发），重登/召回/放生均不重发。
+  bool starter_pet_granted = 7;
 }

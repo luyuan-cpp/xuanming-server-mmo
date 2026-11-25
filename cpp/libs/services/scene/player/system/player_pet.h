@@ -79,6 +79,9 @@ public:
 	// 宠物技能的唯一写入口；只允许主人操作，沿用技能修习的等级比较与银两路径。
 	static uint32_t BuildSkillBook(entt::entity player, uint64_t petId, ListSkillsResponse& response);
 	static void UpgradeSkill(entt::entity player, const UpgradeSkillRequest& request, UpgradeSkillResponse& response);
+	// 技能书研习接缝：只补记新技能到 rank >= 1，绝不顶掉宝宝任何已有技能。
+	static uint32_t CheckCanUnlockSkillFromBook(entt::entity player, uint64_t petId);
+	static uint32_t UnlockSkillFromBook(entt::entity player, uint64_t petId, uint32_t skillTableId);
 
 	// 出战 / 收回。出战同时只能有一只(PetRule.max_pets 管的是携带量,不是出战量)。
 	static uint32_t Summon(entt::entity player, uint64_t petId);
@@ -105,6 +108,14 @@ public:
 	// 被拒绝或服务不可用时推一条提示。返回 kSuccess 只表示「已受理」,名字此刻还没变;
 	// 检查没过或没有就绪的内容安全节点时返回对应的错误码,什么都没发生。
 	static uint32_t RequestRename(entt::entity player, uint64_t petId, const std::string& name);
+
+	static constexpr uint32_t kStarterPetTableId = 1; // 灵狐：新角色一次性起步自用首宠
+
+	// 新角色进城一次性起步首宠发放（core-gameplay-loop.md §3）：
+	//   - 若已标记 starter_pet_granted，直接跳过（召回、失去、重登永不重发）；
+	//   - 老号已有宠物时只置位标记保留原宠；
+	//   - 无宠且未领过的新号/老号发放 1 只 1 级可带灵狐并自动设为出战宠，请求关键存盘并推送列表。
+	static bool EnsureStarterPetGranted(entt::entity player);
 
 	// GM / 未来的捕捉与购买共用的发放入口:铸 pet_id、掷资质、落 PlayerPetComp。
 	// petIdOut 仅在返回 kSuccess 时有效。

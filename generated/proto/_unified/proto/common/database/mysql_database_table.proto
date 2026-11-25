@@ -20,6 +20,7 @@ import "proto/common/component/player_item_hold_comp.proto";
 import "proto/common/component/player_mail_outbox_comp.proto";
 import "proto/common/component/player_season_comp.proto";
 import "proto/common/component/player_trial_journal_comp.proto";
+import "proto/common/component/player_craft_comp.proto";
 import "proto/common/component/time_comp.proto";
 import "proto/common/component/buff_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
@@ -220,6 +221,9 @@ message player_database
   // 放 GROWTH 组：与技能、加点、宠物、赛季印同组，一次存盘所有脏行同事务提交（满足 I3 原子性）。
   // 旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取下一个空闲号 31，后续新字段从 32 起。
   PlayerTrialJournalComp trial_journal_component = 31 [(OptionPersistGroup) = 3];  // GROWTH
+  // 轻量化手艺熟练度（铸器/制卷）、未学技能书架、已书解锁技能与主城原子代打配置（docs/design/equipment-quality-and-skill-crafting-v1.md）。
+  // 放 GROWTH 组：与技能、装备、账本同一次存盘同事务提交（满足 I3 原子性）。旧存档缺失默认为空合法；加载无条件挂组件，存盘缺组件 fail-closed 拒存。取 32，后续从 33 起。
+  PlayerCraftComp craft_component = 32 [(OptionPersistGroup) = 3];  // GROWTH
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

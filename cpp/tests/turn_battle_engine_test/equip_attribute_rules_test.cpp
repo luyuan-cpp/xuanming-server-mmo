@@ -1162,6 +1162,43 @@ TEST(EquipGemFitTest, DesignSocketTableAcceptsExpectedGemTypes) {
 }
 
 // ---------------------------------------------------------------------------
+// RollEnhanceWithPity(唯一满配突破级 +11：概率提前成 + 满次数必成不掉级)
+// ---------------------------------------------------------------------------
+
+TEST(EquipEnhanceRulesTest, RollEnhanceWithPityEarlySuccessResetsPityAndFailIncrementsPity) {
+    // 10% 概率提前成功：命中时保底清零且不标记为保底触发。
+    ScriptedRand hit(std::vector<uint64_t>{999});
+    const auto early = equiprules::RollEnhanceWithPity(1000, 7, 20, hit);
+    EXPECT_TRUE(early.success);
+    EXPECT_FALSE(early.triggeredByPity);
+    EXPECT_EQ(early.nextPityCount, 0u);
+    EXPECT_TRUE(hit.Exhausted());
+
+    // 未命中时失败且保底次数 +1。
+    ScriptedRand miss(std::vector<uint64_t>{1000});
+    const auto failed = equiprules::RollEnhanceWithPity(1000, 7, 20, miss);
+    EXPECT_FALSE(failed.success);
+    EXPECT_FALSE(failed.triggeredByPity);
+    EXPECT_EQ(failed.nextPityCount, 8u);
+    EXPECT_TRUE(miss.Exhausted());
+
+    // 第 19 次已失败（下一次即第 20 次）：保底必成且不消耗随机数、保底清零。
+    ScriptedRand empty(std::vector<uint64_t>{});
+    const auto pitied = equiprules::RollEnhanceWithPity(1000, 19, 20, empty);
+    EXPECT_TRUE(pitied.success);
+    EXPECT_TRUE(pitied.triggeredByPity);
+    EXPECT_EQ(pitied.nextPityCount, 0u);
+    EXPECT_TRUE(empty.Requested().empty());
+
+    // pityLimit == 0 时退回普通强化判定，失败后保底计数恒为 0。
+    ScriptedRand noPityMiss(std::vector<uint64_t>{9999});
+    const auto plainFail = equiprules::RollEnhanceWithPity(1000, 0, 0, noPityMiss);
+    EXPECT_FALSE(plainFail.success);
+    EXPECT_FALSE(plainFail.triggeredByPity);
+    EXPECT_EQ(plainFail.nextPityCount, 0u);
+}
+
+// ---------------------------------------------------------------------------
 // 编译期守卫:CombatStat 的数值 == proto CombatAttributes 的字段号(设计文档 §3.3「三者不得错位」)。
 // proto 改号、或在枚举中间插项,这个文件直接编不过 —— 而不是「抗冰冻」在线上悄悄变成「抗昏睡」。
 // 需要 proto-gen 之后的 actor_attribute_state_comp.pb.h(CombatAttributes 是本期新增的消息)。

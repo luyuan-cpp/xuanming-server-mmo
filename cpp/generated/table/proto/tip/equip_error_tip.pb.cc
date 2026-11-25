@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_equip_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025equip_error_tip.proto*\221\005\n\013equip_error\022"
+    "\n\025equip_error_tip.proto*\222\007\n\013equip_error\022"
     "\022\n\016kEquip_errorOK\020\000\022\030\n\022kEquipItemNotFoun"
     "d\020\340\332\001\022\030\n\022kEquipNotEquipment\020\341\332\001\022\032\n\024kEqui"
     "pLevelNotEnough\020\342\332\001\022\031\n\023kEquipClassMismat"
@@ -52,14 +52,20 @@ const char descriptor_table_protodef_equip_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "upied\020\362\332\001\022\032\n\024kEquipGemSocketEmpty\020\363\332\001\022\033\n"
     "\025kEquipGemTypeMismatch\020\364\332\001\022\026\n\020kEquipGemB"
     "agFull\020\365\332\001\022\037\n\031kEquipEnhanceLevelChanged\020"
-    "\366\332\001B$\n\016com.game.tableZ\022generated/pb/tabl"
-    "eb\006proto3"
+    "\366\332\001\022\"\n\034kEquipAffixAlreadyMaxQuality\020\367\332\001\022"
+    "\035\n\027kEquipAffixPolishExempt\020\370\332\001\022\032\n\024kEquip"
+    "AffixSlotEmpty\020\371\332\001\022\034\n\026kEquipAffixReforge"
+    "Same\020\372\332\001\022\037\n\031kEquipBindConfirmRequired\020\373\332"
+    "\001\022\035\n\027kEquipPolishPityChanged\020\374\332\001\022\036\n\030kEqu"
+    "ipCraftGoldNotEnough\020\375\332\001\022\"\n\034kEquipProxyM"
+    "asterUnavailable\020\376\332\001B$\n\016com.game.tableZ\022"
+    "generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_equip_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_equip_5ferror_5ftip_2eproto = {
     false,
     false,
-    729,
+    986,
     descriptor_table_protodef_equip_5ferror_5ftip_2eproto,
     "equip_error_tip.proto",
     &descriptor_table_equip_5ferror_5ftip_2eproto_once,
@@ -78,7 +84,7 @@ equip_error_descriptor() {
   return file_level_enum_descriptors_equip_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t equip_error_internal_data_[] = {
-    65536u, 1507328u, 28015u, 28007u, 28019u, 28003u, 28011u, 28017u, 28021u, 28001u, 28005u, 28009u, 28013u, 28016u, 28018u, 28020u, 28022u, 28000u, 28002u, 28004u, 28006u, 28008u, 28010u, 28012u, 28014u, };
+    65536u, 2031616u, 28015u, 28007u, 28023u, 28003u, 28011u, 28019u, 28027u, 28001u, 28005u, 28009u, 28013u, 28017u, 28021u, 28025u, 28029u, 28000u, 28002u, 28004u, 28006u, 28008u, 28010u, 28012u, 28014u, 28016u, 28018u, 28020u, 28022u, 28024u, 28026u, 28028u, 28030u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

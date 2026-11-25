@@ -949,6 +949,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     kAllowDeadTargetFieldNumber = 56,
     kForbidCopyFieldNumber = 57,
     kSeasonIdFieldNumber = 58,
+    kScrollIdFieldNumber = 59,
+    kRarityTierFieldNumber = 60,
   };
   // repeated uint32 skill_type = 2;
   [[nodiscard]] int skill_type_size()
@@ -1638,11 +1640,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
   void _internal_set_season_id(::uint32_t value);
 
   public:
+  // uint32 scroll_id = 59;
+  void clear_scroll_id() ;
+  [[nodiscard]] ::uint32_t scroll_id() const;
+  void set_scroll_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scroll_id() const;
+  void _internal_set_scroll_id(::uint32_t value);
+
+  public:
+  // uint32 rarity_tier = 60;
+  void clear_rarity_tier() ;
+  [[nodiscard]] ::uint32_t rarity_tier() const;
+  void set_rarity_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rarity_tier() const;
+  void _internal_set_rarity_tier(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 58,
+      ::google::protobuf::internal::TcParseTable<5, 60,
                           3, 138,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1733,6 +1755,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     ::uint32_t allow_dead_target_;
     ::uint32_t forbid_copy_;
     ::uint32_t season_id_;
+    ::uint32_t scroll_id_;
+    ::uint32_t rarity_tier_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3829,6 +3853,54 @@ inline ::uint32_t SkillTable::_internal_season_id() const {
 inline void SkillTable::_internal_set_season_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = value;
+}
+
+// uint32 scroll_id = 59;
+inline void SkillTable::clear_scroll_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x04000000U);
+}
+inline ::uint32_t SkillTable::scroll_id() const {
+  // @@protoc_insertion_point(field_get:SkillTable.scroll_id)
+  return _internal_scroll_id();
+}
+inline void SkillTable::set_scroll_id(::uint32_t value) {
+  _internal_set_scroll_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x04000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.scroll_id)
+}
+inline ::uint32_t SkillTable::_internal_scroll_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_id_;
+}
+inline void SkillTable::_internal_set_scroll_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = value;
+}
+
+// uint32 rarity_tier = 60;
+inline void SkillTable::clear_rarity_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x08000000U);
+}
+inline ::uint32_t SkillTable::rarity_tier() const {
+  // @@protoc_insertion_point(field_get:SkillTable.rarity_tier)
+  return _internal_rarity_tier();
+}
+inline void SkillTable::set_rarity_tier(::uint32_t value) {
+  _internal_set_rarity_tier(value);
+  SetHasBit(_impl_._has_bits_[1], 0x08000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.rarity_tier)
+}
+inline ::uint32_t SkillTable::_internal_rarity_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rarity_tier_;
+}
+inline void SkillTable::_internal_set_rarity_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rarity_tier_ = value;
 }
 
 // repeated .Skillrequired_item required_item = 21;

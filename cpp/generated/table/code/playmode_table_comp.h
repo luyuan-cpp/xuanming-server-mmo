@@ -34,6 +34,10 @@ struct PlayModeTeam_size_maxComp {
     uint32_t value;
 };
 
+struct PlayModeAllowed_team_sizesComp {
+    std::span<const uint32_t> values;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -53,4 +57,8 @@ inline PlayModeEnabledComp MakePlayModeEnabledComp(const PlayModeTable& row) {
 }
 inline PlayModeTeam_size_maxComp MakePlayModeTeam_size_maxComp(const PlayModeTable& row) {
     return { row.team_size_max() };
+}
+inline PlayModeAllowed_team_sizesComp MakePlayModeAllowed_team_sizesComp(const PlayModeTable& row) {
+    const auto& rf = row.allowed_team_sizes();
+    return { std::span<const uint32_t>(rf.data(), rf.size()) };
 }

@@ -1,0 +1,152 @@
+{
+ "data": [
+  {
+   "badge_code": "badge_tournament_champion",
+   "desc": "全服总冠军（第1名）",
+   "gold_amount": 120000,
+   "id": 1,
+   "item_counts": [
+    30,
+    30,
+    60
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜你的战队夺得本赛季群仙问道赛全服总冠军！随信奉上冠军奖励与专属荣耀。",
+   "mail_title": "群仙问道赛·全服总冠军奖励",
+   "max_rank": 1,
+   "min_rank": 1,
+   "tier_kind": 1,
+   "title_code": "tournament_champion"
+  },
+  {
+   "badge_code": "badge_tournament_runner_up",
+   "desc": "全服亚军（第2名）",
+   "gold_amount": 80000,
+   "id": 2,
+   "item_counts": [
+    20,
+    20,
+    40
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜你的战队斩获本赛季群仙问道赛全服亚军！请查收赛季奖励。",
+   "mail_title": "群仙问道赛·全服亚军奖励",
+   "max_rank": 2,
+   "min_rank": 2,
+   "tier_kind": 2,
+   "title_code": "tournament_runner_up"
+  },
+  {
+   "badge_code": "badge_tournament_top4",
+   "desc": "全服四强（第3-4名）",
+   "gold_amount": 50000,
+   "id": 3,
+   "item_counts": [
+    14,
+    14,
+    30
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜你的战队晋级本赛季群仙问道赛全服四强！请查收赛季奖励。",
+   "mail_title": "群仙问道赛·全服四强奖励",
+   "max_rank": 4,
+   "min_rank": 3,
+   "tier_kind": 3,
+   "title_code": "tournament_top4"
+  },
+  {
+   "badge_code": "badge_tournament_top8",
+   "desc": "全服八强（第5-8名）",
+   "gold_amount": 35000,
+   "id": 4,
+   "item_counts": [
+    10,
+    10,
+    20
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜你的战队闯入本赛季群仙问道赛全服八强！请查收赛季奖励。",
+   "mail_title": "群仙问道赛·全服八强奖励",
+   "max_rank": 8,
+   "min_rank": 5,
+   "tier_kind": 4
+  },
+  {
+   "badge_code": "badge_tournament_top16",
+   "desc": "全服十六强（第9-16名）",
+   "gold_amount": 20000,
+   "id": 5,
+   "item_counts": [
+    6,
+    6,
+    15
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "恭喜你的战队入围本赛季群仙问道赛十六强！请查收赛季奖励。",
+   "mail_title": "群仙问道赛·全服十六强奖励",
+   "max_rank": 16,
+   "min_rank": 9,
+   "tier_kind": 5
+  },
+  {
+   "badge_code": "badge_tournament_participant",
+   "desc": "参赛保底（完赛≥2场）",
+   "gold_amount": 12000,
+   "id": 6,
+   "item_counts": [
+    4,
+    4,
+    10
+   ],
+   "item_ids": [
+    3403,
+    3406,
+    20
+   ],
+   "mail_body": "感谢参与本赛季群仙问道赛并完成达标场次，奉上赛季参赛鼓励奖！",
+   "mail_title": "群仙问道赛·赛季参赛保底奖",
+   "max_rank": 0,
+   "min_rank": 0,
+   "tier_kind": 6
+  },
+  {
+   "badge_code": "badge_tournament_cheer",
+   "desc": "免费助威命中（所选队进四强/夺冠）",
+   "gold_amount": 5000,
+   "id": 7,
+   "item_counts": [
+    1,
+    5
+   ],
+   "item_ids": [
+    3403,
+    20
+   ],
+   "mail_body": "你在本赛季免费助威的战队闯入四强或夺冠，奉上观赛伯乐纪念礼！",
+   "mail_title": "群仙问道赛·观赛助威纪念奖",
+   "max_rank": 0,
+   "min_rank": 0,
+   "tier_kind": 7
+  }
+ ]
+}

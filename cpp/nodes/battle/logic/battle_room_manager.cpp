@@ -619,6 +619,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     room->battleConfigId = request.battle_config_id();
     // 活动上下文原样保存(未填 = kind NONE);BuildResult 回显进终局原件,结果通道在 match(§6.20)
     room->activityContext = request.activity_context();
+    room->rankedContext = request.ranked_context();
     // 观战可见性随原件冻结,只在这里赋值一次(AddObserver 的第二道闸据此执法;未填 = 不可观战)
     room->spectateVisibility = request.spectate_visibility();
     room->outcomeProtocol = request.outcome_protocol_version();
@@ -903,6 +904,10 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
     // 补拉路径同样要脱敏 + 带本人道具余量(D39:收缩后客户端丢帧只能靠这条补,
     // 只改广播不改这里,重连一次就把对手冷却全看见了)
     const bool isObserver = room->routingByPlayer.find(playerId) == room->routingByPlayer.end();
+    if (!isObserver)
+    {
+        room->engine.MarkPlayerEntered(playerId);
+    }
     RedactStateForViewer(response, isObserver ? 0 : playerId);
     if (!isObserver)
     {
@@ -1460,6 +1465,15 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
         for (const auto player : players) team->add_player_ids(player);
     }
     event.set_finished_at_ms(TimeSystem::NowMillisecondsUTC());
+    if (room.rankedContext.season_id() != 0)
+    {
+        *event.mutable_ranked_context() = room.rankedContext;
+    }
+    for (const auto& [playerId, routing] : room.routingByPlayer)
+    {
+        (void)routing;
+        *event.add_participation_facts() = room.engine.BuildParticipationFact(playerId);
+    }
     turnbattle::FillBattleResultActivityFields(room.activityContext, std::move(fled), std::move(dead), event);
     if (!turnbattle::FreezeBattleSettlementSource(event, std::move(settlements)))
         LOG_ERROR << "metric=battle_settlement_source_invalid;terminal remains unknown";
@@ -2369,6 +2383,10 @@ bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const ui
         old->forceClose();
     }
     slot = conn;
+    if (role == ::BATTLE_TICKET_ROLE_PARTICIPANT)
+    {
+        room->engine.MarkPlayerEntered(playerId);
+    }
     if (role == ::BATTLE_TICKET_ROLE_OBSERVER)
     {
         // 挂上直连即停止席位计时(连接宽限 / 重连宽限)。不重挂定时器:早到一次由回收入口重挂

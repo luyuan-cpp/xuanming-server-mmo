@@ -73,6 +73,19 @@ service MatchService {
   rpc SaveRankedPreset(SaveRankedPresetRequest) returns (SaveRankedPresetResponse) {}
   rpc UpdateRankedCosmetic(UpdateRankedCosmeticRequest) returns (UpdateRankedCosmeticResponse) {}
   rpc GetRankedBattleResult(GetRankedBattleResultRequest) returns (GetRankedBattleResultResponse) {}
+
+  // ---- 全服赛季战队锦标赛《群仙问道赛》V1(docs/design/season-team-tournament-v1.md):请求只认会话本人 ----
+  rpc GetTournamentOverview(GetTournamentOverviewRequest) returns (GetTournamentOverviewResponse) {}
+  rpc CreateTournamentSquad(CreateTournamentSquadRequest) returns (CreateTournamentSquadResponse) {}
+  rpc InviteTournamentMember(InviteTournamentMemberRequest) returns (InviteTournamentMemberResponse) {}
+  rpc RespondTournamentInvite(RespondTournamentInviteRequest) returns (RespondTournamentInviteResponse) {}
+  rpc LeaveTournamentSquad(LeaveTournamentSquadRequest) returns (LeaveTournamentSquadResponse) {}
+  rpc UpdateTournamentLineup(UpdateTournamentLineupRequest) returns (UpdateTournamentLineupResponse) {}
+  rpc RegisterTournamentSquad(RegisterTournamentSquadRequest) returns (RegisterTournamentSquadResponse) {}
+  rpc ListTournamentStandings(ListTournamentStandingsRequest) returns (ListTournamentStandingsResponse) {}
+  rpc StartTournamentMatch(StartTournamentMatchRequest) returns (StartTournamentMatchResponse) {}
+  rpc CheerTournamentSquad(CheerTournamentSquadRequest) returns (CheerTournamentSquadResponse) {}
+  rpc ClaimTournamentReward(ClaimTournamentRewardRequest) returns (ClaimTournamentRewardResponse) {}
 }
 
 // ----- Match mode config -----
@@ -86,7 +99,10 @@ enum MatchMode {
   MATCH_MODE_PVE_SOLO    = 4; // 回合制 PVE 单人,即时开战(伪匹配)
   MATCH_MODE_PVE_TEAM    = 5; // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
   MATCH_MODE_PVP_CHALLENGE = 6; // 场景发起 PK(切磋):点名成局,不入队
-  MATCH_MODE_PVP_TEAM = 7; // 真人人数档PVP：每侧1..5人，整支队伍保持同侧，等待真人对手。
+  MATCH_MODE_PVP_TEAM = 7; // 真人人数档PVP：每侧1..5人，整支队伍保持同侧，等待真人对手（真实养成，正式计分）。
+  MATCH_MODE_POLARITY_5V5 = 8; // 轮换娱乐场·物法易势 5V5：每侧 5 人、10 人公平团战，使用 6 套免费预设，不计正式评分。
+  // 9 / 10 预留给帮战 V2(docs/design/guild-play-v2.md: GUILD_WAR_PVP / GUILD_WAR_SIEGE)。
+  MATCH_MODE_SEASON_TOURNAMENT = 11; // 全服赛季战队锦标赛《群仙问道赛》:本人真实养成、公开 L2 观战、强制录回放、不进常规 Elo 榜。
 }
 
 // ----- Join queue -----
@@ -491,6 +507,14 @@ message RankedSeasonInfo {
   string champion_name = 17;
   int64 champion_rating_centi = 18;
   bool rank_board_sealed = 19;
+  // 服务端当前开放的正式会武每侧人数档（来自 PlayMode.allowed_team_sizes，如首测 [1, 3]，在线达标后放开 [1, 3, 5]）。
+  repeated uint32 allowed_team_sizes = 20;
+  // true = 正式人宠会武使用本人真实养成（装备/词条/法宝/技能/宝宝），免费预设仅用于轮换娱乐场。
+  bool uses_own_progression = 21;
+  // 常驻正式会武主力档全集（如 [1, 3, 5]），用于客户端区分主力待开放档与特殊玩法档。
+  repeated uint32 primary_team_sizes = 22;
+  // 归属特殊玩法开关的人数档（如 [2, 4]，对应帮会 2V2 会武 / 主题 4V4 特殊赛）。
+  repeated uint32 special_team_sizes = 23;
 }
 
 message RankedPlayerSeasonSummary {
@@ -575,4 +599,293 @@ message GetRankedBattleResultRequest {
 message GetRankedBattleResultResponse {
   TipInfoMessage error_message = 1;
   RankedBattleSettlementView result = 2;
+}
+
+// ----- 全服赛季战队锦标赛《群仙问道赛》V1(docs/design/season-team-tournament-v1.md) -----
+
+enum TournamentStage {
+  TOURNAMENT_STAGE_UNSPECIFIED  = 0;
+  TOURNAMENT_STAGE_REGISTRATION = 1; // 报名建队与阵容锁定期
+  TOURNAMENT_STAGE_QUALIFIER    = 2; // 宽时间窗海选积分赛
+  TOURNAMENT_STAGE_KNOCKOUT     = 3; // 全服单败淘汰赛与总决赛
+  TOURNAMENT_STAGE_SETTLED      = 4; // 封榜领奖与冠军殿堂展示期
+}
+
+enum TournamentSquadState {
+  TOURNAMENT_SQUAD_STATE_UNSPECIFIED = 0;
+  TOURNAMENT_SQUAD_STATE_DRAFT       = 1; // 筹备中(未锁定,可增删改成员)
+  TOURNAMENT_SQUAD_STATE_REGISTERED  = 2; // 已锁定本赛季报名(海选/淘汰中有效)
+  TOURNAMENT_SQUAD_STATE_ELIMINATED  = 3; // 已淘汰或海选未晋级
+  TOURNAMENT_SQUAD_STATE_CHAMPION    = 4; // 本赛季全服总冠军
+  TOURNAMENT_SQUAD_STATE_DISBANDED   = 5; // 报名期已解散或截止未达人数作废
+}
+
+enum TournamentMemberRole {
+  TOURNAMENT_MEMBER_ROLE_UNSPECIFIED = 0;
+  TOURNAMENT_MEMBER_ROLE_CAPTAIN     = 1; // 队长(默认首发)
+  TOURNAMENT_MEMBER_ROLE_STARTER     = 2; // 首发队员
+  TOURNAMENT_MEMBER_ROLE_SUBSTITUTE  = 3; // 替补队员
+}
+
+enum TournamentMatchPhase {
+  TOURNAMENT_MATCH_PHASE_UNSPECIFIED = 0;
+  TOURNAMENT_MATCH_PHASE_QUALIFIER   = 1; // 海选积分赛
+  TOURNAMENT_MATCH_PHASE_KNOCKOUT    = 2; // 淘汰赛/总决赛
+}
+
+enum TournamentMatchState {
+  TOURNAMENT_MATCH_STATE_UNSPECIFIED      = 0;
+  TOURNAMENT_MATCH_STATE_WAITING_OPPONENT = 1; // 海选等待匹配对手 / 淘汰赛等待对阵双方就绪
+  TOURNAMENT_MATCH_STATE_READY            = 2; // 双方已配对/待备战开打
+  TOURNAMENT_MATCH_STATE_IN_BATTLE        = 3; // 激战中(支持全服 L2 公开观战)
+  TOURNAMENT_MATCH_STATE_FINISHED         = 4; // 已决胜负/平局
+  TOURNAMENT_MATCH_STATE_BYE              = 5; // 轮空自动晋级
+  TOURNAMENT_MATCH_STATE_FORFEIT          = 6; // 超时弃权裁决
+}
+
+enum TournamentRewardTierKind {
+  TOURNAMENT_REWARD_TIER_UNSPECIFIED = 0;
+  TOURNAMENT_REWARD_TIER_CHAMPION    = 1; // 冠军(第1名)
+  TOURNAMENT_REWARD_TIER_RUNNER_UP   = 2; // 亚军(第2名)
+  TOURNAMENT_REWARD_TIER_TOP4        = 3; // 四强(第3-4名)
+  TOURNAMENT_REWARD_TIER_TOP8        = 4; // 八强(第5-8名)
+  TOURNAMENT_REWARD_TIER_TOP16       = 5; // 十六强(第9-16名)
+  TOURNAMENT_REWARD_TIER_PARTICIPANT = 6; // 参赛保底(全队完赛>=2场)
+  TOURNAMENT_REWARD_TIER_CHEER       = 7; // 免费助威命中(所选队进四强/夺冠)
+}
+
+enum TournamentRewardDeliveryState {
+  TOURNAMENT_REWARD_DELIVERY_UNSPECIFIED = 0;
+  TOURNAMENT_REWARD_DELIVERY_CLAIMABLE   = 1; // 已结算待领取/待投递
+  TOURNAMENT_REWARD_DELIVERY_CLAIMED     = 2; // 已领取/已发至邮箱
+  TOURNAMENT_REWARD_DELIVERY_ABANDONED   = 3; // 异常放弃待人工核查
+}
+
+message TournamentSeasonView {
+  uint32 season_id = 1;
+  string season_key = 2;
+  string season_name = 3;
+  uint32 rule_version = 4;
+  TournamentStage stage = 5;
+  bool enabled = 6;
+  uint32 battle_team_size = 7;          // 单场出战人数(首测=3)
+  uint32 roster_max_size = 8;           // 名册上限(首测=4)
+  uint32 min_level = 9;                 // 最低等级要求(首测=15)
+  uint32 qualifier_max_matches = 10;    // 海选最多场次(首测=6)
+  uint32 participation_min_matches = 11;// 保底完赛场次(首测=2)
+  uint32 knockout_max_teams = 12;       // 最大淘汰席位(首测=16)
+  uint32 knockout_team_count = 13;      // 本季实际动态淘汰席位(0/2/4/8/16)
+  uint32 registered_squad_count = 14;   // 当前全服已报名锁定战队数
+  uint64 registration_start_ms = 15;
+  uint64 qualifier_start_ms = 16;
+  uint64 knockout_start_ms = 17;
+  uint64 settle_start_ms = 18;
+  uint64 end_ms = 19;
+  uint64 champion_squad_id = 20;
+  string champion_squad_name = 21;
+  string champion_member_summary = 22;  // 冠军成员摘要(供冠军殿堂展示)
+}
+
+message TournamentMemberView {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint32 zone_id = 3;
+  TournamentMemberRole role = 4;
+  uint32 starter_slot = 5; // 1..battle_team_size 为首发位,0 为替补
+  uint64 joined_ms = 6;
+}
+
+message TournamentSquadView {
+  uint64 squad_id = 1;
+  uint32 season_id = 2;
+  string name = 3;
+  uint64 captain_player_id = 4;
+  TournamentSquadState state = 5;
+  uint32 member_count = 6;
+  uint32 qualifier_points = 7;
+  uint32 qualifier_played = 8;
+  uint32 qualifier_wins = 9;
+  uint32 qualifier_losses = 10;
+  uint32 qualifier_draws = 11;
+  uint32 seed_rank = 12;   // 海选定档名次(1起,0=未定档)
+  uint32 final_rank = 13;  // 赛季最终名次(1起,0=未定档)
+  uint32 cheer_count = 14; // 全服免费助威票数
+  uint64 registered_ms = 15;
+  repeated TournamentMemberView members = 16;
+}
+
+message TournamentInviteView {
+  uint64 squad_id = 1;
+  uint32 season_id = 2;
+  string squad_name = 3;
+  uint64 inviter_player_id = 4;
+  string inviter_name = 5;
+  uint32 current_member_count = 6;
+  uint32 roster_max_size = 7;
+  uint64 created_ms = 8;
+  uint64 expires_ms = 9;
+}
+
+message TournamentMatchView {
+  uint64 match_id = 1;
+  uint32 season_id = 2;
+  TournamentMatchPhase phase = 3;
+  uint32 round_index = 4;        // 海选轮次/淘汰赛轮次(1起)
+  uint32 slot_index = 5;         // 淘汰赛对阵槽位(0起)
+  uint64 squad_a_id = 6;
+  string squad_a_name = 7;
+  uint32 squad_a_seed = 8;
+  uint64 squad_b_id = 9;         // 0 表示轮空或海选待配对
+  string squad_b_name = 10;
+  uint32 squad_b_seed = 11;
+  bool ready_a = 12;
+  bool ready_b = 13;
+  TournamentMatchState state = 14;
+  uint64 battle_id = 15;         // 开战后非 0,可直接传给 WatchBattle / GetBattleReport
+  uint64 winner_squad_id = 16;
+  eBattleOutcome outcome = 17;
+  bool featured_spectate = 18;   // true 表示已标全服 L2 推荐观战
+  uint64 scheduled_start_ms = 19;
+  uint64 deadline_ms = 20;
+  uint64 finished_ms = 21;
+}
+
+message TournamentRewardItem {
+  uint32 item_id = 1;
+  uint32 count = 2;
+}
+
+message TournamentRewardTierView {
+  uint32 tier_id = 1;
+  TournamentRewardTierKind tier_kind = 2;
+  uint32 min_rank = 3;
+  uint32 max_rank = 4;
+  uint64 gold_amount = 5;
+  repeated TournamentRewardItem items = 6;
+  string title_code = 7;
+  string badge_code = 8;
+  string desc = 9;
+}
+
+message TournamentPlayerRewardView {
+  uint64 reward_id = 1;
+  uint32 season_id = 2;
+  TournamentRewardTierKind tier_kind = 3;
+  uint32 tier_id = 4;
+  uint32 final_rank = 5;
+  uint64 gold_amount = 6;
+  repeated TournamentRewardItem items = 7;
+  string title_code = 8;
+  string badge_code = 9;
+  TournamentRewardDeliveryState delivery_state = 10;
+  uint64 mail_id = 11;
+  uint64 claimed_ms = 12;
+}
+
+message GetTournamentOverviewRequest {
+  bool include_history = 1; // true 同时返回往届冠军殿堂与个人历史领奖记录
+}
+message GetTournamentOverviewResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSeasonView current_season = 2;
+  TournamentSquadView my_squad = 3;                        // 未入队为空
+  repeated TournamentInviteView pending_invites = 4;       // 本人待处理战队邀请
+  TournamentMatchView my_active_match = 5;                 // 本队当前活跃海选/淘汰对局(无则空)
+  repeated TournamentMatchView featured_matches = 6;       // 当前进行中的全服精选观战局
+  uint64 my_cheered_squad_id = 7;                          // 本季已免费助威战队(0=未助威)
+  string my_cheered_squad_name = 8;
+  repeated TournamentRewardTierView reward_tiers = 9;      // 全档位奖励说明(来自配置表)
+  repeated TournamentPlayerRewardView my_rewards = 10;     // 本季与历史奖励账单
+  repeated TournamentSeasonView hall_of_fame = 11;         // 历届冠军殿堂(season_id 降序)
+  uint64 server_time_ms = 12;
+}
+
+message CreateTournamentSquadRequest {
+  string squad_name = 1; // 2..12 字符,服务端审核并同季去重
+}
+message CreateTournamentSquadResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSquadView squad = 2;
+}
+
+message InviteTournamentMemberRequest {
+  uint64 target_player_id = 1;
+}
+message InviteTournamentMemberResponse {
+  TipInfoMessage error_message = 1;
+  TournamentInviteView invite = 2;
+}
+
+message RespondTournamentInviteRequest {
+  uint64 squad_id = 1;
+  bool accept = 2;
+}
+message RespondTournamentInviteResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSquadView squad = 2; // accept=true 成功时返回最新战队视图
+}
+
+message LeaveTournamentSquadRequest {
+  uint64 target_player_id = 1; // 0 或本人 ID 表示主动退队/解散;队长传队员 ID 表示踢人
+}
+message LeaveTournamentSquadResponse {
+  TipInfoMessage error_message = 1;
+  bool squad_disbanded = 2;
+  TournamentSquadView squad = 3; // 未解散且仍在本队(如踢人后)时返回最新战队视图
+}
+
+message UpdateTournamentLineupRequest {
+  repeated uint64 starter_player_ids = 1; // 恰好 battle_team_size 名本队成员,顺序即首发槽位
+}
+message UpdateTournamentLineupResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSquadView squad = 2;
+}
+
+message RegisterTournamentSquadRequest {}
+message RegisterTournamentSquadResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSquadView squad = 2;
+}
+
+message ListTournamentStandingsRequest {
+  uint32 season_id = 1; // 0 = 当前赛季
+  uint32 page = 2;      // 1 起,0 按 1
+  uint32 page_size = 3; // 缺省 20,上限 50
+}
+message ListTournamentStandingsResponse {
+  TipInfoMessage error_message = 1;
+  TournamentSeasonView season = 2;
+  repeated TournamentSquadView standings = 3;        // 按海选积分/最终名次排序
+  TournamentSquadView my_squad = 4;                  // 本人战队摘录(可能不在当前页)
+  uint32 total_squads = 5;
+  repeated TournamentMatchView knockout_bracket = 6; // 淘汰赛对阵树(按 round_index, slot_index 升序)
+  uint64 server_time_ms = 7;
+}
+
+message StartTournamentMatchRequest {
+  uint64 match_id = 1;                   // 海选传 0;淘汰赛传指定对局 match_id
+  repeated uint64 lineup_player_ids = 2; // 本场出战成员(空则沿用已保存首发名单)
+}
+message StartTournamentMatchResponse {
+  TipInfoMessage error_message = 1;
+  TournamentMatchView match = 2;
+  uint64 battle_id = 3; // 立即成局时非 0;等待对手/对端就绪时为 0
+}
+
+message CheerTournamentSquadRequest {
+  uint64 squad_id = 1;
+}
+message CheerTournamentSquadResponse {
+  TipInfoMessage error_message = 1;
+  uint64 squad_id = 2;
+  uint32 squad_cheer_count = 3;
+}
+
+message ClaimTournamentRewardRequest {
+  uint32 season_id = 1; // 0 = 领取本人所有已结算未领奖励;非 0 = 仅指定赛季
+}
+message ClaimTournamentRewardResponse {
+  TipInfoMessage error_message = 1;
+  repeated TournamentPlayerRewardView claimed_rewards = 2;
 }

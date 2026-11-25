@@ -29,6 +29,7 @@ struct ConditionTableSnapshot;
 struct CooldownTableSnapshot;
 struct DungeonTableSnapshot;
 struct EquipAffixPoolTableSnapshot;
+struct EquipAffixQualityTableSnapshot;
 struct EquipAffixRuleTableSnapshot;
 struct EquipArtifactTableSnapshot;
 struct EquipAttributeTableSnapshot;
@@ -65,8 +66,11 @@ struct SeasonRuleTableSnapshot;
 struct SeasonSealTableSnapshot;
 struct SkillTableSnapshot;
 struct SkillPermissionTableSnapshot;
+struct SkillScrollCraftTableSnapshot;
 struct TestTableSnapshot;
 struct TestMultiKeyTableSnapshot;
+struct TournamentRewardTableSnapshot;
+struct TournamentRuleTableSnapshot;
 struct TrialJournalEntryTableSnapshot;
 struct TrialJournalMilestoneTableSnapshot;
 struct TrialJournalSealTableSnapshot;
@@ -78,7 +82,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "8a3cb14b8c44ed4e";
+inline constexpr std::string_view kTableSchemaDigest = "2d08ed0321d964c6";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -134,6 +138,8 @@ struct TableSet {
     std::shared_ptr<const DungeonTableSnapshot> dungeonTable;
 
     std::shared_ptr<const EquipAffixPoolTableSnapshot> equipAffixPoolTable;
+
+    std::shared_ptr<const EquipAffixQualityTableSnapshot> equipAffixQualityTable;
 
     std::shared_ptr<const EquipAffixRuleTableSnapshot> equipAffixRuleTable;
 
@@ -207,9 +213,15 @@ struct TableSet {
 
     std::shared_ptr<const SkillPermissionTableSnapshot> skillPermissionTable;
 
+    std::shared_ptr<const SkillScrollCraftTableSnapshot> skillScrollCraftTable;
+
     std::shared_ptr<const TestTableSnapshot> testTable;
 
     std::shared_ptr<const TestMultiKeyTableSnapshot> testMultiKeyTable;
+
+    std::shared_ptr<const TournamentRewardTableSnapshot> tournamentRewardTable;
+
+    std::shared_ptr<const TournamentRuleTableSnapshot> tournamentRuleTable;
 
     std::shared_ptr<const TrialJournalEntryTableSnapshot> trialJournalEntryTable;
 

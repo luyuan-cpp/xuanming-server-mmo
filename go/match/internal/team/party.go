@@ -113,6 +113,18 @@ func (s *Service) markFillSupported(view *teampb.TeamView) {
 	}
 	view.MatchFillSupported = !s.svcCtx.Config.Team.FillQueueDisabled
 	view.PvpMatchSupported = true
+	cat := s.svcCtx.ActiveRanked()
+	ruleVer := cat.RuleVersion()
+	view.RankedRuleVersion = ruleVer
+	allConfirmed := len(view.Members) > 0
+	for _, m := range view.Members {
+		if !m.GetRankedPresetConfirmed() || m.GetRankedRuleVersion() != ruleVer ||
+			!cat.IsValidPair(m.GetRankedCharacterPresetId(), m.GetRankedPetPresetId()) {
+			allConfirmed = false
+			break
+		}
+	}
+	view.RankedPresetsAllConfirmed = allConfirmed
 }
 
 // pushMembersSnapshot 由一次 ReadMembers 给 recipients 里仍在本队的人推当前视图(epoch 同源,§C.4)。

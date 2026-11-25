@@ -408,8 +408,8 @@ func validateTerminalResult(f *pb.MatchFormationRecord, event *kafkapb.BattleRes
 	// match 侧时刻,两台主机比先后,battle 时钟稍慢时几秒就分出胜负的局(逃跑、秒杀)会被永久拒收、截止后整局作废。
 	// 它只给 scene 的近期战绩与帮会补登记作展示时刻、给帮会结算延迟作指标,不参与任何裁决;终局属于哪一局由
 	// placement_operation_id + target_instance_id 与持久原件逐项核对,不靠时间先后。帮会侧同样只要求非 0。
-	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs == 0 || !proto.Equal(event.ActivityContext, r.ActivityContext) {
-		return errors.New("终局配置、活动不符或缺结束时刻")
+	if event.BattleId != r.BattleId || event.BattleConfigId != r.BattleConfigId || event.MatchMode != r.MatchMode || event.FinishedAtMs == 0 || !proto.Equal(event.ActivityContext, r.ActivityContext) || !proto.Equal(event.RankedContext, r.RankedContext) {
+		return errors.New("终局配置、活动或排位上下文不符或缺结束时刻")
 	}
 	if len(event.Settlements) != len(members) {
 		return errors.New("终局个人原件全集与持久创建成员不符")

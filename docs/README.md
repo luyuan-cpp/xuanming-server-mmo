@@ -161,6 +161,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [equipment-eight-slot-implementation.md](design/equipment-eight-slot-implementation.md) — 八部位装备：代码接入与验证
 - [equipment-eight-slot-planning.md](design/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
+- [equipment-quality-and-skill-crafting-v1.md](design/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
 - [equipment-recycling-trade-economy-candidate.md](design/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
 - [equipment-recycling-trade-economy-v1.md](design/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
 - [equipment-v1-affixes-artifacts.md](design/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
@@ -171,6 +172,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [guild-actor-architecture.md](design/guild-actor-architecture.md) — Guild 存储架构现状与 Actor 历史提案
 - [guild-play-ui-handoff.md](design/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v1.md](design/guild-play-v1.md) — 帮会玩法首发 V1 · 帮会会武与同道历练
+- [guild-play-v2.md](design/guild-play-v2.md) — 帮会玩法 V2 · 全天无匹配帮战、野外任意异帮直打、江湖追杀令与三灵脉争夺
+- [guild-play-v2-ui-handoff.md](design/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接
 - [guild-zone-client-access.md](design/guild-zone-client-access.md) — 公会:按 zone 隔离的客户端接入
 - [guild_friend_service_notes_zh.md](design/guild_friend_service_notes_zh.md) — 公会与好友服务实现笔记
 - [guild_ranking_architecture.md](design/guild_ranking_architecture.md) — 帮会排行榜架构 · [EN](design/guild_ranking_architecture_en.md) · [中文](design/guild_ranking_architecture_zh.md)
@@ -182,6 +185,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [player-attribute-allocation.md](design/player-attribute-allocation.md) — 角色属性加点系统
 - [player-features-ui.md](design/player-features-ui.md) — 背包、任务、活动客户端读取接口
 - [player-pet.md](design/player-pet.md) — 宝宝(宠物)系统 —— 核心线
+- [season-pvp-pve-economy-unified-v1.md](design/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
+- [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
+- [season-team-tournament-v1.md](design/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
+- [season-team-tournament-v1-ui-handoff.md](design/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
 - [stall-system.md](design/stall-system.md) — 摆摊系统设计(草案)
 - [team-system.md](design/team-system.md) — 组队系统设计(team-in-match)
 
@@ -300,7 +307,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 - [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
 - [biyuan-water-palace-scene5-nav-20261123.md](design/biyuan-water-palace-scene5-nav-20261123.md) — 碧渊水宫本体（`biyuan-water-palace` / 场景 5）服务端导航与配表接入设计方案
-- [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：轻量玩法 V1、UI 规格与双机交接
+- [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：深度策略玩法 V2、UI 美术规格与双机交接
 - [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象永久收藏衣柜、形象卡解锁与 1 小时免费试用设计
 - [character-background-collection-design.md](design/character-background-collection-design.md) — 《五行奇谈》人物志与角色收藏设计
 - [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
@@ -319,6 +326,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
 - [data-service-breaker-per-logical-db.md](design/data-service-breaker-per-logical-db.md) — data_service 的熔断:服务端从按方法改成按逻辑库,调用方关掉按方法的客户端熔断
 - [disconnect-reconnect-audit-20261020.md](design/disconnect-reconnect-audit-20261020.md) — 断线重连恢复审计（2026-10-20）
+- [economy-anti-scam-ui-codex-handoff.md](design/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 制作任务书（Codex 美术交付规格）
 - [gameplay-unified-design-v1.md](design/gameplay-unified-design-v1.md) — 《五行奇谈》全局玩法统一收口设计方案（V1 提案）
 - [gateway-zone-health-publish-20261111.md](design/gateway-zone-health-publish-20261111.md) — 网关区服健康:每 zone 发布汇总记录,网关只读汇总(2026-11-11)
 - [global-match-hierarchical-pools.md](design/global-match-hierarchical-pools.md) — 全服匹配：按模板分池、逐级扩大范围、每池单写者
@@ -329,6 +337,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [long-term-progression-v1.md](design/long-term-progression-v1.md) — 《五行奇谈》长期养成首发规格 · 试炼手记
 - [long-term-progression-v2.md](design/long-term-progression-v2.md) — 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2）
 - [mall-administration.md](design/mall-administration.md) — 商城后台的受限经济命令
+- [minigame-remote-map-streaming-and-scene-gating.md](design/minigame-remote-map-streaming-and-scene-gating.md) — 小游戏与 App 双形态远程地图流式加载、CDN 分发与服务端切图门禁设计
 - [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 - [mixed-version-persist-field-protection.md](design/mixed-version-persist-field-protection.md) — 新旧版本混跑时的玩家持久字段保护
 - [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
@@ -349,8 +358,8 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [redis-player-store-cluster.md](design/redis-player-store-cluster.md) — 玩家态 Redis 集群化：物理水平扩展设计
 - [release-track-gray-canary.md](design/release-track-gray-canary.md) — 发布轨道：灰度与金丝雀发布设计（2026-11-05）
 - [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全
+- [replace-legacy-current-maps-with-qdao-nav-20261124.md](design/replace-legacy-current-maps-with-qdao-nav-20261124.md) — 退役旧版 12.5 GB 三图（`CurrentMaps20261009`）、接通八景岛/月汐湾双端导航与主城临时替代方案
 - [rpc-kill-switch.md](design/rpc-kill-switch.md) — RPC 热关停：节点 / 服务 / 方法三级（C++ 与 Go 同一套）
-- [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [team-follow-server-trail.md](design/team-follow-server-trail.md) — 组队跟随:服务器沿队长轨迹驱动队员(2026-11-06 服务端源码已写;2026-11-10 补入场后补推、客户端已写,补跨节点与离线托管的跨场景跟随;均未编译未测试)
 - [workload-secrets-via-k8s-secret.md](design/workload-secrets-via-k8s-secret.md) — 工作负载密钥只放 K8s Secret(2026-11-10)
 - [world-map-play-v1.md](design/world-map-play-v1.md) — 《五行奇谈》地图顺手拾取首版：野外主动捡，战斗优先

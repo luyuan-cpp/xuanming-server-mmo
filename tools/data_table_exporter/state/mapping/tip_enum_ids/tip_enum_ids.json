@@ -220,7 +220,16 @@
         "SkillLevelNotEnough": 7010,
         "SkillMaxRankReached": 7011,
         "SkillGoldNotEnough": 7012,
-        "SkillUpgradeBusy": 7013
+        "SkillUpgradeBusy": 7013,
+        "SkillScrollInvalid": 7014,
+        "SkillBookNotFound": 7015,
+        "SkillBookNotDismantlable": 7016,
+        "SkillCraftMaterialNotEnough": 7017,
+        "SkillCraftRevisionChanged": 7018,
+        "SkillCraftBookRequired": 7019,
+        "SkillAlreadyBookUnlocked": 7020,
+        "SkillProxyStallRequiresMaster": 7021,
+        "SkillProxyFeeInvalid": 7022
       }
     },
     "buff_error": {
@@ -377,7 +386,22 @@
         "MatchBattleScriptLoadoutFull": 16033,
         "MatchRankedSeasonSettling": 16034,
         "MatchRankedPresetInvalid": 16035,
-        "MatchRankedRuleVersionMismatch": 16036
+        "MatchRankedRuleVersionMismatch": 16036,
+        "MatchTournamentNotOpen": 16037,
+        "MatchTournamentStageClosed": 16038,
+        "MatchTournamentSquadNameInvalid": 16039,
+        "MatchTournamentAlreadyInSquad": 16040,
+        "MatchTournamentSquadNotFound": 16041,
+        "MatchTournamentNotCaptain": 16042,
+        "MatchTournamentSquadFull": 16043,
+        "MatchTournamentSquadLocked": 16044,
+        "MatchTournamentInviteNotFound": 16045,
+        "MatchTournamentMemberNotEnough": 16046,
+        "MatchTournamentLineupInvalid": 16047,
+        "MatchTournamentQualifierLimit": 16048,
+        "MatchTournamentMatchNotReady": 16049,
+        "MatchTournamentAlreadyCheered": 16050,
+        "MatchTournamentRewardUnavailable": 16051
       }
     },
     "attribute_error": {
@@ -490,7 +514,15 @@
         "EquipGemSocketEmpty": 28019,
         "EquipGemTypeMismatch": 28020,
         "EquipGemBagFull": 28021,
-        "EquipEnhanceLevelChanged": 28022
+        "EquipEnhanceLevelChanged": 28022,
+        "EquipAffixAlreadyMaxQuality": 28023,
+        "EquipAffixPolishExempt": 28024,
+        "EquipAffixSlotEmpty": 28025,
+        "EquipAffixReforgeSame": 28026,
+        "EquipBindConfirmRequired": 28027,
+        "EquipPolishPityChanged": 28028,
+        "EquipCraftGoldNotEnough": 28029,
+        "EquipProxyMasterUnavailable": 28030
       }
     },
     "player_inbox_error": {

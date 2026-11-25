@@ -43,8 +43,10 @@ func TestPoolPolicyRatesPvpTeamPools(t *testing.T) {
 	require.True(t, pvp.Sides)
 	require.True(t, pvp.Rated, "人数档真人 PVP 计分")
 	require.Equal(t, uint64(10_000), pvp.PremadeGapStepMs)
-	require.Equal(t, 10_000.0, pvp.ToleranceCenti(0), "默认曲线起始 ±100 分")
-	require.True(t, math.IsInf(pvp.ToleranceCenti(90_000), 1), "等满终态兜底后不限")
+	require.Equal(t, 10_000.0, pvp.ToleranceCenti(0), "论剑排位曲线 <30s ±100 分")
+	require.Equal(t, 20_000.0, pvp.ToleranceCenti(30_000), "论剑排位曲线 30..90s ±200 分")
+	require.Equal(t, 30_000.0, pvp.ToleranceCenti(90_000), "论剑排位曲线 >=90s 硬上限 ±300 分")
+	require.Equal(t, 30_000.0, pvp.ToleranceCenti(600_000), "久等仍不越 300 分,永不退化为 +Inf")
 
 	pve := poolPolicy(s, catalog.Pool{Mode: pb.MatchMode_MATCH_MODE_PVE_TEAM, ConfigId: 1, TeamSize: 3})
 	require.False(t, pve.Rated)

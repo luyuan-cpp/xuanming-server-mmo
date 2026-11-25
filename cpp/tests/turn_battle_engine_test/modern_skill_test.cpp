@@ -178,7 +178,7 @@ protected:
         }
         for (const auto& [id, row] : BuffTableManager::Instance().GetIdMap()) data->AddBuff(id) = *row;
         for (const auto& [id, row] : MonsterTableManager::Instance().GetIdMap()) data->AddMonster(id) = *row;
-        ASSERT_EQ(catalog.size(), 62u);
+        ASSERT_EQ(catalog.size(), 65u);
     }
     const SkillTable& Row(uint32_t id) { return catalog.at(id); }
     std::shared_ptr<MemoryBattleDataProvider> data;
@@ -189,7 +189,7 @@ TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedId
     const std::map<char, std::vector<uint32_t>> expected = {
         {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40,41}},
         {'B',{5,6,7,8,9,11,12,13,14,15,16}},
-        {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19}},
+        {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22}},
         {'T',{1,5,6}}, {'O',{1,2,3}}};
     const std::map<char,uint32_t> bases = {{'A',10000},{'B',11000},{'P',12000},{'T',13000},{'O',14000}};
     std::set<std::string> codes;

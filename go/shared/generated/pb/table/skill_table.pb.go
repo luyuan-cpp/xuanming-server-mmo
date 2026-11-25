@@ -234,6 +234,8 @@ type SkillTable struct {
 	AllowDeadTarget      uint32                   `protobuf:"varint,56,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`
 	ForbidCopy           uint32                   `protobuf:"varint,57,opt,name=forbid_copy,json=forbidCopy,proto3" json:"forbid_copy,omitempty"`
 	SeasonId             uint32                   `protobuf:"varint,58,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	ScrollId             uint32                   `protobuf:"varint,59,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`
+	RarityTier           uint32                   `protobuf:"varint,60,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`
 	RequiredItem         []*SkillrequiredItem     `protobuf:"bytes,21,rep,name=required_item,json=requiredItem,proto3" json:"required_item,omitempty"`
 	RequiredResource     []*SkillrequiredResource `protobuf:"bytes,22,rep,name=required_resource,json=requiredResource,proto3" json:"required_resource,omitempty"`
 	CostResource         []*SkillcostResource     `protobuf:"bytes,23,rep,name=cost_resource,json=costResource,proto3" json:"cost_resource,omitempty"`
@@ -656,6 +658,20 @@ func (x *SkillTable) GetSeasonId() uint32 {
 	return 0
 }
 
+func (x *SkillTable) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *SkillTable) GetRarityTier() uint32 {
+	if x != nil {
+		return x.RarityTier
+	}
+	return 0
+}
+
 func (x *SkillTable) GetRequiredItem() []*SkillrequiredItem {
 	if x != nil {
 		return x.RequiredItem
@@ -734,7 +750,7 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x17required_resource_value\x18\x02 \x01(\rR\x15requiredResourceValue\"l\n" +
 	"\x12Skillcost_resource\x12(\n" +
 	"\x10cost_resource_id\x18\x01 \x01(\rR\x0ecostResourceId\x12,\n" +
-	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\xb8\x10\n" +
+	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\xf6\x10\n" +
 	"\n" +
 	"SkillTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1d\n" +
@@ -805,7 +821,10 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x11allow_dead_target\x188 \x01(\rR\x0fallowDeadTarget\x12\x1f\n" +
 	"\vforbid_copy\x189 \x01(\rR\n" +
 	"forbidCopy\x12\x1b\n" +
-	"\tseason_id\x18: \x01(\rR\bseasonId\x128\n" +
+	"\tseason_id\x18: \x01(\rR\bseasonId\x12\x1b\n" +
+	"\tscroll_id\x18; \x01(\rR\bscrollId\x12\x1f\n" +
+	"\vrarity_tier\x18< \x01(\rR\n" +
+	"rarityTier\x128\n" +
 	"\rrequired_item\x18\x15 \x03(\v2\x13.Skillrequired_itemR\frequiredItem\x12D\n" +
 	"\x11required_resource\x18\x16 \x03(\v2\x17.Skillrequired_resourceR\x10requiredResource\x128\n" +
 	"\rcost_resource\x18\x17 \x03(\v2\x13.Skillcost_resourceR\fcostResource\"1\n" +

@@ -7,6 +7,8 @@ import (
 	"match/internal/config"
 	"sort"
 
+	"google.golang.org/protobuf/proto"
+	battlepb "proto/battle"
 	pb "proto/match"
 	teampb "proto/team"
 )
@@ -37,13 +39,18 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 	if err != nil {
 		return err
 	}
+	if mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) && data.Original.GetRankedSeasonId() != 0 {
+		if err = s.requireRankedAdmissionOpenTx(ctx, tx, stamp); err != nil {
+			return err
+		}
+	}
 	members := append([]*teampb.TeamLaunchMember(nil), data.Members...)
 	sort.Slice(members, func(i, j int) bool { return members[i].Original.PlayerId < members[j].Original.PlayerId })
 	var group []*pb.MatchAuthorityTicketRecord
 	preferred := make([]uint32, 0, len(members)) // 成员各自的首选机房,算整队原件的 pool_region
 	for _, member := range members {
 		player := member.Original.PlayerId
-		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", player, []byte{}); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", player, []byte{}, []byte{}); err != nil {
 			return err
 		}
 		old, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", player))
@@ -69,12 +76,28 @@ func (s *Store) EnqueueTeamLaunchTx(ctx context.Context, tx *sql.Tx, launch *tea
 			return errors.New("team: 原成员地域测量已失效")
 		}
 		preferred = append(preferred, PreferredRegion(profile, stamp))
-		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: mode, ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision}
+		rankedCtxRaw := []byte{}
+		if mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) && data.Original.GetRankedSeasonId() != 0 {
+			ruleVer := data.Original.GetRankedRuleVersion()
+			if ruleVer == 0 {
+				ruleVer = s.RankedCatalog().RuleVersion()
+			}
+			memberCtx := &battlepb.RankedMatchContext{
+				SeasonId:      data.Original.GetRankedSeasonId(),
+				RuleVersion:   ruleVer,
+				TeamSize:      launch.TargetSize,
+				UseFreePreset: false,
+			}
+			if rankedCtxRaw, err = (proto.MarshalOptions{Deterministic: true}).Marshal(memberCtx); err != nil {
+				return err
+			}
+		}
+		ticket := &pb.MatchAuthorityTicketRecord{PlayerId: player, Ticket: member.Ticket, RequestId: data.Original.Request.RequestId, Mode: mode, ConfigId: launch.ConfigId, TeamSize: launch.TargetSize, State: 1, EnqueuedMs: launch.EnqueuedMs, NotBeforeMs: launch.NotBeforeMs, ZoneId: data.Original.Zones[player], TeamId: launch.TeamId, NetworkProfile: payload, ExpiresMs: expiry, OwnerAccount: member.Original.OwnerAccount, OwnerRevision: member.Original.OwnerRevision, RankedContext: rankedCtxRaw}
 		// 计分模式（PVP_TEAM）把成员此刻的评分快照写进票，撮合与提交点按它算队伍分；非计分模式为 0。
 		if ticket.RatingCenti, err = s.queueRatingCentiTx(ctx, tx, player, mode); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=?,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, player); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=?,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,owner_account=?,owner_revision=?,ranked_context=? WHERE player_id=?", ticket.Ticket, ticket.RequestId, ticket.Mode, ticket.ConfigId, ticket.TeamSize, ticket.EnqueuedMs, ticket.NotBeforeMs, ticket.ZoneId, ticket.RatingCenti, ticket.TeamId, ticket.NetworkProfile, ticket.ExpiresMs, ticket.OwnerAccount, ticket.OwnerRevision, ticket.RankedContext, player); err != nil {
 			return err
 		}
 		group = append(group, ticket)

@@ -51,6 +51,7 @@ class Snapshot:
     rows: tuple[Row, ...]
     #: 主键唯一：一个 id 一行。
     by_id: dict[int, Row]
+    arr_allowed_team_sizes: dict[int, tuple[Row, ...]]
     idx_battle_config_id: dict[int, tuple[Row, ...]]
 
 
@@ -60,6 +61,7 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     container=_pb.PlayModeTableData(),
     rows=(),
     by_id={},
+    arr_allowed_team_sizes={},
     idx_battle_config_id={},
 )
 
@@ -103,10 +105,13 @@ class PlayModeTableManager:
 
         rows: tuple[Row, ...] = tuple(container.data)
         by_id: dict[int, Row] = {}
+        arr_allowed_team_sizes: dict[int, list[Row]] = {}
         idx_battle_config_id: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
+            for elem in row.allowed_team_sizes:
+                arr_allowed_team_sizes.setdefault(elem, []).append(row)
             idx_battle_config_id.setdefault(row.battle_config_id, []).append(row)
 
         # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
@@ -116,6 +121,7 @@ class PlayModeTableManager:
             container=container,
             rows=rows,
             by_id=by_id,
+            arr_allowed_team_sizes={k: tuple(v) for k, v in arr_allowed_team_sizes.items()},
             idx_battle_config_id={k: tuple(v) for k, v in idx_battle_config_id.items()},
         )
 
@@ -163,6 +169,10 @@ class PlayModeTableManager:
                 result.append(row)
         return tuple(result)
 
+    def find_by_allowed_team_sizes_index(self, key: int) -> tuple[Row, ...]:
+        """反查：repeated 列 ``allowed_team_sizes`` 里含有 key 的全部行。"""
+        return self._snap.arr_allowed_team_sizes.get(key, _NO_ROWS)
+
     def get_by_battle_config_id(self, key: int) -> tuple[Row, ...]:
         """二级索引：``battle_config_id`` == key 的全部行。"""
         return self._snap.idx_battle_config_id.get(key, _NO_ROWS)
@@ -176,6 +186,9 @@ class PlayModeTableManager:
 
     def count(self) -> int:
         return len(self._snap.rows)
+
+    def count_by_allowed_team_sizes_index(self, key: int) -> int:
+        return len(self._snap.arr_allowed_team_sizes.get(key, _NO_ROWS))
 
     def count_by_battle_config_id_index(self, key: int) -> int:
         return len(self._snap.idx_battle_config_id.get(key, _NO_ROWS))

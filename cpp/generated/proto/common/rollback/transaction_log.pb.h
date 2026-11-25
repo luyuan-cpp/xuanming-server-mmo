@@ -119,6 +119,9 @@ enum TransactionType : int {
   TX_SEASON_SEAL_CATCHUP = 35,
   TX_TRIAL_JOURNAL_MILESTONE = 36,
   TX_TRIAL_ARTIFACT_REDEEM = 37,
+  TX_EQUIP_POLISH_REFORGE = 38,
+  TX_SKILL_SCROLL_CRAFT = 39,
+  TX_CRAFT_PROXY_FEE = 40,
   TransactionType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   TransactionType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -129,11 +132,11 @@ extern const uint32_t TransactionType_internal_data_[];
 inline constexpr TransactionType TransactionType_MIN =
     static_cast<TransactionType>(0);
 inline constexpr TransactionType TransactionType_MAX =
-    static_cast<TransactionType>(37);
+    static_cast<TransactionType>(40);
 [[nodiscard]] inline bool TransactionType_IsValid(int value) {
-  return 0 <= value && value <= 37;
+  return 0 <= value && value <= 40;
 }
-inline constexpr int TransactionType_ARRAYSIZE = 37 + 1;
+inline constexpr int TransactionType_ARRAYSIZE = 40 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TransactionType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TransactionType) {
@@ -148,7 +151,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& TransactionType_Name(TransactionType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 37>(
+  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 40>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool TransactionType_Parse(

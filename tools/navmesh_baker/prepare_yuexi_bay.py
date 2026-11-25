@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -13,14 +14,17 @@ import subprocess
 import openpyxl
 
 from prepare_festival_test_tables import export, sha
-from sync_current_maps import YUEXI_NAV_PATH, digest
 
 ROOT = Path(__file__).resolve().parents[2]
 REVISION = "yuexi-bay-20261115"
+YUEXI_NAV_PATH = "data/scene_nav_bin/current_maps/village/yuexi-bay-20261115/scene.bin"
 NAV_PATH = Path(YUEXI_NAV_PATH)
-LEGACY_PATH = "data/scene_nav_bin/donghai_scene.bin"
 NAV_FIELDS = ("worldRect", "effectiveWorldRect", "imageRect", "cellSize",
               "walkmaskColumns", "walkmaskRows", "spawnWorld")
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def require(condition, message):
@@ -147,8 +151,8 @@ def prepare_tables(output, spawn):
     sheet = workbook["BaseScene"]
     cols = {c.value: c.column for c in sheet[1]}
     rows = [i for i in range(6, sheet.max_row + 1) if sheet.cell(i, cols["id"]).value == 3]
-    require(len(rows) == 1 and sheet.cell(rows[0], cols["nav_bin_file"]).value in
-            (LEGACY_PATH, NAV_PATH.as_posix()), "Unknown scene 3 source table binding")
+    require(len(rows) == 1 and sheet.cell(rows[0], cols["nav_bin_file"]).value == NAV_PATH.as_posix(),
+            "Unknown scene 3 source table binding")
     table_update = dict(zip(("nav_bin_file", "spawn_x", "spawn_y", "spawn_z"),
                             [NAV_PATH.as_posix(), *spawn], strict=True))
     if any(sheet.cell(rows[0], cols[key]).value != value for key, value in table_update.items()):

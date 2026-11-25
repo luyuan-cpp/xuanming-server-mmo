@@ -383,6 +383,12 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                 }
                 RemoveConfiguredBuff(receiver, ids[i], result);
             }
+            if (op == BattleEffectOp::DispelBuff && caster.team_index() != receiver.team_index()) {
+                TryDispelBossStance(caster, receiver);
+            }
+            if (limit > 0) {
+                RecordEffectiveContribution(caster);
+            }
             if (op == BattleEffectOp::DispelDebuff && limit > 0 &&
                 caster.team_index() == receiver.team_index() &&
                 caster.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
@@ -545,6 +551,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
     }
     const uint64_t healed = ApplyHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
     RecordTrialMonsterHeal(source, target, healed);
+    if (healed > 0) RecordEffectiveContribution(source);
     for (const auto& [index, gain] : contributions) UseArtifact(source, index, target.actor_id(), gain, result);
     auto* event = AppendEvent(result, BATTLE_EVENT_HEAL, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(healed);
@@ -566,7 +573,10 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
                 TriggerConfiguredBuffs(target, source, BattleTrigger::AfterDodge, damageType, context, result);
             return 0;
         }
-        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage));
+        const double typedOutgoing = damageType == combatdamage::kPhysicalDamage
+            ? ConfiguredModifier(source, BattleModifier::OutgoingPhysicalDamage)
+            : ConfiguredModifier(source, BattleModifier::OutgoingMagicDamage);
+        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage) + typedOutgoing);
         damage = supportrules::ApplyBonus(damage, petcultivation::DamageBonus(source, damageType, context.origin, hitKind));
         damage *= std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingDamage));
         if (damageType == combatdamage::kMagicDamage)
@@ -593,6 +603,8 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) damage = 0;
     if (target.is_defending() && context.origin != BattleDamageOrigin::Reflect && context.origin != BattleDamageOrigin::Redirect) damage *= 0.5;
     uint64_t remaining = combatdamage::DamageToHealth(damage, UINT64_MAX);
+    remaining = ApplyEncounterDamageModifiers(source, target, remaining, damageType,
+        direct && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER, result);
     uint64_t absorbed = 0;
     std::vector<std::pair<uint32_t, uint64_t>> defenses;
     if (direct) for (const auto& entry : target.buffs()) {
@@ -661,6 +673,9 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     target.mutable_attributes()->set_health(target.attributes().health() - dealt);
     if (context.origin == BattleDamageOrigin::Direct) {
         RecordTrialDirectDamage(source, target, damageType, AddSafe(dealt, absorbed));
+    }
+    if (AddSafe(dealt, absorbed) > 0) {
+        RecordEffectiveContribution(source);
     }
     auto* event = AppendEvent(result, BATTLE_EVENT_DAMAGE, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(dealt); event->set_absorbed(absorbed);
@@ -961,6 +976,9 @@ uint32_t TurnBattleEngine::ValidateActorAction(uint64_t ownerPlayerId, uint64_t 
 bool TurnBattleEngine::SubmitActorAction(uint64_t ownerPlayerId, uint64_t actorId, const BattleAction& action) {
     if (!initialized || outcome != BATTLE_OUTCOME_ONGOING || ValidateActorAction(ownerPlayerId, actorId, action) != kSuccess) return false;
     pendingActions[actorId] = action;
+    if (const auto* actor = FindActor(actorId); actor != nullptr) {
+        RecordManualActionForActor(*actor);
+    }
     return AllPlayersReady();
 }
 }  // namespace turnbattle

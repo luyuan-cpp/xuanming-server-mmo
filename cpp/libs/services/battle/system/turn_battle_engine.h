@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -76,6 +77,29 @@ public:
 
     // 单个玩家的结算数据(battle → scene,scene 是唯一应用者)
     BattleSettlementData BuildSettlement(uint64_t playerId) const;
+
+    // 正式人宠会武(PVP_TEAM): season_id != 0 时计正式排位分、冻结参与事实并执行回合上限判平。
+    bool IsRankedBattle() const {
+        return createRequest.has_ranked_context() && createRequest.ranked_context().season_id() != 0;
+    }
+    // 免费 3×3 预设娱乐场(护卫救援 / 物法易势 5V5): 仅 use_free_preset=true 时放行临时竞技宠并禁止回写场外宠物。
+    bool UsesFreePreset() const {
+        return createRequest.has_ranked_context() && createRequest.ranked_context().use_free_preset();
+    }
+    void MarkPlayerEntered(uint64_t playerId);
+    BattleParticipationFact BuildParticipationFact(uint64_t playerId) const;
+    bool DidPlayerParticipate(uint64_t playerId) const;
+
+    // 论剑同速确定性决胜(SplitMix64): 仅看开局冻结 seed、回合号与 actor_id,重连与回放逐回合完全一致。
+    static uint64_t SplitMix64(uint64_t x) {
+        x += 0x9E3779B97F4A7C15ULL;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBULL;
+        return x ^ (x >> 31);
+    }
+    static uint64_t RankedTurnTieKey(uint64_t seed, uint32_t roundIdx, uint64_t actorId) {
+        return SplitMix64(seed ^ SplitMix64(static_cast<uint64_t>(roundIdx)) ^ SplitMix64(actorId));
+    }
 
     // 重连补拉的全量状态。action_deadline_ms 引擎不填(引擎无时钟),
     // 由 battle 节点按房间 timer 回填。
@@ -517,15 +541,45 @@ private:
                                  uint32_t damageType, uint64_t dealtOrAbsorbed);
     void RecordTrialMonsterHeal(const BattleActorState& source, const BattleActorState& target,
                                 uint64_t healed);
+    void RecordManualActionForActor(const BattleActorState& actor);
+    void RecordEffectiveContribution(const BattleActorState& actor);
+    uint64_t ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
+                                           uint64_t damage, uint32_t damageType, bool isDirectPrimary,
+                                           TurnResultS2C& result);
+    bool IsActorControlLocked(const BattleActorState& actor) const;
+    bool IsEncounterSlowPhaseActor(uint64_t actorId) const;
+    void InitSpecialEncounterState();
+    void UpdatePolarityForRound();
+    uint32_t NextPolaritySwitchRound() const;
+    void RefreshEncounterTelegraphs();
+    void ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& result);
+    void TryDispelBossStance(const BattleActorState& source, const BattleActorState& target);
 
     // 五行试炼志 V2 局内权威战法事实（仅内存确定性累积，不消耗 RNG）
     std::set<uint64_t> everDiedActors;
     uint64_t bossGuardHealTotal = 0;
     bool guardStanceDispelled = false;
-    bool teamADealtPhysicalDirectDamage = false;
-    bool teamADealtMagicDirectDamage = false;
+    std::array<bool, 2> teamDealtPhysicalDirectDamage{false, false};
+    std::array<bool, 2> teamDealtMagicDirectDamage{false, false};
     std::set<uint64_t> shieldBreakPlayers;
     std::set<uint64_t> antiControlOrSeasonSkillPlayers;
+
+    // 赛季首领试炼、护卫救援、物法易势 5V5 与防挂机战中事实（全部确定性）
+    uint32_t bossTrialKind = 0;
+    uint32_t battleDifficulty = 0;
+    uint64_t protectedGuardActorId = 0;
+    uint32_t initialPolarity = 0;
+    uint32_t activePolarity = 0;
+    uint32_t bossStanceType = 0;
+    uint64_t bossBarrierShield = 0;
+    std::vector<BattleTelegraphEntry> activeTelegraphs;
+    std::map<uint64_t, std::set<uint32_t>> manualActionRoundsByPlayer;
+    std::set<uint64_t> effectiveContributionPlayers;
+    // 论剑排位有效参与事实(有序集合保确定性;终局前由 BuildParticipationFact 冻结进 BattleResultEvent)
+    std::set<uint64_t> enteredPlayers;
+    std::set<uint64_t> manualActionPlayers;
+    std::set<uint64_t> explicitAutoPlayers;
+    std::set<uint64_t> hadOperableTurnPlayers;
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始

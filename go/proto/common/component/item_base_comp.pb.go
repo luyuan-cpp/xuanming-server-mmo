@@ -159,11 +159,13 @@ func (x *EquipGem) GetGemConfigId() uint32 {
 // —— 那会把「没掷过属性」变成「已初始化」。
 // V1 固定词条只保存选择；槽位 1/2 是词条位身份，不是装备穿戴位置。
 type EquipFixedAffix struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
-	AffixId       uint32                 `protobuf:"varint,2,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"` // EquipV1Affix.id；数值与显示由规则表提供。
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Slot            uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	AffixId         uint32                 `protobuf:"varint,2,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`                           // EquipV1Affix.id；满值与显示由规则表提供。
+	QualityTier     uint32                 `protobuf:"varint,3,opt,name=quality_tier,json=qualityTier,proto3" json:"quality_tier,omitempty"`               // 5 档品相（1凡品80%..5极品100%）；0 = 历史旧档按满值 5 档兼容。
+	PolishPityCount uint32                 `protobuf:"varint,4,opt,name=polish_pity_count,json=polishPityCount,proto3" json:"polish_pity_count,omitempty"` // 单条打磨累计未出极品次数（0..7，>=7 下次必出极品 5 档）；换词条 100% 保留。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EquipFixedAffix) Reset() {
@@ -210,14 +212,31 @@ func (x *EquipFixedAffix) GetAffixId() uint32 {
 	return 0
 }
 
+func (x *EquipFixedAffix) GetQualityTier() uint32 {
+	if x != nil {
+		return x.QualityTier
+	}
+	return 0
+}
+
+func (x *EquipFixedAffix) GetPolishPityCount() uint32 {
+	if x != nil {
+		return x.PolishPityCount
+	}
+	return 0
+}
+
 type EquipInstanceData struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Affixes       []*EquipAffix          `protobuf:"bytes,1,rep,name=affixes,proto3" json:"affixes,omitempty"`
-	EnhanceLevel  uint32                 `protobuf:"varint,2,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"` // 强化等级(+N),0 = 未强化。入库的只有「+几」,加成按 EquipEnhance 表现查
-	Gems          []*EquipGem            `protobuf:"bytes,3,rep,name=gems,proto3" json:"gems,omitempty"`                                      // 已镶嵌宝石;同一 socket 至多一条
-	FixedAffixes  []*EquipFixedAffix     `protobuf:"bytes,4,rep,name=fixed_affixes,json=fixedAffixes,proto3" json:"fixed_affixes,omitempty"`  // V1 首次安装的固定词条，不与旧颜色档混用。
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Affixes          []*EquipAffix          `protobuf:"bytes,1,rep,name=affixes,proto3" json:"affixes,omitempty"`
+	EnhanceLevel     uint32                 `protobuf:"varint,2,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`               // 强化等级(+N),0 = 未强化。入库的只有「+几」,加成按 EquipEnhance 表现查
+	Gems             []*EquipGem            `protobuf:"bytes,3,rep,name=gems,proto3" json:"gems,omitempty"`                                                    // 已镶嵌宝石;同一 socket 至多一条
+	FixedAffixes     []*EquipFixedAffix     `protobuf:"bytes,4,rep,name=fixed_affixes,json=fixedAffixes,proto3" json:"fixed_affixes,omitempty"`                // V1 首次安装的固定词条，不与旧颜色档混用。
+	EnhancePityCount uint32                 `protobuf:"varint,5,opt,name=enhance_pity_count,json=enhancePityCount,proto3" json:"enhance_pity_count,omitempty"` // 当前目标强化等级的失败保底累计次数；强化成功归零，随实例完整持久化与升档继承。
+	CrafterName      string                 `protobuf:"bytes,6,opt,name=crafter_name,json=crafterName,proto3" json:"crafter_name,omitempty"`                   // 宗师打造/打磨出满值极品时烙印的永久署名（0 战力加成）。
+	CrafterPlayerId  uint64                 `protobuf:"varint,7,opt,name=crafter_player_id,json=crafterPlayerId,proto3" json:"crafter_player_id,omitempty"`    // 宗师玩家 ID（仅追溯）。
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *EquipInstanceData) Reset() {
@@ -276,6 +295,27 @@ func (x *EquipInstanceData) GetFixedAffixes() []*EquipFixedAffix {
 		return x.FixedAffixes
 	}
 	return nil
+}
+
+func (x *EquipInstanceData) GetEnhancePityCount() uint32 {
+	if x != nil {
+		return x.EnhancePityCount
+	}
+	return 0
+}
+
+func (x *EquipInstanceData) GetCrafterName() string {
+	if x != nil {
+		return x.CrafterName
+	}
+	return ""
+}
+
+func (x *EquipInstanceData) GetCrafterPlayerId() uint64 {
+	if x != nil {
+		return x.CrafterPlayerId
+	}
+	return 0
 }
 
 type ItemComp struct {
@@ -392,15 +432,20 @@ const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
 	"\x03seq\x18\x04 \x01(\rR\x03seq\"F\n" +
 	"\bEquipGem\x12\x16\n" +
 	"\x06socket\x18\x01 \x01(\rR\x06socket\x12\"\n" +
-	"\rgem_config_id\x18\x02 \x01(\rR\vgemConfigId\"@\n" +
+	"\rgem_config_id\x18\x02 \x01(\rR\vgemConfigId\"\x8f\x01\n" +
 	"\x0fEquipFixedAffix\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x19\n" +
-	"\baffix_id\x18\x02 \x01(\rR\aaffixId\"\xb5\x01\n" +
+	"\baffix_id\x18\x02 \x01(\rR\aaffixId\x12!\n" +
+	"\fquality_tier\x18\x03 \x01(\rR\vqualityTier\x12*\n" +
+	"\x11polish_pity_count\x18\x04 \x01(\rR\x0fpolishPityCount\"\xb2\x02\n" +
 	"\x11EquipInstanceData\x12%\n" +
 	"\aaffixes\x18\x01 \x03(\v2\v.EquipAffixR\aaffixes\x12#\n" +
 	"\renhance_level\x18\x02 \x01(\rR\fenhanceLevel\x12\x1d\n" +
 	"\x04gems\x18\x03 \x03(\v2\t.EquipGemR\x04gems\x125\n" +
-	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\"\xb5\x01\n" +
+	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\x12,\n" +
+	"\x12enhance_pity_count\x18\x05 \x01(\rR\x10enhancePityCount\x12!\n" +
+	"\fcrafter_name\x18\x06 \x01(\tR\vcrafterName\x12*\n" +
+	"\x11crafter_player_id\x18\a \x01(\x04R\x0fcrafterPlayerId\"\xb5\x01\n" +
 	"\bItemComp\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x12\n" +

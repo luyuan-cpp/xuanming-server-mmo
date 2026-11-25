@@ -35,6 +35,23 @@ public interface PlayModeTableOrBuilder extends
   boolean getEnabled();
 
   /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @return A list containing the allowedTeamSizes.
+   */
+  java.util.List<java.lang.Integer> getAllowedTeamSizesList();
+  /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @return The count of allowedTeamSizes.
+   */
+  int getAllowedTeamSizesCount();
+  /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @param index The index of the element to return.
+   * @return The allowedTeamSizes at the given index.
+   */
+  int getAllowedTeamSizes(int index);
+
+  /**
    * <code>uint32 team_size_max = 5;</code>
    * @return The teamSizeMax.
    */

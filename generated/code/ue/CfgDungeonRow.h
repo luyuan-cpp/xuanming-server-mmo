@@ -75,4 +75,16 @@ struct FCfgDungeonRow : public FTableRowBase
 	/** 仅普通野外遭遇档开启捕捉，活动与竞技仍拒绝。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
 	int32 allow_pet_capture = 0;
+
+	/** 首领试炼/轮换玩法类型：0=常规，1=破阵首领·回春，2=破阵首领·护势，3=灵障首领，4=玄毒首领，5=护卫救援(PVE轮换)，6=物法易势(5V5轮换)。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
+	int32 boss_trial_kind = 0;
+
+	/** 试炼难度档：0=常规，1=普通，2=困难（用于困难胜局 +5 绑定材料与首领技能强度档）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
+	int32 difficulty = 0;
+
+	/** 显式逻辑回合上限：0=沿用 time_limit/6 换算，>0 直接采用本值，避免 8/12/15/16 回合被时长换算误掐。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
+	int32 round_limit = 0;
 };

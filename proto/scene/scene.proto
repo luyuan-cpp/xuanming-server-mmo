@@ -121,8 +121,13 @@ message PrepareBattleRequest
   uint32 battle_node_id = 3;  // 写进 InBattleComp(日志/排障用)
   uint64 deadline_ms = 4;     // 战斗作废期限(Unix 毫秒),scene reaper 依据
   uint64 prepare_deadline_ms = 5; // 备战作废期限(Unix 毫秒):CreateBattle 确认前 reaper 按它解冻(二期,设计 cross-zone-matchmaking.md §10);0 = 沿用 deadline_ms
-  // 论剑排位冻结上下文(非排位留空)。season_id != 0 时 scene 从空数据构建竞技快照并跳过背包预留,校验失败一律拒开局。
+  // 排位/免费预设上下文(非排位且非预设娱乐场留空)。仅 use_free_preset=true 时 scene 从免费预设构建临时快照并跳过背包预留;
+  // 正式人宠会武(season_id != 0 && !use_free_preset)使用本人真实养成快照。
   RankedMatchContext ranked_context = 6;
+  // 开局冻结的副本模板 ID(DungeonTable.id)，用于 scene 权威校验困难首领试炼解锁与试炼局规则；0 = 旧发送方未填。
+  uint32 battle_config_id = 7;
+  // 开局冻结的匹配模式(match.MatchMode 枚举值)；0 = 旧发送方未填。
+  uint32 match_mode = 8;
 }
 
 message PrepareBattleResponse

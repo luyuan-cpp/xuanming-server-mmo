@@ -42,6 +42,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 1.0,
    "require_target": 0,
    "required_item": [
@@ -65,6 +66,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -118,6 +120,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -141,6 +144,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -194,6 +198,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -217,6 +222,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     2
@@ -269,6 +275,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -292,6 +299,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     3
@@ -345,6 +353,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -368,6 +377,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     4
@@ -421,6 +431,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -444,6 +455,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     5,
@@ -497,6 +509,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -520,6 +533,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     6
@@ -573,6 +587,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -596,6 +611,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     7
@@ -649,6 +665,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -672,6 +689,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     8
@@ -724,6 +742,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -747,6 +766,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     9
@@ -796,6 +816,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -819,6 +840,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     10
@@ -872,6 +894,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -895,6 +918,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     11,
@@ -944,6 +968,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -967,6 +992,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1,
@@ -1010,6 +1036,7 @@
    "max_range": 0.0,
    "min_range": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1033,6 +1060,7 @@
     }
    ],
    "required_status": 0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1092,6 +1120,7 @@
    "name": "破阵惊锋",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1116,6 +1145,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1177,6 +1207,7 @@
    "name": "横戈裂岳",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1201,6 +1232,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1265,6 +1297,7 @@
    "name": "赤甲镇关",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1289,6 +1322,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1350,6 +1384,7 @@
    "name": "戈鸣断势",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1374,6 +1409,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1435,6 +1471,7 @@
    "name": "破军决胜",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1459,6 +1496,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1521,6 +1559,7 @@
    "passive_percent": 0.08,
    "passive_stat": "defense",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1545,6 +1584,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -1601,6 +1641,7 @@
    "passive_percent": 0.06,
    "passive_stat": "physicalAttack",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1625,6 +1666,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -1681,6 +1723,7 @@
    "passive_percent": 0.08,
    "passive_stat": "maxHp",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1705,6 +1748,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -1760,6 +1804,7 @@
    "name": "玄符落曜",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1784,6 +1829,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1845,6 +1891,7 @@
    "name": "紫霄雷阵",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1869,6 +1916,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -1933,6 +1981,7 @@
    "name": "寒星凝魄",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -1957,6 +2006,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2018,6 +2068,7 @@
    "name": "太虚澄心",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2042,6 +2093,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.2,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2100,6 +2152,7 @@
    "name": "九霄归墟",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2124,6 +2177,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2186,6 +2240,7 @@
    "passive_percent": 0.06,
    "passive_stat": "magicAttack",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2210,6 +2265,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -2266,6 +2322,7 @@
    "passive_percent": 0.1,
    "passive_stat": "maxMp",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2290,6 +2347,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -2346,6 +2404,7 @@
    "passive_percent": 0.06,
    "passive_stat": "defense",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2370,6 +2429,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -2425,6 +2485,7 @@
    "name": "丹华续脉",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2449,6 +2510,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2510,6 +2572,7 @@
    "name": "青莲润生",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2534,6 +2597,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2595,6 +2659,7 @@
    "name": "玉露涤尘",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2619,6 +2684,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2683,6 +2749,7 @@
    "name": "灵鼎护元",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2707,6 +2774,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2768,6 +2836,7 @@
    "name": "丹心返照",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2792,6 +2861,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -2854,6 +2924,7 @@
    "passive_percent": 0.08,
    "passive_stat": "outgoingHeal",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2878,6 +2949,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -2934,6 +3006,7 @@
    "passive_percent": 0.08,
    "passive_stat": "maxHp",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -2958,6 +3031,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -3014,6 +3088,7 @@
    "passive_percent": 0.1,
    "passive_stat": "maxMp",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3038,6 +3113,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -3093,6 +3169,7 @@
    "name": "逐影穿云",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3117,6 +3194,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -3178,6 +3256,7 @@
    "name": "回岚掠阵",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3202,6 +3281,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -3266,6 +3346,7 @@
    "name": "青羽催行",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3290,6 +3371,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -3354,6 +3436,7 @@
    "name": "缚岚止步",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3378,6 +3461,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -3439,6 +3523,7 @@
    "name": "长风先至",
    "passive_percent": 0.0,
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3463,6 +3548,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "skill_type": [
     1
@@ -3525,6 +3611,7 @@
    "passive_percent": 0.05,
    "passive_stat": "crit",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3549,6 +3636,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -3605,6 +3693,7 @@
    "passive_percent": 0.08,
    "passive_stat": "speed",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3629,6 +3718,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -3685,6 +3775,7 @@
    "passive_percent": 0.05,
    "passive_stat": "physicalAttack",
    "range": 0.0,
+   "rarity_tier": 0,
    "recovery_time": 0.0,
    "require_target": 0,
    "required_item": [
@@ -3709,6 +3800,7 @@
    ],
    "required_status": 0,
    "restore_mana_percent": 0.0,
+   "scroll_id": 0,
    "self_status": 0,
    "target_status": 0,
    "target_team": 3,
@@ -3736,7 +3828,9 @@
    "name": "横戈裂岳",
    "pet_max_targets": 2,
    "prototype_code": "A02",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3768,7 +3862,9 @@
    "name": "戈鸣断势",
    "pet_max_targets": 1,
    "prototype_code": "A03",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3799,7 +3895,9 @@
    "name": "紫霄雷阵",
    "pet_max_targets": 2,
    "prototype_code": "A06",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3830,7 +3928,9 @@
    "name": "九霄归墟",
    "pet_max_targets": 1,
    "prototype_code": "A08",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3858,7 +3958,9 @@
    "name": "青莲润生",
    "pet_max_targets": 1,
    "prototype_code": "A10",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3888,7 +3990,9 @@
    "name": "丹心返照",
    "pet_max_targets": 1,
    "prototype_code": "A12",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3916,7 +4020,9 @@
    "name": "灵鼎护元",
    "pet_max_targets": 1,
    "prototype_code": "A14",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3944,7 +4050,9 @@
    "name": "太虚澄心",
    "pet_max_targets": 1,
    "prototype_code": "A15",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -3972,7 +4080,9 @@
    "name": "青羽催行",
    "pet_max_targets": 1,
    "prototype_code": "A16",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4004,7 +4114,9 @@
    "name": "碎甲击",
    "pet_max_targets": 2,
    "prototype_code": "A18",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4032,7 +4144,9 @@
    "name": "蚀骨毒",
    "pet_max_targets": 2,
    "prototype_code": "A19",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4060,7 +4174,9 @@
    "name": "封灵咒",
    "pet_max_targets": 1,
    "prototype_code": "A20",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4088,7 +4204,9 @@
    "name": "闭灵锁魄",
    "pet_max_targets": 1,
    "prototype_code": "A21",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4116,7 +4234,9 @@
    "name": "禁武缚刃",
    "pet_max_targets": 1,
    "prototype_code": "A22",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4144,7 +4264,9 @@
    "name": "乱心惑神",
    "pet_max_targets": 1,
    "prototype_code": "A23",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4172,7 +4294,9 @@
    "name": "七魄入梦",
    "pet_max_targets": 1,
    "prototype_code": "A24",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4200,7 +4324,9 @@
    "name": "战意昂扬",
    "pet_max_targets": 1,
    "prototype_code": "A25",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4229,7 +4355,9 @@
    "name": "生生不息",
    "pet_max_targets": 1,
    "prototype_code": "A26",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "skill_type": [
     1
    ],
@@ -4257,7 +4385,9 @@
    "name": "幻影迷踪",
    "pet_max_targets": 1,
    "prototype_code": "A27",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4285,7 +4415,9 @@
    "name": "蔓毒术",
    "pet_max_targets": 1,
    "prototype_code": "A29",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4317,7 +4449,9 @@
    "name": "焚心炎",
    "pet_max_targets": 1,
    "prototype_code": "A30",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4349,7 +4483,9 @@
    "name": "毒火交攻",
    "pet_max_targets": 1,
    "prototype_code": "A31",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4377,7 +4513,9 @@
    "name": "清心荡秽",
    "pet_max_targets": 1,
    "prototype_code": "A33",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4405,7 +4543,9 @@
    "name": "驱灵散势",
    "pet_max_targets": 1,
    "prototype_code": "A34",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4433,7 +4573,9 @@
    "name": "断脉咒",
    "pet_max_targets": 1,
    "prototype_code": "A35",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4461,7 +4603,9 @@
    "name": "同袍共济",
    "pet_max_targets": 1,
    "prototype_code": "A36",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4489,7 +4633,9 @@
    "name": "冰封玄狱",
    "pet_max_targets": 1,
    "prototype_code": "A38",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4520,7 +4666,9 @@
    "name": "天崩裂岳",
    "pet_max_targets": 1,
    "prototype_code": "A39",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4548,7 +4696,9 @@
    "name": "独立护盾（名称待定）",
    "pet_max_targets": 1,
    "prototype_code": "A40",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4576,7 +4726,9 @@
    "name": "如意灵环",
    "pet_max_targets": 1,
    "prototype_code": "B05",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4604,7 +4756,9 @@
    "name": "神龙护体",
    "pet_max_targets": 1,
    "prototype_code": "B06",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4632,7 +4786,9 @@
    "name": "乾坤反震",
    "pet_max_targets": 1,
    "prototype_code": "B07",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4660,7 +4816,9 @@
    "name": "五色返照",
    "pet_max_targets": 1,
    "prototype_code": "B08",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4688,7 +4846,9 @@
    "name": "游说退敌",
    "pet_max_targets": 1,
    "prototype_code": "B09",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "skill_type": [
     1
    ],
@@ -4716,7 +4876,9 @@
    "name": "连战之印",
    "pet_max_targets": 1,
    "prototype_code": "B11",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4747,7 +4909,9 @@
    "name": "摄魂汲血",
    "pet_max_targets": 2,
    "prototype_code": "B12",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4777,7 +4941,9 @@
    "name": "舍命破灵",
    "pet_max_targets": 1,
    "prototype_code": "B13",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4805,7 +4971,9 @@
    "name": "法力护盾",
    "pet_max_targets": 1,
    "prototype_code": "B14",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4834,7 +5002,9 @@
    "name": "移灵养元",
    "pet_max_targets": 1,
    "prototype_code": "B15",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "skill_type": [
     1
    ],
@@ -4866,7 +5036,9 @@
    "name": "舍身救主",
    "pet_max_targets": 1,
    "prototype_code": "B16",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "skill_type": [
     1
    ],
@@ -4893,7 +5065,9 @@
    "passive_stat": "physicalAttack",
    "pet_max_targets": 1,
    "prototype_code": "P01",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -4917,7 +5091,9 @@
    "passive_stat": "magicAttack",
    "pet_max_targets": 1,
    "prototype_code": "P02",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -4941,7 +5117,9 @@
    "passive_stat": "defense",
    "pet_max_targets": 1,
    "prototype_code": "P03",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -4965,7 +5143,9 @@
    "passive_stat": "maxHp",
    "pet_max_targets": 1,
    "prototype_code": "P04",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -4990,7 +5170,9 @@
    "name": "悬壶济世",
    "pet_max_targets": 1,
    "prototype_code": "P05",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5014,7 +5196,9 @@
    "passive_stat": "speed",
    "pet_max_targets": 1,
    "prototype_code": "P06",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5039,7 +5223,9 @@
    "name": "凝神节用",
    "pet_max_targets": 1,
    "prototype_code": "P07",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5064,7 +5250,9 @@
    "name": "借毒养元",
    "pet_max_targets": 1,
    "prototype_code": "P08",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5089,7 +5277,9 @@
    "name": "反戈一击",
    "pet_max_targets": 1,
    "prototype_code": "P09",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5114,7 +5304,9 @@
    "name": "灵障",
    "pet_max_targets": 1,
    "prototype_code": "P14",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5139,7 +5331,9 @@
    "name": "忠心护主",
    "pet_max_targets": 1,
    "prototype_code": "P15",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5164,7 +5358,9 @@
    "name": "凝心守神",
    "pet_max_targets": 1,
    "prototype_code": "P16",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5189,7 +5385,9 @@
    "name": "卸力护身",
    "pet_max_targets": 1,
    "prototype_code": "P17",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5214,7 +5412,9 @@
    "name": "灵息回转",
    "pet_max_targets": 1,
    "prototype_code": "P18",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5239,7 +5439,9 @@
    "name": "法术反击",
    "pet_max_targets": 1,
    "prototype_code": "P19",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5264,7 +5466,9 @@
    "name": "乘胜追击",
    "pet_max_targets": 1,
    "prototype_code": "T01",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5289,7 +5493,9 @@
    "name": "裂甲追击",
    "pet_max_targets": 1,
    "prototype_code": "T05",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5314,7 +5520,9 @@
    "name": "灵术回响",
    "pet_max_targets": 1,
    "prototype_code": "T06",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 3,
    "targeting_mode": [
     1
@@ -5339,7 +5547,9 @@
    "name": "后发制人",
    "pet_max_targets": 1,
    "prototype_code": "O01",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 2,
    "targeting_mode": [
     1
@@ -5364,7 +5574,9 @@
    "name": "固阵待敌",
    "pet_max_targets": 1,
    "prototype_code": "O02",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 2,
    "targeting_mode": [
     1
@@ -5389,7 +5601,9 @@
    "name": "守主灵契",
    "pet_max_targets": 1,
    "prototype_code": "O03",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 1,
    "target_team": 2,
    "targeting_mode": [
     1
@@ -5415,7 +5629,9 @@
    "name": "玄镜映法",
    "pet_max_targets": 1,
    "prototype_code": "A41",
+   "rarity_tier": 1,
    "require_target": 1,
+   "scroll_id": 2,
    "skill_type": [
     1
    ],
@@ -5448,7 +5664,9 @@
    "name": "破阵裂锋",
    "pet_max_targets": 1,
    "prototype_code": "SS101",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 0,
    "season_id": 1,
    "skill_type": [
     1
@@ -5482,7 +5700,9 @@
    "name": "破阵灵雷",
    "pet_max_targets": 1,
    "prototype_code": "SS102",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 0,
    "season_id": 1,
    "skill_type": [
     1
@@ -5512,7 +5732,9 @@
    "name": "固阵灵障",
    "pet_max_targets": 1,
    "prototype_code": "SS103",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 0,
    "season_id": 1,
    "skill_type": [
     1
@@ -5542,12 +5764,98 @@
    "name": "破阵蓄势",
    "pet_max_targets": 1,
    "prototype_code": "SS104",
+   "rarity_tier": 0,
    "require_target": 1,
+   "scroll_id": 0,
    "season_id": 1,
    "skill_type": [
     1
    ],
    "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合开始使自身物理直接伤害提高 5%，持续至战斗结束，最多叠加 5 层（+25%）；阵亡暂停增长，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12020",
+   "id": 12020,
+   "init_effect": [
+    120200
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "愈战愈勇",
+   "pet_max_targets": 1,
+   "prototype_code": "G01",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 3,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合开始使自身法术直接伤害提高 5%，持续至战斗结束，最多叠加 5 层（+25%）；阵亡暂停增长，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12021",
+   "id": 12021,
+   "init_effect": [
+    120210
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "深谋远虑",
+   "pet_max_targets": 1,
+   "prototype_code": "G02",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 3,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "description": "每回合开始使自身防御提高 5%，持续至战斗结束，最多叠加 5 层（+25%），受常驻 60% 减伤封顶约束；阵亡暂停增长，复活保留已有层，不可被普通驱散。",
+   "forbid_copy": 1,
+   "icon_key": "UI/Skills/12022",
+   "id": 12022,
+   "init_effect": [
+    120220
+   ],
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "步步为营",
+   "pet_max_targets": 1,
+   "prototype_code": "G03",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 3,
+   "season_id": 0,
+   "target_team": 3,
    "targeting_mode": [
     1
    ],

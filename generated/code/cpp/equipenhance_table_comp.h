@@ -50,6 +50,10 @@ struct EquipEnhanceLevelComp {
     uint32_t value;
 };
 
+struct EquipEnhancePity_limitComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -81,4 +85,7 @@ inline EquipEnhanceProfile_idComp MakeEquipEnhanceProfile_idComp(const EquipEnha
 }
 inline EquipEnhanceLevelComp MakeEquipEnhanceLevelComp(const EquipEnhanceTable& row) {
     return { row.level() };
+}
+inline EquipEnhancePity_limitComp MakeEquipEnhancePity_limitComp(const EquipEnhanceTable& row) {
+    return { row.pity_limit() };
 }

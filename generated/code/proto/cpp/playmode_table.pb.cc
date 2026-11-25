@@ -48,11 +48,11 @@ constexpr PlayModeTable::ParseTableT_ PlayModeTable::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -64,40 +64,45 @@ constexpr PlayModeTable::ParseTableT_ PlayModeTable::InternalGenerateParseTable_
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.id_)}},
       // uint32 match_mode = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.match_mode_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.match_mode_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.match_mode_)}},
       // uint32 battle_config_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.battle_config_id_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.battle_config_id_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.battle_config_id_)}},
       // bool enabled = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayModeTable, _impl_.enabled_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayModeTable, _impl_.enabled_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.enabled_)}},
       // uint32 team_size_max = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.team_size_max_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayModeTable, _impl_.team_size_max_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.team_size_max_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated uint32 allowed_team_sizes = 6;
+      {::_pbi::TcParser::FastV32P1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.allowed_team_sizes_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 match_mode = 2;
-      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.match_mode_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.match_mode_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_config_id = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.battle_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool enabled = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.enabled_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.enabled_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 team_size_max = 5;
-      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.team_size_max_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.team_size_max_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 allowed_team_sizes = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.allowed_team_sizes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
     {{
@@ -110,6 +115,12 @@ inline constexpr PlayModeTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        allowed_team_sizes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayModeTable,
+            PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.allowed_team_sizes_)>()
+         }
+        ,
+        _allowed_team_sizes_cached_byte_size_{0},
         id_{0u},
         match_mode_{0u},
         battle_config_id_{0u},
@@ -132,7 +143,7 @@ inline void* PROTOBUF_NONNULL PlayModeTable::PlacementNew_(
   return ::new (mem) PlayModeTable(arena);
 }
 constexpr auto PlayModeTable::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PlayModeTable), alignof(PlayModeTable));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayModeTable), alignof(PlayModeTable));
 }
 constexpr auto PlayModeTable::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -368,17 +379,19 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.match_mode_),
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.battle_config_id_),
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.enabled_),
+        PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.allowed_team_sizes_),
         PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.team_size_max_),
-        0,
         1,
         2,
         3,
         4,
+        0,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayModeTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -389,7 +402,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayModeTable)},
-        {13, sizeof(::PlayModeTableData)},
+        {15, sizeof(::PlayModeTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -398,19 +411,20 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_playmode_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\024playmode_table.proto\"q\n\rPlayModeTable\022"
-    "\n\n\002id\030\001 \001(\r\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020battl"
-    "e_config_id\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\010\022\025\n\rte"
-    "am_size_max\030\005 \001(\r\"1\n\021PlayModeTableData\022\034"
-    "\n\004data\030\001 \003(\0132\016.PlayModeTableB\?\n\016com.game"
-    ".tableB\027PlayModeTableOuterClassP\001Z\022gener"
-    "ated/pb/tableb\006proto3"
+    "\n\024playmode_table.proto\"\215\001\n\rPlayModeTable"
+    "\022\n\n\002id\030\001 \001(\r\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020batt"
+    "le_config_id\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\010\022\032\n\022a"
+    "llowed_team_sizes\030\006 \003(\r\022\025\n\rteam_size_max"
+    "\030\005 \001(\r\"1\n\021PlayModeTableData\022\034\n\004data\030\001 \003("
+    "\0132\016.PlayModeTableB\?\n\016com.game.tableB\027Pla"
+    "yModeTableOuterClassP\001Z\022generated/pb/tab"
+    "leb\006proto3"
 };
 static ::absl::once_flag descriptor_table_playmode_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_playmode_5ftable_2eproto = {
     false,
     false,
-    261,
+    290,
     descriptor_table_protodef_playmode_5ftable_2eproto,
     "playmode_table.proto",
     &descriptor_table_playmode_5ftable_2eproto_once,
@@ -434,21 +448,55 @@ PlayModeTable::PlayModeTable(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:PlayModeTable)
 }
+PROTOBUF_NDEBUG_INLINE PlayModeTable::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PlayModeTable& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        allowed_team_sizes_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayModeTable,
+              PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.allowed_team_sizes_)>()
+          , from.allowed_team_sizes_
+        }
+        ,
+        _allowed_team_sizes_cached_byte_size_{0} {}
+
 PlayModeTable::PlayModeTable(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayModeTable& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayModeTable& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, PlayModeTable_get_class_data()),
+    : ::google::protobuf::Message(arena, PlayModeTable_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  PlayModeTable* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, id_),
+           offsetof(Impl_, team_size_max_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::team_size_max_));
+
+  // @@protoc_insertion_point(copy_constructor:PlayModeTable)
 }
 PROTOBUF_NDEBUG_INLINE PlayModeTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        allowed_team_sizes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayModeTable,
+            PROTOBUF_FIELD_OFFSET(::PlayModeTable, _impl_.allowed_team_sizes_)>()
+         }
+        ,
+        _allowed_team_sizes_cached_byte_size_{0} {}
 
 inline void PlayModeTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -507,7 +555,10 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.allowed_team_sizes_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.team_size_max_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.team_size_max_));
@@ -536,7 +587,7 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -545,7 +596,7 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
   }
 
   // uint32 match_mode = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_match_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -554,7 +605,7 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
   }
 
   // uint32 battle_config_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_battle_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -563,7 +614,7 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
   }
 
   // bool enabled = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -572,11 +623,22 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
   }
 
   // uint32 team_size_max = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_team_size_max() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           5, this_._internal_team_size_max(), target);
+    }
+  }
+
+  // repeated uint32 allowed_team_sizes = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._allowed_team_sizes_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            6, this_._internal_allowed_team_sizes(), byte_size, target);
+      }
     }
   }
 
@@ -605,36 +667,43 @@ PROTOBUF_NOINLINE void PlayModeTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
-    // uint32 id = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // repeated uint32 allowed_team_sizes = 6;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_allowed_team_sizes(), 1,
+              this_._impl_._allowed_team_sizes_cached_byte_size_);
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 match_mode = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_match_mode() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_match_mode());
       }
     }
     // uint32 battle_config_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_battle_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_config_id());
       }
     }
     // bool enabled = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_enabled() != 0) {
         total_size += 2;
       }
     }
     // uint32 team_size_max = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_team_size_max() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_team_size_max());
@@ -658,28 +727,31 @@ void PlayModeTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_allowed_team_sizes()->MergeFrom(from._internal_allowed_team_sizes());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_match_mode() != 0) {
         _this->_impl_.match_mode_ = from._impl_.match_mode_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_battle_config_id() != 0) {
         _this->_impl_.battle_config_id_ = from._impl_.battle_config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_enabled() != 0) {
         _this->_impl_.enabled_ = from._impl_.enabled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_team_size_max() != 0) {
         _this->_impl_.team_size_max_ = from._impl_.team_size_max_;
       }
@@ -702,6 +774,7 @@ void PlayModeTable::InternalSwap(PlayModeTable* PROTOBUF_RESTRICT PROTOBUF_NONNU
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.allowed_team_sizes_.InternalSwap(&other->_impl_.allowed_team_sizes_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(PlayModeTable, _impl_.team_size_max_)
       + sizeof(PlayModeTable::_impl_.team_size_max_)

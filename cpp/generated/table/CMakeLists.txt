@@ -229,6 +229,17 @@ set(SOURCE_FILES
     code/equipv1affix_table_fk.cpp
     proto/equipartifact_table.pb.cc
     proto/equipv1affix_table.pb.cc
+    code/equipaffixquality_table.cpp
+    proto/equipaffixquality_table.pb.cc
+    code/skillscrollcraft_table.cpp
+    code/skillscrollcraft_table_fk.cpp
+    proto/skillscrollcraft_table.pb.cc
+    code/tournamentrule_table.cpp
+    code/tournamentrule_table_fk.cpp
+    proto/tournamentrule_table.pb.cc
+    code/tournamentreward_table.cpp
+    code/tournamentreward_table_fk.cpp
+    proto/tournamentreward_table.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

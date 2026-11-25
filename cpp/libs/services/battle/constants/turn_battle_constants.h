@@ -25,6 +25,35 @@ inline constexpr uint32_t kDefaultMaxRounds = 300;
 
 inline constexpr uint32_t kMatchModePveSolo = 4;
 inline constexpr uint32_t kMatchModePveTeam = 5;
+inline constexpr uint32_t kMatchModePolarity5v5 = 8;
+
+// 赛季首领试炼与轮换娱乐玩法类型（对应 DungeonTable.boss_trial_kind）
+inline constexpr uint32_t kBossTrialKindNone = 0;
+inline constexpr uint32_t kBossTrialKindBreakRejuv = 1;    // 破阵·回春（慢速重击 + 回春护卫）
+inline constexpr uint32_t kBossTrialKindBreakStance = 2;   // 破阵·护势（慢速重击 + 护势护卫）
+inline constexpr uint32_t kBossTrialKindBarrier = 3;       // 灵障首领（灵障护盾 + 强法重击）
+inline constexpr uint32_t kBossTrialKindVenom = 4;         // 玄毒首领（缚灵封控 + 群体玄毒）
+inline constexpr uint32_t kBossTrialKindGuardianRescue = 5;// 护卫救援（8回合保护友方护卫击败首领）
+inline constexpr uint32_t kBossTrialKindPolarity5v5 = 6;   // 物法易势 5V5（每2回合切换物理/法术+15%，16回合平局）
+
+// 预告动作种类（对应 BattleTelegraphEntry.intent_kind）
+inline constexpr uint32_t kTelegraphKindSlowCleave = 1;
+inline constexpr uint32_t kTelegraphKindGuardHeal = 2;
+inline constexpr uint32_t kTelegraphKindGuardStancePhys = 3;
+inline constexpr uint32_t kTelegraphKindGuardStanceMagic = 4;
+inline constexpr uint32_t kTelegraphKindGuardShield = 5;
+inline constexpr uint32_t kTelegraphKindGuardBind = 6;
+inline constexpr uint32_t kTelegraphKindBossMagicStrike = 7;
+inline constexpr uint32_t kTelegraphKindBossVenomAoe = 8;
+
+// 预告状态（对应 BattleTelegraphEntry.status）
+inline constexpr uint32_t kTelegraphStatusUpcoming = 1;
+inline constexpr uint32_t kTelegraphStatusExecuting = 2;
+
+// 物法易势默认回合上限与同系直接主伤害放大比例（+15%，整数向下取整一次）
+inline constexpr uint32_t kPolarityDefaultMaxRounds = 16;
+inline constexpr uint64_t kPolarityDamageNum = 115;
+inline constexpr uint64_t kPolarityDamageDen = 100;
 
 // ---- 二期:自动战斗 / 5v5 / 队伍上限(设计文档 §11,D13/D14) ----
 

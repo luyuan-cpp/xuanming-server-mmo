@@ -136,6 +136,8 @@ static void SkillTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject,
 	SkillTableCheckNarrowedField(RowObject, TEXT("allow_dead_target"), TEXT("allow_dead_target"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("forbid_copy"), TEXT("forbid_copy"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("season_id"), TEXT("season_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("scroll_id"), TEXT("scroll_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("rarity_tier"), TEXT("rarity_tier"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("skill_type"), TEXT("skill_type[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("targeting_mode"), TEXT("targeting_mode[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("effect"), TEXT("effect[]"), RowIndex, 2147483647.0, TEXT("uint32"));

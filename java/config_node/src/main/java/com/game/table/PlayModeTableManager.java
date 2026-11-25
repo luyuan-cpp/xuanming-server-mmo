@@ -30,21 +30,26 @@ public class PlayModeTableManager {
 
 
 
+        final Map<Integer, List<PlayModeTable>> idxAllowedTeamSizes;
+
 
         final Map<Integer, List<PlayModeTable>> idxBattleConfigId;
 
 
         Snapshot(PlayModeTableData data,
                  Map<Integer, PlayModeTable> kvData,
+                 Map<Integer, List<PlayModeTable>> idxAllowedTeamSizes,
                  Map<Integer, List<PlayModeTable>> idxBattleConfigId) {
             this.data = data;
             this.kvData = kvData;
+            this.idxAllowedTeamSizes = idxAllowedTeamSizes;
             this.idxBattleConfigId = idxBattleConfigId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             PlayModeTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
     );
@@ -65,14 +70,18 @@ public class PlayModeTableManager {
         PlayModeTableData data = builder.build();
 
         Map<Integer, PlayModeTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<PlayModeTable>> idxAllowedTeamSizes = new HashMap<>();
         Map<Integer, List<PlayModeTable>> idxBattleConfigId = new HashMap<>();
 
         for (PlayModeTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
+            for (Integer elem : row.getAllowedTeamSizesList()) {
+                idxAllowedTeamSizes.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+            }
             idxBattleConfigId.computeIfAbsent(row.getBattleConfigId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxBattleConfigId);
+        this.snapshot = new Snapshot(data, kvData, idxAllowedTeamSizes, idxBattleConfigId);
     }
 
     public PlayModeTableData findAll() {
@@ -91,6 +100,10 @@ public class PlayModeTableManager {
 
 
 
+
+    public List<PlayModeTable> findByAllowedTeamSizesIndex(int key) {
+        return snapshot.idxAllowedTeamSizes.getOrDefault(key, Collections.emptyList());
+    }
 
 
 
@@ -118,6 +131,10 @@ public class PlayModeTableManager {
     }
 
 
+
+    public int countByAllowedTeamSizesIndex(int key) {
+        return snapshot.idxAllowedTeamSizes.getOrDefault(key, Collections.emptyList()).size();
+    }
 
 
     public int countByBattleConfigIdIndex(int key) {

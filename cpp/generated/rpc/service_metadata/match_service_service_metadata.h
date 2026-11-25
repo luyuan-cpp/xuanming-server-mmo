@@ -90,3 +90,47 @@ constexpr uint32_t MatchServiceUpdateRankedCosmeticIndex = 20;
 constexpr uint32_t MatchServiceGetRankedBattleResultMessageId = 451;
 constexpr uint32_t MatchServiceGetRankedBattleResultIndex = 21;
 #define MatchServiceGetRankedBattleResultMethod  ::MatchService_Stub::descriptor()->method(21)
+
+constexpr uint32_t MatchServiceGetTournamentOverviewMessageId = 465;
+constexpr uint32_t MatchServiceGetTournamentOverviewIndex = 22;
+#define MatchServiceGetTournamentOverviewMethod  ::MatchService_Stub::descriptor()->method(22)
+
+constexpr uint32_t MatchServiceCreateTournamentSquadMessageId = 466;
+constexpr uint32_t MatchServiceCreateTournamentSquadIndex = 23;
+#define MatchServiceCreateTournamentSquadMethod  ::MatchService_Stub::descriptor()->method(23)
+
+constexpr uint32_t MatchServiceInviteTournamentMemberMessageId = 467;
+constexpr uint32_t MatchServiceInviteTournamentMemberIndex = 24;
+#define MatchServiceInviteTournamentMemberMethod  ::MatchService_Stub::descriptor()->method(24)
+
+constexpr uint32_t MatchServiceRespondTournamentInviteMessageId = 468;
+constexpr uint32_t MatchServiceRespondTournamentInviteIndex = 25;
+#define MatchServiceRespondTournamentInviteMethod  ::MatchService_Stub::descriptor()->method(25)
+
+constexpr uint32_t MatchServiceLeaveTournamentSquadMessageId = 469;
+constexpr uint32_t MatchServiceLeaveTournamentSquadIndex = 26;
+#define MatchServiceLeaveTournamentSquadMethod  ::MatchService_Stub::descriptor()->method(26)
+
+constexpr uint32_t MatchServiceUpdateTournamentLineupMessageId = 470;
+constexpr uint32_t MatchServiceUpdateTournamentLineupIndex = 27;
+#define MatchServiceUpdateTournamentLineupMethod  ::MatchService_Stub::descriptor()->method(27)
+
+constexpr uint32_t MatchServiceRegisterTournamentSquadMessageId = 471;
+constexpr uint32_t MatchServiceRegisterTournamentSquadIndex = 28;
+#define MatchServiceRegisterTournamentSquadMethod  ::MatchService_Stub::descriptor()->method(28)
+
+constexpr uint32_t MatchServiceListTournamentStandingsMessageId = 472;
+constexpr uint32_t MatchServiceListTournamentStandingsIndex = 29;
+#define MatchServiceListTournamentStandingsMethod  ::MatchService_Stub::descriptor()->method(29)
+
+constexpr uint32_t MatchServiceStartTournamentMatchMessageId = 473;
+constexpr uint32_t MatchServiceStartTournamentMatchIndex = 30;
+#define MatchServiceStartTournamentMatchMethod  ::MatchService_Stub::descriptor()->method(30)
+
+constexpr uint32_t MatchServiceCheerTournamentSquadMessageId = 474;
+constexpr uint32_t MatchServiceCheerTournamentSquadIndex = 31;
+#define MatchServiceCheerTournamentSquadMethod  ::MatchService_Stub::descriptor()->method(31)
+
+constexpr uint32_t MatchServiceClaimTournamentRewardMessageId = 475;
+constexpr uint32_t MatchServiceClaimTournamentRewardIndex = 32;
+#define MatchServiceClaimTournamentRewardMethod  ::MatchService_Stub::descriptor()->method(32)

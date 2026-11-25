@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"match/internal/authority"
+	"match/internal/constants"
 
 	matchpb "proto/match"
 	teampb "proto/team"
@@ -79,6 +80,9 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		if size < uint32(len(snap.Record.Members)) || size > limit {
 			return s.matchReject(ctx, caller, ErrSizeExceeded, 0, &snap)
 		}
+		if !s.svcCtx.ActiveCatalog().AllowedTeamSize(mode, in.BattleConfigId, size) {
+			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
+		}
 		if code := CheckPvpPartySize(mode, size, uint32(len(snap.Record.Members))); code != 0 {
 			return s.matchReject(ctx, caller, code, 0, &snap)
 		}
@@ -86,6 +90,11 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
 		}
 		roster := MatchRoster(snap.Record)
+		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM && in.GetRankedRuleVersion() != 0 {
+			if curVer := s.svcCtx.ActiveRanked().RuleVersion(); curVer != 0 && in.GetRankedRuleVersion() != curVer {
+				return s.matchReject(ctx, caller, ErrRankedPresetInvalid, 0, &snap)
+			}
+		}
 		code, culprit := s.preflightMatch(ctx, roster)
 		if code != 0 {
 			return s.matchReject(ctx, caller, code, culprit, &snap)
@@ -236,6 +245,22 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 		}
 		return nil, nil, err
 	}
+	var rankedSeasonID, rankedRuleVer uint32
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM && (request.BattleConfigId == s.authority.RankedCatalog().BattleConfigId() || request.GetRankedRuleVersion() != 0) {
+		cat := s.authority.RankedCatalog()
+		rankedRuleVer = cat.RuleVersion()
+		if request.GetRankedRuleVersion() != 0 && request.GetRankedRuleVersion() != rankedRuleVer {
+			return &PinnedResult{Code: ErrRankedPresetInvalid}, nil, nil
+		}
+		curSeason, seasonErr := s.authority.EnsureActiveSeason(ctx)
+		if seasonErr != nil {
+			return nil, nil, seasonErr
+		}
+		if curSeason.GetState() != uint32(matchpb.RankedSeasonState_RANKED_SEASON_STATE_ACTIVE) || (curSeason.GetEndMs() > 0 && stamp >= curSeason.GetEndMs()) {
+			return &PinnedResult{Code: constants.ErrRankedSeasonSettling}, nil, nil
+		}
+		rankedSeasonID = curSeason.GetSeasonId()
+	}
 	queued := mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM || size > uint32(len(roster))
 	if queued && len(exits) == 0 {
 		decision.Record.MatchLockToken = ""
@@ -256,9 +281,17 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 	if code != 0 {
 		return &PinnedResult{Code: code, CodeParam: param}, nil, nil
 	}
-	original := &teampb.TeamLaunchOriginal{Actor: originalByPlayer(locked, caller), TeamId: snap.TeamId, TeamVersion: commit.Version, LockToken: token, Request: proto.Clone(request).(*teampb.StartTeamMatchRequest), Zones: zones, LockTtlSeconds: ttl, EnqueuedMs: stamp}
+	original := &teampb.TeamLaunchOriginal{Actor: originalByPlayer(locked, caller), TeamId: snap.TeamId, TeamVersion: commit.Version, LockToken: token, Request: proto.Clone(request).(*teampb.StartTeamMatchRequest), Zones: zones, LockTtlSeconds: ttl, EnqueuedMs: stamp, RankedSeasonId: rankedSeasonID, RankedRuleVersion: rankedRuleVer}
 	for index, player := range roster {
-		original.Members = append(original.Members, &teampb.TeamLaunchMember{Original: originalByPlayer(locked, player), RosterOrder: uint32(index + 1), Ticket: uuid.NewString()})
+		lm := &teampb.TeamLaunchMember{Original: originalByPlayer(locked, player), RosterOrder: uint32(index + 1), Ticket: uuid.NewString()}
+		if rankedSeasonID != 0 {
+			if m := FindMember(current.data.Record, player); m != nil {
+				lm.CharacterPresetId = m.GetRankedCharacterPresetId()
+				lm.PetPresetId = m.GetRankedPetPresetId()
+				lm.RankedRuleVersion = m.GetRankedRuleVersion()
+			}
+		}
+		original.Members = append(original.Members, lm)
 	}
 	requestBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(request)
 	if err != nil {
@@ -286,4 +319,22 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 		return nil, nil, err
 	}
 	return &PinnedResult{Commit: commit}, launch, nil
+}
+
+func (s *Service) checkRankedPresets(rec *teampb.TeamRecord, roster []uint64, reqRuleVer uint32) (uint32, uint64) {
+	cat := s.svcCtx.ActiveRanked()
+	curVer := cat.RuleVersion()
+	if reqRuleVer != 0 && reqRuleVer != curVer {
+		return ErrRankedPresetInvalid, 0
+	}
+	for _, pid := range roster {
+		m := FindMember(rec, pid)
+		if m == nil || !m.GetRankedPresetConfirmed() || m.GetRankedRuleVersion() != curVer {
+			return ErrRankedPresetUnconfirmed, pid
+		}
+		if !cat.IsValidPair(m.GetRankedCharacterPresetId(), m.GetRankedPetPresetId()) {
+			return ErrRankedPresetInvalid, pid
+		}
+	}
+	return 0, 0
 }

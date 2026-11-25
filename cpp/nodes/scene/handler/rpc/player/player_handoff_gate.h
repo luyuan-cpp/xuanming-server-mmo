@@ -85,7 +85,13 @@ namespace scene_handoff_gate
 		const auto index = static_cast<uint32_t>(method.index());
 		if (service == SceneSkillClientPlayer::descriptor())
 		{
-			return index == SceneSkillClientPlayerListSkillsIndex || index == SceneSkillClientPlayerUpgradeSkillIndex;
+			// 仅放行纯玩家本地状态查询/制书/研习/拆页；SetCraftProxyStall / ListCraftProxyStalls 绑当前场景摊位列表，不跨节点重放。
+			return index == SceneSkillClientPlayerListSkillsIndex ||
+				   index == SceneSkillClientPlayerUpgradeSkillIndex ||
+				   index == SceneSkillClientPlayerGetSkillCraftingStateIndex ||
+				   index == SceneSkillClientPlayerCraftSkillBookIndex ||
+				   index == SceneSkillClientPlayerLearnSkillBookIndex ||
+				   index == SceneSkillClientPlayerDismantleSkillBookIndex;
 		}
 		if (service == SceneSceneClientPlayer::descriptor())
 		{

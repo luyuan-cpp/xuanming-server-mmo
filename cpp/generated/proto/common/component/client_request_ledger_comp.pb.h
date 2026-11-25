@@ -238,8 +238,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
   enum : int {
     kDayStartsAtMsFieldNumber = 1,
     kAvailableUnitsFieldNumber = 3,
-    kRevisionFieldNumber = 4,
     kEarnedTodayFieldNumber = 2,
+    kLifetimeEarnedFieldNumber = 5,
+    kRevisionFieldNumber = 4,
+    kAvailableTradableUnitsFieldNumber = 7,
+    kTradableEarnedTotalFieldNumber = 6,
+    kEarnedThisWeekFieldNumber = 9,
+    kWeekStartsAtMsFieldNumber = 8,
+    kMigratedToV2FieldNumber = 10,
   };
   // uint64 day_starts_at_ms = 1;
   void clear_day_starts_at_ms() ;
@@ -261,16 +267,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
   void _internal_set_available_units(::uint64_t value);
 
   public:
-  // uint64 revision = 4;
-  void clear_revision() ;
-  [[nodiscard]] ::uint64_t revision() const;
-  void set_revision(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_revision() const;
-  void _internal_set_revision(::uint64_t value);
-
-  public:
   // uint32 earned_today = 2;
   void clear_earned_today() ;
   [[nodiscard]] ::uint32_t earned_today() const;
@@ -281,11 +277,81 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
   void _internal_set_earned_today(::uint32_t value);
 
   public:
+  // uint32 lifetime_earned = 5;
+  void clear_lifetime_earned() ;
+  [[nodiscard]] ::uint32_t lifetime_earned() const;
+  void set_lifetime_earned(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_lifetime_earned() const;
+  void _internal_set_lifetime_earned(::uint32_t value);
+
+  public:
+  // uint64 revision = 4;
+  void clear_revision() ;
+  [[nodiscard]] ::uint64_t revision() const;
+  void set_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_revision() const;
+  void _internal_set_revision(::uint64_t value);
+
+  public:
+  // uint64 available_tradable_units = 7;
+  void clear_available_tradable_units() ;
+  [[nodiscard]] ::uint64_t available_tradable_units() const;
+  void set_available_tradable_units(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_available_tradable_units() const;
+  void _internal_set_available_tradable_units(::uint64_t value);
+
+  public:
+  // uint32 tradable_earned_total = 6;
+  void clear_tradable_earned_total() ;
+  [[nodiscard]] ::uint32_t tradable_earned_total() const;
+  void set_tradable_earned_total(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tradable_earned_total() const;
+  void _internal_set_tradable_earned_total(::uint32_t value);
+
+  public:
+  // uint32 earned_this_week = 9;
+  void clear_earned_this_week() ;
+  [[nodiscard]] ::uint32_t earned_this_week() const;
+  void set_earned_this_week(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earned_this_week() const;
+  void _internal_set_earned_this_week(::uint32_t value);
+
+  public:
+  // uint64 week_starts_at_ms = 8;
+  void clear_week_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t week_starts_at_ms() const;
+  void set_week_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_week_starts_at_ms() const;
+  void _internal_set_week_starts_at_ms(::uint64_t value);
+
+  public:
+  // bool migrated_to_v2 = 10;
+  void clear_migrated_to_v2() ;
+  [[nodiscard]] bool migrated_to_v2() const;
+  void set_migrated_to_v2(bool value);
+
+  private:
+  bool _internal_migrated_to_v2() const;
+  void _internal_set_migrated_to_v2(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipmentMaterialRewardLedger)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -316,8 +382,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t day_starts_at_ms_;
     ::uint64_t available_units_;
-    ::uint64_t revision_;
     ::uint32_t earned_today_;
+    ::uint32_t lifetime_earned_;
+    ::uint64_t revision_;
+    ::uint64_t available_tradable_units_;
+    ::uint32_t tradable_earned_total_;
+    ::uint32_t earned_this_week_;
+    ::uint64_t week_starts_at_ms_;
+    bool migrated_to_v2_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -475,23 +547,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   enum : int {
     kFingerprintFieldNumber = 3,
     kKeyFieldNumber = 1,
-    kKindFieldNumber = 2,
-    kEnhanceSuccessFieldNumber = 5,
     kSeqFieldNumber = 4,
+    kKindFieldNumber = 2,
     kEnhanceLevelFieldNumber = 6,
-    kCreatedSchemeIdFieldNumber = 7,
     kEquipmentItemIdFieldNumber = 8,
     kForgeRevisionFieldNumber = 9,
-    kMaterialRewardRevisionFieldNumber = 10,
+    kCreatedSchemeIdFieldNumber = 7,
     kCraftingMaterialCountFieldNumber = 11,
+    kMaterialRewardRevisionFieldNumber = 10,
     kEnhancementStoneCountFieldNumber = 12,
-    kSeasonCatchupSpentFieldNumber = 14,
     kSeasonCatchupPointsFieldNumber = 13,
+    kSeasonCatchupSpentFieldNumber = 14,
     kTrialMilestoneIdFieldNumber = 15,
+    kEnhanceSuccessFieldNumber = 5,
+    kEquipmentGuaranteedByPityFieldNumber = 25,
     kTrialMilestoneSandCountFieldNumber = 16,
     kTrialMilestoneVoucherCountFieldNumber = 17,
     kRedeemedArtifactItemIdFieldNumber = 18,
     kRedeemedArtifactConfigIdFieldNumber = 19,
+    kEnhancePityCountFieldNumber = 20,
+    kCraftingTradableCountFieldNumber = 21,
+    kEnhancementTradableCountFieldNumber = 22,
+    kEquipmentQualityTierFieldNumber = 23,
+    kEquipmentPolishPityCountFieldNumber = 24,
+    kCraftedSkillBookIdFieldNumber = 26,
+    kScrollCraftRevisionFieldNumber = 28,
+    kCraftedSkillTableIdFieldNumber = 27,
+    kScrollBonusFragmentsFieldNumber = 29,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -518,26 +600,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_key(::uint64_t value);
 
   public:
-  // uint32 kind = 2;
-  void clear_kind() ;
-  [[nodiscard]] ::uint32_t kind() const;
-  void set_kind(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_kind() const;
-  void _internal_set_kind(::uint32_t value);
-
-  public:
-  // bool enhance_success = 5;
-  void clear_enhance_success() ;
-  [[nodiscard]] bool enhance_success() const;
-  void set_enhance_success(bool value);
-
-  private:
-  bool _internal_enhance_success() const;
-  void _internal_set_enhance_success(bool value);
-
-  public:
   // uint64 seq = 4;
   void clear_seq() ;
   [[nodiscard]] ::uint64_t seq() const;
@@ -548,6 +610,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_seq(::uint64_t value);
 
   public:
+  // uint32 kind = 2;
+  void clear_kind() ;
+  [[nodiscard]] ::uint32_t kind() const;
+  void set_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_kind() const;
+  void _internal_set_kind(::uint32_t value);
+
+  public:
   // uint32 enhance_level = 6;
   void clear_enhance_level() ;
   [[nodiscard]] ::uint32_t enhance_level() const;
@@ -556,16 +628,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   private:
   ::uint32_t _internal_enhance_level() const;
   void _internal_set_enhance_level(::uint32_t value);
-
-  public:
-  // uint32 created_scheme_id = 7;
-  void clear_created_scheme_id() ;
-  [[nodiscard]] ::uint32_t created_scheme_id() const;
-  void set_created_scheme_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_created_scheme_id() const;
-  void _internal_set_created_scheme_id(::uint32_t value);
 
   public:
   // uint64 equipment_item_id = 8;
@@ -588,14 +650,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_forge_revision(::uint64_t value);
 
   public:
-  // uint64 material_reward_revision = 10;
-  void clear_material_reward_revision() ;
-  [[nodiscard]] ::uint64_t material_reward_revision() const;
-  void set_material_reward_revision(::uint64_t value);
+  // uint32 created_scheme_id = 7;
+  void clear_created_scheme_id() ;
+  [[nodiscard]] ::uint32_t created_scheme_id() const;
+  void set_created_scheme_id(::uint32_t value);
 
   private:
-  ::uint64_t _internal_material_reward_revision() const;
-  void _internal_set_material_reward_revision(::uint64_t value);
+  ::uint32_t _internal_created_scheme_id() const;
+  void _internal_set_created_scheme_id(::uint32_t value);
 
   public:
   // uint32 crafting_material_count = 11;
@@ -608,6 +670,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_crafting_material_count(::uint32_t value);
 
   public:
+  // uint64 material_reward_revision = 10;
+  void clear_material_reward_revision() ;
+  [[nodiscard]] ::uint64_t material_reward_revision() const;
+  void set_material_reward_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_material_reward_revision() const;
+  void _internal_set_material_reward_revision(::uint64_t value);
+
+  public:
   // uint32 enhancement_stone_count = 12;
   void clear_enhancement_stone_count() ;
   [[nodiscard]] ::uint32_t enhancement_stone_count() const;
@@ -616,16 +688,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   private:
   ::uint32_t _internal_enhancement_stone_count() const;
   void _internal_set_enhancement_stone_count(::uint32_t value);
-
-  public:
-  // uint64 season_catchup_spent = 14;
-  void clear_season_catchup_spent() ;
-  [[nodiscard]] ::uint64_t season_catchup_spent() const;
-  void set_season_catchup_spent(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_season_catchup_spent() const;
-  void _internal_set_season_catchup_spent(::uint64_t value);
 
   public:
   // uint32 season_catchup_points = 13;
@@ -638,6 +700,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_season_catchup_points(::uint32_t value);
 
   public:
+  // uint64 season_catchup_spent = 14;
+  void clear_season_catchup_spent() ;
+  [[nodiscard]] ::uint64_t season_catchup_spent() const;
+  void set_season_catchup_spent(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_season_catchup_spent() const;
+  void _internal_set_season_catchup_spent(::uint64_t value);
+
+  public:
   // uint32 trial_milestone_id = 15;
   void clear_trial_milestone_id() ;
   [[nodiscard]] ::uint32_t trial_milestone_id() const;
@@ -646,6 +718,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   private:
   ::uint32_t _internal_trial_milestone_id() const;
   void _internal_set_trial_milestone_id(::uint32_t value);
+
+  public:
+  // bool enhance_success = 5;
+  void clear_enhance_success() ;
+  [[nodiscard]] bool enhance_success() const;
+  void set_enhance_success(bool value);
+
+  private:
+  bool _internal_enhance_success() const;
+  void _internal_set_enhance_success(bool value);
+
+  public:
+  // bool equipment_guaranteed_by_pity = 25;
+  void clear_equipment_guaranteed_by_pity() ;
+  [[nodiscard]] bool equipment_guaranteed_by_pity() const;
+  void set_equipment_guaranteed_by_pity(bool value);
+
+  private:
+  bool _internal_equipment_guaranteed_by_pity() const;
+  void _internal_set_equipment_guaranteed_by_pity(bool value);
 
   public:
   // uint32 trial_milestone_sand_count = 16;
@@ -688,11 +780,101 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_redeemed_artifact_config_id(::uint32_t value);
 
   public:
+  // uint32 enhance_pity_count = 20;
+  void clear_enhance_pity_count() ;
+  [[nodiscard]] ::uint32_t enhance_pity_count() const;
+  void set_enhance_pity_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_enhance_pity_count() const;
+  void _internal_set_enhance_pity_count(::uint32_t value);
+
+  public:
+  // uint32 crafting_tradable_count = 21;
+  void clear_crafting_tradable_count() ;
+  [[nodiscard]] ::uint32_t crafting_tradable_count() const;
+  void set_crafting_tradable_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_crafting_tradable_count() const;
+  void _internal_set_crafting_tradable_count(::uint32_t value);
+
+  public:
+  // uint32 enhancement_tradable_count = 22;
+  void clear_enhancement_tradable_count() ;
+  [[nodiscard]] ::uint32_t enhancement_tradable_count() const;
+  void set_enhancement_tradable_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_enhancement_tradable_count() const;
+  void _internal_set_enhancement_tradable_count(::uint32_t value);
+
+  public:
+  // uint32 equipment_quality_tier = 23;
+  void clear_equipment_quality_tier() ;
+  [[nodiscard]] ::uint32_t equipment_quality_tier() const;
+  void set_equipment_quality_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equipment_quality_tier() const;
+  void _internal_set_equipment_quality_tier(::uint32_t value);
+
+  public:
+  // uint32 equipment_polish_pity_count = 24;
+  void clear_equipment_polish_pity_count() ;
+  [[nodiscard]] ::uint32_t equipment_polish_pity_count() const;
+  void set_equipment_polish_pity_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equipment_polish_pity_count() const;
+  void _internal_set_equipment_polish_pity_count(::uint32_t value);
+
+  public:
+  // uint64 crafted_skill_book_id = 26;
+  void clear_crafted_skill_book_id() ;
+  [[nodiscard]] ::uint64_t crafted_skill_book_id() const;
+  void set_crafted_skill_book_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_crafted_skill_book_id() const;
+  void _internal_set_crafted_skill_book_id(::uint64_t value);
+
+  public:
+  // uint64 scroll_craft_revision = 28;
+  void clear_scroll_craft_revision() ;
+  [[nodiscard]] ::uint64_t scroll_craft_revision() const;
+  void set_scroll_craft_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_scroll_craft_revision() const;
+  void _internal_set_scroll_craft_revision(::uint64_t value);
+
+  public:
+  // uint32 crafted_skill_table_id = 27;
+  void clear_crafted_skill_table_id() ;
+  [[nodiscard]] ::uint32_t crafted_skill_table_id() const;
+  void set_crafted_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_crafted_skill_table_id() const;
+  void _internal_set_crafted_skill_table_id(::uint32_t value);
+
+  public:
+  // uint32 scroll_bonus_fragments = 29;
+  void clear_scroll_bonus_fragments() ;
+  [[nodiscard]] ::uint32_t scroll_bonus_fragments() const;
+  void set_scroll_bonus_fragments(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scroll_bonus_fragments() const;
+  void _internal_set_scroll_bonus_fragments(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
+      ::google::protobuf::internal::TcParseTable<5, 29,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -723,23 +905,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr fingerprint_;
     ::uint64_t key_;
-    ::uint32_t kind_;
-    bool enhance_success_;
     ::uint64_t seq_;
+    ::uint32_t kind_;
     ::uint32_t enhance_level_;
-    ::uint32_t created_scheme_id_;
     ::uint64_t equipment_item_id_;
     ::uint64_t forge_revision_;
-    ::uint64_t material_reward_revision_;
+    ::uint32_t created_scheme_id_;
     ::uint32_t crafting_material_count_;
+    ::uint64_t material_reward_revision_;
     ::uint32_t enhancement_stone_count_;
-    ::uint64_t season_catchup_spent_;
     ::uint32_t season_catchup_points_;
+    ::uint64_t season_catchup_spent_;
     ::uint32_t trial_milestone_id_;
+    bool enhance_success_;
+    bool equipment_guaranteed_by_pity_;
     ::uint32_t trial_milestone_sand_count_;
     ::uint32_t trial_milestone_voucher_count_;
     ::uint64_t redeemed_artifact_item_id_;
     ::uint32_t redeemed_artifact_config_id_;
+    ::uint32_t enhance_pity_count_;
+    ::uint32_t crafting_tradable_count_;
+    ::uint32_t enhancement_tradable_count_;
+    ::uint32_t equipment_quality_tier_;
+    ::uint32_t equipment_polish_pity_count_;
+    ::uint64_t crafted_skill_book_id_;
+    ::uint64_t scroll_craft_revision_;
+    ::uint32_t crafted_skill_table_id_;
+    ::uint32_t scroll_bonus_fragments_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1044,7 +1236,7 @@ inline void ClientRequestRecord::_internal_set_key(::uint64_t value) {
 inline void ClientRequestRecord::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t ClientRequestRecord::kind() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.kind)
@@ -1052,7 +1244,7 @@ inline ::uint32_t ClientRequestRecord::kind() const {
 }
 inline void ClientRequestRecord::set_kind(::uint32_t value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.kind)
 }
 inline ::uint32_t ClientRequestRecord::_internal_kind() const {
@@ -1132,7 +1324,7 @@ inline void ClientRequestRecord::set_allocated_fingerprint(::std::string* PROTOB
 inline void ClientRequestRecord::clear_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ClientRequestRecord::seq() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.seq)
@@ -1140,7 +1332,7 @@ inline ::uint64_t ClientRequestRecord::seq() const {
 }
 inline void ClientRequestRecord::set_seq(::uint64_t value) {
   _internal_set_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.seq)
 }
 inline ::uint64_t ClientRequestRecord::_internal_seq() const {
@@ -1156,7 +1348,7 @@ inline void ClientRequestRecord::_internal_set_seq(::uint64_t value) {
 inline void ClientRequestRecord::clear_enhance_success() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_success_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline bool ClientRequestRecord::enhance_success() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.enhance_success)
@@ -1164,7 +1356,7 @@ inline bool ClientRequestRecord::enhance_success() const {
 }
 inline void ClientRequestRecord::set_enhance_success(bool value) {
   _internal_set_enhance_success(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.enhance_success)
 }
 inline bool ClientRequestRecord::_internal_enhance_success() const {
@@ -1180,7 +1372,7 @@ inline void ClientRequestRecord::_internal_set_enhance_success(bool value) {
 inline void ClientRequestRecord::clear_enhance_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t ClientRequestRecord::enhance_level() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.enhance_level)
@@ -1188,7 +1380,7 @@ inline ::uint32_t ClientRequestRecord::enhance_level() const {
 }
 inline void ClientRequestRecord::set_enhance_level(::uint32_t value) {
   _internal_set_enhance_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.enhance_level)
 }
 inline ::uint32_t ClientRequestRecord::_internal_enhance_level() const {
@@ -1204,7 +1396,7 @@ inline void ClientRequestRecord::_internal_set_enhance_level(::uint32_t value) {
 inline void ClientRequestRecord::clear_created_scheme_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_scheme_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t ClientRequestRecord::created_scheme_id() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.created_scheme_id)
@@ -1212,7 +1404,7 @@ inline ::uint32_t ClientRequestRecord::created_scheme_id() const {
 }
 inline void ClientRequestRecord::set_created_scheme_id(::uint32_t value) {
   _internal_set_created_scheme_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.created_scheme_id)
 }
 inline ::uint32_t ClientRequestRecord::_internal_created_scheme_id() const {
@@ -1228,7 +1420,7 @@ inline void ClientRequestRecord::_internal_set_created_scheme_id(::uint32_t valu
 inline void ClientRequestRecord::clear_equipment_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipment_item_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t ClientRequestRecord::equipment_item_id() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_item_id)
@@ -1236,7 +1428,7 @@ inline ::uint64_t ClientRequestRecord::equipment_item_id() const {
 }
 inline void ClientRequestRecord::set_equipment_item_id(::uint64_t value) {
   _internal_set_equipment_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_item_id)
 }
 inline ::uint64_t ClientRequestRecord::_internal_equipment_item_id() const {
@@ -1252,7 +1444,7 @@ inline void ClientRequestRecord::_internal_set_equipment_item_id(::uint64_t valu
 inline void ClientRequestRecord::clear_forge_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t ClientRequestRecord::forge_revision() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.forge_revision)
@@ -1260,7 +1452,7 @@ inline ::uint64_t ClientRequestRecord::forge_revision() const {
 }
 inline void ClientRequestRecord::set_forge_revision(::uint64_t value) {
   _internal_set_forge_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.forge_revision)
 }
 inline ::uint64_t ClientRequestRecord::_internal_forge_revision() const {
@@ -1300,7 +1492,7 @@ inline void ClientRequestRecord::_internal_set_material_reward_revision(::uint64
 inline void ClientRequestRecord::clear_crafting_material_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.crafting_material_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t ClientRequestRecord::crafting_material_count() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.crafting_material_count)
@@ -1308,7 +1500,7 @@ inline ::uint32_t ClientRequestRecord::crafting_material_count() const {
 }
 inline void ClientRequestRecord::set_crafting_material_count(::uint32_t value) {
   _internal_set_crafting_material_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.crafting_material_count)
 }
 inline ::uint32_t ClientRequestRecord::_internal_crafting_material_count() const {
@@ -1324,7 +1516,7 @@ inline void ClientRequestRecord::_internal_set_crafting_material_count(::uint32_
 inline void ClientRequestRecord::clear_enhancement_stone_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhancement_stone_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t ClientRequestRecord::enhancement_stone_count() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.enhancement_stone_count)
@@ -1332,7 +1524,7 @@ inline ::uint32_t ClientRequestRecord::enhancement_stone_count() const {
 }
 inline void ClientRequestRecord::set_enhancement_stone_count(::uint32_t value) {
   _internal_set_enhancement_stone_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.enhancement_stone_count)
 }
 inline ::uint32_t ClientRequestRecord::_internal_enhancement_stone_count() const {
@@ -1348,7 +1540,7 @@ inline void ClientRequestRecord::_internal_set_enhancement_stone_count(::uint32_
 inline void ClientRequestRecord::clear_season_catchup_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_catchup_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t ClientRequestRecord::season_catchup_points() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.season_catchup_points)
@@ -1356,7 +1548,7 @@ inline ::uint32_t ClientRequestRecord::season_catchup_points() const {
 }
 inline void ClientRequestRecord::set_season_catchup_points(::uint32_t value) {
   _internal_set_season_catchup_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.season_catchup_points)
 }
 inline ::uint32_t ClientRequestRecord::_internal_season_catchup_points() const {
@@ -1396,7 +1588,7 @@ inline void ClientRequestRecord::_internal_set_season_catchup_spent(::uint64_t v
 inline void ClientRequestRecord::clear_trial_milestone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_milestone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t ClientRequestRecord::trial_milestone_id() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_id)
@@ -1404,7 +1596,7 @@ inline ::uint32_t ClientRequestRecord::trial_milestone_id() const {
 }
 inline void ClientRequestRecord::set_trial_milestone_id(::uint32_t value) {
   _internal_set_trial_milestone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_id)
 }
 inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_id() const {
@@ -1420,7 +1612,7 @@ inline void ClientRequestRecord::_internal_set_trial_milestone_id(::uint32_t val
 inline void ClientRequestRecord::clear_trial_milestone_sand_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_milestone_sand_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t ClientRequestRecord::trial_milestone_sand_count() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_sand_count)
@@ -1428,7 +1620,7 @@ inline ::uint32_t ClientRequestRecord::trial_milestone_sand_count() const {
 }
 inline void ClientRequestRecord::set_trial_milestone_sand_count(::uint32_t value) {
   _internal_set_trial_milestone_sand_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_sand_count)
 }
 inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_sand_count() const {
@@ -1444,7 +1636,7 @@ inline void ClientRequestRecord::_internal_set_trial_milestone_sand_count(::uint
 inline void ClientRequestRecord::clear_trial_milestone_voucher_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_milestone_voucher_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t ClientRequestRecord::trial_milestone_voucher_count() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.trial_milestone_voucher_count)
@@ -1452,7 +1644,7 @@ inline ::uint32_t ClientRequestRecord::trial_milestone_voucher_count() const {
 }
 inline void ClientRequestRecord::set_trial_milestone_voucher_count(::uint32_t value) {
   _internal_set_trial_milestone_voucher_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.trial_milestone_voucher_count)
 }
 inline ::uint32_t ClientRequestRecord::_internal_trial_milestone_voucher_count() const {
@@ -1468,7 +1660,7 @@ inline void ClientRequestRecord::_internal_set_trial_milestone_voucher_count(::u
 inline void ClientRequestRecord::clear_redeemed_artifact_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.redeemed_artifact_item_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t ClientRequestRecord::redeemed_artifact_item_id() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.redeemed_artifact_item_id)
@@ -1476,7 +1668,7 @@ inline ::uint64_t ClientRequestRecord::redeemed_artifact_item_id() const {
 }
 inline void ClientRequestRecord::set_redeemed_artifact_item_id(::uint64_t value) {
   _internal_set_redeemed_artifact_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.redeemed_artifact_item_id)
 }
 inline ::uint64_t ClientRequestRecord::_internal_redeemed_artifact_item_id() const {
@@ -1492,7 +1684,7 @@ inline void ClientRequestRecord::_internal_set_redeemed_artifact_item_id(::uint6
 inline void ClientRequestRecord::clear_redeemed_artifact_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.redeemed_artifact_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t ClientRequestRecord::redeemed_artifact_config_id() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.redeemed_artifact_config_id)
@@ -1500,7 +1692,7 @@ inline ::uint32_t ClientRequestRecord::redeemed_artifact_config_id() const {
 }
 inline void ClientRequestRecord::set_redeemed_artifact_config_id(::uint32_t value) {
   _internal_set_redeemed_artifact_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.redeemed_artifact_config_id)
 }
 inline ::uint32_t ClientRequestRecord::_internal_redeemed_artifact_config_id() const {
@@ -1510,6 +1702,246 @@ inline ::uint32_t ClientRequestRecord::_internal_redeemed_artifact_config_id() c
 inline void ClientRequestRecord::_internal_set_redeemed_artifact_config_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.redeemed_artifact_config_id_ = value;
+}
+
+// uint32 enhance_pity_count = 20;
+inline void ClientRequestRecord::clear_enhance_pity_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhance_pity_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t ClientRequestRecord::enhance_pity_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.enhance_pity_count)
+  return _internal_enhance_pity_count();
+}
+inline void ClientRequestRecord::set_enhance_pity_count(::uint32_t value) {
+  _internal_set_enhance_pity_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.enhance_pity_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_enhance_pity_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enhance_pity_count_;
+}
+inline void ClientRequestRecord::_internal_set_enhance_pity_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhance_pity_count_ = value;
+}
+
+// uint32 crafting_tradable_count = 21;
+inline void ClientRequestRecord::clear_crafting_tradable_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_tradable_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t ClientRequestRecord::crafting_tradable_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.crafting_tradable_count)
+  return _internal_crafting_tradable_count();
+}
+inline void ClientRequestRecord::set_crafting_tradable_count(::uint32_t value) {
+  _internal_set_crafting_tradable_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.crafting_tradable_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_crafting_tradable_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafting_tradable_count_;
+}
+inline void ClientRequestRecord::_internal_set_crafting_tradable_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_tradable_count_ = value;
+}
+
+// uint32 enhancement_tradable_count = 22;
+inline void ClientRequestRecord::clear_enhancement_tradable_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_tradable_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t ClientRequestRecord::enhancement_tradable_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.enhancement_tradable_count)
+  return _internal_enhancement_tradable_count();
+}
+inline void ClientRequestRecord::set_enhancement_tradable_count(::uint32_t value) {
+  _internal_set_enhancement_tradable_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.enhancement_tradable_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_enhancement_tradable_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enhancement_tradable_count_;
+}
+inline void ClientRequestRecord::_internal_set_enhancement_tradable_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_tradable_count_ = value;
+}
+
+// uint32 equipment_quality_tier = 23;
+inline void ClientRequestRecord::clear_equipment_quality_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_quality_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t ClientRequestRecord::equipment_quality_tier() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_quality_tier)
+  return _internal_equipment_quality_tier();
+}
+inline void ClientRequestRecord::set_equipment_quality_tier(::uint32_t value) {
+  _internal_set_equipment_quality_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_quality_tier)
+}
+inline ::uint32_t ClientRequestRecord::_internal_equipment_quality_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_quality_tier_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_quality_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_quality_tier_ = value;
+}
+
+// uint32 equipment_polish_pity_count = 24;
+inline void ClientRequestRecord::clear_equipment_polish_pity_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_polish_pity_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t ClientRequestRecord::equipment_polish_pity_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_polish_pity_count)
+  return _internal_equipment_polish_pity_count();
+}
+inline void ClientRequestRecord::set_equipment_polish_pity_count(::uint32_t value) {
+  _internal_set_equipment_polish_pity_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_polish_pity_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_equipment_polish_pity_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_polish_pity_count_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_polish_pity_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_polish_pity_count_ = value;
+}
+
+// bool equipment_guaranteed_by_pity = 25;
+inline void ClientRequestRecord::clear_equipment_guaranteed_by_pity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_guaranteed_by_pity_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline bool ClientRequestRecord::equipment_guaranteed_by_pity() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_guaranteed_by_pity)
+  return _internal_equipment_guaranteed_by_pity();
+}
+inline void ClientRequestRecord::set_equipment_guaranteed_by_pity(bool value) {
+  _internal_set_equipment_guaranteed_by_pity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_guaranteed_by_pity)
+}
+inline bool ClientRequestRecord::_internal_equipment_guaranteed_by_pity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_guaranteed_by_pity_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_guaranteed_by_pity(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_guaranteed_by_pity_ = value;
+}
+
+// uint64 crafted_skill_book_id = 26;
+inline void ClientRequestRecord::clear_crafted_skill_book_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafted_skill_book_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint64_t ClientRequestRecord::crafted_skill_book_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.crafted_skill_book_id)
+  return _internal_crafted_skill_book_id();
+}
+inline void ClientRequestRecord::set_crafted_skill_book_id(::uint64_t value) {
+  _internal_set_crafted_skill_book_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.crafted_skill_book_id)
+}
+inline ::uint64_t ClientRequestRecord::_internal_crafted_skill_book_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafted_skill_book_id_;
+}
+inline void ClientRequestRecord::_internal_set_crafted_skill_book_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafted_skill_book_id_ = value;
+}
+
+// uint32 crafted_skill_table_id = 27;
+inline void ClientRequestRecord::clear_crafted_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafted_skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t ClientRequestRecord::crafted_skill_table_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.crafted_skill_table_id)
+  return _internal_crafted_skill_table_id();
+}
+inline void ClientRequestRecord::set_crafted_skill_table_id(::uint32_t value) {
+  _internal_set_crafted_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.crafted_skill_table_id)
+}
+inline ::uint32_t ClientRequestRecord::_internal_crafted_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafted_skill_table_id_;
+}
+inline void ClientRequestRecord::_internal_set_crafted_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafted_skill_table_id_ = value;
+}
+
+// uint64 scroll_craft_revision = 28;
+inline void ClientRequestRecord::clear_scroll_craft_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_craft_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint64_t ClientRequestRecord::scroll_craft_revision() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.scroll_craft_revision)
+  return _internal_scroll_craft_revision();
+}
+inline void ClientRequestRecord::set_scroll_craft_revision(::uint64_t value) {
+  _internal_set_scroll_craft_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.scroll_craft_revision)
+}
+inline ::uint64_t ClientRequestRecord::_internal_scroll_craft_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_craft_revision_;
+}
+inline void ClientRequestRecord::_internal_set_scroll_craft_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_craft_revision_ = value;
+}
+
+// uint32 scroll_bonus_fragments = 29;
+inline void ClientRequestRecord::clear_scroll_bonus_fragments() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_bonus_fragments_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline ::uint32_t ClientRequestRecord::scroll_bonus_fragments() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.scroll_bonus_fragments)
+  return _internal_scroll_bonus_fragments();
+}
+inline void ClientRequestRecord::set_scroll_bonus_fragments(::uint32_t value) {
+  _internal_set_scroll_bonus_fragments(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.scroll_bonus_fragments)
+}
+inline ::uint32_t ClientRequestRecord::_internal_scroll_bonus_fragments() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_bonus_fragments_;
+}
+inline void ClientRequestRecord::_internal_set_scroll_bonus_fragments(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_bonus_fragments_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -1544,7 +1976,7 @@ inline void EquipmentMaterialRewardLedger::_internal_set_day_starts_at_ms(::uint
 inline void EquipmentMaterialRewardLedger::clear_earned_today() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.earned_today_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t EquipmentMaterialRewardLedger::earned_today() const {
   // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.earned_today)
@@ -1552,7 +1984,7 @@ inline ::uint32_t EquipmentMaterialRewardLedger::earned_today() const {
 }
 inline void EquipmentMaterialRewardLedger::set_earned_today(::uint32_t value) {
   _internal_set_earned_today(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.earned_today)
 }
 inline ::uint32_t EquipmentMaterialRewardLedger::_internal_earned_today() const {
@@ -1592,7 +2024,7 @@ inline void EquipmentMaterialRewardLedger::_internal_set_available_units(::uint6
 inline void EquipmentMaterialRewardLedger::clear_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t EquipmentMaterialRewardLedger::revision() const {
   // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.revision)
@@ -1600,7 +2032,7 @@ inline ::uint64_t EquipmentMaterialRewardLedger::revision() const {
 }
 inline void EquipmentMaterialRewardLedger::set_revision(::uint64_t value) {
   _internal_set_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.revision)
 }
 inline ::uint64_t EquipmentMaterialRewardLedger::_internal_revision() const {
@@ -1610,6 +2042,150 @@ inline ::uint64_t EquipmentMaterialRewardLedger::_internal_revision() const {
 inline void EquipmentMaterialRewardLedger::_internal_set_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = value;
+}
+
+// uint32 lifetime_earned = 5;
+inline void EquipmentMaterialRewardLedger::clear_lifetime_earned() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_earned_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::lifetime_earned() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.lifetime_earned)
+  return _internal_lifetime_earned();
+}
+inline void EquipmentMaterialRewardLedger::set_lifetime_earned(::uint32_t value) {
+  _internal_set_lifetime_earned(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.lifetime_earned)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_lifetime_earned() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lifetime_earned_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_lifetime_earned(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lifetime_earned_ = value;
+}
+
+// uint32 tradable_earned_total = 6;
+inline void EquipmentMaterialRewardLedger::clear_tradable_earned_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tradable_earned_total_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::tradable_earned_total() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.tradable_earned_total)
+  return _internal_tradable_earned_total();
+}
+inline void EquipmentMaterialRewardLedger::set_tradable_earned_total(::uint32_t value) {
+  _internal_set_tradable_earned_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.tradable_earned_total)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_tradable_earned_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tradable_earned_total_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_tradable_earned_total(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tradable_earned_total_ = value;
+}
+
+// uint64 available_tradable_units = 7;
+inline void EquipmentMaterialRewardLedger::clear_available_tradable_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_tradable_units_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::available_tradable_units() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.available_tradable_units)
+  return _internal_available_tradable_units();
+}
+inline void EquipmentMaterialRewardLedger::set_available_tradable_units(::uint64_t value) {
+  _internal_set_available_tradable_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.available_tradable_units)
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::_internal_available_tradable_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_tradable_units_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_available_tradable_units(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_tradable_units_ = value;
+}
+
+// uint64 week_starts_at_ms = 8;
+inline void EquipmentMaterialRewardLedger::clear_week_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::week_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.week_starts_at_ms)
+  return _internal_week_starts_at_ms();
+}
+inline void EquipmentMaterialRewardLedger::set_week_starts_at_ms(::uint64_t value) {
+  _internal_set_week_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.week_starts_at_ms)
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::_internal_week_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_starts_at_ms_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_week_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = value;
+}
+
+// uint32 earned_this_week = 9;
+inline void EquipmentMaterialRewardLedger::clear_earned_this_week() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_this_week_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::earned_this_week() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.earned_this_week)
+  return _internal_earned_this_week();
+}
+inline void EquipmentMaterialRewardLedger::set_earned_this_week(::uint32_t value) {
+  _internal_set_earned_this_week(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.earned_this_week)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_earned_this_week() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earned_this_week_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_earned_this_week(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_this_week_ = value;
+}
+
+// bool migrated_to_v2 = 10;
+inline void EquipmentMaterialRewardLedger::clear_migrated_to_v2() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.migrated_to_v2_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool EquipmentMaterialRewardLedger::migrated_to_v2() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.migrated_to_v2)
+  return _internal_migrated_to_v2();
+}
+inline void EquipmentMaterialRewardLedger::set_migrated_to_v2(bool value) {
+  _internal_set_migrated_to_v2(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.migrated_to_v2)
+}
+inline bool EquipmentMaterialRewardLedger::_internal_migrated_to_v2() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.migrated_to_v2_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_migrated_to_v2(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.migrated_to_v2_ = value;
 }
 
 // -------------------------------------------------------------------

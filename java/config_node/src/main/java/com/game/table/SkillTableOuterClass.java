@@ -66,7 +66,7 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
       "urce\022\036\n\026required_resource_type\030\001 \001(\r\022\037\n\027" +
       "required_resource_value\030\002 \001(\r\"J\n\022Skillco" +
       "st_resource\022\030\n\020cost_resource_id\030\001 \001(\r\022\032\n" +
-      "\022cost_resource_cost\030\002 \001(\r\"\310\n\n\nSkillTable" +
+      "\022cost_resource_cost\030\002 \001(\r\"\360\n\n\nSkillTable" +
       "\022\n\n\002id\030\001 \001(\r\022\022\n\nskill_type\030\002 \003(\r\022\026\n\016targ" +
       "eting_mode\030\003 \003(\r\022\026\n\016require_target\030\004 \001(\r" +
       "\022\025\n\rtarget_status\030\005 \001(\r\022\022\n\ncast_point\030\006 " +
@@ -97,6 +97,7 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
       "\0305 \001(\r\022\030\n\020health_cost_mode\0306 \001(\r\022\023\n\013acti" +
       "on_tags\0307 \001(\r\022\031\n\021allow_dead_target\0308 \001(\r" +
       "\022\023\n\013forbid_copy\0309 \001(\r\022\021\n\tseason_id\030: \001(\r" +
+      "\022\021\n\tscroll_id\030; \001(\r\022\023\n\013rarity_tier\030< \001(\r" +
       "\022*\n\rrequired_item\030\025 \003(\0132\023.Skillrequired_" +
       "item\0222\n\021required_resource\030\026 \003(\0132\027.Skillr" +
       "equired_resource\022*\n\rcost_resource\030\027 \003(\0132" +
@@ -132,7 +133,7 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
     internal_static_SkillTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SkillTable_descriptor,
-        new java.lang.String[] { "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "BattleModel", "CasterMask", "AbilityKind", "PetMaxTargets", "InitEffect", "PrototypeCode", "MaxBattleUses", "HealthCostMode", "ActionTags", "AllowDeadTarget", "ForbidCopy", "SeasonId", "RequiredItem", "RequiredResource", "CostResource", });
+        new java.lang.String[] { "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "BattleModel", "CasterMask", "AbilityKind", "PetMaxTargets", "InitEffect", "PrototypeCode", "MaxBattleUses", "HealthCostMode", "ActionTags", "AllowDeadTarget", "ForbidCopy", "SeasonId", "ScrollId", "RarityTier", "RequiredItem", "RequiredResource", "CostResource", });
     internal_static_SkillTableData_descriptor =
       getDescriptor().getMessageType(4);
     internal_static_SkillTableData_fieldAccessorTable = new

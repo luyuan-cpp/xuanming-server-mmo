@@ -176,6 +176,19 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 		metrics.ObserveRatingUpdate(modeName, outcome)
 		return outcome
 	}
+	if mode == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		roundLimit := svcCtx.ActiveCatalog().RoundLimit(event.GetBattleConfigId())
+		applied, err := svcCtx.Authority.ApplyTournamentBattleResult(ctx, event, roundLimit)
+		if err != nil {
+			return finish(ratingOutcomeError), err
+		}
+		if !applied {
+			return finish(ratingOutcomeDuplicate), nil
+		}
+		return finish(ratingOutcomeApplied), nil
+	}
 	if !isRatedMode(mode) {
 		return finish(ratingOutcomeIgnored), nil
 	}
@@ -202,7 +215,13 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	applied, e := svcCtx.Authority.ApplyRating(ctx, battleId, event, uint32(mode), teamA, teamB, scoreA)
+	var applied bool
+	var e error
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM && event.GetRankedContext().GetSeasonId() != 0 {
+		applied, e = svcCtx.Authority.ApplyRankedRating(ctx, event, teamA, teamB, scoreA)
+	} else {
+		applied, e = svcCtx.Authority.ApplyRating(ctx, battleId, event, uint32(mode), teamA, teamB, scoreA)
+	}
 	if e != nil {
 		return finish(ratingOutcomeError), e
 	}

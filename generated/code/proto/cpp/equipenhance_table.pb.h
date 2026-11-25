@@ -237,6 +237,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
     kMaterialCountFieldNumber = 7,
     kProfileIdFieldNumber = 8,
     kLevelFieldNumber = 9,
+    kPityLimitFieldNumber = 10,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -328,11 +329,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
   void _internal_set_level(::uint32_t value);
 
   public:
+  // uint32 pity_limit = 10;
+  void clear_pity_limit() ;
+  [[nodiscard]] ::uint32_t pity_limit() const;
+  void set_pity_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pity_limit() const;
+  void _internal_set_pity_limit(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipEnhanceTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -370,6 +381,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
     ::uint32_t material_count_;
     ::uint32_t profile_id_;
     ::uint32_t level_;
+    ::uint32_t pity_limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -818,6 +830,30 @@ inline ::uint32_t EquipEnhanceTable::_internal_level() const {
 inline void EquipEnhanceTable::_internal_set_level(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = value;
+}
+
+// uint32 pity_limit = 10;
+inline void EquipEnhanceTable::clear_pity_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pity_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t EquipEnhanceTable::pity_limit() const {
+  // @@protoc_insertion_point(field_get:EquipEnhanceTable.pity_limit)
+  return _internal_pity_limit();
+}
+inline void EquipEnhanceTable::set_pity_limit(::uint32_t value) {
+  _internal_set_pity_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:EquipEnhanceTable.pity_limit)
+}
+inline ::uint32_t EquipEnhanceTable::_internal_pity_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pity_limit_;
+}
+inline void EquipEnhanceTable::_internal_set_pity_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pity_limit_ = value;
 }
 
 // -------------------------------------------------------------------

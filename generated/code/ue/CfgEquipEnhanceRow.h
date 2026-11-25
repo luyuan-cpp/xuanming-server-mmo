@@ -90,4 +90,8 @@ struct FCfgEquipEnhanceRow : public FTableRowBase
 	/** 目标等级。旧规则组可留 0 并沿用 id，其余规则组必须显式填写。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
 	int32 level = 0;
+
+	/** 保底必成次数上限：0 = 无保底（用于 100% 必成行或旧规则行）；> 0 时连续失败达到 pity_limit - 1 次后的下一次 100% 必成且不掉级。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
+	int32 pity_limit = 0;
 };

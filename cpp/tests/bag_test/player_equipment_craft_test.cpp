@@ -32,6 +32,7 @@
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_craft_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "table/code/attributeallocratio_table.h"
@@ -40,6 +41,7 @@
 #include "table/code/attributerule_table.h"
 #include "table/code/class_table.h"
 #include "table/code/equipaffixpool_table.h"
+#include "table/code/equipaffixquality_table.h"
 #include "table/code/equipaffixrule_table.h"
 #include "table/code/equipartifact_table.h"
 #include "table/code/equipattribute_table.h"
@@ -130,6 +132,7 @@ protected:
     static void LoadTables() {
         ItemTableManager::Instance().Load();
         EquipV1AffixTableManager::Instance().Load();
+        EquipAffixQualityTableManager::Instance().Load();
         EquipArtifactTableManager::Instance().Load();
         EquipSlotTableManager::Instance().Load();
         EquipAttributeTableManager::Instance().Load();
@@ -154,6 +157,7 @@ protected:
         auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
         for (auto& bag : bags.bags) bag.SetPlayerGuid(kCraftPlayer);
         tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player);
+        tlsEcs.actorRegistry.emplace<PlayerCraftComp>(player);
         tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
         tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(80);
         tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player);
@@ -175,6 +179,7 @@ protected:
         for (const auto id : originalItemBlocks) GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, id);
         BagService::SetItemInstanceInitializer({});
         PlayerEquipSystem::SetRandomSourceForTest({});
+        PlayerEquipmentV1System::SetQualityRollForTest(nullptr);
         persistRequests = 0;
         persistAccepted = false;
         PlayerEquipmentV1System::SetPersistForTest(&CapturePersistRequest);
@@ -183,6 +188,7 @@ protected:
 
     void TearDown() override {
         PlayerEquipmentV1System::SetPersistForTest(nullptr);
+        PlayerEquipmentV1System::SetQualityRollForTest(nullptr);
         BagService::SetItemInstanceInitializer({});
         PlayerEquipSystem::SetRandomSourceForTest({});
         tlsEcs.playerList.erase(kCraftPlayer);
@@ -448,6 +454,7 @@ TEST_F(PlayerEquipmentCraftTest, ExactExchangeCallbackRejectionDoesNotPublishCan
 }
 
 TEST_F(PlayerEquipmentCraftTest, FullSetEightInstancesAndTwelveAffixesCostsExactlyThreeHundred) {
+    PlayerEquipmentV1System::SetQualityRollForTest([](uint32_t) { return 9999u; }); // 满档 100% 品相验证上限汇总。
     ASSERT_NO_FATAL_FAILURE(Stock(300));
     std::array<Guid, 8> ids{};
     for (uint32_t i = 0; i < 4; ++i) {
@@ -489,6 +496,7 @@ TEST_F(PlayerEquipmentCraftTest, FullSetEightInstancesAndTwelveAffixesCostsExact
 }
 
 TEST_F(PlayerEquipmentCraftTest, EveryFormalAffixMatchesPreviewInstalledDisplayAndCollectedEffect) {
+    PlayerEquipmentV1System::SetQualityRollForTest([](uint32_t) { return 9999u; });
     ASSERT_NO_FATAL_FAILURE(Stock(2000));
     GetEquipmentCraftRulesResponse rules;
     ASSERT_EQ(kSuccess, PlayerEquipmentV1System::GetRules(player, rules));
@@ -509,7 +517,10 @@ TEST_F(PlayerEquipmentCraftTest, EveryFormalAffixMatchesPreviewInstalledDisplayA
         for (const auto& entry : preview.preview().result().fixed_affix_slots())
             if (entry.slot() == slot && entry.has_selected()) selected = &entry.selected();
         ASSERT_NE(nullptr, selected);
-        EXPECT_EQ(affix.SerializeAsString(), selected->SerializeAsString());
+        EXPECT_EQ(affix.affix_id(), selected->affix_id());
+        EXPECT_EQ(affix.value_bps(), selected->value_bps());
+        EXPECT_EQ(affix.max_value_bps(), selected->max_value_bps());
+        EXPECT_EQ(5u, selected->quality_tier());
         ASSERT_NO_FATAL_FAILURE(Install(id, slot, affix.affix_id()));
         BagItemInfo actual;
         ASSERT_NE(nullptr, Inventory().GetItemCompByGuid(id));
@@ -570,6 +581,7 @@ TEST_F(PlayerEquipmentCraftTest, FirstInstallPreservesEnhancementAndGemsAndNever
 }
 
 TEST_F(PlayerEquipmentCraftTest, InstallingOnEquippedInstanceChangesEffectWithoutMovingItsSlot) {
+    PlayerEquipmentV1System::SetQualityRollForTest([](uint32_t) { return 9999u; });
     ASSERT_NO_FATAL_FAILURE(Stock(100));
     Guid id{};
     ASSERT_NO_FATAL_FAILURE(Create(3101, id));

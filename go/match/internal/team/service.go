@@ -345,6 +345,19 @@ func (s *Service) disbandTeam(ctx context.Context, caller uint64, in *teampb.Dis
 	return resp
 }
 
+// ConfirmRankedPreset 队员确认论剑排位预设(452);非法预设或旧规则版本回 4034,成功推 RANKED_PRESET_CONFIRMED。
+func (s *Service) confirmRankedPreset(ctx context.Context, caller uint64, in *teampb.ConfirmRankedPresetRequest) *teampb.TeamResponse {
+	cat := s.svcCtx.ActiveRanked()
+	curVer := cat.RuleVersion()
+	if in.GetRuleVersion() != curVer || !cat.IsValidPair(in.GetCharacterPresetId(), in.GetPetPresetId()) {
+		return s.respond(ctx, caller, ErrRankedPresetInvalid, 0)
+	}
+	resp, _ := s.runMutate(ctx, caller, BindCaller(caller, in.GetExpectedTeamId()),
+		ConfirmRankedPresetOp(caller, in.GetCharacterPresetId(), in.GetPetPresetId(), curVer),
+		mutateSpec{method: methodConfirmRankedPreset})
+	return resp
+}
+
 // preflightMatch 逐成员只读预检(§E.1 第 5 步,按 roster 顺序,fail-closed)。
 // 返回 (tip, parameters[0])。顺序固定为会话 → 战斗锁 → 位置 → 票据,与 JoinQueue 同序。
 // 位置只判「人在不在场景」:它的 zone 是物理节点,不是归属,开战原件记的归属在 createLaunch 的路由锁内读。

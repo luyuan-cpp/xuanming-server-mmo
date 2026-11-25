@@ -3821,6 +3821,8 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player); // 同上,物品数量预留(battle-item-reservation.md)
     tlsEcs.actorRegistry.emplace<PlayerMailOutboxComp>(player); // 同上,待寄邮件(battle-overflow-mail.md)
     tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player); // 同上,赛季印持久状态(season-skills-and-seal-design.md)
+    tlsEcs.actorRegistry.emplace<PlayerTrialJournalComp>(player); // 同上,五行试炼志持久状态(long-term-progression-v2.md)
+    tlsEcs.actorRegistry.emplace<PlayerCraftComp>(player); // 同上,装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

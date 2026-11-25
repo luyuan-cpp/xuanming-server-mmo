@@ -232,18 +232,44 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     roundIndex = 1;
     outcome = BATTLE_OUTCOME_ONGOING;
     everDiedActors.clear();
+    enteredPlayers.clear();
+    manualActionPlayers.clear();
+    explicitAutoPlayers.clear();
+    hadOperableTurnPlayers.clear();
     bossGuardHealTotal = 0;
     guardStanceDispelled = false;
-    teamADealtPhysicalDirectDamage = false;
-    teamADealtMagicDirectDamage = false;
+    teamDealtPhysicalDirectDamage = {false, false};
+    teamDealtMagicDirectDamage = {false, false};
     shieldBreakPlayers.clear();
     antiControlOrSeasonSkillPlayers.clear();
+    bossTrialKind = kBossTrialKindNone;
+    battleDifficulty = 0;
+    protectedGuardActorId = 0;
+    initialPolarity = 0;
+    activePolarity = 0;
+    bossStanceType = 0;
+    bossBarrierShield = 0;
+    activeTelegraphs.clear();
+    manualActionRoundsByPlayer.clear();
+    effectiveContributionPlayers.clear();
 
-    // 回合上限:DungeonTable.time_limit(秒)换算,缺省 300 回合
+    // 回合上限与玩法配置：优先 DungeonTable.round_limit，其次物法易势默认 16 回合，其余沿用 time_limit 换算。
     maxRounds = kDefaultMaxRounds;
     if (const auto* dungeonRow = dataProvider->FindDungeon(request.battle_config_id());
-        dungeonRow != nullptr && dungeonRow->time_limit() > 0) {
-        maxRounds = RoundsFromMilliseconds(static_cast<uint64_t>(dungeonRow->time_limit()) * 1000);
+        dungeonRow != nullptr) {
+        bossTrialKind = dungeonRow->boss_trial_kind();
+        battleDifficulty = dungeonRow->difficulty();
+        if (dungeonRow->round_limit() > 0) {
+            maxRounds = dungeonRow->round_limit();
+        } else if (dungeonRow->time_limit() > 0) {
+            maxRounds = RoundsFromMilliseconds(static_cast<uint64_t>(dungeonRow->time_limit()) * 1000);
+        }
+    }
+    if (request.match_mode() == kMatchModePolarity5v5 && bossTrialKind == kBossTrialKindNone) {
+        bossTrialKind = kBossTrialKindPolarity5v5;
+        if (maxRounds == kDefaultMaxRounds) {
+            maxRounds = kPolarityDefaultMaxRounds;
+        }
     }
 
     if (!InitPlayers(request)) {
@@ -287,6 +313,7 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     BindBattleScripts();
     BindDungeonMonsterAis();
     InitializeConfiguredAbilities();
+    InitSpecialEncounterState();
 
     initialized = true;
     return true;
@@ -418,13 +445,20 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
     };
 
     uint64_t petIndex = 0;  // 局内序号,按快照顺序递增,确定性
+    const bool allowTempPet = UsesFreePreset();
     for (const auto& snapshot : request.players()) {
         for (const auto& pet : snapshot.pets()) {
-            if (pet.pet_id() == 0) {
-                return false;  // 快照非法:scene 不应产出无 id 的宝宝
+            const bool isCompetitiveTemp = pet.competitive_temporary();
+            if (isCompetitiveTemp && !allowTempPet) {
+                LOG_ERROR << "CreateBattle competitive_temporary pet rejected when use_free_preset is false: battle_id="
+                          << request.battle_id() << " player_id=" << snapshot.player_id();
+                return false;
             }
-            // 同一只宝宝出现在两份快照里 = 编排层错误,拒绝开局
-            if (petAlreadyJoined(pet.pet_id())) {
+            if (pet.pet_id() == 0 && !(isCompetitiveTemp && allowTempPet)) {
+                return false;  // 快照非法:非免费预设娱乐场的 scene 快照不应产出无 id 的宝宝
+            }
+            // 同一只永久宝宝出现在两份快照里 = 编排层错误,拒绝开局
+            if (pet.pet_id() != 0 && petAlreadyJoined(pet.pet_id())) {
                 LOG_ERROR << "CreateBattle pet participates more than once: battle_id="
                           << request.battle_id() << " pet_id=" << pet.pet_id();
                 return false;
@@ -437,6 +471,7 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
             actor.set_actor_id(kPetActorIdBase + petIndex);
             ++petIndex;
             actor.set_pet_id(pet.pet_id());
+            actor.set_competitive_temporary(isCompetitiveTemp);
             actor.set_actor_type(BATTLE_ACTOR_TYPE_PET);
             // 与主人同队:快照的 team_index 由 match 改写,宝宝只跟随,不自带阵营
             actor.set_team_index(snapshot.team_index());
@@ -511,28 +546,42 @@ bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
         }
     }
 
+    const bool isBossTrialOrRescue =
+        bossTrialKind >= kBossTrialKindBreakRejuv && bossTrialKind <= kBossTrialKindGuardianRescue;
     auto monsterIds = dataProvider->GetDungeonMonsterIds(request.battle_config_id());
     if (monsterIds.empty()) {
         // DungeonTable 缺怪物组列:按玩家人数生成默认怪,保证 PVE 一定有对手
         monsterIds.assign(static_cast<size_t>(request.players_size()), 0);
-    } else if (const uint32_t monstersPerPlayer =
-                   dataProvider->GetDungeonMonstersPerPlayer(request.battle_config_id());
-               monstersPerPlayer > 0 && attackerCount > 0 &&
-               !IsActivityBattle(request.activity_context())) {
-        // 活动对局(帮会同道历练等,请求带 activity_context)不放大:活动的难度、胜负与奖励口径是按
-        // 固定一组怪定的(guild-phase2/06-activities.md),人数档只针对普通 PVE(排队 / 整队开战)。
-        // 怪物只数跟队伍人数走(pve-team-size-matching.md §2):怪物组此时是"种类池",
-        // 按顺序循环取够只数。每人只数先按上限夹一次再乘:attackerCount 已被 Initialize 压在
-        // kMaxBattleTeamSize 以内,乘积不会溢出。attackerCount == 0 是分边错误的快照,
-        // 不放大,留给 Initialize 的两侧非空检查拒绝
-        const uint32_t scaledCount =
-            attackerCount * std::min(monstersPerPlayer, kMaxScaledPveMonsterCount);
-        monsterIds = CycleMonsterGroup(monsterIds, std::min(scaledCount, kMaxScaledPveMonsterCount));
+    } else if (!isBossTrialOrRescue) {
+        if (const uint32_t monstersPerPlayer =
+                dataProvider->GetDungeonMonstersPerPlayer(request.battle_config_id());
+            monstersPerPlayer > 0 && attackerCount > 0 &&
+            !IsActivityBattle(request.activity_context())) {
+            // 活动对局(帮会同道历练等,请求带 activity_context)不放大;首领试炼与护卫救援固定 1 首领 + 1 护卫
+            // 仅按玩家人数线性缩放血量，不复制额外怪。
+            const uint32_t scaledCount =
+                attackerCount * std::min(monstersPerPlayer, kMaxScaledPveMonsterCount);
+            monsterIds = CycleMonsterGroup(monsterIds, std::min(scaledCount, kMaxScaledPveMonsterCount));
+        }
     }
 
+    const uint32_t hpScale = isBossTrialOrRescue ? std::max<uint32_t>(1u, attackerCount) : 1u;
     uint32_t monsterIndex = 0;
     for (const auto monsterTableId : monsterIds) {
         AppendMonsterActor(monsterTableId, monsterIndex, referenceLevel);
+        auto& spawned = actors.back();
+        if (hpScale > 1) {
+            const uint64_t scaledHp = spawned.max_health() * hpScale;
+            spawned.set_max_health(scaledHp);
+            spawned.mutable_attributes()->set_health(scaledHp);
+        }
+        // 护卫救援：非首领的护卫单位归属玩家侧（team 0）作为受保护目标，死亡即刻判负。
+        if (bossTrialKind == kBossTrialKindGuardianRescue && !spawned.is_boss() && protectedGuardActorId == 0) {
+            const uint32_t allySlot = NextFormationSlot(0);
+            spawned.set_team_index(0);
+            spawned.set_formation_slot(allySlot);
+            protectedGuardActorId = spawned.actor_id();
+        }
         ++monsterIndex;
     }
     return true;
@@ -618,6 +667,7 @@ bool TurnBattleEngine::SubmitAction(uint64_t actorId, const BattleAction& action
         // 截止前允许重复提交改主意,最后一次为准
         if (CheckActionPrerequisites(*actor, action) == kSuccess) {
             pendingActions[actorId] = action;
+            RecordManualActionForActor(*actor);
         }
     }
 
@@ -654,6 +704,9 @@ uint32_t TurnBattleEngine::SetActorAuto(uint64_t actorId, bool enabled) {
         return kThisEntityIsInvalid;
     }
     actor->set_is_auto(enabled);
+    if (enabled) {
+        explicitAutoPlayers.insert(actorId);
+    }
     for (auto& pet : actors) if (pet.actor_type() == BATTLE_ACTOR_TYPE_PET && pet.owner_player_id() == actorId &&
         !pet.skill_ranks().empty()) pet.set_is_auto(enabled);
     return 0;
@@ -963,11 +1016,26 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     currentHitIndex = 0;
     lastActionOrder = BuildTurnOrder();
 
-    // 2. 速度降序、同速按 actor_id 稳定序,逐个执行;死亡/已逃单位跳过
+    // 2. 速度降序、同速按 actor_id 稳定序,逐个执行;死亡/已逃单位跳过。
+    //    本回合承担慢速蓄力重击或周期机制的试炼首领/护卫在慢速阶段统一结算，不在普通循环重复行动。
     for (const auto actorId : lastActionOrder) {
+        if (IsEncounterSlowPhaseActor(actorId)) {
+            continue;
+        }
         auto* actor = FindActor(actorId);
         if (actor == nullptr || !IsActorActive(*actor)) {
             continue;
+        }
+        if (actor->actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            const bool hardControlled =
+                ActorHasBuffOfType(*actor, kBuffTypeStun) ||
+                ActorHasBuffOfType(*actor, kBuffTypeFreeze) ||
+                HasConfiguredState(*actor, BattleStateKind::Freeze) ||
+                HasConfiguredState(*actor, BattleStateKind::Sleep) ||
+                HasConfiguredState(*actor, BattleStateKind::Confusion);
+            if (!hardControlled) {
+                hadOperableTurnPlayers.insert(actor->actor_id());
+            }
         }
         const auto actionIt = pendingActions.find(actorId);
         if (actionIt == pendingActions.end()) {
@@ -977,6 +1045,10 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         BeginEventGroup();
         ExecuteAction(*actor, actionIt->second, result);
     }
+
+    // 2.5 首领试炼慢速重击与护卫周期机制：排在全部常规行动之后、回合末 buff tick 与摘除防御之前，
+    //     确保低速单位点击防御后必然在本回合享受到防御减半，且受控首领/护卫的预告动作被直接取消不回退普攻。
+    ExecuteBossTrialSlowAndGuardianActions(result);
 
     // 3. 回合末 buff tick:周期效果 → 持续减一 → 到期移除
     TickBuffsAtRoundEnd(result);
@@ -995,7 +1067,7 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         }
     }
 
-    // 6. 胜负判定(含 max_rounds 打满进攻方判负)
+    // 6. 胜负判定(含 max_rounds 打满进攻方判负、护卫救援护卫阵亡即负、物法易势满 16 回合平局)
     UpdateOutcome();
 
     // 7. 终局奖励只生成一次，固定额度与独立随机结果写进结算账本供重复读取。
@@ -1004,6 +1076,10 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     pendingActions.clear();
     if (outcome == BATTLE_OUTCOME_ONGOING) {
         ++roundIndex;
+        UpdatePolarityForRound();
+        RefreshEncounterTelegraphs();
+    } else {
+        activeTelegraphs.clear();
     }
 
     *result.mutable_state() = BuildStateSnapshot();
@@ -1021,6 +1097,13 @@ void TurnBattleEngine::FillDefaultActions() {
             continue;
         }
         if (pendingActions.find(actor.actor_id()) != pendingActions.end()) {
+            continue;
+        }
+        // 护卫救援：玩家侧待保护护卫默认防御保命。
+        if (protectedGuardActorId != 0 && actor.actor_id() == protectedGuardActorId) {
+            BattleAction guardDefend;
+            guardDefend.set_action_type(BATTLE_ACTION_DEFEND);
+            pendingActions.emplace(actor.actor_id(), std::move(guardDefend));
             continue;
         }
         // 超时/掉线/怪物:默认普攻,目标置 0,结算时用引擎 RNG 随机存活敌方
@@ -1130,6 +1213,10 @@ void TurnBattleEngine::FillDungeonMonsterAiActions() {
             continue;
         }
         if (pendingActions.find(actor.actor_id()) != pendingActions.end()) {
+            continue;
+        }
+        // 护卫救援：玩家侧待保护护卫不走敌方怪物 AI。
+        if (protectedGuardActorId != 0 && actor.actor_id() == protectedGuardActorId) {
             continue;
         }
 
@@ -1527,8 +1614,11 @@ std::vector<uint64_t> TurnBattleEngine::BuildTurnOrder() const {
     for (const auto* actor : ordered) {
         sortKeys[actor->actor_id()] = {ActionInitiative(*actor), EffectiveSpeed(*actor)};
     }
+    const bool rankedTieBreak = IsRankedBattle() || UsesFreePreset();
+    const uint64_t battleSeed = createRequest.seed();
+    const uint32_t currentRound = roundIndex;
     std::sort(ordered.begin(), ordered.end(),
-              [&sortKeys](const BattleActorState* lhs, const BattleActorState* rhs) {
+              [&sortKeys, rankedTieBreak, battleSeed, currentRound](const BattleActorState* lhs, const BattleActorState* rhs) {
                   const auto& lhsKey = sortKeys.at(lhs->actor_id());
                   const auto& rhsKey = sortKeys.at(rhs->actor_id());
                   if (lhsKey.first != rhsKey.first) {
@@ -1536,6 +1626,13 @@ std::vector<uint64_t> TurnBattleEngine::BuildTurnOrder() const {
                   }
                   if (lhsKey.second != rhsKey.second) {
                       return lhsKey.second > rhsKey.second;
+                  }
+                  if (rankedTieBreak) {
+                      const uint64_t lhsTie = RankedTurnTieKey(battleSeed, currentRound, lhs->actor_id());
+                      const uint64_t rhsTie = RankedTurnTieKey(battleSeed, currentRound, rhs->actor_id());
+                      if (lhsTie != rhsTie) {
+                          return lhsTie < rhsTie;
+                      }
                   }
                   return lhs->actor_id() < rhs->actor_id();
               });
@@ -1680,9 +1777,24 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
         if (hitKind != BATTLE_HIT_COUNTER) TryReflectDamage(attacker, target, context.actualDamage, result);
         return context.actualDamage > 0;
     }
-    const uint64_t dealt = ApplyDamage(target, finalDamage);
+    uint64_t dealt = 0;
+    if (activePolarity != 0 || bossTrialKind == kBossTrialKindBreakStance || bossTrialKind == kBossTrialKindBarrier) {
+        double scaled = finalDamage;
+        if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) scaled = 0.0;
+        if (target.is_defending()) scaled *= 0.5;
+        uint64_t remaining = combatdamage::DamageToHealth(scaled, UINT64_MAX);
+        remaining = ApplyEncounterDamageModifiers(attacker, target, remaining, combatdamage::kPhysicalDamage,
+                                                  hitKind != BATTLE_HIT_COUNTER, result);
+        dealt = std::min(target.attributes().health(), remaining);
+        if (dealt > 0) target.mutable_attributes()->set_health(target.attributes().health() - dealt);
+    } else {
+        dealt = ApplyDamage(target, finalDamage);
+    }
     if (hitKind != BATTLE_HIT_COUNTER) {
         RecordTrialDirectDamage(attacker, target, combatdamage::kPhysicalDamage, dealt);
+    }
+    if (dealt > 0) {
+        RecordEffectiveContribution(attacker);
     }
 
     auto* damageEvent =
@@ -1925,8 +2037,22 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
             context.primaryTargetId = action.target_id() != 0 ? action.target_id() : currentHitIndex == 0 ? target.actor_id() : 0;
             ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
         } else {
-        const uint64_t dealt = ApplyDamage(target, finalDamage);
+        uint64_t dealt = 0;
+        if (activePolarity != 0 || bossTrialKind == kBossTrialKindBreakStance || bossTrialKind == kBossTrialKindBarrier) {
+            double scaled = finalDamage;
+            if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) scaled = 0.0;
+            if (target.is_defending()) scaled *= 0.5;
+            uint64_t remaining = combatdamage::DamageToHealth(scaled, UINT64_MAX);
+            remaining = ApplyEncounterDamageModifiers(actor, target, remaining, skillRow.damage_type(), true, result);
+            dealt = std::min(target.attributes().health(), remaining);
+            if (dealt > 0) target.mutable_attributes()->set_health(target.attributes().health() - dealt);
+        } else {
+            dealt = ApplyDamage(target, finalDamage);
+        }
         RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
+        if (dealt > 0) {
+            RecordEffectiveContribution(actor);
+        }
 
         auto* damageEvent =
             AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), target.actor_id());
@@ -2192,8 +2318,22 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
                 context.primaryTargetId = primaryTargetId;
                 ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
             } else {
-            const uint64_t dealt = ApplyDamage(target, finalDamage);
+            uint64_t dealt = 0;
+            if (activePolarity != 0 || bossTrialKind == kBossTrialKindBreakStance || bossTrialKind == kBossTrialKindBarrier) {
+                double scaled = finalDamage;
+                if (ActorHasBuffOfType(target, kBuffTypeInvincibility)) scaled = 0.0;
+                if (target.is_defending()) scaled *= 0.5;
+                uint64_t remaining = combatdamage::DamageToHealth(scaled, UINT64_MAX);
+                remaining = ApplyEncounterDamageModifiers(actor, target, remaining, skillRow.damage_type(), true, result);
+                dealt = std::min(target.attributes().health(), remaining);
+                if (dealt > 0) target.mutable_attributes()->set_health(target.attributes().health() - dealt);
+            } else {
+                dealt = ApplyDamage(target, finalDamage);
+            }
             RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
+            if (dealt > 0) {
+                RecordEffectiveContribution(actor);
+            }
 
             auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), target.actor_id());
             damageEvent->set_skill_table_id(skillRow.id());
@@ -2219,6 +2359,9 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
         } else {
         const uint64_t healed = ApplyHeal(target, ClassSkillHealAmount(actor, skillRow, rank, target));
         RecordTrialMonsterHeal(actor, target, healed);
+        if (healed > 0) {
+            RecordEffectiveContribution(actor);
+        }
         // 满血也发一条(value = 0):演出要知道这一下奶给了谁
         auto* healEvent = AppendEvent(result, BATTLE_EVENT_HEAL, actor.actor_id(), target.actor_id());
         healEvent->set_skill_table_id(skillRow.id());
@@ -2242,9 +2385,14 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
     }
 
     if (skillRow.dispel_count() > 0) {
-        if (DispelDebuffs(target, skillRow.dispel_count(), result) > 0 &&
-            actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == target.team_index()) {
-            antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
+        if (actor.team_index() != target.team_index()) {
+            TryDispelBossStance(actor, target);
+        }
+        if (DispelDebuffs(target, skillRow.dispel_count(), result) > 0) {
+            RecordEffectiveContribution(actor);
+            if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == target.team_index()) {
+                antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
+            }
         }
     }
 
@@ -2322,7 +2470,8 @@ uint64_t TurnBattleEngine::EffectivePhysicalAttack(const BattleActorState& actor
 
 uint64_t TurnBattleEngine::EffectiveDefense(const BattleActorState& actor) const {
     const double multiplier = ClassBuffStatMultiplier(actor, ClassBuffStat::kDefense) *
-        std::max(0.1, 1 + ConfiguredModifier(actor, BattleModifier::Defense));
+        std::max(0.1, 1 + ConfiguredModifier(actor, BattleModifier::Defense) +
+            ConfiguredModifier(actor, BattleModifier::SelfGrowingDefense));
     return multiplier == 1.0 ? actor.defense() : classskill::FloorRatio(actor.defense(), multiplier);
 }
 
@@ -2936,6 +3085,34 @@ void TurnBattleEngine::DecayCooldowns() {
 }
 
 void TurnBattleEngine::UpdateOutcome() {
+    // 护卫救援：受保护护卫阵亡即刻判负（即便同回合或同行动击杀首领，保护目标阵亡仍判负）。
+    if (bossTrialKind == kBossTrialKindGuardianRescue) {
+        const auto* guard = FindActor(protectedGuardActorId);
+        if (guard == nullptr || guard->is_dead()) {
+            outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+            return;
+        }
+        bool anyPlayerActive = false;
+        for (const auto& actor : actors) {
+            if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && actor.team_index() == 0 && IsActorActive(actor)) {
+                anyPlayerActive = true;
+                break;
+            }
+        }
+        if (!anyPlayerActive) {
+            outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+            return;
+        }
+        if (SideWiped(1)) {
+            outcome = BATTLE_OUTCOME_SIDE_A_WIN;
+            return;
+        }
+        if (roundIndex >= maxRounds) {
+            outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+        }
+        return;
+    }
+
     const bool sideAWiped = SideWiped(0);
     const bool sideBWiped = SideWiped(1);
 
@@ -2946,8 +3123,12 @@ void TurnBattleEngine::UpdateOutcome() {
     } else if (sideBWiped) {
         outcome = BATTLE_OUTCOME_SIDE_A_WIN;
     } else if (roundIndex >= maxRounds) {
-        // max_rounds 打满:进攻方(A 方)判负(设计文档 §5.1)
-        outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+        // 论剑排位与物法易势 5V5 打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
+        if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 || createRequest.match_mode() == kMatchModePolarity5v5) {
+            outcome = BATTLE_OUTCOME_DRAW;
+        } else {
+            outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+        }
     }
 }
 
@@ -3238,13 +3419,13 @@ void TurnBattleEngine::HandleDeath(BattleActorState& target, uint64_t sourceActo
 
 void TurnBattleEngine::RecordTrialDirectDamage(const BattleActorState& source, const BattleActorState& target,
                                                uint32_t damageType, uint64_t dealtOrAbsorbed) {
-    if (dealtOrAbsorbed == 0 || source.team_index() != 0 || target.team_index() != 1) {
+    if (dealtOrAbsorbed == 0 || source.team_index() == target.team_index() || source.team_index() >= 2) {
         return;
     }
     if (damageType == combatdamage::kPhysicalDamage) {
-        teamADealtPhysicalDirectDamage = true;
+        teamDealtPhysicalDirectDamage[source.team_index()] = true;
     } else if (damageType == combatdamage::kMagicDamage) {
-        teamADealtMagicDirectDamage = true;
+        teamDealtMagicDirectDamage[source.team_index()] = true;
     }
 }
 
@@ -3259,6 +3440,436 @@ void TurnBattleEngine::RecordTrialMonsterHeal(const BattleActorState& source, co
     if (guardMonsterId == 0 || source.monster_table_id() == guardMonsterId) {
         bossGuardHealTotal = SaturatingAdd(bossGuardHealTotal, healed);
     }
+}
+
+void TurnBattleEngine::RecordManualActionForActor(const BattleActorState& actor) {
+    uint64_t ownerId = 0;
+    if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+        ownerId = actor.actor_id();
+    } else if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET) {
+        ownerId = actor.owner_player_id();
+    }
+    if (ownerId != 0) {
+        manualActionRoundsByPlayer[ownerId].insert(roundIndex);
+        manualActionPlayers.insert(ownerId);
+        enteredPlayers.insert(ownerId);
+    }
+}
+
+void TurnBattleEngine::RecordEffectiveContribution(const BattleActorState& actor) {
+    uint64_t ownerId = 0;
+    if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+        ownerId = actor.actor_id();
+    } else if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET) {
+        ownerId = actor.owner_player_id();
+    }
+    if (ownerId != 0) {
+        effectiveContributionPlayers.insert(ownerId);
+    }
+}
+
+uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState& source, BattleActorState& target,
+                                                         uint64_t damage, uint32_t damageType, bool isDirectPrimary,
+                                                         TurnResultS2C& result) {
+    if (damage == 0) {
+        return 0;
+    }
+    // 1. 物法易势 5V5：与当前易势同类型的直接主伤害 ×1.15（常规减伤/防御后、护盾吸收前，整数向下取整一次）。
+    if (isDirectPrimary && activePolarity != 0 && activePolarity == damageType) {
+        damage = (damage * kPolarityDamageNum) / kPolarityDamageDen;
+    }
+    // 2. 破阵·护势：首领处于同系护势减伤时，直接伤害降低 30%（普通）/ 40%（困难）。
+    if (isDirectPrimary && bossTrialKind == kBossTrialKindBreakStance && target.is_boss() &&
+        bossStanceType != 0 && bossStanceType == damageType) {
+        const uint64_t keepPct = battleDifficulty >= 2 ? 60ULL : 70ULL;
+        damage = (damage * keepPct) / 100ULL;
+    }
+    // 3. 灵障首领：灵障护盾在生命扣血之前优先吸收伤害，击破时记录破盾者与有效贡献。
+    if (bossTrialKind == kBossTrialKindBarrier && target.is_boss() && bossBarrierShield > 0 && damage > 0) {
+        const uint64_t absorbed = std::min<uint64_t>(damage, bossBarrierShield);
+        bossBarrierShield -= absorbed;
+        damage -= absorbed;
+        if (absorbed > 0) {
+            RecordTrialDirectDamage(source, target, damageType, absorbed);
+            RecordEffectiveContribution(source);
+            auto* shieldEvent = AppendEvent(result, BATTLE_EVENT_SHIELD, target.actor_id(), target.actor_id());
+            shieldEvent->set_absorbed(absorbed);
+            shieldEvent->set_shield_after(bossBarrierShield);
+            if (bossBarrierShield == 0) {
+                if (source.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                    shieldBreakPlayers.insert(source.actor_id());
+                } else if (source.actor_type() == BATTLE_ACTOR_TYPE_PET && source.owner_player_id() != 0) {
+                    shieldBreakPlayers.insert(source.owner_player_id());
+                }
+            }
+        }
+    }
+    return damage;
+}
+
+bool TurnBattleEngine::IsActorControlLocked(const BattleActorState& actor) const {
+    return CheckState(actor) != kSuccess ||
+        ActorHasBuffOfType(actor, kBuffTypeStun) ||
+        ActorHasBuffOfType(actor, kBuffTypeFreeze) ||
+        ActorHasBuffOfType(actor, kBuffTypeSilence) ||
+        HasConfiguredState(actor, BattleStateKind::Freeze) ||
+        HasConfiguredState(actor, BattleStateKind::Sleep) ||
+        HasConfiguredState(actor, BattleStateKind::Confusion) ||
+        HasConfiguredState(actor, BattleStateKind::SealActive) ||
+        HasConfiguredState(actor, BattleStateKind::SealMagic) ||
+        HasConfiguredState(actor, BattleStateKind::SealPhysical);
+}
+
+bool TurnBattleEngine::IsEncounterSlowPhaseActor(uint64_t actorId) const {
+    for (const auto& entry : activeTelegraphs) {
+        if (entry.execute_round() == roundIndex && entry.source_actor_id() == actorId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TurnBattleEngine::InitSpecialEncounterState() {
+    if (bossTrialKind == kBossTrialKindNone) {
+        return;
+    }
+    if (bossTrialKind == kBossTrialKindPolarity5v5 || createRequest.match_mode() == kMatchModePolarity5v5) {
+        initialPolarity = (RandIndex(2) == 0) ? combatdamage::kPhysicalDamage : combatdamage::kMagicDamage;
+        UpdatePolarityForRound();
+        return;
+    }
+    RefreshEncounterTelegraphs();
+}
+
+void TurnBattleEngine::UpdatePolarityForRound() {
+    if (bossTrialKind != kBossTrialKindPolarity5v5 && createRequest.match_mode() != kMatchModePolarity5v5) {
+        activePolarity = 0;
+        return;
+    }
+    if (initialPolarity == 0) {
+        initialPolarity = combatdamage::kPhysicalDamage;
+    }
+    const uint32_t block = (roundIndex > 0 ? (roundIndex - 1) : 0) / 2;
+    activePolarity = (block % 2 == 0)
+        ? initialPolarity
+        : (initialPolarity == combatdamage::kPhysicalDamage ? combatdamage::kMagicDamage
+                                                            : combatdamage::kPhysicalDamage);
+}
+
+uint32_t TurnBattleEngine::NextPolaritySwitchRound() const {
+    if (activePolarity == 0) {
+        return 0;
+    }
+    const uint32_t nextSwitch = ((roundIndex > 0 ? (roundIndex - 1) : 0) / 2 + 1) * 2 + 1;
+    return nextSwitch <= maxRounds ? nextSwitch : 0;
+}
+
+void TurnBattleEngine::RefreshEncounterTelegraphs() {
+    // 清理已经过期或属于更早回合的预告，保留本回合待执行的预告，并在预告回合生成下一回合的预告。
+    std::vector<BattleTelegraphEntry> kept;
+    for (auto entry : activeTelegraphs) {
+        if (entry.execute_round() >= roundIndex) {
+            entry.set_status(entry.execute_round() == roundIndex
+                                 ? kTelegraphStatusExecuting
+                                 : kTelegraphStatusUpcoming);
+            kept.push_back(std::move(entry));
+        }
+    }
+    activeTelegraphs = std::move(kept);
+
+    if (bossTrialKind < kBossTrialKindBreakRejuv || bossTrialKind > kBossTrialKindGuardianRescue) {
+        return;
+    }
+
+    const BattleActorState* boss = nullptr;
+    const BattleActorState* guard = nullptr;
+    for (const auto& actor : actors) {
+        if (actor.actor_type() != BATTLE_ACTOR_TYPE_MONSTER || actor.team_index() != 1 || !IsActorActive(actor)) {
+            continue;
+        }
+        if (actor.is_boss()) {
+            boss = &actor;
+        } else if (guard == nullptr) {
+            guard = &actor;
+        }
+    }
+
+    const auto hasEntryFor = [&](uint64_t sourceId, uint32_t execRound) {
+        for (const auto& e : activeTelegraphs) {
+            if (e.source_actor_id() == sourceId && e.execute_round() == execRound) return true;
+        }
+        return false;
+    };
+
+    const auto pickEnemyTarget = [&](const BattleActorState& caster) -> uint64_t {
+        const auto targets = CollectAliveEnemyIds(caster);
+        if (targets.empty()) return 0;
+        // 护卫救援：优先对受保护护卫或存活玩家确定性点名（偶数蓄力直接威胁护卫，促使玩家保卫/控场）。
+        if (bossTrialKind == kBossTrialKindGuardianRescue && protectedGuardActorId != 0) {
+            if (const auto* allyGuard = FindActor(protectedGuardActorId);
+                allyGuard != nullptr && IsActorActive(*allyGuard)) {
+                return protectedGuardActorId;
+            }
+        }
+        return targets[static_cast<size_t>(RandIndex(targets.size()))];
+    };
+
+    // 1. 首领蓄力慢速重击：在 R1/4/7/10/13 预告，次轮（R2/5/8/11/14）慢速结算。
+    if (boss != nullptr && roundIndex % 3 == 1 && roundIndex + 1 <= maxRounds &&
+        !hasEntryFor(boss->actor_id(), roundIndex + 1)) {
+        BattleTelegraphEntry entry;
+        entry.set_source_actor_id(boss->actor_id());
+        entry.set_execute_round(roundIndex + 1);
+        entry.set_status(kTelegraphStatusUpcoming);
+        if (bossTrialKind == kBossTrialKindBarrier) {
+            entry.set_intent_kind(kTelegraphKindBossMagicStrike);
+            entry.set_target_actor_id(pickEnemyTarget(*boss));
+            entry.set_label("灵障重击：下回合慢速法术重击，防御可减半、控场可打断");
+        } else if (bossTrialKind == kBossTrialKindVenom) {
+            entry.set_intent_kind(kTelegraphKindBossVenomAoe);
+            entry.set_target_actor_id(0);
+            entry.set_label("玄毒冲击：下回合慢速群体法术伤害，防御可减半、控场可打断");
+        } else {
+            entry.set_intent_kind(kTelegraphKindSlowCleave);
+            entry.set_target_actor_id(pickEnemyTarget(*boss));
+            entry.set_label("蓄力重击：下回合慢速物理重击，防御可减半、控场可打断");
+        }
+        activeTelegraphs.push_back(std::move(entry));
+    }
+
+    // 2. 敌方护卫周期机制预告。
+    if (guard != nullptr && boss != nullptr) {
+        if (bossTrialKind == kBossTrialKindBreakRejuv) {
+            // 回春护卫：普通 R3/6/9/12（在 R2/5/8/11 预告），困难 R2/5/8/11（在 R1/4/7/10 预告与重击重叠）。
+            const uint32_t triggerMod = battleDifficulty >= 2 ? 1u : 2u;
+            if (roundIndex % 3 == triggerMod && roundIndex + 1 <= maxRounds &&
+                !hasEntryFor(guard->actor_id(), roundIndex + 1)) {
+                BattleTelegraphEntry entry;
+                entry.set_source_actor_id(guard->actor_id());
+                entry.set_target_actor_id(boss->actor_id());
+                entry.set_intent_kind(kTelegraphKindGuardHeal);
+                entry.set_execute_round(roundIndex + 1);
+                entry.set_status(kTelegraphStatusUpcoming);
+                entry.set_label(battleDifficulty >= 2
+                                    ? "回春祈愈：下回合为首领回复10%最大生命"
+                                    : "回春祈愈：下回合为首领回复8%最大生命");
+                activeTelegraphs.push_back(std::move(entry));
+            }
+        } else if (bossTrialKind == kBossTrialKindBreakStance) {
+            // 护势护卫：R1/4/7/10/13 当回合立刻展开交替护势（物理/法术减伤，可驱散）。
+            if (roundIndex % 3 == 1 && !hasEntryFor(guard->actor_id(), roundIndex)) {
+                const bool isPhysical = (((roundIndex - 1) / 3) % 2 == 0);
+                BattleTelegraphEntry entry;
+                entry.set_source_actor_id(guard->actor_id());
+                entry.set_target_actor_id(boss->actor_id());
+                entry.set_intent_kind(isPhysical ? kTelegraphKindGuardStancePhys : kTelegraphKindGuardStanceMagic);
+                entry.set_execute_round(roundIndex);
+                entry.set_status(kTelegraphStatusExecuting);
+                entry.set_label(isPhysical
+                                    ? "物理护势：本回合为首领施加物理减伤护势（可驱散）"
+                                    : "法术护势：本回合为首领施加法术减伤护势（可驱散）");
+                activeTelegraphs.push_back(std::move(entry));
+            }
+        } else if (bossTrialKind == kBossTrialKindBarrier) {
+            // 灵障护卫：R1/4/7/10/13 为首领施加灵障护盾。
+            if (roundIndex % 3 == 1 && !hasEntryFor(guard->actor_id(), roundIndex)) {
+                BattleTelegraphEntry entry;
+                entry.set_source_actor_id(guard->actor_id());
+                entry.set_target_actor_id(boss->actor_id());
+                entry.set_intent_kind(kTelegraphKindGuardShield);
+                entry.set_execute_round(roundIndex);
+                entry.set_status(kTelegraphStatusExecuting);
+                entry.set_label("灵障护佑：本回合为首领附加灵障护盾");
+                activeTelegraphs.push_back(std::move(entry));
+            }
+        } else if (bossTrialKind == kBossTrialKindVenom) {
+            // 缚灵护卫：R1/4/7/10 预告，R2/5/8/11 尝试封控吸蓝。
+            if (roundIndex % 3 == 1 && roundIndex + 1 <= maxRounds &&
+                !hasEntryFor(guard->actor_id(), roundIndex + 1)) {
+                BattleTelegraphEntry entry;
+                entry.set_source_actor_id(guard->actor_id());
+                entry.set_target_actor_id(pickEnemyTarget(*guard));
+                entry.set_intent_kind(kTelegraphKindGuardBind);
+                entry.set_execute_round(roundIndex + 1);
+                entry.set_status(kTelegraphStatusUpcoming);
+                entry.set_label("缚灵锁脉：下回合封控目标并消耗法力");
+                activeTelegraphs.push_back(std::move(entry));
+            }
+        }
+    }
+}
+
+void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& result) {
+    if (activeTelegraphs.empty()) {
+        return;
+    }
+    const std::vector<BattleTelegraphEntry> due = activeTelegraphs;
+    for (const auto& entry : due) {
+        if (entry.execute_round() != roundIndex) {
+            continue;
+        }
+        auto* source = FindActor(entry.source_actor_id());
+        if (source == nullptr || !IsActorActive(*source)) {
+            continue;
+        }
+        // 受控（眩晕/冰冻/昏睡/封印）直接取消蓄力或护卫机制，绝不回退普攻！
+        if (IsActorControlLocked(*source)) {
+            continue;
+        }
+
+        const auto dealBossStrike = [&](BattleActorState& target, uint32_t damageType, double scale) {
+            bool isCritical = false;
+            const uint64_t attack = damageType == combatdamage::kMagicDamage
+                ? std::max(source->magic_attack(), EffectivePhysicalAttack(*source))
+                : EffectivePhysicalAttack(*source);
+            const double rawDamage = CalculateFinalDamage(*source, target, kBasicAttackBaseDamage * scale,
+                                                          attack, scale, damageType, isCritical);
+            if (HasConfiguredBuffs(*source) || HasConfiguredBuffs(target) ||
+                source->has_equipment_effects() || target.has_equipment_effects()) {
+                EffectContext ctx;
+                ctx.critical = isCritical;
+                ctx.origin = BattleDamageOrigin::Direct;
+                ctx.primaryTargetId = target.actor_id();
+                ResolveConfiguredDamage(*source, target, rawDamage, damageType, ctx, result);
+            } else {
+                const uint64_t dealt = ApplyDamage(target, rawDamage);
+                auto* dmgEv = AppendEvent(result, BATTLE_EVENT_DAMAGE, source->actor_id(), target.actor_id());
+                dmgEv->set_value(dealt);
+                dmgEv->set_is_critical(isCritical);
+                dmgEv->set_target_health_after(target.attributes().health());
+                dmgEv->set_target_mana_after(target.attributes().mana());
+                if (target.attributes().health() == 0) {
+                    HandleDeath(target, source->actor_id(), result);
+                }
+            }
+        };
+
+        switch (entry.intent_kind()) {
+        case kTelegraphKindSlowCleave:
+        case kTelegraphKindBossMagicStrike: {
+            auto* target = FindActor(entry.target_actor_id());
+            if (target == nullptr || !IsActorActive(*target)) {
+                break;
+            }
+            BeginEventGroup();
+            AppendEvent(result, BATTLE_EVENT_ATTACK, source->actor_id(), target->actor_id());
+            const double scale = entry.intent_kind() == kTelegraphKindBossMagicStrike
+                ? (battleDifficulty >= 2 ? 2.0 : 1.7)
+                : (battleDifficulty >= 2 ? 2.1 : 1.8);
+            const uint32_t dmgType = entry.intent_kind() == kTelegraphKindBossMagicStrike
+                ? combatdamage::kMagicDamage : combatdamage::kPhysicalDamage;
+            dealBossStrike(*target, dmgType, scale);
+            break;
+        }
+        case kTelegraphKindBossVenomAoe: {
+            const auto targets = CollectAliveEnemyIds(*source);
+            if (targets.empty()) {
+                break;
+            }
+            BeginEventGroup();
+            const double scale = battleDifficulty >= 2 ? 1.05 : 0.85;
+            for (const uint64_t targetId : targets) {
+                auto* target = FindActor(targetId);
+                if (target != nullptr && IsActorActive(*target)) {
+                    dealBossStrike(*target, combatdamage::kMagicDamage, scale);
+                }
+            }
+            break;
+        }
+        case kTelegraphKindGuardHeal: {
+            auto* boss = FindActor(entry.target_actor_id());
+            if (boss == nullptr || !IsActorActive(*boss)) {
+                break;
+            }
+            const double received = std::max(0.0, 1.0 + ConfiguredModifier(*boss, BattleModifier::IncomingHeal));
+            if (received <= 0.0) {
+                break;
+            }
+            BeginEventGroup();
+            const uint64_t pct = battleDifficulty >= 2 ? 10ULL : 8ULL;
+            const uint64_t rawHeal = std::max<uint64_t>(1ULL, (boss->max_health() * pct) / 100ULL);
+            const uint64_t healed = ApplyHeal(*boss, static_cast<double>(rawHeal) * received);
+            RecordTrialMonsterHeal(*source, *boss, healed);
+            auto* healEv = AppendEvent(result, BATTLE_EVENT_HEAL, source->actor_id(), boss->actor_id());
+            healEv->set_value(healed);
+            healEv->set_target_health_after(boss->attributes().health());
+            healEv->set_target_mana_after(boss->attributes().mana());
+            break;
+        }
+        case kTelegraphKindGuardStancePhys:
+        case kTelegraphKindGuardStanceMagic: {
+            auto* boss = FindActor(entry.target_actor_id());
+            if (boss == nullptr || !IsActorActive(*boss)) {
+                break;
+            }
+            BeginEventGroup();
+            bossStanceType = entry.intent_kind() == kTelegraphKindGuardStancePhys
+                ? combatdamage::kPhysicalDamage
+                : combatdamage::kMagicDamage;
+            auto* stanceEv = AppendEvent(result, BATTLE_EVENT_BUFF_ADD, source->actor_id(), boss->actor_id());
+            stanceEv->set_value(bossStanceType);
+            break;
+        }
+        case kTelegraphKindGuardShield: {
+            auto* boss = FindActor(entry.target_actor_id());
+            if (boss == nullptr || !IsActorActive(*boss)) {
+                break;
+            }
+            BeginEventGroup();
+            const uint64_t pct = battleDifficulty >= 2 ? 18ULL : 12ULL;
+            const uint64_t addShield = std::max<uint64_t>(1ULL, (boss->max_health() * pct) / 100ULL);
+            bossBarrierShield = SaturatingAdd(bossBarrierShield, addShield);
+            auto* shieldEv = AppendEvent(result, BATTLE_EVENT_SHIELD, source->actor_id(), boss->actor_id());
+            shieldEv->set_value(addShield);
+            shieldEv->set_shield_after(bossBarrierShield);
+            break;
+        }
+        case kTelegraphKindGuardBind: {
+            auto* target = FindActor(entry.target_actor_id());
+            if (target == nullptr || !IsActorActive(*target)) {
+                break;
+            }
+            BeginEventGroup();
+            const uint64_t resist = std::min<uint64_t>(
+                100ULL,
+                static_cast<uint64_t>(target->combat().resist_forget()) + target->combat().resist_all_ailment());
+            if (RollPercent(resist)) {
+                AppendEvent(result, BATTLE_EVENT_RESIST, source->actor_id(), target->actor_id());
+                if (target->actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                    antiControlOrSeasonSkillPlayers.insert(target->actor_id());
+                } else if (target->actor_type() == BATTLE_ACTOR_TYPE_PET && target->owner_player_id() != 0) {
+                    antiControlOrSeasonSkillPlayers.insert(target->owner_player_id());
+                }
+                break;
+            }
+            // 缚灵吸蓝冲击（15% 最大法力），不依赖固定 Buff 表主键。
+            const uint64_t drain = std::min<uint64_t>(
+                target->attributes().mana(),
+                std::max<uint64_t>(1ULL, (target->max_mana() * 15ULL) / 100ULL));
+            if (drain > 0) {
+                target->mutable_attributes()->set_mana(target->attributes().mana() - drain);
+                auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, source->actor_id(), target->actor_id());
+                manaEv->set_value(drain);
+                manaEv->set_mana_delta(-static_cast<int64_t>(drain));
+                manaEv->set_target_health_after(target->attributes().health());
+                manaEv->set_target_mana_after(target->attributes().mana());
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+}
+
+void TurnBattleEngine::TryDispelBossStance(const BattleActorState& source, const BattleActorState& target) {
+    if (bossTrialKind != kBossTrialKindBreakStance || bossStanceType == 0 || !target.is_boss() ||
+        source.team_index() == target.team_index()) {
+        return;
+    }
+    bossStanceType = 0;
+    guardStanceDispelled = true;
+    RecordEffectiveContribution(source);
 }
 
 // ---------------------------------------------------------------------------
@@ -3295,6 +3906,12 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
 
     // 驱散:新 buff 的 dispel_tag 命中现有 buff 的 tag 即移除之
     DispelBuffsByTag(target, *buffRow, result);
+    if (const auto* caster = FindActor(casterId); caster != nullptr) {
+        if (buffRow->buff_type() == kBuffTypeDispel && caster->team_index() != target.team_index()) {
+            TryDispelBossStance(*caster, target);
+        }
+        RecordEffectiveContribution(*caster);
+    }
 
     // 纯驱散 buff 不落地(镜像 DispelBuffsOnAwake 的返回语义)
     if (buffRow->buff_type() == kBuffTypeDispel) {
@@ -3497,6 +4114,44 @@ void TurnBattleEngine::RemoveBuffAt(BattleActorState& target, int buffIndex,
 // 输出
 // ---------------------------------------------------------------------------
 
+void TurnBattleEngine::MarkPlayerEntered(uint64_t playerId) {
+    if (playerId == 0) {
+        return;
+    }
+    if (const auto* actor = FindActor(playerId); actor != nullptr && actor->actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+        enteredPlayers.insert(playerId);
+    }
+}
+
+BattleParticipationFact TurnBattleEngine::BuildParticipationFact(uint64_t playerId) const {
+    BattleParticipationFact fact;
+    fact.set_player_id(playerId);
+    const bool entered = enteredPlayers.contains(playerId);
+    const bool manual = manualActionPlayers.contains(playerId);
+    const bool explicitAuto = explicitAutoPlayers.contains(playerId);
+    const bool noOpp = entered && !hadOperableTurnPlayers.contains(playerId);
+    fact.set_entered_room(entered);
+    fact.set_manual_action_accepted(manual);
+    fact.set_explicit_auto_enabled(explicitAuto);
+    fact.set_no_action_opportunity(noOpp);
+    return fact;
+}
+
+bool TurnBattleEngine::DidPlayerParticipate(uint64_t playerId) const {
+    if (CompletedRounds() == 0) {
+        return false;
+    }
+    const auto* actor = FindActor(playerId);
+    if (actor == nullptr || actor->fled()) {
+        return false;
+    }
+    const auto fact = BuildParticipationFact(playerId);
+    if (fact.manual_action_accepted()) {
+        return true;
+    }
+    return fact.entered_room() && (fact.explicit_auto_enabled() || fact.no_action_opportunity());
+}
+
 BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const {
     BattleSettlementData settlement;
     const auto settlementIt = settlements.find(playerId);
@@ -3507,6 +4162,14 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_player_id(playerId);
     settlement.set_outcome(outcome);
     settlement.set_total_rounds(CompletedRounds());
+    if (!IsPveMatch()) {
+        const auto manualIt = manualActionRoundsByPlayer.find(playerId);
+        settlement.set_manual_action_rounds(
+            manualIt != manualActionRoundsByPlayer.end() ? static_cast<uint32_t>(manualIt->second.size()) : 0u);
+        settlement.set_effective_combat_contribution(effectiveContributionPlayers.contains(playerId));
+    }
+    settlement.set_battle_difficulty(battleDifficulty);
+    settlement.set_boss_trial_kind(bossTrialKind);
     // BuildSettlement 可重复读取；只复制实际击杀簿，不按初始阵位推断先后。
     settlement.clear_defeated_monsters();
 
@@ -3520,9 +4183,10 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_is_dead(actor->is_dead());
     settlement.set_fled(actor->fled());
 
-    // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者)
+    // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者);论剑临时竞技宠不回写永久宠物。
     for (const auto& other : actors) {
-        if (other.actor_type() != BATTLE_ACTOR_TYPE_PET || other.owner_player_id() != playerId) {
+        if (other.actor_type() != BATTLE_ACTOR_TYPE_PET || other.owner_player_id() != playerId ||
+            other.competitive_temporary()) {
             continue;
         }
         auto* petSettlement = settlement.add_pets();
@@ -3530,6 +4194,14 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         petSettlement->set_health(other.attributes().health());
         petSettlement->set_mana(other.attributes().mana());
         petSettlement->set_is_dead(other.is_dead());
+    }
+
+    settlement.set_use_free_preset(UsesFreePreset());
+    if (IsRankedBattle()) {
+        settlement.set_competitive_ranked(true);
+        settlement.set_season_id(createRequest.ranked_context().season_id());
+        settlement.set_ranked_rule_version(createRequest.ranked_context().rule_version());
+        settlement.set_participated(DidPlayerParticipate(playerId));
     }
 
     // 奖励已由 RollRewards 终局冻结；这里只带出实际击杀事实，读取结算不查配置、不掷随机。
@@ -3577,22 +4249,28 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
 
         bool selfOrPetDied = everDiedActors.contains(playerId);
         bool guardSurvived = false;
+        if (protectedGuardActorId != 0) {
+            const auto* protectedGuard = FindActor(protectedGuardActorId);
+            guardSurvived = protectedGuard != nullptr && !protectedGuard->is_dead();
+        }
         for (const auto& other : actors) {
             if (other.actor_type() == BATTLE_ACTOR_TYPE_PET && other.owner_player_id() == playerId &&
                 everDiedActors.contains(other.actor_id())) {
                 selfOrPetDied = true;
             }
-            if (other.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && other.team_index() != actor->team_index() &&
+            if (protectedGuardActorId == 0 &&
+                other.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && other.team_index() != actor->team_index() &&
                 !other.is_boss() && !other.is_dead() &&
                 (ctx.guard_monster_table_id() == 0 || other.monster_table_id() == ctx.guard_monster_table_id())) {
                 guardSurvived = true;
             }
         }
+        const uint32_t myTeam = actor->team_index();
         facts->set_self_or_pet_ever_died(selfOrPetDied);
         facts->set_boss_guard_heal_total(bossGuardHealTotal);
         facts->set_guard_stance_dispelled(guardStanceDispelled);
-        facts->set_team_dealt_physical_direct_damage(teamADealtPhysicalDirectDamage);
-        facts->set_team_dealt_magic_direct_damage(teamADealtMagicDirectDamage);
+        facts->set_team_dealt_physical_direct_damage(myTeam < 2 && teamDealtPhysicalDirectDamage[myTeam]);
+        facts->set_team_dealt_magic_direct_damage(myTeam < 2 && teamDealtMagicDirectDamage[myTeam]);
         facts->set_guard_survived(guardSurvived);
         facts->set_self_triggered_shield_break(shieldBreakPlayers.contains(playerId));
         facts->set_self_triggered_anti_control_or_season_skill(
@@ -3634,7 +4312,18 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
             BuildSupportEffects(actor, *visible->mutable_support_effects());
     }
 
+    if (activePolarity != 0) {
+        state.set_active_polarity(activePolarity);
+        state.set_next_polarity_switch_round(NextPolaritySwitchRound());
+    }
+    if (protectedGuardActorId != 0) {
+        state.set_protected_guard_actor_id(protectedGuardActorId);
+    }
+
     if (outcome == BATTLE_OUTCOME_ONGOING) {
+        for (const auto& entry : activeTelegraphs) {
+            *state.add_telegraphs() = entry;
+        }
         for (const auto& actor : actors) {
             if ((actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER && actor.actor_type() != BATTLE_ACTOR_TYPE_PET) || !IsActorActive(actor)) {
                 continue;

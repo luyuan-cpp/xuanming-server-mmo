@@ -628,5 +628,31 @@
     <ClInclude Include="proto\equipartifact_table.pb.h" />
     <ClCompile Include="proto\equipv1affix_table.pb.cc" />
     <ClInclude Include="proto\equipv1affix_table.pb.h" />
+    <ClCompile Include="code\equipaffixquality_table.cpp" />
+    <ClInclude Include="code\equipaffixquality_table.h" />
+    <ClInclude Include="code\equipaffixquality_table_comp.h" />
+    <ClCompile Include="proto\equipaffixquality_table.pb.cc" />
+    <ClInclude Include="proto\equipaffixquality_table.pb.h" />
+    <ClCompile Include="code\skillscrollcraft_table.cpp" />
+    <ClInclude Include="code\skillscrollcraft_table.h" />
+    <ClInclude Include="code\skillscrollcraft_table_comp.h" />
+    <ClCompile Include="code\skillscrollcraft_table_fk.cpp" />
+    <ClInclude Include="code\skillscrollcraft_table_fk.h" />
+    <ClCompile Include="proto\skillscrollcraft_table.pb.cc" />
+    <ClInclude Include="proto\skillscrollcraft_table.pb.h" />
+    <ClCompile Include="code\tournamentrule_table.cpp" />
+    <ClInclude Include="code\tournamentrule_table.h" />
+    <ClInclude Include="code\tournamentrule_table_comp.h" />
+    <ClCompile Include="code\tournamentrule_table_fk.cpp" />
+    <ClInclude Include="code\tournamentrule_table_fk.h" />
+    <ClCompile Include="proto\tournamentrule_table.pb.cc" />
+    <ClInclude Include="proto\tournamentrule_table.pb.h" />
+    <ClCompile Include="code\tournamentreward_table.cpp" />
+    <ClInclude Include="code\tournamentreward_table.h" />
+    <ClInclude Include="code\tournamentreward_table_comp.h" />
+    <ClCompile Include="code\tournamentreward_table_fk.cpp" />
+    <ClInclude Include="code\tournamentreward_table_fk.h" />
+    <ClCompile Include="proto\tournamentreward_table.pb.cc" />
+    <ClInclude Include="proto\tournamentreward_table.pb.h" />
   </ItemGroup>
 </Project>

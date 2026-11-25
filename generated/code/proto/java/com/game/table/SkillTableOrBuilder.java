@@ -427,6 +427,18 @@ public interface SkillTableOrBuilder extends
   int getSeasonId();
 
   /**
+   * <code>uint32 scroll_id = 59;</code>
+   * @return The scrollId.
+   */
+  int getScrollId();
+
+  /**
+   * <code>uint32 rarity_tier = 60;</code>
+   * @return The rarityTier.
+   */
+  int getRarityTier();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

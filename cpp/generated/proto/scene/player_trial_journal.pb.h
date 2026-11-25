@@ -2706,11 +2706,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSnapshot final : public
     kStateRevisionFieldNumber = 3,
     kServerNowMsFieldNumber = 4,
     kTotalPermanentLitSealsFieldNumber = 5,
-    kAvailableFieldNumber = 1,
-    kCanOperateFieldNumber = 9,
+    kTotalPermanentSealsFieldNumber = 6,
     kVoucherBalanceFieldNumber = 7,
     kBoundSandBalanceFieldNumber = 8,
-    kTotalPermanentSealsFieldNumber = 6,
+    kAvailableFieldNumber = 1,
+    kCanOperateFieldNumber = 9,
+    kHardBossTrialUnlockedFieldNumber = 14,
   };
   // repeated .TrialJournalChapterView chapters = 11;
   [[nodiscard]] int chapters_size()
@@ -2835,24 +2836,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSnapshot final : public
   void _internal_set_total_permanent_lit_seals(::uint32_t value);
 
   public:
-  // bool available = 1;
-  void clear_available() ;
-  [[nodiscard]] bool available() const;
-  void set_available(bool value);
+  // uint32 total_permanent_seals = 6;
+  void clear_total_permanent_seals() ;
+  [[nodiscard]] ::uint32_t total_permanent_seals() const;
+  void set_total_permanent_seals(::uint32_t value);
 
   private:
-  bool _internal_available() const;
-  void _internal_set_available(bool value);
-
-  public:
-  // bool can_operate = 9;
-  void clear_can_operate() ;
-  [[nodiscard]] bool can_operate() const;
-  void set_can_operate(bool value);
-
-  private:
-  bool _internal_can_operate() const;
-  void _internal_set_can_operate(bool value);
+  ::uint32_t _internal_total_permanent_seals() const;
+  void _internal_set_total_permanent_seals(::uint32_t value);
 
   public:
   // uint64 voucher_balance = 7;
@@ -2875,21 +2866,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSnapshot final : public
   void _internal_set_bound_sand_balance(::uint64_t value);
 
   public:
-  // uint32 total_permanent_seals = 6;
-  void clear_total_permanent_seals() ;
-  [[nodiscard]] ::uint32_t total_permanent_seals() const;
-  void set_total_permanent_seals(::uint32_t value);
+  // bool available = 1;
+  void clear_available() ;
+  [[nodiscard]] bool available() const;
+  void set_available(bool value);
 
   private:
-  ::uint32_t _internal_total_permanent_seals() const;
-  void _internal_set_total_permanent_seals(::uint32_t value);
+  bool _internal_available() const;
+  void _internal_set_available(bool value);
+
+  public:
+  // bool can_operate = 9;
+  void clear_can_operate() ;
+  [[nodiscard]] bool can_operate() const;
+  void set_can_operate(bool value);
+
+  private:
+  bool _internal_can_operate() const;
+  void _internal_set_can_operate(bool value);
+
+  public:
+  // bool hard_boss_trial_unlocked = 14;
+  void clear_hard_boss_trial_unlocked() ;
+  [[nodiscard]] bool hard_boss_trial_unlocked() const;
+  void set_hard_boss_trial_unlocked(bool value);
+
+  private:
+  bool _internal_hard_boss_trial_unlocked() const;
+  void _internal_set_hard_boss_trial_unlocked(bool value);
 
   public:
   // @@protoc_insertion_point(class_scope:TrialJournalSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           3, 80,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2926,11 +2937,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSnapshot final : public
     ::uint64_t state_revision_;
     ::uint64_t server_now_ms_;
     ::uint32_t total_permanent_lit_seals_;
-    bool available_;
-    bool can_operate_;
+    ::uint32_t total_permanent_seals_;
     ::uint64_t voucher_balance_;
     ::uint64_t bound_sand_balance_;
-    ::uint32_t total_permanent_seals_;
+    bool available_;
+    bool can_operate_;
+    bool hard_boss_trial_unlocked_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6364,7 +6376,7 @@ inline void TrialRedeemableArtifactOption::_internal_set_owned_count(::uint32_t 
 inline void TrialJournalSnapshot::clear_available() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.available_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline bool TrialJournalSnapshot::available() const {
   // @@protoc_insertion_point(field_get:TrialJournalSnapshot.available)
@@ -6372,7 +6384,7 @@ inline bool TrialJournalSnapshot::available() const {
 }
 inline void TrialJournalSnapshot::set_available(bool value) {
   _internal_set_available(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:TrialJournalSnapshot.available)
 }
 inline bool TrialJournalSnapshot::_internal_available() const {
@@ -6524,7 +6536,7 @@ inline void TrialJournalSnapshot::_internal_set_total_permanent_lit_seals(::uint
 inline void TrialJournalSnapshot::clear_total_permanent_seals() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_permanent_seals_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t TrialJournalSnapshot::total_permanent_seals() const {
   // @@protoc_insertion_point(field_get:TrialJournalSnapshot.total_permanent_seals)
@@ -6532,7 +6544,7 @@ inline ::uint32_t TrialJournalSnapshot::total_permanent_seals() const {
 }
 inline void TrialJournalSnapshot::set_total_permanent_seals(::uint32_t value) {
   _internal_set_total_permanent_seals(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:TrialJournalSnapshot.total_permanent_seals)
 }
 inline ::uint32_t TrialJournalSnapshot::_internal_total_permanent_seals() const {
@@ -6548,7 +6560,7 @@ inline void TrialJournalSnapshot::_internal_set_total_permanent_seals(::uint32_t
 inline void TrialJournalSnapshot::clear_voucher_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.voucher_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t TrialJournalSnapshot::voucher_balance() const {
   // @@protoc_insertion_point(field_get:TrialJournalSnapshot.voucher_balance)
@@ -6556,7 +6568,7 @@ inline ::uint64_t TrialJournalSnapshot::voucher_balance() const {
 }
 inline void TrialJournalSnapshot::set_voucher_balance(::uint64_t value) {
   _internal_set_voucher_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:TrialJournalSnapshot.voucher_balance)
 }
 inline ::uint64_t TrialJournalSnapshot::_internal_voucher_balance() const {
@@ -6572,7 +6584,7 @@ inline void TrialJournalSnapshot::_internal_set_voucher_balance(::uint64_t value
 inline void TrialJournalSnapshot::clear_bound_sand_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bound_sand_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t TrialJournalSnapshot::bound_sand_balance() const {
   // @@protoc_insertion_point(field_get:TrialJournalSnapshot.bound_sand_balance)
@@ -6580,7 +6592,7 @@ inline ::uint64_t TrialJournalSnapshot::bound_sand_balance() const {
 }
 inline void TrialJournalSnapshot::set_bound_sand_balance(::uint64_t value) {
   _internal_set_bound_sand_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:TrialJournalSnapshot.bound_sand_balance)
 }
 inline ::uint64_t TrialJournalSnapshot::_internal_bound_sand_balance() const {
@@ -6596,7 +6608,7 @@ inline void TrialJournalSnapshot::_internal_set_bound_sand_balance(::uint64_t va
 inline void TrialJournalSnapshot::clear_can_operate() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_operate_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline bool TrialJournalSnapshot::can_operate() const {
   // @@protoc_insertion_point(field_get:TrialJournalSnapshot.can_operate)
@@ -6604,7 +6616,7 @@ inline bool TrialJournalSnapshot::can_operate() const {
 }
 inline void TrialJournalSnapshot::set_can_operate(bool value) {
   _internal_set_can_operate(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:TrialJournalSnapshot.can_operate)
 }
 inline bool TrialJournalSnapshot::_internal_can_operate() const {
@@ -6843,6 +6855,30 @@ inline ::google::protobuf::RepeatedPtrField<::TrialRedeemableArtifactOption>* PR
 TrialJournalSnapshot::_internal_mutable_redeemable_artifacts() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.redeemable_artifacts_;
+}
+
+// bool hard_boss_trial_unlocked = 14;
+inline void TrialJournalSnapshot::clear_hard_boss_trial_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hard_boss_trial_unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool TrialJournalSnapshot::hard_boss_trial_unlocked() const {
+  // @@protoc_insertion_point(field_get:TrialJournalSnapshot.hard_boss_trial_unlocked)
+  return _internal_hard_boss_trial_unlocked();
+}
+inline void TrialJournalSnapshot::set_hard_boss_trial_unlocked(bool value) {
+  _internal_set_hard_boss_trial_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:TrialJournalSnapshot.hard_boss_trial_unlocked)
+}
+inline bool TrialJournalSnapshot::_internal_hard_boss_trial_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hard_boss_trial_unlocked_;
+}
+inline void TrialJournalSnapshot::_internal_set_hard_boss_trial_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hard_boss_trial_unlocked_ = value;
 }
 
 // -------------------------------------------------------------------

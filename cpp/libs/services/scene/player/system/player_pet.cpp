@@ -30,6 +30,7 @@
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/player_craft.h"
 #include "player/system/player_skill.h"
 #include "services/battle/system/class_skill_rules.h"
 
@@ -672,9 +673,12 @@ uint32_t PetSystem::BuildSkillBook(entt::entity player, uint64_t petId, ListSkil
 	const auto busy = PlayerBattleSystem::IsInBattle(player) ||
 		!player_mutability::IsPlayerMutable(player) ? kSkillUpgradeBusy :
 		*ownerLevel < level ? kPetOwnerLevelNotEnough : 0u;
+	const bool craftGateEnabled = PlayerCraftSystem::IsCraftUnlockGateEnabled();
 	for (const auto* row : rows) {
+		const bool craftRequired = craftGateEnabled && row->season_id() == 0 && row->scroll_id() > 0;
+		const bool unlockedByBook = PlayerCraftSystem::IsSkillBookUnlocked(player, row->id());
 		PlayerSkillSystem::FillCatalogEntry(*row, StoredSkillRank(*pet, *species, row->id()), level,
-			balance, busy, true, *response.add_catalog());
+			balance, busy, true, *response.add_catalog(), craftRequired, unlockedByBook);
 	}
 	return kSuccess;
 }
@@ -707,6 +711,11 @@ void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& req
 	const auto level = PetEffectiveLevel(*pet, species);
 	if (*ownerLevel < level) { finish(kPetOwnerLevelNotEnough); return; }
 	const auto rank = StoredSkillRank(*pet, *species, row->id());
+	if (rank == 0 && PlayerCraftSystem::IsCraftUnlockGateEnabled() && row->scroll_id() > 0 &&
+		!PlayerCraftSystem::IsSkillBookUnlocked(player, row->id())) {
+		finish(kSkillCraftBookRequired);
+		return;
+	}
 	if (request.expected_rank() != rank) { finish(kSkillRankChanged); return; }
 	const auto plan = classskill::PlanUpgrade(rank, row->max_rank(),
 		classskill::RankLimit(level, row->unlock_level(), row->max_rank()), row->unlock_level(),
@@ -726,6 +735,36 @@ void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& req
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_skill_upgraded");
 	PushList(player);
 	finish(0);
+}
+
+uint32_t PetSystem::CheckCanUnlockSkillFromBook(entt::entity player, uint64_t petId) {
+	if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+	auto* comp = FindComp(player);
+	const auto ownerLevel = OwnerLevel(player);
+	if (comp == nullptr || !ownerLevel.has_value()) return kServiceUnavailable;
+	auto* pet = FindPet(*comp, petId);
+	if (pet == nullptr) return kPetNotFound;
+	const auto* species = PetRow(pet->pet_table_id());
+	const auto* pool = PetPool();
+	if (species == nullptr || pool == nullptr) return kInvalidTableData;
+	return kSuccess;
+}
+
+uint32_t PetSystem::UnlockSkillFromBook(entt::entity player, uint64_t petId, uint32_t skillTableId) {
+	if (const auto err = CheckCanUnlockSkillFromBook(player, petId); err != kSuccess) return err;
+	auto* comp = FindComp(player);
+	const auto ownerLevel = OwnerLevel(player);
+	auto* pet = FindPet(*comp, petId);
+	const auto* species = PetRow(pet->pet_table_id());
+	const auto* pool = PetPool();
+	const auto before = ComputeDerived(*pet, *species, *pool);
+	auto& ranks = *pet->mutable_skill_ranks();
+	if (ranks[skillTableId] == 0) {
+		ranks[skillTableId] = 1;
+	}
+	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kSkillChanged, &before);
+	PushList(player);
+	return kSuccess;
 }
 
 uint32_t PetSystem::Summon(entt::entity player, uint64_t petId) {
@@ -1108,6 +1147,48 @@ bool PetDataKnown(const PlayerPetComp& pets) {
     return pets.active_pet_id() == 0 || ids.contains(pets.active_pet_id());
 }
 } // namespace
+
+bool PetSystem::EnsureStarterPetGranted(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player) || !PlayerLifecycleSystem::IsPlayerMutable(player)) {
+        return false;
+    }
+    auto* comp = FindComp(player);
+    const auto level = OwnerLevel(player);
+    if (comp == nullptr || !level.has_value() || !PetDataKnown(*comp)) {
+        return false;
+    }
+    if (comp->starter_pet_granted()) {
+        return false;
+    }
+    // 已有宝宝的老号保留原宠，仅置位一次性标记防止未来误补发。
+    if (comp->pets_size() > 0) {
+        comp->set_starter_pet_granted(true);
+        PlayerLifecycleSystem::RequestKeyProgressSave(player, "starter_pet_marked_existing");
+        return false;
+    }
+    const auto* row = PetRow(kStarterPetTableId);
+    const auto* pool = PetPool();
+    if (row == nullptr || pool == nullptr) {
+        LOG_WARN << "[PlayerPet] Starter pet skipped: table missing pet_table_id=" << kStarterPetTableId
+                 << " player_id=" << tlsEcs.GetPlayerId(player);
+        return false;
+    }
+    PetInstance candidate;
+    if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) {
+        LOG_WARN << "[PlayerPet] Starter pet grant deferred: player_id=" << tlsEcs.GetPlayerId(player)
+                 << " err=" << err;
+        return false;
+    }
+    const uint64_t grantedPetId = candidate.pet_id();
+    *comp->add_pets() = std::move(candidate);
+    comp->set_active_pet_id(grantedPetId);
+    comp->set_starter_pet_granted(true);
+    LOG_INFO << "[PlayerPet] Starter pet granted: player_id=" << tlsEcs.GetPlayerId(player)
+             << " pet_id=" << grantedPetId << " pet_table_id=" << kStarterPetTableId;
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "starter_pet_granted");
+    PushList(player);
+    return true;
+}
 
 uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut) {
     petIdOut = 0;

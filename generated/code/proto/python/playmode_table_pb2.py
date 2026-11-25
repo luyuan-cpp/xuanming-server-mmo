@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14playmode_table.proto\"q\n\rPlayModeTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x12\n\nmatch_mode\x18\x02 \x01(\r\x12\x18\n\x10\x62\x61ttle_config_id\x18\x03 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x04 \x01(\x08\x12\x15\n\rteam_size_max\x18\x05 \x01(\r\"1\n\x11PlayModeTableData\x12\x1c\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0e.PlayModeTableB?\n\x0e\x63om.game.tableB\x17PlayModeTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14playmode_table.proto\"\x8d\x01\n\rPlayModeTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x12\n\nmatch_mode\x18\x02 \x01(\r\x12\x18\n\x10\x62\x61ttle_config_id\x18\x03 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x04 \x01(\x08\x12\x1a\n\x12\x61llowed_team_sizes\x18\x06 \x03(\r\x12\x15\n\rteam_size_max\x18\x05 \x01(\r\"1\n\x11PlayModeTableData\x12\x1c\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0e.PlayModeTableB?\n\x0e\x63om.game.tableB\x17PlayModeTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'playmode_table_pb2', _globa
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\027PlayModeTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_PLAYMODETABLE']._serialized_start=24
-  _globals['_PLAYMODETABLE']._serialized_end=137
-  _globals['_PLAYMODETABLEDATA']._serialized_start=139
-  _globals['_PLAYMODETABLEDATA']._serialized_end=188
+  _globals['_PLAYMODETABLE']._serialized_start=25
+  _globals['_PLAYMODETABLE']._serialized_end=166
+  _globals['_PLAYMODETABLEDATA']._serialized_start=168
+  _globals['_PLAYMODETABLEDATA']._serialized_end=217
 # @@protoc_insertion_point(module_scope)

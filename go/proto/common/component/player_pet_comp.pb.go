@@ -215,8 +215,10 @@ type PlayerPetComp struct {
 	LastPurchasePetTableId uint32 `protobuf:"varint,4,opt,name=last_purchase_pet_table_id,json=lastPurchasePetTableId,proto3" json:"last_purchase_pet_table_id,omitempty"`
 	LastPurchasePetId      uint64 `protobuf:"varint,5,opt,name=last_purchase_pet_id,json=lastPurchasePetId,proto3" json:"last_purchase_pet_id,omitempty"`
 	LastPurchasePriceGold  uint64 `protobuf:"varint,6,opt,name=last_purchase_price_gold,json=lastPurchasePriceGold,proto3" json:"last_purchase_price_gold,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// true = 该角色已完成一次性起步灵狐判定（已发放或老号已有宠不再补发），重登/召回/放生均不重发。
+	StarterPetGranted bool `protobuf:"varint,7,opt,name=starter_pet_granted,json=starterPetGranted,proto3" json:"starter_pet_granted,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PlayerPetComp) Reset() {
@@ -291,6 +293,13 @@ func (x *PlayerPetComp) GetLastPurchasePriceGold() uint64 {
 	return 0
 }
 
+func (x *PlayerPetComp) GetStarterPetGranted() bool {
+	if x != nil {
+		return x.StarterPetGranted
+	}
+	return false
+}
+
 var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
@@ -333,14 +342,15 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aB\n" +
 	"\x14EntryLastTargetEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xb1\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe1\x02\n" +
 	"\rPlayerPetComp\x12 \n" +
 	"\x04pets\x18\x01 \x03(\v2\f.PetInstanceR\x04pets\x12\"\n" +
 	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetId\x124\n" +
 	"\x16last_purchase_sequence\x18\x03 \x01(\x04R\x14lastPurchaseSequence\x12:\n" +
 	"\x1alast_purchase_pet_table_id\x18\x04 \x01(\rR\x16lastPurchasePetTableId\x12/\n" +
 	"\x14last_purchase_pet_id\x18\x05 \x01(\x04R\x11lastPurchasePetId\x127\n" +
-	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGoldB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGold\x12.\n" +
+	"\x13starter_pet_granted\x18\a \x01(\bR\x11starterPetGrantedB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_pet_comp_proto_rawDescOnce sync.Once

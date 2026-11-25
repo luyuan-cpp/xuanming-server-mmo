@@ -14,21 +14,28 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/utils/bit_index/bit_index_util.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/currency/comp/player_currency_comp.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/battle/battle_data.pb.h"
+#include "proto/common/component/asset_op_ledger_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/player_trial_journal_comp.pb.h"
 #include "proto/scene/player_appearance.pb.h"
 #include "proto/scene/player_trial_journal.pb.h"
+#include "security/token_security.h"
 #include "services/battle/system/trial_journal_rules.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
+#include "services/scene/player/system/asset_op_auth.h"
+#include "services/scene/player/system/asset_op_system.h"
 #include "services/scene/player/system/player_appearance.h"
 #include "services/scene/player/system/player_season.h"
 #include "services/scene/player/system/player_trial_journal.h"
+#include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/code/appearancerule_table.h"
 #include "table/code/appearanceseries_table.h"
 #include "table/code/bit_index/trialjournalmilestone_table_id_bit_index.h"
@@ -198,14 +205,26 @@ TEST_F(PlayerTrialJournalSystemTest, RealExportedTablesValidateAndPopulateInitia
     EXPECT_TRUE(snap.available());
     EXPECT_TRUE(snap.can_operate());
     EXPECT_EQ(snap.total_permanent_lit_seals(), 0u);
-    EXPECT_EQ(snap.total_permanent_seals(), 12u);
+    EXPECT_EQ(snap.total_permanent_seals(), 24u);
     EXPECT_EQ(snap.voucher_balance(), 0u);
     EXPECT_EQ(snap.bound_sand_balance(), 0u);
-    ASSERT_EQ(snap.chapters_size(), 1);
+    ASSERT_EQ(snap.chapters_size(), 3);
     EXPECT_EQ(snap.chapters(0).chapter_id(), trialjournal::kChapterBreakthrough);
     EXPECT_EQ(snap.chapters(0).entries_size(), 4);
-    EXPECT_EQ(snap.milestones_size(), 4);
+    EXPECT_EQ(snap.chapters(1).chapter_id(), trialjournal::kChapterThreeRealms);
+    EXPECT_EQ(snap.chapters(1).entries_size(), 4);
+    EXPECT_EQ(snap.chapters(2).chapter_id(), trialjournal::kChapterSeasonal);
+    EXPECT_EQ(snap.chapters(2).season_id(), 1u);
+    EXPECT_EQ(snap.chapters(2).entries_size(), 3);
+    EXPECT_EQ(snap.milestones_size(), 10);
     EXPECT_EQ(snap.redeemable_artifacts_size(), 8);
+
+    const auto* m901 = FindMilestoneView(snap, 901);
+    ASSERT_NE(m901, nullptr);
+    EXPECT_EQ(m901->scope_chapter_id(), trialjournal::kScopeAllPermanent);
+    EXPECT_EQ(m901->required_seals(), 18u);
+    EXPECT_EQ(m901->grant_appearance_id(), "20_star_formation_master_girl");
+    EXPECT_EQ(m901->grant_appearance_name(), "星阵宗师");
 }
 
 TEST_F(PlayerTrialJournalSystemTest, RejectsMilestoneGrantingCardUnlockableAppearance) {
@@ -416,6 +435,8 @@ TEST_F(PlayerTrialJournalSystemTest, ClaimMilestoneIdempotencyBagFullAndVoucherR
     EXPECT_FALSE(ok101.replayed());
     EXPECT_EQ(ok101.granted_sand_count(), 2u);
     EXPECT_EQ(ok101.snapshot().bound_sand_balance(), 2u);
+    EXPECT_EQ(inv.GetTotalItemCount(trialjournal::kBoundReforgeSandItemId), 2u);
+    EXPECT_EQ(inv.GetTotalTradableItemCount(trialjournal::kBoundReforgeSandItemId), 0u) << "里程碑重铸砂必须绑定";
     EXPECT_EQ(persistCalls, 1u);
 
     // 同 client_request_id 重放返回 replayed=true 且不重复发奖
@@ -443,6 +464,8 @@ TEST_F(PlayerTrialJournalSystemTest, ClaimMilestoneIdempotencyBagFullAndVoucherR
     EXPECT_EQ(ok102.error_message().id(), 0u);
     EXPECT_EQ(ok102.granted_voucher_count(), 1u);
     EXPECT_EQ(ok102.snapshot().voucher_balance(), 1u);
+    EXPECT_EQ(inv.GetTotalItemCount(trialjournal::kBoundArtifactVoucherItemId), 1u);
+    EXPECT_EQ(inv.GetTotalTradableItemCount(trialjournal::kBoundArtifactVoucherItemId), 0u) << "里程碑法宝拓印必须绑定";
     EXPECT_EQ(tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).material_reward().earned_today(),
               materialEarnedBefore);
 
@@ -549,4 +572,240 @@ TEST_F(PlayerTrialJournalSystemTest, ExclusiveAppearanceMilestoneGrantsAppearanc
         }
     }
     EXPECT_TRUE(ownedExclusive);
+}
+
+TEST_F(PlayerTrialJournalSystemTest, BoundTrialRewardsStackIntoBoundSlotAndAreRejectedByTradeDebit) {
+    // 1) 点亮 6 印（101+102），领取 M101（2 绑定重铸砂）与 M102（1 绑定法宝拓印），并兑换 1 件绑定法宝 3301
+    PlayerTrialJournalSystem::SettlementDelta d;
+    ApplyBattleCredit(MakeTrialSettlement(5601, 101, 1, 6), d);
+    auto win102 = MakeTrialSettlement(5602, 102, 1, 6);
+    win102.mutable_trial_facts()->set_guard_stance_dispelled(true);
+    ApplyBattleCredit(win102, d);
+
+    auto& inv = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+    // 先塞入 1 个绑定重铸砂，并把容量卡死到恰好 1 格（0 空位）：领 M101 时必须能并入既有绑定堆！
+    InitItemParam seedBoundSand;
+    seedBoundSand.itemPBComp.set_item_id(kInvalidGuid);
+    seedBoundSand.itemPBComp.set_config_id(trialjournal::kBoundReforgeSandItemId);
+    seedBoundSand.itemPBComp.set_size(1);
+    seedBoundSand.itemPBComp.set_bound(true);
+    ASSERT_EQ(inv.AddItems(std::vector<InitItemParam>{seedBoundSand}), kSuccess);
+    inv.SetCapacityForRestore(inv.OccupiedGridCount());
+
+    ClaimTrialJournalMilestoneRequest req101;
+    req101.set_client_request_id(9201);
+    req101.set_milestone_id(101);
+    ClaimTrialJournalMilestoneResponse resp101;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, req101, resp101);
+    EXPECT_EQ(resp101.error_message().id(), 0u) << "满格但存在同配置绑定堆时，绑定发奖应可并堆";
+    EXPECT_EQ(inv.GetTotalItemCount(trialjournal::kBoundReforgeSandItemId), 3u);
+    EXPECT_EQ(inv.GetTotalTradableItemCount(trialjournal::kBoundReforgeSandItemId), 0u);
+
+    // 恢复容量，领 M102 并兑 3301 绑定法宝
+    inv.SetCapacityForRestore(40);
+    ClaimTrialJournalMilestoneRequest req102;
+    req102.set_client_request_id(9202);
+    req102.set_milestone_id(102);
+    ClaimTrialJournalMilestoneResponse resp102;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, req102, resp102);
+    ASSERT_EQ(resp102.error_message().id(), 0u);
+
+    RedeemBoundArtifactVoucherRequest redeemReq;
+    redeemReq.set_client_request_id(9203);
+    redeemReq.set_artifact_item_config_id(3301);
+    RedeemBoundArtifactVoucherResponse redeemResp;
+    PlayerTrialJournalSystem::RedeemArtifactVoucher(player, kNowMs, redeemReq, redeemResp);
+    ASSERT_EQ(redeemResp.error_message().id(), 0u);
+    const Guid boundArtifactGuid = redeemResp.created_item_id();
+
+    // 2) 接入真实 PlayerAssetOpSystem::Debit（聚宝斋寄售 TX_AUCTION_SELL）校验绑定拦截
+    constexpr std::string_view kTestSecret = "trial-journal-bound-debit-secret-0123456789";
+    tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player);
+    tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
+    tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+    PlayerAssetOpSystem::SetNowFnForTest([]() -> int64_t { return static_cast<int64_t>(kNowMs); });
+    PlayerAssetOpSystem::SetPersistFnForTest([](entt::entity) { return true; });
+    PlayerAssetOpSystem::SetSecretLookupForTest([](std::string_view) { return std::string(kTestSecret); });
+    struct AssetOpHookReset {
+        ~AssetOpHookReset() {
+            PlayerAssetOpSystem::SetNowFnForTest(nullptr);
+            PlayerAssetOpSystem::SetPersistFnForTest(nullptr);
+            PlayerAssetOpSystem::SetSecretLookupForTest(nullptr);
+        }
+    } hookReset;
+
+    const auto tradeDebit = [&](uint64_t seq, const auto& fillBundle) {
+        ::AssetOpRequest req;
+        req.set_player_id(kTestPlayerId);
+        req.set_stream(ASSET_OP_STREAM_TRADE_DEBIT);
+        req.set_stream_epoch(1);
+        req.set_seq(seq);
+        req.set_correlation_id(92000 + seq);
+        req.set_tx_type(static_cast<uint32_t>(TX_AUCTION_SELL));
+        fillBundle(*req.mutable_bundle());
+        auto* auth = req.mutable_auth();
+        auth->set_caller("trade");
+        auth->set_timestamp_ms(kNowMs);
+        auth->set_signature_hex(token_security::HmacSha256Hex(kTestSecret, AssetOpCanonical("debit", req)));
+        ::AssetOpResponse resp;
+        PlayerAssetOpSystem::Debit(req, resp);
+        return resp;
+    };
+
+    // 2a) 按 GUID 托管绑定法宝必须终局拒绝且法宝留在背包
+    const auto boundArtifactResp = tradeDebit(1, [&](AssetBundle& b) { b.add_item_uuids(boundArtifactGuid); });
+    EXPECT_EQ(boundArtifactResp.outcome(), ASSET_OP_OUTCOME_REJECTED);
+    EXPECT_EQ(boundArtifactResp.reason().id(), kAssetInvalidBundle);
+    EXPECT_TRUE(inv.ContainsGuid(boundArtifactGuid));
+
+    // 2b) 按数量托管仅有绑定堆的重铸砂必须终局拒绝且数量不动
+    const auto boundSandResp = tradeDebit(2, [&](AssetBundle& b) {
+        auto* it = b.add_items();
+        it->set_config_id(trialjournal::kBoundReforgeSandItemId);
+        it->set_count(1);
+    });
+    EXPECT_EQ(boundSandResp.outcome(), ASSET_OP_OUTCOME_REJECTED);
+    EXPECT_EQ(boundSandResp.reason().id(), kAssetInvalidBundle);
+    EXPECT_EQ(inv.GetTotalItemCount(trialjournal::kBoundReforgeSandItemId), 3u);
+
+    // 2c) 同时拥有 3 绑定 + 2 可交易重铸砂时，托管 2 个成功且仅扣除可交易堆，3 个绑定堆毫发无损
+    InitItemParam tradableSand;
+    tradableSand.itemPBComp.set_item_id(kInvalidGuid);
+    tradableSand.itemPBComp.set_config_id(trialjournal::kBoundReforgeSandItemId);
+    tradableSand.itemPBComp.set_size(2);
+    tradableSand.itemPBComp.set_bound(false);
+    ASSERT_EQ(inv.AddItems(std::vector<InitItemParam>{tradableSand}), kSuccess);
+
+    const auto tradableSandResp = tradeDebit(3, [&](AssetBundle& b) {
+        auto* it = b.add_items();
+        it->set_config_id(trialjournal::kBoundReforgeSandItemId);
+        it->set_count(2);
+    });
+    EXPECT_EQ(tradableSandResp.outcome(), ASSET_OP_OUTCOME_APPLIED);
+    EXPECT_EQ(inv.GetTotalTradableItemCount(trialjournal::kBoundReforgeSandItemId), 0u);
+    EXPECT_EQ(inv.GetTotalItemCount(trialjournal::kBoundReforgeSandItemId), 3u);
+}
+
+TEST_F(PlayerTrialJournalSystemTest, FullThreeChaptersGrandmasterM901AndSeasonalIsolation) {
+    ASSERT_TRUE(PlayerTrialJournalSystem::ValidateTables());
+    PlayerTrialJournalSystem::SettlementDelta d;
+
+    // 1) 点亮卷一全部 12 印 + 卷二普通两格 6 印 = 18/24 永久印，达标终极里程碑 M901
+    ApplyBattleCredit(MakeTrialSettlement(6101, 101, 1, 5), d);
+    auto s102 = MakeTrialSettlement(6102, 102, 1, 5);
+    s102.mutable_trial_facts()->set_guard_stance_dispelled(true);
+    ApplyBattleCredit(s102, d);
+    ApplyBattleCredit(MakeTrialSettlement(6103, 103, 1, 6), d);
+    auto s104 = MakeTrialSettlement(6104, 104, 1, 6);
+    s104.mutable_trial_facts()->set_guard_stance_dispelled(true);
+    ApplyBattleCredit(s104, d);
+
+    auto s201 = MakeTrialSettlement(6201, 201, 1, 6);
+    s201.mutable_trial_facts()->set_self_triggered_shield_break(true);
+    ApplyBattleCredit(s201, d);
+    auto s202 = MakeTrialSettlement(6202, 202, 1, 6);
+    s202.mutable_trial_facts()->set_self_triggered_anti_control_or_season_skill(true);
+    ApplyBattleCredit(s202, d);
+
+    // 2) 卷三 S1 赛季印（301 护卫救援 + 302 物法易势 + 303 人宠会武）写入 season_records，不污染永久计数与永久位图
+    auto s301 = MakeTrialSettlement(6301, 301, 1, 5);
+    s301.mutable_trial_facts()->set_season_id(1);
+    s301.mutable_trial_facts()->set_guard_survived(true);
+    ApplyBattleCredit(s301, d);
+    EXPECT_EQ(d.newlyLitSealIds.size(), 2u); // 3011 + 3012
+
+    auto s302 = MakeTrialSettlement(6302, 302, 1, 8, 5);
+    s302.mutable_trial_facts()->set_season_id(1);
+    s302.mutable_trial_facts()->set_team_dealt_physical_direct_damage(true);
+    s302.mutable_trial_facts()->set_team_dealt_magic_direct_damage(true);
+    ApplyBattleCredit(s302, d);
+    EXPECT_EQ(d.newlyLitSealIds.size(), 2u); // 3021 + 3022
+    EXPECT_FALSE(d.newSoloBest);
+    EXPECT_FALSE(d.newCoopBest) << "PVP 卷三格只点亮印记，不写 PVE 竞速回合纪录";
+
+    // 过季/错误 season_id 的卷三结算被忽略
+    auto staleSeason = MakeTrialSettlement(6303, 303, 1, 6, 3);
+    staleSeason.mutable_trial_facts()->set_season_id(99);
+    staleSeason.mutable_trial_facts()->set_self_triggered_shield_break(true);
+    ApplyBattleCredit(staleSeason, d);
+    EXPECT_FALSE(d.changed);
+
+    // 正式人宠会武合格负局（participated=true）可点亮 3031/3032
+    auto s303 = MakeTrialSettlement(6304, 303, 1, 6, 3, BATTLE_OUTCOME_SIDE_B_WIN);
+    s303.set_participated(true);
+    s303.mutable_trial_facts()->set_season_id(1);
+    s303.mutable_trial_facts()->set_self_triggered_shield_break(true);
+    s303.mutable_trial_facts()->set_self_triggered_anti_control_or_season_skill(true);
+    ApplyBattleCredit(s303, d);
+    EXPECT_EQ(d.newlyLitSealIds.size(), 2u); // 3031 + 3032
+
+    GetTrialJournalResponse snapResp;
+    ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, kNowMs, snapResp), kSuccess);
+    EXPECT_EQ(snapResp.snapshot().total_permanent_lit_seals(), 18u) << "卷三 6 枚赛季印绝不得混入永久 18 印";
+    EXPECT_EQ(snapResp.snapshot().chapters(2).lit_seal_count(), 6u);
+    const auto* m901 = FindMilestoneView(snapResp.snapshot(), 901);
+    ASSERT_NE(m901, nullptr);
+    EXPECT_TRUE(m901->claimable());
+
+    // 3) 领取 M901 永久免费授予「星阵宗师」20_star_formation_master_girl
+    ClaimTrialJournalMilestoneRequest claim901;
+    claim901.set_client_request_id(9401);
+    claim901.set_milestone_id(901);
+    ClaimTrialJournalMilestoneResponse resp901;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim901, resp901);
+    EXPECT_EQ(resp901.error_message().id(), 0u);
+    EXPECT_EQ(resp901.granted_appearance_id(), "20_star_formation_master_girl");
+
+    PlayerAppearanceInfo appInfo;
+    PlayerAppearanceSystem::FillInfo(player, kNowMs / 1000u, appInfo);
+    bool ownedStarMaster = false;
+    for (const auto& entry : appInfo.appearances()) {
+        if (entry.appearance_id() == "20_star_formation_master_girl") {
+            ownedStarMaster = entry.owned();
+            EXPECT_FALSE(entry.card_unlockable());
+        }
+    }
+    EXPECT_TRUE(ownedStarMaster);
+
+    // 4) 领取卷三 S1 里程碑 302（4 印）落进 season_records，不写永久 claimed_milestone_bits
+    ClaimTrialJournalMilestoneRequest claim302;
+    claim302.set_client_request_id(9402);
+    claim302.set_milestone_id(302);
+    ClaimTrialJournalMilestoneResponse resp302;
+    PlayerTrialJournalSystem::ClaimMilestone(player, kNowMs, claim302, resp302);
+    EXPECT_EQ(resp302.error_message().id(), 0u);
+    EXPECT_EQ(resp302.granted_sand_count(), 1u);
+    const auto& comp = tlsEcs.actorRegistry.get<PlayerTrialJournalComp>(player);
+    ASSERT_EQ(comp.season_records_size(), 1);
+    EXPECT_EQ(comp.season_records(0).season_id(), 1u);
+    EXPECT_EQ(comp.season_records(0).lit_seal_ids_size(), 6);
+    ASSERT_EQ(comp.season_records(0).claimed_milestone_ids_size(), 1);
+    EXPECT_EQ(comp.season_records(0).claimed_milestone_ids(0), 302u);
+}
+
+TEST_F(PlayerTrialJournalSystemTest, NormalBossTrialClearUnlocksHardWithoutJournalEntry) {
+    EXPECT_FALSE(PlayerTrialJournalSystem::HasClearedAnyNormalBossTrial(player));
+    GetTrialJournalResponse before;
+    ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, kNowMs, before), kSuccess);
+    EXPECT_FALSE(before.snapshot().hard_boss_trial_unlocked());
+
+    // 灵障首领（boss_trial_kind=3）普通难度胜局（无 TrialJournalEntry 行）也应解锁全部困难首领试炼
+    BattleSettlementData barrierNormalWin;
+    barrierNormalWin.set_battle_id(9901);
+    barrierNormalWin.set_player_id(kTestPlayerId);
+    barrierNormalWin.set_player_team_index(0);
+    barrierNormalWin.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    barrierNormalWin.set_total_rounds(5);
+    barrierNormalWin.set_boss_trial_kind(3);
+    barrierNormalWin.set_battle_difficulty(1);
+
+    EXPECT_TRUE(PlayerTrialJournalSystem::HasJournalUpdate(barrierNormalWin));
+    PlayerTrialJournalSystem::SettlementDelta delta;
+    ApplyBattleCredit(barrierNormalWin, delta);
+    EXPECT_TRUE(delta.changed);
+    EXPECT_TRUE(PlayerTrialJournalSystem::HasClearedAnyNormalBossTrial(player));
+
+    GetTrialJournalResponse after;
+    ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, kNowMs, after), kSuccess);
+    EXPECT_TRUE(after.snapshot().hard_boss_trial_unlocked());
 }

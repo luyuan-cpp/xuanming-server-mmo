@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025match_error_tip.proto*\224\t\n\013match_error\022"
+    "\n\025match_error_tip.proto*\254\r\n\013match_error\022"
     "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}"
     "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode"
     "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure"
@@ -64,15 +64,28 @@ const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "ptLoadoutInvalid\020\240}\022\"\n\035kMatchBattleScrip"
     "tLoadoutFull\020\241}\022\037\n\032kMatchRankedSeasonSet"
     "tling\020\242}\022\036\n\031kMatchRankedPresetInvalid\020\243}"
-    "\022$\n\037kMatchRankedRuleVersionMismatch\020\244}B$"
-    "\n\016com.game.tableZ\022generated/pb/tableb\006pr"
-    "oto3"
+    "\022$\n\037kMatchRankedRuleVersionMismatch\020\244}\022\034"
+    "\n\027kMatchTournamentNotOpen\020\245}\022 \n\033kMatchTo"
+    "urnamentStageClosed\020\246}\022%\n kMatchTourname"
+    "ntSquadNameInvalid\020\247}\022#\n\036kMatchTournamen"
+    "tAlreadyInSquad\020\250}\022\"\n\035kMatchTournamentSq"
+    "uadNotFound\020\251}\022\037\n\032kMatchTournamentNotCap"
+    "tain\020\252}\022\036\n\031kMatchTournamentSquadFull\020\253}\022"
+    " \n\033kMatchTournamentSquadLocked\020\254}\022#\n\036kMa"
+    "tchTournamentInviteNotFound\020\255}\022$\n\037kMatch"
+    "TournamentMemberNotEnough\020\256}\022\"\n\035kMatchTo"
+    "urnamentLineupInvalid\020\257}\022#\n\036kMatchTourna"
+    "mentQualifierLimit\020\260}\022\"\n\035kMatchTournamen"
+    "tMatchNotReady\020\261}\022#\n\036kMatchTournamentAlr"
+    "eadyCheered\020\262}\022&\n!kMatchTournamentReward"
+    "Unavailable\020\263}B$\n\016com.game.tableZ\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_match_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_match_5ferror_5ftip_2eproto = {
     false,
     false,
-    1244,
+    1780,
     descriptor_table_protodef_match_5ferror_5ftip_2eproto,
     "match_error_tip.proto",
     &descriptor_table_match_5ferror_5ftip_2eproto_once,
@@ -91,7 +104,7 @@ match_error_descriptor() {
   return file_level_enum_descriptors_match_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t match_error_internal_data_[] = {
-    65536u, 2424832u, 16021u, 16013u, 16029u, 16007u, 16017u, 16025u, 16033u, 16003u, 16011u, 16015u, 16019u, 16023u, 16027u, 16031u, 16035u, 16001u, 16005u, 16009u, 16012u, 16014u, 16016u, 16018u, 16020u, 16022u, 16024u, 16026u, 16028u, 16030u, 16032u, 16034u, 16036u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, };
+    65536u, 3407872u, 16031u, 16015u, 16044u, 16007u, 16023u, 16039u, 16048u, 16003u, 16011u, 16019u, 16027u, 16035u, 16042u, 16046u, 16050u, 16001u, 16005u, 16009u, 16013u, 16017u, 16021u, 16025u, 16029u, 16033u, 16037u, 16041u, 16043u, 16045u, 16047u, 16049u, 16051u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, 16012u, 16014u, 16016u, 16018u, 16020u, 16022u, 16024u, 16026u, 16028u, 16030u, 16032u, 16034u, 16036u, 16038u, 16040u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

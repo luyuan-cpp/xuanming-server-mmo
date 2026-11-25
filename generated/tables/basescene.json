@@ -2,16 +2,16 @@
  "data": [
   {
    "id": 1,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 2,
-   "nav_bin_file": "data/scene_nav_bin/penglai_scene.bin",
-   "spawn_x": 173.0,
-   "spawn_y": 195.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/island/bajingbody20261114/scene.bin",
+   "spawn_x": 70.00000000000001,
+   "spawn_y": 205.0,
    "spawn_z": 0.0
   },
   {
@@ -37,79 +37,79 @@
   },
   {
    "id": 6,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 7,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 8,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 9,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 10,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 11,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 12,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 13,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 14,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 15,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {
    "id": 16,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
-   "spawn_x": 133.0,
-   "spawn_y": 199.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
+   "spawn_x": 58.5,
+   "spawn_y": 222.5,
    "spawn_z": 0.0
   },
   {

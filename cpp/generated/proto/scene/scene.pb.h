@@ -2914,6 +2914,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     kDeadlineMsFieldNumber = 4,
     kPrepareDeadlineMsFieldNumber = 5,
     kBattleNodeIdFieldNumber = 3,
+    kBattleConfigIdFieldNumber = 7,
+    kMatchModeFieldNumber = 8,
   };
   // .RankedMatchContext ranked_context = 6;
   [[nodiscard]] bool has_ranked_context()
@@ -2981,11 +2983,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
   void _internal_set_battle_node_id(::uint32_t value);
 
   public:
+  // uint32 battle_config_id = 7;
+  void clear_battle_config_id() ;
+  [[nodiscard]] ::uint32_t battle_config_id() const;
+  void set_battle_config_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_config_id() const;
+  void _internal_set_battle_config_id(::uint32_t value);
+
+  public:
+  // uint32 match_mode = 8;
+  void clear_match_mode() ;
+  [[nodiscard]] ::uint32_t match_mode() const;
+  void set_match_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_match_mode() const;
+  void _internal_set_match_mode(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PrepareBattleRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3020,6 +3042,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     ::uint64_t deadline_ms_;
     ::uint64_t prepare_deadline_ms_;
     ::uint32_t battle_node_id_;
+    ::uint32_t battle_config_id_;
+    ::uint32_t match_mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4673,6 +4697,54 @@ inline void PrepareBattleRequest::set_allocated_ranked_context(::RankedMatchCont
 
   _impl_.ranked_context_ = reinterpret_cast<::RankedMatchContext*>(value);
   // @@protoc_insertion_point(field_set_allocated:PrepareBattleRequest.ranked_context)
+}
+
+// uint32 battle_config_id = 7;
+inline void PrepareBattleRequest::clear_battle_config_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_config_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PrepareBattleRequest::battle_config_id() const {
+  // @@protoc_insertion_point(field_get:PrepareBattleRequest.battle_config_id)
+  return _internal_battle_config_id();
+}
+inline void PrepareBattleRequest::set_battle_config_id(::uint32_t value) {
+  _internal_set_battle_config_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PrepareBattleRequest.battle_config_id)
+}
+inline ::uint32_t PrepareBattleRequest::_internal_battle_config_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_config_id_;
+}
+inline void PrepareBattleRequest::_internal_set_battle_config_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_config_id_ = value;
+}
+
+// uint32 match_mode = 8;
+inline void PrepareBattleRequest::clear_match_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PrepareBattleRequest::match_mode() const {
+  // @@protoc_insertion_point(field_get:PrepareBattleRequest.match_mode)
+  return _internal_match_mode();
+}
+inline void PrepareBattleRequest::set_match_mode(::uint32_t value) {
+  _internal_set_match_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PrepareBattleRequest.match_mode)
+}
+inline ::uint32_t PrepareBattleRequest::_internal_match_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_mode_;
+}
+inline void PrepareBattleRequest::_internal_set_match_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_mode_ = value;
 }
 
 // -------------------------------------------------------------------

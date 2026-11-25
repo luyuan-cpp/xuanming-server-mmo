@@ -1,5 +1,7 @@
 # 《论剑排位首发 V1》工程落盘设计
 
+> **[2026-11-24 已作废 — 仅保留 `RankedPreset` 表结构供轮换娱乐场复用]** 负责人已拍板：正式 `PVP_TEAM` 固定走本人真实养成，不落地纯标准化正式排位；统一工程方案见 [season-pvp-pve-economy-unified-v1.md](season-pvp-pve-economy-unified-v1.md)。
+
 对应规格：[ranked-play-season-ui-candidate.md](ranked-play-season-ui-candidate.md)（2026-11-23）。本文记录 C++/Go 权威服、Java 独立服、共享配置与协议、以及 Unity 非 UI 适配的完整落地设计。
 
 ## 1. 需求分析

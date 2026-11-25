@@ -62,6 +62,21 @@ const (
 	MatchError_kMatchRankedSeasonSettling         MatchError = 16034
 	MatchError_kMatchRankedPresetInvalid          MatchError = 16035
 	MatchError_kMatchRankedRuleVersionMismatch    MatchError = 16036
+	MatchError_kMatchTournamentNotOpen            MatchError = 16037
+	MatchError_kMatchTournamentStageClosed        MatchError = 16038
+	MatchError_kMatchTournamentSquadNameInvalid   MatchError = 16039
+	MatchError_kMatchTournamentAlreadyInSquad     MatchError = 16040
+	MatchError_kMatchTournamentSquadNotFound      MatchError = 16041
+	MatchError_kMatchTournamentNotCaptain         MatchError = 16042
+	MatchError_kMatchTournamentSquadFull          MatchError = 16043
+	MatchError_kMatchTournamentSquadLocked        MatchError = 16044
+	MatchError_kMatchTournamentInviteNotFound     MatchError = 16045
+	MatchError_kMatchTournamentMemberNotEnough    MatchError = 16046
+	MatchError_kMatchTournamentLineupInvalid      MatchError = 16047
+	MatchError_kMatchTournamentQualifierLimit     MatchError = 16048
+	MatchError_kMatchTournamentMatchNotReady      MatchError = 16049
+	MatchError_kMatchTournamentAlreadyCheered     MatchError = 16050
+	MatchError_kMatchTournamentRewardUnavailable  MatchError = 16051
 )
 
 // Enum value maps for MatchError.
@@ -105,6 +120,21 @@ var (
 		16034: "kMatchRankedSeasonSettling",
 		16035: "kMatchRankedPresetInvalid",
 		16036: "kMatchRankedRuleVersionMismatch",
+		16037: "kMatchTournamentNotOpen",
+		16038: "kMatchTournamentStageClosed",
+		16039: "kMatchTournamentSquadNameInvalid",
+		16040: "kMatchTournamentAlreadyInSquad",
+		16041: "kMatchTournamentSquadNotFound",
+		16042: "kMatchTournamentNotCaptain",
+		16043: "kMatchTournamentSquadFull",
+		16044: "kMatchTournamentSquadLocked",
+		16045: "kMatchTournamentInviteNotFound",
+		16046: "kMatchTournamentMemberNotEnough",
+		16047: "kMatchTournamentLineupInvalid",
+		16048: "kMatchTournamentQualifierLimit",
+		16049: "kMatchTournamentMatchNotReady",
+		16050: "kMatchTournamentAlreadyCheered",
+		16051: "kMatchTournamentRewardUnavailable",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":                     0,
@@ -145,6 +175,21 @@ var (
 		"kMatchRankedSeasonSettling":         16034,
 		"kMatchRankedPresetInvalid":          16035,
 		"kMatchRankedRuleVersionMismatch":    16036,
+		"kMatchTournamentNotOpen":            16037,
+		"kMatchTournamentStageClosed":        16038,
+		"kMatchTournamentSquadNameInvalid":   16039,
+		"kMatchTournamentAlreadyInSquad":     16040,
+		"kMatchTournamentSquadNotFound":      16041,
+		"kMatchTournamentNotCaptain":         16042,
+		"kMatchTournamentSquadFull":          16043,
+		"kMatchTournamentSquadLocked":        16044,
+		"kMatchTournamentInviteNotFound":     16045,
+		"kMatchTournamentMemberNotEnough":    16046,
+		"kMatchTournamentLineupInvalid":      16047,
+		"kMatchTournamentQualifierLimit":     16048,
+		"kMatchTournamentMatchNotReady":      16049,
+		"kMatchTournamentAlreadyCheered":     16050,
+		"kMatchTournamentRewardUnavailable":  16051,
 	}
 )
 
@@ -179,7 +224,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\x94\t\n" +
+	"\x15match_error_tip.proto*\xac\r\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -218,7 +263,22 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1dkMatchBattleScriptLoadoutFull\x10\xa1}\x12\x1f\n" +
 	"\x1akMatchRankedSeasonSettling\x10\xa2}\x12\x1e\n" +
 	"\x19kMatchRankedPresetInvalid\x10\xa3}\x12$\n" +
-	"\x1fkMatchRankedRuleVersionMismatch\x10\xa4}B$\n" +
+	"\x1fkMatchRankedRuleVersionMismatch\x10\xa4}\x12\x1c\n" +
+	"\x17kMatchTournamentNotOpen\x10\xa5}\x12 \n" +
+	"\x1bkMatchTournamentStageClosed\x10\xa6}\x12%\n" +
+	" kMatchTournamentSquadNameInvalid\x10\xa7}\x12#\n" +
+	"\x1ekMatchTournamentAlreadyInSquad\x10\xa8}\x12\"\n" +
+	"\x1dkMatchTournamentSquadNotFound\x10\xa9}\x12\x1f\n" +
+	"\x1akMatchTournamentNotCaptain\x10\xaa}\x12\x1e\n" +
+	"\x19kMatchTournamentSquadFull\x10\xab}\x12 \n" +
+	"\x1bkMatchTournamentSquadLocked\x10\xac}\x12#\n" +
+	"\x1ekMatchTournamentInviteNotFound\x10\xad}\x12$\n" +
+	"\x1fkMatchTournamentMemberNotEnough\x10\xae}\x12\"\n" +
+	"\x1dkMatchTournamentLineupInvalid\x10\xaf}\x12#\n" +
+	"\x1ekMatchTournamentQualifierLimit\x10\xb0}\x12\"\n" +
+	"\x1dkMatchTournamentMatchNotReady\x10\xb1}\x12#\n" +
+	"\x1ekMatchTournamentAlreadyCheered\x10\xb2}\x12&\n" +
+	"!kMatchTournamentRewardUnavailable\x10\xb3}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

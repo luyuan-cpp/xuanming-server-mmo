@@ -47,7 +47,10 @@ func commitAbortTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, 
 			return err
 		}
 	}
-	return writeVoidSettlementSourcesTx(ctx, tx, f, stamp)
+	if err = writeVoidSettlementSourcesTx(ctx, tx, f, stamp); err != nil {
+		return err
+	}
+	return writeVoidRankedBattlesTx(ctx, tx, f, stamp)
 }
 
 // observeTerminalAbort 在 ABORT 事务提交成功之后调用:计一次低基数计数,打一行带 battle_id 的 INFO,

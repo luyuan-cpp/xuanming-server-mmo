@@ -58,6 +58,9 @@ enum class ClientRequestKind : uint8_t
 	kCatchupSeasonSeal = 9,       // SceneSeasonClientPlayer.CatchupSeasonSeal:小额灵石快捷追赶赛季印进度
 	kClaimTrialJournalMilestone = 10, // SceneTrialJournalClientPlayer.ClaimTrialJournalMilestone:领取试炼志战法印里程碑奖励
 	kRedeemBoundArtifactVoucher = 11, // SceneTrialJournalClientPlayer.RedeemBoundArtifactVoucher:使用自用法宝拓印兑换绑定法宝
+	kSkillScrollCraft = 12,           // SceneSkillClientPlayer.CraftSkillBook:分卷宗拓印常规/稀世技能书
+	kLearnSkillBook = 13,             // SceneSkillClientPlayer.LearnSkillBook:研习未学技能书永久解锁
+	kDismantleSkillBook = 14,         // SceneSkillClientPlayer.DismantleSkillBook:拆解未学常规书返还残页
 	kCount
 };
 
@@ -76,7 +79,8 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward",
 														  "buy_afk_pass", "switch_appearance", "start_appearance_trial",
 														  "catchup_season_seal", "claim_trial_journal_milestone",
-														  "redeem_bound_artifact_voucher"};
+														  "redeem_bound_artifact_voucher", "skill_scroll_craft",
+														  "learn_skill_book", "dismantle_skill_book"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -103,12 +107,15 @@ struct ClientRequestResult
 {
 	bool enhanceSuccess{false};  // kEnhanceEquip:那一次掷骰成没成
 	uint32_t enhanceLevel{0};    // kEnhanceEquip:那一次强化之后的等级(后来又强化过的话,当前等级会不同)
+	uint32_t enhancePityCount{0}; // kEnhanceEquip:那一次强化之后的保底累计失败次数（成功归 0）
 	uint32_t createdSchemeId{0}; // kCreateAttributeScheme:那一次建出来的方案号
 	uint64_t equipmentItemId{0};
 	uint64_t forgeRevision{0};
 	uint64_t materialRewardRevision{0};
 	uint32_t craftingMaterialCount{0};
 	uint32_t enhancementStoneCount{0};
+	uint32_t craftingTradableCount{0};
+	uint32_t enhancementTradableCount{0};
 	uint32_t seasonCatchupPoints{0};
 	uint64_t seasonCatchupSpent{0};
 	uint32_t trialMilestoneId{0};
@@ -116,6 +123,13 @@ struct ClientRequestResult
 	uint32_t trialMilestoneVoucherCount{0};
 	uint64_t redeemedArtifactItemId{0};
 	uint32_t redeemedArtifactConfigId{0};
+	uint32_t equipmentQualityTier{0};
+	uint32_t equipmentPolishPityCount{0};
+	bool equipmentGuaranteedByPity{false};
+	uint64_t craftedSkillBookId{0};
+	uint32_t craftedSkillTableId{0};
+	uint64_t scrollCraftRevision{0};
+	uint32_t scrollBonusFragments{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

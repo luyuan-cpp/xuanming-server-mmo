@@ -82,27 +82,28 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 		if required == 0 {
 			required = limit
 		}
-		if required > limit {
+		if required > limit || !l.svcCtx.ActiveCatalog().AllowedTeamSize(in.Mode, in.BattleConfigId, required) {
 			metrics.ObserveJoinQueue(modeName, "team_size_over_limit")
 			return &matchpb.JoinQueueResponse{
 				ErrorCode:    constants.ErrModeNotOpen,
-				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该副本不支持这个队伍人数"),
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该副本暂未开放这个队伍人数档"),
 			}, nil
 		}
 	case matchpb.MatchMode_MATCH_MODE_1V1:
 		required = 2
-	case matchpb.MatchMode_MATCH_MODE_5V5:
+	case matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
 		required = required5v5Players
 	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
 		sideSize := in.TeamSize
 		if sideSize == 0 {
 			sideSize = 1
 		}
-		// 每侧人数上限来自 PlayMode 表(不超过引擎每队上限 5);模板没有开放 PVP_TEAM 即 0,一律拒绝。
-		if limit := min(l.svcCtx.ActiveCatalog().MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize); sideSize > limit {
+		// 每侧人数上限及冷启动档位白名单来自 PlayMode 表(不超过引擎每队上限 5);未开放档位一律拒绝。
+		if limit := min(l.svcCtx.ActiveCatalog().MaxTeamSize(in.Mode, in.BattleConfigId), kMaxBattleTeamSize); sideSize > limit ||
+			!l.svcCtx.ActiveCatalog().AllowedTeamSize(in.Mode, in.BattleConfigId, sideSize) {
 			metrics.ObserveJoinQueue(modeName, "team_size_over_limit")
 			return &matchpb.JoinQueueResponse{ErrorCode: constants.ErrModeNotOpen,
-				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该模板不支持这个每方人数")}, nil
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "该模板暂未开放这个每方人数档")}, nil
 		}
 		required = sideSize * 2
 	default:

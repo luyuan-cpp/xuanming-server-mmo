@@ -17,7 +17,8 @@ enum class BattleModifier : uint32_t {
     OutgoingDamage = 5, IncomingHeal = 6, Evasion = 7, OutgoingHeal = 8,
     ManaCost = 9, MagicReduction = 10, RetreatResist = 11, ControlResist = 12,
     LaterHitReduction = 13, NextDirectDamage = 14, AdaptiveDamage = 15,
-    IncomingDamage = 16, OutgoingShield = 17, kCount
+    IncomingDamage = 16, OutgoingShield = 17, OutgoingPhysicalDamage = 18,
+    OutgoingMagicDamage = 19, SelfGrowingDefense = 20, kCount
 };
 enum class BattleDamageOrigin : uint32_t {
     Direct = 0, Periodic = 1, Reflect = 2, Redirect = 3, ResourceCost = 4,

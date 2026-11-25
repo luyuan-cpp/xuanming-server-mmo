@@ -5612,6 +5612,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kBattleConfigIdFieldNumber = 19,
     kSeasonIdFieldNumber = 22,
     kRankedRuleVersionFieldNumber = 23,
+    kManualActionRoundsFieldNumber = 26,
+    kBattleDifficultyFieldNumber = 28,
+    kEffectiveCombatContributionFieldNumber = 27,
+    kUseFreePresetFieldNumber = 30,
+    kBossTrialKindFieldNumber = 29,
   };
   // repeated .BattleItemEntry items_consumed = 9;
   [[nodiscard]] int items_consumed_size()
@@ -5934,11 +5939,61 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_ranked_rule_version(::uint32_t value);
 
   public:
+  // uint32 manual_action_rounds = 26;
+  void clear_manual_action_rounds() ;
+  [[nodiscard]] ::uint32_t manual_action_rounds() const;
+  void set_manual_action_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_manual_action_rounds() const;
+  void _internal_set_manual_action_rounds(::uint32_t value);
+
+  public:
+  // uint32 battle_difficulty = 28;
+  void clear_battle_difficulty() ;
+  [[nodiscard]] ::uint32_t battle_difficulty() const;
+  void set_battle_difficulty(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_difficulty() const;
+  void _internal_set_battle_difficulty(::uint32_t value);
+
+  public:
+  // bool effective_combat_contribution = 27;
+  void clear_effective_combat_contribution() ;
+  [[nodiscard]] bool effective_combat_contribution() const;
+  void set_effective_combat_contribution(bool value);
+
+  private:
+  bool _internal_effective_combat_contribution() const;
+  void _internal_set_effective_combat_contribution(bool value);
+
+  public:
+  // bool use_free_preset = 30;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
+  // uint32 boss_trial_kind = 29;
+  void clear_boss_trial_kind() ;
+  [[nodiscard]] ::uint32_t boss_trial_kind() const;
+  void set_boss_trial_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_boss_trial_kind() const;
+  void _internal_set_boss_trial_kind(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleSettlementData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 25,
+      ::google::protobuf::internal::TcParseTable<5, 30,
                           6, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5993,6 +6048,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     ::uint32_t battle_config_id_;
     ::uint32_t season_id_;
     ::uint32_t ranked_rule_version_;
+    ::uint32_t manual_action_rounds_;
+    ::uint32_t battle_difficulty_;
+    bool effective_combat_contribution_;
+    bool use_free_preset_;
+    ::uint32_t boss_trial_kind_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6443,6 +6503,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext final : public :
     kRuleVersionFieldNumber = 4,
     kRankGenerationFieldNumber = 3,
     kTeamSizeFieldNumber = 5,
+    kUseFreePresetFieldNumber = 8,
   };
   // repeated .RankedMemberLoadout members = 7;
   [[nodiscard]] int members_size()
@@ -6535,12 +6596,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext final : public :
   void _internal_set_team_size(::uint32_t value);
 
   public:
+  // bool use_free_preset = 8;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RankedMatchContext)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          1, 55,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          1, 63,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6575,6 +6646,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext final : public :
     ::uint32_t rule_version_;
     ::uint64_t rank_generation_;
     ::uint32_t team_size_;
+    bool use_free_preset_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -14989,6 +15061,126 @@ inline void BattleSettlementData::set_allocated_trial_facts(::BattleTrialJournal
   // @@protoc_insertion_point(field_set_allocated:BattleSettlementData.trial_facts)
 }
 
+// uint32 manual_action_rounds = 26;
+inline void BattleSettlementData::clear_manual_action_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.manual_action_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t BattleSettlementData::manual_action_rounds() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.manual_action_rounds)
+  return _internal_manual_action_rounds();
+}
+inline void BattleSettlementData::set_manual_action_rounds(::uint32_t value) {
+  _internal_set_manual_action_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.manual_action_rounds)
+}
+inline ::uint32_t BattleSettlementData::_internal_manual_action_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.manual_action_rounds_;
+}
+inline void BattleSettlementData::_internal_set_manual_action_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.manual_action_rounds_ = value;
+}
+
+// bool effective_combat_contribution = 27;
+inline void BattleSettlementData::clear_effective_combat_contribution() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_combat_contribution_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline bool BattleSettlementData::effective_combat_contribution() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.effective_combat_contribution)
+  return _internal_effective_combat_contribution();
+}
+inline void BattleSettlementData::set_effective_combat_contribution(bool value) {
+  _internal_set_effective_combat_contribution(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.effective_combat_contribution)
+}
+inline bool BattleSettlementData::_internal_effective_combat_contribution() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effective_combat_contribution_;
+}
+inline void BattleSettlementData::_internal_set_effective_combat_contribution(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_combat_contribution_ = value;
+}
+
+// uint32 battle_difficulty = 28;
+inline void BattleSettlementData::clear_battle_difficulty() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_difficulty_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t BattleSettlementData::battle_difficulty() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.battle_difficulty)
+  return _internal_battle_difficulty();
+}
+inline void BattleSettlementData::set_battle_difficulty(::uint32_t value) {
+  _internal_set_battle_difficulty(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.battle_difficulty)
+}
+inline ::uint32_t BattleSettlementData::_internal_battle_difficulty() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_difficulty_;
+}
+inline void BattleSettlementData::_internal_set_battle_difficulty(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_difficulty_ = value;
+}
+
+// uint32 boss_trial_kind = 29;
+inline void BattleSettlementData::clear_boss_trial_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_trial_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+}
+inline ::uint32_t BattleSettlementData::boss_trial_kind() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.boss_trial_kind)
+  return _internal_boss_trial_kind();
+}
+inline void BattleSettlementData::set_boss_trial_kind(::uint32_t value) {
+  _internal_set_boss_trial_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.boss_trial_kind)
+}
+inline ::uint32_t BattleSettlementData::_internal_boss_trial_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.boss_trial_kind_;
+}
+inline void BattleSettlementData::_internal_set_boss_trial_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.boss_trial_kind_ = value;
+}
+
+// bool use_free_preset = 30;
+inline void BattleSettlementData::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline bool BattleSettlementData::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:BattleSettlementData.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void BattleSettlementData::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:BattleSettlementData.use_free_preset)
+}
+inline bool BattleSettlementData::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void BattleSettlementData::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BattlePetSettlementData
@@ -15720,6 +15912,30 @@ inline ::google::protobuf::RepeatedPtrField<::RankedMemberLoadout>* PROTOBUF_NON
 RankedMatchContext::_internal_mutable_members() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.members_;
+}
+
+// bool use_free_preset = 8;
+inline void RankedMatchContext::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool RankedMatchContext::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:RankedMatchContext.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void RankedMatchContext::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:RankedMatchContext.use_free_preset)
+}
+inline bool RankedMatchContext::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void RankedMatchContext::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
 }
 
 // -------------------------------------------------------------------

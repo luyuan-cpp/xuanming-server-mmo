@@ -77,8 +77,11 @@ enum class EquipmentProfile : uint8_t {
     kV1Artifact = 3,
     kCount
 };
-inline constexpr uint32_t kV1MaxEnhanceLevel = 10;
+inline constexpr uint32_t kV1GuaranteedMaxEnhanceLevel = 10;
+inline constexpr uint32_t kV1MaxEnhanceLevel = 11;
 inline constexpr uint32_t kV1EnhanceBonusPerLevel = 200;
+inline constexpr uint32_t kV1TopEnhanceBonusPermyriad = 2400;
+inline constexpr uint32_t kV1TopEnhancePityLimit = 20;
 
 constexpr uint32_t ToRaw(EquipmentProfile profile) { return static_cast<uint32_t>(profile); }
 constexpr bool IsKnownEquipmentProfile(uint32_t profile) {
@@ -526,6 +529,32 @@ bool RollEnhanceSuccess(uint32_t ratePermyriad, RandFn&& rand) {
 // failLevelLoss == 0 = 不掉级。
 constexpr uint32_t LevelAfterFailure(uint32_t level, uint32_t failLevelLoss) {
     return level > failLevelLoss ? level - failLevelLoss : 0;
+}
+
+// 满配突破（如 V1 +11）的保底强化结果：概率提前成 + 满次数必成（不掉级）。
+struct EnhanceRollResult {
+    bool success{false};
+    bool triggeredByPity{false};
+    uint32_t nextPityCount{0};
+};
+
+// 带保底的强化判定：
+//   - pityLimit == 0：沿用无保底路径（RollEnhanceSuccess），nextPityCount 恒为 0；
+//   - pityLimit > 0 且 currentPityCount + 1 >= pityLimit：本手触发保底必成（不消耗随机数），保底归零；
+//   - 其余：消耗一次 rand(10000)，命中则成功且保底归零，未命中则保底计数 +1。
+template <class RandFn>
+EnhanceRollResult RollEnhanceWithPity(uint32_t ratePermyriad, uint32_t currentPityCount, uint32_t pityLimit,
+                                      RandFn&& rand) {
+    EnhanceRollResult result;
+    if (pityLimit > 0 && currentPityCount + 1 >= pityLimit) {
+        result.success = true;
+        result.triggeredByPity = true;
+        result.nextPityCount = 0;
+        return result;
+    }
+    result.success = RollEnhanceSuccess(ratePermyriad, rand);
+    result.nextPityCount = (!result.success && pityLimit > 0) ? (currentPityCount + 1) : 0;
+    return result;
 }
 
 // ---------------------------------------------------------------------------

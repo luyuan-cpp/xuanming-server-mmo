@@ -78,6 +78,7 @@ const (
 	OpKick
 	OpTransferLeader
 	OpDisband
+	OpConfirmRankedPreset
 )
 
 // Op 一次名册操作的输入。用下面的构造函数创建,不要手填 Kind 与字段组合。
@@ -97,6 +98,10 @@ type Op struct {
 	NewTeamId uint64
 	// Accept HandleApplication 的 approve / RespondInvite 的 accept。
 	Accept bool
+	// RankedCharacterPresetId / RankedPetPresetId / RankedRuleVersion: ConfirmRankedPreset 确认的排位预设与规则版本。
+	RankedCharacterPresetId uint32
+	RankedPetPresetId       uint32
+	RankedRuleVersion       uint32
 }
 
 // CreateOp 建队:caller 为队长,zone 为建队者 home zone,teamId 由发号器给出。
@@ -140,6 +145,17 @@ func TransferLeaderOp(caller, target uint64) Op {
 
 // DisbandOp 队长解散。
 func DisbandOp(caller uint64) Op { return Op{Kind: OpDisband, Caller: caller} }
+
+// ConfirmRankedPresetOp 成员确认本局论剑排位预设。
+func ConfirmRankedPresetOp(caller uint64, characterPresetID, petPresetID, ruleVersion uint32) Op {
+	return Op{
+		Kind:                    OpConfirmRankedPreset,
+		Caller:                  caller,
+		RankedCharacterPresetId: characterPresetID,
+		RankedPetPresetId:       petPresetID,
+		RankedRuleVersion:       ruleVersion,
+	}
+}
 
 // InviteIndexAdd 需要写进 team_invite_index 的反查项。
 type InviteIndexAdd struct {
@@ -268,6 +284,8 @@ func Apply(op Op, rec *teampb.TeamRecord, nowMs uint64, sessions Sessions, cfg R
 		c.transferLeader()
 	case OpDisband:
 		c.disband()
+	case OpConfirmRankedPreset:
+		c.confirmRankedPreset()
 	default:
 		return reject(ErrInternal, 0)
 	}
@@ -645,8 +663,38 @@ func (c *ruleCtx) disband() {
 	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_DISBANDED, c.op.Caller)
 }
 
-// addMember 加入成员(seq = next_join_seq++),并删掉此人在本队的申请与邀请。
+func (c *ruleCtx) confirmRankedPreset() {
+	m := FindMember(c.rec, c.op.Caller)
+	if m == nil {
+		c.fail(ErrNoTeam, 0)
+		return
+	}
+	if c.locked() {
+		c.fail(ErrInMatch, 0)
+		return
+	}
+	if m.GetRankedCharacterPresetId() == c.op.RankedCharacterPresetId &&
+		m.GetRankedPetPresetId() == c.op.RankedPetPresetId &&
+		m.GetRankedRuleVersion() == c.op.RankedRuleVersion &&
+		m.GetRankedPresetConfirmed() {
+		return // 相同选择与版本幂等无变更
+	}
+	m.RankedCharacterPresetId = c.op.RankedCharacterPresetId
+	m.RankedPetPresetId = c.op.RankedPetPresetId
+	m.RankedRuleVersion = c.op.RankedRuleVersion
+	m.RankedPresetConfirmed = true
+	c.markOp(teampb.TeamChangeReason_TEAM_CHANGE_REASON_RANKED_PRESET_CONFIRMED, c.op.Caller)
+}
+
+func clearRankedConfirmations(rec *teampb.TeamRecord) {
+	for _, m := range rec.GetMembers() {
+		m.RankedPresetConfirmed = false
+	}
+}
+
+// addMember 加入成员(seq = next_join_seq++),并删掉此人在本队的申请与邀请;名单变化使既有排位确认失效(保留上次选择)。
 func (c *ruleCtx) addMember(playerId uint64, zone uint32) {
+	clearRankedConfirmations(c.rec)
 	seq := c.rec.GetNextJoinSeq()
 	for _, m := range c.rec.GetMembers() {
 		if m.GetJoinSeq() >= seq {
@@ -668,12 +716,12 @@ func (c *ruleCtx) addMember(playerId uint64, zone uint32) {
 	removeInvite(c.rec, playerId)
 }
 
-// removeMember 移出成员;没有剩余成员则解散;移出的是队长则转给
-// 在线且 join_seq 最小的成员,没有在线成员取 join_seq 最小的(§D.5 LeaveTeam)。
+// removeMember 移出成员;没有剩余成员则解散;留队成员排位确认态失效(保留上次选择);移出的是队长则改选队长。
 func (c *ruleCtx) removeMember(playerId uint64) {
 	kept := c.rec.Members[:0:0]
 	for _, m := range c.rec.GetMembers() {
 		if m.GetPlayerId() != playerId {
+			m.RankedPresetConfirmed = false
 			kept = append(kept, m)
 		}
 	}

@@ -53,6 +53,10 @@ func spectateVisibilityOfMode(mode matchpb.MatchMode) (visibility battlepb.ESpec
 		return private, true // 点名切磋:没有公开依据,默认拒绝
 	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
 		return private, true // 真人人数档 PVP:没有公开依据,默认拒绝
+	case matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
+		return private, true // 轮换娱乐物法易势 5V5:非公开观战模式,默认私密
+	case matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
+		return public, true // 全服赛季战队锦标赛:全服公开观战,优先升 L2 赛事广播
 	case matchpb.MatchMode_MATCH_MODE_3V3:
 		return private, true // 未开放
 	case matchpb.MatchMode_MATCH_MODE_UNSPECIFIED:

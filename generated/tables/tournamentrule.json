@@ -1,0 +1,26 @@
+{
+ "data": [
+  {
+   "battle_config_id": 5,
+   "battle_team_size": 3,
+   "desc": "全服赛季战队锦标赛《群仙问道赛》首测规则：3人出战+1替补、真实养成、7天宽窗海选+周末淘汰赛",
+   "enabled": true,
+   "id": 1,
+   "invite_ttl_seconds": 259200,
+   "knockout_days": 2,
+   "knockout_max_teams": 16,
+   "knockout_round_timeout_seconds": 1800,
+   "min_level": 15,
+   "participation_min_matches": 2,
+   "qualifier_days": 7,
+   "qualifier_draw_points": 1,
+   "qualifier_loss_points": 0,
+   "qualifier_max_matches": 6,
+   "qualifier_win_points": 3,
+   "registration_days": 42,
+   "roster_max_size": 4,
+   "rule_version": 1,
+   "settle_display_days": 5
+  }
+ ]
+}

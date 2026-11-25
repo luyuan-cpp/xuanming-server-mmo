@@ -33,6 +33,10 @@ type PlayModeTeam_size_maxComp struct {
     Value uint32
 }
 
+type PlayModeAllowed_team_sizesComp struct {
+    Values []uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -56,5 +60,9 @@ func MakePlayModeEnabledComp(row *pb.PlayModeTable) PlayModeEnabledComp {
 
 func MakePlayModeTeam_size_maxComp(row *pb.PlayModeTable) PlayModeTeam_size_maxComp {
     return PlayModeTeam_size_maxComp{Value: row.TeamSizeMax}
+}
+
+func MakePlayModeAllowed_team_sizesComp(row *pb.PlayModeTable) PlayModeAllowed_team_sizesComp {
+    return PlayModeAllowed_team_sizesComp{Values: row.AllowedTeamSizes}
 }
 

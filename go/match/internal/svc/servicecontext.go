@@ -23,12 +23,16 @@ import (
 	matchkafka "match/internal/kafka"
 	"match/internal/metrics"
 	"match/internal/poolowner"
+	"match/internal/ranked"
 	"match/internal/scope"
+	"match/internal/tournament"
 
 	dspb "proto/data_service"
+	mailpb "proto/mail"
 	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
 
+	"shared/contentguard"
 	"shared/dsclient"
 	"shared/generated/table"
 	"shared/idsegment"
@@ -101,6 +105,17 @@ type ServiceContext struct {
 	// 手工构造的单测 ServiceContext 可直接写 BattleScripts 或留 nil;业务读路径一律经 ActiveBattleScripts()。
 	BattleScripts     *battlescript.Catalog
 	liveBattleScripts atomic.Pointer[battlescript.Catalog]
+	// Ranked 是启动时由 RankedRule / RankedPreset 等表编译校验的论剑排位目录(热更时经 liveRanked 原子切换)。
+	Ranked     *ranked.Catalog
+	liveRanked atomic.Pointer[ranked.Catalog]
+	// Tournament 是启动时由 TournamentRule / TournamentReward 编译校验的全服赛季战队锦标赛目录(热更时经 liveTournament 原子切换)。
+	Tournament     *tournament.Catalog
+	liveTournament atomic.Pointer[tournament.Catalog]
+	// ContentGuard 用于战队名称等 UGC 文本审核(未装配时为 nil,保留本地字符集与唯一键校验)。
+	ContentGuard contentguard.Checker
+	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励附件(可选装配)。
+	MailAdmin  mailpb.MailAdminClient
+	MailSecret string
 	// TableBundle 负责表包启动校验与运行期两阶段热更(未设 MMORPG_TABLE_BUNDLE_ROOT 时仅执行启动校验)。
 	TableBundle *tablebundle.Manager
 	// MatchNodes 是 match 实例自身注册(MatchNodeService)的 etcd 镜像。按池撮合用它的实例 UUID 作成员表,
@@ -348,11 +363,23 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			if err != nil {
 				return nil, fmt.Errorf("build official battle scripts: %w", err)
 			}
+			nextRanked, err := ranked.BuildFromTableSet(ts)
+			if err != nil {
+				return nil, fmt.Errorf("build ranked play catalog: %w", err)
+			}
+			nextTournament, err := tournament.BuildFromTableSet(ts)
+			if err != nil {
+				return nil, fmt.Errorf("build season tournament catalog: %w", err)
+			}
 			return func() {
 				sc.liveCatalog.Store(nextCatalog)
 				sc.liveBattleScripts.Store(nextScripts)
+				sc.liveRanked.Store(nextRanked)
+				sc.liveTournament.Store(nextTournament)
 				if sc.Authority != nil {
 					sc.Authority.SwapCatalog(nextCatalog)
+					sc.Authority.SwapRankedCatalog(nextRanked)
+					sc.Authority.SwapTournamentCatalog(nextTournament)
 				}
 			}, nil
 		},
@@ -365,6 +392,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	matchCatalog := sc.ActiveCatalog()
 	sc.Catalog = matchCatalog
 	sc.BattleScripts = sc.ActiveBattleScripts()
+	sc.Ranked = sc.ActiveRanked()
+	sc.Tournament = sc.ActiveTournament()
 
 	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
 	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
@@ -394,6 +423,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(fmt.Errorf("failed to initialize global match authority: %w", err))
 	}
 	sc.Authority = store
+	store.SwapRankedCatalog(sc.ActiveRanked())
+	store.SwapTournamentCatalog(sc.ActiveTournament())
 	schedule := scope.Schedule{
 		GroupAfterMs:  uint64(c.GlobalMatch.ScopeGroupAfterSeconds) * 1000,
 		GlobalAfterMs: uint64(c.GlobalMatch.ScopeGlobalAfterSeconds) * 1000,
@@ -717,6 +748,34 @@ func (sc *ServiceContext) ActiveBattleScripts() *battlescript.Catalog {
 	return sc.BattleScripts
 }
 
+// ActiveRanked 返回当前生效的论剑排位目录(运行期热更经 liveRanked 原子切换;单测未装配时回落默认目录)。
+func (sc *ServiceContext) ActiveRanked() *ranked.Catalog {
+	if sc == nil {
+		return ranked.DefaultFallback()
+	}
+	if r := sc.liveRanked.Load(); r != nil {
+		return r
+	}
+	if sc.Ranked != nil {
+		return sc.Ranked
+	}
+	return ranked.DefaultFallback()
+}
+
+// ActiveTournament 返回当前生效的锦标赛配置目录(运行期热更经 liveTournament 原子切换;单测未装配时回落默认目录)。
+func (sc *ServiceContext) ActiveTournament() *tournament.Catalog {
+	if sc == nil {
+		return tournament.DefaultFallback()
+	}
+	if t := sc.liveTournament.Load(); t != nil {
+		return t
+	}
+	if sc.Tournament != nil {
+		return sc.Tournament
+	}
+	return tournament.DefaultFallback()
+}
+
 // ValidateTables 是 match 的 --validate-tables 预检钩子:与生产运行期热更使用完全相同的目录与剧本编译校验。
 func ValidateTables(_ string, ts *table.TableSet) (func(), error) {
 	if _, err := catalog.BuildFromTableSet(ts); err != nil {
@@ -724,6 +783,12 @@ func ValidateTables(_ string, ts *table.TableSet) (func(), error) {
 	}
 	if _, err := battlescript.LoadFromTableSet(ts); err != nil {
 		return nil, fmt.Errorf("build official battle scripts: %w", err)
+	}
+	if _, err := ranked.BuildFromTableSet(ts); err != nil {
+		return nil, fmt.Errorf("build ranked play catalog: %w", err)
+	}
+	if _, err := tournament.BuildFromTableSet(ts); err != nil {
+		return nil, fmt.Errorf("build season tournament catalog: %w", err)
 	}
 	return nil, nil
 }

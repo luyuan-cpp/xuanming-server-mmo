@@ -33,6 +33,8 @@ public:
     static bool ValidateTables();
 
     static bool HasJournalUpdate(const BattleSettlementData& settlement);
+    // 普通难度任意首领试炼通关一次即永久解锁全部困难首领试炼（兼容既有试炼志普通通关战法印）。
+    static bool HasClearedAnyNormalBossTrial(entt::entity player);
 
     // 纯候选准备：在 ApplySettlementToEntity 事务预检段调用，失败零副作用；
     // 成功后由调用方在 credit() 同步提交段与收件箱水位、近期战果同帧 Swap 落盘。

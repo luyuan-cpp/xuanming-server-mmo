@@ -27,6 +27,7 @@
 #include "player/system/player_mail_outbox.h"
 #include "player/system/player_mystery_merchant.h"
 #include "battle/system/player_battle.h"
+#include "battle/system/ranked_preset_rules.h"
 #include "services/battle/data/battle_table_fingerprint.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 #include "handler/event/scene_kafka_command_router.h"
@@ -43,6 +44,7 @@
 #include "player/system/player_appearance.h"
 #include "player/system/player_season.h"
 #include "player/system/player_trial_journal.h"
+#include "player/system/player_craft.h"
 #include "player/system/player_rename.h"
 
 #include <chrono>
@@ -145,6 +147,16 @@ namespace
                     err = "scene TrialJournalEntry / TrialJournalSeal / TrialJournalMilestone table validation failed";
                     return false;
                 }
+                if (!PlayerCraftSystem::ValidateTables())
+                {
+                    err = "scene EquipAffixQuality / SkillScrollCraft table validation failed";
+                    return false;
+                }
+                if (!rankedpreset::ValidateTables())
+                {
+                    err = "scene RankedRule / RankedPreset table validation failed";
+                    return false;
+                }
                 return true;
             }
 
@@ -159,6 +171,8 @@ namespace
                 AfkPassSystem::ValidateTables();
                 PlayerSeasonSystem::ValidateTables();
                 PlayerTrialJournalSystem::ValidateTables();
+                PlayerCraftSystem::ValidateTables();
+                rankedpreset::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

@@ -694,6 +694,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     kItemsMailedFieldNumber = 17,
     kTrialNewSoloBestFieldNumber = 23,
     kTrialNewCoopBestFieldNumber = 24,
+    kMaterialPvpLossIneligibleFieldNumber = 26,
+    kMaterialTradableUnitsAddedFieldNumber = 25,
   };
   // repeated .PlayerBattleResultCurrency currencies = 10;
   [[nodiscard]] int currencies_size()
@@ -978,11 +980,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_trial_new_coop_best(bool value);
 
   public:
+  // bool material_pvp_loss_ineligible = 26;
+  void clear_material_pvp_loss_ineligible() ;
+  [[nodiscard]] bool material_pvp_loss_ineligible() const;
+  void set_material_pvp_loss_ineligible(bool value);
+
+  private:
+  bool _internal_material_pvp_loss_ineligible() const;
+  void _internal_set_material_pvp_loss_ineligible(bool value);
+
+  public:
+  // uint32 material_tradable_units_added = 25;
+  void clear_material_tradable_units_added() ;
+  [[nodiscard]] ::uint32_t material_tradable_units_added() const;
+  void set_material_tradable_units_added(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_material_tradable_units_added() const;
+  void _internal_set_material_tradable_units_added(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerBattleResult)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
+      ::google::protobuf::internal::TcParseTable<5, 26,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1036,6 +1058,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     bool items_mailed_;
     bool trial_new_solo_best_;
     bool trial_new_coop_best_;
+    bool material_pvp_loss_ineligible_;
+    ::uint32_t material_tradable_units_added_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2080,6 +2104,54 @@ inline bool PlayerBattleResult::_internal_trial_new_coop_best() const {
 inline void PlayerBattleResult::_internal_set_trial_new_coop_best(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_new_coop_best_ = value;
+}
+
+// uint32 material_tradable_units_added = 25;
+inline void PlayerBattleResult::clear_material_tradable_units_added() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_tradable_units_added_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t PlayerBattleResult::material_tradable_units_added() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.material_tradable_units_added)
+  return _internal_material_tradable_units_added();
+}
+inline void PlayerBattleResult::set_material_tradable_units_added(::uint32_t value) {
+  _internal_set_material_tradable_units_added(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.material_tradable_units_added)
+}
+inline ::uint32_t PlayerBattleResult::_internal_material_tradable_units_added() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.material_tradable_units_added_;
+}
+inline void PlayerBattleResult::_internal_set_material_tradable_units_added(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_tradable_units_added_ = value;
+}
+
+// bool material_pvp_loss_ineligible = 26;
+inline void PlayerBattleResult::clear_material_pvp_loss_ineligible() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_pvp_loss_ineligible_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline bool PlayerBattleResult::material_pvp_loss_ineligible() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.material_pvp_loss_ineligible)
+  return _internal_material_pvp_loss_ineligible();
+}
+inline void PlayerBattleResult::set_material_pvp_loss_ineligible(bool value) {
+  _internal_set_material_pvp_loss_ineligible(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.material_pvp_loss_ineligible)
+}
+inline bool PlayerBattleResult::_internal_material_pvp_loss_ineligible() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.material_pvp_loss_ineligible_;
+}
+inline void PlayerBattleResult::_internal_set_material_pvp_loss_ineligible(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_pvp_loss_ineligible_ = value;
 }
 
 // -------------------------------------------------------------------

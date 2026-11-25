@@ -116,6 +116,7 @@ static void EquipEnhanceTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& Row
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("material_count"), TEXT("material_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("profile_id"), TEXT("profile_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("level"), TEXT("level"), RowIndex, 2147483647.0, TEXT("uint32"));
+	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("pity_limit"), TEXT("pity_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UEquipEnhanceTable::LoadFromJson(const FString& JsonText, FString& OutError)

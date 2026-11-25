@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"match/internal/authority"
@@ -130,10 +131,19 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	deadlineMs := f.DeadlineMs
 	prepareDeadlineMs := min(f.CreatedMs+uint64(matchedTicketTTLFor(svcCtx, uint32(len(members))))*1000, f.RetryAtMs-1000)
 
+	var rankedCtx *battlepb.RankedMatchContext
+	if len(f.RankedContext) > 0 {
+		rankedCtx = &battlepb.RankedMatchContext{}
+		if err := proto.Unmarshal(f.RankedContext, rankedCtx); err != nil {
+			logx.Errorf("[gather] Invalid frozen ranked context battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+	}
+
 	// 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
-		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, func(endpoint string) error {
+		endpoint, resp, err := preparePlayerFenced(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, func(endpoint string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			return svcCtx.Authority.Prepared(ctx, f, playerId, endpoint)
@@ -182,6 +192,10 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		snapshots = append(snapshots, p.snapshot)
 	}
 	createdAtMs := createOriginalCreatedAtMs(nowMs(), f.CreatedMs)
+	var teamScripts []*battlepb.BattleTeamScript
+	if rankedCtx == nil || !rankedCtx.GetUseFreePreset() {
+		teamScripts = resolveTeamScripts(svcCtx, f, teams)
+	}
 	createReq := &battlepb.CreateBattleRequest{
 		BattleId:               battleId,
 		BattleConfigId:         f.ConfigId,
@@ -199,8 +213,10 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		TargetInstanceId:       f.TargetInstanceId,
 		AdmitBeforeMs:          prepareDeadlineMs,
 		OutcomeProtocolVersion: 1,
-		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2):随原件落库,恢复重放不再重新解析
-		TeamScripts: resolveTeamScripts(svcCtx, f, teams),
+		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2);论剑排位自动战斗只用预设内技能,不带玩家自定义剧本。
+		TeamScripts:   teamScripts,
+		RankedContext: rankedCtx,
+		TrialContext:  svcCtx.ActiveCatalog().TrialContextFor(mode, f.ConfigId, activityContext, rankedCtx),
 	}
 	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -274,6 +290,10 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 
 	// 公开这场战斗:入活跃集合(best-effort;补签与按 battle_id 观战都读成局原件,不靠这一步)。
 	addSpectateActive(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility())
+	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT && svcCtx.MatchRedis != nil {
+		// 全服赛季战队锦标赛自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort)。
+		_, _ = svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(battleId), int64(f.DeadlineMs), strconv.FormatUint(battleId, 10))
+	}
 	logx.Infof("[gather] Battle started successfully battle=%d mode=%s config=%d node=%d members=%v elapsed=%s",
 		battleId, modeName, f.ConfigId, battleNode.NodeId, members, time.Since(start))
 	metrics.ObserveGather(modeName, "success", time.Since(start))
@@ -336,7 +356,7 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 // (快照非空且属于这名玩家;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
 // 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
 // before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
-func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
+func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	// player:{id}:location 由 scene_manager 写(protobuf PlayerLocation),
 	// 是玩家 scene 定位的共享契约(设计文档 §5.4 / go/scene_manager changesceneutil.go);
 	// 带 zone_id,所以任意 zone 的玩家都能定位到自己 zone 的 scene 节点。
@@ -364,6 +384,9 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 		BattleNodeId:      battleNodeId,
 		DeadlineMs:        deadlineMs,
 		PrepareDeadlineMs: prepareDeadlineMs,
+		RankedContext:     rankedCtx,
+		BattleConfigId:    battleConfigId,
+		MatchMode:         matchMode,
 	})
 	if err != nil {
 		return endpoint, nil, fmt.Errorf("PrepareBattle RPC 失败: %w", err)
@@ -622,7 +645,7 @@ func teamIndexFor(mode matchpb.MatchMode, memberIndex int, required int) uint32 
 	switch mode {
 	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:
 		return uint32(memberIndex)
-	case matchpb.MatchMode_MATCH_MODE_5V5:
+	case matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
 		if required > 0 && memberIndex >= required/2 {
 			return 1
 		}

@@ -56,4 +56,22 @@ public interface DungeonTableOrBuilder extends
    * @return The allowPetCapture.
    */
   int getAllowPetCapture();
+
+  /**
+   * <code>uint32 boss_trial_kind = 7;</code>
+   * @return The bossTrialKind.
+   */
+  int getBossTrialKind();
+
+  /**
+   * <code>uint32 difficulty = 8;</code>
+   * @return The difficulty.
+   */
+  int getDifficulty();
+
+  /**
+   * <code>uint32 round_limit = 9;</code>
+   * @return The roundLimit.
+   */
+  int getRoundLimit();
 }

@@ -2378,7 +2378,17 @@ type BattleSettlementData struct {
 	// 本人是否达成排位有效参与(由 battle 房间在终局前按统一参与事实冻结,非排位恒为 false)。
 	Participated bool `protobuf:"varint,24,opt,name=participated,proto3" json:"participated,omitempty"`
 	// 五行试炼志 V2 权威战法事实与轻量阵容快照(由 battle 引擎在终局前按真实事件冻结,非试炼志关联局留空)。
-	TrialFacts    *BattleTrialJournalFacts `protobuf:"bytes,25,opt,name=trial_facts,json=trialFacts,proto3" json:"trial_facts,omitempty"`
+	TrialFacts *BattleTrialJournalFacts `protobuf:"bytes,25,opt,name=trial_facts,json=trialFacts,proto3" json:"trial_facts,omitempty"`
+	// 本局玩家成功提交本人或本人宝宝手动有效指令的独立回合数（用于 PVP 负/平局防挂机门槛判定）。
+	ManualActionRounds uint32 `protobuf:"varint,26,opt,name=manual_action_rounds,json=manualActionRounds,proto3" json:"manual_action_rounds,omitempty"`
+	// 本人或本人宝宝整场是否产生非零有效战斗贡献（有效伤害/治疗/护盾吸收/有效控制或驱散任一项 > 0）。
+	EffectiveCombatContribution bool `protobuf:"varint,27,opt,name=effective_combat_contribution,json=effectiveCombatContribution,proto3" json:"effective_combat_contribution,omitempty"`
+	// 开局从 DungeonTable 冻结的试炼难度档（0=常规，1=普通，2=困难；用于困难胜局额外 +5 绑定材料）。
+	BattleDifficulty uint32 `protobuf:"varint,28,opt,name=battle_difficulty,json=battleDifficulty,proto3" json:"battle_difficulty,omitempty"`
+	// 开局从 DungeonTable 冻结的首领/轮换玩法类型（0=常规，1..6 见 dungeon_table.proto）。
+	BossTrialKind uint32 `protobuf:"varint,29,opt,name=boss_trial_kind,json=bossTrialKind,proto3" json:"boss_trial_kind,omitempty"`
+	// true = 本局由免费 3×3 预设驱动（仅限轮换娱乐场：护卫救援 / 物法易势 5V5），战后严格不回写场外资产。
+	UseFreePreset bool `protobuf:"varint,30,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2586,6 +2596,41 @@ func (x *BattleSettlementData) GetTrialFacts() *BattleTrialJournalFacts {
 		return x.TrialFacts
 	}
 	return nil
+}
+
+func (x *BattleSettlementData) GetManualActionRounds() uint32 {
+	if x != nil {
+		return x.ManualActionRounds
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetEffectiveCombatContribution() bool {
+	if x != nil {
+		return x.EffectiveCombatContribution
+	}
+	return false
+}
+
+func (x *BattleSettlementData) GetBattleDifficulty() uint32 {
+	if x != nil {
+		return x.BattleDifficulty
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetBossTrialKind() uint32 {
+	if x != nil {
+		return x.BossTrialKind
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetUseFreePreset() bool {
+	if x != nil {
+		return x.UseFreePreset
+	}
+	return false
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -2863,9 +2908,12 @@ type RankedMatchContext struct {
 	RuleVersion       uint32                 `protobuf:"varint,4,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`                  // RankedRule.rule_version
 	TeamSize          uint32                 `protobuf:"varint,5,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`                           // 每侧玩家人数(1..5)
 	ConfigFingerprint string                 `protobuf:"bytes,6,opt,name=config_fingerprint,json=configFingerprint,proto3" json:"config_fingerprint,omitempty"` // 竞技规则与预设依赖表指纹
-	Members           []*RankedMemberLoadout `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`                                              // 本局全员冻结预设(PrepareBattle 可只含本人,CreateBattle 含全员)
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	Members           []*RankedMemberLoadout `protobuf:"bytes,7,rep,name=members,proto3" json:"members,omitempty"`                                              // 本局全员冻结预设(仅 use_free_preset=true 生效;PrepareBattle 可只含本人,CreateBattle 含全员)
+	// true = 本局使用 6 套免费人宠预设(仅限轮换娱乐场：护卫救援 / 物法易势 5V5);
+	// false = 正式自养人宠会武(PVP_TEAM),携带本人真实装备、词条、法宝、技能与出战宝宝。
+	UseFreePreset bool `protobuf:"varint,8,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RankedMatchContext) Reset() {
@@ -2945,6 +2993,13 @@ func (x *RankedMatchContext) GetMembers() []*RankedMemberLoadout {
 		return x.Members
 	}
 	return nil
+}
+
+func (x *RankedMatchContext) GetUseFreePreset() bool {
+	if x != nil {
+		return x.UseFreePreset
+	}
+	return false
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
@@ -3526,7 +3581,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xf5\a\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xe8\t\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -3555,7 +3610,12 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13ranked_rule_version\x18\x17 \x01(\rR\x11rankedRuleVersion\x12\"\n" +
 	"\fparticipated\x18\x18 \x01(\bR\fparticipated\x129\n" +
 	"\vtrial_facts\x18\x19 \x01(\v2\x18.BattleTrialJournalFactsR\n" +
-	"trialFacts\"u\n" +
+	"trialFacts\x120\n" +
+	"\x14manual_action_rounds\x18\x1a \x01(\rR\x12manualActionRounds\x12B\n" +
+	"\x1deffective_combat_contribution\x18\x1b \x01(\bR\x1beffectiveCombatContribution\x12+\n" +
+	"\x11battle_difficulty\x18\x1c \x01(\rR\x10battleDifficulty\x12&\n" +
+	"\x0fboss_trial_kind\x18\x1d \x01(\rR\rbossTrialKind\x12&\n" +
+	"\x0fuse_free_preset\x18\x1e \x01(\bR\ruseFreePreset\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -3576,7 +3636,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rpet_preset_id\x18\x02 \x01(\rR\vpetPresetId\"d\n" +
 	"\x13RankedMemberLoadout\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
-	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\x98\x02\n" +
+	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\xc0\x02\n" +
 	"\x12RankedMatchContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -3585,7 +3645,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\frule_version\x18\x04 \x01(\rR\vruleVersion\x12\x1b\n" +
 	"\tteam_size\x18\x05 \x01(\rR\bteamSize\x12-\n" +
 	"\x12config_fingerprint\x18\x06 \x01(\tR\x11configFingerprint\x12.\n" +
-	"\amembers\x18\a \x03(\v2\x14.RankedMemberLoadoutR\amembers\"\xf7\x01\n" +
+	"\amembers\x18\a \x03(\v2\x14.RankedMemberLoadoutR\amembers\x12&\n" +
+	"\x0fuse_free_preset\x18\b \x01(\bR\ruseFreePreset\"\xf7\x01\n" +
 	"\x17BattleParticipationFact\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12!\n" +
 	"\fentered_room\x18\x02 \x01(\bR\venteredRoom\x124\n" +

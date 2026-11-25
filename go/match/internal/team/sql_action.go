@@ -107,7 +107,12 @@ func (s *Service) decorateSQLReplay(ctx context.Context, response *teampb.TeamRe
 	zones := s.mergedZones()
 	view.ZoneId = zones.Final(view.ZoneId)
 	for index, member := range view.Members {
-		view.Members[index] = memberView(member.PlayerId, zones.Final(member.ZoneId), member.JoinSeq, view.LeaderId, display)
+		mv := memberView(member.PlayerId, zones.Final(member.ZoneId), member.JoinSeq, view.LeaderId, display)
+		mv.RankedCharacterPresetId = member.GetRankedCharacterPresetId()
+		mv.RankedPetPresetId = member.GetRankedPetPresetId()
+		mv.RankedRuleVersion = member.GetRankedRuleVersion()
+		mv.RankedPresetConfirmed = member.GetRankedPresetConfirmed()
+		view.Members[index] = mv
 	}
 	for _, application := range view.Applications {
 		member := application.GetPlayer()
@@ -253,4 +258,7 @@ func (s *Service) TransferLeader(ctx context.Context, caller uint64, in *teampb.
 }
 func (s *Service) DisbandTeam(ctx context.Context, caller uint64, in *teampb.DisbandTeamRequest) *teampb.TeamResponse {
 	return s.sqlAction(ctx, caller, uint32(OpDisband), in, func(ctx context.Context) *teampb.TeamResponse { return s.disbandTeam(ctx, caller, in) })
+}
+func (s *Service) ConfirmRankedPreset(ctx context.Context, caller uint64, in *teampb.ConfirmRankedPresetRequest) *teampb.TeamResponse {
+	return s.sqlAction(ctx, caller, uint32(OpConfirmRankedPreset), in, func(ctx context.Context) *teampb.TeamResponse { return s.confirmRankedPreset(ctx, caller, in) })
 }

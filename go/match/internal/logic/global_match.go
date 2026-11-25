@@ -60,6 +60,19 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*p
 	t := &pb.MatchAuthorityTicketRecord{PlayerId: d.PlayerId, Ticket: uuid.NewString(), RequestId: in.RequestId, Mode: uint32(in.Mode), ConfigId: in.BattleConfigId, TeamSize: required, ZoneId: home, RatingCenti: int64(math.Round(rating * 100))}
 	if in.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM {
 		t.TeamSize = required / 2
+		if in.BattleConfigId == l.svcCtx.ActiveRanked().BattleConfigId() || in.GetCharacterPresetId() != 0 || in.GetPetPresetId() != 0 || in.GetRankedRuleVersion() != 0 {
+			rankedRaw, rErr := l.svcCtx.Authority.ResolveSoloRankedContext(l.ctx, d.PlayerId, in.GetCharacterPresetId(), in.GetPetPresetId(), in.GetRankedRuleVersion(), t.TeamSize)
+			if rErr != nil {
+				return joinRejection(rErr, "排位赛季状态不可用"), nil
+			}
+			t.RankedContext = rankedRaw
+		}
+	} else if in.Mode == pb.MatchMode_MATCH_MODE_POLARITY_5V5 || l.svcCtx.ActiveCatalog().BossTrialKind(in.BattleConfigId) == 5 {
+		presetRaw, rErr := l.svcCtx.Authority.ResolveFreePresetContext(l.ctx, d.PlayerId, in.GetCharacterPresetId(), in.GetPetPresetId(), in.GetRankedRuleVersion(), t.TeamSize)
+		if rErr != nil {
+			return joinRejection(rErr, "轮换娱乐预设不可用"), nil
+		}
+		t.RankedContext = presetRaw
 	}
 	prepared, exit, pending, e := l.svcCtx.Authority.PrepareJoin(l.ctx, t, in, binding)
 	if e != nil {
@@ -95,6 +108,12 @@ func joinRejection(err error, fallback string) *pb.JoinQueueResponse {
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrProbeRequired, ErrorMessage: tipErr(constants.ErrProbeRequired, "请完成地域延迟探测后重试")}
 	case errors.Is(err, authority.ErrNoRegionWithinLatency):
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrNoRegionWithinLatency, ErrorMessage: tipErr(constants.ErrNoRegionWithinLatency, "附近没有延迟合适的服务器")}
+	case errors.Is(err, authority.ErrRankedSeasonSettling):
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrRankedSeasonSettling, ErrorMessage: tipErr(constants.ErrRankedSeasonSettling, "上季结算中，暂无法报名论剑")}
+	case errors.Is(err, authority.ErrRankedRuleVersionMismatch):
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrRankedRuleVersionMismatch, ErrorMessage: tipErr(constants.ErrRankedRuleVersionMismatch, "论剑规则版本已更新，请刷新大厅")}
+	case errors.Is(err, authority.ErrRankedPresetInvalid):
+		return &pb.JoinQueueResponse{ErrorCode: constants.ErrRankedPresetInvalid, ErrorMessage: tipErr(constants.ErrRankedPresetInvalid, "论剑预设搭配无效")}
 	default:
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, fallback)}
 	}

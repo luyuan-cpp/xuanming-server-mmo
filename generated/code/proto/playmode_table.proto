@@ -13,6 +13,7 @@ message PlayModeTable {
 	uint32 match_mode = 2;
 	uint32 battle_config_id = 3;
 	bool enabled = 4;
+	repeated uint32 allowed_team_sizes = 6;
 	uint32 team_size_max = 5;
 }
 

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+// TournamentReward 表的权威 schema。源表 data/TournamentReward.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 全服赛季战队锦标赛奖励档位表(全部道具均为绑定自用;设计 docs/design/season-team-tournament-v1.md)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TournamentRewardTable {
+  option (cfg_sheet)       = "TournamentReward";
+  option (cfg_source_file) = "TournamentReward.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 档位行 id(1..7)
+  uint32 id = 1;
+  // 档位类型(1冠军/2亚军/3四强/4八强/5十六强/6参赛保底/7免费助威命中)
+  uint32 tier_kind = 2 [(cfg_index) = true];
+  // 适用名次下限(含;0表示非名次档如保底或助威)
+  uint32 min_rank = 3;
+  // 适用名次上限(含;0表示非名次档)
+  uint32 max_rank = 4;
+  // 绑定银两数量
+  uint64 gold_amount = 5;
+  // 绑定道具 id 列表(最多4格;FK -> Item.id)
+  repeated uint32 item_ids = 6 [(cfg_slots) = 4, (cfg_fk) = "Item"];
+  // 绑定道具数量列表(与 item_ids 一一对应,最多4格)
+  repeated uint32 item_counts = 7 [(cfg_slots) = 4];
+  // 授予称号代号(空表示无)
+  string title_code = 8;
+  // 授予徽章/印记代号(空表示无)
+  string badge_code = 9;
+  // 邮件标题
+  string mail_title = 10;
+  // 邮件正文
+  string mail_body = 11;
+  // 档位展示说明
+  string desc = 12;
+}

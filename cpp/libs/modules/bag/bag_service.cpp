@@ -282,6 +282,13 @@ uint64_t BagService::RemovableCount(entt::entity playerEntity, const Bag &bag, c
 	return total > held ? total - held : 0;
 }
 
+uint64_t BagService::RemovableTradableCount(entt::entity playerEntity, const Bag &bag, const uint32_t configId,
+											const uint64_t exceptHoldId)
+{
+	return std::min<uint64_t>(bag.GetTotalTradableItemCount(configId),
+							  RemovableCount(playerEntity, bag, configId, exceptHoldId));
+}
+
 BagService::RemovalVerdict BagService::CheckRemovable(entt::entity playerEntity, const Bag &bag,
 													  const ItemCountMap &quantities)
 {
@@ -523,7 +530,7 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
 }
 
 uint32_t BagService::CheckInventoryExchangeSpace(entt::entity playerEntity, const ItemCountMap& consumed,
-                                               const ItemCountMap& gained)
+                                               const ItemCountMap& gained, bool tradableOnly, bool gainedBound)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity)) return kInvalidParameter;
     const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
@@ -531,6 +538,10 @@ uint32_t BagService::CheckInventoryExchangeSpace(entt::entity playerEntity, cons
     const auto& inventory = bags->bags[kInventory];
     if (!inventory.IsLayerConsistent()) return kInvalidParameter;
     if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough) return kBagInsufficientItems;
+    if (tradableOnly) {
+        for (const auto& [config, count] : consumed)
+            if (count > RemovableTradableCount(playerEntity, inventory, config)) return kBagInsufficientItems;
+    }
     for (const auto& [config,count] : gained) {
         if (config == 0 || count == 0) return kInvalidParameter;
         if (GainBlockService::IsItemGainBlocked(playerEntity,config)) return kAssetBlocked;
@@ -538,30 +549,38 @@ uint32_t BagService::CheckInventoryExchangeSpace(entt::entity playerEntity, cons
     Bag candidate;
     if (!CloneBagForTransaction(inventory, candidate)) return kInvalidParameter;
     if (!consumed.empty()) {
-        const auto error = candidate.RemoveItems(consumed);
+        const auto error = candidate.RemoveItems(consumed, nullptr, tradableOnly);
         if (error != kSuccess) return error;
     }
-    return gained.empty() ? uint32_t{kSuccess} : candidate.CheckSpaceFor(gained);
+    return gained.empty() ? uint32_t{kSuccess} : candidate.CheckSpaceFor(gained, nullptr, gainedBound);
 }
 
 uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const ItemCountMap& consumed,
     const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
     uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
-    const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit)
+    const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit,
+    bool tradableOnly, bool* consumedBoundOut)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity))
         return kInvalidParameter;
     const auto playerId = tlsEcs.GetPlayerId(playerEntity);
     if (playerId == 0 || tlsEcs.GetPlayer(playerId) != playerEntity) return kInvalidParameter;
     auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
-    if (bags == nullptr || !beforeCommit || (gained.empty() && replacements.empty())) return kInvalidParameter;
+    if (bags == nullptr || !beforeCommit || (consumed.empty() && gained.empty() && replacements.empty())) return kInvalidParameter;
     auto& inventory = bags->bags[kInventory];
     auto& equipment = bags->bags[kEquipment];
     if (!inventory.IsLayerConsistent() || !equipment.IsLayerConsistent()) return kInvalidParameter;
     for (const auto& [config, count] : consumed)
         if (config == 0 || count == 0 || ItemTableManager::Instance().FindByIdSilent(config).first == nullptr)
             return kInvalidParameter;
-    if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough)
+    const auto enoughConsumed = [&] {
+        if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough) return false;
+        if (!tradableOnly) return true;
+        for (const auto& [config, count] : consumed)
+            if (count > RemovableTradableCount(playerEntity, inventory, config)) return false;
+        return true;
+    };
+    if (!enoughConsumed())
         return kBagInsufficientItems;
     const auto gainsAllowed = [&] {
         for (const auto& param : gained)
@@ -595,8 +614,9 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
         *item = edit.replacement;
     }
     std::vector<DrainedInstance> drained;
+    bool consumedBound = false;
     if (!consumed.empty()) {
-        const auto result = nextInventory.RemoveItems(consumed, &drained);
+        const auto result = nextInventory.RemoveItems(consumed, &drained, tradableOnly, &consumedBound);
         if (result != kSuccess) return result;
     }
     // 替换的实例不得在同一笔中又被当作材料销毁。
@@ -609,7 +629,8 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
     }
     if (!sameSource()) return kInvalidParameter;
     if (!gainsAllowed()) return kAssetBlocked;
-    if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough) return kBagInsufficientItems;
+    if (!enoughConsumed()) return kBagInsufficientItems;
+    if (consumedBoundOut != nullptr) *consumedBoundOut = consumedBound;
     const auto result = beforeCommit(created);
     if (result != kSuccess) return result;
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
@@ -805,7 +826,8 @@ uint32_t BagService::RemoveItemsExact(
 	const ItemCountMap &itemsToRemove,
 	TransactionType txType,
 	uint64_t correlationId,
-	const std::string &extra)
+	const std::string &extra,
+	bool tradableOnly)
 {
 	// ── 参数检查:排在冻结闸之前 ─────────────────────────────────────────
 	// 空表在底层是"什么都不用扣 = 成功",调用方会把一次什么都没扣的调用当成扣过了。
@@ -857,11 +879,24 @@ uint32_t BagService::RemoveItemsExact(
 				  << " tx_type=" << static_cast<int>(txType) << " correlation_id=" << correlationId;
 		return PrintStackAndReturnError(kBagInsufficientItems);
 	}
+	if (tradableOnly)
+	{
+		for (const auto &[configId, count] : itemsToRemove)
+		{
+			if (count > RemovableTradableCount(playerEntity, bag, configId))
+			{
+				LOG_ERROR << "BagService::RemoveItemsExact rejected: insufficient tradable items for config " << configId
+						  << " player=" << bag.PlayerGuid() << " tx_type=" << static_cast<int>(txType)
+						  << " correlation_id=" << correlationId;
+				return PrintStackAndReturnError(kBagInsufficientItems);
+			}
+		}
+	}
 
 	// ── 全或无扣除:任何一种不够就整体失败,一件不扣 ─────────────────────
 	// 不够时 Bag 层已经打过 ERROR 与调用栈;drained 此时保持为空,下面不会落任何流水。
 	std::vector<DrainedInstance> drained;
-	RETURN_ON_ERROR(bag.RemoveItems(itemsToRemove, &drained));
+	RETURN_ON_ERROR(bag.RemoveItems(itemsToRemove, &drained, tradableOnly));
 
 	// 逐条落流水,理由同 RemoveItemsClamped:一笔消耗可能横跨好几堆,少记一条就是少一条
 	// 追溯线索。注意 LogItemDestroy 的 txType 在**最后**(与 LogItemCreate 的顺序不同),

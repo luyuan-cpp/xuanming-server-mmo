@@ -1718,11 +1718,11 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      14,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1734,8 +1734,8 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // bool available = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TrialJournalSnapshot, _impl_.available_), 8>(),
-       {8, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TrialJournalSnapshot, _impl_.available_), 11>(),
+       {8, 11, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.available_)}},
       // string unavailable_reason = 2;
       {::_pbi::TcParser::FastUS1,
@@ -1754,20 +1754,20 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
        {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_lit_seals_)}},
       // uint32 total_permanent_seals = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TrialJournalSnapshot, _impl_.total_permanent_seals_), 12>(),
-       {48, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TrialJournalSnapshot, _impl_.total_permanent_seals_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_seals_)}},
       // uint64 voucher_balance = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TrialJournalSnapshot, _impl_.voucher_balance_), 10>(),
-       {56, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TrialJournalSnapshot, _impl_.voucher_balance_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.voucher_balance_)}},
       // uint64 bound_sand_balance = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TrialJournalSnapshot, _impl_.bound_sand_balance_), 11>(),
-       {64, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TrialJournalSnapshot, _impl_.bound_sand_balance_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.bound_sand_balance_)}},
       // bool can_operate = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TrialJournalSnapshot, _impl_.can_operate_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TrialJournalSnapshot, _impl_.can_operate_), 12>(),
+       {72, 12, 0,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.can_operate_)}},
       // string action_unavailable_reason = 10;
       {::_pbi::TcParser::FastUS1,
@@ -1785,13 +1785,16 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
       {::_pbi::TcParser::FastMtR1,
        {106, 2, 2,
         PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.redeemable_artifacts_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool hard_boss_trial_unlocked = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TrialJournalSnapshot, _impl_.hard_boss_trial_unlocked_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.hard_boss_trial_unlocked_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // bool available = 1;
-      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string unavailable_reason = 2;
       {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.unavailable_reason_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 state_revision = 3;
@@ -1801,13 +1804,13 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
       // uint32 total_permanent_lit_seals = 5;
       {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_lit_seals_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 total_permanent_seals = 6;
-      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_seals_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_seals_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 voucher_balance = 7;
-      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.voucher_balance_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.voucher_balance_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 bound_sand_balance = 8;
-      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.bound_sand_balance_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.bound_sand_balance_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool can_operate = 9;
-      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.can_operate_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.can_operate_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // string action_unavailable_reason = 10;
       {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.action_unavailable_reason_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated .TrialJournalChapterView chapters = 11;
@@ -1816,6 +1819,8 @@ constexpr TrialJournalSnapshot::ParseTableT_ TrialJournalSnapshot::InternalGener
       {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.milestones_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .TrialRedeemableArtifactOption redeemable_artifacts = 13;
       {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.redeemable_artifacts_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool hard_boss_trial_unlocked = 14;
+      {PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.hard_boss_trial_unlocked_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1872,11 +1877,12 @@ inline constexpr TrialJournalSnapshot::Impl_::Impl_(
         state_revision_{::uint64_t{0u}},
         server_now_ms_{::uint64_t{0u}},
         total_permanent_lit_seals_{0u},
-        available_{false},
-        can_operate_{false},
+        total_permanent_seals_{0u},
         voucher_balance_{::uint64_t{0u}},
         bound_sand_balance_{::uint64_t{0u}},
-        total_permanent_seals_{0u} {}
+        available_{false},
+        can_operate_{false},
+        hard_boss_trial_unlocked_{false} {}
 
 template <typename>
 constexpr TrialJournalSnapshot::TrialJournalSnapshot(::_pbi::ConstantInitialized,
@@ -2652,7 +2658,7 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_._has_bits_),
-        16, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.available_),
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.unavailable_reason_),
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.state_revision_),
@@ -2666,19 +2672,21 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.chapters_),
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.milestones_),
         PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.redeemable_artifacts_),
-        8,
+        PROTOBUF_FIELD_OFFSET(::TrialJournalSnapshot, _impl_.hard_boss_trial_unlocked_),
+        11,
         3,
         5,
         6,
         7,
-        12,
-        10,
-        11,
+        8,
         9,
+        10,
+        12,
         4,
         0,
         1,
         2,
+        13,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetTrialJournalResponse, _impl_._has_bits_),
@@ -2739,12 +2747,12 @@ static const ::_pbi::MigrationSchema
         {81, sizeof(::TrialJournalMilestoneView)},
         {122, sizeof(::TrialRedeemableArtifactOption)},
         {137, sizeof(::TrialJournalSnapshot)},
-        {166, sizeof(::GetTrialJournalRequest)},
-        {167, sizeof(::GetTrialJournalResponse)},
-        {174, sizeof(::ClaimTrialJournalMilestoneRequest)},
-        {181, sizeof(::ClaimTrialJournalMilestoneResponse)},
-        {196, sizeof(::RedeemBoundArtifactVoucherRequest)},
-        {203, sizeof(::RedeemBoundArtifactVoucherResponse)},
+        {168, sizeof(::GetTrialJournalRequest)},
+        {169, sizeof(::GetTrialJournalResponse)},
+        {176, sizeof(::ClaimTrialJournalMilestoneRequest)},
+        {183, sizeof(::ClaimTrialJournalMilestoneResponse)},
+        {198, sizeof(::RedeemBoundArtifactVoucherRequest)},
+        {205, sizeof(::RedeemBoundArtifactVoucherResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2805,7 +2813,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5ftrial_5fjournal_2e
     "eemableArtifactOption\022\026\n\016item_config_id\030"
     "\001 \001(\r\022\032\n\022artifact_effect_id\030\002 \001(\r\022\014\n\004nam"
     "e\030\003 \001(\t\022\023\n\013description\030\004 \001(\t\022\020\n\010icon_key"
-    "\030\005 \001(\t\022\023\n\013owned_count\030\006 \001(\r\"\275\003\n\024TrialJou"
+    "\030\005 \001(\t\022\023\n\013owned_count\030\006 \001(\r\"\337\003\n\024TrialJou"
     "rnalSnapshot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022unava"
     "ilable_reason\030\002 \001(\t\022\026\n\016state_revision\030\003 "
     "\001(\004\022\025\n\rserver_now_ms\030\004 \001(\004\022!\n\031total_perm"
@@ -2816,35 +2824,35 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5ftrial_5fjournal_2e
     "\t\022*\n\010chapters\030\013 \003(\0132\030.TrialJournalChapte"
     "rView\022.\n\nmilestones\030\014 \003(\0132\032.TrialJournal"
     "MilestoneView\022<\n\024redeemable_artifacts\030\r "
-    "\003(\0132\036.TrialRedeemableArtifactOption\"\030\n\026G"
-    "etTrialJournalRequest\"j\n\027GetTrialJournal"
+    "\003(\0132\036.TrialRedeemableArtifactOption\022 \n\030h"
+    "ard_boss_trial_unlocked\030\016 \001(\010\"\030\n\026GetTria"
+    "lJournalRequest\"j\n\027GetTrialJournalRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022\'\n\010snapshot\030\002 \001(\0132\025.TrialJournalSnaps"
+    "hot\"T\n!ClaimTrialJournalMilestoneRequest"
+    "\022\031\n\021client_request_id\030\001 \001(\004\022\024\n\014milestone"
+    "_id\030\002 \001(\r\"\341\001\n\"ClaimTrialJournalMilestone"
     "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
     "oMessage\022\'\n\010snapshot\030\002 \001(\0132\025.TrialJourna"
-    "lSnapshot\"T\n!ClaimTrialJournalMilestoneR"
-    "equest\022\031\n\021client_request_id\030\001 \001(\004\022\024\n\014mil"
-    "estone_id\030\002 \001(\r\"\341\001\n\"ClaimTrialJournalMil"
-    "estoneResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132\025.Trial"
-    "JournalSnapshot\022\020\n\010replayed\030\003 \001(\010\022\032\n\022gra"
-    "nted_sand_count\030\004 \001(\r\022\035\n\025granted_voucher"
-    "_count\030\005 \001(\r\022\035\n\025granted_appearance_id\030\006 "
-    "\001(\t\"_\n!RedeemBoundArtifactVoucherRequest"
-    "\022\031\n\021client_request_id\030\001 \001(\004\022\037\n\027artifact_"
-    "item_config_id\030\002 \001(\r\"\301\001\n\"RedeemBoundArti"
-    "factVoucherResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132\025."
-    "TrialJournalSnapshot\022\020\n\010replayed\030\003 \001(\010\022\027"
-    "\n\017created_item_id\030\004 \001(\004\022\037\n\027artifact_item"
-    "_config_id\030\005 \001(\r2\277\002\n\035SceneTrialJournalCl"
-    "ientPlayer\022D\n\017GetTrialJournal\022\027.GetTrial"
-    "JournalRequest\032\030.GetTrialJournalResponse"
-    "\022e\n\032ClaimTrialJournalMilestone\022\".ClaimTr"
-    "ialJournalMilestoneRequest\032#.ClaimTrialJ"
-    "ournalMilestoneResponse\022e\n\032RedeemBoundAr"
-    "tifactVoucher\022\".RedeemBoundArtifactVouch"
-    "erRequest\032#.RedeemBoundArtifactVoucherRe"
-    "sponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006prot"
-    "o3"
+    "lSnapshot\022\020\n\010replayed\030\003 \001(\010\022\032\n\022granted_s"
+    "and_count\030\004 \001(\r\022\035\n\025granted_voucher_count"
+    "\030\005 \001(\r\022\035\n\025granted_appearance_id\030\006 \001(\t\"_\n"
+    "!RedeemBoundArtifactVoucherRequest\022\031\n\021cl"
+    "ient_request_id\030\001 \001(\004\022\037\n\027artifact_item_c"
+    "onfig_id\030\002 \001(\r\"\301\001\n\"RedeemBoundArtifactVo"
+    "ucherResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "ipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132\025.TrialJ"
+    "ournalSnapshot\022\020\n\010replayed\030\003 \001(\010\022\027\n\017crea"
+    "ted_item_id\030\004 \001(\004\022\037\n\027artifact_item_confi"
+    "g_id\030\005 \001(\r2\277\002\n\035SceneTrialJournalClientPl"
+    "ayer\022D\n\017GetTrialJournal\022\027.GetTrialJourna"
+    "lRequest\032\030.GetTrialJournalResponse\022e\n\032Cl"
+    "aimTrialJournalMilestone\022\".ClaimTrialJou"
+    "rnalMilestoneRequest\032#.ClaimTrialJournal"
+    "MilestoneResponse\022e\n\032RedeemBoundArtifact"
+    "Voucher\022\".RedeemBoundArtifactVoucherRequ"
+    "est\032#.RedeemBoundArtifactVoucherResponse"
+    "\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5ftrial_5fjournal_2eproto_deps[3] = {
@@ -2856,7 +2864,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5ftrial_5fjourn
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5ftrial_5fjournal_2eproto = {
     false,
     false,
-    3242,
+    3276,
     descriptor_table_protodef_proto_2fscene_2fplayer_5ftrial_5fjournal_2eproto,
     "proto/scene/player_trial_journal.proto",
     &descriptor_table_proto_2fscene_2fplayer_5ftrial_5fjournal_2eproto_once,
@@ -5610,9 +5618,9 @@ TrialJournalSnapshot::TrialJournalSnapshot(
                offsetof(Impl_, state_revision_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, state_revision_),
-           offsetof(Impl_, total_permanent_seals_) -
+           offsetof(Impl_, hard_boss_trial_unlocked_) -
                offsetof(Impl_, state_revision_) +
-               sizeof(Impl_::total_permanent_seals_));
+               sizeof(Impl_::hard_boss_trial_unlocked_));
 
   // @@protoc_insertion_point(copy_constructor:TrialJournalSnapshot)
 }
@@ -5643,9 +5651,9 @@ inline void TrialJournalSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, state_revision_),
            0,
-           offsetof(Impl_, total_permanent_seals_) -
+           offsetof(Impl_, hard_boss_trial_unlocked_) -
                offsetof(Impl_, state_revision_) +
-               sizeof(Impl_::total_permanent_seals_));
+               sizeof(Impl_::hard_boss_trial_unlocked_));
 }
 TrialJournalSnapshot::~TrialJournalSnapshot() {
   // @@protoc_insertion_point(destructor:TrialJournalSnapshot)
@@ -5719,10 +5727,10 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
         reinterpret_cast<char*>(&_impl_.total_permanent_lit_seals_) -
         reinterpret_cast<char*>(&_impl_.state_revision_)) + sizeof(_impl_.total_permanent_lit_seals_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    ::memset(&_impl_.available_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.total_permanent_seals_) -
-        reinterpret_cast<char*>(&_impl_.available_)) + sizeof(_impl_.total_permanent_seals_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    ::memset(&_impl_.total_permanent_seals_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.hard_boss_trial_unlocked_) -
+        reinterpret_cast<char*>(&_impl_.total_permanent_seals_)) + sizeof(_impl_.hard_boss_trial_unlocked_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5748,7 +5756,7 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // bool available = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_available() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -5794,7 +5802,7 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
   }
 
   // uint32 total_permanent_seals = 6;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_total_permanent_seals() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -5803,7 +5811,7 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
   }
 
   // uint64 voucher_balance = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_voucher_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5812,7 +5820,7 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
   }
 
   // uint64 bound_sand_balance = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_bound_sand_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -5821,7 +5829,7 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
   }
 
   // bool can_operate = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_can_operate() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -5875,6 +5883,15 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
               13, repfield, repfield.GetCachedSize(),
               target, stream);
+    }
+  }
+
+  // bool hard_boss_trial_unlocked = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_hard_boss_trial_unlocked() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_hard_boss_trial_unlocked(), target);
     }
   }
 
@@ -5961,38 +5978,44 @@ PROTOBUF_NOINLINE void TrialJournalSnapshot::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    // bool available = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    // uint32 total_permanent_seals = 6;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_available() != 0) {
-        total_size += 2;
-      }
-    }
-    // bool can_operate = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_can_operate() != 0) {
-        total_size += 2;
+      if (this_._internal_total_permanent_seals() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_total_permanent_seals());
       }
     }
     // uint64 voucher_balance = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_voucher_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_voucher_balance());
       }
     }
     // uint64 bound_sand_balance = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_bound_sand_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_bound_sand_balance());
       }
     }
-    // uint32 total_permanent_seals = 6;
+    // bool available = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_available() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool can_operate = 9;
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
-      if (this_._internal_total_permanent_seals() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_total_permanent_seals());
+      if (this_._internal_can_operate() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool hard_boss_trial_unlocked = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_hard_boss_trial_unlocked() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -6064,30 +6087,35 @@ void TrialJournalSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_available() != 0) {
-        _this->_impl_.available_ = from._impl_.available_;
+      if (from._internal_total_permanent_seals() != 0) {
+        _this->_impl_.total_permanent_seals_ = from._impl_.total_permanent_seals_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_can_operate() != 0) {
-        _this->_impl_.can_operate_ = from._impl_.can_operate_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_voucher_balance() != 0) {
         _this->_impl_.voucher_balance_ = from._impl_.voucher_balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_bound_sand_balance() != 0) {
         _this->_impl_.bound_sand_balance_ = from._impl_.bound_sand_balance_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_available() != 0) {
+        _this->_impl_.available_ = from._impl_.available_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
-      if (from._internal_total_permanent_seals() != 0) {
-        _this->_impl_.total_permanent_seals_ = from._impl_.total_permanent_seals_;
+      if (from._internal_can_operate() != 0) {
+        _this->_impl_.can_operate_ = from._impl_.can_operate_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_hard_boss_trial_unlocked() != 0) {
+        _this->_impl_.hard_boss_trial_unlocked_ = from._impl_.hard_boss_trial_unlocked_;
       }
     }
   }
@@ -6116,8 +6144,8 @@ void TrialJournalSnapshot::InternalSwap(TrialJournalSnapshot* PROTOBUF_RESTRICT 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.unavailable_reason_, &other->_impl_.unavailable_reason_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.action_unavailable_reason_, &other->_impl_.action_unavailable_reason_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.total_permanent_seals_)
-      + sizeof(TrialJournalSnapshot::_impl_.total_permanent_seals_)
+      PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.hard_boss_trial_unlocked_)
+      + sizeof(TrialJournalSnapshot::_impl_.hard_boss_trial_unlocked_)
       - PROTOBUF_FIELD_OFFSET(TrialJournalSnapshot, _impl_.state_revision_)>(
           reinterpret_cast<char*>(&_impl_.state_revision_),
           reinterpret_cast<char*>(&other->_impl_.state_revision_));

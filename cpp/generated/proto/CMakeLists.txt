@@ -187,6 +187,7 @@ set(SOURCE_FILES
     scene/player_season.pb.cc
     common/component/player_trial_journal_comp.pb.cc
     scene/player_trial_journal.pb.cc
+    common/component/player_craft_comp.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

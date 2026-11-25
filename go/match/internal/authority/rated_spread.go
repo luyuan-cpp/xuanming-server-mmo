@@ -39,7 +39,12 @@ func (s *Store) requireRatedSpread(mode uint32, group []*pb.MatchAuthorityTicket
 		}
 		lowest, highest = min(lowest, rating), max(highest, rating)
 	}
-	if float64(highest-lowest) > s.ratingCurve.AnchorCenti(longest) {
+	limit := s.ratingCurve.AnchorCenti(longest)
+	if mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		// 论剑排位(PVP_TEAM)使用配表硬上限分差曲线(默认 100/200/300),久等仍不得越过硬上限。
+		limit = s.RankedCatalog().RankedCurve().AnchorCenti(longest)
+	}
+	if float64(highest-lowest) > limit {
 		return ErrRatingSpread
 	}
 	return nil

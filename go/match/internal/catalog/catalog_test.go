@@ -5,7 +5,9 @@ import (
 
 	"match/internal/scope"
 
+	battlepb "proto/battle"
 	matchpb "proto/match"
+	"shared/generated/table"
 )
 
 const (
@@ -188,10 +190,200 @@ func TestRejectsBadRows(t *testing.T) {
 		"大区号段重叠": mutate(func(r *Rows) {
 			r.ZoneGroups = append(r.ZoneGroups, scope.Range{GroupID: 2, ZoneBegin: 100, ZoneEnd: 200})
 		}),
+		"allowed_team_sizes 超出上限": mutate(func(r *Rows) {
+			r.PlayModes[4].AllowedTeamSizes = []uint32{1, 6}
+		}),
+		"allowed_team_sizes 含重复": mutate(func(r *Rows) {
+			r.PlayModes[4].AllowedTeamSizes = []uint32{1, 1}
+		}),
+		"固定人数模式配置了 allowed_team_sizes": mutate(func(r *Rows) {
+			r.PlayModes[2].AllowedTeamSizes = []uint32{1}
+		}),
+		"POLARITY_5V5 写了 team_size_max": mutate(func(r *Rows) {
+			r.PlayModes = append(r.PlayModes, PlayModeRow{Id: 98, Mode: matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, ConfigId: 1, Enabled: true, TeamSizeMax: 5})
+		}),
 	}
 	for name, rows := range bad {
 		if _, err := New(rows); err == nil {
 			t.Errorf("%s: 应拒绝", name)
 		}
+	}
+}
+
+func TestAllowedTeamSizesWhitelistAndPolarity5v5Pool(t *testing.T) {
+	c, err := New(Rows{
+		Dungeons: []DungeonRow{
+			{Id: 5, MaxTeamSize: 5, TimeLimitSeconds: 600, MonsterCount: 1},
+			{Id: 110, MaxTeamSize: 5, TimeLimitSeconds: 96, RoundLimit: 16, MonsterCount: 0},
+		},
+		PlayModes: []PlayModeRow{
+			{Id: 6, Mode: matchpb.MatchMode_MATCH_MODE_PVP_TEAM, ConfigId: 5, Enabled: true, TeamSizeMax: 5, AllowedTeamSizes: []uint32{1, 3}},
+			{Id: 301, Mode: matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, ConfigId: 110, Enabled: true, TeamSizeMax: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("合法冷启动白名单与物法易势目录应构建成功: %v", err)
+	}
+	if !c.AllowedTeamSize(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5, 1) ||
+		!c.AllowedTeamSize(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5, 3) {
+		t.Fatalf("白名单内的 1V1 / 3V3 必须放行")
+	}
+	for _, blocked := range []uint32{0, 2, 4, 5, 6} {
+		if c.AllowedTeamSize(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5, blocked) {
+			t.Fatalf("冷启动期未开放的 %dV%d 不应放行", blocked, blocked)
+		}
+	}
+	if got := c.RoundLimit(110); got != 16 {
+		t.Fatalf("显式 round_limit=16 应优先于 time_limit: got %d", got)
+	}
+	wantPools := []Pool{
+		{Mode: matchpb.MatchMode_MATCH_MODE_PVP_TEAM, ConfigId: 5, TeamSize: 1},
+		{Mode: matchpb.MatchMode_MATCH_MODE_PVP_TEAM, ConfigId: 5, TeamSize: 3},
+		{Mode: matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, ConfigId: 110, TeamSize: 10},
+	}
+	gotPools := c.Pools()
+	if len(gotPools) != len(wantPools) {
+		t.Fatalf("Pools() = %+v, want %+v", gotPools, wantPools)
+	}
+	for i := range wantPools {
+		if gotPools[i] != wantPools[i] {
+			t.Fatalf("Pools()[%d] = %+v, want %+v", i, gotPools[i], wantPools[i])
+		}
+	}
+}
+
+func TestLoadGeneratedTablesIncludesBossTrialsAndColdStartWhitelist(t *testing.T) {
+	c, err := Load("../../../../generated/tables")
+	if err != nil {
+		t.Fatalf("加载真实导出表失败: %v", err)
+	}
+	if !c.AllowedTeamSize(modePvpTeam, 5, 1) || !c.AllowedTeamSize(modePvpTeam, 5, 3) {
+		t.Fatalf("真实 PlayMode 表中 PVP_TEAM(5) 必须放行冷启动 1V1 与 3V3")
+	}
+	for _, blocked := range []uint32{2, 4, 5} {
+		if c.AllowedTeamSize(modePvpTeam, 5, blocked) {
+			t.Fatalf("真实 PlayMode 表中 PVP_TEAM(5) 冷启动不应开放 %dV%d", blocked, blocked)
+		}
+	}
+	if !c.Open(matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, 110) {
+		t.Fatalf("真实 PlayMode 表应开放物法易势 5V5 (Dungeon 110)")
+	}
+	if got := c.RoundLimit(110); got != 16 {
+		t.Fatalf("Dungeon 110 回合上限应为 16, got %d", got)
+	}
+	for id := uint32(101); id <= 109; id++ {
+		if !c.Open(modeSolo, id) || !c.Open(modeTeam, id) {
+			t.Fatalf("首领试炼/护卫救援 Dungeon %d 应同时开放单人与组队入口", id)
+		}
+	}
+	if got := c.RoundLimit(109); got != 8 {
+		t.Fatalf("护卫救援 Dungeon 109 回合上限应为 8, got %d", got)
+	}
+
+	// 核对真实导出表生成的全部 11 格试炼志上下文：卷一(101..104)、卷二(201..204)、卷三护卫救援(301)、物法易势(302)、人宠会武(303)。
+	wantPveTrials := map[uint32]struct {
+		entryId  uint32
+		guardId  uint32
+		seasonId uint32
+	}{
+		101: {entryId: 101, guardId: 102, seasonId: 0},
+		102: {entryId: 103, guardId: 102, seasonId: 0},
+		103: {entryId: 102, guardId: 103, seasonId: 0},
+		104: {entryId: 104, guardId: 103, seasonId: 0},
+		105: {entryId: 201, guardId: 105, seasonId: 0},
+		106: {entryId: 203, guardId: 105, seasonId: 0},
+		107: {entryId: 202, guardId: 107, seasonId: 0},
+		108: {entryId: 204, guardId: 107, seasonId: 0},
+		109: {entryId: 301, guardId: 102, seasonId: 1},
+	}
+	for dungeonId, want := range wantPveTrials {
+		solo := c.TrialContextFor(modeSolo, dungeonId, nil, nil)
+		team := c.TrialContextFor(modeTeam, dungeonId, nil, nil)
+		if solo == nil || team == nil {
+			t.Fatalf("Dungeon %d 在单人/组队 PVE 必须生成 TrialContext", dungeonId)
+		}
+		if solo.GetJournalEntryId() != want.entryId || solo.GetTrialRuleVersion() != 1 ||
+			solo.GetSeasonId() != want.seasonId || solo.GetGuardMonsterTableId() != want.guardId {
+			t.Fatalf("Dungeon %d TrialContext=%+v want entry=%d guard=%d season=%d", dungeonId, solo, want.entryId, want.guardId, want.seasonId)
+		}
+		if team.GetJournalEntryId() != want.entryId || team.GetGuardMonsterTableId() != want.guardId {
+			t.Fatalf("Dungeon %d 组队 TrialContext=%+v", dungeonId, team)
+		}
+		// 篡改返回值不得污染目录内部缓存。
+		solo.JournalEntryId = 9999
+		if again := c.TrialContextFor(modeSolo, dungeonId, nil, nil); again.GetJournalEntryId() != want.entryId {
+			t.Fatalf("TrialContextFor 必须返回深拷贝")
+		}
+		// 帮会活动、带排位上下文的 PVE 与切磋不得写入 PVE 试炼志上下文。
+		if got := c.TrialContextFor(modeTeam, dungeonId, &battlepb.BattleActivityContext{GuildId: 1}, nil); got != nil {
+			t.Fatalf("活动战不应生成 TrialContext: %+v", got)
+		}
+		if got := c.TrialContextFor(modeSolo, dungeonId, nil, &battlepb.RankedMatchContext{SeasonId: 1}); got != nil {
+			t.Fatalf("带排位上下文的 PVE 不应生成 TrialContext: %+v", got)
+		}
+		if got := c.TrialContextFor(modeDuel, dungeonId, nil, nil); got != nil {
+			t.Fatalf("切磋模式不应生成 TrialContext: %+v", got)
+		}
+	}
+	// 卷三 · 物法易势 5V5 (Dungeon 110 → Entry 302, season=1)
+	polarityCtx := c.TrialContextFor(matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, 110, nil, nil)
+	if polarityCtx == nil || polarityCtx.GetJournalEntryId() != 302 || polarityCtx.GetSeasonId() != 1 {
+		t.Fatalf("物法易势 5V5 (Dungeon 110) 必须生成 Entry 302(season=1): got %+v", polarityCtx)
+	}
+	// 卷三 · 正式人宠会武 PVP_TEAM (Dungeon 5 → Entry 303, season=1)，跨季不匹配时拒挂
+	rankedTrial := c.TrialContextFor(modePvpTeam, 5, nil, &battlepb.RankedMatchContext{SeasonId: 1})
+	if rankedTrial == nil || rankedTrial.GetJournalEntryId() != 303 || rankedTrial.GetSeasonId() != 1 {
+		t.Fatalf("正式人宠会武 S1 必须生成 Entry 303(season=1): got %+v", rankedTrial)
+	}
+	if mismatchSeason := c.TrialContextFor(modePvpTeam, 5, nil, &battlepb.RankedMatchContext{SeasonId: 2}); mismatchSeason != nil {
+		t.Fatalf("赛季号不匹配的排位不应挂 S1 试炼志上下文: got %+v", mismatchSeason)
+	}
+	for _, nonTrial := range []uint32{1, 2, 3, 4} {
+		if got := c.TrialContextFor(modeSolo, nonTrial, nil, nil); got != nil {
+			t.Fatalf("普通副本 Dungeon %d 不应生成 TrialContext: %+v", nonTrial, got)
+		}
+	}
+
+	// 验证 BuildFromTableSet 路径与 Load 一致（热更与 --validate-tables 走此路径）。
+	ts, err := table.Prepare("../../../../generated/tables", false)
+	if err != nil {
+		t.Fatalf("Prepare 真实表失败: %v", err)
+	}
+	fromTS, err := BuildFromTableSet(ts)
+	if err != nil {
+		t.Fatalf("BuildFromTableSet 失败: %v", err)
+	}
+	if got := fromTS.TrialContextFor(modeSolo, 102, nil, nil); got == nil || got.GetJournalEntryId() != 103 || got.GetGuardMonsterTableId() != 102 {
+		t.Fatalf("BuildFromTableSet Dungeon 102 映射错误: %+v", got)
+	}
+	if got := fromTS.TrialContextFor(modeSolo, 106, nil, nil); got == nil || got.GetJournalEntryId() != 203 || got.GetGuardMonsterTableId() != 105 {
+		t.Fatalf("BuildFromTableSet Dungeon 106 映射错误: %+v", got)
+	}
+	if got := fromTS.TrialContextFor(matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, 110, nil, &battlepb.RankedMatchContext{UseFreePreset: true}); got == nil || got.GetJournalEntryId() != 302 {
+		t.Fatalf("BuildFromTableSet Dungeon 110 带免费预设娱乐上下文映射错误: %+v", got)
+	}
+	if got := fromTS.TrialContextFor(modeSolo, 109, nil, &battlepb.RankedMatchContext{UseFreePreset: true}); got == nil || got.GetJournalEntryId() != 301 {
+		t.Fatalf("BuildFromTableSet Dungeon 109 护卫救援带免费预设娱乐上下文映射错误: %+v", got)
+	}
+	gotSizes := c.AllowedTeamSizes(modePvpTeam, 5)
+	if len(gotSizes) != 2 || gotSizes[0] != 1 || gotSizes[1] != 3 {
+		t.Fatalf("PVP_TEAM(5) AllowedTeamSizes 应为 [1 3], got %v", gotSizes)
+	}
+	if got := c.BossTrialKind(109); got != 5 {
+		t.Fatalf("Dungeon 109 BossTrialKind 应为 5, got %d", got)
+	}
+	if got := c.BossTrialKind(110); got != 6 {
+		t.Fatalf("Dungeon 110 BossTrialKind 应为 6, got %d", got)
+	}
+}
+
+func TestTrialContextRejectsDuplicateEnabledVariant(t *testing.T) {
+	rows := baseRows()
+	rows.TrialEntries = []TrialJournalEntryRow{
+		{Id: 101, SourceKind: 1, Difficulty: 1, VariantKey: "rejuvenation", RuleVersion: 1, Enabled: true},
+		{Id: 199, SourceKind: 1, Difficulty: 1, VariantKey: "rejuvenation", RuleVersion: 1, Enabled: true},
+	}
+	if _, err := New(rows); err == nil {
+		t.Fatal("重复启用的同难度同机制 TrialJournalEntry 必须拒绝")
 	}
 }

@@ -45,13 +45,14 @@ public final class PlayModeTableOuterClass extends com.google.protobuf.Generated
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\024playmode_table.proto\"q\n\rPlayModeTable\022" +
-      "\n\n\002id\030\001 \001(\r\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020battl" +
-      "e_config_id\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\010\022\025\n\rte" +
-      "am_size_max\030\005 \001(\r\"1\n\021PlayModeTableData\022\034" +
-      "\n\004data\030\001 \003(\0132\016.PlayModeTableB?\n\016com.game" +
-      ".tableB\027PlayModeTableOuterClassP\001Z\022gener" +
-      "ated/pb/tableb\006proto3"
+      "\n\024playmode_table.proto\"\215\001\n\rPlayModeTable" +
+      "\022\n\n\002id\030\001 \001(\r\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020batt" +
+      "le_config_id\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\010\022\032\n\022a" +
+      "llowed_team_sizes\030\006 \003(\r\022\025\n\rteam_size_max" +
+      "\030\005 \001(\r\"1\n\021PlayModeTableData\022\034\n\004data\030\001 \003(" +
+      "\0132\016.PlayModeTableB?\n\016com.game.tableB\027Pla" +
+      "yModeTableOuterClassP\001Z\022generated/pb/tab" +
+      "leb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -62,7 +63,7 @@ public final class PlayModeTableOuterClass extends com.google.protobuf.Generated
     internal_static_PlayModeTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_PlayModeTable_descriptor,
-        new java.lang.String[] { "Id", "MatchMode", "BattleConfigId", "Enabled", "TeamSizeMax", });
+        new java.lang.String[] { "Id", "MatchMode", "BattleConfigId", "Enabled", "AllowedTeamSizes", "TeamSizeMax", });
     internal_static_PlayModeTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_PlayModeTableData_fieldAccessorTable = new

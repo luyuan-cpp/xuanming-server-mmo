@@ -232,7 +232,8 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 					CoolingLockDurationMs:        c.Commerce.PlayerTrade.CoolingLockDurationMs,
 					AllowAcquaintanceCoolingLock: c.Commerce.PlayerTrade.AllowAcquaintanceCoolingLock,
 				},
-				Prices: &commerce.SQLReferencePriceReader{DB: db},
+				Prices:   &commerce.SQLReferencePriceReader{DB: db},
+				DailyOut: &commerce.SQLDailyPlayerTradeTracker{DB: db},
 			}
 		}
 		commerceEngine.Roles = roles

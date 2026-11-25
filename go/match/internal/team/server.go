@@ -27,18 +27,19 @@ const teamRPCBudget = 3500 * time.Millisecond
 
 // RPC 名:team_rpc_total{method} 与 team_commit_retry_total{op} 的固定 label 值。
 const (
-	methodCreateTeam        = "CreateTeam"
-	methodGetMyTeam         = "GetMyTeam"
-	methodApplyJoinTeam     = "ApplyJoinTeam"
-	methodHandleApplication = "HandleApplication"
-	methodInviteToTeam      = "InviteToTeam"
-	methodRespondInvite     = "RespondInvite"
-	methodListMyInvites     = "ListMyInvites"
-	methodLeaveTeam         = "LeaveTeam"
-	methodKickMember        = "KickMember"
-	methodTransferLeader    = "TransferLeader"
-	methodDisbandTeam       = "DisbandTeam"
-	methodStartTeamMatch    = "StartTeamMatch"
+	methodCreateTeam          = "CreateTeam"
+	methodGetMyTeam           = "GetMyTeam"
+	methodApplyJoinTeam       = "ApplyJoinTeam"
+	methodHandleApplication   = "HandleApplication"
+	methodInviteToTeam        = "InviteToTeam"
+	methodRespondInvite       = "RespondInvite"
+	methodListMyInvites       = "ListMyInvites"
+	methodLeaveTeam           = "LeaveTeam"
+	methodKickMember          = "KickMember"
+	methodTransferLeader      = "TransferLeader"
+	methodDisbandTeam         = "DisbandTeam"
+	methodStartTeamMatch      = "StartTeamMatch"
+	methodConfirmRankedPreset = "ConfirmRankedPreset"
 )
 
 // team_rpc_total{outcome} 的固定取值。
@@ -146,6 +147,10 @@ func (s *Server) DisbandTeam(ctx context.Context, in *teampb.DisbandTeamRequest)
 
 func (s *Server) StartTeamMatch(ctx context.Context, in *teampb.StartTeamMatchRequest) (*teampb.TeamResponse, error) {
 	return serveTeam(ctx, methodStartTeamMatch, in, s.service.StartTeamMatch)
+}
+
+func (s *Server) ConfirmRankedPreset(ctx context.Context, in *teampb.ConfirmRankedPresetRequest) (*teampb.TeamResponse, error) {
+	return serveTeam(ctx, methodConfirmRankedPreset, in, s.service.ConfirmRankedPreset)
 }
 
 // ListMyInvites 回包类型不同,单独写外壳(语义与 serveTeam 相同)。

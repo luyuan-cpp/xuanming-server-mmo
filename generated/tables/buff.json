@@ -1497,6 +1497,60 @@
     "Buff": true
    },
    "tick_on_apply": 1
+  },
+  {
+   "battle_op": 25,
+   "buff_type": 0,
+   "effect_target": 1,
+   "id": 120200,
+   "infinite_duration": 1,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 18,
+   "no_caster": 0,
+   "ratio": 0.05,
+   "refresh_policy": 1,
+   "require_living_caster": 1,
+   "stack_limit": 5,
+   "start_round": 1,
+   "trigger_event": 6
+  },
+  {
+   "battle_op": 25,
+   "buff_type": 0,
+   "effect_target": 1,
+   "id": 120210,
+   "infinite_duration": 1,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 19,
+   "no_caster": 0,
+   "ratio": 0.05,
+   "refresh_policy": 1,
+   "require_living_caster": 1,
+   "stack_limit": 5,
+   "start_round": 1,
+   "trigger_event": 6
+  },
+  {
+   "battle_op": 25,
+   "buff_type": 0,
+   "effect_target": 1,
+   "id": 120220,
+   "infinite_duration": 1,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 20,
+   "no_caster": 0,
+   "ratio": 0.05,
+   "refresh_policy": 1,
+   "require_living_caster": 1,
+   "stack_limit": 5,
+   "start_round": 1,
+   "trigger_event": 6
   }
  ]
 }

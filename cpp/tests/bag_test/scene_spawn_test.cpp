@@ -193,6 +193,61 @@ TEST_F(SceneSpawnTest, BiyuanWaterPalaceLoadedMapRoutesReachAllKeyAreasAndBlockW
     }
 }
 
+TEST_F(SceneSpawnTest, BajingIslandLoadedMapRoutesReachAllKeyAreasAndBlockSea) {
+    SelectScene(2);
+    auto* nav = SceneNavManager::Instance().Get(2);
+    ASSERT_NE(nullptr, nav);
+    ASSERT_TRUE(nav->versionedMask);
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(2));
+    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(2);
+    EXPECT_NEAR(70.0, spawn.x(), 1e-9);
+    EXPECT_NEAR(205.0, spawn.y(), 1e-9);
+    EXPECT_DOUBLE_EQ(0, spawn.z());
+    // 八景岛双节共享导航关键地标（中央太极广场、中央主殿前、西北桥、东南书亭前），服务端 Z-up 坐标。
+    for (const auto& [x, y] : {std::pair{200.41666666666666, 166.66666666666669},
+                               std::pair{240.0, 209.58333333333331},
+                               std::pair{272.5, 104.16666666666667},
+                               std::pair{141.66666666666666, 341.25}}) {
+        Location goal;
+        goal.set_x(x); goal.set_y(y);
+        std::vector<Location> route;
+        ASSERT_TRUE(NavQuerySystem::FindPath(*nav, spawn, goal, route)) << x << ',' << y;
+        ASSERT_GE(route.size(), 2U);
+        EXPECT_NEAR(spawn.x(), route.front().x(), .02);
+        EXPECT_NEAR(spawn.y(), route.front().y(), .02);
+        EXPECT_NEAR(goal.x(), route.back().x(), .02);
+        EXPECT_NEAR(goal.y(), route.back().y(), .02);
+        for (size_t i = 1; i < route.size(); ++i) {
+            Location accepted;
+            ASSERT_TRUE(NavQuerySystem::ValidateMove(*nav, route[i - 1], route[i], accepted)) << i;
+        }
+        SetPosition(goal.x(), goal.y(), 0);
+        EXPECT_FALSE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+        ExpectPosition(goal);
+    }
+    // 外海区域必须阻挡。
+    Location sea, accepted;
+    sea.set_x(198.33333333333334); sea.set_y(-12.5);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, sea, accepted));
+    EXPECT_FALSE(NavQuerySystem::ValidateMove(*nav, spawn, sea, accepted));
+}
+
+TEST_F(SceneSpawnTest, TemporaryMainCityReusesBiyuanNavigationAndSpawn) {
+    SelectScene(1);
+    auto* nav1 = SceneNavManager::Instance().Get(1);
+    auto* nav5 = SceneNavManager::Instance().Get(5);
+    ASSERT_NE(nullptr, nav1);
+    ASSERT_EQ(nav5, nav1);
+    ASSERT_TRUE(nav1->versionedMask);
+    const auto spawn = SceneSpawnSystem::DefaultSpawnFor(1);
+    EXPECT_NEAR(58.5, spawn.x(), 1e-9);
+    EXPECT_NEAR(222.5, spawn.y(), 1e-9);
+    // 旧主城出生点 (133, 199) 在碧渊水宫内不可走，进图应回落到新出生点。
+    SetPosition(133, 199, 0);
+    EXPECT_TRUE(SceneSpawnSystem::EnsureValidEnterLocation(player, scene));
+    ExpectPosition(spawn);
+}
+
 TEST_F(SceneSpawnTest, NoNavigationStillHonorsDestinationSpawnAndPreservesReentry) {
     SceneNavManager::Instance().sceneNav.clear();
     SelectScene(4);

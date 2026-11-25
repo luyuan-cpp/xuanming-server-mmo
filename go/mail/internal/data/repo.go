@@ -116,6 +116,8 @@ func SenderKind(caller string) uint32 {
 		return 4
 	case "battle":
 		return 5
+	case "match":
+		return 6
 	}
 	return 0
 }

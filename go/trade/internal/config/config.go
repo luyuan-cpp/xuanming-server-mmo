@@ -161,6 +161,8 @@ type CommerceConf struct {
 	// Mode 为空表示未启用额外收紧；"strict_consumables"(方案 A) 仅放开低价耗材与小额银两互助；
 	// "acquaintance_locked"(方案 B) 强制熟人好友时长与近 7 日参考价偏离保护。
 	PlayerTrade PlayerTradeConf `json:",optional"`
+	// SellerCredit 控制卖家店铺信用评分的评价窗口、防刷分限额与异地换机清零冷静期。
+	SellerCredit SellerCreditConf `json:",optional"`
 	// ManualResolutionSecretEnv:人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract,运维工具 commercefix 调)
 	// 的 serviceauth 密钥所在的环境变量名,调用方只有 ManualResolutionCaller,不与别的调用方共用。空 = 入口关闭,一律 PermissionDenied。
 	// 只写变量名;密钥值由部署从 K8s Secret 注入,不进 yaml / ConfigMap(2026-11-11,jubaozhai-market.md §15.7.1)。
@@ -179,6 +181,15 @@ type PlayerTradeConf struct {
 	MaxReferenceDeviationPct     uint32   `json:",optional"`
 	CoolingLockDurationMs        uint64   `json:",optional"`
 	AllowAcquaintanceCoolingLock bool     `json:",optional"`
+}
+
+// SellerCreditConf 是卖家信用评分与防刷分策略配置项。
+type SellerCreditConf struct {
+	ReviewWindowMs                  uint64 `json:",optional"`
+	PairScoreWindowMs               uint64 `json:",optional"`
+	MaxScoredReviewsPerPairInWindow int    `json:",optional"`
+	MinScoreAmountMinor             uint64 `json:",optional"`
+	PostEnvChangeScoreCooldownMs    uint64 `json:",optional"`
 }
 
 // ManualResolutionCaller 是 TradeAdmin.ListManualContracts / ResolveManualContract 唯一接受的 serviceauth 调用方。
@@ -666,6 +677,9 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("Commerce.PlayerTrade.MaxReferenceDeviationPct(%d) 必须小于 100", c.Commerce.PlayerTrade.MaxReferenceDeviationPct)
 			}
 		}
+		if err := c.Commerce.SellerCredit.validate(); err != nil {
+			return err
+		}
 		if err := c.AssetOp.validateRecovery(); err != nil {
 			return err
 		}
@@ -700,4 +714,22 @@ func HasRpcTarget(c zrpc.RpcClientConf) bool {
 // 绑定灵石禁售。白名单只在这里一份:配置校验与 svc 装配人民币寄售都调它。
 func IsTradableCurrency(currency uint32) bool {
 	return currency == currencytype.Gold || currency == currencytype.Diamond
+}
+
+func (sc SellerCreditConf) validate() error {
+	const maxWindowMs uint64 = 90 * 24 * 3600 * 1000
+	const maxCooldownMs uint64 = 30 * 24 * 3600 * 1000
+	if sc.MaxScoredReviewsPerPairInWindow < 0 || sc.MaxScoredReviewsPerPairInWindow > 10 {
+		return fmt.Errorf("Commerce.SellerCredit.MaxScoredReviewsPerPairInWindow(%d) 必须在 [0, 10] 内", sc.MaxScoredReviewsPerPairInWindow)
+	}
+	if sc.ReviewWindowMs > maxWindowMs {
+		return fmt.Errorf("Commerce.SellerCredit.ReviewWindowMs(%d) 不能超过 90 天", sc.ReviewWindowMs)
+	}
+	if sc.PairScoreWindowMs > maxWindowMs {
+		return fmt.Errorf("Commerce.SellerCredit.PairScoreWindowMs(%d) 不能超过 90 天", sc.PairScoreWindowMs)
+	}
+	if sc.PostEnvChangeScoreCooldownMs > maxCooldownMs {
+		return fmt.Errorf("Commerce.SellerCredit.PostEnvChangeScoreCooldownMs(%d) 不能超过 30 天", sc.PostEnvChangeScoreCooldownMs)
+	}
+	return nil
 }

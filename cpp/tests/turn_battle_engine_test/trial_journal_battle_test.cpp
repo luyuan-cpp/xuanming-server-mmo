@@ -368,3 +368,348 @@ TEST_F(TrialJournalBattleTest, TracksGuardHealOnBossAndGuardStanceDispelInPve) {
     EXPECT_TRUE(settlement.trial_facts().guard_survived());
     EXPECT_TRUE(settlement.trial_facts().team_dealt_physical_direct_damage());
 }
+
+TEST_F(TrialJournalBattleTest, TracksBossTrialRejuvHealAndBreakStanceDispelWithMatchTrialContext) {
+    // 1. 首领试炼·困难回春（Dungeon 102 → Entry 103, guard=102）：R1 预告，R2 慢速回春治疗首领必须记入 boss_guard_heal_total。
+    {
+        CreateBattleRequest rejuvReq;
+        rejuvReq.set_battle_id(92011);
+        rejuvReq.set_match_mode(turnbattle::kMatchModePveSolo);
+        rejuvReq.set_battle_config_id(102);
+        rejuvReq.set_seed(17);
+        auto* ctx = rejuvReq.mutable_trial_context();
+        ctx->set_journal_entry_id(103);
+        ctx->set_trial_rule_version(1);
+        ctx->set_guard_monster_table_id(102);
+
+        auto& d102 = data->AddDungeon(102);
+        d102.Clear();
+        d102.set_id(102);
+        d102.set_boss_trial_kind(turnbattle::kBossTrialKindBreakRejuv);
+        d102.set_difficulty(2);
+        d102.set_round_limit(15);
+        data->SetDungeonMonsters(102, {101, 102});
+        data->AddBattleReward(102, "");
+
+        auto& mBoss = data->AddMonster(101);
+        mBoss.Clear();
+        mBoss.set_id(101);
+        mBoss.set_is_boss(1);
+        mBoss.set_health(8000);
+        mBoss.set_speed(50);
+        auto& mGuard = data->AddMonster(102);
+        mGuard.Clear();
+        mGuard.set_id(102);
+        mGuard.set_is_boss(0);
+        mGuard.set_health(4000);
+        mGuard.set_speed(60);
+
+        auto* p = rejuvReq.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("道友");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(1500);
+        p->set_defense(200);
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(rejuvReq));
+        uint64_t bossActorId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) {
+                bossActorId = a.actor_id();
+            }
+        }
+        ASSERT_NE(bossActorId, 0u);
+
+        // R1 打伤首领，R2 防御等困难回春护卫在慢速阶段给首领回血
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_ATTACK, bossActorId));
+        engine.ResolveCurrentRound();
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+
+        const auto s = engine.BuildSettlement(kHeroA);
+        ASSERT_TRUE(s.has_trial_facts());
+        EXPECT_EQ(s.trial_facts().journal_entry_id(), 103u);
+        EXPECT_GT(s.trial_facts().boss_guard_heal_total(), 0u);
+    }
+
+    // 2. 首领试炼·普通护势（Dungeon 103 → Entry 102, guard=103, guard_stance_buff_id=0）：R1 上护势，R2 驱散必须置位 guard_stance_dispelled。
+    {
+        CreateBattleRequest stanceReq;
+        stanceReq.set_battle_id(92012);
+        stanceReq.set_match_mode(turnbattle::kMatchModePveSolo);
+        stanceReq.set_battle_config_id(103);
+        stanceReq.set_seed(19);
+        auto* ctx = stanceReq.mutable_trial_context();
+        ctx->set_journal_entry_id(102);
+        ctx->set_trial_rule_version(1);
+        ctx->set_guard_monster_table_id(103);
+
+        auto& d103 = data->AddDungeon(103);
+        d103.Clear();
+        d103.set_id(103);
+        d103.set_boss_trial_kind(turnbattle::kBossTrialKindBreakStance);
+        d103.set_difficulty(1);
+        d103.set_round_limit(12);
+        data->SetDungeonMonsters(103, {101, 103});
+        data->AddBattleReward(103, "");
+
+        auto& mGuard = data->AddMonster(103);
+        mGuard.Clear();
+        mGuard.set_id(103);
+        mGuard.set_is_boss(0);
+        mGuard.set_health(4000);
+        mGuard.set_speed(60);
+
+        auto& dispelSkill = data->AddSkill(16211);
+        dispelSkill.Clear();
+        dispelSkill.set_id(16211);
+        dispelSkill.set_battle_model(1);
+        dispelSkill.set_caster_mask(1);
+        dispelSkill.set_ability_kind(1);
+        dispelSkill.set_unlock_level(1);
+        dispelSkill.set_max_rank(10);
+        dispelSkill.set_target_team(1);
+        dispelSkill.set_max_targets(1);
+        dispelSkill.add_skill_type(1);
+        dispelSkill.set_mana_percent(0.01);
+        dispelSkill.add_effect(19921);
+        auto& dispelBuff = data->AddBuff(19921);
+        dispelBuff.Clear();
+        dispelBuff.set_id(19921);
+        dispelBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::DispelBuff));
+        dispelBuff.set_effect_count(1);
+
+        auto* p = stanceReq.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("道友");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(1000);
+        p->set_defense(200);
+        p->add_skill_table_ids(16211);
+        (*p->mutable_skill_ranks())[16211] = 1;
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(stanceReq));
+        uint64_t bossActorId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) {
+                bossActorId = a.actor_id();
+            }
+        }
+        ASSERT_NE(bossActorId, 0u);
+
+        // R1 护势护卫在慢速阶段给首领施放物理护势，R2 玩家施放驱散技能破势
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_SKILL, bossActorId, 16211));
+        engine.ResolveCurrentRound();
+
+        const auto s = engine.BuildSettlement(kHeroA);
+        ASSERT_TRUE(s.has_trial_facts());
+        EXPECT_EQ(s.trial_facts().journal_entry_id(), 102u);
+        EXPECT_TRUE(s.trial_facts().guard_stance_dispelled());
+    }
+}
+
+TEST_F(TrialJournalBattleTest, TracksBarrierBreakGuardianRescueAndPolarityTeamBDualDamage) {
+    // 1. 卷二 · 灵障首领 (Dungeon 105 → Entry 201)：击破灵障护盾置位 self_triggered_shield_break
+    {
+        CreateBattleRequest req;
+        req.set_battle_id(92021);
+        req.set_match_mode(turnbattle::kMatchModePveSolo);
+        req.set_battle_config_id(105);
+        req.set_seed(23);
+        auto* ctx = req.mutable_trial_context();
+        ctx->set_journal_entry_id(201);
+        ctx->set_trial_rule_version(1);
+        ctx->set_guard_monster_table_id(105);
+
+        auto& d105 = data->AddDungeon(105);
+        d105.Clear();
+        d105.set_id(105);
+        d105.set_boss_trial_kind(turnbattle::kBossTrialKindBarrier);
+        d105.set_difficulty(1);
+        d105.set_round_limit(12);
+        data->SetDungeonMonsters(105, {104, 105});
+        data->AddBattleReward(105, "");
+
+        auto& boss = data->AddMonster(104);
+        boss.Clear();
+        boss.set_id(104);
+        boss.set_is_boss(1);
+        boss.set_health(2000);
+        boss.set_speed(50);
+        auto& guard = data->AddMonster(105);
+        guard.Clear();
+        guard.set_id(105);
+        guard.set_is_boss(0);
+        guard.set_health(1500);
+        guard.set_speed(60);
+
+        auto* p = req.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("破障客");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(5000);
+        p->set_defense(200);
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(req));
+        uint64_t bossActorId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossActorId = a.actor_id();
+        }
+        ASSERT_NE(bossActorId, 0u);
+        // R1 灵障护卫在慢速阶段给首领附加 12% 护盾，R2 玩家重击直接击破灵障护盾
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_ATTACK, bossActorId));
+        engine.ResolveCurrentRound();
+
+        const auto s = engine.BuildSettlement(kHeroA);
+        ASSERT_TRUE(s.has_trial_facts());
+        EXPECT_EQ(s.trial_facts().journal_entry_id(), 201u);
+        EXPECT_TRUE(s.trial_facts().self_triggered_shield_break());
+    }
+
+    // 2. 卷三 · 护卫救援 (Dungeon 109 → Entry 301)：击败首领且我方受保护护卫存活时 guard_survived == true
+    {
+        CreateBattleRequest req;
+        req.set_battle_id(92022);
+        req.set_match_mode(turnbattle::kMatchModePveSolo);
+        req.set_battle_config_id(109);
+        req.set_seed(29);
+        auto* ctx = req.mutable_trial_context();
+        ctx->set_journal_entry_id(301);
+        ctx->set_trial_rule_version(1);
+        ctx->set_season_id(1);
+        ctx->set_guard_monster_table_id(102);
+
+        auto& d109 = data->AddDungeon(109);
+        d109.Clear();
+        d109.set_id(109);
+        d109.set_boss_trial_kind(turnbattle::kBossTrialKindGuardianRescue);
+        d109.set_difficulty(1);
+        d109.set_round_limit(8);
+        data->SetDungeonMonsters(109, {101, 102});
+        data->AddBattleReward(109, "");
+
+        auto& boss = data->AddMonster(101);
+        boss.Clear();
+        boss.set_id(101);
+        boss.set_is_boss(1);
+        boss.set_health(500);
+        boss.set_speed(50);
+        auto& guard = data->AddMonster(102);
+        guard.Clear();
+        guard.set_id(102);
+        guard.set_is_boss(0);
+        guard.set_health(5000);
+        guard.set_speed(60);
+
+        auto* p = req.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("救援者");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(5000);
+        p->set_defense(200);
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(req));
+        uint64_t bossActorId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && a.is_boss()) bossActorId = a.actor_id();
+        }
+        ASSERT_NE(bossActorId, 0u);
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_ATTACK, bossActorId));
+        engine.ResolveCurrentRound();
+
+        const auto s = engine.BuildSettlement(kHeroA);
+        EXPECT_EQ(s.outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        ASSERT_TRUE(s.has_trial_facts());
+        EXPECT_EQ(s.trial_facts().journal_entry_id(), 301u);
+        EXPECT_TRUE(s.trial_facts().guard_survived());
+    }
+
+    // 3. 卷三 · 物法易势 5V5 (Entry 302)：B 队造成物理+法术双系直伤必须准确写入 B 队结算而非仅限 A 队
+    {
+        AddModernDamageSkill(16301, combatdamage::kMagicDamage, 600);
+        CreateBattleRequest req;
+        req.set_battle_id(92023);
+        req.set_match_mode(turnbattle::kMatchModePolarity5v5);
+        req.set_battle_config_id(110);
+        req.set_seed(31);
+        auto* ctx = req.mutable_trial_context();
+        ctx->set_journal_entry_id(302);
+        ctx->set_trial_rule_version(1);
+        ctx->set_season_id(1);
+
+        auto& d110 = data->AddDungeon(110);
+        d110.Clear();
+        d110.set_id(110);
+        d110.set_boss_trial_kind(turnbattle::kBossTrialKindPolarity5v5);
+        d110.set_round_limit(16);
+
+        auto addMember = [&](uint64_t id, uint32_t team, uint64_t speed) {
+            auto* p = req.add_players();
+            p->set_player_id(id);
+            p->set_player_name("易势选手");
+            p->set_team_index(team);
+            p->set_level(30);
+            p->set_max_health(20000);
+            p->set_max_mana(10000);
+            p->mutable_base_attributes()->set_health(20000);
+            p->mutable_base_attributes()->set_mana(10000);
+            p->mutable_base_attributes()->set_speed(speed);
+            p->set_physical_attack(1200);
+            p->set_magic_attack(1200);
+            p->set_defense(100);
+            p->add_skill_table_ids(16301);
+            (*p->mutable_skill_ranks())[16301] = 1;
+        };
+        addMember(kHeroA, 0, 100);
+        addMember(kEnemy, 1, 300);
+        addMember(kEnemy + 1, 1, 250);
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(req));
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kEnemy, Command(BATTLE_ACTION_ATTACK, kHeroA));
+        engine.SubmitAction(kEnemy + 1, Command(BATTLE_ACTION_SKILL, kHeroA, 16301));
+        engine.ResolveCurrentRound();
+
+        const auto sA = engine.BuildSettlement(kHeroA);
+        const auto sB = engine.BuildSettlement(kEnemy);
+        ASSERT_TRUE(sA.has_trial_facts());
+        ASSERT_TRUE(sB.has_trial_facts());
+        EXPECT_FALSE(sA.trial_facts().team_dealt_physical_direct_damage());
+        EXPECT_FALSE(sA.trial_facts().team_dealt_magic_direct_damage());
+        EXPECT_TRUE(sB.trial_facts().team_dealt_physical_direct_damage());
+        EXPECT_TRUE(sB.trial_facts().team_dealt_magic_direct_damage());
+    }
+}

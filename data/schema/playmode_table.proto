@@ -30,4 +30,7 @@ message PlayModeTable {
   // PVE_SOLO 填 1；PVE_TEAM 填同场人数上限（再与 Dungeon.max_team_size、引擎每队上限 5 取小）；
   // PVP_TEAM 填每侧人数上限（1..5）；其它模式填 0
   uint32 team_size_max = 5;
+  // 允许排队的人数档白名单（占 5 格，仅对 PVP_TEAM / PVE_TEAM 生效）：留空表示 1..team_size_max 全开；
+  // 非空则仅开放列明的人数档（例如首测冷启动填 [1, 3] 仅开放 1V1 与 3V3，在线达标后改表即放开全五档）。
+  repeated uint32 allowed_team_sizes = 6 [(cfg_slots) = 5];
 }

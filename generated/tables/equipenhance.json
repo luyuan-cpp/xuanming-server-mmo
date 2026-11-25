@@ -7,6 +7,7 @@
    "id": 1,
    "material_count": 1,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 10000
   },
   {
@@ -16,6 +17,7 @@
    "id": 2,
    "material_count": 1,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 10000
   },
   {
@@ -25,6 +27,7 @@
    "id": 3,
    "material_count": 2,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 10000
   },
   {
@@ -34,6 +37,7 @@
    "id": 4,
    "material_count": 2,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 9000
   },
   {
@@ -43,6 +47,7 @@
    "id": 5,
    "material_count": 3,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 8000
   },
   {
@@ -52,6 +57,7 @@
    "id": 6,
    "material_count": 3,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 7000
   },
   {
@@ -61,6 +67,7 @@
    "id": 7,
    "material_count": 4,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 6000
   },
   {
@@ -70,6 +77,7 @@
    "id": 8,
    "material_count": 4,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 5000
   },
   {
@@ -79,6 +87,7 @@
    "id": 9,
    "material_count": 5,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 4000
   },
   {
@@ -88,6 +97,7 @@
    "id": 10,
    "material_count": 6,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 3000
   },
   {
@@ -97,6 +107,7 @@
    "id": 11,
    "material_count": 8,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 2500
   },
   {
@@ -106,6 +117,7 @@
    "id": 12,
    "material_count": 10,
    "material_id": 2001,
+   "pity_limit": 0,
    "success_rate": 2000
   },
   {
@@ -116,6 +128,7 @@
    "level": 1,
    "material_count": 2,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -127,6 +140,7 @@
    "level": 2,
    "material_count": 3,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -138,6 +152,7 @@
    "level": 3,
    "material_count": 4,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -149,6 +164,7 @@
    "level": 4,
    "material_count": 5,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -160,6 +176,7 @@
    "level": 5,
    "material_count": 6,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -171,6 +188,7 @@
    "level": 6,
    "material_count": 7,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -182,6 +200,7 @@
    "level": 7,
    "material_count": 9,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -193,6 +212,7 @@
    "level": 8,
    "material_count": 11,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -204,6 +224,7 @@
    "level": 9,
    "material_count": 13,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
   },
@@ -215,8 +236,21 @@
    "level": 10,
    "material_count": 15,
    "material_id": 3002,
+   "pity_limit": 0,
    "profile_id": 1,
    "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 2400,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1011,
+   "level": 11,
+   "material_count": 30,
+   "material_id": 3002,
+   "pity_limit": 20,
+   "profile_id": 1,
+   "success_rate": 1000
   }
  ]
 }

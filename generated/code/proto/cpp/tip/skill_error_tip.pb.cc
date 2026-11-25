@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_skill_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025skill_error_tip.proto*\301\003\n\013skill_error\022"
+    "\n\025skill_error_tip.proto*\327\005\n\013skill_error\022"
     "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt"
     "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k"
     "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN"
@@ -46,15 +46,21 @@ const char descriptor_table_protodef_skill_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "SkillRankChanged\020\3406\022\036\n\031kSkillUpgradeCoun"
     "tInvalid\020\3416\022\031\n\024kSkillLevelNotEnough\020\3426\022\031"
     "\n\024kSkillMaxRankReached\020\3436\022\030\n\023kSkillGoldN"
-    "otEnough\020\3446\022\026\n\021kSkillUpgradeBusy\020\3456B$\n\016c"
-    "om.game.tableZ\022generated/pb/tableb\006proto"
-    "3"
+    "otEnough\020\3446\022\026\n\021kSkillUpgradeBusy\020\3456\022\030\n\023k"
+    "SkillScrollInvalid\020\3466\022\027\n\022kSkillBookNotFo"
+    "und\020\3476\022\036\n\031kSkillBookNotDismantlable\020\3506\022!"
+    "\n\034kSkillCraftMaterialNotEnough\020\3516\022\037\n\032kSk"
+    "illCraftRevisionChanged\020\3526\022\034\n\027kSkillCraf"
+    "tBookRequired\020\3536\022\036\n\031kSkillAlreadyBookUnl"
+    "ocked\020\3546\022#\n\036kSkillProxyStallRequiresMast"
+    "er\020\3556\022\032\n\025kSkillProxyFeeInvalid\020\3566B$\n\016com"
+    ".game.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_skill_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_skill_5ferror_5ftip_2eproto = {
     false,
     false,
-    521,
+    799,
     descriptor_table_protodef_skill_5ferror_5ftip_2eproto,
     "skill_error_tip.proto",
     &descriptor_table_skill_5ferror_5ftip_2eproto_once,
@@ -73,7 +79,7 @@ skill_error_descriptor() {
   return file_level_enum_descriptors_skill_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t skill_error_internal_data_[] = {
-    65536u, 917504u, 7007u, 7003u, 7011u, 7001u, 7005u, 7009u, 7013u, 7000u, 7002u, 7004u, 7006u, 7008u, 7010u, 7012u, };
+    65536u, 1507328u, 7015u, 7007u, 7019u, 7003u, 7011u, 7017u, 7021u, 7001u, 7005u, 7009u, 7013u, 7016u, 7018u, 7020u, 7022u, 7000u, 7002u, 7004u, 7006u, 7008u, 7010u, 7012u, 7014u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

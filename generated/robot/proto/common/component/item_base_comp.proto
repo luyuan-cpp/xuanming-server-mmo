@@ -36,7 +36,9 @@ message EquipGem
 // V1 固定词条只保存选择；槽位 1/2 是词条位身份，不是装备穿戴位置。
 message EquipFixedAffix {
   uint32 slot = 1;
-  uint32 affix_id = 2; // EquipV1Affix.id；数值与显示由规则表提供。
+  uint32 affix_id = 2;          // EquipV1Affix.id；满值与显示由规则表提供。
+  uint32 quality_tier = 3;      // 5 档品相（1凡品80%..5极品100%）；0 = 历史旧档按满值 5 档兼容。
+  uint32 polish_pity_count = 4; // 单条打磨累计未出极品次数（0..7，>=7 下次必出极品 5 档）；换词条 100% 保留。
 }
 
 message EquipInstanceData
@@ -45,6 +47,9 @@ message EquipInstanceData
 	uint32 enhance_level = 2;	// 强化等级(+N),0 = 未强化。入库的只有「+几」,加成按 EquipEnhance 表现查
 	repeated EquipGem gems = 3;	// 已镶嵌宝石;同一 socket 至多一条
 	repeated EquipFixedAffix fixed_affixes = 4; // V1 首次安装的固定词条，不与旧颜色档混用。
+	uint32 enhance_pity_count = 5; // 当前目标强化等级的失败保底累计次数；强化成功归零，随实例完整持久化与升档继承。
+	string crafter_name = 6;       // 宗师打造/打磨出满值极品时烙印的永久署名（0 战力加成）。
+	uint64 crafter_player_id = 7;  // 宗师玩家 ID（仅追溯）。
 }
 
 message ItemComp

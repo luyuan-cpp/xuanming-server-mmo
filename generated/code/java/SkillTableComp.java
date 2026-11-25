@@ -323,6 +323,18 @@ public final class SkillTableComp {
         }
     }
 
+    public record Scroll_id(int value) {
+        public static Scroll_id from(SkillTable row) {
+            return new Scroll_id(row.getScrollId());
+        }
+    }
+
+    public record Rarity_tier(int value) {
+        public static Rarity_tier from(SkillTable row) {
+            return new Rarity_tier(row.getRarityTier());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());

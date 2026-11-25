@@ -17,6 +17,7 @@ struct PlayModeTableSnapshot {
 
     PlayModeTableData data;
     IdMapType idMap;
+    std::unordered_multimap<uint32_t, const PlayModeTable*> allowedTeamSizesIndex;
     std::unordered_map<uint32_t, std::vector<const PlayModeTable*>> battleConfigIdIndex;
     const PlayModeTable* FindRowById(uint32_t tableId) const {
         const auto it = idMap.find(tableId);
@@ -74,6 +75,7 @@ public:
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
     // FK: battle_config_id -> Dungeon.id
+    const std::unordered_multimap<uint32_t, const PlayModeTable*>& GetAllowedTeamSizesIndex() const { return snapshot->allowedTeamSizesIndex; }
     const std::unordered_map<uint32_t, std::vector<const PlayModeTable*>>& GetBattleConfigIdIndex() const { return snapshot->battleConfigIdIndex; }
     const std::vector<const PlayModeTable*>& GetByBattleConfigId(uint32_t key) const {
         static const std::vector<const PlayModeTable*> kEmpty;
@@ -88,6 +90,7 @@ public:
     // ---- Count ----
 
     std::size_t Count() const { return snapshot->idMap.size(); }
+    std::size_t CountByAllowedTeamSizesIndex(uint32_t key) const { return snapshot->allowedTeamSizesIndex.count(key); }
     std::size_t CountByBattleConfigIdIndex(uint32_t key) const {
         auto it = snapshot->battleConfigIdIndex.find(key);
         return it != snapshot->battleConfigIdIndex.end() ? it->second.size() : 0;

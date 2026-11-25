@@ -461,3 +461,37 @@ func TestPlayerTradeGuardConfigValidation(t *testing.T) {
 		t.Error("MaxReferenceDeviationPct >= 100 must fail validation")
 	}
 }
+
+func TestSellerCreditConfigValidation(t *testing.T) {
+	base := func() Config {
+		c := validConfig()
+		c.Market.Scope = ScopeGlobal
+		c.AssetOp.Enabled = true
+		c.AssetOp.SecretEnv = AssetOpSecretEnvPrefix + "TRADE"
+		return c
+	}
+
+	c := base()
+	c.Commerce.SellerCredit = SellerCreditConf{
+		ReviewWindowMs:                  7 * 24 * 3600 * 1000,
+		PairScoreWindowMs:               7 * 24 * 3600 * 1000,
+		MaxScoredReviewsPerPairInWindow: 1,
+		MinScoreAmountMinor:             100,
+		PostEnvChangeScoreCooldownMs:    24 * 3600 * 1000,
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid SellerCredit config should pass: %v", err)
+	}
+
+	c = base()
+	c.Commerce.SellerCredit.MaxScoredReviewsPerPairInWindow = 11
+	if err := c.Validate(); err == nil {
+		t.Error("MaxScoredReviewsPerPairInWindow > 10 must fail validation")
+	}
+
+	c = base()
+	c.Commerce.SellerCredit.PostEnvChangeScoreCooldownMs = 31 * 24 * 3600 * 1000
+	if err := c.Validate(); err == nil {
+		t.Error("PostEnvChangeScoreCooldownMs > 30 days must fail validation")
+	}
+}

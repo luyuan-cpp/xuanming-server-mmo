@@ -49,6 +49,7 @@
 #include "proto/common/component/player_mail_outbox_comp.pb.h"
 #include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/player_trial_journal_comp.pb.h"
+#include "proto/common/component/player_craft_comp.pb.h"
 #include "proto/common/component/time_comp.pb.h"
 #include "proto/common/component/buff_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -2551,6 +2552,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kSkillCooldownsFieldNumber = 28,
     kSeasonComponentFieldNumber = 30,
     kTrialJournalComponentFieldNumber = 31,
+    kCraftComponentFieldNumber = 32,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
@@ -2959,6 +2961,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerTrialJournalComp* PROTOBUF_NONNULL _internal_mutable_trial_journal_component();
 
   public:
+  // .PlayerCraftComp craft_component = 32 [(.OptionPersistGroup) = 3];
+  [[nodiscard]] bool has_craft_component()
+      const;
+  void clear_craft_component() ;
+  [[nodiscard]] const ::PlayerCraftComp& craft_component() const;
+  [[nodiscard]] ::PlayerCraftComp* PROTOBUF_NULLABLE release_craft_component();
+  ::PlayerCraftComp* PROTOBUF_NONNULL mutable_craft_component();
+  void set_allocated_craft_component(::PlayerCraftComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_craft_component(::PlayerCraftComp* PROTOBUF_NULLABLE value);
+  ::PlayerCraftComp* PROTOBUF_NULLABLE unsafe_arena_release_craft_component();
+
+  private:
+  const ::PlayerCraftComp& _internal_craft_component() const;
+  ::PlayerCraftComp* PROTOBUF_NONNULL _internal_mutable_craft_component();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2983,8 +3001,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 27,
-                          25, 0,
+      ::google::protobuf::internal::TcParseTable<5, 28,
+                          26, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3037,6 +3055,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::CooldownTimeListComp* PROTOBUF_NULLABLE skill_cooldowns_;
     ::PlayerSeasonComp* PROTOBUF_NULLABLE season_component_;
     ::PlayerTrialJournalComp* PROTOBUF_NULLABLE trial_journal_component_;
+    ::PlayerCraftComp* PROTOBUF_NULLABLE craft_component_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4055,7 +4074,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -4063,7 +4082,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -5474,7 +5493,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5482,7 +5501,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -6379,6 +6398,99 @@ inline void player_database::set_allocated_trial_journal_component(::PlayerTrial
 
   _impl_.trial_journal_component_ = reinterpret_cast<::PlayerTrialJournalComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.trial_journal_component)
+}
+
+// .PlayerCraftComp craft_component = 32 [(.OptionPersistGroup) = 3];
+inline bool player_database::has_craft_component() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x02000000U);
+  PROTOBUF_ASSUME(!value || _impl_.craft_component_ != nullptr);
+  return value;
+}
+inline const ::PlayerCraftComp& player_database::_internal_craft_component() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerCraftComp* p = _impl_.craft_component_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerCraftComp>(&::PlayerCraftComp_globals_);
+}
+inline const ::PlayerCraftComp& player_database::craft_component() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.craft_component)
+  return _internal_craft_component();
+}
+inline void player_database::unsafe_arena_set_allocated_craft_component(
+    ::PlayerCraftComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.craft_component_);
+  }
+  _impl_.craft_component_ = reinterpret_cast<::PlayerCraftComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.craft_component)
+}
+inline ::PlayerCraftComp* PROTOBUF_NULLABLE player_database::release_craft_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ::PlayerCraftComp* released = _impl_.craft_component_;
+  _impl_.craft_component_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerCraftComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_craft_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.craft_component)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ::PlayerCraftComp* temp = _impl_.craft_component_;
+  _impl_.craft_component_ = nullptr;
+  return temp;
+}
+inline ::PlayerCraftComp* PROTOBUF_NONNULL player_database::_internal_mutable_craft_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.craft_component_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerCraftComp>(GetArena());
+    _impl_.craft_component_ = reinterpret_cast<::PlayerCraftComp*>(p);
+  }
+  return _impl_.craft_component_;
+}
+inline ::PlayerCraftComp* PROTOBUF_NONNULL player_database::mutable_craft_component()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ::PlayerCraftComp* _msg = _internal_mutable_craft_component();
+  // @@protoc_insertion_point(field_mutable:player_database.craft_component)
+  return _msg;
+}
+inline void player_database::set_allocated_craft_component(::PlayerCraftComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.craft_component_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  }
+
+  _impl_.craft_component_ = reinterpret_cast<::PlayerCraftComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.craft_component)
 }
 
 // -------------------------------------------------------------------

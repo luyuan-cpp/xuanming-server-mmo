@@ -54,6 +54,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	CooldownTable = NewObject<UCooldownTable>(this);
 	DungeonTable = NewObject<UDungeonTable>(this);
 	EquipAffixPoolTable = NewObject<UEquipAffixPoolTable>(this);
+	EquipAffixQualityTable = NewObject<UEquipAffixQualityTable>(this);
 	EquipAffixRuleTable = NewObject<UEquipAffixRuleTable>(this);
 	EquipArtifactTable = NewObject<UEquipArtifactTable>(this);
 	EquipAttributeTable = NewObject<UEquipAttributeTable>(this);
@@ -90,8 +91,11 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	SeasonSealTable = NewObject<USeasonSealTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
+	SkillScrollCraftTable = NewObject<USkillScrollCraftTable>(this);
 	TestTable = NewObject<UTestTable>(this);
 	TestMultiKeyTable = NewObject<UTestMultiKeyTable>(this);
+	TournamentRewardTable = NewObject<UTournamentRewardTable>(this);
+	TournamentRuleTable = NewObject<UTournamentRuleTable>(this);
 	TrialJournalEntryTable = NewObject<UTrialJournalEntryTable>(this);
 	TrialJournalMilestoneTable = NewObject<UTrialJournalMilestoneTable>(this);
 	TrialJournalSealTable = NewObject<UTrialJournalSealTable>(this);
@@ -122,6 +126,7 @@ void UConfigSubsystem::Deinitialize()
 	CooldownTable = nullptr;
 	DungeonTable = nullptr;
 	EquipAffixPoolTable = nullptr;
+	EquipAffixQualityTable = nullptr;
 	EquipAffixRuleTable = nullptr;
 	EquipArtifactTable = nullptr;
 	EquipAttributeTable = nullptr;
@@ -158,8 +163,11 @@ void UConfigSubsystem::Deinitialize()
 	SeasonSealTable = nullptr;
 	SkillTable = nullptr;
 	SkillPermissionTable = nullptr;
+	SkillScrollCraftTable = nullptr;
 	TestTable = nullptr;
 	TestMultiKeyTable = nullptr;
+	TournamentRewardTable = nullptr;
+	TournamentRuleTable = nullptr;
 	TrialJournalEntryTable = nullptr;
 	TrialJournalMilestoneTable = nullptr;
 	TrialJournalSealTable = nullptr;
@@ -195,6 +203,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UCooldownTable::FileName(),
 		UDungeonTable::FileName(),
 		UEquipAffixPoolTable::FileName(),
+		UEquipAffixQualityTable::FileName(),
 		UEquipAffixRuleTable::FileName(),
 		UEquipArtifactTable::FileName(),
 		UEquipAttributeTable::FileName(),
@@ -231,8 +240,11 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		USeasonSealTable::FileName(),
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
+		USkillScrollCraftTable::FileName(),
 		UTestTable::FileName(),
 		UTestMultiKeyTable::FileName(),
+		UTournamentRewardTable::FileName(),
+		UTournamentRuleTable::FileName(),
 		UTrialJournalEntryTable::FileName(),
 		UTrialJournalMilestoneTable::FileName(),
 		UTrialJournalSealTable::FileName(),
@@ -535,6 +547,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!EquipAffixPoolTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (EquipAffixQualityTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipAffixQuality] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!EquipAffixQualityTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1047,6 +1073,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (SkillScrollCraftTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillScrollCraft] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!SkillScrollCraftTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (TestTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Test] 管理器未创建"));
@@ -1067,6 +1107,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!TestMultiKeyTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TournamentRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TournamentRewardTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (TournamentRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TournamentRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1590,6 +1658,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!EquipAffixPoolTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (EquipAffixQualityTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipAffixQuality] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UEquipAffixQualityTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipAffixQuality] 取不到 %s"), UEquipAffixQualityTable::FileName());
+		bAllOk = false;
+	}
+	else if (!EquipAffixQualityTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2319,6 +2407,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (SkillScrollCraftTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillScrollCraft] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(USkillScrollCraftTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[SkillScrollCraft] 取不到 %s"), USkillScrollCraftTable::FileName());
+		bAllOk = false;
+	}
+	else if (!SkillScrollCraftTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (TestTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[Test] 管理器未创建"));
@@ -2350,6 +2458,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!TestMultiKeyTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TournamentRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTournamentRewardTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentReward] 取不到 %s"), UTournamentRewardTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TournamentRewardTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (TournamentRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UTournamentRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[TournamentRule] 取不到 %s"), UTournamentRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!TournamentRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

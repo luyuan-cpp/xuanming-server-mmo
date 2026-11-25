@@ -330,10 +330,11 @@ TEST_F(PlayerAppearanceSystemTest, PermanentWardrobeFreeSwitchFailClosedAndUnkno
 	EXPECT_EQ(profile.appearance_owned_bits(), seedBits); // 只读不脏写
 	EXPECT_TRUE(player_appearance::IsBitMarked(initialInfo.owned_bits(), 2));
 	EXPECT_EQ(static_cast<unsigned char>(initialInfo.owned_bits()[2]), 0x02u);
-	ASSERT_EQ(initialInfo.appearances_size(), 8);
+	ASSERT_EQ(initialInfo.appearances_size(), 9);
 	for (const auto &entry : initialInfo.appearances())
 	{
-		EXPECT_TRUE(entry.card_unlockable());
+		// 20_star_formation_master_girl(id=11) 为五行试炼志 M901 专属形象(card_unlockable=0)，其余 8 项支持形象卡解锁。
+		EXPECT_EQ(entry.card_unlockable(), entry.appearance_id() != "20_star_formation_master_girl");
 		EXPECT_EQ(entry.owned(), entry.appearance_id() == "00_reference_topright_boy");
 	}
 

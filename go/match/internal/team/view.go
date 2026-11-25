@@ -60,7 +60,12 @@ func teamViewFor(viewer uint64, rec *teampb.TeamRecord, version, epoch, nowMs ui
 	}
 	for _, pid := range MemberIds(live) { // join_seq 升序;客户端仍按 join_seq 字段排序(§11.6)
 		m := FindMember(live, pid)
-		view.Members = append(view.Members, memberView(pid, zones.Final(m.GetZoneId()), m.GetJoinSeq(), leader, dc))
+		mv := memberView(pid, zones.Final(m.GetZoneId()), m.GetJoinSeq(), leader, dc)
+		mv.RankedCharacterPresetId = m.GetRankedCharacterPresetId()
+		mv.RankedPetPresetId = m.GetRankedPetPresetId()
+		mv.RankedRuleVersion = m.GetRankedRuleVersion()
+		mv.RankedPresetConfirmed = m.GetRankedPresetConfirmed()
+		view.Members = append(view.Members, mv)
 	}
 	if viewer == 0 || viewer != leader {
 		return view

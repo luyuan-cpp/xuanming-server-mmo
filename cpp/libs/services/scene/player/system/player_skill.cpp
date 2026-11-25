@@ -14,6 +14,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
 #include "player/system/player_attribute.h"
+#include "player/system/player_craft.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
@@ -587,13 +588,16 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	const uint32_t busyTip = CheckSkillWritable(player);
 	SupportEffectSummary support;
 	PlayerSupportEffectSystem::Build(player, support);
+	const bool craftGateEnabled = PlayerCraftSystem::IsCraftUnlockGateEnabled();
 	for (const auto *row : rows)
 	{
 		auto* entry = response.add_catalog();
 		const uint32_t rank = row->season_id() != 0
 			? seasonrules::EffectiveSeasonalSkillRank(level, row->unlock_level(), row->max_rank())
 			: StoredRank(list, row->id());
-		FillCatalogEntry(*row, rank, level, balance, busyTip, false, *entry);
+		const bool craftRequired = craftGateEnabled && row->season_id() == 0 && row->scroll_id() > 0;
+		const bool unlockedByBook = PlayerCraftSystem::IsSkillBookUnlocked(player, row->id());
+		FillCatalogEntry(*row, rank, level, balance, busyTip, false, *entry, craftRequired, unlockedByBook);
 		for (const auto& preview : support.previews()) if (preview.skill_table_id() == row->id()) {
 			*entry->mutable_support_preview() = preview; break;
 		}
@@ -602,7 +606,8 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 }
 
 void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
-	uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view)
+	uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view,
+	bool craftUnlockRequired, bool unlockedByBook)
 {
 	const auto rankLimit = classskill::RankLimit(level, row.unlock_level(), row.max_rank());
 	const bool isSeasonal = row.season_id() != 0;
@@ -629,8 +634,14 @@ void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, u
 	view.set_caster_mask(row.caster_mask());
 	view.set_action_tags(row.action_tags());
 	view.set_season_id(row.season_id());
+	view.set_scroll_id(row.scroll_id());
+	view.set_rarity_tier(row.rarity_tier());
+	view.set_craft_unlock_required(craftUnlockRequired);
+	view.set_unlocked_by_book(unlockedByBook);
+	const bool blockedByBook = craftUnlockRequired && !unlockedByBook && rank == 0;
 	view.set_upgrade_block_tip_id(isSeasonal ? static_cast<uint32_t>(kSeasonSkillNoUpgrade) :
-		busyTip != 0 ? busyTip : rank >= row.max_rank() ? kSkillMaxRankReached :
+		busyTip != 0 ? busyTip : blockedByBook ? static_cast<uint32_t>(kSkillCraftBookRequired) :
+		rank >= row.max_rank() ? kSkillMaxRankReached :
 		rank >= rankLimit ? kSkillLevelNotEnough : nextCost > balance ? kSkillGoldNotEnough : 0);
 }
 
@@ -695,6 +706,12 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 
 	auto &list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
 	const auto storedRank = StoredRank(list, row->id());
+	if (storedRank == 0 && PlayerCraftSystem::IsCraftUnlockGateEnabled() && row->scroll_id() > 0 &&
+		!PlayerCraftSystem::IsSkillBookUnlocked(player, row->id()))
+	{
+		finish(kSkillCraftBookRequired);
+		return;
+	}
 	// 乐观比较:客户端按它看到的等级提交。对不上说明这是旧请求的重放或别处已经改过,整笔拒绝、不扣钱
 	if (storedRank != request.expected_rank())
 	{

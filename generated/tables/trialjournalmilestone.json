@@ -50,6 +50,85 @@
    "scope_chapter_id": 1,
    "season_id": 0,
    "title": "破阵尽墨"
+  },
+  {
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 2,
+   "desc": "卷二累计点亮 3 枚战法印，获赠 1 张自用法宝拓印与 2 份仅自用重铸砂。",
+   "enabled": true,
+   "id": 201,
+   "required_seals": 3,
+   "scope_chapter_id": 2,
+   "season_id": 0,
+   "title": "破障初成"
+  },
+  {
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 0,
+   "desc": "卷二累计点亮 6 枚战法印，获赠第 5 张自用法宝拓印。",
+   "enabled": true,
+   "id": 202,
+   "required_seals": 6,
+   "scope_chapter_id": 2,
+   "season_id": 0,
+   "title": "涤毒明心"
+  },
+  {
+   "badge_key": "badge_trial_three_bosses",
+   "badge_name": "三首问道",
+   "bound_artifact_voucher_count": 1,
+   "bound_sand_count": 0,
+   "commentary_body": "后厨蒸笼刚掀开，停云就把你破灵障、解玄毒的战报折成纸船放在灶台上。她说从前只觉盾厚最难啃、毒阵最磨人，如今看你一边换法宝破障、一边拿清心和赛季技稳住阵脚，倒像熬一锅五味汤——火候对了，样样都能化开。面碗我给你留着最满的一勺青葱，打完记得回留灯院坐坐。",
+   "commentary_key": "commentary_ahe_trial_v2",
+   "commentary_title": "阿禾·三首记",
+   "desc": "卷二累计点亮 9 枚战法印，获赠第 6 张自用法宝拓印（集齐 8 法宝闭环）、名片印戳「三首问道」与留灯院评语《阿禾·三首记》。",
+   "enabled": true,
+   "id": 203,
+   "required_seals": 9,
+   "scope_chapter_id": 2,
+   "season_id": 0,
+   "title": "三首问道"
+  },
+  {
+   "badge_key": "badge_trial_grandmaster",
+   "badge_name": "五行宗师",
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 0,
+   "commentary_body": "十八枚金印落满宣纸那夜，太极广场的灯影正好映在星图上。你既能三招破阵，也肯为队友守心解厄——这一袭星阵宗师法衣不卖银两、不增半点战力，只留给把五行战法真正打通的问道之人。",
+   "commentary_key": "commentary_grandmaster_v2",
+   "commentary_title": "留灯院·试炼宗师跋",
+   "desc": "永久卷一与卷二合计点亮 18/24 枚战法印（留 6 印容错），永久免费解锁零战力专属角色形象「星阵宗师」与名片印戳「五行宗师」。",
+   "enabled": true,
+   "grant_appearance_id": "20_star_formation_master_girl",
+   "id": 901,
+   "required_seals": 18,
+   "scope_chapter_id": 0,
+   "season_id": 0,
+   "title": "五行宗师"
+  },
+  {
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 1,
+   "desc": "破阵之季卷三累计点亮 2 枚赛季印，获赠 1 份仅自用重铸砂。",
+   "enabled": true,
+   "id": 301,
+   "required_seals": 2,
+   "scope_chapter_id": 3,
+   "season_id": 1,
+   "title": "季游初试"
+  },
+  {
+   "badge_key": "badge_season_s1_trial",
+   "badge_name": "破阵季游",
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 1,
+   "desc": "破阵之季卷三累计点亮 4 枚赛季印，获赠 1 份仅自用重铸砂与破阵之季纪念印戳「破阵季游」。",
+   "enabled": true,
+   "id": 302,
+   "required_seals": 4,
+   "scope_chapter_id": 3,
+   "season_id": 1,
+   "title": "破阵奇谈"
   }
  ]
 }

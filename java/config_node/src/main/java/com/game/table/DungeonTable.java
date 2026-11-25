@@ -134,6 +134,39 @@ private static final long serialVersionUID = 0L;
     return allowPetCapture_;
   }
 
+  public static final int BOSS_TRIAL_KIND_FIELD_NUMBER = 7;
+  private int bossTrialKind_ = 0;
+  /**
+   * <code>uint32 boss_trial_kind = 7;</code>
+   * @return The bossTrialKind.
+   */
+  @java.lang.Override
+  public int getBossTrialKind() {
+    return bossTrialKind_;
+  }
+
+  public static final int DIFFICULTY_FIELD_NUMBER = 8;
+  private int difficulty_ = 0;
+  /**
+   * <code>uint32 difficulty = 8;</code>
+   * @return The difficulty.
+   */
+  @java.lang.Override
+  public int getDifficulty() {
+    return difficulty_;
+  }
+
+  public static final int ROUND_LIMIT_FIELD_NUMBER = 9;
+  private int roundLimit_ = 0;
+  /**
+   * <code>uint32 round_limit = 9;</code>
+   * @return The roundLimit.
+   */
+  @java.lang.Override
+  public int getRoundLimit() {
+    return roundLimit_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -170,6 +203,15 @@ private static final long serialVersionUID = 0L;
     }
     if (allowPetCapture_ != 0) {
       output.writeUInt32(6, allowPetCapture_);
+    }
+    if (bossTrialKind_ != 0) {
+      output.writeUInt32(7, bossTrialKind_);
+    }
+    if (difficulty_ != 0) {
+      output.writeUInt32(8, difficulty_);
+    }
+    if (roundLimit_ != 0) {
+      output.writeUInt32(9, roundLimit_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -209,6 +251,18 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(6, allowPetCapture_);
     }
+    if (bossTrialKind_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(7, bossTrialKind_);
+    }
+    if (difficulty_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, difficulty_);
+    }
+    if (roundLimit_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, roundLimit_);
+    }
     return size;
   }
   @java.lang.Override
@@ -245,6 +299,12 @@ private static final long serialVersionUID = 0L;
         .equals(other.getMonsterList())) return false;
     if (getAllowPetCapture()
         != other.getAllowPetCapture()) return false;
+    if (getBossTrialKind()
+        != other.getBossTrialKind()) return false;
+    if (getDifficulty()
+        != other.getDifficulty()) return false;
+    if (getRoundLimit()
+        != other.getRoundLimit()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -270,6 +330,12 @@ private static final long serialVersionUID = 0L;
     }
     hash = (37 * hash) + ALLOW_PET_CAPTURE_FIELD_NUMBER;
     hash = (53 * hash) + getAllowPetCapture();
+    hash = (37 * hash) + BOSS_TRIAL_KIND_FIELD_NUMBER;
+    hash = (53 * hash) + getBossTrialKind();
+    hash = (37 * hash) + DIFFICULTY_FIELD_NUMBER;
+    hash = (53 * hash) + getDifficulty();
+    hash = (37 * hash) + ROUND_LIMIT_FIELD_NUMBER;
+    hash = (53 * hash) + getRoundLimit();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -407,6 +473,9 @@ private static final long serialVersionUID = 0L;
       timeLimit_ = 0;
       monster_ = emptyIntList();
       allowPetCapture_ = 0;
+      bossTrialKind_ = 0;
+      difficulty_ = 0;
+      roundLimit_ = 0;
       return this;
     }
 
@@ -459,6 +528,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.allowPetCapture_ = allowPetCapture_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.bossTrialKind_ = bossTrialKind_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.difficulty_ = difficulty_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.roundLimit_ = roundLimit_;
+      }
     }
 
     @java.lang.Override
@@ -498,6 +576,15 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getAllowPetCapture() != 0) {
         setAllowPetCapture(other.getAllowPetCapture());
+      }
+      if (other.getBossTrialKind() != 0) {
+        setBossTrialKind(other.getBossTrialKind());
+      }
+      if (other.getDifficulty() != 0) {
+        setDifficulty(other.getDifficulty());
+      }
+      if (other.getRoundLimit() != 0) {
+        setRoundLimit(other.getRoundLimit());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -566,6 +653,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 48
+            case 56: {
+              bossTrialKind_ = input.readUInt32();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              difficulty_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              roundLimit_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -823,6 +925,102 @@ private static final long serialVersionUID = 0L;
     public Builder clearAllowPetCapture() {
       bitField0_ = (bitField0_ & ~0x00000020);
       allowPetCapture_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int bossTrialKind_ ;
+    /**
+     * <code>uint32 boss_trial_kind = 7;</code>
+     * @return The bossTrialKind.
+     */
+    @java.lang.Override
+    public int getBossTrialKind() {
+      return bossTrialKind_;
+    }
+    /**
+     * <code>uint32 boss_trial_kind = 7;</code>
+     * @param value The bossTrialKind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBossTrialKind(int value) {
+
+      bossTrialKind_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 boss_trial_kind = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBossTrialKind() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      bossTrialKind_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int difficulty_ ;
+    /**
+     * <code>uint32 difficulty = 8;</code>
+     * @return The difficulty.
+     */
+    @java.lang.Override
+    public int getDifficulty() {
+      return difficulty_;
+    }
+    /**
+     * <code>uint32 difficulty = 8;</code>
+     * @param value The difficulty to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDifficulty(int value) {
+
+      difficulty_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 difficulty = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDifficulty() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      difficulty_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int roundLimit_ ;
+    /**
+     * <code>uint32 round_limit = 9;</code>
+     * @return The roundLimit.
+     */
+    @java.lang.Override
+    public int getRoundLimit() {
+      return roundLimit_;
+    }
+    /**
+     * <code>uint32 round_limit = 9;</code>
+     * @param value The roundLimit to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoundLimit(int value) {
+
+      roundLimit_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 round_limit = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoundLimit() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      roundLimit_ = 0;
       onChanged();
       return this;
     }

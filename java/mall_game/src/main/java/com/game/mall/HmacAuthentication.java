@@ -60,7 +60,8 @@ public class HmacAuthentication extends OncePerRequestFilter {
         Map.entry("/internal/admin/manual/list", "admin"),
         Map.entry("/internal/admin/manual/orders/resolve", "admin"),
         Map.entry("/internal/admin/manual/refunds/resolve", "admin"),
-        Map.entry("/internal/admin/manual/consignments/resolve", "admin"));
+        Map.entry("/internal/admin/manual/consignments/resolve", "admin"),
+        Map.entry("/internal/admin/manual/incomes/dispute", "admin"));
     private final CommerceProperties props;
     private final NonceStore nonces;
     public HmacAuthentication(CommerceProperties props, NonceStore nonces) { this.props = props; this.nonces = nonces; }

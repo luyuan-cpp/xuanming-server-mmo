@@ -1,0 +1,32 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "SkillScrollCraftTableOuterClass";
+option java_multiple_files = true;
+
+
+message SkillScrollCraftTable {
+	uint32 id = 1;
+	string name = 2;
+	string description = 3;
+	uint32 rarity_tier = 4;
+	uint32 fragment_item_id = 5;
+	uint32 random_fragment_count = 6;
+	uint64 random_gold_cost = 7;
+	uint32 targeted_fragment_count = 8;
+	uint64 targeted_gold_cost = 9;
+	uint32 dismantle_fragment_count = 10;
+	uint32 rare_scroll_item_id = 11;
+	uint32 rare_scroll_count = 12;
+	uint32 rare_ink_item_id = 13;
+	uint32 rare_ink_count = 14;
+	uint64 rare_gold_cost = 15;
+	uint32 enabled = 16;
+}
+
+message SkillScrollCraftTableData {
+	repeated SkillScrollCraftTable data = 1;
+}

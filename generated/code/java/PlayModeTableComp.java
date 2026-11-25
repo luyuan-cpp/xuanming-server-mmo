@@ -47,4 +47,10 @@ public final class PlayModeTableComp {
         }
     }
 
+    public record Allowed_team_sizes(List<Integer> values) {
+        public static Allowed_team_sizes from(PlayModeTable row) {
+            return new Allowed_team_sizes(row.getAllowedTeamSizesList());
+        }
+    }
+
 }

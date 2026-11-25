@@ -119,6 +119,186 @@
    "id": 1043,
    "seal_slot_kind": 3,
    "title": "破势"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关普通·灵障（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 201,
+   "id": 2011,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 7,
+   "condition_type": 2,
+   "desc": "7 回合内有效通关普通·灵障",
+   "enabled": true,
+   "entry_id": 201,
+   "id": 2012,
+   "seal_slot_kind": 4,
+   "title": "速破"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 11,
+   "desc": "普通·灵障中本人击破灵障护盾或触发破盾削盾并通关",
+   "enabled": true,
+   "entry_id": 201,
+   "id": 2013,
+   "seal_slot_kind": 3,
+   "title": "破障"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关普通·玄毒（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 202,
+   "id": 2021,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 7,
+   "condition_type": 2,
+   "desc": "7 回合内有效通关普通·玄毒",
+   "enabled": true,
+   "entry_id": 202,
+   "id": 2022,
+   "seal_slot_kind": 4,
+   "title": "速破"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 12,
+   "desc": "普通·玄毒中本人抵御缚灵/净化或施放赛季技并通关",
+   "enabled": true,
+   "entry_id": 202,
+   "id": 2023,
+   "seal_slot_kind": 3,
+   "title": "明心"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关困难·灵障（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 203,
+   "id": 2031,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "困难·灵障中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 203,
+   "id": 2032,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 11,
+   "desc": "困难·灵障中本人击破灵障护盾或触发破盾削盾并通关",
+   "enabled": true,
+   "entry_id": 203,
+   "id": 2033,
+   "seal_slot_kind": 3,
+   "title": "破障"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关困难·玄毒（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 204,
+   "id": 2041,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "困难·玄毒中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 204,
+   "id": 2042,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 12,
+   "desc": "困难·玄毒中本人抵御缚灵/净化或施放赛季技并通关",
+   "enabled": true,
+   "entry_id": 204,
+   "id": 2043,
+   "seal_slot_kind": 3,
+   "title": "明心"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 301,
+   "id": 3011,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 301,
+   "id": 3012,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在当季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 302,
+   "id": 3021,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 302,
+   "id": 3022,
+   "seal_slot_kind": 3,
+   "title": "双势兼济"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 11,
+   "desc": "正式人宠会武合格对局中本人触发破盾效果并造成有效削盾",
+   "enabled": true,
+   "entry_id": 303,
+   "id": 3031,
+   "seal_slot_kind": 3,
+   "title": "破障锋芒"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 12,
+   "desc": "正式人宠会武合格对局中本人触发清心抗控、净化或施放本季赛季技",
+   "enabled": true,
+   "entry_id": 303,
+   "id": 3032,
+   "seal_slot_kind": 3,
+   "title": "明心应劫"
   }
  ]
 }

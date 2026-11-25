@@ -218,6 +218,14 @@ struct SkillSeason_idComp {
     uint32_t value;
 };
 
+struct SkillScroll_idComp {
+    uint32_t value;
+};
+
+struct SkillRarity_tierComp {
+    uint32_t value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -391,6 +399,12 @@ inline SkillForbid_copyComp MakeSkillForbid_copyComp(const SkillTable& row) {
 }
 inline SkillSeason_idComp MakeSkillSeason_idComp(const SkillTable& row) {
     return { row.season_id() };
+}
+inline SkillScroll_idComp MakeSkillScroll_idComp(const SkillTable& row) {
+    return { row.scroll_id() };
+}
+inline SkillRarity_tierComp MakeSkillRarity_tierComp(const SkillTable& row) {
+    return { row.rarity_tier() };
 }
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();

@@ -55,4 +55,20 @@ enum equip_error {
 
   kEquipEnhanceLevelChanged = 28022;
 
+  kEquipAffixAlreadyMaxQuality = 28023;
+
+  kEquipAffixPolishExempt = 28024;
+
+  kEquipAffixSlotEmpty = 28025;
+
+  kEquipAffixReforgeSame = 28026;
+
+  kEquipBindConfirmRequired = 28027;
+
+  kEquipPolishPityChanged = 28028;
+
+  kEquipCraftGoldNotEnough = 28029;
+
+  kEquipProxyMasterUnavailable = 28030;
+
 };

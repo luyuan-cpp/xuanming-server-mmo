@@ -187,7 +187,7 @@ func (r *sqlTraceRows) Next(dest []driver.Value) error {
 // sqlTraceTicketRow 按 ticketColumns 的列序给一行票据。
 func sqlTraceTicketRow(t *pb.MatchAuthorityTicketRecord) *sqlTraceRows {
 	return sqlTraceRow(t.PlayerId, t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, t.State, t.EnqueuedMs, t.NotBeforeMs, t.ZoneId,
-		t.RatingCenti, t.FormationId, t.TeamId, t.NetworkProfile, t.ExpiresMs, t.SelectedRegion, t.OwnerAccount, t.OwnerRevision)
+		t.RatingCenti, t.FormationId, t.TeamId, t.NetworkProfile, t.ExpiresMs, t.SelectedRegion, t.OwnerAccount, t.OwnerRevision, t.RankedContext)
 }
 
 // sqlTraceLaunchRow 按 teamLaunchColumns 的列序给一行整队开战原件。

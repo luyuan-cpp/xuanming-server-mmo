@@ -109,6 +109,10 @@ const (
 	// correlation_id = 客户端幂等键 client_request_id。只追加,不复用旧编号。
 	TransactionType_TX_TRIAL_JOURNAL_MILESTONE TransactionType = 36
 	TransactionType_TX_TRIAL_ARTIFACT_REDEEM   TransactionType = 37
+	// ── V1 装备词条品相打磨/重铸、分卷宗技能制书与主城原子代打(docs/design/equipment-quality-and-skill-crafting-v1.md) ──
+	TransactionType_TX_EQUIP_POLISH_REFORGE TransactionType = 38
+	TransactionType_TX_SKILL_SCROLL_CRAFT   TransactionType = 39
+	TransactionType_TX_CRAFT_PROXY_FEE      TransactionType = 40
 )
 
 // Enum value maps for TransactionType.
@@ -152,6 +156,9 @@ var (
 		35: "TX_SEASON_SEAL_CATCHUP",
 		36: "TX_TRIAL_JOURNAL_MILESTONE",
 		37: "TX_TRIAL_ARTIFACT_REDEEM",
+		38: "TX_EQUIP_POLISH_REFORGE",
+		39: "TX_SKILL_SCROLL_CRAFT",
+		40: "TX_CRAFT_PROXY_FEE",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":                 0,
@@ -192,6 +199,9 @@ var (
 		"TX_SEASON_SEAL_CATCHUP":     35,
 		"TX_TRIAL_JOURNAL_MILESTONE": 36,
 		"TX_TRIAL_ARTIFACT_REDEEM":   37,
+		"TX_EQUIP_POLISH_REFORGE":    38,
+		"TX_SKILL_SCROLL_CRAFT":      39,
+		"TX_CRAFT_PROXY_FEE":         40,
 	}
 )
 
@@ -463,7 +473,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xd5\x06\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xa5\a\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -504,7 +514,10 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x14TX_APPEARANCE_SWITCH\x10\"\x12\x1a\n" +
 	"\x16TX_SEASON_SEAL_CATCHUP\x10#\x12\x1e\n" +
 	"\x1aTX_TRIAL_JOURNAL_MILESTONE\x10$\x12\x1c\n" +
-	"\x18TX_TRIAL_ARTIFACT_REDEEM\x10%B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x18TX_TRIAL_ARTIFACT_REDEEM\x10%\x12\x1b\n" +
+	"\x17TX_EQUIP_POLISH_REFORGE\x10&\x12\x19\n" +
+	"\x15TX_SKILL_SCROLL_CRAFT\x10'\x12\x16\n" +
+	"\x12TX_CRAFT_PROXY_FEE\x10(B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

@@ -1494,6 +1494,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTrialJournalComp final : publ
     kLitSealBitsFieldNumber = 1,
     kClaimedMilestoneBitsFieldNumber = 2,
     kStateRevisionFieldNumber = 3,
+    kNormalBossTrialClearedFieldNumber = 6,
   };
   // repeated .TrialJournalEntryRecord records = 4;
   [[nodiscard]] int records_size()
@@ -1577,11 +1578,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTrialJournalComp final : publ
   void _internal_set_state_revision(::uint64_t value);
 
   public:
+  // bool normal_boss_trial_cleared = 6;
+  void clear_normal_boss_trial_cleared() ;
+  [[nodiscard]] bool normal_boss_trial_cleared() const;
+  void set_normal_boss_trial_cleared(bool value);
+
+  private:
+  bool _internal_normal_boss_trial_cleared() const;
+  void _internal_set_normal_boss_trial_cleared(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerTrialJournalComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1615,6 +1626,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTrialJournalComp final : publ
     ::google::protobuf::internal::ArenaStringPtr lit_seal_bits_;
     ::google::protobuf::internal::ArenaStringPtr claimed_milestone_bits_;
     ::uint64_t state_revision_;
+    bool normal_boss_trial_cleared_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2700,6 +2712,30 @@ inline ::google::protobuf::RepeatedPtrField<::SeasonTrialJournalArchive>* PROTOB
 PlayerTrialJournalComp::_internal_mutable_season_records() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.season_records_;
+}
+
+// bool normal_boss_trial_cleared = 6;
+inline void PlayerTrialJournalComp::clear_normal_boss_trial_cleared() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.normal_boss_trial_cleared_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool PlayerTrialJournalComp::normal_boss_trial_cleared() const {
+  // @@protoc_insertion_point(field_get:PlayerTrialJournalComp.normal_boss_trial_cleared)
+  return _internal_normal_boss_trial_cleared();
+}
+inline void PlayerTrialJournalComp::set_normal_boss_trial_cleared(bool value) {
+  _internal_set_normal_boss_trial_cleared(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PlayerTrialJournalComp.normal_boss_trial_cleared)
+}
+inline bool PlayerTrialJournalComp::_internal_normal_boss_trial_cleared() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.normal_boss_trial_cleared_;
+}
+inline void PlayerTrialJournalComp::_internal_set_normal_boss_trial_cleared(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.normal_boss_trial_cleared_ = value;
 }
 
 #ifdef __GNUC__

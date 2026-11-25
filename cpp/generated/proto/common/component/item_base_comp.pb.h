@@ -467,6 +467,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipFixedAffix final : public ::go
   enum : int {
     kSlotFieldNumber = 1,
     kAffixIdFieldNumber = 2,
+    kQualityTierFieldNumber = 3,
+    kPolishPityCountFieldNumber = 4,
   };
   // uint32 slot = 1;
   void clear_slot() ;
@@ -488,11 +490,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipFixedAffix final : public ::go
   void _internal_set_affix_id(::uint32_t value);
 
   public:
+  // uint32 quality_tier = 3;
+  void clear_quality_tier() ;
+  [[nodiscard]] ::uint32_t quality_tier() const;
+  void set_quality_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_quality_tier() const;
+  void _internal_set_quality_tier(::uint32_t value);
+
+  public:
+  // uint32 polish_pity_count = 4;
+  void clear_polish_pity_count() ;
+  [[nodiscard]] ::uint32_t polish_pity_count() const;
+  void set_polish_pity_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_polish_pity_count() const;
+  void _internal_set_polish_pity_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipFixedAffix)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -523,6 +545,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipFixedAffix final : public ::go
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t slot_;
     ::uint32_t affix_id_;
+    ::uint32_t quality_tier_;
+    ::uint32_t polish_pity_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -918,7 +942,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipInstanceData final : public ::
     kAffixesFieldNumber = 1,
     kGemsFieldNumber = 3,
     kFixedAffixesFieldNumber = 4,
+    kCrafterNameFieldNumber = 6,
     kEnhanceLevelFieldNumber = 2,
+    kEnhancePityCountFieldNumber = 5,
+    kCrafterPlayerIdFieldNumber = 7,
   };
   // repeated .EquipAffix affixes = 1;
   [[nodiscard]] int affixes_size()
@@ -983,6 +1010,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipInstanceData final : public ::
   ::google::protobuf::RepeatedPtrField<::EquipFixedAffix>* PROTOBUF_NONNULL _internal_mutable_fixed_affixes();
 
   public:
+  // string crafter_name = 6;
+  void clear_crafter_name() ;
+  [[nodiscard]] const ::std::string& crafter_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_crafter_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_crafter_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_crafter_name();
+  void set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_crafter_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_crafter_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_crafter_name();
+
+  public:
   // uint32 enhance_level = 2;
   void clear_enhance_level() ;
   [[nodiscard]] ::uint32_t enhance_level() const;
@@ -993,12 +1035,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipInstanceData final : public ::
   void _internal_set_enhance_level(::uint32_t value);
 
   public:
+  // uint32 enhance_pity_count = 5;
+  void clear_enhance_pity_count() ;
+  [[nodiscard]] ::uint32_t enhance_pity_count() const;
+  void set_enhance_pity_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_enhance_pity_count() const;
+  void _internal_set_enhance_pity_count(::uint32_t value);
+
+  public:
+  // uint64 crafter_player_id = 7;
+  void clear_crafter_player_id() ;
+  [[nodiscard]] ::uint64_t crafter_player_id() const;
+  void set_crafter_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_crafter_player_id() const;
+  void _internal_set_crafter_player_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipInstanceData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          3, 0,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          3, 38,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1029,7 +1091,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipInstanceData final : public ::
     ::google::protobuf::RepeatedPtrField< ::EquipAffix > affixes_;
     ::google::protobuf::RepeatedPtrField< ::EquipGem > gems_;
     ::google::protobuf::RepeatedPtrField< ::EquipFixedAffix > fixed_affixes_;
+    ::google::protobuf::internal::ArenaStringPtr crafter_name_;
     ::uint32_t enhance_level_;
+    ::uint32_t enhance_pity_count_;
+    ::uint64_t crafter_player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1519,6 +1584,54 @@ inline void EquipFixedAffix::_internal_set_affix_id(::uint32_t value) {
   _impl_.affix_id_ = value;
 }
 
+// uint32 quality_tier = 3;
+inline void EquipFixedAffix::clear_quality_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.quality_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t EquipFixedAffix::quality_tier() const {
+  // @@protoc_insertion_point(field_get:EquipFixedAffix.quality_tier)
+  return _internal_quality_tier();
+}
+inline void EquipFixedAffix::set_quality_tier(::uint32_t value) {
+  _internal_set_quality_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:EquipFixedAffix.quality_tier)
+}
+inline ::uint32_t EquipFixedAffix::_internal_quality_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.quality_tier_;
+}
+inline void EquipFixedAffix::_internal_set_quality_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.quality_tier_ = value;
+}
+
+// uint32 polish_pity_count = 4;
+inline void EquipFixedAffix::clear_polish_pity_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.polish_pity_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t EquipFixedAffix::polish_pity_count() const {
+  // @@protoc_insertion_point(field_get:EquipFixedAffix.polish_pity_count)
+  return _internal_polish_pity_count();
+}
+inline void EquipFixedAffix::set_polish_pity_count(::uint32_t value) {
+  _internal_set_polish_pity_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipFixedAffix.polish_pity_count)
+}
+inline ::uint32_t EquipFixedAffix::_internal_polish_pity_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.polish_pity_count_;
+}
+inline void EquipFixedAffix::_internal_set_polish_pity_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.polish_pity_count_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EquipInstanceData
@@ -1582,7 +1695,7 @@ EquipInstanceData::_internal_mutable_affixes() {
 inline void EquipInstanceData::clear_enhance_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enhance_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t EquipInstanceData::enhance_level() const {
   // @@protoc_insertion_point(field_get:EquipInstanceData.enhance_level)
@@ -1590,7 +1703,7 @@ inline ::uint32_t EquipInstanceData::enhance_level() const {
 }
 inline void EquipInstanceData::set_enhance_level(::uint32_t value) {
   _internal_set_enhance_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:EquipInstanceData.enhance_level)
 }
 inline ::uint32_t EquipInstanceData::_internal_enhance_level() const {
@@ -1710,6 +1823,118 @@ inline ::google::protobuf::RepeatedPtrField<::EquipFixedAffix>* PROTOBUF_NONNULL
 EquipInstanceData::_internal_mutable_fixed_affixes() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.fixed_affixes_;
+}
+
+// uint32 enhance_pity_count = 5;
+inline void EquipInstanceData::clear_enhance_pity_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhance_pity_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t EquipInstanceData::enhance_pity_count() const {
+  // @@protoc_insertion_point(field_get:EquipInstanceData.enhance_pity_count)
+  return _internal_enhance_pity_count();
+}
+inline void EquipInstanceData::set_enhance_pity_count(::uint32_t value) {
+  _internal_set_enhance_pity_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:EquipInstanceData.enhance_pity_count)
+}
+inline ::uint32_t EquipInstanceData::_internal_enhance_pity_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enhance_pity_count_;
+}
+inline void EquipInstanceData::_internal_set_enhance_pity_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhance_pity_count_ = value;
+}
+
+// string crafter_name = 6;
+inline void EquipInstanceData::clear_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& EquipInstanceData::crafter_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipInstanceData.crafter_name)
+  return _internal_crafter_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EquipInstanceData::set_crafter_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.crafter_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:EquipInstanceData.crafter_name)
+}
+inline ::std::string* PROTOBUF_NONNULL EquipInstanceData::mutable_crafter_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_crafter_name();
+  // @@protoc_insertion_point(field_mutable:EquipInstanceData.crafter_name)
+  return _s;
+}
+inline const ::std::string& EquipInstanceData::_internal_crafter_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_name_.Get();
+}
+inline void EquipInstanceData::_internal_set_crafter_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EquipInstanceData::_internal_mutable_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.crafter_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EquipInstanceData::release_crafter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipInstanceData.crafter_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.crafter_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EquipInstanceData::set_allocated_crafter_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.crafter_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.crafter_name_.IsDefault()) {
+    _impl_.crafter_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:EquipInstanceData.crafter_name)
+}
+
+// uint64 crafter_player_id = 7;
+inline void EquipInstanceData::clear_crafter_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t EquipInstanceData::crafter_player_id() const {
+  // @@protoc_insertion_point(field_get:EquipInstanceData.crafter_player_id)
+  return _internal_crafter_player_id();
+}
+inline void EquipInstanceData::set_crafter_player_id(::uint64_t value) {
+  _internal_set_crafter_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:EquipInstanceData.crafter_player_id)
+}
+inline ::uint64_t EquipInstanceData::_internal_crafter_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafter_player_id_;
+}
+inline void EquipInstanceData::_internal_set_crafter_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafter_player_id_ = value;
 }
 
 // -------------------------------------------------------------------

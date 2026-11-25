@@ -8,3 +8,4 @@ L09_bamboo_archer_girl竹弓少女 (2青竹穿云，百步穿杨@H
 L	10_crimson_spear_girl赤枪少女 (2红缨长枪，飒爽凌云@H
 R
 15_water_dragon_scholar_boy水龙书生 (2沧澜化龙，文武兼修@H
+�20_star_formation_master_girl星阵宗师 (	2m星图流转，破阵问道；五行试炼志永久战法印达 18 枚解锁的零属性玩法专属形象。

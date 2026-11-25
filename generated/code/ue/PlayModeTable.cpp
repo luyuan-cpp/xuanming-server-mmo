@@ -111,6 +111,7 @@ static void PlayModeTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObje
 	PlayModeTableCheckNarrowedField(RowObject, TEXT("match_mode"), TEXT("match_mode"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PlayModeTableCheckNarrowedField(RowObject, TEXT("battle_config_id"), TEXT("battle_config_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PlayModeTableCheckNarrowedField(RowObject, TEXT("team_size_max"), TEXT("team_size_max"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PlayModeTableCheckNarrowedField(RowObject, TEXT("allowed_team_sizes"), TEXT("allowed_team_sizes[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UPlayModeTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -201,6 +202,18 @@ void UPlayModeTable::BuildIndices(FSnapshot& Snap)
 				*LexToString(Row.id), *Existing, RowIndex);
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
+		for (const int32& Element : Row.allowed_team_sizes)
+		{
+			// 同一行同一个值只塞一次。定长数组补位、重复填同一个 id 在配置表里很常见,
+			// 不去重的话 GetRowsByAllowedTeamSizes() 会把这一行返回 N 遍、
+			// CountByAllowedTeamSizesIndex() 会数成 N 而不是 1。
+			// 行是按 RowIndex 递增处理的,所以本行的下标只可能在桶尾。
+			TArray<int32>& Bucket = Snap.AllowedTeamSizesValueIndex.FindOrAdd(Element);
+			if (Bucket.Num() == 0 || Bucket.Last() != RowIndex)
+			{
+				Bucket.Add(RowIndex);
+			}
+		}
 		Snap.BattleConfigIdIndex.FindOrAdd(Row.battle_config_id).Add(RowIndex);
 	}
 }
@@ -277,6 +290,27 @@ const TArray<int32>& UPlayModeTable::GetBattleConfigIdIndices(int32 Key) const
 int32 UPlayModeTable::CountByBattleConfigIdIndex(int32 Key) const
 {
 	return GetBattleConfigIdIndices(Key).Num();
+}
+
+TArray<const FCfgPlayModeRow*> UPlayModeTable::GetRowsByAllowedTeamSizes(int32 Value) const
+{
+	TArray<const FCfgPlayModeRow*> Result;
+	if (const TArray<int32>* Indices = Snapshot->AllowedTeamSizesValueIndex.Find(Value))
+	{
+		Result.Reserve(Indices->Num());
+		for (const int32 RowIndex : *Indices)
+		{
+			Result.Add(&Snapshot->Rows[RowIndex]);
+		}
+	}
+	return Result;
+}
+
+int32 UPlayModeTable::CountByAllowedTeamSizesIndex(int32 Value) const
+{
+	// 桶里同一行只有一个下标(见 BuildIndices),所以这是**行数**。
+	const TArray<int32>* Indices = Snapshot->AllowedTeamSizesValueIndex.Find(Value);
+	return Indices != nullptr ? Indices->Num() : 0;
 }
 
 TArray<const FCfgPlayModeRow*> UPlayModeTable::Where(TFunctionRef<bool(const FCfgPlayModeRow&)> Pred) const

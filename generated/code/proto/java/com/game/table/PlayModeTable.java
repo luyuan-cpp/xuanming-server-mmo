@@ -28,6 +28,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private PlayModeTable() {
+    allowedTeamSizes_ = emptyIntList();
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -92,6 +93,36 @@ private static final long serialVersionUID = 0L;
     return enabled_;
   }
 
+  public static final int ALLOWED_TEAM_SIZES_FIELD_NUMBER = 6;
+  @SuppressWarnings("serial")
+  private com.google.protobuf.Internal.IntList allowedTeamSizes_ =
+      emptyIntList();
+  /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @return A list containing the allowedTeamSizes.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.Integer>
+      getAllowedTeamSizesList() {
+    return allowedTeamSizes_;
+  }
+  /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @return The count of allowedTeamSizes.
+   */
+  public int getAllowedTeamSizesCount() {
+    return allowedTeamSizes_.size();
+  }
+  /**
+   * <code>repeated uint32 allowed_team_sizes = 6;</code>
+   * @param index The index of the element to return.
+   * @return The allowedTeamSizes at the given index.
+   */
+  public int getAllowedTeamSizes(int index) {
+    return allowedTeamSizes_.getInt(index);
+  }
+  private int allowedTeamSizesMemoizedSerializedSize = -1;
+
   public static final int TEAM_SIZE_MAX_FIELD_NUMBER = 5;
   private int teamSizeMax_ = 0;
   /**
@@ -117,6 +148,7 @@ private static final long serialVersionUID = 0L;
   @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (id_ != 0) {
       output.writeUInt32(1, id_);
     }
@@ -131,6 +163,13 @@ private static final long serialVersionUID = 0L;
     }
     if (teamSizeMax_ != 0) {
       output.writeUInt32(5, teamSizeMax_);
+    }
+    if (getAllowedTeamSizesList().size() > 0) {
+      output.writeUInt32NoTag(50);
+      output.writeUInt32NoTag(allowedTeamSizesMemoizedSerializedSize);
+    }
+    for (int i = 0; i < allowedTeamSizes_.size(); i++) {
+      output.writeUInt32NoTag(allowedTeamSizes_.getInt(i));
     }
     getUnknownFields().writeTo(output);
   }
@@ -155,6 +194,20 @@ private static final long serialVersionUID = 0L;
     if (teamSizeMax_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(5, teamSizeMax_);
+    }
+    {
+      int dataSize = 0;
+      for (int i = 0; i < allowedTeamSizes_.size(); i++) {
+        dataSize += com.google.protobuf.CodedOutputStream
+          .computeUInt32SizeNoTag(allowedTeamSizes_.getInt(i));
+      }
+      size += dataSize;
+      if (!getAllowedTeamSizesList().isEmpty()) {
+        size += 1;
+        size += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(dataSize);
+      }
+      allowedTeamSizesMemoizedSerializedSize = dataSize;
     }
     return size;
   }
@@ -188,6 +241,8 @@ private static final long serialVersionUID = 0L;
         != other.getBattleConfigId()) return false;
     if (getEnabled()
         != other.getEnabled()) return false;
+    if (!getAllowedTeamSizesList()
+        .equals(other.getAllowedTeamSizesList())) return false;
     if (getTeamSizeMax()
         != other.getTeamSizeMax()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
@@ -210,6 +265,10 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + ENABLED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getEnabled());
+    if (getAllowedTeamSizesCount() > 0) {
+      hash = (37 * hash) + ALLOWED_TEAM_SIZES_FIELD_NUMBER;
+      hash = (53 * hash) + getAllowedTeamSizesList().hashCode();
+    }
     hash = (37 * hash) + TEAM_SIZE_MAX_FIELD_NUMBER;
     hash = (53 * hash) + getTeamSizeMax();
     hash = (29 * hash) + getUnknownFields().hashCode();
@@ -347,6 +406,7 @@ private static final long serialVersionUID = 0L;
       matchMode_ = 0;
       battleConfigId_ = 0;
       enabled_ = false;
+      allowedTeamSizes_ = emptyIntList();
       teamSizeMax_ = 0;
       return this;
     }
@@ -394,6 +454,10 @@ private static final long serialVersionUID = 0L;
         result.enabled_ = enabled_;
       }
       if (((from_bitField0_ & 0x00000010) != 0)) {
+        allowedTeamSizes_.makeImmutable();
+        result.allowedTeamSizes_ = allowedTeamSizes_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
         result.teamSizeMax_ = teamSizeMax_;
       }
     }
@@ -421,6 +485,17 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getEnabled() != false) {
         setEnabled(other.getEnabled());
+      }
+      if (!other.allowedTeamSizes_.isEmpty()) {
+        if (allowedTeamSizes_.isEmpty()) {
+          allowedTeamSizes_ = other.allowedTeamSizes_;
+          allowedTeamSizes_.makeImmutable();
+          bitField0_ |= 0x00000010;
+        } else {
+          ensureAllowedTeamSizesIsMutable();
+          allowedTeamSizes_.addAll(other.allowedTeamSizes_);
+        }
+        onChanged();
       }
       if (other.getTeamSizeMax() != 0) {
         setTeamSizeMax(other.getTeamSizeMax());
@@ -473,9 +548,25 @@ private static final long serialVersionUID = 0L;
             } // case 32
             case 40: {
               teamSizeMax_ = input.readUInt32();
-              bitField0_ |= 0x00000010;
+              bitField0_ |= 0x00000020;
               break;
             } // case 40
+            case 48: {
+              int v = input.readUInt32();
+              ensureAllowedTeamSizesIsMutable();
+              allowedTeamSizes_.addInt(v);
+              break;
+            } // case 48
+            case 50: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              ensureAllowedTeamSizesIsMutable();
+              while (input.getBytesUntilLimit() > 0) {
+                allowedTeamSizes_.addInt(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            } // case 50
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -621,6 +712,90 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private com.google.protobuf.Internal.IntList allowedTeamSizes_ = emptyIntList();
+    private void ensureAllowedTeamSizesIsMutable() {
+      if (!allowedTeamSizes_.isModifiable()) {
+        allowedTeamSizes_ = makeMutableCopy(allowedTeamSizes_);
+      }
+      bitField0_ |= 0x00000010;
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @return A list containing the allowedTeamSizes.
+     */
+    public java.util.List<java.lang.Integer>
+        getAllowedTeamSizesList() {
+      allowedTeamSizes_.makeImmutable();
+      return allowedTeamSizes_;
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @return The count of allowedTeamSizes.
+     */
+    public int getAllowedTeamSizesCount() {
+      return allowedTeamSizes_.size();
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @param index The index of the element to return.
+     * @return The allowedTeamSizes at the given index.
+     */
+    public int getAllowedTeamSizes(int index) {
+      return allowedTeamSizes_.getInt(index);
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @param index The index to set the value at.
+     * @param value The allowedTeamSizes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowedTeamSizes(
+        int index, int value) {
+
+      ensureAllowedTeamSizesIsMutable();
+      allowedTeamSizes_.setInt(index, value);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @param value The allowedTeamSizes to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllowedTeamSizes(int value) {
+
+      ensureAllowedTeamSizesIsMutable();
+      allowedTeamSizes_.addInt(value);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @param values The allowedTeamSizes to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllAllowedTeamSizes(
+        java.lang.Iterable<? extends java.lang.Integer> values) {
+      ensureAllowedTeamSizesIsMutable();
+      com.google.protobuf.AbstractMessageLite.Builder.addAll(
+          values, allowedTeamSizes_);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 allowed_team_sizes = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowedTeamSizes() {
+      allowedTeamSizes_ = emptyIntList();
+      bitField0_ = (bitField0_ & ~0x00000010);
+      onChanged();
+      return this;
+    }
+
     private int teamSizeMax_ ;
     /**
      * <code>uint32 team_size_max = 5;</code>
@@ -638,7 +813,7 @@ private static final long serialVersionUID = 0L;
     public Builder setTeamSizeMax(int value) {
 
       teamSizeMax_ = value;
-      bitField0_ |= 0x00000010;
+      bitField0_ |= 0x00000020;
       onChanged();
       return this;
     }
@@ -647,7 +822,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearTeamSizeMax() {
-      bitField0_ = (bitField0_ & ~0x00000010);
+      bitField0_ = (bitField0_ & ~0x00000020);
       teamSizeMax_ = 0;
       onChanged();
       return this;

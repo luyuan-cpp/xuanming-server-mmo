@@ -27,8 +27,9 @@ EXPECTED_CONTAINER_SHA256 = "724b3f9b1018951ac21d502a798d54b1b86d0a04250f01e1524
 
 RELATED_EXISTING_SCENE_NOTES = {
     "05000": (
-        "Existing formal BaseScene.id=1 (main_scene.bin) is the legacy 300x300m city; "
-        "PC original 05000 (10000x6774) is NOT registered as BaseScene 5000 and must not be conflated with BaseScene 1."
+        "Existing formal BaseScene.id=1 temporarily reuses Biyuan Water Palace versioned navigation "
+        "(biyuan-body-20261123); PC original 05000 (10000x6774) is NOT registered as BaseScene 5000 "
+        "and must not be conflated with BaseScene 1."
     ),
     "02000": (
         "Existing formal BaseScene.id=4 (lanxian_scene.bin) is Lanxian Town; "

@@ -50,7 +50,7 @@ func TestTeamMatchIntentPreservesOriginalFormationOutcome(t *testing.T) {
 					return sqlTraceLaunchRow(launch)
 				case strings.HasPrefix(statement, "SELECT "+formationColumns+" FROM match_formation"):
 					return sqlTraceRow(uint64(9001), "operation", formationState, uint32(1), uint32(1), "instance", "endpoint", uint32(7), uint32(1),
-						[]byte{}, []byte{}, uint64(1), uint64(2), uint64(0), []byte{}, false, []byte{}, uint32(1), uint32(1), "instance", uint32(1), true, "stable")
+						[]byte{}, []byte{}, uint64(1), uint64(2), uint64(0), []byte{}, false, []byte{}, uint32(1), uint32(1), "instance", uint32(1), true, "stable", []byte{}, uint32(0))
 				}
 				return nil
 			}

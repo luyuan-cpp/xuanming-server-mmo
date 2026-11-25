@@ -54,4 +54,6 @@ message PlayerTrialJournalComp {
   uint64 state_revision = 3;         // 单调写修订号（防旧响应覆盖客户端较新快照）
   repeated TrialJournalEntryRecord records = 4;
   repeated SeasonTrialJournalArchive season_records = 5;
+  // true = 至少通关过任意一只普通难度首领试炼（boss_trial_kind 1..4 && difficulty == 1），解锁全部困难首领试炼准入。
+  bool normal_boss_trial_cleared = 6;
 }

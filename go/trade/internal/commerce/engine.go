@@ -127,6 +127,7 @@ type Engine struct {
 	OpIDs            IDs
 	Policy           Policy
 	PlayerTradeGuard *PlayerTradeGuard
+	Credits          *SellerCreditService
 	Applier          assetop.Applier
 	Ledger           assetop.LedgerReader
 	Now              func() time.Time
@@ -846,8 +847,9 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 	// bidToWake 是这一步让拍品结案了时它引用的出价(finishedLotBid)。事务体可能被重跑,每次进入先清空。
 	var parentsToWake []uint64
 	var bidToWake uint64
+	var settledCreditFact *CompletedTradeFact
 	err = e.roleTx(ctx, func(tx *sql.Tx) error {
-		parentsToWake, bidToWake = nil, 0
+		parentsToWake, bidToWake, settledCreditFact = nil, 0, nil
 		if err := e.lockRoles(ctx, tx, 0, old.SellerPlayerId, old.BuyerPlayerId, w.HighestBidder); err != nil {
 			return err
 		}
@@ -983,6 +985,11 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 		}
 		parentsToWake = filledParentsToWake(lockedRecord, r)
 		bidToWake = finishedLotBid(lockedRecord, r, w)
+		if lockedRecord.Status != Settled && r.Status == Settled {
+			if fact, ok := settledTradeFact(r, w, e.now()); ok {
+				settledCreditFact = &fact
+			}
+		}
 		return e.Repo.Save(ctx, tx, r, w, e.now())
 	})
 	if err == nil {
@@ -999,8 +1006,86 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 				logx.Errorf("[Commerce] Could not wake held bid %d after its lot finished, it rechecks on its own schedule: %v", bidToWake, wakeErr)
 			}
 		}
+		// 官方托管真实成交首次结案后，按 OrderID 幂等记入卖家店铺信用（尽力而为，不阻塞主账本）。
+		if e.Credits != nil && settledCreditFact != nil {
+			if _, creditErr := e.Credits.RecordCompletedTrade(ctx, *settledCreditFact); creditErr != nil {
+				logx.Errorf("[Commerce] Record completed trade into seller credit failed order_id=%s seller_id=%d: %v",
+					settledCreditFact.OrderID, settledCreditFact.SellerPlayerID, creditErr)
+			}
+		}
 	}
 	return err
+}
+
+// settledTradeFact 从已结案（Settled）的官方托管合同抽取卖家信用成交事实。
+// 仅统计官方托管真实成交（固定价寄售 kind=3、集市撮合子单 kind=4/side=0、拍卖 kind=5、非角色人民币寄售 kind=6）；
+// 刻意排除游戏内当面交易（kind=2，防熟人互刷店分）与角色过户（kind=6 且 CharacterPlayerId!=0，由过户清空信用链路单独处理）。
+func settledTradeFact(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, settledAtMs uint64) (CompletedTradeFact, bool) {
+	if r == nil || w == nil || r.Status != Settled || r.SellerPlayerId == 0 {
+		return CompletedTradeFact{}, false
+	}
+	orderID := "commerce:" + strconv.FormatUint(r.CommerceId, 10)
+	var buyerID uint64
+	var amount uint64
+	switch r.Kind {
+	case 3: // 固定价寄售
+		buyerID = r.BuyerPlayerId
+		amount = r.UnitPrice
+	case 4: // 集市撮合子单（母单 side!=0 不重复计）
+		if r.Side != 0 {
+			return CompletedTradeFact{}, false
+		}
+		buyerID = r.BuyerPlayerId
+		if r.Quantity > 0 && r.UnitPrice > math.MaxUint64/uint64(r.Quantity) {
+			amount = math.MaxUint64
+		} else {
+			amount = r.UnitPrice * uint64(r.Quantity)
+		}
+	case 5: // 拍卖成交
+		buyerID = w.HighestBidder
+		amount = w.HighestBid
+	case 6: // 人民币寄售（仅非角色寄售计入当任卖家成交；角色过户走 OnCharacterTransferred 清空）
+		if w.Rmb == nil || w.Rmb.CharacterPlayerId != 0 {
+			return CompletedTradeFact{}, false
+		}
+		buyerID = r.BuyerPlayerId
+		amount = w.Rmb.PriceFen
+		if w.Rmb.MallOrderId != "" {
+			orderID = w.Rmb.MallOrderId
+		}
+	default:
+		return CompletedTradeFact{}, false
+	}
+	if buyerID == 0 || buyerID == r.SellerPlayerId {
+		return CompletedTradeFact{}, false
+	}
+	sellerAcct := w.GetSellerIdentity().GetAccount()
+	sellerRev := w.GetSellerIdentity().GetOwnerRevision()
+	buyerAcct := w.GetBuyerIdentity().GetAccount()
+	if r.Kind == 6 && w.Rmb != nil {
+		if sellerAcct == "" {
+			sellerAcct = w.Rmb.SellerAccount
+		}
+		if sellerRev == 0 {
+			sellerRev = w.Rmb.SellerOwnerRevision
+		}
+		if buyerAcct == "" {
+			buyerAcct = w.Rmb.BuyerAccount
+		}
+	}
+	if sellerAcct == "" || sellerRev == 0 || (buyerAcct != "" && sellerAcct == buyerAcct) {
+		return CompletedTradeFact{}, false
+	}
+	return CompletedTradeFact{
+		OrderID:             orderID,
+		SellerPlayerID:      r.SellerPlayerId,
+		SellerAccount:       sellerAcct,
+		SellerOwnerRevision: sellerRev,
+		BuyerPlayerID:       buyerID,
+		BuyerAccount:        buyerAcct,
+		AmountMinor:         amount,
+		SettledAtMs:         settledAtMs,
+	}, true
 }
 
 // Tick 推进一批到期合同,再轮转发一页收据 ACK。由 svc 的单个 goroutine(trade.commerce.reconcile)每秒调用一次;

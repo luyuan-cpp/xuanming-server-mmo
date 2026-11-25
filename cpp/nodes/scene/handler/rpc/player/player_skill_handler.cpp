@@ -8,6 +8,7 @@
 #include "combat/skill/system/skill.h"
 #include "macros/return_define.h"
 #include "proto/common/component/player_skill_comp.pb.h"
+#include "player/system/player_craft.h"
 #include "player/system/player_skill.h"
 #include "player/system/player_pet.h"
 #include "table/code/skill_table.h"
@@ -93,6 +94,62 @@ void SceneSkillClientPlayerHandler::UpgradeSkill(entt::entity player,const ::Upg
 	// 修习者只认会话绑定的 player 实体,请求里没有、也不接受角色身份
 	if (request->pet_id() != 0) PetSystem::UpgradeSkill(player, *request, *response);
 	else PlayerSkillSystem::UpgradeSkill(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::GetSkillCraftingState(entt::entity player,const ::GetSkillCraftingStateRequest* request,
+	::GetSkillCraftingStateResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	(void)request;
+	PlayerCraftSystem::GetState(player, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::CraftSkillBook(entt::entity player,const ::CraftSkillBookRequest* request,
+	::CraftSkillBookResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::CraftSkillBook(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::LearnSkillBook(entt::entity player,const ::LearnSkillBookRequest* request,
+	::LearnSkillBookResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::LearnSkillBook(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::DismantleSkillBook(entt::entity player,const ::DismantleSkillBookRequest* request,
+	::DismantleSkillBookResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::DismantleSkillBook(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::SetCraftProxyStall(entt::entity player,const ::SetCraftProxyStallRequest* request,
+	::SetCraftProxyStallResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::SetProxyStall(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::ListCraftProxyStalls(entt::entity player,const ::ListCraftProxyStallsRequest* request,
+	::ListCraftProxyStallsResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	(void)request;
+	PlayerCraftSystem::ListProxyStalls(player, *response);
 ///<<< END WRITING YOUR CODE
 
 }

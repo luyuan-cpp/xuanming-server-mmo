@@ -221,8 +221,11 @@ public:
 
 	// Enhance 的结果。概率失败也返回 kSuccess(金币与材料照扣,不是错误),靠 success 区分。
 	struct EnhanceOutcome {
-		bool success{false};  // 本次掷骰是否成功
-		uint32_t level{0};    // 操作后的强化等级
+		bool success{false};          // 本次掷骰是否成功
+		uint32_t level{0};            // 操作后的强化等级
+		uint32_t pityCount{0};        // 操作后的保底累计失败次数（成功归 0）
+		uint32_t pityLimit{0};        // 目标档保底阈值（0 = 无保底必成档）
+		bool triggeredByPity{false};  // 本次是否由保底必成触发
 	};
 
 	// 强化:按 EquipEnhance 表第「有效等级 + 1」行掷一次成功率。成功等级 +1;失败掉 fail_level_loss 级
@@ -235,9 +238,10 @@ public:
 	//   实例未初始化(打 WARN)                                 kEquipEnhanceUnavailable
 	//   强化未开放(MaxEnhanceLevel() == 0)                     kEquipEnhanceUnavailable
 	//   expectedLevel != 有效等级(存档值按表上限夹取)          kEquipEnhanceLevelChanged
+	//   expectedPityCount 有值且 != 当前保底失败次数            kEquipEnhanceLevelChanged
 	//   有效等级已到上限                                        kEquipEnhanceMaxLevel
 	//   下一级的行查不到(打 ERROR)                             kEquipInternalError
-	//   下一级的行 success_rate == 0(必败的行不收费)           kEquipEnhanceUnavailable
+	//   下一级的行不可用(必败或违反 V1 契约)                   kEquipEnhanceUnavailable
 	//   要材料,但材料的 Item 行不存在或是装备(打 ERROR)       kEquipInternalError
 	//   要材料,人物背包里的数量不够                             kEquipEnhanceMaterialNotEnough
 	//   要材料,只有算上带更新版本字段的堆才够(打 WARN)         kFeatureUnavailable(版本错位,可重试)
@@ -245,23 +249,21 @@ public:
 	//   「要材料」= material_id != 0 且 material_count > 0;「要金币」= cost_gold > 0。
 	//   材料按 Bag::CheckQuantities 判,只计 ItemStore::IsCountableByConfig 的堆,与提交段扣材料同一口径
 	//   (混版本设计 §4.4 第 6 批):判完才扣金币,扣材料不会因版本错位失败,也就不会出现 ENHANCE_PARTIAL。
-	// 提交顺序:掷骰(equiprules::RollEnhanceSuccess,恰好消耗一次 rand(10000);先掷后扣是为了让流水带上成败)
+	// 提交顺序:掷骰(equiprules::RollEnhanceWithPity;无保底或未触顶时恰好消耗一次 rand(10000);先掷后扣是为了让流水带上成败)
 	//   → 扣金币(CurrencySystem::DeductCurrency,TX_EQUIP_ENHANCE,correlation = itemId)
 	//   → 扣材料(BagService::RemoveItemsExact,TX_EQUIP_ENHANCE,correlation = itemId,
 	//      extra = {"from":<强化前等级>,"success":true|false})
-	//   → 重新按 guid 取实例,写 enhance_level → 回收材料抽空的堆(MergeAndCompact(kMergeOnly),放在写实例
-	//      之后:「已扣」与「已写」之间不夹任何会销毁实例的步骤)→ 等级变了且穿着 → 重算属性并推面板。
+	//   → 重新按 guid 取实例,写 enhance_level 与 enhance_pity_count → 等级变了且穿着 → 重算属性并推面板。
 	//   提交段任何一步失败都返回 kEquipInternalError 并打 ERROR:扣金币失败 = 什么都没动;扣材料失败带标签
 	//   [PlayerEquip][ENHANCE_PARTIAL](金币已扣;没有货币退款原语,只留日志供人工对账);写等级时取不到实例
 	//   带标签 [PlayerEquip][INSTANCE_LOST]。正常情况下这三个分支都走不到。
 	//
 	// expectedLevel 是客户端看到的强化等级(EnhanceEquipRequest.expected_level = BagItemInfo.enhance_level),与
 	// UpgradeSkill 的 expected_rank 同构的乐观比较:比的是**有效等级**(min(存档值, MaxEnhanceLevel()),就是快照里下发的那个数),
-	// 不是存档原值 —— 上限下调后客户端只看得到夹取后的等级。对不上整笔拒绝,不扣、不掷:结局未知之后重发的旧请求,
-	// 在上一次已经成功或掉过级时到这里就停(审计 r2-equip#1)。掷骰失败且不掉级时等级没变,重发仍会被当作新的一次受理,
-	// 所以调用方仍不得自动重试。
-	// outcome 在函数开头被重置;只有返回 kSuccess 时有意义。
-	static uint32_t Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome);
+	// 不是存档原值 —— 上限下调后客户端只看得到夹取后的等级。expectedPityCount 用于保底档失败不掉级时的弱网重放防护。
+	// 对不上整笔拒绝,不扣、不掷。outcome 在函数开头被重置;只有返回 kSuccess 时有意义。
+	static uint32_t Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome,
+		std::optional<uint32_t> expectedPityCount = std::nullopt);
 
 	// 镶嵌:消耗人物背包里 1 颗 gemConfigId(按 config 扣,不指定哪一堆),记到装备实例的 socket 号孔上。
 	// 孔里已有宝石就拒绝,要先取下(不做「顶替并退回」)。

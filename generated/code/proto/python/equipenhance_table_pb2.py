@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18\x65quipenhance_table.proto\"\xca\x01\n\x11\x45quipEnhanceTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x17\n\x0f\x62onus_permyriad\x18\x02 \x01(\r\x12\x14\n\x0csuccess_rate\x18\x03 \x01(\r\x12\x17\n\x0f\x66\x61il_level_loss\x18\x04 \x01(\r\x12\x11\n\tcost_gold\x18\x05 \x01(\x04\x12\x13\n\x0bmaterial_id\x18\x06 \x01(\r\x12\x16\n\x0ematerial_count\x18\x07 \x01(\r\x12\x12\n\nprofile_id\x18\x08 \x01(\r\x12\r\n\x05level\x18\t \x01(\r\"9\n\x15\x45quipEnhanceTableData\x12 \n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x12.EquipEnhanceTableBC\n\x0e\x63om.game.tableB\x1b\x45quipEnhanceTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18\x65quipenhance_table.proto\"\xde\x01\n\x11\x45quipEnhanceTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x17\n\x0f\x62onus_permyriad\x18\x02 \x01(\r\x12\x14\n\x0csuccess_rate\x18\x03 \x01(\r\x12\x17\n\x0f\x66\x61il_level_loss\x18\x04 \x01(\r\x12\x11\n\tcost_gold\x18\x05 \x01(\x04\x12\x13\n\x0bmaterial_id\x18\x06 \x01(\r\x12\x16\n\x0ematerial_count\x18\x07 \x01(\r\x12\x12\n\nprofile_id\x18\x08 \x01(\r\x12\r\n\x05level\x18\t \x01(\r\x12\x12\n\npity_limit\x18\n \x01(\r\"9\n\x15\x45quipEnhanceTableData\x12 \n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x12.EquipEnhanceTableBC\n\x0e\x63om.game.tableB\x1b\x45quipEnhanceTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\033EquipEnhanceTableOuterClassP\001Z\022generated/pb/table'
   _globals['_EQUIPENHANCETABLE']._serialized_start=29
-  _globals['_EQUIPENHANCETABLE']._serialized_end=231
-  _globals['_EQUIPENHANCETABLEDATA']._serialized_start=233
-  _globals['_EQUIPENHANCETABLEDATA']._serialized_end=290
+  _globals['_EQUIPENHANCETABLE']._serialized_end=251
+  _globals['_EQUIPENHANCETABLEDATA']._serialized_start=253
+  _globals['_EQUIPENHANCETABLEDATA']._serialized_end=310
 # @@protoc_insertion_point(module_scope)

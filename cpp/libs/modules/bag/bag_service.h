@@ -132,7 +132,8 @@ public:
     };
     // 纯预览：在副本上模拟严格扣料后检查新增空间，不发号、不初始化、不写审计。
     static uint32_t CheckInventoryExchangeSpace(entt::entity playerEntity, const ItemCountMap& consumed,
-                                                const ItemCountMap& gained);
+                                                const ItemCountMap& gained, bool tradableOnly = false,
+                                                bool gainedBound = false);
     // 同步严格兑换：材料必须扣足，新增只进人物背包，满包不转临时格。
     // 实例修改只允许人物包/装备包内同身份、同模板、同数量的内容替换，不改变布局。
     // 全部操作先在候选上完成并复核同源；beforeCommit可原子发布预构造的外部账本，
@@ -141,7 +142,8 @@ public:
     static uint32_t ExchangeInventoryExact(entt::entity playerEntity, const ItemCountMap& consumed,
         const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
         uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
-        const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit);
+        const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit,
+        bool tradableOnly = false, bool* consumedBoundOut = nullptr);
 
     // ── 物品数量预留(docs/design/battle-item-reservation.md)──────────────────────────────────
     // 一份预留 = 「人物背包里这几种物品各有这么多已被某件事占住」,数据在持久组件 PlayerItemHoldComp,规则在 item_hold.h。
@@ -182,6 +184,9 @@ public:
     // 可出包数量 = bag.GetTotalItemCount(configId) - HeldCount(...),不足为 0。只读。
     [[nodiscard]] static uint64_t RemovableCount(entt::entity playerEntity, const Bag &bag, uint32_t configId,
                                                  uint64_t exceptHoldId = 0);
+    // 同上，仅计未绑定（可交易）可出包数量。只读。
+    [[nodiscard]] static uint64_t RemovableTradableCount(entt::entity playerEntity, const Bag &bag, uint32_t configId,
+                                                         uint64_t exceptHoldId = 0);
     // 按数量出包的静默预检(不打日志),出包调用方用它代替 Bag::CheckQuantities。需求为 0 的项视为满足。只读。
     [[nodiscard]] static RemovalVerdict CheckRemovable(entt::entity playerEntity, const Bag &bag,
                                                        const ItemCountMap &quantities);
@@ -332,7 +337,8 @@ public:
 		const ItemCountMap &itemsToRemove,
 		TransactionType txType,
 		uint64_t correlationId = 0,
-		const std::string &extra = {});
+		const std::string &extra = {},
+		bool tradableOnly = false);
 
 	// Orchestrated 按 guid 全或无扣出(聚宝斋 P2 托管):
 	//   frozen check → Bag::ReserveForBatchRemove(纯预检)→ 逐个 Bag::RemoveItem

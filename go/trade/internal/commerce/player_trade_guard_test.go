@@ -2,7 +2,11 @@ package commerce
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +16,7 @@ import (
 	"shared/currencytype"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 type stubRefPrices struct {
@@ -223,4 +228,119 @@ func TestRmbIncomesValidatesDisputeFrozenFen(t *testing.T) {
 	payload["incomes"].([]map[string]any)[0]["disputeFrozenFen"] = 601
 	_, err = mall.RmbIncomes(context.Background(), "seller-acct", "", 20)
 	require.Error(t, err)
+}
+
+type stubWorkflowQueryConnector struct {
+	sellerRows [][]byte
+	buyerRows  [][]byte
+}
+
+func (c *stubWorkflowQueryConnector) Connect(context.Context) (driver.Conn, error) {
+	return &stubWorkflowQueryConn{c: c}, nil
+}
+func (c *stubWorkflowQueryConnector) Driver() driver.Driver { return nil }
+
+type stubWorkflowQueryConn struct{ c *stubWorkflowQueryConnector }
+
+func (c *stubWorkflowQueryConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
+func (c *stubWorkflowQueryConn) Close() error                        { return nil }
+func (c *stubWorkflowQueryConn) Begin() (driver.Tx, error)           { return nil, driver.ErrSkip }
+func (c *stubWorkflowQueryConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	if strings.Contains(query, "seller_player_id=?") {
+		return &stubByteRows{rows: c.c.sellerRows}, nil
+	}
+	return &stubByteRows{rows: c.c.buyerRows}, nil
+}
+
+type stubByteRows struct {
+	rows [][]byte
+	idx  int
+}
+
+func (r *stubByteRows) Columns() []string { return []string{"workflow_proto"} }
+func (r *stubByteRows) Close() error      { return nil }
+func (r *stubByteRows) Next(dest []driver.Value) error {
+	if r.idx >= len(r.rows) {
+		return io.EOF
+	}
+	dest[0] = r.rows[r.idx]
+	r.idx++
+	return nil
+}
+
+func mustMarshalWorkflow(t *testing.T, w *tradepb.TradeCommerceWorkflow) []byte {
+	t.Helper()
+	raw, err := proto.Marshal(w)
+	require.NoError(t, err)
+	return raw
+}
+
+func TestSQLDailyPlayerTradeTrackerSumsBothSidesAndFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	const now uint64 = 1_760_000_000_000
+
+	conn := &stubWorkflowQueryConnector{
+		sellerRows: [][]byte{
+			mustMarshalWorkflow(t, &tradepb.TradeCommerceWorkflow{
+				SellerAssets: &tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 3_500},
+				BuyerAssets:  &tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 9_999}, // 对方流出不计入卖家
+			}),
+			mustMarshalWorkflow(t, &tradepb.TradeCommerceWorkflow{
+				SellerAssets: &tradepb.TradeAssetSelection{CurrencyType: currencytype.Diamond, CurrencyAmount: 500}, // 其他币种不计入银两
+			}),
+		},
+		buyerRows: [][]byte{
+			mustMarshalWorkflow(t, &tradepb.TradeCommerceWorkflow{
+				SellerAssets: &tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 8_888},
+				BuyerAssets:  &tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 4_000},
+			}),
+		},
+	}
+	db := sql.OpenDB(conn)
+	t.Cleanup(func() { _ = db.Close() })
+
+	tracker := &SQLDailyPlayerTradeTracker{DB: db}
+	used, err := tracker.DailyCurrencyOutflow(ctx, 101, currencytype.Gold, (now/dayMs)*dayMs)
+	require.NoError(t, err)
+	require.EqualValues(t, 7_500, used)
+
+	// 接入 PlayerTradeGuard 后：剩余额度 2500，2500 放行、2501 拦截（防拆单绕单日限额）。
+	guard := &PlayerTradeGuard{
+		Policy: PlayerTradePolicy{
+			Mode:                   PlayerTradeModeStrictConsumables,
+			ConsumableItems:        []uint32{501},
+			MaxDailyCurrencyAmount: 10_000,
+		},
+		DailyOut: tracker,
+	}
+	_, err = guard.Evaluate(ctx, 101, 202,
+		&tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 2_500},
+		&tradepb.TradeAssetSelection{Items: map[uint32]uint32{501: 1}},
+		now)
+	require.NoError(t, err)
+
+	_, err = guard.Evaluate(ctx, 101, 202,
+		&tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 2_501},
+		&tradepb.TradeAssetSelection{Items: map[uint32]uint32{501: 1}},
+		now)
+	require.ErrorIs(t, err, ErrNotTradable)
+
+	// 溢出饱和保护 + 坏字节 fail-closed
+	require.EqualValues(t, uint64(math.MaxUint64), saturatingAddUint64(math.MaxUint64-10, 20))
+	conn.sellerRows = [][]byte{[]byte("not-a-valid-protobuf-wire")}
+	_, err = tracker.DailyCurrencyOutflow(ctx, 101, currencytype.Gold, (now/dayMs)*dayMs)
+	require.Error(t, err)
+
+	// 单侧触达扫描上限（1000 笔/日）直接饱和拒放，杜绝脚本海量微单绕限额
+	oneGold := mustMarshalWorkflow(t, &tradepb.TradeCommerceWorkflow{
+		SellerAssets: &tradepb.TradeAssetSelection{CurrencyType: currencytype.Gold, CurrencyAmount: 1},
+	})
+	conn.sellerRows = make([][]byte, maxDailyPlayerTradeScanRows)
+	for i := range conn.sellerRows {
+		conn.sellerRows[i] = oneGold
+	}
+	conn.buyerRows = nil
+	saturated, err := tracker.DailyCurrencyOutflow(ctx, 101, currencytype.Gold, (now/dayMs)*dayMs)
+	require.NoError(t, err)
+	require.EqualValues(t, uint64(math.MaxUint64), saturated)
 }

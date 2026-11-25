@@ -77,6 +77,20 @@ enum RankedSeasonState : int;
 extern const uint32_t RankedSeasonState_internal_data_[];
 enum RankedTier : int;
 extern const uint32_t RankedTier_internal_data_[];
+enum TournamentMatchPhase : int;
+extern const uint32_t TournamentMatchPhase_internal_data_[];
+enum TournamentMatchState : int;
+extern const uint32_t TournamentMatchState_internal_data_[];
+enum TournamentMemberRole : int;
+extern const uint32_t TournamentMemberRole_internal_data_[];
+enum TournamentRewardDeliveryState : int;
+extern const uint32_t TournamentRewardDeliveryState_internal_data_[];
+enum TournamentRewardTierKind : int;
+extern const uint32_t TournamentRewardTierKind_internal_data_[];
+enum TournamentSquadState : int;
+extern const uint32_t TournamentSquadState_internal_data_[];
+enum TournamentStage : int;
+extern const uint32_t TournamentStage_internal_data_[];
 enum eSpectateDelivery : int;
 extern const uint32_t eSpectateDelivery_internal_data_[];
 class BattleReportMember;
@@ -150,6 +164,54 @@ extern ChallengeResultS2CGlobalsTypeInternal ChallengeResultS2C_globals_;
 extern const ::google::protobuf::internal::ClassDataFull ChallengeResultS2C_class_data_;
 #else
 extern const ChallengeResultS2CGlobalsTypeInternal ChallengeResultS2C_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CheerTournamentSquadRequest;
+struct CheerTournamentSquadRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CheerTournamentSquadRequestGlobalsTypeInternal CheerTournamentSquadRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CheerTournamentSquadRequest_class_data_;
+#else
+extern const CheerTournamentSquadRequestGlobalsTypeInternal CheerTournamentSquadRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CheerTournamentSquadResponse;
+struct CheerTournamentSquadResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CheerTournamentSquadResponseGlobalsTypeInternal CheerTournamentSquadResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CheerTournamentSquadResponse_class_data_;
+#else
+extern const CheerTournamentSquadResponseGlobalsTypeInternal CheerTournamentSquadResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimTournamentRewardRequest;
+struct ClaimTournamentRewardRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimTournamentRewardRequestGlobalsTypeInternal ClaimTournamentRewardRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimTournamentRewardRequest_class_data_;
+#else
+extern const ClaimTournamentRewardRequestGlobalsTypeInternal ClaimTournamentRewardRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimTournamentRewardResponse;
+struct ClaimTournamentRewardResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimTournamentRewardResponseGlobalsTypeInternal ClaimTournamentRewardResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimTournamentRewardResponse_class_data_;
+#else
+extern const ClaimTournamentRewardResponseGlobalsTypeInternal ClaimTournamentRewardResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CreateTournamentSquadRequest;
+struct CreateTournamentSquadRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CreateTournamentSquadRequestGlobalsTypeInternal CreateTournamentSquadRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CreateTournamentSquadRequest_class_data_;
+#else
+extern const CreateTournamentSquadRequestGlobalsTypeInternal CreateTournamentSquadRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CreateTournamentSquadResponse;
+struct CreateTournamentSquadResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CreateTournamentSquadResponseGlobalsTypeInternal CreateTournamentSquadResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CreateTournamentSquadResponse_class_data_;
+#else
+extern const CreateTournamentSquadResponseGlobalsTypeInternal CreateTournamentSquadResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class DeleteBattleScriptRequest;
 struct DeleteBattleScriptRequestGlobalsTypeInternal;
@@ -231,6 +293,38 @@ extern const ::google::protobuf::internal::ClassDataFull GetRankedProfileRespons
 #else
 extern const GetRankedProfileResponseGlobalsTypeInternal GetRankedProfileResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTournamentOverviewRequest;
+struct GetTournamentOverviewRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTournamentOverviewRequestGlobalsTypeInternal GetTournamentOverviewRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTournamentOverviewRequest_class_data_;
+#else
+extern const GetTournamentOverviewRequestGlobalsTypeInternal GetTournamentOverviewRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTournamentOverviewResponse;
+struct GetTournamentOverviewResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTournamentOverviewResponseGlobalsTypeInternal GetTournamentOverviewResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTournamentOverviewResponse_class_data_;
+#else
+extern const GetTournamentOverviewResponseGlobalsTypeInternal GetTournamentOverviewResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class InviteTournamentMemberRequest;
+struct InviteTournamentMemberRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern InviteTournamentMemberRequestGlobalsTypeInternal InviteTournamentMemberRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull InviteTournamentMemberRequest_class_data_;
+#else
+extern const InviteTournamentMemberRequestGlobalsTypeInternal InviteTournamentMemberRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class InviteTournamentMemberResponse;
+struct InviteTournamentMemberResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern InviteTournamentMemberResponseGlobalsTypeInternal InviteTournamentMemberResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull InviteTournamentMemberResponse_class_data_;
+#else
+extern const InviteTournamentMemberResponseGlobalsTypeInternal InviteTournamentMemberResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class JoinQueueRequest;
 struct JoinQueueRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -246,6 +340,22 @@ extern JoinQueueResponseGlobalsTypeInternal JoinQueueResponse_globals_;
 extern const ::google::protobuf::internal::ClassDataFull JoinQueueResponse_class_data_;
 #else
 extern const JoinQueueResponseGlobalsTypeInternal JoinQueueResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class LeaveTournamentSquadRequest;
+struct LeaveTournamentSquadRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern LeaveTournamentSquadRequestGlobalsTypeInternal LeaveTournamentSquadRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull LeaveTournamentSquadRequest_class_data_;
+#else
+extern const LeaveTournamentSquadRequestGlobalsTypeInternal LeaveTournamentSquadRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class LeaveTournamentSquadResponse;
+struct LeaveTournamentSquadResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern LeaveTournamentSquadResponseGlobalsTypeInternal LeaveTournamentSquadResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull LeaveTournamentSquadResponse_class_data_;
+#else
+extern const LeaveTournamentSquadResponseGlobalsTypeInternal LeaveTournamentSquadResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListBattleReportsRequest;
 struct ListBattleReportsRequestGlobalsTypeInternal;
@@ -278,6 +388,22 @@ extern ListBattleScriptsResponseGlobalsTypeInternal ListBattleScriptsResponse_gl
 extern const ::google::protobuf::internal::ClassDataFull ListBattleScriptsResponse_class_data_;
 #else
 extern const ListBattleScriptsResponseGlobalsTypeInternal ListBattleScriptsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTournamentStandingsRequest;
+struct ListTournamentStandingsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTournamentStandingsRequestGlobalsTypeInternal ListTournamentStandingsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTournamentStandingsRequest_class_data_;
+#else
+extern const ListTournamentStandingsRequestGlobalsTypeInternal ListTournamentStandingsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTournamentStandingsResponse;
+struct ListTournamentStandingsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTournamentStandingsResponseGlobalsTypeInternal ListTournamentStandingsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTournamentStandingsResponse_class_data_;
+#else
+extern const ListTournamentStandingsResponseGlobalsTypeInternal ListTournamentStandingsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListWatchableBattlesRequest;
 struct ListWatchableBattlesRequestGlobalsTypeInternal;
@@ -367,6 +493,22 @@ extern const ::google::protobuf::internal::ClassDataFull RankedSeasonInfo_class_
 #else
 extern const RankedSeasonInfoGlobalsTypeInternal RankedSeasonInfo_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RegisterTournamentSquadRequest;
+struct RegisterTournamentSquadRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RegisterTournamentSquadRequestGlobalsTypeInternal RegisterTournamentSquadRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RegisterTournamentSquadRequest_class_data_;
+#else
+extern const RegisterTournamentSquadRequestGlobalsTypeInternal RegisterTournamentSquadRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RegisterTournamentSquadResponse;
+struct RegisterTournamentSquadResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RegisterTournamentSquadResponseGlobalsTypeInternal RegisterTournamentSquadResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RegisterTournamentSquadResponse_class_data_;
+#else
+extern const RegisterTournamentSquadResponseGlobalsTypeInternal RegisterTournamentSquadResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RespondChallengeRequest;
 struct RespondChallengeRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -382,6 +524,22 @@ extern RespondChallengeResponseGlobalsTypeInternal RespondChallengeResponse_glob
 extern const ::google::protobuf::internal::ClassDataFull RespondChallengeResponse_class_data_;
 #else
 extern const RespondChallengeResponseGlobalsTypeInternal RespondChallengeResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RespondTournamentInviteRequest;
+struct RespondTournamentInviteRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RespondTournamentInviteRequestGlobalsTypeInternal RespondTournamentInviteRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RespondTournamentInviteRequest_class_data_;
+#else
+extern const RespondTournamentInviteRequestGlobalsTypeInternal RespondTournamentInviteRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RespondTournamentInviteResponse;
+struct RespondTournamentInviteResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RespondTournamentInviteResponseGlobalsTypeInternal RespondTournamentInviteResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RespondTournamentInviteResponse_class_data_;
+#else
+extern const RespondTournamentInviteResponseGlobalsTypeInternal RespondTournamentInviteResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SaveRankedPresetRequest;
 struct SaveRankedPresetRequestGlobalsTypeInternal;
@@ -423,6 +581,22 @@ extern const ::google::protobuf::internal::ClassDataFull SpectateBattleRecord_cl
 #else
 extern const SpectateBattleRecordGlobalsTypeInternal SpectateBattleRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartTournamentMatchRequest;
+struct StartTournamentMatchRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartTournamentMatchRequestGlobalsTypeInternal StartTournamentMatchRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartTournamentMatchRequest_class_data_;
+#else
+extern const StartTournamentMatchRequestGlobalsTypeInternal StartTournamentMatchRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartTournamentMatchResponse;
+struct StartTournamentMatchResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartTournamentMatchResponseGlobalsTypeInternal StartTournamentMatchResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartTournamentMatchResponse_class_data_;
+#else
+extern const StartTournamentMatchResponseGlobalsTypeInternal StartTournamentMatchResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SubmitBattleScriptRequest;
 struct SubmitBattleScriptRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -439,6 +613,70 @@ extern const ::google::protobuf::internal::ClassDataFull SubmitBattleScriptRespo
 #else
 extern const SubmitBattleScriptResponseGlobalsTypeInternal SubmitBattleScriptResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentInviteView;
+struct TournamentInviteViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentInviteViewGlobalsTypeInternal TournamentInviteView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentInviteView_class_data_;
+#else
+extern const TournamentInviteViewGlobalsTypeInternal TournamentInviteView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentMatchView;
+struct TournamentMatchViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentMatchViewGlobalsTypeInternal TournamentMatchView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentMatchView_class_data_;
+#else
+extern const TournamentMatchViewGlobalsTypeInternal TournamentMatchView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentMemberView;
+struct TournamentMemberViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentMemberViewGlobalsTypeInternal TournamentMemberView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentMemberView_class_data_;
+#else
+extern const TournamentMemberViewGlobalsTypeInternal TournamentMemberView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentPlayerRewardView;
+struct TournamentPlayerRewardViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentPlayerRewardViewGlobalsTypeInternal TournamentPlayerRewardView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentPlayerRewardView_class_data_;
+#else
+extern const TournamentPlayerRewardViewGlobalsTypeInternal TournamentPlayerRewardView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentRewardItem;
+struct TournamentRewardItemGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentRewardItemGlobalsTypeInternal TournamentRewardItem_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentRewardItem_class_data_;
+#else
+extern const TournamentRewardItemGlobalsTypeInternal TournamentRewardItem_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentRewardTierView;
+struct TournamentRewardTierViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentRewardTierViewGlobalsTypeInternal TournamentRewardTierView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentRewardTierView_class_data_;
+#else
+extern const TournamentRewardTierViewGlobalsTypeInternal TournamentRewardTierView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentSeasonView;
+struct TournamentSeasonViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentSeasonViewGlobalsTypeInternal TournamentSeasonView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentSeasonView_class_data_;
+#else
+extern const TournamentSeasonViewGlobalsTypeInternal TournamentSeasonView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TournamentSquadView;
+struct TournamentSquadViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TournamentSquadViewGlobalsTypeInternal TournamentSquadView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TournamentSquadView_class_data_;
+#else
+extern const TournamentSquadViewGlobalsTypeInternal TournamentSquadView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class UpdateRankedCosmeticRequest;
 struct UpdateRankedCosmeticRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -454,6 +692,22 @@ extern UpdateRankedCosmeticResponseGlobalsTypeInternal UpdateRankedCosmeticRespo
 extern const ::google::protobuf::internal::ClassDataFull UpdateRankedCosmeticResponse_class_data_;
 #else
 extern const UpdateRankedCosmeticResponseGlobalsTypeInternal UpdateRankedCosmeticResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpdateTournamentLineupRequest;
+struct UpdateTournamentLineupRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpdateTournamentLineupRequestGlobalsTypeInternal UpdateTournamentLineupRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpdateTournamentLineupRequest_class_data_;
+#else
+extern const UpdateTournamentLineupRequestGlobalsTypeInternal UpdateTournamentLineupRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpdateTournamentLineupResponse;
+struct UpdateTournamentLineupResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpdateTournamentLineupResponseGlobalsTypeInternal UpdateTournamentLineupResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpdateTournamentLineupResponse_class_data_;
+#else
+extern const UpdateTournamentLineupResponseGlobalsTypeInternal UpdateTournamentLineupResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class WatchBattleRequest;
 struct WatchBattleRequestGlobalsTypeInternal;
@@ -496,6 +750,27 @@ template <>
 internal::EnumTraitsT<::match::RankedTier_internal_data_>
     internal::EnumTraitsImpl::value<::match::RankedTier>;
 template <>
+internal::EnumTraitsT<::match::TournamentMatchPhase_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentMatchPhase>;
+template <>
+internal::EnumTraitsT<::match::TournamentMatchState_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentMatchState>;
+template <>
+internal::EnumTraitsT<::match::TournamentMemberRole_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentMemberRole>;
+template <>
+internal::EnumTraitsT<::match::TournamentRewardDeliveryState_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentRewardDeliveryState>;
+template <>
+internal::EnumTraitsT<::match::TournamentRewardTierKind_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentRewardTierKind>;
+template <>
+internal::EnumTraitsT<::match::TournamentSquadState_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentSquadState>;
+template <>
+internal::EnumTraitsT<::match::TournamentStage_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TournamentStage>;
+template <>
 internal::EnumTraitsT<::match::eSpectateDelivery_internal_data_>
     internal::EnumTraitsImpl::value<::match::eSpectateDelivery>;
 }  // namespace protobuf
@@ -511,6 +786,8 @@ enum MatchMode : int {
   MATCH_MODE_PVE_TEAM = 5,
   MATCH_MODE_PVP_CHALLENGE = 6,
   MATCH_MODE_PVP_TEAM = 7,
+  MATCH_MODE_POLARITY_5V5 = 8,
+  MATCH_MODE_SEASON_TOURNAMENT = 11,
   MatchMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MatchMode_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -521,11 +798,11 @@ extern const uint32_t MatchMode_internal_data_[];
 inline constexpr MatchMode MatchMode_MIN =
     static_cast<MatchMode>(0);
 inline constexpr MatchMode MatchMode_MAX =
-    static_cast<MatchMode>(7);
+    static_cast<MatchMode>(11);
 [[nodiscard]] inline bool MatchMode_IsValid(int value) {
-  return 0 <= value && value <= 7;
+  return 0 <= value && value <= 11 && ((2559u >> value) & 1) != 0;
 }
-inline constexpr int MatchMode_ARRAYSIZE = 7 + 1;
+inline constexpr int MatchMode_ARRAYSIZE = 11 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 MatchMode_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(MatchMode) {
@@ -540,7 +817,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& MatchMode_Name(MatchMode value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<MatchMode_descriptor, 0, 7>(
+  return ::google::protobuf::internal::NameOfDenseEnum<MatchMode_descriptor, 0, 11>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool MatchMode_Parse(
@@ -849,6 +1126,309 @@ template <>
   return ::google::protobuf::internal::ParseNamedEnum<RankedMatchRatingStatus>(RankedMatchRatingStatus_descriptor(), name,
                                            value);
 }
+enum TournamentStage : int {
+  TOURNAMENT_STAGE_UNSPECIFIED = 0,
+  TOURNAMENT_STAGE_REGISTRATION = 1,
+  TOURNAMENT_STAGE_QUALIFIER = 2,
+  TOURNAMENT_STAGE_KNOCKOUT = 3,
+  TOURNAMENT_STAGE_SETTLED = 4,
+  TournamentStage_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentStage_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentStage_internal_data_[];
+inline constexpr TournamentStage TournamentStage_MIN =
+    static_cast<TournamentStage>(0);
+inline constexpr TournamentStage TournamentStage_MAX =
+    static_cast<TournamentStage>(4);
+[[nodiscard]] inline bool TournamentStage_IsValid(int value) {
+  return 0 <= value && value <= 4;
+}
+inline constexpr int TournamentStage_ARRAYSIZE = 4 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentStage_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentStage) {
+  return TournamentStage_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentStage_Name(T value) {
+  static_assert(::std::is_same<T, TournamentStage>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentStage_Name().");
+  return TournamentStage_Name(static_cast<TournamentStage>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentStage_Name(TournamentStage value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentStage_descriptor, 0, 4>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentStage_Parse(
+    ::absl::string_view name, TournamentStage* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentStage>(TournamentStage_descriptor(), name,
+                                           value);
+}
+enum TournamentSquadState : int {
+  TOURNAMENT_SQUAD_STATE_UNSPECIFIED = 0,
+  TOURNAMENT_SQUAD_STATE_DRAFT = 1,
+  TOURNAMENT_SQUAD_STATE_REGISTERED = 2,
+  TOURNAMENT_SQUAD_STATE_ELIMINATED = 3,
+  TOURNAMENT_SQUAD_STATE_CHAMPION = 4,
+  TOURNAMENT_SQUAD_STATE_DISBANDED = 5,
+  TournamentSquadState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentSquadState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentSquadState_internal_data_[];
+inline constexpr TournamentSquadState TournamentSquadState_MIN =
+    static_cast<TournamentSquadState>(0);
+inline constexpr TournamentSquadState TournamentSquadState_MAX =
+    static_cast<TournamentSquadState>(5);
+[[nodiscard]] inline bool TournamentSquadState_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int TournamentSquadState_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentSquadState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentSquadState) {
+  return TournamentSquadState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentSquadState_Name(T value) {
+  static_assert(::std::is_same<T, TournamentSquadState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentSquadState_Name().");
+  return TournamentSquadState_Name(static_cast<TournamentSquadState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentSquadState_Name(TournamentSquadState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentSquadState_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentSquadState_Parse(
+    ::absl::string_view name, TournamentSquadState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentSquadState>(TournamentSquadState_descriptor(), name,
+                                           value);
+}
+enum TournamentMemberRole : int {
+  TOURNAMENT_MEMBER_ROLE_UNSPECIFIED = 0,
+  TOURNAMENT_MEMBER_ROLE_CAPTAIN = 1,
+  TOURNAMENT_MEMBER_ROLE_STARTER = 2,
+  TOURNAMENT_MEMBER_ROLE_SUBSTITUTE = 3,
+  TournamentMemberRole_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentMemberRole_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentMemberRole_internal_data_[];
+inline constexpr TournamentMemberRole TournamentMemberRole_MIN =
+    static_cast<TournamentMemberRole>(0);
+inline constexpr TournamentMemberRole TournamentMemberRole_MAX =
+    static_cast<TournamentMemberRole>(3);
+[[nodiscard]] inline bool TournamentMemberRole_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int TournamentMemberRole_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentMemberRole_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentMemberRole) {
+  return TournamentMemberRole_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentMemberRole_Name(T value) {
+  static_assert(::std::is_same<T, TournamentMemberRole>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentMemberRole_Name().");
+  return TournamentMemberRole_Name(static_cast<TournamentMemberRole>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentMemberRole_Name(TournamentMemberRole value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentMemberRole_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentMemberRole_Parse(
+    ::absl::string_view name, TournamentMemberRole* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentMemberRole>(TournamentMemberRole_descriptor(), name,
+                                           value);
+}
+enum TournamentMatchPhase : int {
+  TOURNAMENT_MATCH_PHASE_UNSPECIFIED = 0,
+  TOURNAMENT_MATCH_PHASE_QUALIFIER = 1,
+  TOURNAMENT_MATCH_PHASE_KNOCKOUT = 2,
+  TournamentMatchPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentMatchPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentMatchPhase_internal_data_[];
+inline constexpr TournamentMatchPhase TournamentMatchPhase_MIN =
+    static_cast<TournamentMatchPhase>(0);
+inline constexpr TournamentMatchPhase TournamentMatchPhase_MAX =
+    static_cast<TournamentMatchPhase>(2);
+[[nodiscard]] inline bool TournamentMatchPhase_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int TournamentMatchPhase_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentMatchPhase_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentMatchPhase) {
+  return TournamentMatchPhase_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentMatchPhase_Name(T value) {
+  static_assert(::std::is_same<T, TournamentMatchPhase>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentMatchPhase_Name().");
+  return TournamentMatchPhase_Name(static_cast<TournamentMatchPhase>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentMatchPhase_Name(TournamentMatchPhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentMatchPhase_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentMatchPhase_Parse(
+    ::absl::string_view name, TournamentMatchPhase* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentMatchPhase>(TournamentMatchPhase_descriptor(), name,
+                                           value);
+}
+enum TournamentMatchState : int {
+  TOURNAMENT_MATCH_STATE_UNSPECIFIED = 0,
+  TOURNAMENT_MATCH_STATE_WAITING_OPPONENT = 1,
+  TOURNAMENT_MATCH_STATE_READY = 2,
+  TOURNAMENT_MATCH_STATE_IN_BATTLE = 3,
+  TOURNAMENT_MATCH_STATE_FINISHED = 4,
+  TOURNAMENT_MATCH_STATE_BYE = 5,
+  TOURNAMENT_MATCH_STATE_FORFEIT = 6,
+  TournamentMatchState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentMatchState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentMatchState_internal_data_[];
+inline constexpr TournamentMatchState TournamentMatchState_MIN =
+    static_cast<TournamentMatchState>(0);
+inline constexpr TournamentMatchState TournamentMatchState_MAX =
+    static_cast<TournamentMatchState>(6);
+[[nodiscard]] inline bool TournamentMatchState_IsValid(int value) {
+  return 0 <= value && value <= 6;
+}
+inline constexpr int TournamentMatchState_ARRAYSIZE = 6 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentMatchState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentMatchState) {
+  return TournamentMatchState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentMatchState_Name(T value) {
+  static_assert(::std::is_same<T, TournamentMatchState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentMatchState_Name().");
+  return TournamentMatchState_Name(static_cast<TournamentMatchState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentMatchState_Name(TournamentMatchState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentMatchState_descriptor, 0, 6>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentMatchState_Parse(
+    ::absl::string_view name, TournamentMatchState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentMatchState>(TournamentMatchState_descriptor(), name,
+                                           value);
+}
+enum TournamentRewardTierKind : int {
+  TOURNAMENT_REWARD_TIER_UNSPECIFIED = 0,
+  TOURNAMENT_REWARD_TIER_CHAMPION = 1,
+  TOURNAMENT_REWARD_TIER_RUNNER_UP = 2,
+  TOURNAMENT_REWARD_TIER_TOP4 = 3,
+  TOURNAMENT_REWARD_TIER_TOP8 = 4,
+  TOURNAMENT_REWARD_TIER_TOP16 = 5,
+  TOURNAMENT_REWARD_TIER_PARTICIPANT = 6,
+  TOURNAMENT_REWARD_TIER_CHEER = 7,
+  TournamentRewardTierKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentRewardTierKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentRewardTierKind_internal_data_[];
+inline constexpr TournamentRewardTierKind TournamentRewardTierKind_MIN =
+    static_cast<TournamentRewardTierKind>(0);
+inline constexpr TournamentRewardTierKind TournamentRewardTierKind_MAX =
+    static_cast<TournamentRewardTierKind>(7);
+[[nodiscard]] inline bool TournamentRewardTierKind_IsValid(int value) {
+  return 0 <= value && value <= 7;
+}
+inline constexpr int TournamentRewardTierKind_ARRAYSIZE = 7 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentRewardTierKind_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentRewardTierKind) {
+  return TournamentRewardTierKind_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentRewardTierKind_Name(T value) {
+  static_assert(::std::is_same<T, TournamentRewardTierKind>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentRewardTierKind_Name().");
+  return TournamentRewardTierKind_Name(static_cast<TournamentRewardTierKind>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentRewardTierKind_Name(TournamentRewardTierKind value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentRewardTierKind_descriptor, 0, 7>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentRewardTierKind_Parse(
+    ::absl::string_view name, TournamentRewardTierKind* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentRewardTierKind>(TournamentRewardTierKind_descriptor(), name,
+                                           value);
+}
+enum TournamentRewardDeliveryState : int {
+  TOURNAMENT_REWARD_DELIVERY_UNSPECIFIED = 0,
+  TOURNAMENT_REWARD_DELIVERY_CLAIMABLE = 1,
+  TOURNAMENT_REWARD_DELIVERY_CLAIMED = 2,
+  TOURNAMENT_REWARD_DELIVERY_ABANDONED = 3,
+  TournamentRewardDeliveryState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TournamentRewardDeliveryState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TournamentRewardDeliveryState_internal_data_[];
+inline constexpr TournamentRewardDeliveryState TournamentRewardDeliveryState_MIN =
+    static_cast<TournamentRewardDeliveryState>(0);
+inline constexpr TournamentRewardDeliveryState TournamentRewardDeliveryState_MAX =
+    static_cast<TournamentRewardDeliveryState>(3);
+[[nodiscard]] inline bool TournamentRewardDeliveryState_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int TournamentRewardDeliveryState_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TournamentRewardDeliveryState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TournamentRewardDeliveryState) {
+  return TournamentRewardDeliveryState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TournamentRewardDeliveryState_Name(T value) {
+  static_assert(::std::is_same<T, TournamentRewardDeliveryState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TournamentRewardDeliveryState_Name().");
+  return TournamentRewardDeliveryState_Name(static_cast<TournamentRewardDeliveryState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TournamentRewardDeliveryState_Name(TournamentRewardDeliveryState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TournamentRewardDeliveryState_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TournamentRewardDeliveryState_Parse(
+    ::absl::string_view name, TournamentRewardDeliveryState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TournamentRewardDeliveryState>(TournamentRewardDeliveryState_descriptor(), name,
+                                           value);
+}
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
 using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
@@ -1087,6 +1667,2152 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WatchBattleRequest final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateTournamentLineupRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.UpdateTournamentLineupRequest) */ {
+ public:
+  inline UpdateTournamentLineupRequest() : UpdateTournamentLineupRequest(nullptr) {}
+  ~UpdateTournamentLineupRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpdateTournamentLineupRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpdateTournamentLineupRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpdateTournamentLineupRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpdateTournamentLineupRequest(const UpdateTournamentLineupRequest& from) : UpdateTournamentLineupRequest(nullptr, from) {}
+  inline UpdateTournamentLineupRequest(UpdateTournamentLineupRequest&& from) noexcept : UpdateTournamentLineupRequest(nullptr, ::std::move(from)) {}
+  inline UpdateTournamentLineupRequest& operator=(const UpdateTournamentLineupRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpdateTournamentLineupRequest& operator=(UpdateTournamentLineupRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpdateTournamentLineupRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateTournamentLineupRequest>(&UpdateTournamentLineupRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 67;
+  friend void swap(UpdateTournamentLineupRequest& a, UpdateTournamentLineupRequest& b) { a.Swap(&b); }
+  inline void Swap(UpdateTournamentLineupRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpdateTournamentLineupRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpdateTournamentLineupRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpdateTournamentLineupRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpdateTournamentLineupRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpdateTournamentLineupRequest& from) { UpdateTournamentLineupRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpdateTournamentLineupRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.UpdateTournamentLineupRequest"; }
+
+  explicit UpdateTournamentLineupRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpdateTournamentLineupRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpdateTournamentLineupRequest& from);
+  UpdateTournamentLineupRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpdateTournamentLineupRequest&& from) noexcept
+      : UpdateTournamentLineupRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStarterPlayerIdsFieldNumber = 1,
+  };
+  // repeated uint64 starter_player_ids = 1;
+  [[nodiscard]] int starter_player_ids_size()
+      const;
+  private:
+  int _internal_starter_player_ids_size() const;
+
+  public:
+  void clear_starter_player_ids() ;
+  [[nodiscard]] ::uint64_t starter_player_ids(int index) const;
+  void set_starter_player_ids(int index, ::uint64_t value);
+  void add_starter_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& starter_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_starter_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_starter_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_starter_player_ids();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.UpdateTournamentLineupRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpdateTournamentLineupRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> starter_player_ids_;
+    ::google::protobuf::internal::CachedSize _starter_player_ids_cached_byte_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentSeasonView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentSeasonView) */ {
+ public:
+  inline TournamentSeasonView() : TournamentSeasonView(nullptr) {}
+  ~TournamentSeasonView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentSeasonView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentSeasonView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentSeasonView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentSeasonView(const TournamentSeasonView& from) : TournamentSeasonView(nullptr, from) {}
+  inline TournamentSeasonView(TournamentSeasonView&& from) noexcept : TournamentSeasonView(nullptr, ::std::move(from)) {}
+  inline TournamentSeasonView& operator=(const TournamentSeasonView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentSeasonView& operator=(TournamentSeasonView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentSeasonView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentSeasonView>(&TournamentSeasonView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 49;
+  friend void swap(TournamentSeasonView& a, TournamentSeasonView& b) { a.Swap(&b); }
+  inline void Swap(TournamentSeasonView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentSeasonView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentSeasonView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentSeasonView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentSeasonView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentSeasonView& from) { TournamentSeasonView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentSeasonView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentSeasonView"; }
+
+  explicit TournamentSeasonView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentSeasonView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentSeasonView& from);
+  TournamentSeasonView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentSeasonView&& from) noexcept
+      : TournamentSeasonView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonKeyFieldNumber = 2,
+    kSeasonNameFieldNumber = 3,
+    kChampionSquadNameFieldNumber = 21,
+    kChampionMemberSummaryFieldNumber = 22,
+    kSeasonIdFieldNumber = 1,
+    kRuleVersionFieldNumber = 4,
+    kStageFieldNumber = 5,
+    kEnabledFieldNumber = 6,
+    kBattleTeamSizeFieldNumber = 7,
+    kRosterMaxSizeFieldNumber = 8,
+    kMinLevelFieldNumber = 9,
+    kQualifierMaxMatchesFieldNumber = 10,
+    kParticipationMinMatchesFieldNumber = 11,
+    kKnockoutMaxTeamsFieldNumber = 12,
+    kKnockoutTeamCountFieldNumber = 13,
+    kRegisteredSquadCountFieldNumber = 14,
+    kRegistrationStartMsFieldNumber = 15,
+    kQualifierStartMsFieldNumber = 16,
+    kKnockoutStartMsFieldNumber = 17,
+    kSettleStartMsFieldNumber = 18,
+    kEndMsFieldNumber = 19,
+    kChampionSquadIdFieldNumber = 20,
+  };
+  // string season_key = 2;
+  void clear_season_key() ;
+  [[nodiscard]] const ::std::string& season_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_key();
+  void set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_key();
+
+  public:
+  // string season_name = 3;
+  void clear_season_name() ;
+  [[nodiscard]] const ::std::string& season_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_season_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_season_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_season_name();
+  void set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_season_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_season_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_season_name();
+
+  public:
+  // string champion_squad_name = 21;
+  void clear_champion_squad_name() ;
+  [[nodiscard]] const ::std::string& champion_squad_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_champion_squad_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_champion_squad_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_champion_squad_name();
+  void set_allocated_champion_squad_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_champion_squad_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_champion_squad_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_champion_squad_name();
+
+  public:
+  // string champion_member_summary = 22;
+  void clear_champion_member_summary() ;
+  [[nodiscard]] const ::std::string& champion_member_summary() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_champion_member_summary(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_champion_member_summary();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_champion_member_summary();
+  void set_allocated_champion_member_summary(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_champion_member_summary() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_champion_member_summary(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_champion_member_summary();
+
+  public:
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 rule_version = 4;
+  void clear_rule_version() ;
+  [[nodiscard]] ::uint32_t rule_version() const;
+  void set_rule_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rule_version() const;
+  void _internal_set_rule_version(::uint32_t value);
+
+  public:
+  // .match.TournamentStage stage = 5;
+  void clear_stage() ;
+  [[nodiscard]] ::match::TournamentStage stage() const;
+  void set_stage(::match::TournamentStage value);
+
+  private:
+  ::match::TournamentStage _internal_stage() const;
+  void _internal_set_stage(::match::TournamentStage value);
+
+  public:
+  // bool enabled = 6;
+  void clear_enabled() ;
+  [[nodiscard]] bool enabled() const;
+  void set_enabled(bool value);
+
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+
+  public:
+  // uint32 battle_team_size = 7;
+  void clear_battle_team_size() ;
+  [[nodiscard]] ::uint32_t battle_team_size() const;
+  void set_battle_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_team_size() const;
+  void _internal_set_battle_team_size(::uint32_t value);
+
+  public:
+  // uint32 roster_max_size = 8;
+  void clear_roster_max_size() ;
+  [[nodiscard]] ::uint32_t roster_max_size() const;
+  void set_roster_max_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_roster_max_size() const;
+  void _internal_set_roster_max_size(::uint32_t value);
+
+  public:
+  // uint32 min_level = 9;
+  void clear_min_level() ;
+  [[nodiscard]] ::uint32_t min_level() const;
+  void set_min_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_level() const;
+  void _internal_set_min_level(::uint32_t value);
+
+  public:
+  // uint32 qualifier_max_matches = 10;
+  void clear_qualifier_max_matches() ;
+  [[nodiscard]] ::uint32_t qualifier_max_matches() const;
+  void set_qualifier_max_matches(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_max_matches() const;
+  void _internal_set_qualifier_max_matches(::uint32_t value);
+
+  public:
+  // uint32 participation_min_matches = 11;
+  void clear_participation_min_matches() ;
+  [[nodiscard]] ::uint32_t participation_min_matches() const;
+  void set_participation_min_matches(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_participation_min_matches() const;
+  void _internal_set_participation_min_matches(::uint32_t value);
+
+  public:
+  // uint32 knockout_max_teams = 12;
+  void clear_knockout_max_teams() ;
+  [[nodiscard]] ::uint32_t knockout_max_teams() const;
+  void set_knockout_max_teams(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_knockout_max_teams() const;
+  void _internal_set_knockout_max_teams(::uint32_t value);
+
+  public:
+  // uint32 knockout_team_count = 13;
+  void clear_knockout_team_count() ;
+  [[nodiscard]] ::uint32_t knockout_team_count() const;
+  void set_knockout_team_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_knockout_team_count() const;
+  void _internal_set_knockout_team_count(::uint32_t value);
+
+  public:
+  // uint32 registered_squad_count = 14;
+  void clear_registered_squad_count() ;
+  [[nodiscard]] ::uint32_t registered_squad_count() const;
+  void set_registered_squad_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_registered_squad_count() const;
+  void _internal_set_registered_squad_count(::uint32_t value);
+
+  public:
+  // uint64 registration_start_ms = 15;
+  void clear_registration_start_ms() ;
+  [[nodiscard]] ::uint64_t registration_start_ms() const;
+  void set_registration_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_registration_start_ms() const;
+  void _internal_set_registration_start_ms(::uint64_t value);
+
+  public:
+  // uint64 qualifier_start_ms = 16;
+  void clear_qualifier_start_ms() ;
+  [[nodiscard]] ::uint64_t qualifier_start_ms() const;
+  void set_qualifier_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_qualifier_start_ms() const;
+  void _internal_set_qualifier_start_ms(::uint64_t value);
+
+  public:
+  // uint64 knockout_start_ms = 17;
+  void clear_knockout_start_ms() ;
+  [[nodiscard]] ::uint64_t knockout_start_ms() const;
+  void set_knockout_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_knockout_start_ms() const;
+  void _internal_set_knockout_start_ms(::uint64_t value);
+
+  public:
+  // uint64 settle_start_ms = 18;
+  void clear_settle_start_ms() ;
+  [[nodiscard]] ::uint64_t settle_start_ms() const;
+  void set_settle_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_settle_start_ms() const;
+  void _internal_set_settle_start_ms(::uint64_t value);
+
+  public:
+  // uint64 end_ms = 19;
+  void clear_end_ms() ;
+  [[nodiscard]] ::uint64_t end_ms() const;
+  void set_end_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_end_ms() const;
+  void _internal_set_end_ms(::uint64_t value);
+
+  public:
+  // uint64 champion_squad_id = 20;
+  void clear_champion_squad_id() ;
+  [[nodiscard]] ::uint64_t champion_squad_id() const;
+  void set_champion_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_champion_squad_id() const;
+  void _internal_set_champion_squad_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentSeasonView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 22,
+                          0, 114,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentSeasonView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr season_key_;
+    ::google::protobuf::internal::ArenaStringPtr season_name_;
+    ::google::protobuf::internal::ArenaStringPtr champion_squad_name_;
+    ::google::protobuf::internal::ArenaStringPtr champion_member_summary_;
+    ::uint32_t season_id_;
+    ::uint32_t rule_version_;
+    int stage_;
+    bool enabled_;
+    ::uint32_t battle_team_size_;
+    ::uint32_t roster_max_size_;
+    ::uint32_t min_level_;
+    ::uint32_t qualifier_max_matches_;
+    ::uint32_t participation_min_matches_;
+    ::uint32_t knockout_max_teams_;
+    ::uint32_t knockout_team_count_;
+    ::uint32_t registered_squad_count_;
+    ::uint64_t registration_start_ms_;
+    ::uint64_t qualifier_start_ms_;
+    ::uint64_t knockout_start_ms_;
+    ::uint64_t settle_start_ms_;
+    ::uint64_t end_ms_;
+    ::uint64_t champion_squad_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRewardItem final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentRewardItem) */ {
+ public:
+  inline TournamentRewardItem() : TournamentRewardItem(nullptr) {}
+  ~TournamentRewardItem() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentRewardItem* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentRewardItem));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentRewardItem(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentRewardItem(const TournamentRewardItem& from) : TournamentRewardItem(nullptr, from) {}
+  inline TournamentRewardItem(TournamentRewardItem&& from) noexcept : TournamentRewardItem(nullptr, ::std::move(from)) {}
+  inline TournamentRewardItem& operator=(const TournamentRewardItem& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentRewardItem& operator=(TournamentRewardItem&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentRewardItem& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentRewardItem>(&TournamentRewardItem_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 54;
+  friend void swap(TournamentRewardItem& a, TournamentRewardItem& b) { a.Swap(&b); }
+  inline void Swap(TournamentRewardItem* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentRewardItem* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentRewardItem* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentRewardItem>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentRewardItem& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentRewardItem& from) { TournamentRewardItem::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentRewardItem* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentRewardItem"; }
+
+  explicit TournamentRewardItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentRewardItem(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentRewardItem& from);
+  TournamentRewardItem(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentRewardItem&& from) noexcept
+      : TournamentRewardItem(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 item_id = 1;
+  void clear_item_id() ;
+  [[nodiscard]] ::uint32_t item_id() const;
+  void set_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_id() const;
+  void _internal_set_item_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2;
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentRewardItem)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentRewardItem& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t item_id_;
+    ::uint32_t count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentMemberView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentMemberView) */ {
+ public:
+  inline TournamentMemberView() : TournamentMemberView(nullptr) {}
+  ~TournamentMemberView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentMemberView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentMemberView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentMemberView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentMemberView(const TournamentMemberView& from) : TournamentMemberView(nullptr, from) {}
+  inline TournamentMemberView(TournamentMemberView&& from) noexcept : TournamentMemberView(nullptr, ::std::move(from)) {}
+  inline TournamentMemberView& operator=(const TournamentMemberView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentMemberView& operator=(TournamentMemberView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentMemberView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentMemberView>(&TournamentMemberView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 50;
+  friend void swap(TournamentMemberView& a, TournamentMemberView& b) { a.Swap(&b); }
+  inline void Swap(TournamentMemberView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentMemberView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentMemberView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentMemberView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentMemberView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentMemberView& from) { TournamentMemberView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentMemberView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentMemberView"; }
+
+  explicit TournamentMemberView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentMemberView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentMemberView& from);
+  TournamentMemberView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentMemberView&& from) noexcept
+      : TournamentMemberView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPlayerNameFieldNumber = 2,
+    kPlayerIdFieldNumber = 1,
+    kZoneIdFieldNumber = 3,
+    kRoleFieldNumber = 4,
+    kJoinedMsFieldNumber = 6,
+    kStarterSlotFieldNumber = 5,
+  };
+  // string player_name = 2;
+  void clear_player_name() ;
+  [[nodiscard]] const ::std::string& player_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_player_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_player_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_player_name();
+  void set_allocated_player_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_player_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_player_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_player_name();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 zone_id = 3;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // .match.TournamentMemberRole role = 4;
+  void clear_role() ;
+  [[nodiscard]] ::match::TournamentMemberRole role() const;
+  void set_role(::match::TournamentMemberRole value);
+
+  private:
+  ::match::TournamentMemberRole _internal_role() const;
+  void _internal_set_role(::match::TournamentMemberRole value);
+
+  public:
+  // uint64 joined_ms = 6;
+  void clear_joined_ms() ;
+  [[nodiscard]] ::uint64_t joined_ms() const;
+  void set_joined_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_joined_ms() const;
+  void _internal_set_joined_ms(::uint64_t value);
+
+  public:
+  // uint32 starter_slot = 5;
+  void clear_starter_slot() ;
+  [[nodiscard]] ::uint32_t starter_slot() const;
+  void set_starter_slot(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_starter_slot() const;
+  void _internal_set_starter_slot(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentMemberView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 46,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentMemberView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr player_name_;
+    ::uint64_t player_id_;
+    ::uint32_t zone_id_;
+    int role_;
+    ::uint64_t joined_ms_;
+    ::uint32_t starter_slot_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentMatchView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentMatchView) */ {
+ public:
+  inline TournamentMatchView() : TournamentMatchView(nullptr) {}
+  ~TournamentMatchView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentMatchView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentMatchView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentMatchView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentMatchView(const TournamentMatchView& from) : TournamentMatchView(nullptr, from) {}
+  inline TournamentMatchView(TournamentMatchView&& from) noexcept : TournamentMatchView(nullptr, ::std::move(from)) {}
+  inline TournamentMatchView& operator=(const TournamentMatchView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentMatchView& operator=(TournamentMatchView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentMatchView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentMatchView>(&TournamentMatchView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 53;
+  friend void swap(TournamentMatchView& a, TournamentMatchView& b) { a.Swap(&b); }
+  inline void Swap(TournamentMatchView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentMatchView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentMatchView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentMatchView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentMatchView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentMatchView& from) { TournamentMatchView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentMatchView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentMatchView"; }
+
+  explicit TournamentMatchView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentMatchView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentMatchView& from);
+  TournamentMatchView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentMatchView&& from) noexcept
+      : TournamentMatchView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSquadANameFieldNumber = 7,
+    kSquadBNameFieldNumber = 10,
+    kMatchIdFieldNumber = 1,
+    kSeasonIdFieldNumber = 2,
+    kPhaseFieldNumber = 3,
+    kRoundIndexFieldNumber = 4,
+    kSlotIndexFieldNumber = 5,
+    kSquadAIdFieldNumber = 6,
+    kSquadBIdFieldNumber = 9,
+    kSquadASeedFieldNumber = 8,
+    kSquadBSeedFieldNumber = 11,
+    kStateFieldNumber = 14,
+    kReadyAFieldNumber = 12,
+    kReadyBFieldNumber = 13,
+    kFeaturedSpectateFieldNumber = 18,
+    kBattleIdFieldNumber = 15,
+    kWinnerSquadIdFieldNumber = 16,
+    kScheduledStartMsFieldNumber = 19,
+    kDeadlineMsFieldNumber = 20,
+    kFinishedMsFieldNumber = 21,
+    kOutcomeFieldNumber = 17,
+  };
+  // string squad_a_name = 7;
+  void clear_squad_a_name() ;
+  [[nodiscard]] const ::std::string& squad_a_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_squad_a_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_squad_a_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_squad_a_name();
+  void set_allocated_squad_a_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_squad_a_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_squad_a_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_squad_a_name();
+
+  public:
+  // string squad_b_name = 10;
+  void clear_squad_b_name() ;
+  [[nodiscard]] const ::std::string& squad_b_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_squad_b_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_squad_b_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_squad_b_name();
+  void set_allocated_squad_b_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_squad_b_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_squad_b_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_squad_b_name();
+
+  public:
+  // uint64 match_id = 1;
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 2;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // .match.TournamentMatchPhase phase = 3;
+  void clear_phase() ;
+  [[nodiscard]] ::match::TournamentMatchPhase phase() const;
+  void set_phase(::match::TournamentMatchPhase value);
+
+  private:
+  ::match::TournamentMatchPhase _internal_phase() const;
+  void _internal_set_phase(::match::TournamentMatchPhase value);
+
+  public:
+  // uint32 round_index = 4;
+  void clear_round_index() ;
+  [[nodiscard]] ::uint32_t round_index() const;
+  void set_round_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_round_index() const;
+  void _internal_set_round_index(::uint32_t value);
+
+  public:
+  // uint32 slot_index = 5;
+  void clear_slot_index() ;
+  [[nodiscard]] ::uint32_t slot_index() const;
+  void set_slot_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_slot_index() const;
+  void _internal_set_slot_index(::uint32_t value);
+
+  public:
+  // uint64 squad_a_id = 6;
+  void clear_squad_a_id() ;
+  [[nodiscard]] ::uint64_t squad_a_id() const;
+  void set_squad_a_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_a_id() const;
+  void _internal_set_squad_a_id(::uint64_t value);
+
+  public:
+  // uint64 squad_b_id = 9;
+  void clear_squad_b_id() ;
+  [[nodiscard]] ::uint64_t squad_b_id() const;
+  void set_squad_b_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_b_id() const;
+  void _internal_set_squad_b_id(::uint64_t value);
+
+  public:
+  // uint32 squad_a_seed = 8;
+  void clear_squad_a_seed() ;
+  [[nodiscard]] ::uint32_t squad_a_seed() const;
+  void set_squad_a_seed(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_squad_a_seed() const;
+  void _internal_set_squad_a_seed(::uint32_t value);
+
+  public:
+  // uint32 squad_b_seed = 11;
+  void clear_squad_b_seed() ;
+  [[nodiscard]] ::uint32_t squad_b_seed() const;
+  void set_squad_b_seed(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_squad_b_seed() const;
+  void _internal_set_squad_b_seed(::uint32_t value);
+
+  public:
+  // .match.TournamentMatchState state = 14;
+  void clear_state() ;
+  [[nodiscard]] ::match::TournamentMatchState state() const;
+  void set_state(::match::TournamentMatchState value);
+
+  private:
+  ::match::TournamentMatchState _internal_state() const;
+  void _internal_set_state(::match::TournamentMatchState value);
+
+  public:
+  // bool ready_a = 12;
+  void clear_ready_a() ;
+  [[nodiscard]] bool ready_a() const;
+  void set_ready_a(bool value);
+
+  private:
+  bool _internal_ready_a() const;
+  void _internal_set_ready_a(bool value);
+
+  public:
+  // bool ready_b = 13;
+  void clear_ready_b() ;
+  [[nodiscard]] bool ready_b() const;
+  void set_ready_b(bool value);
+
+  private:
+  bool _internal_ready_b() const;
+  void _internal_set_ready_b(bool value);
+
+  public:
+  // bool featured_spectate = 18;
+  void clear_featured_spectate() ;
+  [[nodiscard]] bool featured_spectate() const;
+  void set_featured_spectate(bool value);
+
+  private:
+  bool _internal_featured_spectate() const;
+  void _internal_set_featured_spectate(bool value);
+
+  public:
+  // uint64 battle_id = 15;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 winner_squad_id = 16;
+  void clear_winner_squad_id() ;
+  [[nodiscard]] ::uint64_t winner_squad_id() const;
+  void set_winner_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_winner_squad_id() const;
+  void _internal_set_winner_squad_id(::uint64_t value);
+
+  public:
+  // uint64 scheduled_start_ms = 19;
+  void clear_scheduled_start_ms() ;
+  [[nodiscard]] ::uint64_t scheduled_start_ms() const;
+  void set_scheduled_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_scheduled_start_ms() const;
+  void _internal_set_scheduled_start_ms(::uint64_t value);
+
+  public:
+  // uint64 deadline_ms = 20;
+  void clear_deadline_ms() ;
+  [[nodiscard]] ::uint64_t deadline_ms() const;
+  void set_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deadline_ms() const;
+  void _internal_set_deadline_ms(::uint64_t value);
+
+  public:
+  // uint64 finished_ms = 21;
+  void clear_finished_ms() ;
+  [[nodiscard]] ::uint64_t finished_ms() const;
+  void set_finished_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_finished_ms() const;
+  void _internal_set_finished_ms(::uint64_t value);
+
+  public:
+  // .eBattleOutcome outcome = 17;
+  void clear_outcome() ;
+  [[nodiscard]] ::eBattleOutcome outcome() const;
+  void set_outcome(::eBattleOutcome value);
+
+  private:
+  ::eBattleOutcome _internal_outcome() const;
+  void _internal_set_outcome(::eBattleOutcome value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentMatchView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 21,
+                          0, 74,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentMatchView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr squad_a_name_;
+    ::google::protobuf::internal::ArenaStringPtr squad_b_name_;
+    ::uint64_t match_id_;
+    ::uint32_t season_id_;
+    int phase_;
+    ::uint32_t round_index_;
+    ::uint32_t slot_index_;
+    ::uint64_t squad_a_id_;
+    ::uint64_t squad_b_id_;
+    ::uint32_t squad_a_seed_;
+    ::uint32_t squad_b_seed_;
+    int state_;
+    bool ready_a_;
+    bool ready_b_;
+    bool featured_spectate_;
+    ::uint64_t battle_id_;
+    ::uint64_t winner_squad_id_;
+    ::uint64_t scheduled_start_ms_;
+    ::uint64_t deadline_ms_;
+    ::uint64_t finished_ms_;
+    int outcome_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentInviteView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentInviteView) */ {
+ public:
+  inline TournamentInviteView() : TournamentInviteView(nullptr) {}
+  ~TournamentInviteView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentInviteView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentInviteView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentInviteView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentInviteView(const TournamentInviteView& from) : TournamentInviteView(nullptr, from) {}
+  inline TournamentInviteView(TournamentInviteView&& from) noexcept : TournamentInviteView(nullptr, ::std::move(from)) {}
+  inline TournamentInviteView& operator=(const TournamentInviteView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentInviteView& operator=(TournamentInviteView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentInviteView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentInviteView>(&TournamentInviteView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 52;
+  friend void swap(TournamentInviteView& a, TournamentInviteView& b) { a.Swap(&b); }
+  inline void Swap(TournamentInviteView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentInviteView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentInviteView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentInviteView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentInviteView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentInviteView& from) { TournamentInviteView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentInviteView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentInviteView"; }
+
+  explicit TournamentInviteView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentInviteView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentInviteView& from);
+  TournamentInviteView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentInviteView&& from) noexcept
+      : TournamentInviteView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSquadNameFieldNumber = 3,
+    kInviterNameFieldNumber = 5,
+    kSquadIdFieldNumber = 1,
+    kInviterPlayerIdFieldNumber = 4,
+    kSeasonIdFieldNumber = 2,
+    kCurrentMemberCountFieldNumber = 6,
+    kCreatedMsFieldNumber = 8,
+    kExpiresMsFieldNumber = 9,
+    kRosterMaxSizeFieldNumber = 7,
+  };
+  // string squad_name = 3;
+  void clear_squad_name() ;
+  [[nodiscard]] const ::std::string& squad_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_squad_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_squad_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_squad_name();
+  void set_allocated_squad_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_squad_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_squad_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_squad_name();
+
+  public:
+  // string inviter_name = 5;
+  void clear_inviter_name() ;
+  [[nodiscard]] const ::std::string& inviter_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_inviter_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_inviter_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_inviter_name();
+  void set_allocated_inviter_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_inviter_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_inviter_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_inviter_name();
+
+  public:
+  // uint64 squad_id = 1;
+  void clear_squad_id() ;
+  [[nodiscard]] ::uint64_t squad_id() const;
+  void set_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_id() const;
+  void _internal_set_squad_id(::uint64_t value);
+
+  public:
+  // uint64 inviter_player_id = 4;
+  void clear_inviter_player_id() ;
+  [[nodiscard]] ::uint64_t inviter_player_id() const;
+  void set_inviter_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_inviter_player_id() const;
+  void _internal_set_inviter_player_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 2;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 current_member_count = 6;
+  void clear_current_member_count() ;
+  [[nodiscard]] ::uint32_t current_member_count() const;
+  void set_current_member_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_member_count() const;
+  void _internal_set_current_member_count(::uint32_t value);
+
+  public:
+  // uint64 created_ms = 8;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // uint64 expires_ms = 9;
+  void clear_expires_ms() ;
+  [[nodiscard]] ::uint64_t expires_ms() const;
+  void set_expires_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expires_ms() const;
+  void _internal_set_expires_ms(::uint64_t value);
+
+  public:
+  // uint32 roster_max_size = 7;
+  void clear_roster_max_size() ;
+  [[nodiscard]] ::uint32_t roster_max_size() const;
+  void set_roster_max_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_roster_max_size() const;
+  void _internal_set_roster_max_size(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentInviteView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 65,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentInviteView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr squad_name_;
+    ::google::protobuf::internal::ArenaStringPtr inviter_name_;
+    ::uint64_t squad_id_;
+    ::uint64_t inviter_player_id_;
+    ::uint32_t season_id_;
+    ::uint32_t current_member_count_;
+    ::uint64_t created_ms_;
+    ::uint64_t expires_ms_;
+    ::uint32_t roster_max_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTournamentMatchRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.StartTournamentMatchRequest) */ {
+ public:
+  inline StartTournamentMatchRequest() : StartTournamentMatchRequest(nullptr) {}
+  ~StartTournamentMatchRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartTournamentMatchRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartTournamentMatchRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartTournamentMatchRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartTournamentMatchRequest(const StartTournamentMatchRequest& from) : StartTournamentMatchRequest(nullptr, from) {}
+  inline StartTournamentMatchRequest(StartTournamentMatchRequest&& from) noexcept : StartTournamentMatchRequest(nullptr, ::std::move(from)) {}
+  inline StartTournamentMatchRequest& operator=(const StartTournamentMatchRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartTournamentMatchRequest& operator=(StartTournamentMatchRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartTournamentMatchRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartTournamentMatchRequest>(&StartTournamentMatchRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 73;
+  friend void swap(StartTournamentMatchRequest& a, StartTournamentMatchRequest& b) { a.Swap(&b); }
+  inline void Swap(StartTournamentMatchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartTournamentMatchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartTournamentMatchRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartTournamentMatchRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartTournamentMatchRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartTournamentMatchRequest& from) { StartTournamentMatchRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartTournamentMatchRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.StartTournamentMatchRequest"; }
+
+  explicit StartTournamentMatchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartTournamentMatchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartTournamentMatchRequest& from);
+  StartTournamentMatchRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartTournamentMatchRequest&& from) noexcept
+      : StartTournamentMatchRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLineupPlayerIdsFieldNumber = 2,
+    kMatchIdFieldNumber = 1,
+  };
+  // repeated uint64 lineup_player_ids = 2;
+  [[nodiscard]] int lineup_player_ids_size()
+      const;
+  private:
+  int _internal_lineup_player_ids_size() const;
+
+  public:
+  void clear_lineup_player_ids() ;
+  [[nodiscard]] ::uint64_t lineup_player_ids(int index) const;
+  void set_lineup_player_ids(int index, ::uint64_t value);
+  void add_lineup_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& lineup_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_lineup_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_lineup_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_lineup_player_ids();
+
+  public:
+  // uint64 match_id = 1;
+  void clear_match_id() ;
+  [[nodiscard]] ::uint64_t match_id() const;
+  void set_match_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_match_id() const;
+  void _internal_set_match_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.StartTournamentMatchRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartTournamentMatchRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> lineup_player_ids_;
+    ::google::protobuf::internal::CachedSize _lineup_player_ids_cached_byte_size_;
+    ::uint64_t match_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveRankedPresetRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.SaveRankedPresetRequest) */ {
  public:
@@ -1305,6 +4031,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveRankedPresetRequest final : pub
     ::uint32_t character_preset_id_;
     ::uint32_t pet_preset_id_;
     ::uint32_t rule_version_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondTournamentInviteRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.RespondTournamentInviteRequest) */ {
+ public:
+  inline RespondTournamentInviteRequest() : RespondTournamentInviteRequest(nullptr) {}
+  ~RespondTournamentInviteRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RespondTournamentInviteRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RespondTournamentInviteRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RespondTournamentInviteRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RespondTournamentInviteRequest(const RespondTournamentInviteRequest& from) : RespondTournamentInviteRequest(nullptr, from) {}
+  inline RespondTournamentInviteRequest(RespondTournamentInviteRequest&& from) noexcept : RespondTournamentInviteRequest(nullptr, ::std::move(from)) {}
+  inline RespondTournamentInviteRequest& operator=(const RespondTournamentInviteRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RespondTournamentInviteRequest& operator=(RespondTournamentInviteRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RespondTournamentInviteRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RespondTournamentInviteRequest>(&RespondTournamentInviteRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 63;
+  friend void swap(RespondTournamentInviteRequest& a, RespondTournamentInviteRequest& b) { a.Swap(&b); }
+  inline void Swap(RespondTournamentInviteRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RespondTournamentInviteRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RespondTournamentInviteRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RespondTournamentInviteRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RespondTournamentInviteRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RespondTournamentInviteRequest& from) { RespondTournamentInviteRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RespondTournamentInviteRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.RespondTournamentInviteRequest"; }
+
+  explicit RespondTournamentInviteRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RespondTournamentInviteRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RespondTournamentInviteRequest& from);
+  RespondTournamentInviteRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RespondTournamentInviteRequest&& from) noexcept
+      : RespondTournamentInviteRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSquadIdFieldNumber = 1,
+    kAcceptFieldNumber = 2,
+  };
+  // uint64 squad_id = 1;
+  void clear_squad_id() ;
+  [[nodiscard]] ::uint64_t squad_id() const;
+  void set_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_id() const;
+  void _internal_set_squad_id(::uint64_t value);
+
+  public:
+  // bool accept = 2;
+  void clear_accept() ;
+  [[nodiscard]] bool accept() const;
+  void set_accept(bool value);
+
+  private:
+  bool _internal_accept() const;
+  void _internal_set_accept(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.RespondTournamentInviteRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RespondTournamentInviteRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t squad_id_;
+    bool accept_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1537,6 +4476,144 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondChallengeRequest final : pub
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RegisterTournamentSquadRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:match.RegisterTournamentSquadRequest) */ {
+ public:
+  inline RegisterTournamentSquadRequest() : RegisterTournamentSquadRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RegisterTournamentSquadRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegisterTournamentSquadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RegisterTournamentSquadRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RegisterTournamentSquadRequest(const RegisterTournamentSquadRequest& from) : RegisterTournamentSquadRequest(nullptr, from) {}
+  inline RegisterTournamentSquadRequest(RegisterTournamentSquadRequest&& from) noexcept : RegisterTournamentSquadRequest(nullptr, ::std::move(from)) {}
+  inline RegisterTournamentSquadRequest& operator=(const RegisterTournamentSquadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RegisterTournamentSquadRequest& operator=(RegisterTournamentSquadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RegisterTournamentSquadRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RegisterTournamentSquadRequest>(&RegisterTournamentSquadRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 69;
+  friend void swap(RegisterTournamentSquadRequest& a, RegisterTournamentSquadRequest& b) { a.Swap(&b); }
+  inline void Swap(RegisterTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RegisterTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RegisterTournamentSquadRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<RegisterTournamentSquadRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const RegisterTournamentSquadRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const RegisterTournamentSquadRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.RegisterTournamentSquadRequest"; }
+
+  explicit RegisterTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegisterTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegisterTournamentSquadRequest& from);
+  RegisterTournamentSquadRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegisterTournamentSquadRequest&& from) noexcept
+      : RegisterTournamentSquadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:match.RegisterTournamentSquadRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.RankedSeasonInfo) */ {
  public:
@@ -1685,6 +4762,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
 
   // accessors -------------------------------------------------------
   enum : int {
+    kAllowedTeamSizesFieldNumber = 20,
+    kPrimaryTeamSizesFieldNumber = 22,
+    kSpecialTeamSizesFieldNumber = 23,
     kSeasonKeyFieldNumber = 2,
     kSeasonNameFieldNumber = 3,
     kChampionNameFieldNumber = 17,
@@ -1704,7 +4784,68 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
     kChampionPlayerIdFieldNumber = 16,
     kChampionRatingCentiFieldNumber = 18,
     kRankBoardSealedFieldNumber = 19,
+    kUsesOwnProgressionFieldNumber = 21,
   };
+  // repeated uint32 allowed_team_sizes = 20;
+  [[nodiscard]] int allowed_team_sizes_size()
+      const;
+  private:
+  int _internal_allowed_team_sizes_size() const;
+
+  public:
+  void clear_allowed_team_sizes() ;
+  [[nodiscard]] ::uint32_t allowed_team_sizes(int index) const;
+  void set_allowed_team_sizes(int index, ::uint32_t value);
+  void add_allowed_team_sizes(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& allowed_team_sizes()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_allowed_team_sizes();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_allowed_team_sizes() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_allowed_team_sizes();
+
+  public:
+  // repeated uint32 primary_team_sizes = 22;
+  [[nodiscard]] int primary_team_sizes_size()
+      const;
+  private:
+  int _internal_primary_team_sizes_size() const;
+
+  public:
+  void clear_primary_team_sizes() ;
+  [[nodiscard]] ::uint32_t primary_team_sizes(int index) const;
+  void set_primary_team_sizes(int index, ::uint32_t value);
+  void add_primary_team_sizes(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& primary_team_sizes()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_primary_team_sizes();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_primary_team_sizes() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_primary_team_sizes();
+
+  public:
+  // repeated uint32 special_team_sizes = 23;
+  [[nodiscard]] int special_team_sizes_size()
+      const;
+  private:
+  int _internal_special_team_sizes_size() const;
+
+  public:
+  void clear_special_team_sizes() ;
+  [[nodiscard]] ::uint32_t special_team_sizes(int index) const;
+  void set_special_team_sizes(int index, ::uint32_t value);
+  void add_special_team_sizes(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& special_team_sizes()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_special_team_sizes();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_special_team_sizes() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_special_team_sizes();
+
+  public:
   // string season_key = 2;
   void clear_season_key() ;
   [[nodiscard]] const ::std::string& season_key() const;
@@ -1910,11 +5051,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
   void _internal_set_rank_board_sealed(bool value);
 
   public:
+  // bool uses_own_progression = 21;
+  void clear_uses_own_progression() ;
+  [[nodiscard]] bool uses_own_progression() const;
+  void set_uses_own_progression(bool value);
+
+  private:
+  bool _internal_uses_own_progression() const;
+  void _internal_set_uses_own_progression(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.RankedSeasonInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 19,
+      ::google::protobuf::internal::TcParseTable<5, 23,
                           0, 81,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1943,6 +5094,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
         const RankedSeasonInfo& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> allowed_team_sizes_;
+    ::google::protobuf::internal::CachedSize _allowed_team_sizes_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> primary_team_sizes_;
+    ::google::protobuf::internal::CachedSize _primary_team_sizes_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> special_team_sizes_;
+    ::google::protobuf::internal::CachedSize _special_team_sizes_cached_byte_size_;
     ::google::protobuf::internal::ArenaStringPtr season_key_;
     ::google::protobuf::internal::ArenaStringPtr season_name_;
     ::google::protobuf::internal::ArenaStringPtr champion_name_;
@@ -1962,6 +5119,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedSeasonInfo final : public ::g
     ::uint64_t champion_player_id_;
     ::int64_t champion_rating_centi_;
     bool rank_board_sealed_;
+    bool uses_own_progression_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3700,6 +6858,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListWatchableBattlesRequest final :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTournamentStandingsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ListTournamentStandingsRequest) */ {
+ public:
+  inline ListTournamentStandingsRequest() : ListTournamentStandingsRequest(nullptr) {}
+  ~ListTournamentStandingsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTournamentStandingsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTournamentStandingsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTournamentStandingsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTournamentStandingsRequest(const ListTournamentStandingsRequest& from) : ListTournamentStandingsRequest(nullptr, from) {}
+  inline ListTournamentStandingsRequest(ListTournamentStandingsRequest&& from) noexcept : ListTournamentStandingsRequest(nullptr, ::std::move(from)) {}
+  inline ListTournamentStandingsRequest& operator=(const ListTournamentStandingsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTournamentStandingsRequest& operator=(ListTournamentStandingsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTournamentStandingsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTournamentStandingsRequest>(&ListTournamentStandingsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 71;
+  friend void swap(ListTournamentStandingsRequest& a, ListTournamentStandingsRequest& b) { a.Swap(&b); }
+  inline void Swap(ListTournamentStandingsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTournamentStandingsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTournamentStandingsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTournamentStandingsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTournamentStandingsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTournamentStandingsRequest& from) { ListTournamentStandingsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTournamentStandingsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListTournamentStandingsRequest"; }
+
+  explicit ListTournamentStandingsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTournamentStandingsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTournamentStandingsRequest& from);
+  ListTournamentStandingsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTournamentStandingsRequest&& from) noexcept
+      : ListTournamentStandingsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonIdFieldNumber = 1,
+    kPageFieldNumber = 2,
+    kPageSizeFieldNumber = 3,
+  };
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // uint32 page = 2;
+  void clear_page() ;
+  [[nodiscard]] ::uint32_t page() const;
+  void set_page(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_page() const;
+  void _internal_set_page(::uint32_t value);
+
+  public:
+  // uint32 page_size = 3;
+  void clear_page_size() ;
+  [[nodiscard]] ::uint32_t page_size() const;
+  void set_page_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_page_size() const;
+  void _internal_set_page_size(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ListTournamentStandingsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTournamentStandingsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t season_id_;
+    ::uint32_t page_;
+    ::uint32_t page_size_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleScriptsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:match.ListBattleScriptsRequest) */ {
  public:
@@ -3972,6 +7355,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleReportsRequest final : pu
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveTournamentSquadRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.LeaveTournamentSquadRequest) */ {
+ public:
+  inline LeaveTournamentSquadRequest() : LeaveTournamentSquadRequest(nullptr) {}
+  ~LeaveTournamentSquadRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LeaveTournamentSquadRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LeaveTournamentSquadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr LeaveTournamentSquadRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline LeaveTournamentSquadRequest(const LeaveTournamentSquadRequest& from) : LeaveTournamentSquadRequest(nullptr, from) {}
+  inline LeaveTournamentSquadRequest(LeaveTournamentSquadRequest&& from) noexcept : LeaveTournamentSquadRequest(nullptr, ::std::move(from)) {}
+  inline LeaveTournamentSquadRequest& operator=(const LeaveTournamentSquadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LeaveTournamentSquadRequest& operator=(LeaveTournamentSquadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const LeaveTournamentSquadRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LeaveTournamentSquadRequest>(&LeaveTournamentSquadRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 65;
+  friend void swap(LeaveTournamentSquadRequest& a, LeaveTournamentSquadRequest& b) { a.Swap(&b); }
+  inline void Swap(LeaveTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LeaveTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] LeaveTournamentSquadRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LeaveTournamentSquadRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LeaveTournamentSquadRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LeaveTournamentSquadRequest& from) { LeaveTournamentSquadRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LeaveTournamentSquadRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.LeaveTournamentSquadRequest"; }
+
+  explicit LeaveTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LeaveTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LeaveTournamentSquadRequest& from);
+  LeaveTournamentSquadRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LeaveTournamentSquadRequest&& from) noexcept
+      : LeaveTournamentSquadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTargetPlayerIdFieldNumber = 1,
+  };
+  // uint64 target_player_id = 1;
+  void clear_target_player_id() ;
+  [[nodiscard]] ::uint64_t target_player_id() const;
+  void set_target_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_player_id() const;
+  void _internal_set_target_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.LeaveTournamentSquadRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LeaveTournamentSquadRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t target_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
 };
 // -------------------------------------------------------------------
@@ -4323,6 +7907,408 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueRequest final : public ::g
     ::uint32_t character_preset_id_;
     ::uint32_t pet_preset_id_;
     ::uint32_t ranked_rule_version_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteTournamentMemberRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.InviteTournamentMemberRequest) */ {
+ public:
+  inline InviteTournamentMemberRequest() : InviteTournamentMemberRequest(nullptr) {}
+  ~InviteTournamentMemberRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(InviteTournamentMemberRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(InviteTournamentMemberRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr InviteTournamentMemberRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline InviteTournamentMemberRequest(const InviteTournamentMemberRequest& from) : InviteTournamentMemberRequest(nullptr, from) {}
+  inline InviteTournamentMemberRequest(InviteTournamentMemberRequest&& from) noexcept : InviteTournamentMemberRequest(nullptr, ::std::move(from)) {}
+  inline InviteTournamentMemberRequest& operator=(const InviteTournamentMemberRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline InviteTournamentMemberRequest& operator=(InviteTournamentMemberRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const InviteTournamentMemberRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<InviteTournamentMemberRequest>(&InviteTournamentMemberRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 61;
+  friend void swap(InviteTournamentMemberRequest& a, InviteTournamentMemberRequest& b) { a.Swap(&b); }
+  inline void Swap(InviteTournamentMemberRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(InviteTournamentMemberRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] InviteTournamentMemberRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<InviteTournamentMemberRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const InviteTournamentMemberRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const InviteTournamentMemberRequest& from) { InviteTournamentMemberRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(InviteTournamentMemberRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.InviteTournamentMemberRequest"; }
+
+  explicit InviteTournamentMemberRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  InviteTournamentMemberRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const InviteTournamentMemberRequest& from);
+  InviteTournamentMemberRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, InviteTournamentMemberRequest&& from) noexcept
+      : InviteTournamentMemberRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTargetPlayerIdFieldNumber = 1,
+  };
+  // uint64 target_player_id = 1;
+  void clear_target_player_id() ;
+  [[nodiscard]] ::uint64_t target_player_id() const;
+  void set_target_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_player_id() const;
+  void _internal_set_target_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.InviteTournamentMemberRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const InviteTournamentMemberRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t target_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTournamentOverviewRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTournamentOverviewRequest) */ {
+ public:
+  inline GetTournamentOverviewRequest() : GetTournamentOverviewRequest(nullptr) {}
+  ~GetTournamentOverviewRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTournamentOverviewRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTournamentOverviewRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTournamentOverviewRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTournamentOverviewRequest(const GetTournamentOverviewRequest& from) : GetTournamentOverviewRequest(nullptr, from) {}
+  inline GetTournamentOverviewRequest(GetTournamentOverviewRequest&& from) noexcept : GetTournamentOverviewRequest(nullptr, ::std::move(from)) {}
+  inline GetTournamentOverviewRequest& operator=(const GetTournamentOverviewRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTournamentOverviewRequest& operator=(GetTournamentOverviewRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTournamentOverviewRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTournamentOverviewRequest>(&GetTournamentOverviewRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 57;
+  friend void swap(GetTournamentOverviewRequest& a, GetTournamentOverviewRequest& b) { a.Swap(&b); }
+  inline void Swap(GetTournamentOverviewRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTournamentOverviewRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTournamentOverviewRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTournamentOverviewRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTournamentOverviewRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTournamentOverviewRequest& from) { GetTournamentOverviewRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTournamentOverviewRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTournamentOverviewRequest"; }
+
+  explicit GetTournamentOverviewRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTournamentOverviewRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTournamentOverviewRequest& from);
+  GetTournamentOverviewRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTournamentOverviewRequest&& from) noexcept
+      : GetTournamentOverviewRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kIncludeHistoryFieldNumber = 1,
+  };
+  // bool include_history = 1;
+  void clear_include_history() ;
+  [[nodiscard]] bool include_history() const;
+  void set_include_history(bool value);
+
+  private:
+  bool _internal_include_history() const;
+  void _internal_set_include_history(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTournamentOverviewRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTournamentOverviewRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool include_history_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5695,6 +9681,614 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleScriptRequest final : p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t script_id_;
     ::uint32_t expected_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateTournamentSquadRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.CreateTournamentSquadRequest) */ {
+ public:
+  inline CreateTournamentSquadRequest() : CreateTournamentSquadRequest(nullptr) {}
+  ~CreateTournamentSquadRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CreateTournamentSquadRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CreateTournamentSquadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CreateTournamentSquadRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CreateTournamentSquadRequest(const CreateTournamentSquadRequest& from) : CreateTournamentSquadRequest(nullptr, from) {}
+  inline CreateTournamentSquadRequest(CreateTournamentSquadRequest&& from) noexcept : CreateTournamentSquadRequest(nullptr, ::std::move(from)) {}
+  inline CreateTournamentSquadRequest& operator=(const CreateTournamentSquadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CreateTournamentSquadRequest& operator=(CreateTournamentSquadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CreateTournamentSquadRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CreateTournamentSquadRequest>(&CreateTournamentSquadRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 59;
+  friend void swap(CreateTournamentSquadRequest& a, CreateTournamentSquadRequest& b) { a.Swap(&b); }
+  inline void Swap(CreateTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CreateTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CreateTournamentSquadRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CreateTournamentSquadRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CreateTournamentSquadRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CreateTournamentSquadRequest& from) { CreateTournamentSquadRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CreateTournamentSquadRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.CreateTournamentSquadRequest"; }
+
+  explicit CreateTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CreateTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CreateTournamentSquadRequest& from);
+  CreateTournamentSquadRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CreateTournamentSquadRequest&& from) noexcept
+      : CreateTournamentSquadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSquadNameFieldNumber = 1,
+  };
+  // string squad_name = 1;
+  void clear_squad_name() ;
+  [[nodiscard]] const ::std::string& squad_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_squad_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_squad_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_squad_name();
+  void set_allocated_squad_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_squad_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_squad_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_squad_name();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.CreateTournamentSquadRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CreateTournamentSquadRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr squad_name_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTournamentRewardRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ClaimTournamentRewardRequest) */ {
+ public:
+  inline ClaimTournamentRewardRequest() : ClaimTournamentRewardRequest(nullptr) {}
+  ~ClaimTournamentRewardRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimTournamentRewardRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimTournamentRewardRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimTournamentRewardRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimTournamentRewardRequest(const ClaimTournamentRewardRequest& from) : ClaimTournamentRewardRequest(nullptr, from) {}
+  inline ClaimTournamentRewardRequest(ClaimTournamentRewardRequest&& from) noexcept : ClaimTournamentRewardRequest(nullptr, ::std::move(from)) {}
+  inline ClaimTournamentRewardRequest& operator=(const ClaimTournamentRewardRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimTournamentRewardRequest& operator=(ClaimTournamentRewardRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimTournamentRewardRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTournamentRewardRequest>(&ClaimTournamentRewardRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 77;
+  friend void swap(ClaimTournamentRewardRequest& a, ClaimTournamentRewardRequest& b) { a.Swap(&b); }
+  inline void Swap(ClaimTournamentRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimTournamentRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimTournamentRewardRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimTournamentRewardRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimTournamentRewardRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimTournamentRewardRequest& from) { ClaimTournamentRewardRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimTournamentRewardRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ClaimTournamentRewardRequest"; }
+
+  explicit ClaimTournamentRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimTournamentRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTournamentRewardRequest& from);
+  ClaimTournamentRewardRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimTournamentRewardRequest&& from) noexcept
+      : ClaimTournamentRewardRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonIdFieldNumber = 1,
+  };
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ClaimTournamentRewardRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimTournamentRewardRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t season_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheerTournamentSquadRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.CheerTournamentSquadRequest) */ {
+ public:
+  inline CheerTournamentSquadRequest() : CheerTournamentSquadRequest(nullptr) {}
+  ~CheerTournamentSquadRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CheerTournamentSquadRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheerTournamentSquadRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CheerTournamentSquadRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CheerTournamentSquadRequest(const CheerTournamentSquadRequest& from) : CheerTournamentSquadRequest(nullptr, from) {}
+  inline CheerTournamentSquadRequest(CheerTournamentSquadRequest&& from) noexcept : CheerTournamentSquadRequest(nullptr, ::std::move(from)) {}
+  inline CheerTournamentSquadRequest& operator=(const CheerTournamentSquadRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheerTournamentSquadRequest& operator=(CheerTournamentSquadRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CheerTournamentSquadRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheerTournamentSquadRequest>(&CheerTournamentSquadRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 75;
+  friend void swap(CheerTournamentSquadRequest& a, CheerTournamentSquadRequest& b) { a.Swap(&b); }
+  inline void Swap(CheerTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheerTournamentSquadRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CheerTournamentSquadRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CheerTournamentSquadRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CheerTournamentSquadRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CheerTournamentSquadRequest& from) { CheerTournamentSquadRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CheerTournamentSquadRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.CheerTournamentSquadRequest"; }
+
+  explicit CheerTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CheerTournamentSquadRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheerTournamentSquadRequest& from);
+  CheerTournamentSquadRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheerTournamentSquadRequest&& from) noexcept
+      : CheerTournamentSquadRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSquadIdFieldNumber = 1,
+  };
+  // uint64 squad_id = 1;
+  void clear_squad_id() ;
+  [[nodiscard]] ::uint64_t squad_id() const;
+  void set_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_id() const;
+  void _internal_set_squad_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.CheerTournamentSquadRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CheerTournamentSquadRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t squad_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8119,6 +12713,1317 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRankedCosmeticRequest final :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentSquadView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentSquadView) */ {
+ public:
+  inline TournamentSquadView() : TournamentSquadView(nullptr) {}
+  ~TournamentSquadView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentSquadView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentSquadView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentSquadView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentSquadView(const TournamentSquadView& from) : TournamentSquadView(nullptr, from) {}
+  inline TournamentSquadView(TournamentSquadView&& from) noexcept : TournamentSquadView(nullptr, ::std::move(from)) {}
+  inline TournamentSquadView& operator=(const TournamentSquadView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentSquadView& operator=(TournamentSquadView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentSquadView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentSquadView>(&TournamentSquadView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 51;
+  friend void swap(TournamentSquadView& a, TournamentSquadView& b) { a.Swap(&b); }
+  inline void Swap(TournamentSquadView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentSquadView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentSquadView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentSquadView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentSquadView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentSquadView& from) { TournamentSquadView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentSquadView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentSquadView"; }
+
+  explicit TournamentSquadView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentSquadView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentSquadView& from);
+  TournamentSquadView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentSquadView&& from) noexcept
+      : TournamentSquadView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMembersFieldNumber = 16,
+    kNameFieldNumber = 3,
+    kSquadIdFieldNumber = 1,
+    kSeasonIdFieldNumber = 2,
+    kStateFieldNumber = 5,
+    kCaptainPlayerIdFieldNumber = 4,
+    kMemberCountFieldNumber = 6,
+    kQualifierPointsFieldNumber = 7,
+    kQualifierPlayedFieldNumber = 8,
+    kQualifierWinsFieldNumber = 9,
+    kQualifierLossesFieldNumber = 10,
+    kQualifierDrawsFieldNumber = 11,
+    kSeedRankFieldNumber = 12,
+    kFinalRankFieldNumber = 13,
+    kRegisteredMsFieldNumber = 15,
+    kCheerCountFieldNumber = 14,
+  };
+  // repeated .match.TournamentMemberView members = 16;
+  [[nodiscard]] int members_size()
+      const;
+  private:
+  int _internal_members_size() const;
+
+  public:
+  void clear_members() ;
+  [[nodiscard]] const ::match::TournamentMemberView& members(int index) const;
+  [[nodiscard]] ::match::TournamentMemberView* PROTOBUF_NONNULL mutable_members(int index);
+  ::match::TournamentMemberView* PROTOBUF_NONNULL add_members();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>&
+  members() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>* PROTOBUF_NONNULL
+  mutable_members();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>& _internal_members() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>* PROTOBUF_NONNULL _internal_mutable_members();
+
+  public:
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint64 squad_id = 1;
+  void clear_squad_id() ;
+  [[nodiscard]] ::uint64_t squad_id() const;
+  void set_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_id() const;
+  void _internal_set_squad_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 2;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // .match.TournamentSquadState state = 5;
+  void clear_state() ;
+  [[nodiscard]] ::match::TournamentSquadState state() const;
+  void set_state(::match::TournamentSquadState value);
+
+  private:
+  ::match::TournamentSquadState _internal_state() const;
+  void _internal_set_state(::match::TournamentSquadState value);
+
+  public:
+  // uint64 captain_player_id = 4;
+  void clear_captain_player_id() ;
+  [[nodiscard]] ::uint64_t captain_player_id() const;
+  void set_captain_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_captain_player_id() const;
+  void _internal_set_captain_player_id(::uint64_t value);
+
+  public:
+  // uint32 member_count = 6;
+  void clear_member_count() ;
+  [[nodiscard]] ::uint32_t member_count() const;
+  void set_member_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_member_count() const;
+  void _internal_set_member_count(::uint32_t value);
+
+  public:
+  // uint32 qualifier_points = 7;
+  void clear_qualifier_points() ;
+  [[nodiscard]] ::uint32_t qualifier_points() const;
+  void set_qualifier_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_points() const;
+  void _internal_set_qualifier_points(::uint32_t value);
+
+  public:
+  // uint32 qualifier_played = 8;
+  void clear_qualifier_played() ;
+  [[nodiscard]] ::uint32_t qualifier_played() const;
+  void set_qualifier_played(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_played() const;
+  void _internal_set_qualifier_played(::uint32_t value);
+
+  public:
+  // uint32 qualifier_wins = 9;
+  void clear_qualifier_wins() ;
+  [[nodiscard]] ::uint32_t qualifier_wins() const;
+  void set_qualifier_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_wins() const;
+  void _internal_set_qualifier_wins(::uint32_t value);
+
+  public:
+  // uint32 qualifier_losses = 10;
+  void clear_qualifier_losses() ;
+  [[nodiscard]] ::uint32_t qualifier_losses() const;
+  void set_qualifier_losses(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_losses() const;
+  void _internal_set_qualifier_losses(::uint32_t value);
+
+  public:
+  // uint32 qualifier_draws = 11;
+  void clear_qualifier_draws() ;
+  [[nodiscard]] ::uint32_t qualifier_draws() const;
+  void set_qualifier_draws(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_qualifier_draws() const;
+  void _internal_set_qualifier_draws(::uint32_t value);
+
+  public:
+  // uint32 seed_rank = 12;
+  void clear_seed_rank() ;
+  [[nodiscard]] ::uint32_t seed_rank() const;
+  void set_seed_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_seed_rank() const;
+  void _internal_set_seed_rank(::uint32_t value);
+
+  public:
+  // uint32 final_rank = 13;
+  void clear_final_rank() ;
+  [[nodiscard]] ::uint32_t final_rank() const;
+  void set_final_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_final_rank() const;
+  void _internal_set_final_rank(::uint32_t value);
+
+  public:
+  // uint64 registered_ms = 15;
+  void clear_registered_ms() ;
+  [[nodiscard]] ::uint64_t registered_ms() const;
+  void set_registered_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_registered_ms() const;
+  void _internal_set_registered_ms(::uint64_t value);
+
+  public:
+  // uint32 cheer_count = 14;
+  void clear_cheer_count() ;
+  [[nodiscard]] ::uint32_t cheer_count() const;
+  void set_cheer_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cheer_count() const;
+  void _internal_set_cheer_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentSquadView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          1, 54,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentSquadView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentMemberView > members_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint64_t squad_id_;
+    ::uint32_t season_id_;
+    int state_;
+    ::uint64_t captain_player_id_;
+    ::uint32_t member_count_;
+    ::uint32_t qualifier_points_;
+    ::uint32_t qualifier_played_;
+    ::uint32_t qualifier_wins_;
+    ::uint32_t qualifier_losses_;
+    ::uint32_t qualifier_draws_;
+    ::uint32_t seed_rank_;
+    ::uint32_t final_rank_;
+    ::uint64_t registered_ms_;
+    ::uint32_t cheer_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRewardTierView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentRewardTierView) */ {
+ public:
+  inline TournamentRewardTierView() : TournamentRewardTierView(nullptr) {}
+  ~TournamentRewardTierView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentRewardTierView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentRewardTierView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentRewardTierView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentRewardTierView(const TournamentRewardTierView& from) : TournamentRewardTierView(nullptr, from) {}
+  inline TournamentRewardTierView(TournamentRewardTierView&& from) noexcept : TournamentRewardTierView(nullptr, ::std::move(from)) {}
+  inline TournamentRewardTierView& operator=(const TournamentRewardTierView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentRewardTierView& operator=(TournamentRewardTierView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentRewardTierView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentRewardTierView>(&TournamentRewardTierView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 55;
+  friend void swap(TournamentRewardTierView& a, TournamentRewardTierView& b) { a.Swap(&b); }
+  inline void Swap(TournamentRewardTierView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentRewardTierView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentRewardTierView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentRewardTierView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentRewardTierView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentRewardTierView& from) { TournamentRewardTierView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentRewardTierView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentRewardTierView"; }
+
+  explicit TournamentRewardTierView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentRewardTierView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentRewardTierView& from);
+  TournamentRewardTierView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentRewardTierView&& from) noexcept
+      : TournamentRewardTierView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 6,
+    kTitleCodeFieldNumber = 7,
+    kBadgeCodeFieldNumber = 8,
+    kDescFieldNumber = 9,
+    kTierIdFieldNumber = 1,
+    kTierKindFieldNumber = 2,
+    kMinRankFieldNumber = 3,
+    kMaxRankFieldNumber = 4,
+    kGoldAmountFieldNumber = 5,
+  };
+  // repeated .match.TournamentRewardItem items = 6;
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::match::TournamentRewardItem& items(int index) const;
+  [[nodiscard]] ::match::TournamentRewardItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::match::TournamentRewardItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // string title_code = 7;
+  void clear_title_code() ;
+  [[nodiscard]] const ::std::string& title_code() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title_code(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title_code();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title_code();
+  void set_allocated_title_code(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title_code() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title_code(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title_code();
+
+  public:
+  // string badge_code = 8;
+  void clear_badge_code() ;
+  [[nodiscard]] const ::std::string& badge_code() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_badge_code(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_badge_code();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_badge_code();
+  void set_allocated_badge_code(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_badge_code() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_badge_code(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_badge_code();
+
+  public:
+  // string desc = 9;
+  void clear_desc() ;
+  [[nodiscard]] const ::std::string& desc() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_desc(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_desc();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_desc();
+  void set_allocated_desc(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_desc() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // uint32 tier_id = 1;
+  void clear_tier_id() ;
+  [[nodiscard]] ::uint32_t tier_id() const;
+  void set_tier_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_id() const;
+  void _internal_set_tier_id(::uint32_t value);
+
+  public:
+  // .match.TournamentRewardTierKind tier_kind = 2;
+  void clear_tier_kind() ;
+  [[nodiscard]] ::match::TournamentRewardTierKind tier_kind() const;
+  void set_tier_kind(::match::TournamentRewardTierKind value);
+
+  private:
+  ::match::TournamentRewardTierKind _internal_tier_kind() const;
+  void _internal_set_tier_kind(::match::TournamentRewardTierKind value);
+
+  public:
+  // uint32 min_rank = 3;
+  void clear_min_rank() ;
+  [[nodiscard]] ::uint32_t min_rank() const;
+  void set_min_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_rank() const;
+  void _internal_set_min_rank(::uint32_t value);
+
+  public:
+  // uint32 max_rank = 4;
+  void clear_max_rank() ;
+  [[nodiscard]] ::uint32_t max_rank() const;
+  void set_max_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_rank() const;
+  void _internal_set_max_rank(::uint32_t value);
+
+  public:
+  // uint64 gold_amount = 5;
+  void clear_gold_amount() ;
+  [[nodiscard]] ::uint64_t gold_amount() const;
+  void set_gold_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gold_amount() const;
+  void _internal_set_gold_amount(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentRewardTierView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          1, 71,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentRewardTierView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentRewardItem > items_;
+    ::google::protobuf::internal::ArenaStringPtr title_code_;
+    ::google::protobuf::internal::ArenaStringPtr badge_code_;
+    ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::uint32_t tier_id_;
+    int tier_kind_;
+    ::uint32_t min_rank_;
+    ::uint32_t max_rank_;
+    ::uint64_t gold_amount_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentPlayerRewardView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TournamentPlayerRewardView) */ {
+ public:
+  inline TournamentPlayerRewardView() : TournamentPlayerRewardView(nullptr) {}
+  ~TournamentPlayerRewardView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TournamentPlayerRewardView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TournamentPlayerRewardView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TournamentPlayerRewardView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TournamentPlayerRewardView(const TournamentPlayerRewardView& from) : TournamentPlayerRewardView(nullptr, from) {}
+  inline TournamentPlayerRewardView(TournamentPlayerRewardView&& from) noexcept : TournamentPlayerRewardView(nullptr, ::std::move(from)) {}
+  inline TournamentPlayerRewardView& operator=(const TournamentPlayerRewardView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TournamentPlayerRewardView& operator=(TournamentPlayerRewardView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TournamentPlayerRewardView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TournamentPlayerRewardView>(&TournamentPlayerRewardView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 56;
+  friend void swap(TournamentPlayerRewardView& a, TournamentPlayerRewardView& b) { a.Swap(&b); }
+  inline void Swap(TournamentPlayerRewardView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TournamentPlayerRewardView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TournamentPlayerRewardView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TournamentPlayerRewardView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TournamentPlayerRewardView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TournamentPlayerRewardView& from) { TournamentPlayerRewardView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TournamentPlayerRewardView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TournamentPlayerRewardView"; }
+
+  explicit TournamentPlayerRewardView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TournamentPlayerRewardView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TournamentPlayerRewardView& from);
+  TournamentPlayerRewardView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TournamentPlayerRewardView&& from) noexcept
+      : TournamentPlayerRewardView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kItemsFieldNumber = 7,
+    kTitleCodeFieldNumber = 8,
+    kBadgeCodeFieldNumber = 9,
+    kRewardIdFieldNumber = 1,
+    kSeasonIdFieldNumber = 2,
+    kTierKindFieldNumber = 3,
+    kTierIdFieldNumber = 4,
+    kFinalRankFieldNumber = 5,
+    kGoldAmountFieldNumber = 6,
+    kMailIdFieldNumber = 11,
+    kClaimedMsFieldNumber = 12,
+    kDeliveryStateFieldNumber = 10,
+  };
+  // repeated .match.TournamentRewardItem items = 7;
+  [[nodiscard]] int items_size()
+      const;
+  private:
+  int _internal_items_size() const;
+
+  public:
+  void clear_items() ;
+  [[nodiscard]] const ::match::TournamentRewardItem& items(int index) const;
+  [[nodiscard]] ::match::TournamentRewardItem* PROTOBUF_NONNULL mutable_items(int index);
+  ::match::TournamentRewardItem* PROTOBUF_NONNULL add_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>&
+  items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+  mutable_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>& _internal_items() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // string title_code = 8;
+  void clear_title_code() ;
+  [[nodiscard]] const ::std::string& title_code() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title_code(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title_code();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title_code();
+  void set_allocated_title_code(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title_code() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title_code(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title_code();
+
+  public:
+  // string badge_code = 9;
+  void clear_badge_code() ;
+  [[nodiscard]] const ::std::string& badge_code() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_badge_code(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_badge_code();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_badge_code();
+  void set_allocated_badge_code(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_badge_code() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_badge_code(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_badge_code();
+
+  public:
+  // uint64 reward_id = 1;
+  void clear_reward_id() ;
+  [[nodiscard]] ::uint64_t reward_id() const;
+  void set_reward_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_reward_id() const;
+  void _internal_set_reward_id(::uint64_t value);
+
+  public:
+  // uint32 season_id = 2;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // .match.TournamentRewardTierKind tier_kind = 3;
+  void clear_tier_kind() ;
+  [[nodiscard]] ::match::TournamentRewardTierKind tier_kind() const;
+  void set_tier_kind(::match::TournamentRewardTierKind value);
+
+  private:
+  ::match::TournamentRewardTierKind _internal_tier_kind() const;
+  void _internal_set_tier_kind(::match::TournamentRewardTierKind value);
+
+  public:
+  // uint32 tier_id = 4;
+  void clear_tier_id() ;
+  [[nodiscard]] ::uint32_t tier_id() const;
+  void set_tier_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_id() const;
+  void _internal_set_tier_id(::uint32_t value);
+
+  public:
+  // uint32 final_rank = 5;
+  void clear_final_rank() ;
+  [[nodiscard]] ::uint32_t final_rank() const;
+  void set_final_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_final_rank() const;
+  void _internal_set_final_rank(::uint32_t value);
+
+  public:
+  // uint64 gold_amount = 6;
+  void clear_gold_amount() ;
+  [[nodiscard]] ::uint64_t gold_amount() const;
+  void set_gold_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gold_amount() const;
+  void _internal_set_gold_amount(::uint64_t value);
+
+  public:
+  // uint64 mail_id = 11;
+  void clear_mail_id() ;
+  [[nodiscard]] ::uint64_t mail_id() const;
+  void set_mail_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_mail_id() const;
+  void _internal_set_mail_id(::uint64_t value);
+
+  public:
+  // uint64 claimed_ms = 12;
+  void clear_claimed_ms() ;
+  [[nodiscard]] ::uint64_t claimed_ms() const;
+  void set_claimed_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_claimed_ms() const;
+  void _internal_set_claimed_ms(::uint64_t value);
+
+  public:
+  // .match.TournamentRewardDeliveryState delivery_state = 10;
+  void clear_delivery_state() ;
+  [[nodiscard]] ::match::TournamentRewardDeliveryState delivery_state() const;
+  void set_delivery_state(::match::TournamentRewardDeliveryState value);
+
+  private:
+  ::match::TournamentRewardDeliveryState _internal_delivery_state() const;
+  void _internal_set_delivery_state(::match::TournamentRewardDeliveryState value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TournamentPlayerRewardView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          1, 69,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TournamentPlayerRewardView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentRewardItem > items_;
+    ::google::protobuf::internal::ArenaStringPtr title_code_;
+    ::google::protobuf::internal::ArenaStringPtr badge_code_;
+    ::uint64_t reward_id_;
+    ::uint32_t season_id_;
+    int tier_kind_;
+    ::uint32_t tier_id_;
+    ::uint32_t final_rank_;
+    ::uint64_t gold_amount_;
+    ::uint64_t mail_id_;
+    ::uint64_t claimed_ms_;
+    int delivery_state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTournamentMatchResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.StartTournamentMatchResponse) */ {
+ public:
+  inline StartTournamentMatchResponse() : StartTournamentMatchResponse(nullptr) {}
+  ~StartTournamentMatchResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartTournamentMatchResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartTournamentMatchResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartTournamentMatchResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartTournamentMatchResponse(const StartTournamentMatchResponse& from) : StartTournamentMatchResponse(nullptr, from) {}
+  inline StartTournamentMatchResponse(StartTournamentMatchResponse&& from) noexcept : StartTournamentMatchResponse(nullptr, ::std::move(from)) {}
+  inline StartTournamentMatchResponse& operator=(const StartTournamentMatchResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartTournamentMatchResponse& operator=(StartTournamentMatchResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartTournamentMatchResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartTournamentMatchResponse>(&StartTournamentMatchResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 74;
+  friend void swap(StartTournamentMatchResponse& a, StartTournamentMatchResponse& b) { a.Swap(&b); }
+  inline void Swap(StartTournamentMatchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartTournamentMatchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartTournamentMatchResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartTournamentMatchResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartTournamentMatchResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartTournamentMatchResponse& from) { StartTournamentMatchResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartTournamentMatchResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.StartTournamentMatchResponse"; }
+
+  explicit StartTournamentMatchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartTournamentMatchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartTournamentMatchResponse& from);
+  StartTournamentMatchResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartTournamentMatchResponse&& from) noexcept
+      : StartTournamentMatchResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kMatchFieldNumber = 2,
+    kBattleIdFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentMatchView match = 2;
+  [[nodiscard]] bool has_match()
+      const;
+  void clear_match() ;
+  [[nodiscard]] const ::match::TournamentMatchView& match() const;
+  [[nodiscard]] ::match::TournamentMatchView* PROTOBUF_NULLABLE release_match();
+  ::match::TournamentMatchView* PROTOBUF_NONNULL mutable_match();
+  void set_allocated_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value);
+  ::match::TournamentMatchView* PROTOBUF_NULLABLE unsafe_arena_release_match();
+
+  private:
+  const ::match::TournamentMatchView& _internal_match() const;
+  ::match::TournamentMatchView* PROTOBUF_NONNULL _internal_mutable_match();
+
+  public:
+  // uint64 battle_id = 3;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.StartTournamentMatchResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartTournamentMatchResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentMatchView* PROTOBUF_NULLABLE match_;
+    ::uint64_t battle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.SpectateBattleRecord) */ {
  public:
@@ -10454,6 +16359,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueResponse final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InviteTournamentMemberResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.InviteTournamentMemberResponse) */ {
+ public:
+  inline InviteTournamentMemberResponse() : InviteTournamentMemberResponse(nullptr) {}
+  ~InviteTournamentMemberResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(InviteTournamentMemberResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(InviteTournamentMemberResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr InviteTournamentMemberResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline InviteTournamentMemberResponse(const InviteTournamentMemberResponse& from) : InviteTournamentMemberResponse(nullptr, from) {}
+  inline InviteTournamentMemberResponse(InviteTournamentMemberResponse&& from) noexcept : InviteTournamentMemberResponse(nullptr, ::std::move(from)) {}
+  inline InviteTournamentMemberResponse& operator=(const InviteTournamentMemberResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline InviteTournamentMemberResponse& operator=(InviteTournamentMemberResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const InviteTournamentMemberResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<InviteTournamentMemberResponse>(&InviteTournamentMemberResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 62;
+  friend void swap(InviteTournamentMemberResponse& a, InviteTournamentMemberResponse& b) { a.Swap(&b); }
+  inline void Swap(InviteTournamentMemberResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(InviteTournamentMemberResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] InviteTournamentMemberResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<InviteTournamentMemberResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const InviteTournamentMemberResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const InviteTournamentMemberResponse& from) { InviteTournamentMemberResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(InviteTournamentMemberResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.InviteTournamentMemberResponse"; }
+
+  explicit InviteTournamentMemberResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  InviteTournamentMemberResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const InviteTournamentMemberResponse& from);
+  InviteTournamentMemberResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, InviteTournamentMemberResponse&& from) noexcept
+      : InviteTournamentMemberResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kInviteFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentInviteView invite = 2;
+  [[nodiscard]] bool has_invite()
+      const;
+  void clear_invite() ;
+  [[nodiscard]] const ::match::TournamentInviteView& invite() const;
+  [[nodiscard]] ::match::TournamentInviteView* PROTOBUF_NULLABLE release_invite();
+  ::match::TournamentInviteView* PROTOBUF_NONNULL mutable_invite();
+  void set_allocated_invite(::match::TournamentInviteView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_invite(::match::TournamentInviteView* PROTOBUF_NULLABLE value);
+  ::match::TournamentInviteView* PROTOBUF_NULLABLE unsafe_arena_release_invite();
+
+  private:
+  const ::match::TournamentInviteView& _internal_invite() const;
+  ::match::TournamentInviteView* PROTOBUF_NONNULL _internal_mutable_invite();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.InviteTournamentMemberResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const InviteTournamentMemberResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentInviteView* PROTOBUF_NULLABLE invite_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankedProfileResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.GetRankedProfileResponse) */ {
  public:
@@ -11269,6 +17399,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleScriptResponse final : 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheerTournamentSquadResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.CheerTournamentSquadResponse) */ {
+ public:
+  inline CheerTournamentSquadResponse() : CheerTournamentSquadResponse(nullptr) {}
+  ~CheerTournamentSquadResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CheerTournamentSquadResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CheerTournamentSquadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CheerTournamentSquadResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CheerTournamentSquadResponse(const CheerTournamentSquadResponse& from) : CheerTournamentSquadResponse(nullptr, from) {}
+  inline CheerTournamentSquadResponse(CheerTournamentSquadResponse&& from) noexcept : CheerTournamentSquadResponse(nullptr, ::std::move(from)) {}
+  inline CheerTournamentSquadResponse& operator=(const CheerTournamentSquadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CheerTournamentSquadResponse& operator=(CheerTournamentSquadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CheerTournamentSquadResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CheerTournamentSquadResponse>(&CheerTournamentSquadResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 76;
+  friend void swap(CheerTournamentSquadResponse& a, CheerTournamentSquadResponse& b) { a.Swap(&b); }
+  inline void Swap(CheerTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CheerTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CheerTournamentSquadResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CheerTournamentSquadResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CheerTournamentSquadResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CheerTournamentSquadResponse& from) { CheerTournamentSquadResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CheerTournamentSquadResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.CheerTournamentSquadResponse"; }
+
+  explicit CheerTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CheerTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CheerTournamentSquadResponse& from);
+  CheerTournamentSquadResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CheerTournamentSquadResponse&& from) noexcept
+      : CheerTournamentSquadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadIdFieldNumber = 2,
+    kSquadCheerCountFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 squad_id = 2;
+  void clear_squad_id() ;
+  [[nodiscard]] ::uint64_t squad_id() const;
+  void set_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_squad_id() const;
+  void _internal_set_squad_id(::uint64_t value);
+
+  public:
+  // uint32 squad_cheer_count = 3;
+  void clear_squad_cheer_count() ;
+  [[nodiscard]] ::uint32_t squad_cheer_count() const;
+  void set_squad_cheer_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_squad_cheer_count() const;
+  void _internal_set_squad_cheer_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.CheerTournamentSquadResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CheerTournamentSquadResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t squad_id_;
+    ::uint32_t squad_cheer_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChallengePlayerResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.ChallengePlayerResponse) */ {
  public:
@@ -11784,6 +18145,994 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleReportSummary final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateTournamentLineupResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.UpdateTournamentLineupResponse) */ {
+ public:
+  inline UpdateTournamentLineupResponse() : UpdateTournamentLineupResponse(nullptr) {}
+  ~UpdateTournamentLineupResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpdateTournamentLineupResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpdateTournamentLineupResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpdateTournamentLineupResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpdateTournamentLineupResponse(const UpdateTournamentLineupResponse& from) : UpdateTournamentLineupResponse(nullptr, from) {}
+  inline UpdateTournamentLineupResponse(UpdateTournamentLineupResponse&& from) noexcept : UpdateTournamentLineupResponse(nullptr, ::std::move(from)) {}
+  inline UpdateTournamentLineupResponse& operator=(const UpdateTournamentLineupResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpdateTournamentLineupResponse& operator=(UpdateTournamentLineupResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpdateTournamentLineupResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateTournamentLineupResponse>(&UpdateTournamentLineupResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 68;
+  friend void swap(UpdateTournamentLineupResponse& a, UpdateTournamentLineupResponse& b) { a.Swap(&b); }
+  inline void Swap(UpdateTournamentLineupResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpdateTournamentLineupResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpdateTournamentLineupResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpdateTournamentLineupResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpdateTournamentLineupResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpdateTournamentLineupResponse& from) { UpdateTournamentLineupResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpdateTournamentLineupResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.UpdateTournamentLineupResponse"; }
+
+  explicit UpdateTournamentLineupResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpdateTournamentLineupResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpdateTournamentLineupResponse& from);
+  UpdateTournamentLineupResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpdateTournamentLineupResponse&& from) noexcept
+      : UpdateTournamentLineupResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSquadView squad = 2;
+  [[nodiscard]] bool has_squad()
+      const;
+  void clear_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_squad();
+  void set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_squad();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.UpdateTournamentLineupResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpdateTournamentLineupResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RespondTournamentInviteResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.RespondTournamentInviteResponse) */ {
+ public:
+  inline RespondTournamentInviteResponse() : RespondTournamentInviteResponse(nullptr) {}
+  ~RespondTournamentInviteResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RespondTournamentInviteResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RespondTournamentInviteResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RespondTournamentInviteResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RespondTournamentInviteResponse(const RespondTournamentInviteResponse& from) : RespondTournamentInviteResponse(nullptr, from) {}
+  inline RespondTournamentInviteResponse(RespondTournamentInviteResponse&& from) noexcept : RespondTournamentInviteResponse(nullptr, ::std::move(from)) {}
+  inline RespondTournamentInviteResponse& operator=(const RespondTournamentInviteResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RespondTournamentInviteResponse& operator=(RespondTournamentInviteResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RespondTournamentInviteResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RespondTournamentInviteResponse>(&RespondTournamentInviteResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 64;
+  friend void swap(RespondTournamentInviteResponse& a, RespondTournamentInviteResponse& b) { a.Swap(&b); }
+  inline void Swap(RespondTournamentInviteResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RespondTournamentInviteResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RespondTournamentInviteResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RespondTournamentInviteResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RespondTournamentInviteResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RespondTournamentInviteResponse& from) { RespondTournamentInviteResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RespondTournamentInviteResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.RespondTournamentInviteResponse"; }
+
+  explicit RespondTournamentInviteResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RespondTournamentInviteResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RespondTournamentInviteResponse& from);
+  RespondTournamentInviteResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RespondTournamentInviteResponse&& from) noexcept
+      : RespondTournamentInviteResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSquadView squad = 2;
+  [[nodiscard]] bool has_squad()
+      const;
+  void clear_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_squad();
+  void set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_squad();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.RespondTournamentInviteResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RespondTournamentInviteResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RegisterTournamentSquadResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.RegisterTournamentSquadResponse) */ {
+ public:
+  inline RegisterTournamentSquadResponse() : RegisterTournamentSquadResponse(nullptr) {}
+  ~RegisterTournamentSquadResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RegisterTournamentSquadResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RegisterTournamentSquadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RegisterTournamentSquadResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RegisterTournamentSquadResponse(const RegisterTournamentSquadResponse& from) : RegisterTournamentSquadResponse(nullptr, from) {}
+  inline RegisterTournamentSquadResponse(RegisterTournamentSquadResponse&& from) noexcept : RegisterTournamentSquadResponse(nullptr, ::std::move(from)) {}
+  inline RegisterTournamentSquadResponse& operator=(const RegisterTournamentSquadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RegisterTournamentSquadResponse& operator=(RegisterTournamentSquadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RegisterTournamentSquadResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RegisterTournamentSquadResponse>(&RegisterTournamentSquadResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 70;
+  friend void swap(RegisterTournamentSquadResponse& a, RegisterTournamentSquadResponse& b) { a.Swap(&b); }
+  inline void Swap(RegisterTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RegisterTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RegisterTournamentSquadResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RegisterTournamentSquadResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RegisterTournamentSquadResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RegisterTournamentSquadResponse& from) { RegisterTournamentSquadResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RegisterTournamentSquadResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.RegisterTournamentSquadResponse"; }
+
+  explicit RegisterTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RegisterTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RegisterTournamentSquadResponse& from);
+  RegisterTournamentSquadResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RegisterTournamentSquadResponse&& from) noexcept
+      : RegisterTournamentSquadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSquadView squad = 2;
+  [[nodiscard]] bool has_squad()
+      const;
+  void clear_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_squad();
+  void set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_squad();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.RegisterTournamentSquadResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RegisterTournamentSquadResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTournamentStandingsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ListTournamentStandingsResponse) */ {
+ public:
+  inline ListTournamentStandingsResponse() : ListTournamentStandingsResponse(nullptr) {}
+  ~ListTournamentStandingsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTournamentStandingsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTournamentStandingsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTournamentStandingsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTournamentStandingsResponse(const ListTournamentStandingsResponse& from) : ListTournamentStandingsResponse(nullptr, from) {}
+  inline ListTournamentStandingsResponse(ListTournamentStandingsResponse&& from) noexcept : ListTournamentStandingsResponse(nullptr, ::std::move(from)) {}
+  inline ListTournamentStandingsResponse& operator=(const ListTournamentStandingsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTournamentStandingsResponse& operator=(ListTournamentStandingsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTournamentStandingsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTournamentStandingsResponse>(&ListTournamentStandingsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 72;
+  friend void swap(ListTournamentStandingsResponse& a, ListTournamentStandingsResponse& b) { a.Swap(&b); }
+  inline void Swap(ListTournamentStandingsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTournamentStandingsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTournamentStandingsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTournamentStandingsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTournamentStandingsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTournamentStandingsResponse& from) { ListTournamentStandingsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTournamentStandingsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListTournamentStandingsResponse"; }
+
+  explicit ListTournamentStandingsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTournamentStandingsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTournamentStandingsResponse& from);
+  ListTournamentStandingsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTournamentStandingsResponse&& from) noexcept
+      : ListTournamentStandingsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStandingsFieldNumber = 3,
+    kKnockoutBracketFieldNumber = 6,
+    kErrorMessageFieldNumber = 1,
+    kSeasonFieldNumber = 2,
+    kMySquadFieldNumber = 4,
+    kServerTimeMsFieldNumber = 7,
+    kTotalSquadsFieldNumber = 5,
+  };
+  // repeated .match.TournamentSquadView standings = 3;
+  [[nodiscard]] int standings_size()
+      const;
+  private:
+  int _internal_standings_size() const;
+
+  public:
+  void clear_standings() ;
+  [[nodiscard]] const ::match::TournamentSquadView& standings(int index) const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_standings(int index);
+  ::match::TournamentSquadView* PROTOBUF_NONNULL add_standings();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>&
+  standings() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>* PROTOBUF_NONNULL
+  mutable_standings();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>& _internal_standings() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>* PROTOBUF_NONNULL _internal_mutable_standings();
+
+  public:
+  // repeated .match.TournamentMatchView knockout_bracket = 6;
+  [[nodiscard]] int knockout_bracket_size()
+      const;
+  private:
+  int _internal_knockout_bracket_size() const;
+
+  public:
+  void clear_knockout_bracket() ;
+  [[nodiscard]] const ::match::TournamentMatchView& knockout_bracket(int index) const;
+  [[nodiscard]] ::match::TournamentMatchView* PROTOBUF_NONNULL mutable_knockout_bracket(int index);
+  ::match::TournamentMatchView* PROTOBUF_NONNULL add_knockout_bracket();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>&
+  knockout_bracket() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+  mutable_knockout_bracket();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>& _internal_knockout_bracket() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL _internal_mutable_knockout_bracket();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSeasonView season = 2;
+  [[nodiscard]] bool has_season()
+      const;
+  void clear_season() ;
+  [[nodiscard]] const ::match::TournamentSeasonView& season() const;
+  [[nodiscard]] ::match::TournamentSeasonView* PROTOBUF_NULLABLE release_season();
+  ::match::TournamentSeasonView* PROTOBUF_NONNULL mutable_season();
+  void set_allocated_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSeasonView* PROTOBUF_NULLABLE unsafe_arena_release_season();
+
+  private:
+  const ::match::TournamentSeasonView& _internal_season() const;
+  ::match::TournamentSeasonView* PROTOBUF_NONNULL _internal_mutable_season();
+
+  public:
+  // .match.TournamentSquadView my_squad = 4;
+  [[nodiscard]] bool has_my_squad()
+      const;
+  void clear_my_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& my_squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_my_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_my_squad();
+  void set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_my_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_my_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_my_squad();
+
+  public:
+  // uint64 server_time_ms = 7;
+  void clear_server_time_ms() ;
+  [[nodiscard]] ::uint64_t server_time_ms() const;
+  void set_server_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_time_ms() const;
+  void _internal_set_server_time_ms(::uint64_t value);
+
+  public:
+  // uint32 total_squads = 5;
+  void clear_total_squads() ;
+  [[nodiscard]] ::uint32_t total_squads() const;
+  void set_total_squads(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_squads() const;
+  void _internal_set_total_squads(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ListTournamentStandingsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          5, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTournamentStandingsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentSquadView > standings_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentMatchView > knockout_bracket_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSeasonView* PROTOBUF_NULLABLE season_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE my_squad_;
+    ::uint64_t server_time_ms_;
+    ::uint32_t total_squads_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleReportsResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.ListBattleReportsResponse) */ {
  public:
@@ -12014,6 +19363,660 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleReportsResponse final : p
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaveTournamentSquadResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.LeaveTournamentSquadResponse) */ {
+ public:
+  inline LeaveTournamentSquadResponse() : LeaveTournamentSquadResponse(nullptr) {}
+  ~LeaveTournamentSquadResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LeaveTournamentSquadResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LeaveTournamentSquadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr LeaveTournamentSquadResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline LeaveTournamentSquadResponse(const LeaveTournamentSquadResponse& from) : LeaveTournamentSquadResponse(nullptr, from) {}
+  inline LeaveTournamentSquadResponse(LeaveTournamentSquadResponse&& from) noexcept : LeaveTournamentSquadResponse(nullptr, ::std::move(from)) {}
+  inline LeaveTournamentSquadResponse& operator=(const LeaveTournamentSquadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LeaveTournamentSquadResponse& operator=(LeaveTournamentSquadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const LeaveTournamentSquadResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LeaveTournamentSquadResponse>(&LeaveTournamentSquadResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 66;
+  friend void swap(LeaveTournamentSquadResponse& a, LeaveTournamentSquadResponse& b) { a.Swap(&b); }
+  inline void Swap(LeaveTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LeaveTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] LeaveTournamentSquadResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LeaveTournamentSquadResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LeaveTournamentSquadResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LeaveTournamentSquadResponse& from) { LeaveTournamentSquadResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LeaveTournamentSquadResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.LeaveTournamentSquadResponse"; }
+
+  explicit LeaveTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LeaveTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LeaveTournamentSquadResponse& from);
+  LeaveTournamentSquadResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LeaveTournamentSquadResponse&& from) noexcept
+      : LeaveTournamentSquadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadFieldNumber = 3,
+    kSquadDisbandedFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSquadView squad = 3;
+  [[nodiscard]] bool has_squad()
+      const;
+  void clear_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_squad();
+  void set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_squad();
+
+  public:
+  // bool squad_disbanded = 2;
+  void clear_squad_disbanded() ;
+  [[nodiscard]] bool squad_disbanded() const;
+  void set_squad_disbanded(bool value);
+
+  private:
+  bool _internal_squad_disbanded() const;
+  void _internal_set_squad_disbanded(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.LeaveTournamentSquadResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LeaveTournamentSquadResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    bool squad_disbanded_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTournamentOverviewResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTournamentOverviewResponse) */ {
+ public:
+  inline GetTournamentOverviewResponse() : GetTournamentOverviewResponse(nullptr) {}
+  ~GetTournamentOverviewResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTournamentOverviewResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTournamentOverviewResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTournamentOverviewResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTournamentOverviewResponse(const GetTournamentOverviewResponse& from) : GetTournamentOverviewResponse(nullptr, from) {}
+  inline GetTournamentOverviewResponse(GetTournamentOverviewResponse&& from) noexcept : GetTournamentOverviewResponse(nullptr, ::std::move(from)) {}
+  inline GetTournamentOverviewResponse& operator=(const GetTournamentOverviewResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTournamentOverviewResponse& operator=(GetTournamentOverviewResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTournamentOverviewResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTournamentOverviewResponse>(&GetTournamentOverviewResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 58;
+  friend void swap(GetTournamentOverviewResponse& a, GetTournamentOverviewResponse& b) { a.Swap(&b); }
+  inline void Swap(GetTournamentOverviewResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTournamentOverviewResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTournamentOverviewResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTournamentOverviewResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTournamentOverviewResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTournamentOverviewResponse& from) { GetTournamentOverviewResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTournamentOverviewResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTournamentOverviewResponse"; }
+
+  explicit GetTournamentOverviewResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTournamentOverviewResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTournamentOverviewResponse& from);
+  GetTournamentOverviewResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTournamentOverviewResponse&& from) noexcept
+      : GetTournamentOverviewResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPendingInvitesFieldNumber = 4,
+    kFeaturedMatchesFieldNumber = 6,
+    kRewardTiersFieldNumber = 9,
+    kMyRewardsFieldNumber = 10,
+    kHallOfFameFieldNumber = 11,
+    kMyCheeredSquadNameFieldNumber = 8,
+    kErrorMessageFieldNumber = 1,
+    kCurrentSeasonFieldNumber = 2,
+    kMySquadFieldNumber = 3,
+    kMyActiveMatchFieldNumber = 5,
+    kMyCheeredSquadIdFieldNumber = 7,
+    kServerTimeMsFieldNumber = 12,
+  };
+  // repeated .match.TournamentInviteView pending_invites = 4;
+  [[nodiscard]] int pending_invites_size()
+      const;
+  private:
+  int _internal_pending_invites_size() const;
+
+  public:
+  void clear_pending_invites() ;
+  [[nodiscard]] const ::match::TournamentInviteView& pending_invites(int index) const;
+  [[nodiscard]] ::match::TournamentInviteView* PROTOBUF_NONNULL mutable_pending_invites(int index);
+  ::match::TournamentInviteView* PROTOBUF_NONNULL add_pending_invites();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>&
+  pending_invites() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>* PROTOBUF_NONNULL
+  mutable_pending_invites();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>& _internal_pending_invites() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>* PROTOBUF_NONNULL _internal_mutable_pending_invites();
+
+  public:
+  // repeated .match.TournamentMatchView featured_matches = 6;
+  [[nodiscard]] int featured_matches_size()
+      const;
+  private:
+  int _internal_featured_matches_size() const;
+
+  public:
+  void clear_featured_matches() ;
+  [[nodiscard]] const ::match::TournamentMatchView& featured_matches(int index) const;
+  [[nodiscard]] ::match::TournamentMatchView* PROTOBUF_NONNULL mutable_featured_matches(int index);
+  ::match::TournamentMatchView* PROTOBUF_NONNULL add_featured_matches();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>&
+  featured_matches() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+  mutable_featured_matches();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>& _internal_featured_matches() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL _internal_mutable_featured_matches();
+
+  public:
+  // repeated .match.TournamentRewardTierView reward_tiers = 9;
+  [[nodiscard]] int reward_tiers_size()
+      const;
+  private:
+  int _internal_reward_tiers_size() const;
+
+  public:
+  void clear_reward_tiers() ;
+  [[nodiscard]] const ::match::TournamentRewardTierView& reward_tiers(int index) const;
+  [[nodiscard]] ::match::TournamentRewardTierView* PROTOBUF_NONNULL mutable_reward_tiers(int index);
+  ::match::TournamentRewardTierView* PROTOBUF_NONNULL add_reward_tiers();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>&
+  reward_tiers() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>* PROTOBUF_NONNULL
+  mutable_reward_tiers();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>& _internal_reward_tiers() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>* PROTOBUF_NONNULL _internal_mutable_reward_tiers();
+
+  public:
+  // repeated .match.TournamentPlayerRewardView my_rewards = 10;
+  [[nodiscard]] int my_rewards_size()
+      const;
+  private:
+  int _internal_my_rewards_size() const;
+
+  public:
+  void clear_my_rewards() ;
+  [[nodiscard]] const ::match::TournamentPlayerRewardView& my_rewards(int index) const;
+  [[nodiscard]] ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL mutable_my_rewards(int index);
+  ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL add_my_rewards();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>&
+  my_rewards() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+  mutable_my_rewards();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>& _internal_my_rewards() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL _internal_mutable_my_rewards();
+
+  public:
+  // repeated .match.TournamentSeasonView hall_of_fame = 11;
+  [[nodiscard]] int hall_of_fame_size()
+      const;
+  private:
+  int _internal_hall_of_fame_size() const;
+
+  public:
+  void clear_hall_of_fame() ;
+  [[nodiscard]] const ::match::TournamentSeasonView& hall_of_fame(int index) const;
+  [[nodiscard]] ::match::TournamentSeasonView* PROTOBUF_NONNULL mutable_hall_of_fame(int index);
+  ::match::TournamentSeasonView* PROTOBUF_NONNULL add_hall_of_fame();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>&
+  hall_of_fame() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>* PROTOBUF_NONNULL
+  mutable_hall_of_fame();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>& _internal_hall_of_fame() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>* PROTOBUF_NONNULL _internal_mutable_hall_of_fame();
+
+  public:
+  // string my_cheered_squad_name = 8;
+  void clear_my_cheered_squad_name() ;
+  [[nodiscard]] const ::std::string& my_cheered_squad_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_my_cheered_squad_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_my_cheered_squad_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_my_cheered_squad_name();
+  void set_allocated_my_cheered_squad_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_my_cheered_squad_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_my_cheered_squad_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_my_cheered_squad_name();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSeasonView current_season = 2;
+  [[nodiscard]] bool has_current_season()
+      const;
+  void clear_current_season() ;
+  [[nodiscard]] const ::match::TournamentSeasonView& current_season() const;
+  [[nodiscard]] ::match::TournamentSeasonView* PROTOBUF_NULLABLE release_current_season();
+  ::match::TournamentSeasonView* PROTOBUF_NONNULL mutable_current_season();
+  void set_allocated_current_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_current_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSeasonView* PROTOBUF_NULLABLE unsafe_arena_release_current_season();
+
+  private:
+  const ::match::TournamentSeasonView& _internal_current_season() const;
+  ::match::TournamentSeasonView* PROTOBUF_NONNULL _internal_mutable_current_season();
+
+  public:
+  // .match.TournamentSquadView my_squad = 3;
+  [[nodiscard]] bool has_my_squad()
+      const;
+  void clear_my_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& my_squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_my_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_my_squad();
+  void set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_my_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_my_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_my_squad();
+
+  public:
+  // .match.TournamentMatchView my_active_match = 5;
+  [[nodiscard]] bool has_my_active_match()
+      const;
+  void clear_my_active_match() ;
+  [[nodiscard]] const ::match::TournamentMatchView& my_active_match() const;
+  [[nodiscard]] ::match::TournamentMatchView* PROTOBUF_NULLABLE release_my_active_match();
+  ::match::TournamentMatchView* PROTOBUF_NONNULL mutable_my_active_match();
+  void set_allocated_my_active_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_my_active_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value);
+  ::match::TournamentMatchView* PROTOBUF_NULLABLE unsafe_arena_release_my_active_match();
+
+  private:
+  const ::match::TournamentMatchView& _internal_my_active_match() const;
+  ::match::TournamentMatchView* PROTOBUF_NONNULL _internal_mutable_my_active_match();
+
+  public:
+  // uint64 my_cheered_squad_id = 7;
+  void clear_my_cheered_squad_id() ;
+  [[nodiscard]] ::uint64_t my_cheered_squad_id() const;
+  void set_my_cheered_squad_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_my_cheered_squad_id() const;
+  void _internal_set_my_cheered_squad_id(::uint64_t value);
+
+  public:
+  // uint64 server_time_ms = 12;
+  void clear_server_time_ms() ;
+  [[nodiscard]] ::uint64_t server_time_ms() const;
+  void set_server_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_time_ms() const;
+  void _internal_set_server_time_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTournamentOverviewResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          9, 73,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTournamentOverviewResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentInviteView > pending_invites_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentMatchView > featured_matches_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentRewardTierView > reward_tiers_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentPlayerRewardView > my_rewards_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentSeasonView > hall_of_fame_;
+    ::google::protobuf::internal::ArenaStringPtr my_cheered_squad_name_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSeasonView* PROTOBUF_NULLABLE current_season_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE my_squad_;
+    ::match::TournamentMatchView* PROTOBUF_NULLABLE my_active_match_;
+    ::uint64_t my_cheered_squad_id_;
+    ::uint64_t server_time_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankedBattleResultResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.GetRankedBattleResultResponse) */ {
  public:
@@ -12232,6 +20235,461 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetRankedBattleResultResponse final
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::match::RankedBattleSettlementView* PROTOBUF_NULLABLE result_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateTournamentSquadResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.CreateTournamentSquadResponse) */ {
+ public:
+  inline CreateTournamentSquadResponse() : CreateTournamentSquadResponse(nullptr) {}
+  ~CreateTournamentSquadResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CreateTournamentSquadResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CreateTournamentSquadResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CreateTournamentSquadResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CreateTournamentSquadResponse(const CreateTournamentSquadResponse& from) : CreateTournamentSquadResponse(nullptr, from) {}
+  inline CreateTournamentSquadResponse(CreateTournamentSquadResponse&& from) noexcept : CreateTournamentSquadResponse(nullptr, ::std::move(from)) {}
+  inline CreateTournamentSquadResponse& operator=(const CreateTournamentSquadResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CreateTournamentSquadResponse& operator=(CreateTournamentSquadResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CreateTournamentSquadResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CreateTournamentSquadResponse>(&CreateTournamentSquadResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 60;
+  friend void swap(CreateTournamentSquadResponse& a, CreateTournamentSquadResponse& b) { a.Swap(&b); }
+  inline void Swap(CreateTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CreateTournamentSquadResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CreateTournamentSquadResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CreateTournamentSquadResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CreateTournamentSquadResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CreateTournamentSquadResponse& from) { CreateTournamentSquadResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CreateTournamentSquadResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.CreateTournamentSquadResponse"; }
+
+  explicit CreateTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CreateTournamentSquadResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CreateTournamentSquadResponse& from);
+  CreateTournamentSquadResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CreateTournamentSquadResponse&& from) noexcept
+      : CreateTournamentSquadResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSquadFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TournamentSquadView squad = 2;
+  [[nodiscard]] bool has_squad()
+      const;
+  void clear_squad() ;
+  [[nodiscard]] const ::match::TournamentSquadView& squad() const;
+  [[nodiscard]] ::match::TournamentSquadView* PROTOBUF_NULLABLE release_squad();
+  ::match::TournamentSquadView* PROTOBUF_NONNULL mutable_squad();
+  void set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value);
+  ::match::TournamentSquadView* PROTOBUF_NULLABLE unsafe_arena_release_squad();
+
+  private:
+  const ::match::TournamentSquadView& _internal_squad() const;
+  ::match::TournamentSquadView* PROTOBUF_NONNULL _internal_mutable_squad();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.CreateTournamentSquadResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CreateTournamentSquadResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTournamentRewardResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ClaimTournamentRewardResponse) */ {
+ public:
+  inline ClaimTournamentRewardResponse() : ClaimTournamentRewardResponse(nullptr) {}
+  ~ClaimTournamentRewardResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimTournamentRewardResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimTournamentRewardResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimTournamentRewardResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimTournamentRewardResponse(const ClaimTournamentRewardResponse& from) : ClaimTournamentRewardResponse(nullptr, from) {}
+  inline ClaimTournamentRewardResponse(ClaimTournamentRewardResponse&& from) noexcept : ClaimTournamentRewardResponse(nullptr, ::std::move(from)) {}
+  inline ClaimTournamentRewardResponse& operator=(const ClaimTournamentRewardResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimTournamentRewardResponse& operator=(ClaimTournamentRewardResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimTournamentRewardResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTournamentRewardResponse>(&ClaimTournamentRewardResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 78;
+  friend void swap(ClaimTournamentRewardResponse& a, ClaimTournamentRewardResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimTournamentRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimTournamentRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimTournamentRewardResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimTournamentRewardResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimTournamentRewardResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimTournamentRewardResponse& from) { ClaimTournamentRewardResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimTournamentRewardResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ClaimTournamentRewardResponse"; }
+
+  explicit ClaimTournamentRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimTournamentRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimTournamentRewardResponse& from);
+  ClaimTournamentRewardResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimTournamentRewardResponse&& from) noexcept
+      : ClaimTournamentRewardResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClaimedRewardsFieldNumber = 2,
+    kErrorMessageFieldNumber = 1,
+  };
+  // repeated .match.TournamentPlayerRewardView claimed_rewards = 2;
+  [[nodiscard]] int claimed_rewards_size()
+      const;
+  private:
+  int _internal_claimed_rewards_size() const;
+
+  public:
+  void clear_claimed_rewards() ;
+  [[nodiscard]] const ::match::TournamentPlayerRewardView& claimed_rewards(int index) const;
+  [[nodiscard]] ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL mutable_claimed_rewards(int index);
+  ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL add_claimed_rewards();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>&
+  claimed_rewards() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+  mutable_claimed_rewards();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>& _internal_claimed_rewards() const;
+  ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL _internal_mutable_claimed_rewards();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ClaimTournamentRewardResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimTournamentRewardResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TournamentPlayerRewardView > claimed_rewards_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -19703,7 +28161,7 @@ inline void RankedCosmeticLoadout::_internal_set_hide_talisman(bool value) {
 inline void RankedSeasonInfo::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t RankedSeasonInfo::season_id() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.season_id)
@@ -19711,7 +28169,7 @@ inline ::uint32_t RankedSeasonInfo::season_id() const {
 }
 inline void RankedSeasonInfo::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.season_id)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_season_id() const {
@@ -19727,7 +28185,7 @@ inline void RankedSeasonInfo::_internal_set_season_id(::uint32_t value) {
 inline void RankedSeasonInfo::clear_season_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_key_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& RankedSeasonInfo::season_key() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -19737,13 +28195,13 @@ inline const ::std::string& RankedSeasonInfo::season_key() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void RankedSeasonInfo::set_season_key(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.season_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.season_key)
 }
 inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::mutable_season_key()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_season_key();
   // @@protoc_insertion_point(field_mutable:match.RankedSeasonInfo.season_key)
   return _s;
@@ -19763,10 +28221,10 @@ inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::_internal_mutable_seaso
 inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_season_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.RankedSeasonInfo.season_key)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.season_key_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.season_key_.Set("", GetArena());
@@ -19776,9 +28234,9 @@ inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_season_key() {
 inline void RankedSeasonInfo::set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.season_key_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_key_.IsDefault()) {
@@ -19791,7 +28249,7 @@ inline void RankedSeasonInfo::set_allocated_season_key(::std::string* PROTOBUF_N
 inline void RankedSeasonInfo::clear_season_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& RankedSeasonInfo::season_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -19801,13 +28259,13 @@ inline const ::std::string& RankedSeasonInfo::season_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void RankedSeasonInfo::set_season_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.season_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.season_name)
 }
 inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::mutable_season_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_season_name();
   // @@protoc_insertion_point(field_mutable:match.RankedSeasonInfo.season_name)
   return _s;
@@ -19827,10 +28285,10 @@ inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::_internal_mutable_seaso
 inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_season_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.RankedSeasonInfo.season_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.season_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.season_name_.Set("", GetArena());
@@ -19840,9 +28298,9 @@ inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_season_name() 
 inline void RankedSeasonInfo::set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.season_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_name_.IsDefault()) {
@@ -19855,7 +28313,7 @@ inline void RankedSeasonInfo::set_allocated_season_name(::std::string* PROTOBUF_
 inline void RankedSeasonInfo::clear_rank_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rank_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t RankedSeasonInfo::rank_generation() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.rank_generation)
@@ -19863,7 +28321,7 @@ inline ::uint64_t RankedSeasonInfo::rank_generation() const {
 }
 inline void RankedSeasonInfo::set_rank_generation(::uint64_t value) {
   _internal_set_rank_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.rank_generation)
 }
 inline ::uint64_t RankedSeasonInfo::_internal_rank_generation() const {
@@ -19879,7 +28337,7 @@ inline void RankedSeasonInfo::_internal_set_rank_generation(::uint64_t value) {
 inline void RankedSeasonInfo::clear_rule_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rule_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t RankedSeasonInfo::rule_version() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.rule_version)
@@ -19887,7 +28345,7 @@ inline ::uint32_t RankedSeasonInfo::rule_version() const {
 }
 inline void RankedSeasonInfo::set_rule_version(::uint32_t value) {
   _internal_set_rule_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.rule_version)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_rule_version() const {
@@ -19903,7 +28361,7 @@ inline void RankedSeasonInfo::_internal_set_rule_version(::uint32_t value) {
 inline void RankedSeasonInfo::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::match::RankedSeasonState RankedSeasonInfo::state() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.state)
@@ -19911,7 +28369,7 @@ inline ::match::RankedSeasonState RankedSeasonInfo::state() const {
 }
 inline void RankedSeasonInfo::set_state(::match::RankedSeasonState value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.state)
 }
 inline ::match::RankedSeasonState RankedSeasonInfo::_internal_state() const {
@@ -19927,7 +28385,7 @@ inline void RankedSeasonInfo::_internal_set_state(::match::RankedSeasonState val
 inline void RankedSeasonInfo::clear_start_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.start_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t RankedSeasonInfo::start_ms() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.start_ms)
@@ -19935,7 +28393,7 @@ inline ::uint64_t RankedSeasonInfo::start_ms() const {
 }
 inline void RankedSeasonInfo::set_start_ms(::uint64_t value) {
   _internal_set_start_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.start_ms)
 }
 inline ::uint64_t RankedSeasonInfo::_internal_start_ms() const {
@@ -19951,7 +28409,7 @@ inline void RankedSeasonInfo::_internal_set_start_ms(::uint64_t value) {
 inline void RankedSeasonInfo::clear_end_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.end_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t RankedSeasonInfo::end_ms() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.end_ms)
@@ -19959,7 +28417,7 @@ inline ::uint64_t RankedSeasonInfo::end_ms() const {
 }
 inline void RankedSeasonInfo::set_end_ms(::uint64_t value) {
   _internal_set_end_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.end_ms)
 }
 inline ::uint64_t RankedSeasonInfo::_internal_end_ms() const {
@@ -19975,7 +28433,7 @@ inline void RankedSeasonInfo::_internal_set_end_ms(::uint64_t value) {
 inline void RankedSeasonInfo::clear_battle_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t RankedSeasonInfo::battle_config_id() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.battle_config_id)
@@ -19983,7 +28441,7 @@ inline ::uint32_t RankedSeasonInfo::battle_config_id() const {
 }
 inline void RankedSeasonInfo::set_battle_config_id(::uint32_t value) {
   _internal_set_battle_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.battle_config_id)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_battle_config_id() const {
@@ -19999,7 +28457,7 @@ inline void RankedSeasonInfo::_internal_set_battle_config_id(::uint32_t value) {
 inline void RankedSeasonInfo::clear_wait_prompt_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.wait_prompt_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t RankedSeasonInfo::wait_prompt_seconds() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.wait_prompt_seconds)
@@ -20007,7 +28465,7 @@ inline ::uint32_t RankedSeasonInfo::wait_prompt_seconds() const {
 }
 inline void RankedSeasonInfo::set_wait_prompt_seconds(::uint32_t value) {
   _internal_set_wait_prompt_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.wait_prompt_seconds)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_wait_prompt_seconds() const {
@@ -20023,7 +28481,7 @@ inline void RankedSeasonInfo::_internal_set_wait_prompt_seconds(::uint32_t value
 inline void RankedSeasonInfo::clear_spread_tier1_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spread_tier1_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t RankedSeasonInfo::spread_tier1_seconds() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.spread_tier1_seconds)
@@ -20031,7 +28489,7 @@ inline ::uint32_t RankedSeasonInfo::spread_tier1_seconds() const {
 }
 inline void RankedSeasonInfo::set_spread_tier1_seconds(::uint32_t value) {
   _internal_set_spread_tier1_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.spread_tier1_seconds)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_spread_tier1_seconds() const {
@@ -20047,7 +28505,7 @@ inline void RankedSeasonInfo::_internal_set_spread_tier1_seconds(::uint32_t valu
 inline void RankedSeasonInfo::clear_spread_tier1_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spread_tier1_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t RankedSeasonInfo::spread_tier1_points() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.spread_tier1_points)
@@ -20055,7 +28513,7 @@ inline ::uint32_t RankedSeasonInfo::spread_tier1_points() const {
 }
 inline void RankedSeasonInfo::set_spread_tier1_points(::uint32_t value) {
   _internal_set_spread_tier1_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.spread_tier1_points)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_spread_tier1_points() const {
@@ -20071,7 +28529,7 @@ inline void RankedSeasonInfo::_internal_set_spread_tier1_points(::uint32_t value
 inline void RankedSeasonInfo::clear_spread_tier2_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spread_tier2_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t RankedSeasonInfo::spread_tier2_seconds() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.spread_tier2_seconds)
@@ -20079,7 +28537,7 @@ inline ::uint32_t RankedSeasonInfo::spread_tier2_seconds() const {
 }
 inline void RankedSeasonInfo::set_spread_tier2_seconds(::uint32_t value) {
   _internal_set_spread_tier2_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.spread_tier2_seconds)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_spread_tier2_seconds() const {
@@ -20095,7 +28553,7 @@ inline void RankedSeasonInfo::_internal_set_spread_tier2_seconds(::uint32_t valu
 inline void RankedSeasonInfo::clear_spread_tier2_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spread_tier2_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t RankedSeasonInfo::spread_tier2_points() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.spread_tier2_points)
@@ -20103,7 +28561,7 @@ inline ::uint32_t RankedSeasonInfo::spread_tier2_points() const {
 }
 inline void RankedSeasonInfo::set_spread_tier2_points(::uint32_t value) {
   _internal_set_spread_tier2_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.spread_tier2_points)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_spread_tier2_points() const {
@@ -20119,7 +28577,7 @@ inline void RankedSeasonInfo::_internal_set_spread_tier2_points(::uint32_t value
 inline void RankedSeasonInfo::clear_spread_tier3_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spread_tier3_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t RankedSeasonInfo::spread_tier3_points() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.spread_tier3_points)
@@ -20127,7 +28585,7 @@ inline ::uint32_t RankedSeasonInfo::spread_tier3_points() const {
 }
 inline void RankedSeasonInfo::set_spread_tier3_points(::uint32_t value) {
   _internal_set_spread_tier3_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.spread_tier3_points)
 }
 inline ::uint32_t RankedSeasonInfo::_internal_spread_tier3_points() const {
@@ -20143,7 +28601,7 @@ inline void RankedSeasonInfo::_internal_set_spread_tier3_points(::uint32_t value
 inline void RankedSeasonInfo::clear_champion_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.champion_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t RankedSeasonInfo::champion_player_id() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.champion_player_id)
@@ -20151,7 +28609,7 @@ inline ::uint64_t RankedSeasonInfo::champion_player_id() const {
 }
 inline void RankedSeasonInfo::set_champion_player_id(::uint64_t value) {
   _internal_set_champion_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.champion_player_id)
 }
 inline ::uint64_t RankedSeasonInfo::_internal_champion_player_id() const {
@@ -20167,7 +28625,7 @@ inline void RankedSeasonInfo::_internal_set_champion_player_id(::uint64_t value)
 inline void RankedSeasonInfo::clear_champion_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.champion_name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::std::string& RankedSeasonInfo::champion_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -20177,13 +28635,13 @@ inline const ::std::string& RankedSeasonInfo::champion_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void RankedSeasonInfo::set_champion_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   _impl_.champion_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.champion_name)
 }
 inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::mutable_champion_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::std::string* _s = _internal_mutable_champion_name();
   // @@protoc_insertion_point(field_mutable:match.RankedSeasonInfo.champion_name)
   return _s;
@@ -20203,10 +28661,10 @@ inline ::std::string* PROTOBUF_NONNULL RankedSeasonInfo::_internal_mutable_champ
 inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_champion_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.RankedSeasonInfo.champion_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   auto* released = _impl_.champion_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.champion_name_.Set("", GetArena());
@@ -20216,9 +28674,9 @@ inline ::std::string* PROTOBUF_NULLABLE RankedSeasonInfo::release_champion_name(
 inline void RankedSeasonInfo::set_allocated_champion_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   _impl_.champion_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.champion_name_.IsDefault()) {
@@ -20231,7 +28689,7 @@ inline void RankedSeasonInfo::set_allocated_champion_name(::std::string* PROTOBU
 inline void RankedSeasonInfo::clear_champion_rating_centi() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.champion_rating_centi_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::int64_t RankedSeasonInfo::champion_rating_centi() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.champion_rating_centi)
@@ -20239,7 +28697,7 @@ inline ::int64_t RankedSeasonInfo::champion_rating_centi() const {
 }
 inline void RankedSeasonInfo::set_champion_rating_centi(::int64_t value) {
   _internal_set_champion_rating_centi(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.champion_rating_centi)
 }
 inline ::int64_t RankedSeasonInfo::_internal_champion_rating_centi() const {
@@ -20255,7 +28713,7 @@ inline void RankedSeasonInfo::_internal_set_champion_rating_centi(::int64_t valu
 inline void RankedSeasonInfo::clear_rank_board_sealed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rank_board_sealed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool RankedSeasonInfo::rank_board_sealed() const {
   // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.rank_board_sealed)
@@ -20263,7 +28721,7 @@ inline bool RankedSeasonInfo::rank_board_sealed() const {
 }
 inline void RankedSeasonInfo::set_rank_board_sealed(bool value) {
   _internal_set_rank_board_sealed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.rank_board_sealed)
 }
 inline bool RankedSeasonInfo::_internal_rank_board_sealed() const {
@@ -20273,6 +28731,183 @@ inline bool RankedSeasonInfo::_internal_rank_board_sealed() const {
 inline void RankedSeasonInfo::_internal_set_rank_board_sealed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rank_board_sealed_ = value;
+}
+
+// repeated uint32 allowed_team_sizes = 20;
+inline int RankedSeasonInfo::_internal_allowed_team_sizes_size() const {
+  return _internal_allowed_team_sizes().size();
+}
+inline int RankedSeasonInfo::allowed_team_sizes_size() const {
+  return _internal_allowed_team_sizes_size();
+}
+inline void RankedSeasonInfo::clear_allowed_team_sizes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allowed_team_sizes_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t RankedSeasonInfo::allowed_team_sizes(int index) const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.allowed_team_sizes)
+  return _internal_allowed_team_sizes().Get(index);
+}
+inline void RankedSeasonInfo::set_allowed_team_sizes(int index, ::uint32_t value) {
+  _internal_mutable_allowed_team_sizes()->Set(index, value);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.allowed_team_sizes)
+}
+inline void RankedSeasonInfo::add_allowed_team_sizes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_allowed_team_sizes()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.RankedSeasonInfo.allowed_team_sizes)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& RankedSeasonInfo::allowed_team_sizes() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.RankedSeasonInfo.allowed_team_sizes)
+  return _internal_allowed_team_sizes();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL RankedSeasonInfo::mutable_allowed_team_sizes()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.RankedSeasonInfo.allowed_team_sizes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_allowed_team_sizes();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+RankedSeasonInfo::_internal_allowed_team_sizes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allowed_team_sizes_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+RankedSeasonInfo::_internal_mutable_allowed_team_sizes() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.allowed_team_sizes_;
+}
+
+// bool uses_own_progression = 21;
+inline void RankedSeasonInfo::clear_uses_own_progression() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.uses_own_progression_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline bool RankedSeasonInfo::uses_own_progression() const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.uses_own_progression)
+  return _internal_uses_own_progression();
+}
+inline void RankedSeasonInfo::set_uses_own_progression(bool value) {
+  _internal_set_uses_own_progression(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.uses_own_progression)
+}
+inline bool RankedSeasonInfo::_internal_uses_own_progression() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.uses_own_progression_;
+}
+inline void RankedSeasonInfo::_internal_set_uses_own_progression(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.uses_own_progression_ = value;
+}
+
+// repeated uint32 primary_team_sizes = 22;
+inline int RankedSeasonInfo::_internal_primary_team_sizes_size() const {
+  return _internal_primary_team_sizes().size();
+}
+inline int RankedSeasonInfo::primary_team_sizes_size() const {
+  return _internal_primary_team_sizes_size();
+}
+inline void RankedSeasonInfo::clear_primary_team_sizes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.primary_team_sizes_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t RankedSeasonInfo::primary_team_sizes(int index) const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.primary_team_sizes)
+  return _internal_primary_team_sizes().Get(index);
+}
+inline void RankedSeasonInfo::set_primary_team_sizes(int index, ::uint32_t value) {
+  _internal_mutable_primary_team_sizes()->Set(index, value);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.primary_team_sizes)
+}
+inline void RankedSeasonInfo::add_primary_team_sizes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_primary_team_sizes()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:match.RankedSeasonInfo.primary_team_sizes)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& RankedSeasonInfo::primary_team_sizes() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.RankedSeasonInfo.primary_team_sizes)
+  return _internal_primary_team_sizes();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL RankedSeasonInfo::mutable_primary_team_sizes()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:match.RankedSeasonInfo.primary_team_sizes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_primary_team_sizes();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+RankedSeasonInfo::_internal_primary_team_sizes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.primary_team_sizes_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+RankedSeasonInfo::_internal_mutable_primary_team_sizes() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.primary_team_sizes_;
+}
+
+// repeated uint32 special_team_sizes = 23;
+inline int RankedSeasonInfo::_internal_special_team_sizes_size() const {
+  return _internal_special_team_sizes().size();
+}
+inline int RankedSeasonInfo::special_team_sizes_size() const {
+  return _internal_special_team_sizes_size();
+}
+inline void RankedSeasonInfo::clear_special_team_sizes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.special_team_sizes_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t RankedSeasonInfo::special_team_sizes(int index) const {
+  // @@protoc_insertion_point(field_get:match.RankedSeasonInfo.special_team_sizes)
+  return _internal_special_team_sizes().Get(index);
+}
+inline void RankedSeasonInfo::set_special_team_sizes(int index, ::uint32_t value) {
+  _internal_mutable_special_team_sizes()->Set(index, value);
+  // @@protoc_insertion_point(field_set:match.RankedSeasonInfo.special_team_sizes)
+}
+inline void RankedSeasonInfo::add_special_team_sizes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_special_team_sizes()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:match.RankedSeasonInfo.special_team_sizes)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& RankedSeasonInfo::special_team_sizes() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.RankedSeasonInfo.special_team_sizes)
+  return _internal_special_team_sizes();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL RankedSeasonInfo::mutable_special_team_sizes()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:match.RankedSeasonInfo.special_team_sizes)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_special_team_sizes();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+RankedSeasonInfo::_internal_special_team_sizes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.special_team_sizes_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+RankedSeasonInfo::_internal_mutable_special_team_sizes() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.special_team_sizes_;
 }
 
 // -------------------------------------------------------------------
@@ -22760,6 +31395,6472 @@ inline void GetRankedBattleResultResponse::set_allocated_result(::match::RankedB
   // @@protoc_insertion_point(field_set_allocated:match.GetRankedBattleResultResponse.result)
 }
 
+// -------------------------------------------------------------------
+
+// TournamentSeasonView
+
+// uint32 season_id = 1;
+inline void TournamentSeasonView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TournamentSeasonView::season_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.season_id)
+  return _internal_season_id();
+}
+inline void TournamentSeasonView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.season_id)
+}
+inline ::uint32_t TournamentSeasonView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TournamentSeasonView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string season_key = 2;
+inline void TournamentSeasonView::clear_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TournamentSeasonView::season_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.season_key)
+  return _internal_season_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentSeasonView::set_season_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.season_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.season_key)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::mutable_season_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_season_key();
+  // @@protoc_insertion_point(field_mutable:match.TournamentSeasonView.season_key)
+  return _s;
+}
+inline const ::std::string& TournamentSeasonView::_internal_season_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_key_.Get();
+}
+inline void TournamentSeasonView::_internal_set_season_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::_internal_mutable_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentSeasonView::release_season_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentSeasonView.season_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.season_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentSeasonView::set_allocated_season_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.season_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_key_.IsDefault()) {
+    _impl_.season_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentSeasonView.season_key)
+}
+
+// string season_name = 3;
+inline void TournamentSeasonView::clear_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentSeasonView::season_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.season_name)
+  return _internal_season_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentSeasonView::set_season_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.season_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.season_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::mutable_season_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_season_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentSeasonView.season_name)
+  return _s;
+}
+inline const ::std::string& TournamentSeasonView::_internal_season_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_name_.Get();
+}
+inline void TournamentSeasonView::_internal_set_season_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::_internal_mutable_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.season_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentSeasonView::release_season_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentSeasonView.season_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.season_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentSeasonView::set_allocated_season_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.season_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.season_name_.IsDefault()) {
+    _impl_.season_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentSeasonView.season_name)
+}
+
+// uint32 rule_version = 4;
+inline void TournamentSeasonView::clear_rule_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TournamentSeasonView::rule_version() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.rule_version)
+  return _internal_rule_version();
+}
+inline void TournamentSeasonView::set_rule_version(::uint32_t value) {
+  _internal_set_rule_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.rule_version)
+}
+inline ::uint32_t TournamentSeasonView::_internal_rule_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rule_version_;
+}
+inline void TournamentSeasonView::_internal_set_rule_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rule_version_ = value;
+}
+
+// .match.TournamentStage stage = 5;
+inline void TournamentSeasonView::clear_stage() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::match::TournamentStage TournamentSeasonView::stage() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.stage)
+  return _internal_stage();
+}
+inline void TournamentSeasonView::set_stage(::match::TournamentStage value) {
+  _internal_set_stage(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.stage)
+}
+inline ::match::TournamentStage TournamentSeasonView::_internal_stage() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentStage>(_impl_.stage_);
+}
+inline void TournamentSeasonView::_internal_set_stage(::match::TournamentStage value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage_ = value;
+}
+
+// bool enabled = 6;
+inline void TournamentSeasonView::clear_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool TournamentSeasonView::enabled() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.enabled)
+  return _internal_enabled();
+}
+inline void TournamentSeasonView::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.enabled)
+}
+inline bool TournamentSeasonView::_internal_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enabled_;
+}
+inline void TournamentSeasonView::_internal_set_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = value;
+}
+
+// uint32 battle_team_size = 7;
+inline void TournamentSeasonView::clear_battle_team_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_team_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t TournamentSeasonView::battle_team_size() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.battle_team_size)
+  return _internal_battle_team_size();
+}
+inline void TournamentSeasonView::set_battle_team_size(::uint32_t value) {
+  _internal_set_battle_team_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.battle_team_size)
+}
+inline ::uint32_t TournamentSeasonView::_internal_battle_team_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_team_size_;
+}
+inline void TournamentSeasonView::_internal_set_battle_team_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_team_size_ = value;
+}
+
+// uint32 roster_max_size = 8;
+inline void TournamentSeasonView::clear_roster_max_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_max_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t TournamentSeasonView::roster_max_size() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.roster_max_size)
+  return _internal_roster_max_size();
+}
+inline void TournamentSeasonView::set_roster_max_size(::uint32_t value) {
+  _internal_set_roster_max_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.roster_max_size)
+}
+inline ::uint32_t TournamentSeasonView::_internal_roster_max_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roster_max_size_;
+}
+inline void TournamentSeasonView::_internal_set_roster_max_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_max_size_ = value;
+}
+
+// uint32 min_level = 9;
+inline void TournamentSeasonView::clear_min_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TournamentSeasonView::min_level() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.min_level)
+  return _internal_min_level();
+}
+inline void TournamentSeasonView::set_min_level(::uint32_t value) {
+  _internal_set_min_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.min_level)
+}
+inline ::uint32_t TournamentSeasonView::_internal_min_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_level_;
+}
+inline void TournamentSeasonView::_internal_set_min_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_level_ = value;
+}
+
+// uint32 qualifier_max_matches = 10;
+inline void TournamentSeasonView::clear_qualifier_max_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_max_matches_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t TournamentSeasonView::qualifier_max_matches() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.qualifier_max_matches)
+  return _internal_qualifier_max_matches();
+}
+inline void TournamentSeasonView::set_qualifier_max_matches(::uint32_t value) {
+  _internal_set_qualifier_max_matches(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.qualifier_max_matches)
+}
+inline ::uint32_t TournamentSeasonView::_internal_qualifier_max_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_max_matches_;
+}
+inline void TournamentSeasonView::_internal_set_qualifier_max_matches(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_max_matches_ = value;
+}
+
+// uint32 participation_min_matches = 11;
+inline void TournamentSeasonView::clear_participation_min_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.participation_min_matches_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t TournamentSeasonView::participation_min_matches() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.participation_min_matches)
+  return _internal_participation_min_matches();
+}
+inline void TournamentSeasonView::set_participation_min_matches(::uint32_t value) {
+  _internal_set_participation_min_matches(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.participation_min_matches)
+}
+inline ::uint32_t TournamentSeasonView::_internal_participation_min_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.participation_min_matches_;
+}
+inline void TournamentSeasonView::_internal_set_participation_min_matches(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.participation_min_matches_ = value;
+}
+
+// uint32 knockout_max_teams = 12;
+inline void TournamentSeasonView::clear_knockout_max_teams() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_max_teams_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t TournamentSeasonView::knockout_max_teams() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.knockout_max_teams)
+  return _internal_knockout_max_teams();
+}
+inline void TournamentSeasonView::set_knockout_max_teams(::uint32_t value) {
+  _internal_set_knockout_max_teams(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.knockout_max_teams)
+}
+inline ::uint32_t TournamentSeasonView::_internal_knockout_max_teams() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.knockout_max_teams_;
+}
+inline void TournamentSeasonView::_internal_set_knockout_max_teams(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_max_teams_ = value;
+}
+
+// uint32 knockout_team_count = 13;
+inline void TournamentSeasonView::clear_knockout_team_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_team_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t TournamentSeasonView::knockout_team_count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.knockout_team_count)
+  return _internal_knockout_team_count();
+}
+inline void TournamentSeasonView::set_knockout_team_count(::uint32_t value) {
+  _internal_set_knockout_team_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.knockout_team_count)
+}
+inline ::uint32_t TournamentSeasonView::_internal_knockout_team_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.knockout_team_count_;
+}
+inline void TournamentSeasonView::_internal_set_knockout_team_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_team_count_ = value;
+}
+
+// uint32 registered_squad_count = 14;
+inline void TournamentSeasonView::clear_registered_squad_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_squad_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t TournamentSeasonView::registered_squad_count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.registered_squad_count)
+  return _internal_registered_squad_count();
+}
+inline void TournamentSeasonView::set_registered_squad_count(::uint32_t value) {
+  _internal_set_registered_squad_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.registered_squad_count)
+}
+inline ::uint32_t TournamentSeasonView::_internal_registered_squad_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.registered_squad_count_;
+}
+inline void TournamentSeasonView::_internal_set_registered_squad_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_squad_count_ = value;
+}
+
+// uint64 registration_start_ms = 15;
+inline void TournamentSeasonView::clear_registration_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registration_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t TournamentSeasonView::registration_start_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.registration_start_ms)
+  return _internal_registration_start_ms();
+}
+inline void TournamentSeasonView::set_registration_start_ms(::uint64_t value) {
+  _internal_set_registration_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.registration_start_ms)
+}
+inline ::uint64_t TournamentSeasonView::_internal_registration_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.registration_start_ms_;
+}
+inline void TournamentSeasonView::_internal_set_registration_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registration_start_ms_ = value;
+}
+
+// uint64 qualifier_start_ms = 16;
+inline void TournamentSeasonView::clear_qualifier_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t TournamentSeasonView::qualifier_start_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.qualifier_start_ms)
+  return _internal_qualifier_start_ms();
+}
+inline void TournamentSeasonView::set_qualifier_start_ms(::uint64_t value) {
+  _internal_set_qualifier_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.qualifier_start_ms)
+}
+inline ::uint64_t TournamentSeasonView::_internal_qualifier_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_start_ms_;
+}
+inline void TournamentSeasonView::_internal_set_qualifier_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_start_ms_ = value;
+}
+
+// uint64 knockout_start_ms = 17;
+inline void TournamentSeasonView::clear_knockout_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t TournamentSeasonView::knockout_start_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.knockout_start_ms)
+  return _internal_knockout_start_ms();
+}
+inline void TournamentSeasonView::set_knockout_start_ms(::uint64_t value) {
+  _internal_set_knockout_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.knockout_start_ms)
+}
+inline ::uint64_t TournamentSeasonView::_internal_knockout_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.knockout_start_ms_;
+}
+inline void TournamentSeasonView::_internal_set_knockout_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_start_ms_ = value;
+}
+
+// uint64 settle_start_ms = 18;
+inline void TournamentSeasonView::clear_settle_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settle_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t TournamentSeasonView::settle_start_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.settle_start_ms)
+  return _internal_settle_start_ms();
+}
+inline void TournamentSeasonView::set_settle_start_ms(::uint64_t value) {
+  _internal_set_settle_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.settle_start_ms)
+}
+inline ::uint64_t TournamentSeasonView::_internal_settle_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.settle_start_ms_;
+}
+inline void TournamentSeasonView::_internal_set_settle_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.settle_start_ms_ = value;
+}
+
+// uint64 end_ms = 19;
+inline void TournamentSeasonView::clear_end_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint64_t TournamentSeasonView::end_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.end_ms)
+  return _internal_end_ms();
+}
+inline void TournamentSeasonView::set_end_ms(::uint64_t value) {
+  _internal_set_end_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.end_ms)
+}
+inline ::uint64_t TournamentSeasonView::_internal_end_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.end_ms_;
+}
+inline void TournamentSeasonView::_internal_set_end_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_ms_ = value;
+}
+
+// uint64 champion_squad_id = 20;
+inline void TournamentSeasonView::clear_champion_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint64_t TournamentSeasonView::champion_squad_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.champion_squad_id)
+  return _internal_champion_squad_id();
+}
+inline void TournamentSeasonView::set_champion_squad_id(::uint64_t value) {
+  _internal_set_champion_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.champion_squad_id)
+}
+inline ::uint64_t TournamentSeasonView::_internal_champion_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_squad_id_;
+}
+inline void TournamentSeasonView::_internal_set_champion_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_squad_id_ = value;
+}
+
+// string champion_squad_name = 21;
+inline void TournamentSeasonView::clear_champion_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_squad_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TournamentSeasonView::champion_squad_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.champion_squad_name)
+  return _internal_champion_squad_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentSeasonView::set_champion_squad_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.champion_squad_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.champion_squad_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::mutable_champion_squad_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_champion_squad_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentSeasonView.champion_squad_name)
+  return _s;
+}
+inline const ::std::string& TournamentSeasonView::_internal_champion_squad_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_squad_name_.Get();
+}
+inline void TournamentSeasonView::_internal_set_champion_squad_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_squad_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::_internal_mutable_champion_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.champion_squad_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentSeasonView::release_champion_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentSeasonView.champion_squad_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.champion_squad_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.champion_squad_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentSeasonView::set_allocated_champion_squad_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.champion_squad_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.champion_squad_name_.IsDefault()) {
+    _impl_.champion_squad_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentSeasonView.champion_squad_name)
+}
+
+// string champion_member_summary = 22;
+inline void TournamentSeasonView::clear_champion_member_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_member_summary_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& TournamentSeasonView::champion_member_summary() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSeasonView.champion_member_summary)
+  return _internal_champion_member_summary();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentSeasonView::set_champion_member_summary(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.champion_member_summary_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentSeasonView.champion_member_summary)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::mutable_champion_member_summary()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_champion_member_summary();
+  // @@protoc_insertion_point(field_mutable:match.TournamentSeasonView.champion_member_summary)
+  return _s;
+}
+inline const ::std::string& TournamentSeasonView::_internal_champion_member_summary() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.champion_member_summary_.Get();
+}
+inline void TournamentSeasonView::_internal_set_champion_member_summary(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.champion_member_summary_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSeasonView::_internal_mutable_champion_member_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.champion_member_summary_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentSeasonView::release_champion_member_summary() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentSeasonView.champion_member_summary)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.champion_member_summary_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.champion_member_summary_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentSeasonView::set_allocated_champion_member_summary(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.champion_member_summary_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.champion_member_summary_.IsDefault()) {
+    _impl_.champion_member_summary_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentSeasonView.champion_member_summary)
+}
+
+// -------------------------------------------------------------------
+
+// TournamentMemberView
+
+// uint64 player_id = 1;
+inline void TournamentMemberView::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t TournamentMemberView::player_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.player_id)
+  return _internal_player_id();
+}
+inline void TournamentMemberView::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.player_id)
+}
+inline ::uint64_t TournamentMemberView::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void TournamentMemberView::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string player_name = 2;
+inline void TournamentMemberView::clear_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TournamentMemberView::player_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.player_name)
+  return _internal_player_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentMemberView::set_player_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.player_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.player_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMemberView::mutable_player_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_player_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentMemberView.player_name)
+  return _s;
+}
+inline const ::std::string& TournamentMemberView::_internal_player_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_name_.Get();
+}
+inline void TournamentMemberView::_internal_set_player_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMemberView::_internal_mutable_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.player_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentMemberView::release_player_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentMemberView.player_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.player_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.player_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentMemberView::set_allocated_player_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.player_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.player_name_.IsDefault()) {
+    _impl_.player_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentMemberView.player_name)
+}
+
+// uint32 zone_id = 3;
+inline void TournamentMemberView::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t TournamentMemberView::zone_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.zone_id)
+  return _internal_zone_id();
+}
+inline void TournamentMemberView::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.zone_id)
+}
+inline ::uint32_t TournamentMemberView::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void TournamentMemberView::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// .match.TournamentMemberRole role = 4;
+inline void TournamentMemberView::clear_role() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::match::TournamentMemberRole TournamentMemberView::role() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.role)
+  return _internal_role();
+}
+inline void TournamentMemberView::set_role(::match::TournamentMemberRole value) {
+  _internal_set_role(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.role)
+}
+inline ::match::TournamentMemberRole TournamentMemberView::_internal_role() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentMemberRole>(_impl_.role_);
+}
+inline void TournamentMemberView::_internal_set_role(::match::TournamentMemberRole value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = value;
+}
+
+// uint32 starter_slot = 5;
+inline void TournamentMemberView::clear_starter_slot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starter_slot_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TournamentMemberView::starter_slot() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.starter_slot)
+  return _internal_starter_slot();
+}
+inline void TournamentMemberView::set_starter_slot(::uint32_t value) {
+  _internal_set_starter_slot(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.starter_slot)
+}
+inline ::uint32_t TournamentMemberView::_internal_starter_slot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.starter_slot_;
+}
+inline void TournamentMemberView::_internal_set_starter_slot(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starter_slot_ = value;
+}
+
+// uint64 joined_ms = 6;
+inline void TournamentMemberView::clear_joined_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.joined_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t TournamentMemberView::joined_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMemberView.joined_ms)
+  return _internal_joined_ms();
+}
+inline void TournamentMemberView::set_joined_ms(::uint64_t value) {
+  _internal_set_joined_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentMemberView.joined_ms)
+}
+inline ::uint64_t TournamentMemberView::_internal_joined_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.joined_ms_;
+}
+inline void TournamentMemberView::_internal_set_joined_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.joined_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TournamentSquadView
+
+// uint64 squad_id = 1;
+inline void TournamentSquadView::clear_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t TournamentSquadView::squad_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.squad_id)
+  return _internal_squad_id();
+}
+inline void TournamentSquadView::set_squad_id(::uint64_t value) {
+  _internal_set_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.squad_id)
+}
+inline ::uint64_t TournamentSquadView::_internal_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_id_;
+}
+inline void TournamentSquadView::_internal_set_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = value;
+}
+
+// uint32 season_id = 2;
+inline void TournamentSquadView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TournamentSquadView::season_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.season_id)
+  return _internal_season_id();
+}
+inline void TournamentSquadView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.season_id)
+}
+inline ::uint32_t TournamentSquadView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TournamentSquadView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string name = 3;
+inline void TournamentSquadView::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentSquadView::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentSquadView::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSquadView::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentSquadView.name)
+  return _s;
+}
+inline const ::std::string& TournamentSquadView::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void TournamentSquadView::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentSquadView::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentSquadView::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentSquadView.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentSquadView::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentSquadView.name)
+}
+
+// uint64 captain_player_id = 4;
+inline void TournamentSquadView::clear_captain_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t TournamentSquadView::captain_player_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.captain_player_id)
+  return _internal_captain_player_id();
+}
+inline void TournamentSquadView::set_captain_player_id(::uint64_t value) {
+  _internal_set_captain_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.captain_player_id)
+}
+inline ::uint64_t TournamentSquadView::_internal_captain_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.captain_player_id_;
+}
+inline void TournamentSquadView::_internal_set_captain_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.captain_player_id_ = value;
+}
+
+// .match.TournamentSquadState state = 5;
+inline void TournamentSquadView::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::match::TournamentSquadState TournamentSquadView::state() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.state)
+  return _internal_state();
+}
+inline void TournamentSquadView::set_state(::match::TournamentSquadState value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.state)
+}
+inline ::match::TournamentSquadState TournamentSquadView::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentSquadState>(_impl_.state_);
+}
+inline void TournamentSquadView::_internal_set_state(::match::TournamentSquadState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint32 member_count = 6;
+inline void TournamentSquadView::clear_member_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t TournamentSquadView::member_count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.member_count)
+  return _internal_member_count();
+}
+inline void TournamentSquadView::set_member_count(::uint32_t value) {
+  _internal_set_member_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.member_count)
+}
+inline ::uint32_t TournamentSquadView::_internal_member_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.member_count_;
+}
+inline void TournamentSquadView::_internal_set_member_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.member_count_ = value;
+}
+
+// uint32 qualifier_points = 7;
+inline void TournamentSquadView::clear_qualifier_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TournamentSquadView::qualifier_points() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.qualifier_points)
+  return _internal_qualifier_points();
+}
+inline void TournamentSquadView::set_qualifier_points(::uint32_t value) {
+  _internal_set_qualifier_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.qualifier_points)
+}
+inline ::uint32_t TournamentSquadView::_internal_qualifier_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_points_;
+}
+inline void TournamentSquadView::_internal_set_qualifier_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_points_ = value;
+}
+
+// uint32 qualifier_played = 8;
+inline void TournamentSquadView::clear_qualifier_played() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_played_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t TournamentSquadView::qualifier_played() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.qualifier_played)
+  return _internal_qualifier_played();
+}
+inline void TournamentSquadView::set_qualifier_played(::uint32_t value) {
+  _internal_set_qualifier_played(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.qualifier_played)
+}
+inline ::uint32_t TournamentSquadView::_internal_qualifier_played() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_played_;
+}
+inline void TournamentSquadView::_internal_set_qualifier_played(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_played_ = value;
+}
+
+// uint32 qualifier_wins = 9;
+inline void TournamentSquadView::clear_qualifier_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t TournamentSquadView::qualifier_wins() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.qualifier_wins)
+  return _internal_qualifier_wins();
+}
+inline void TournamentSquadView::set_qualifier_wins(::uint32_t value) {
+  _internal_set_qualifier_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.qualifier_wins)
+}
+inline ::uint32_t TournamentSquadView::_internal_qualifier_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_wins_;
+}
+inline void TournamentSquadView::_internal_set_qualifier_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_wins_ = value;
+}
+
+// uint32 qualifier_losses = 10;
+inline void TournamentSquadView::clear_qualifier_losses() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_losses_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TournamentSquadView::qualifier_losses() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.qualifier_losses)
+  return _internal_qualifier_losses();
+}
+inline void TournamentSquadView::set_qualifier_losses(::uint32_t value) {
+  _internal_set_qualifier_losses(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.qualifier_losses)
+}
+inline ::uint32_t TournamentSquadView::_internal_qualifier_losses() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_losses_;
+}
+inline void TournamentSquadView::_internal_set_qualifier_losses(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_losses_ = value;
+}
+
+// uint32 qualifier_draws = 11;
+inline void TournamentSquadView::clear_qualifier_draws() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_draws_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t TournamentSquadView::qualifier_draws() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.qualifier_draws)
+  return _internal_qualifier_draws();
+}
+inline void TournamentSquadView::set_qualifier_draws(::uint32_t value) {
+  _internal_set_qualifier_draws(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.qualifier_draws)
+}
+inline ::uint32_t TournamentSquadView::_internal_qualifier_draws() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.qualifier_draws_;
+}
+inline void TournamentSquadView::_internal_set_qualifier_draws(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.qualifier_draws_ = value;
+}
+
+// uint32 seed_rank = 12;
+inline void TournamentSquadView::clear_seed_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seed_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t TournamentSquadView::seed_rank() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.seed_rank)
+  return _internal_seed_rank();
+}
+inline void TournamentSquadView::set_seed_rank(::uint32_t value) {
+  _internal_set_seed_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.seed_rank)
+}
+inline ::uint32_t TournamentSquadView::_internal_seed_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seed_rank_;
+}
+inline void TournamentSquadView::_internal_set_seed_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seed_rank_ = value;
+}
+
+// uint32 final_rank = 13;
+inline void TournamentSquadView::clear_final_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t TournamentSquadView::final_rank() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.final_rank)
+  return _internal_final_rank();
+}
+inline void TournamentSquadView::set_final_rank(::uint32_t value) {
+  _internal_set_final_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.final_rank)
+}
+inline ::uint32_t TournamentSquadView::_internal_final_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.final_rank_;
+}
+inline void TournamentSquadView::_internal_set_final_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = value;
+}
+
+// uint32 cheer_count = 14;
+inline void TournamentSquadView::clear_cheer_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cheer_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t TournamentSquadView::cheer_count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.cheer_count)
+  return _internal_cheer_count();
+}
+inline void TournamentSquadView::set_cheer_count(::uint32_t value) {
+  _internal_set_cheer_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.cheer_count)
+}
+inline ::uint32_t TournamentSquadView::_internal_cheer_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cheer_count_;
+}
+inline void TournamentSquadView::_internal_set_cheer_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cheer_count_ = value;
+}
+
+// uint64 registered_ms = 15;
+inline void TournamentSquadView::clear_registered_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t TournamentSquadView::registered_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.registered_ms)
+  return _internal_registered_ms();
+}
+inline void TournamentSquadView::set_registered_ms(::uint64_t value) {
+  _internal_set_registered_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.TournamentSquadView.registered_ms)
+}
+inline ::uint64_t TournamentSquadView::_internal_registered_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.registered_ms_;
+}
+inline void TournamentSquadView::_internal_set_registered_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.registered_ms_ = value;
+}
+
+// repeated .match.TournamentMemberView members = 16;
+inline int TournamentSquadView::_internal_members_size() const {
+  return _internal_members().size();
+}
+inline int TournamentSquadView::members_size() const {
+  return _internal_members_size();
+}
+inline void TournamentSquadView::clear_members() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.members_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentMemberView& TournamentSquadView::members(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentSquadView.members)
+  return _internal_members().Get(index);
+}
+inline ::match::TournamentMemberView* PROTOBUF_NONNULL TournamentSquadView::mutable_members(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.TournamentSquadView.members)
+  return _internal_mutable_members()->Mutable(index);
+}
+inline ::match::TournamentMemberView* PROTOBUF_NONNULL TournamentSquadView::add_members()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentMemberView* _add =
+      _internal_mutable_members()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.TournamentSquadView.members)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>& TournamentSquadView::members() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.TournamentSquadView.members)
+  return _internal_members();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>* PROTOBUF_NONNULL
+TournamentSquadView::mutable_members() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.TournamentSquadView.members)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_members();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>&
+TournamentSquadView::_internal_members() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.members_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMemberView>* PROTOBUF_NONNULL
+TournamentSquadView::_internal_mutable_members() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.members_;
+}
+
+// -------------------------------------------------------------------
+
+// TournamentInviteView
+
+// uint64 squad_id = 1;
+inline void TournamentInviteView::clear_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t TournamentInviteView::squad_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.squad_id)
+  return _internal_squad_id();
+}
+inline void TournamentInviteView::set_squad_id(::uint64_t value) {
+  _internal_set_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.squad_id)
+}
+inline ::uint64_t TournamentInviteView::_internal_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_id_;
+}
+inline void TournamentInviteView::_internal_set_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = value;
+}
+
+// uint32 season_id = 2;
+inline void TournamentInviteView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TournamentInviteView::season_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.season_id)
+  return _internal_season_id();
+}
+inline void TournamentInviteView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.season_id)
+}
+inline ::uint32_t TournamentInviteView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TournamentInviteView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// string squad_name = 3;
+inline void TournamentInviteView::clear_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TournamentInviteView::squad_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.squad_name)
+  return _internal_squad_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentInviteView::set_squad_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.squad_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.squad_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentInviteView::mutable_squad_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_squad_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentInviteView.squad_name)
+  return _s;
+}
+inline const ::std::string& TournamentInviteView::_internal_squad_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_name_.Get();
+}
+inline void TournamentInviteView::_internal_set_squad_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentInviteView::_internal_mutable_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.squad_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentInviteView::release_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentInviteView.squad_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.squad_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.squad_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentInviteView::set_allocated_squad_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.squad_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.squad_name_.IsDefault()) {
+    _impl_.squad_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentInviteView.squad_name)
+}
+
+// uint64 inviter_player_id = 4;
+inline void TournamentInviteView::clear_inviter_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t TournamentInviteView::inviter_player_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.inviter_player_id)
+  return _internal_inviter_player_id();
+}
+inline void TournamentInviteView::set_inviter_player_id(::uint64_t value) {
+  _internal_set_inviter_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.inviter_player_id)
+}
+inline ::uint64_t TournamentInviteView::_internal_inviter_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.inviter_player_id_;
+}
+inline void TournamentInviteView::_internal_set_inviter_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_player_id_ = value;
+}
+
+// string inviter_name = 5;
+inline void TournamentInviteView::clear_inviter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentInviteView::inviter_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.inviter_name)
+  return _internal_inviter_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentInviteView::set_inviter_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.inviter_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.inviter_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentInviteView::mutable_inviter_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_inviter_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentInviteView.inviter_name)
+  return _s;
+}
+inline const ::std::string& TournamentInviteView::_internal_inviter_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.inviter_name_.Get();
+}
+inline void TournamentInviteView::_internal_set_inviter_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.inviter_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentInviteView::_internal_mutable_inviter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.inviter_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentInviteView::release_inviter_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentInviteView.inviter_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.inviter_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.inviter_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentInviteView::set_allocated_inviter_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.inviter_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.inviter_name_.IsDefault()) {
+    _impl_.inviter_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentInviteView.inviter_name)
+}
+
+// uint32 current_member_count = 6;
+inline void TournamentInviteView::clear_current_member_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_member_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TournamentInviteView::current_member_count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.current_member_count)
+  return _internal_current_member_count();
+}
+inline void TournamentInviteView::set_current_member_count(::uint32_t value) {
+  _internal_set_current_member_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.current_member_count)
+}
+inline ::uint32_t TournamentInviteView::_internal_current_member_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_member_count_;
+}
+inline void TournamentInviteView::_internal_set_current_member_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_member_count_ = value;
+}
+
+// uint32 roster_max_size = 7;
+inline void TournamentInviteView::clear_roster_max_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_max_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t TournamentInviteView::roster_max_size() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.roster_max_size)
+  return _internal_roster_max_size();
+}
+inline void TournamentInviteView::set_roster_max_size(::uint32_t value) {
+  _internal_set_roster_max_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.roster_max_size)
+}
+inline ::uint32_t TournamentInviteView::_internal_roster_max_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.roster_max_size_;
+}
+inline void TournamentInviteView::_internal_set_roster_max_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.roster_max_size_ = value;
+}
+
+// uint64 created_ms = 8;
+inline void TournamentInviteView::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t TournamentInviteView::created_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.created_ms)
+  return _internal_created_ms();
+}
+inline void TournamentInviteView::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.created_ms)
+}
+inline ::uint64_t TournamentInviteView::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void TournamentInviteView::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// uint64 expires_ms = 9;
+inline void TournamentInviteView::clear_expires_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t TournamentInviteView::expires_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentInviteView.expires_ms)
+  return _internal_expires_ms();
+}
+inline void TournamentInviteView::set_expires_ms(::uint64_t value) {
+  _internal_set_expires_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentInviteView.expires_ms)
+}
+inline ::uint64_t TournamentInviteView::_internal_expires_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expires_ms_;
+}
+inline void TournamentInviteView::_internal_set_expires_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expires_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TournamentMatchView
+
+// uint64 match_id = 1;
+inline void TournamentMatchView::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t TournamentMatchView::match_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.match_id)
+  return _internal_match_id();
+}
+inline void TournamentMatchView::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.match_id)
+}
+inline ::uint64_t TournamentMatchView::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void TournamentMatchView::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// uint32 season_id = 2;
+inline void TournamentMatchView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TournamentMatchView::season_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.season_id)
+  return _internal_season_id();
+}
+inline void TournamentMatchView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.season_id)
+}
+inline ::uint32_t TournamentMatchView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TournamentMatchView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// .match.TournamentMatchPhase phase = 3;
+inline void TournamentMatchView::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::match::TournamentMatchPhase TournamentMatchView::phase() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.phase)
+  return _internal_phase();
+}
+inline void TournamentMatchView::set_phase(::match::TournamentMatchPhase value) {
+  _internal_set_phase(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.phase)
+}
+inline ::match::TournamentMatchPhase TournamentMatchView::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentMatchPhase>(_impl_.phase_);
+}
+inline void TournamentMatchView::_internal_set_phase(::match::TournamentMatchPhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// uint32 round_index = 4;
+inline void TournamentMatchView::clear_round_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TournamentMatchView::round_index() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.round_index)
+  return _internal_round_index();
+}
+inline void TournamentMatchView::set_round_index(::uint32_t value) {
+  _internal_set_round_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.round_index)
+}
+inline ::uint32_t TournamentMatchView::_internal_round_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.round_index_;
+}
+inline void TournamentMatchView::_internal_set_round_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.round_index_ = value;
+}
+
+// uint32 slot_index = 5;
+inline void TournamentMatchView::clear_slot_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t TournamentMatchView::slot_index() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.slot_index)
+  return _internal_slot_index();
+}
+inline void TournamentMatchView::set_slot_index(::uint32_t value) {
+  _internal_set_slot_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.slot_index)
+}
+inline ::uint32_t TournamentMatchView::_internal_slot_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.slot_index_;
+}
+inline void TournamentMatchView::_internal_set_slot_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_index_ = value;
+}
+
+// uint64 squad_a_id = 6;
+inline void TournamentMatchView::clear_squad_a_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t TournamentMatchView::squad_a_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_a_id)
+  return _internal_squad_a_id();
+}
+inline void TournamentMatchView::set_squad_a_id(::uint64_t value) {
+  _internal_set_squad_a_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_a_id)
+}
+inline ::uint64_t TournamentMatchView::_internal_squad_a_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_a_id_;
+}
+inline void TournamentMatchView::_internal_set_squad_a_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_id_ = value;
+}
+
+// string squad_a_name = 7;
+inline void TournamentMatchView::clear_squad_a_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TournamentMatchView::squad_a_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_a_name)
+  return _internal_squad_a_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentMatchView::set_squad_a_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.squad_a_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_a_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMatchView::mutable_squad_a_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_squad_a_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentMatchView.squad_a_name)
+  return _s;
+}
+inline const ::std::string& TournamentMatchView::_internal_squad_a_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_a_name_.Get();
+}
+inline void TournamentMatchView::_internal_set_squad_a_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMatchView::_internal_mutable_squad_a_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.squad_a_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentMatchView::release_squad_a_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentMatchView.squad_a_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.squad_a_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.squad_a_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentMatchView::set_allocated_squad_a_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.squad_a_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.squad_a_name_.IsDefault()) {
+    _impl_.squad_a_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentMatchView.squad_a_name)
+}
+
+// uint32 squad_a_seed = 8;
+inline void TournamentMatchView::clear_squad_a_seed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_seed_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t TournamentMatchView::squad_a_seed() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_a_seed)
+  return _internal_squad_a_seed();
+}
+inline void TournamentMatchView::set_squad_a_seed(::uint32_t value) {
+  _internal_set_squad_a_seed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_a_seed)
+}
+inline ::uint32_t TournamentMatchView::_internal_squad_a_seed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_a_seed_;
+}
+inline void TournamentMatchView::_internal_set_squad_a_seed(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_a_seed_ = value;
+}
+
+// uint64 squad_b_id = 9;
+inline void TournamentMatchView::clear_squad_b_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t TournamentMatchView::squad_b_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_b_id)
+  return _internal_squad_b_id();
+}
+inline void TournamentMatchView::set_squad_b_id(::uint64_t value) {
+  _internal_set_squad_b_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_b_id)
+}
+inline ::uint64_t TournamentMatchView::_internal_squad_b_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_b_id_;
+}
+inline void TournamentMatchView::_internal_set_squad_b_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_id_ = value;
+}
+
+// string squad_b_name = 10;
+inline void TournamentMatchView::clear_squad_b_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentMatchView::squad_b_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_b_name)
+  return _internal_squad_b_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentMatchView::set_squad_b_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.squad_b_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_b_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMatchView::mutable_squad_b_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_squad_b_name();
+  // @@protoc_insertion_point(field_mutable:match.TournamentMatchView.squad_b_name)
+  return _s;
+}
+inline const ::std::string& TournamentMatchView::_internal_squad_b_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_b_name_.Get();
+}
+inline void TournamentMatchView::_internal_set_squad_b_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentMatchView::_internal_mutable_squad_b_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.squad_b_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentMatchView::release_squad_b_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentMatchView.squad_b_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.squad_b_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.squad_b_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentMatchView::set_allocated_squad_b_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.squad_b_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.squad_b_name_.IsDefault()) {
+    _impl_.squad_b_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentMatchView.squad_b_name)
+}
+
+// uint32 squad_b_seed = 11;
+inline void TournamentMatchView::clear_squad_b_seed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_seed_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TournamentMatchView::squad_b_seed() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.squad_b_seed)
+  return _internal_squad_b_seed();
+}
+inline void TournamentMatchView::set_squad_b_seed(::uint32_t value) {
+  _internal_set_squad_b_seed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.squad_b_seed)
+}
+inline ::uint32_t TournamentMatchView::_internal_squad_b_seed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_b_seed_;
+}
+inline void TournamentMatchView::_internal_set_squad_b_seed(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_b_seed_ = value;
+}
+
+// bool ready_a = 12;
+inline void TournamentMatchView::clear_ready_a() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_a_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool TournamentMatchView::ready_a() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.ready_a)
+  return _internal_ready_a();
+}
+inline void TournamentMatchView::set_ready_a(bool value) {
+  _internal_set_ready_a(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.ready_a)
+}
+inline bool TournamentMatchView::_internal_ready_a() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ready_a_;
+}
+inline void TournamentMatchView::_internal_set_ready_a(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_a_ = value;
+}
+
+// bool ready_b = 13;
+inline void TournamentMatchView::clear_ready_b() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_b_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool TournamentMatchView::ready_b() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.ready_b)
+  return _internal_ready_b();
+}
+inline void TournamentMatchView::set_ready_b(bool value) {
+  _internal_set_ready_b(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.ready_b)
+}
+inline bool TournamentMatchView::_internal_ready_b() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ready_b_;
+}
+inline void TournamentMatchView::_internal_set_ready_b(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_b_ = value;
+}
+
+// .match.TournamentMatchState state = 14;
+inline void TournamentMatchView::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::match::TournamentMatchState TournamentMatchView::state() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.state)
+  return _internal_state();
+}
+inline void TournamentMatchView::set_state(::match::TournamentMatchState value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.state)
+}
+inline ::match::TournamentMatchState TournamentMatchView::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentMatchState>(_impl_.state_);
+}
+inline void TournamentMatchView::_internal_set_state(::match::TournamentMatchState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint64 battle_id = 15;
+inline void TournamentMatchView::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t TournamentMatchView::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.battle_id)
+  return _internal_battle_id();
+}
+inline void TournamentMatchView::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.battle_id)
+}
+inline ::uint64_t TournamentMatchView::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void TournamentMatchView::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint64 winner_squad_id = 16;
+inline void TournamentMatchView::clear_winner_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.winner_squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t TournamentMatchView::winner_squad_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.winner_squad_id)
+  return _internal_winner_squad_id();
+}
+inline void TournamentMatchView::set_winner_squad_id(::uint64_t value) {
+  _internal_set_winner_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.winner_squad_id)
+}
+inline ::uint64_t TournamentMatchView::_internal_winner_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.winner_squad_id_;
+}
+inline void TournamentMatchView::_internal_set_winner_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.winner_squad_id_ = value;
+}
+
+// .eBattleOutcome outcome = 17;
+inline void TournamentMatchView::clear_outcome() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::eBattleOutcome TournamentMatchView::outcome() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.outcome)
+  return _internal_outcome();
+}
+inline void TournamentMatchView::set_outcome(::eBattleOutcome value) {
+  _internal_set_outcome(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.outcome)
+}
+inline ::eBattleOutcome TournamentMatchView::_internal_outcome() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::eBattleOutcome>(_impl_.outcome_);
+}
+inline void TournamentMatchView::_internal_set_outcome(::eBattleOutcome value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = value;
+}
+
+// bool featured_spectate = 18;
+inline void TournamentMatchView::clear_featured_spectate() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.featured_spectate_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline bool TournamentMatchView::featured_spectate() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.featured_spectate)
+  return _internal_featured_spectate();
+}
+inline void TournamentMatchView::set_featured_spectate(bool value) {
+  _internal_set_featured_spectate(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.featured_spectate)
+}
+inline bool TournamentMatchView::_internal_featured_spectate() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.featured_spectate_;
+}
+inline void TournamentMatchView::_internal_set_featured_spectate(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.featured_spectate_ = value;
+}
+
+// uint64 scheduled_start_ms = 19;
+inline void TournamentMatchView::clear_scheduled_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scheduled_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t TournamentMatchView::scheduled_start_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.scheduled_start_ms)
+  return _internal_scheduled_start_ms();
+}
+inline void TournamentMatchView::set_scheduled_start_ms(::uint64_t value) {
+  _internal_set_scheduled_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.scheduled_start_ms)
+}
+inline ::uint64_t TournamentMatchView::_internal_scheduled_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scheduled_start_ms_;
+}
+inline void TournamentMatchView::_internal_set_scheduled_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scheduled_start_ms_ = value;
+}
+
+// uint64 deadline_ms = 20;
+inline void TournamentMatchView::clear_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t TournamentMatchView::deadline_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.deadline_ms)
+  return _internal_deadline_ms();
+}
+inline void TournamentMatchView::set_deadline_ms(::uint64_t value) {
+  _internal_set_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.deadline_ms)
+}
+inline ::uint64_t TournamentMatchView::_internal_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deadline_ms_;
+}
+inline void TournamentMatchView::_internal_set_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = value;
+}
+
+// uint64 finished_ms = 21;
+inline void TournamentMatchView::clear_finished_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.finished_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t TournamentMatchView::finished_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentMatchView.finished_ms)
+  return _internal_finished_ms();
+}
+inline void TournamentMatchView::set_finished_ms(::uint64_t value) {
+  _internal_set_finished_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:match.TournamentMatchView.finished_ms)
+}
+inline ::uint64_t TournamentMatchView::_internal_finished_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.finished_ms_;
+}
+inline void TournamentMatchView::_internal_set_finished_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.finished_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TournamentRewardItem
+
+// uint32 item_id = 1;
+inline void TournamentRewardItem::clear_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t TournamentRewardItem::item_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardItem.item_id)
+  return _internal_item_id();
+}
+inline void TournamentRewardItem::set_item_id(::uint32_t value) {
+  _internal_set_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardItem.item_id)
+}
+inline ::uint32_t TournamentRewardItem::_internal_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_id_;
+}
+inline void TournamentRewardItem::_internal_set_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_ = value;
+}
+
+// uint32 count = 2;
+inline void TournamentRewardItem::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t TournamentRewardItem::count() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardItem.count)
+  return _internal_count();
+}
+inline void TournamentRewardItem::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardItem.count)
+}
+inline ::uint32_t TournamentRewardItem::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void TournamentRewardItem::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TournamentRewardTierView
+
+// uint32 tier_id = 1;
+inline void TournamentRewardTierView::clear_tier_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TournamentRewardTierView::tier_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.tier_id)
+  return _internal_tier_id();
+}
+inline void TournamentRewardTierView::set_tier_id(::uint32_t value) {
+  _internal_set_tier_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.tier_id)
+}
+inline ::uint32_t TournamentRewardTierView::_internal_tier_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_id_;
+}
+inline void TournamentRewardTierView::_internal_set_tier_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_id_ = value;
+}
+
+// .match.TournamentRewardTierKind tier_kind = 2;
+inline void TournamentRewardTierView::clear_tier_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_kind_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::match::TournamentRewardTierKind TournamentRewardTierView::tier_kind() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.tier_kind)
+  return _internal_tier_kind();
+}
+inline void TournamentRewardTierView::set_tier_kind(::match::TournamentRewardTierKind value) {
+  _internal_set_tier_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.tier_kind)
+}
+inline ::match::TournamentRewardTierKind TournamentRewardTierView::_internal_tier_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentRewardTierKind>(_impl_.tier_kind_);
+}
+inline void TournamentRewardTierView::_internal_set_tier_kind(::match::TournamentRewardTierKind value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_kind_ = value;
+}
+
+// uint32 min_rank = 3;
+inline void TournamentRewardTierView::clear_min_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t TournamentRewardTierView::min_rank() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.min_rank)
+  return _internal_min_rank();
+}
+inline void TournamentRewardTierView::set_min_rank(::uint32_t value) {
+  _internal_set_min_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.min_rank)
+}
+inline ::uint32_t TournamentRewardTierView::_internal_min_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_rank_;
+}
+inline void TournamentRewardTierView::_internal_set_min_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_rank_ = value;
+}
+
+// uint32 max_rank = 4;
+inline void TournamentRewardTierView::clear_max_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TournamentRewardTierView::max_rank() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.max_rank)
+  return _internal_max_rank();
+}
+inline void TournamentRewardTierView::set_max_rank(::uint32_t value) {
+  _internal_set_max_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.max_rank)
+}
+inline ::uint32_t TournamentRewardTierView::_internal_max_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_rank_;
+}
+inline void TournamentRewardTierView::_internal_set_max_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_rank_ = value;
+}
+
+// uint64 gold_amount = 5;
+inline void TournamentRewardTierView::clear_gold_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t TournamentRewardTierView::gold_amount() const {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.gold_amount)
+  return _internal_gold_amount();
+}
+inline void TournamentRewardTierView::set_gold_amount(::uint64_t value) {
+  _internal_set_gold_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.gold_amount)
+}
+inline ::uint64_t TournamentRewardTierView::_internal_gold_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gold_amount_;
+}
+inline void TournamentRewardTierView::_internal_set_gold_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_amount_ = value;
+}
+
+// repeated .match.TournamentRewardItem items = 6;
+inline int TournamentRewardTierView::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int TournamentRewardTierView::items_size() const {
+  return _internal_items_size();
+}
+inline void TournamentRewardTierView::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentRewardItem& TournamentRewardTierView::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.items)
+  return _internal_items().Get(index);
+}
+inline ::match::TournamentRewardItem* PROTOBUF_NONNULL TournamentRewardTierView::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.TournamentRewardTierView.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::match::TournamentRewardItem* PROTOBUF_NONNULL TournamentRewardTierView::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentRewardItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.TournamentRewardTierView.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>& TournamentRewardTierView::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.TournamentRewardTierView.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+TournamentRewardTierView::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.TournamentRewardTierView.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>&
+TournamentRewardTierView::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+TournamentRewardTierView::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// string title_code = 7;
+inline void TournamentRewardTierView::clear_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_code_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentRewardTierView::title_code() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.title_code)
+  return _internal_title_code();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentRewardTierView::set_title_code(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.title_code_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.title_code)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::mutable_title_code()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_title_code();
+  // @@protoc_insertion_point(field_mutable:match.TournamentRewardTierView.title_code)
+  return _s;
+}
+inline const ::std::string& TournamentRewardTierView::_internal_title_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_code_.Get();
+}
+inline void TournamentRewardTierView::_internal_set_title_code(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_code_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::_internal_mutable_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_code_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentRewardTierView::release_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentRewardTierView.title_code)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.title_code_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_code_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentRewardTierView::set_allocated_title_code(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.title_code_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_code_.IsDefault()) {
+    _impl_.title_code_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentRewardTierView.title_code)
+}
+
+// string badge_code = 8;
+inline void TournamentRewardTierView::clear_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.badge_code_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TournamentRewardTierView::badge_code() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.badge_code)
+  return _internal_badge_code();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentRewardTierView::set_badge_code(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.badge_code_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.badge_code)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::mutable_badge_code()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_badge_code();
+  // @@protoc_insertion_point(field_mutable:match.TournamentRewardTierView.badge_code)
+  return _s;
+}
+inline const ::std::string& TournamentRewardTierView::_internal_badge_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.badge_code_.Get();
+}
+inline void TournamentRewardTierView::_internal_set_badge_code(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.badge_code_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::_internal_mutable_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.badge_code_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentRewardTierView::release_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentRewardTierView.badge_code)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.badge_code_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.badge_code_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentRewardTierView::set_allocated_badge_code(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.badge_code_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.badge_code_.IsDefault()) {
+    _impl_.badge_code_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentRewardTierView.badge_code)
+}
+
+// string desc = 9;
+inline void TournamentRewardTierView::clear_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desc_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& TournamentRewardTierView::desc() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentRewardTierView.desc)
+  return _internal_desc();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentRewardTierView::set_desc(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.desc_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentRewardTierView.desc)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::mutable_desc()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_desc();
+  // @@protoc_insertion_point(field_mutable:match.TournamentRewardTierView.desc)
+  return _s;
+}
+inline const ::std::string& TournamentRewardTierView::_internal_desc() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.desc_.Get();
+}
+inline void TournamentRewardTierView::_internal_set_desc(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desc_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentRewardTierView::_internal_mutable_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.desc_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentRewardTierView::release_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentRewardTierView.desc)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.desc_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.desc_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentRewardTierView::set_allocated_desc(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.desc_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.desc_.IsDefault()) {
+    _impl_.desc_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentRewardTierView.desc)
+}
+
+// -------------------------------------------------------------------
+
+// TournamentPlayerRewardView
+
+// uint64 reward_id = 1;
+inline void TournamentPlayerRewardView::clear_reward_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t TournamentPlayerRewardView::reward_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.reward_id)
+  return _internal_reward_id();
+}
+inline void TournamentPlayerRewardView::set_reward_id(::uint64_t value) {
+  _internal_set_reward_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.reward_id)
+}
+inline ::uint64_t TournamentPlayerRewardView::_internal_reward_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_id_;
+}
+inline void TournamentPlayerRewardView::_internal_set_reward_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_id_ = value;
+}
+
+// uint32 season_id = 2;
+inline void TournamentPlayerRewardView::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TournamentPlayerRewardView::season_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.season_id)
+  return _internal_season_id();
+}
+inline void TournamentPlayerRewardView::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.season_id)
+}
+inline ::uint32_t TournamentPlayerRewardView::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void TournamentPlayerRewardView::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// .match.TournamentRewardTierKind tier_kind = 3;
+inline void TournamentPlayerRewardView::clear_tier_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_kind_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::match::TournamentRewardTierKind TournamentPlayerRewardView::tier_kind() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.tier_kind)
+  return _internal_tier_kind();
+}
+inline void TournamentPlayerRewardView::set_tier_kind(::match::TournamentRewardTierKind value) {
+  _internal_set_tier_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.tier_kind)
+}
+inline ::match::TournamentRewardTierKind TournamentPlayerRewardView::_internal_tier_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentRewardTierKind>(_impl_.tier_kind_);
+}
+inline void TournamentPlayerRewardView::_internal_set_tier_kind(::match::TournamentRewardTierKind value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_kind_ = value;
+}
+
+// uint32 tier_id = 4;
+inline void TournamentPlayerRewardView::clear_tier_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t TournamentPlayerRewardView::tier_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.tier_id)
+  return _internal_tier_id();
+}
+inline void TournamentPlayerRewardView::set_tier_id(::uint32_t value) {
+  _internal_set_tier_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.tier_id)
+}
+inline ::uint32_t TournamentPlayerRewardView::_internal_tier_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_id_;
+}
+inline void TournamentPlayerRewardView::_internal_set_tier_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_id_ = value;
+}
+
+// uint32 final_rank = 5;
+inline void TournamentPlayerRewardView::clear_final_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TournamentPlayerRewardView::final_rank() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.final_rank)
+  return _internal_final_rank();
+}
+inline void TournamentPlayerRewardView::set_final_rank(::uint32_t value) {
+  _internal_set_final_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.final_rank)
+}
+inline ::uint32_t TournamentPlayerRewardView::_internal_final_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.final_rank_;
+}
+inline void TournamentPlayerRewardView::_internal_set_final_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.final_rank_ = value;
+}
+
+// uint64 gold_amount = 6;
+inline void TournamentPlayerRewardView::clear_gold_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t TournamentPlayerRewardView::gold_amount() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.gold_amount)
+  return _internal_gold_amount();
+}
+inline void TournamentPlayerRewardView::set_gold_amount(::uint64_t value) {
+  _internal_set_gold_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.gold_amount)
+}
+inline ::uint64_t TournamentPlayerRewardView::_internal_gold_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gold_amount_;
+}
+inline void TournamentPlayerRewardView::_internal_set_gold_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_amount_ = value;
+}
+
+// repeated .match.TournamentRewardItem items = 7;
+inline int TournamentPlayerRewardView::_internal_items_size() const {
+  return _internal_items().size();
+}
+inline int TournamentPlayerRewardView::items_size() const {
+  return _internal_items_size();
+}
+inline void TournamentPlayerRewardView::clear_items() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.items_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentRewardItem& TournamentPlayerRewardView::items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.items)
+  return _internal_items().Get(index);
+}
+inline ::match::TournamentRewardItem* PROTOBUF_NONNULL TournamentPlayerRewardView::mutable_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.TournamentPlayerRewardView.items)
+  return _internal_mutable_items()->Mutable(index);
+}
+inline ::match::TournamentRewardItem* PROTOBUF_NONNULL TournamentPlayerRewardView::add_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentRewardItem* _add =
+      _internal_mutable_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.TournamentPlayerRewardView.items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>& TournamentPlayerRewardView::items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.TournamentPlayerRewardView.items)
+  return _internal_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+TournamentPlayerRewardView::mutable_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.TournamentPlayerRewardView.items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>&
+TournamentPlayerRewardView::_internal_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardItem>* PROTOBUF_NONNULL
+TournamentPlayerRewardView::_internal_mutable_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.items_;
+}
+
+// string title_code = 8;
+inline void TournamentPlayerRewardView::clear_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_code_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TournamentPlayerRewardView::title_code() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.title_code)
+  return _internal_title_code();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentPlayerRewardView::set_title_code(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.title_code_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.title_code)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentPlayerRewardView::mutable_title_code()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_title_code();
+  // @@protoc_insertion_point(field_mutable:match.TournamentPlayerRewardView.title_code)
+  return _s;
+}
+inline const ::std::string& TournamentPlayerRewardView::_internal_title_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_code_.Get();
+}
+inline void TournamentPlayerRewardView::_internal_set_title_code(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_code_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentPlayerRewardView::_internal_mutable_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_code_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentPlayerRewardView::release_title_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentPlayerRewardView.title_code)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.title_code_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_code_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentPlayerRewardView::set_allocated_title_code(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.title_code_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_code_.IsDefault()) {
+    _impl_.title_code_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentPlayerRewardView.title_code)
+}
+
+// string badge_code = 9;
+inline void TournamentPlayerRewardView::clear_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.badge_code_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TournamentPlayerRewardView::badge_code() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.badge_code)
+  return _internal_badge_code();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TournamentPlayerRewardView::set_badge_code(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.badge_code_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.badge_code)
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentPlayerRewardView::mutable_badge_code()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_badge_code();
+  // @@protoc_insertion_point(field_mutable:match.TournamentPlayerRewardView.badge_code)
+  return _s;
+}
+inline const ::std::string& TournamentPlayerRewardView::_internal_badge_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.badge_code_.Get();
+}
+inline void TournamentPlayerRewardView::_internal_set_badge_code(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.badge_code_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TournamentPlayerRewardView::_internal_mutable_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.badge_code_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TournamentPlayerRewardView::release_badge_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TournamentPlayerRewardView.badge_code)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.badge_code_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.badge_code_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TournamentPlayerRewardView::set_allocated_badge_code(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.badge_code_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.badge_code_.IsDefault()) {
+    _impl_.badge_code_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TournamentPlayerRewardView.badge_code)
+}
+
+// .match.TournamentRewardDeliveryState delivery_state = 10;
+inline void TournamentPlayerRewardView::clear_delivery_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivery_state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::match::TournamentRewardDeliveryState TournamentPlayerRewardView::delivery_state() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.delivery_state)
+  return _internal_delivery_state();
+}
+inline void TournamentPlayerRewardView::set_delivery_state(::match::TournamentRewardDeliveryState value) {
+  _internal_set_delivery_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.delivery_state)
+}
+inline ::match::TournamentRewardDeliveryState TournamentPlayerRewardView::_internal_delivery_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TournamentRewardDeliveryState>(_impl_.delivery_state_);
+}
+inline void TournamentPlayerRewardView::_internal_set_delivery_state(::match::TournamentRewardDeliveryState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.delivery_state_ = value;
+}
+
+// uint64 mail_id = 11;
+inline void TournamentPlayerRewardView::clear_mail_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t TournamentPlayerRewardView::mail_id() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.mail_id)
+  return _internal_mail_id();
+}
+inline void TournamentPlayerRewardView::set_mail_id(::uint64_t value) {
+  _internal_set_mail_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.mail_id)
+}
+inline ::uint64_t TournamentPlayerRewardView::_internal_mail_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mail_id_;
+}
+inline void TournamentPlayerRewardView::_internal_set_mail_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_id_ = value;
+}
+
+// uint64 claimed_ms = 12;
+inline void TournamentPlayerRewardView::clear_claimed_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t TournamentPlayerRewardView::claimed_ms() const {
+  // @@protoc_insertion_point(field_get:match.TournamentPlayerRewardView.claimed_ms)
+  return _internal_claimed_ms();
+}
+inline void TournamentPlayerRewardView::set_claimed_ms(::uint64_t value) {
+  _internal_set_claimed_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.TournamentPlayerRewardView.claimed_ms)
+}
+inline ::uint64_t TournamentPlayerRewardView::_internal_claimed_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_ms_;
+}
+inline void TournamentPlayerRewardView::_internal_set_claimed_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetTournamentOverviewRequest
+
+// bool include_history = 1;
+inline void GetTournamentOverviewRequest::clear_include_history() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.include_history_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool GetTournamentOverviewRequest::include_history() const {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewRequest.include_history)
+  return _internal_include_history();
+}
+inline void GetTournamentOverviewRequest::set_include_history(bool value) {
+  _internal_set_include_history(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.GetTournamentOverviewRequest.include_history)
+}
+inline bool GetTournamentOverviewRequest::_internal_include_history() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.include_history_;
+}
+inline void GetTournamentOverviewRequest::_internal_set_include_history(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.include_history_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetTournamentOverviewResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetTournamentOverviewResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetTournamentOverviewResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetTournamentOverviewResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetTournamentOverviewResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTournamentOverviewResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTournamentOverviewResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTournamentOverviewResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTournamentOverviewResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTournamentOverviewResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.error_message)
+  return _msg;
+}
+inline void GetTournamentOverviewResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTournamentOverviewResponse.error_message)
+}
+
+// .match.TournamentSeasonView current_season = 2;
+inline bool GetTournamentOverviewResponse::has_current_season() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  PROTOBUF_ASSUME(!value || _impl_.current_season_ != nullptr);
+  return value;
+}
+inline void GetTournamentOverviewResponse::clear_current_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.current_season_ != nullptr) _impl_.current_season_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::match::TournamentSeasonView& GetTournamentOverviewResponse::_internal_current_season() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSeasonView* p = _impl_.current_season_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSeasonView>(&::match::TournamentSeasonView_globals_);
+}
+inline const ::match::TournamentSeasonView& GetTournamentOverviewResponse::current_season() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.current_season)
+  return _internal_current_season();
+}
+inline void GetTournamentOverviewResponse::unsafe_arena_set_allocated_current_season(
+    ::match::TournamentSeasonView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.current_season_);
+  }
+  _impl_.current_season_ = reinterpret_cast<::match::TournamentSeasonView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTournamentOverviewResponse.current_season)
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::release_current_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::match::TournamentSeasonView* released = _impl_.current_season_;
+  _impl_.current_season_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::unsafe_arena_release_current_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTournamentOverviewResponse.current_season)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::match::TournamentSeasonView* temp = _impl_.current_season_;
+  _impl_.current_season_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL GetTournamentOverviewResponse::_internal_mutable_current_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.current_season_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSeasonView>(GetArena());
+    _impl_.current_season_ = reinterpret_cast<::match::TournamentSeasonView*>(p);
+  }
+  return _impl_.current_season_;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_current_season()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::match::TournamentSeasonView* _msg = _internal_mutable_current_season();
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.current_season)
+  return _msg;
+}
+inline void GetTournamentOverviewResponse::set_allocated_current_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.current_season_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+
+  _impl_.current_season_ = reinterpret_cast<::match::TournamentSeasonView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTournamentOverviewResponse.current_season)
+}
+
+// .match.TournamentSquadView my_squad = 3;
+inline bool GetTournamentOverviewResponse::has_my_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  PROTOBUF_ASSUME(!value || _impl_.my_squad_ != nullptr);
+  return value;
+}
+inline void GetTournamentOverviewResponse::clear_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_squad_ != nullptr) _impl_.my_squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::match::TournamentSquadView& GetTournamentOverviewResponse::_internal_my_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.my_squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& GetTournamentOverviewResponse::my_squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.my_squad)
+  return _internal_my_squad();
+}
+inline void GetTournamentOverviewResponse::unsafe_arena_set_allocated_my_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_squad_);
+  }
+  _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTournamentOverviewResponse.my_squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::release_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::match::TournamentSquadView* released = _impl_.my_squad_;
+  _impl_.my_squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::unsafe_arena_release_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTournamentOverviewResponse.my_squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::match::TournamentSquadView* temp = _impl_.my_squad_;
+  _impl_.my_squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL GetTournamentOverviewResponse::_internal_mutable_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.my_squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_my_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_my_squad();
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.my_squad)
+  return _msg;
+}
+inline void GetTournamentOverviewResponse::set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+
+  _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTournamentOverviewResponse.my_squad)
+}
+
+// repeated .match.TournamentInviteView pending_invites = 4;
+inline int GetTournamentOverviewResponse::_internal_pending_invites_size() const {
+  return _internal_pending_invites().size();
+}
+inline int GetTournamentOverviewResponse::pending_invites_size() const {
+  return _internal_pending_invites_size();
+}
+inline void GetTournamentOverviewResponse::clear_pending_invites() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_invites_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentInviteView& GetTournamentOverviewResponse::pending_invites(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.pending_invites)
+  return _internal_pending_invites().Get(index);
+}
+inline ::match::TournamentInviteView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_pending_invites(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.pending_invites)
+  return _internal_mutable_pending_invites()->Mutable(index);
+}
+inline ::match::TournamentInviteView* PROTOBUF_NONNULL GetTournamentOverviewResponse::add_pending_invites()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentInviteView* _add =
+      _internal_mutable_pending_invites()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.GetTournamentOverviewResponse.pending_invites)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>& GetTournamentOverviewResponse::pending_invites() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.GetTournamentOverviewResponse.pending_invites)
+  return _internal_pending_invites();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::mutable_pending_invites() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.GetTournamentOverviewResponse.pending_invites)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_pending_invites();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>&
+GetTournamentOverviewResponse::_internal_pending_invites() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_invites_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentInviteView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::_internal_mutable_pending_invites() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.pending_invites_;
+}
+
+// .match.TournamentMatchView my_active_match = 5;
+inline bool GetTournamentOverviewResponse::has_my_active_match() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
+  PROTOBUF_ASSUME(!value || _impl_.my_active_match_ != nullptr);
+  return value;
+}
+inline void GetTournamentOverviewResponse::clear_my_active_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_active_match_ != nullptr) _impl_.my_active_match_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline const ::match::TournamentMatchView& GetTournamentOverviewResponse::_internal_my_active_match() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentMatchView* p = _impl_.my_active_match_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentMatchView>(&::match::TournamentMatchView_globals_);
+}
+inline const ::match::TournamentMatchView& GetTournamentOverviewResponse::my_active_match() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.my_active_match)
+  return _internal_my_active_match();
+}
+inline void GetTournamentOverviewResponse::unsafe_arena_set_allocated_my_active_match(
+    ::match::TournamentMatchView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_active_match_);
+  }
+  _impl_.my_active_match_ = reinterpret_cast<::match::TournamentMatchView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTournamentOverviewResponse.my_active_match)
+}
+inline ::match::TournamentMatchView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::release_my_active_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::match::TournamentMatchView* released = _impl_.my_active_match_;
+  _impl_.my_active_match_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NULLABLE GetTournamentOverviewResponse::unsafe_arena_release_my_active_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTournamentOverviewResponse.my_active_match)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::match::TournamentMatchView* temp = _impl_.my_active_match_;
+  _impl_.my_active_match_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL GetTournamentOverviewResponse::_internal_mutable_my_active_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_active_match_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentMatchView>(GetArena());
+    _impl_.my_active_match_ = reinterpret_cast<::match::TournamentMatchView*>(p);
+  }
+  return _impl_.my_active_match_;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_my_active_match()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::match::TournamentMatchView* _msg = _internal_mutable_my_active_match();
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.my_active_match)
+  return _msg;
+}
+inline void GetTournamentOverviewResponse::set_allocated_my_active_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_active_match_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+
+  _impl_.my_active_match_ = reinterpret_cast<::match::TournamentMatchView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTournamentOverviewResponse.my_active_match)
+}
+
+// repeated .match.TournamentMatchView featured_matches = 6;
+inline int GetTournamentOverviewResponse::_internal_featured_matches_size() const {
+  return _internal_featured_matches().size();
+}
+inline int GetTournamentOverviewResponse::featured_matches_size() const {
+  return _internal_featured_matches_size();
+}
+inline void GetTournamentOverviewResponse::clear_featured_matches() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.featured_matches_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentMatchView& GetTournamentOverviewResponse::featured_matches(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.featured_matches)
+  return _internal_featured_matches().Get(index);
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_featured_matches(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.featured_matches)
+  return _internal_mutable_featured_matches()->Mutable(index);
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL GetTournamentOverviewResponse::add_featured_matches()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentMatchView* _add =
+      _internal_mutable_featured_matches()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:match.GetTournamentOverviewResponse.featured_matches)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>& GetTournamentOverviewResponse::featured_matches() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.GetTournamentOverviewResponse.featured_matches)
+  return _internal_featured_matches();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::mutable_featured_matches() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:match.GetTournamentOverviewResponse.featured_matches)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_featured_matches();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>&
+GetTournamentOverviewResponse::_internal_featured_matches() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.featured_matches_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::_internal_mutable_featured_matches() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.featured_matches_;
+}
+
+// uint64 my_cheered_squad_id = 7;
+inline void GetTournamentOverviewResponse::clear_my_cheered_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_cheered_squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t GetTournamentOverviewResponse::my_cheered_squad_id() const {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.my_cheered_squad_id)
+  return _internal_my_cheered_squad_id();
+}
+inline void GetTournamentOverviewResponse::set_my_cheered_squad_id(::uint64_t value) {
+  _internal_set_my_cheered_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.GetTournamentOverviewResponse.my_cheered_squad_id)
+}
+inline ::uint64_t GetTournamentOverviewResponse::_internal_my_cheered_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.my_cheered_squad_id_;
+}
+inline void GetTournamentOverviewResponse::_internal_set_my_cheered_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_cheered_squad_id_ = value;
+}
+
+// string my_cheered_squad_name = 8;
+inline void GetTournamentOverviewResponse::clear_my_cheered_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_cheered_squad_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& GetTournamentOverviewResponse::my_cheered_squad_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.my_cheered_squad_name)
+  return _internal_my_cheered_squad_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GetTournamentOverviewResponse::set_my_cheered_squad_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.my_cheered_squad_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.GetTournamentOverviewResponse.my_cheered_squad_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_my_cheered_squad_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_my_cheered_squad_name();
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.my_cheered_squad_name)
+  return _s;
+}
+inline const ::std::string& GetTournamentOverviewResponse::_internal_my_cheered_squad_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.my_cheered_squad_name_.Get();
+}
+inline void GetTournamentOverviewResponse::_internal_set_my_cheered_squad_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_cheered_squad_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GetTournamentOverviewResponse::_internal_mutable_my_cheered_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.my_cheered_squad_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GetTournamentOverviewResponse::release_my_cheered_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTournamentOverviewResponse.my_cheered_squad_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.my_cheered_squad_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.my_cheered_squad_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GetTournamentOverviewResponse::set_allocated_my_cheered_squad_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.my_cheered_squad_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.my_cheered_squad_name_.IsDefault()) {
+    _impl_.my_cheered_squad_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.GetTournamentOverviewResponse.my_cheered_squad_name)
+}
+
+// repeated .match.TournamentRewardTierView reward_tiers = 9;
+inline int GetTournamentOverviewResponse::_internal_reward_tiers_size() const {
+  return _internal_reward_tiers().size();
+}
+inline int GetTournamentOverviewResponse::reward_tiers_size() const {
+  return _internal_reward_tiers_size();
+}
+inline void GetTournamentOverviewResponse::clear_reward_tiers() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_tiers_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::match::TournamentRewardTierView& GetTournamentOverviewResponse::reward_tiers(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.reward_tiers)
+  return _internal_reward_tiers().Get(index);
+}
+inline ::match::TournamentRewardTierView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_reward_tiers(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.reward_tiers)
+  return _internal_mutable_reward_tiers()->Mutable(index);
+}
+inline ::match::TournamentRewardTierView* PROTOBUF_NONNULL GetTournamentOverviewResponse::add_reward_tiers()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentRewardTierView* _add =
+      _internal_mutable_reward_tiers()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:match.GetTournamentOverviewResponse.reward_tiers)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>& GetTournamentOverviewResponse::reward_tiers() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.GetTournamentOverviewResponse.reward_tiers)
+  return _internal_reward_tiers();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::mutable_reward_tiers() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:match.GetTournamentOverviewResponse.reward_tiers)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_reward_tiers();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>&
+GetTournamentOverviewResponse::_internal_reward_tiers() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_tiers_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentRewardTierView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::_internal_mutable_reward_tiers() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.reward_tiers_;
+}
+
+// repeated .match.TournamentPlayerRewardView my_rewards = 10;
+inline int GetTournamentOverviewResponse::_internal_my_rewards_size() const {
+  return _internal_my_rewards().size();
+}
+inline int GetTournamentOverviewResponse::my_rewards_size() const {
+  return _internal_my_rewards_size();
+}
+inline void GetTournamentOverviewResponse::clear_my_rewards() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.my_rewards_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::match::TournamentPlayerRewardView& GetTournamentOverviewResponse::my_rewards(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.my_rewards)
+  return _internal_my_rewards().Get(index);
+}
+inline ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_my_rewards(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.my_rewards)
+  return _internal_mutable_my_rewards()->Mutable(index);
+}
+inline ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL GetTournamentOverviewResponse::add_my_rewards()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentPlayerRewardView* _add =
+      _internal_mutable_my_rewards()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_add:match.GetTournamentOverviewResponse.my_rewards)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>& GetTournamentOverviewResponse::my_rewards() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.GetTournamentOverviewResponse.my_rewards)
+  return _internal_my_rewards();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::mutable_my_rewards() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_mutable_list:match.GetTournamentOverviewResponse.my_rewards)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_my_rewards();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>&
+GetTournamentOverviewResponse::_internal_my_rewards() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.my_rewards_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::_internal_mutable_my_rewards() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.my_rewards_;
+}
+
+// repeated .match.TournamentSeasonView hall_of_fame = 11;
+inline int GetTournamentOverviewResponse::_internal_hall_of_fame_size() const {
+  return _internal_hall_of_fame().size();
+}
+inline int GetTournamentOverviewResponse::hall_of_fame_size() const {
+  return _internal_hall_of_fame_size();
+}
+inline void GetTournamentOverviewResponse::clear_hall_of_fame() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hall_of_fame_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::match::TournamentSeasonView& GetTournamentOverviewResponse::hall_of_fame(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.hall_of_fame)
+  return _internal_hall_of_fame().Get(index);
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL GetTournamentOverviewResponse::mutable_hall_of_fame(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.GetTournamentOverviewResponse.hall_of_fame)
+  return _internal_mutable_hall_of_fame()->Mutable(index);
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL GetTournamentOverviewResponse::add_hall_of_fame()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentSeasonView* _add =
+      _internal_mutable_hall_of_fame()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_add:match.GetTournamentOverviewResponse.hall_of_fame)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>& GetTournamentOverviewResponse::hall_of_fame() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.GetTournamentOverviewResponse.hall_of_fame)
+  return _internal_hall_of_fame();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::mutable_hall_of_fame() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_mutable_list:match.GetTournamentOverviewResponse.hall_of_fame)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_hall_of_fame();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>&
+GetTournamentOverviewResponse::_internal_hall_of_fame() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hall_of_fame_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentSeasonView>* PROTOBUF_NONNULL
+GetTournamentOverviewResponse::_internal_mutable_hall_of_fame() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.hall_of_fame_;
+}
+
+// uint64 server_time_ms = 12;
+inline void GetTournamentOverviewResponse::clear_server_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t GetTournamentOverviewResponse::server_time_ms() const {
+  // @@protoc_insertion_point(field_get:match.GetTournamentOverviewResponse.server_time_ms)
+  return _internal_server_time_ms();
+}
+inline void GetTournamentOverviewResponse::set_server_time_ms(::uint64_t value) {
+  _internal_set_server_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.GetTournamentOverviewResponse.server_time_ms)
+}
+inline ::uint64_t GetTournamentOverviewResponse::_internal_server_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_time_ms_;
+}
+inline void GetTournamentOverviewResponse::_internal_set_server_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CreateTournamentSquadRequest
+
+// string squad_name = 1;
+inline void CreateTournamentSquadRequest::clear_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CreateTournamentSquadRequest::squad_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.CreateTournamentSquadRequest.squad_name)
+  return _internal_squad_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CreateTournamentSquadRequest::set_squad_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.squad_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.CreateTournamentSquadRequest.squad_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CreateTournamentSquadRequest::mutable_squad_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_squad_name();
+  // @@protoc_insertion_point(field_mutable:match.CreateTournamentSquadRequest.squad_name)
+  return _s;
+}
+inline const ::std::string& CreateTournamentSquadRequest::_internal_squad_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_name_.Get();
+}
+inline void CreateTournamentSquadRequest::_internal_set_squad_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CreateTournamentSquadRequest::_internal_mutable_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.squad_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CreateTournamentSquadRequest::release_squad_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.CreateTournamentSquadRequest.squad_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.squad_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.squad_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CreateTournamentSquadRequest::set_allocated_squad_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.squad_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.squad_name_.IsDefault()) {
+    _impl_.squad_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.CreateTournamentSquadRequest.squad_name)
+}
+
+// -------------------------------------------------------------------
+
+// CreateTournamentSquadResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool CreateTournamentSquadResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& CreateTournamentSquadResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& CreateTournamentSquadResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.CreateTournamentSquadResponse.error_message)
+  return _internal_error_message();
+}
+inline void CreateTournamentSquadResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.CreateTournamentSquadResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CreateTournamentSquadResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CreateTournamentSquadResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.CreateTournamentSquadResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CreateTournamentSquadResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CreateTournamentSquadResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.CreateTournamentSquadResponse.error_message)
+  return _msg;
+}
+inline void CreateTournamentSquadResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.CreateTournamentSquadResponse.error_message)
+}
+
+// .match.TournamentSquadView squad = 2;
+inline bool CreateTournamentSquadResponse::has_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.squad_ != nullptr);
+  return value;
+}
+inline void CreateTournamentSquadResponse::clear_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ != nullptr) _impl_.squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentSquadView& CreateTournamentSquadResponse::_internal_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& CreateTournamentSquadResponse::squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.CreateTournamentSquadResponse.squad)
+  return _internal_squad();
+}
+inline void CreateTournamentSquadResponse::unsafe_arena_set_allocated_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.CreateTournamentSquadResponse.squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE CreateTournamentSquadResponse::release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* released = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE CreateTournamentSquadResponse::unsafe_arena_release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.CreateTournamentSquadResponse.squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* temp = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL CreateTournamentSquadResponse::_internal_mutable_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL CreateTournamentSquadResponse::mutable_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_squad();
+  // @@protoc_insertion_point(field_mutable:match.CreateTournamentSquadResponse.squad)
+  return _msg;
+}
+inline void CreateTournamentSquadResponse::set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.CreateTournamentSquadResponse.squad)
+}
+
+// -------------------------------------------------------------------
+
+// InviteTournamentMemberRequest
+
+// uint64 target_player_id = 1;
+inline void InviteTournamentMemberRequest::clear_target_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t InviteTournamentMemberRequest::target_player_id() const {
+  // @@protoc_insertion_point(field_get:match.InviteTournamentMemberRequest.target_player_id)
+  return _internal_target_player_id();
+}
+inline void InviteTournamentMemberRequest::set_target_player_id(::uint64_t value) {
+  _internal_set_target_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.InviteTournamentMemberRequest.target_player_id)
+}
+inline ::uint64_t InviteTournamentMemberRequest::_internal_target_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_player_id_;
+}
+inline void InviteTournamentMemberRequest::_internal_set_target_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// InviteTournamentMemberResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool InviteTournamentMemberResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& InviteTournamentMemberResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& InviteTournamentMemberResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.InviteTournamentMemberResponse.error_message)
+  return _internal_error_message();
+}
+inline void InviteTournamentMemberResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.InviteTournamentMemberResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE InviteTournamentMemberResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE InviteTournamentMemberResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.InviteTournamentMemberResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL InviteTournamentMemberResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL InviteTournamentMemberResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.InviteTournamentMemberResponse.error_message)
+  return _msg;
+}
+inline void InviteTournamentMemberResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.InviteTournamentMemberResponse.error_message)
+}
+
+// .match.TournamentInviteView invite = 2;
+inline bool InviteTournamentMemberResponse::has_invite() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.invite_ != nullptr);
+  return value;
+}
+inline void InviteTournamentMemberResponse::clear_invite() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.invite_ != nullptr) _impl_.invite_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentInviteView& InviteTournamentMemberResponse::_internal_invite() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentInviteView* p = _impl_.invite_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentInviteView>(&::match::TournamentInviteView_globals_);
+}
+inline const ::match::TournamentInviteView& InviteTournamentMemberResponse::invite() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.InviteTournamentMemberResponse.invite)
+  return _internal_invite();
+}
+inline void InviteTournamentMemberResponse::unsafe_arena_set_allocated_invite(
+    ::match::TournamentInviteView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.invite_);
+  }
+  _impl_.invite_ = reinterpret_cast<::match::TournamentInviteView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.InviteTournamentMemberResponse.invite)
+}
+inline ::match::TournamentInviteView* PROTOBUF_NULLABLE InviteTournamentMemberResponse::release_invite() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentInviteView* released = _impl_.invite_;
+  _impl_.invite_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentInviteView* PROTOBUF_NULLABLE InviteTournamentMemberResponse::unsafe_arena_release_invite() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.InviteTournamentMemberResponse.invite)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentInviteView* temp = _impl_.invite_;
+  _impl_.invite_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentInviteView* PROTOBUF_NONNULL InviteTournamentMemberResponse::_internal_mutable_invite() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.invite_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentInviteView>(GetArena());
+    _impl_.invite_ = reinterpret_cast<::match::TournamentInviteView*>(p);
+  }
+  return _impl_.invite_;
+}
+inline ::match::TournamentInviteView* PROTOBUF_NONNULL InviteTournamentMemberResponse::mutable_invite()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentInviteView* _msg = _internal_mutable_invite();
+  // @@protoc_insertion_point(field_mutable:match.InviteTournamentMemberResponse.invite)
+  return _msg;
+}
+inline void InviteTournamentMemberResponse::set_allocated_invite(::match::TournamentInviteView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.invite_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.invite_ = reinterpret_cast<::match::TournamentInviteView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.InviteTournamentMemberResponse.invite)
+}
+
+// -------------------------------------------------------------------
+
+// RespondTournamentInviteRequest
+
+// uint64 squad_id = 1;
+inline void RespondTournamentInviteRequest::clear_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t RespondTournamentInviteRequest::squad_id() const {
+  // @@protoc_insertion_point(field_get:match.RespondTournamentInviteRequest.squad_id)
+  return _internal_squad_id();
+}
+inline void RespondTournamentInviteRequest::set_squad_id(::uint64_t value) {
+  _internal_set_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.RespondTournamentInviteRequest.squad_id)
+}
+inline ::uint64_t RespondTournamentInviteRequest::_internal_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_id_;
+}
+inline void RespondTournamentInviteRequest::_internal_set_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = value;
+}
+
+// bool accept = 2;
+inline void RespondTournamentInviteRequest::clear_accept() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool RespondTournamentInviteRequest::accept() const {
+  // @@protoc_insertion_point(field_get:match.RespondTournamentInviteRequest.accept)
+  return _internal_accept();
+}
+inline void RespondTournamentInviteRequest::set_accept(bool value) {
+  _internal_set_accept(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.RespondTournamentInviteRequest.accept)
+}
+inline bool RespondTournamentInviteRequest::_internal_accept() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accept_;
+}
+inline void RespondTournamentInviteRequest::_internal_set_accept(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RespondTournamentInviteResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RespondTournamentInviteResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RespondTournamentInviteResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RespondTournamentInviteResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.RespondTournamentInviteResponse.error_message)
+  return _internal_error_message();
+}
+inline void RespondTournamentInviteResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.RespondTournamentInviteResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RespondTournamentInviteResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RespondTournamentInviteResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.RespondTournamentInviteResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RespondTournamentInviteResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RespondTournamentInviteResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.RespondTournamentInviteResponse.error_message)
+  return _msg;
+}
+inline void RespondTournamentInviteResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.RespondTournamentInviteResponse.error_message)
+}
+
+// .match.TournamentSquadView squad = 2;
+inline bool RespondTournamentInviteResponse::has_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.squad_ != nullptr);
+  return value;
+}
+inline void RespondTournamentInviteResponse::clear_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ != nullptr) _impl_.squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentSquadView& RespondTournamentInviteResponse::_internal_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& RespondTournamentInviteResponse::squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.RespondTournamentInviteResponse.squad)
+  return _internal_squad();
+}
+inline void RespondTournamentInviteResponse::unsafe_arena_set_allocated_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.RespondTournamentInviteResponse.squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE RespondTournamentInviteResponse::release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* released = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE RespondTournamentInviteResponse::unsafe_arena_release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.RespondTournamentInviteResponse.squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* temp = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL RespondTournamentInviteResponse::_internal_mutable_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL RespondTournamentInviteResponse::mutable_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_squad();
+  // @@protoc_insertion_point(field_mutable:match.RespondTournamentInviteResponse.squad)
+  return _msg;
+}
+inline void RespondTournamentInviteResponse::set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.RespondTournamentInviteResponse.squad)
+}
+
+// -------------------------------------------------------------------
+
+// LeaveTournamentSquadRequest
+
+// uint64 target_player_id = 1;
+inline void LeaveTournamentSquadRequest::clear_target_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t LeaveTournamentSquadRequest::target_player_id() const {
+  // @@protoc_insertion_point(field_get:match.LeaveTournamentSquadRequest.target_player_id)
+  return _internal_target_player_id();
+}
+inline void LeaveTournamentSquadRequest::set_target_player_id(::uint64_t value) {
+  _internal_set_target_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.LeaveTournamentSquadRequest.target_player_id)
+}
+inline ::uint64_t LeaveTournamentSquadRequest::_internal_target_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_player_id_;
+}
+inline void LeaveTournamentSquadRequest::_internal_set_target_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// LeaveTournamentSquadResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool LeaveTournamentSquadResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& LeaveTournamentSquadResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& LeaveTournamentSquadResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.LeaveTournamentSquadResponse.error_message)
+  return _internal_error_message();
+}
+inline void LeaveTournamentSquadResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.LeaveTournamentSquadResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE LeaveTournamentSquadResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE LeaveTournamentSquadResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.LeaveTournamentSquadResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL LeaveTournamentSquadResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL LeaveTournamentSquadResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.LeaveTournamentSquadResponse.error_message)
+  return _msg;
+}
+inline void LeaveTournamentSquadResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.LeaveTournamentSquadResponse.error_message)
+}
+
+// bool squad_disbanded = 2;
+inline void LeaveTournamentSquadResponse::clear_squad_disbanded() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_disbanded_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool LeaveTournamentSquadResponse::squad_disbanded() const {
+  // @@protoc_insertion_point(field_get:match.LeaveTournamentSquadResponse.squad_disbanded)
+  return _internal_squad_disbanded();
+}
+inline void LeaveTournamentSquadResponse::set_squad_disbanded(bool value) {
+  _internal_set_squad_disbanded(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.LeaveTournamentSquadResponse.squad_disbanded)
+}
+inline bool LeaveTournamentSquadResponse::_internal_squad_disbanded() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_disbanded_;
+}
+inline void LeaveTournamentSquadResponse::_internal_set_squad_disbanded(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_disbanded_ = value;
+}
+
+// .match.TournamentSquadView squad = 3;
+inline bool LeaveTournamentSquadResponse::has_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.squad_ != nullptr);
+  return value;
+}
+inline void LeaveTournamentSquadResponse::clear_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ != nullptr) _impl_.squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentSquadView& LeaveTournamentSquadResponse::_internal_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& LeaveTournamentSquadResponse::squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.LeaveTournamentSquadResponse.squad)
+  return _internal_squad();
+}
+inline void LeaveTournamentSquadResponse::unsafe_arena_set_allocated_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.LeaveTournamentSquadResponse.squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE LeaveTournamentSquadResponse::release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* released = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE LeaveTournamentSquadResponse::unsafe_arena_release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.LeaveTournamentSquadResponse.squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* temp = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL LeaveTournamentSquadResponse::_internal_mutable_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL LeaveTournamentSquadResponse::mutable_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_squad();
+  // @@protoc_insertion_point(field_mutable:match.LeaveTournamentSquadResponse.squad)
+  return _msg;
+}
+inline void LeaveTournamentSquadResponse::set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.LeaveTournamentSquadResponse.squad)
+}
+
+// -------------------------------------------------------------------
+
+// UpdateTournamentLineupRequest
+
+// repeated uint64 starter_player_ids = 1;
+inline int UpdateTournamentLineupRequest::_internal_starter_player_ids_size() const {
+  return _internal_starter_player_ids().size();
+}
+inline int UpdateTournamentLineupRequest::starter_player_ids_size() const {
+  return _internal_starter_player_ids_size();
+}
+inline void UpdateTournamentLineupRequest::clear_starter_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.starter_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t UpdateTournamentLineupRequest::starter_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:match.UpdateTournamentLineupRequest.starter_player_ids)
+  return _internal_starter_player_ids().Get(index);
+}
+inline void UpdateTournamentLineupRequest::set_starter_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_starter_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:match.UpdateTournamentLineupRequest.starter_player_ids)
+}
+inline void UpdateTournamentLineupRequest::add_starter_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_starter_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.UpdateTournamentLineupRequest.starter_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& UpdateTournamentLineupRequest::starter_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.UpdateTournamentLineupRequest.starter_player_ids)
+  return _internal_starter_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL UpdateTournamentLineupRequest::mutable_starter_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.UpdateTournamentLineupRequest.starter_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_starter_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+UpdateTournamentLineupRequest::_internal_starter_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.starter_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+UpdateTournamentLineupRequest::_internal_mutable_starter_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.starter_player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// UpdateTournamentLineupResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool UpdateTournamentLineupResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& UpdateTournamentLineupResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& UpdateTournamentLineupResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.UpdateTournamentLineupResponse.error_message)
+  return _internal_error_message();
+}
+inline void UpdateTournamentLineupResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.UpdateTournamentLineupResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UpdateTournamentLineupResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UpdateTournamentLineupResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.UpdateTournamentLineupResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UpdateTournamentLineupResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UpdateTournamentLineupResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.UpdateTournamentLineupResponse.error_message)
+  return _msg;
+}
+inline void UpdateTournamentLineupResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.UpdateTournamentLineupResponse.error_message)
+}
+
+// .match.TournamentSquadView squad = 2;
+inline bool UpdateTournamentLineupResponse::has_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.squad_ != nullptr);
+  return value;
+}
+inline void UpdateTournamentLineupResponse::clear_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ != nullptr) _impl_.squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentSquadView& UpdateTournamentLineupResponse::_internal_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& UpdateTournamentLineupResponse::squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.UpdateTournamentLineupResponse.squad)
+  return _internal_squad();
+}
+inline void UpdateTournamentLineupResponse::unsafe_arena_set_allocated_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.UpdateTournamentLineupResponse.squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE UpdateTournamentLineupResponse::release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* released = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE UpdateTournamentLineupResponse::unsafe_arena_release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.UpdateTournamentLineupResponse.squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* temp = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL UpdateTournamentLineupResponse::_internal_mutable_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL UpdateTournamentLineupResponse::mutable_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_squad();
+  // @@protoc_insertion_point(field_mutable:match.UpdateTournamentLineupResponse.squad)
+  return _msg;
+}
+inline void UpdateTournamentLineupResponse::set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.UpdateTournamentLineupResponse.squad)
+}
+
+// -------------------------------------------------------------------
+
+// RegisterTournamentSquadRequest
+
+// -------------------------------------------------------------------
+
+// RegisterTournamentSquadResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RegisterTournamentSquadResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RegisterTournamentSquadResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RegisterTournamentSquadResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.RegisterTournamentSquadResponse.error_message)
+  return _internal_error_message();
+}
+inline void RegisterTournamentSquadResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.RegisterTournamentSquadResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RegisterTournamentSquadResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RegisterTournamentSquadResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.RegisterTournamentSquadResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RegisterTournamentSquadResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RegisterTournamentSquadResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.RegisterTournamentSquadResponse.error_message)
+  return _msg;
+}
+inline void RegisterTournamentSquadResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.RegisterTournamentSquadResponse.error_message)
+}
+
+// .match.TournamentSquadView squad = 2;
+inline bool RegisterTournamentSquadResponse::has_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.squad_ != nullptr);
+  return value;
+}
+inline void RegisterTournamentSquadResponse::clear_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ != nullptr) _impl_.squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentSquadView& RegisterTournamentSquadResponse::_internal_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& RegisterTournamentSquadResponse::squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.RegisterTournamentSquadResponse.squad)
+  return _internal_squad();
+}
+inline void RegisterTournamentSquadResponse::unsafe_arena_set_allocated_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.RegisterTournamentSquadResponse.squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE RegisterTournamentSquadResponse::release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* released = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE RegisterTournamentSquadResponse::unsafe_arena_release_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.RegisterTournamentSquadResponse.squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* temp = _impl_.squad_;
+  _impl_.squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL RegisterTournamentSquadResponse::_internal_mutable_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL RegisterTournamentSquadResponse::mutable_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_squad();
+  // @@protoc_insertion_point(field_mutable:match.RegisterTournamentSquadResponse.squad)
+  return _msg;
+}
+inline void RegisterTournamentSquadResponse::set_allocated_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.RegisterTournamentSquadResponse.squad)
+}
+
+// -------------------------------------------------------------------
+
+// ListTournamentStandingsRequest
+
+// uint32 season_id = 1;
+inline void ListTournamentStandingsRequest::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ListTournamentStandingsRequest::season_id() const {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsRequest.season_id)
+  return _internal_season_id();
+}
+inline void ListTournamentStandingsRequest::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.ListTournamentStandingsRequest.season_id)
+}
+inline ::uint32_t ListTournamentStandingsRequest::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void ListTournamentStandingsRequest::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// uint32 page = 2;
+inline void ListTournamentStandingsRequest::clear_page() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ListTournamentStandingsRequest::page() const {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsRequest.page)
+  return _internal_page();
+}
+inline void ListTournamentStandingsRequest::set_page(::uint32_t value) {
+  _internal_set_page(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.ListTournamentStandingsRequest.page)
+}
+inline ::uint32_t ListTournamentStandingsRequest::_internal_page() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.page_;
+}
+inline void ListTournamentStandingsRequest::_internal_set_page(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_ = value;
+}
+
+// uint32 page_size = 3;
+inline void ListTournamentStandingsRequest::clear_page_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ListTournamentStandingsRequest::page_size() const {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsRequest.page_size)
+  return _internal_page_size();
+}
+inline void ListTournamentStandingsRequest::set_page_size(::uint32_t value) {
+  _internal_set_page_size(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.ListTournamentStandingsRequest.page_size)
+}
+inline ::uint32_t ListTournamentStandingsRequest::_internal_page_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.page_size_;
+}
+inline void ListTournamentStandingsRequest::_internal_set_page_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.page_size_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListTournamentStandingsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ListTournamentStandingsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ListTournamentStandingsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ListTournamentStandingsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.error_message)
+  return _internal_error_message();
+}
+inline void ListTournamentStandingsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListTournamentStandingsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListTournamentStandingsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListTournamentStandingsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListTournamentStandingsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListTournamentStandingsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListTournamentStandingsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.ListTournamentStandingsResponse.error_message)
+  return _msg;
+}
+inline void ListTournamentStandingsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListTournamentStandingsResponse.error_message)
+}
+
+// .match.TournamentSeasonView season = 2;
+inline bool ListTournamentStandingsResponse::has_season() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.season_ != nullptr);
+  return value;
+}
+inline void ListTournamentStandingsResponse::clear_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_ != nullptr) _impl_.season_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::match::TournamentSeasonView& ListTournamentStandingsResponse::_internal_season() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSeasonView* p = _impl_.season_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSeasonView>(&::match::TournamentSeasonView_globals_);
+}
+inline const ::match::TournamentSeasonView& ListTournamentStandingsResponse::season() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.season)
+  return _internal_season();
+}
+inline void ListTournamentStandingsResponse::unsafe_arena_set_allocated_season(
+    ::match::TournamentSeasonView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_);
+  }
+  _impl_.season_ = reinterpret_cast<::match::TournamentSeasonView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListTournamentStandingsResponse.season)
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NULLABLE ListTournamentStandingsResponse::release_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::match::TournamentSeasonView* released = _impl_.season_;
+  _impl_.season_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NULLABLE ListTournamentStandingsResponse::unsafe_arena_release_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListTournamentStandingsResponse.season)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::match::TournamentSeasonView* temp = _impl_.season_;
+  _impl_.season_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL ListTournamentStandingsResponse::_internal_mutable_season() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.season_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSeasonView>(GetArena());
+    _impl_.season_ = reinterpret_cast<::match::TournamentSeasonView*>(p);
+  }
+  return _impl_.season_;
+}
+inline ::match::TournamentSeasonView* PROTOBUF_NONNULL ListTournamentStandingsResponse::mutable_season()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::match::TournamentSeasonView* _msg = _internal_mutable_season();
+  // @@protoc_insertion_point(field_mutable:match.ListTournamentStandingsResponse.season)
+  return _msg;
+}
+inline void ListTournamentStandingsResponse::set_allocated_season(::match::TournamentSeasonView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.season_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.season_ = reinterpret_cast<::match::TournamentSeasonView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListTournamentStandingsResponse.season)
+}
+
+// repeated .match.TournamentSquadView standings = 3;
+inline int ListTournamentStandingsResponse::_internal_standings_size() const {
+  return _internal_standings().size();
+}
+inline int ListTournamentStandingsResponse::standings_size() const {
+  return _internal_standings_size();
+}
+inline void ListTournamentStandingsResponse::clear_standings() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.standings_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentSquadView& ListTournamentStandingsResponse::standings(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.standings)
+  return _internal_standings().Get(index);
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL ListTournamentStandingsResponse::mutable_standings(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListTournamentStandingsResponse.standings)
+  return _internal_mutable_standings()->Mutable(index);
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL ListTournamentStandingsResponse::add_standings()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentSquadView* _add =
+      _internal_mutable_standings()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.ListTournamentStandingsResponse.standings)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>& ListTournamentStandingsResponse::standings() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListTournamentStandingsResponse.standings)
+  return _internal_standings();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>* PROTOBUF_NONNULL
+ListTournamentStandingsResponse::mutable_standings() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListTournamentStandingsResponse.standings)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_standings();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>&
+ListTournamentStandingsResponse::_internal_standings() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.standings_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentSquadView>* PROTOBUF_NONNULL
+ListTournamentStandingsResponse::_internal_mutable_standings() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.standings_;
+}
+
+// .match.TournamentSquadView my_squad = 4;
+inline bool ListTournamentStandingsResponse::has_my_squad() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.my_squad_ != nullptr);
+  return value;
+}
+inline void ListTournamentStandingsResponse::clear_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_squad_ != nullptr) _impl_.my_squad_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::match::TournamentSquadView& ListTournamentStandingsResponse::_internal_my_squad() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentSquadView* p = _impl_.my_squad_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentSquadView>(&::match::TournamentSquadView_globals_);
+}
+inline const ::match::TournamentSquadView& ListTournamentStandingsResponse::my_squad() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.my_squad)
+  return _internal_my_squad();
+}
+inline void ListTournamentStandingsResponse::unsafe_arena_set_allocated_my_squad(
+    ::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_squad_);
+  }
+  _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListTournamentStandingsResponse.my_squad)
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE ListTournamentStandingsResponse::release_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::match::TournamentSquadView* released = _impl_.my_squad_;
+  _impl_.my_squad_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NULLABLE ListTournamentStandingsResponse::unsafe_arena_release_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListTournamentStandingsResponse.my_squad)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::match::TournamentSquadView* temp = _impl_.my_squad_;
+  _impl_.my_squad_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL ListTournamentStandingsResponse::_internal_mutable_my_squad() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.my_squad_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentSquadView>(GetArena());
+    _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(p);
+  }
+  return _impl_.my_squad_;
+}
+inline ::match::TournamentSquadView* PROTOBUF_NONNULL ListTournamentStandingsResponse::mutable_my_squad()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::match::TournamentSquadView* _msg = _internal_mutable_my_squad();
+  // @@protoc_insertion_point(field_mutable:match.ListTournamentStandingsResponse.my_squad)
+  return _msg;
+}
+inline void ListTournamentStandingsResponse::set_allocated_my_squad(::match::TournamentSquadView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.my_squad_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.my_squad_ = reinterpret_cast<::match::TournamentSquadView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListTournamentStandingsResponse.my_squad)
+}
+
+// uint32 total_squads = 5;
+inline void ListTournamentStandingsResponse::clear_total_squads() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_squads_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ListTournamentStandingsResponse::total_squads() const {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.total_squads)
+  return _internal_total_squads();
+}
+inline void ListTournamentStandingsResponse::set_total_squads(::uint32_t value) {
+  _internal_set_total_squads(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.ListTournamentStandingsResponse.total_squads)
+}
+inline ::uint32_t ListTournamentStandingsResponse::_internal_total_squads() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_squads_;
+}
+inline void ListTournamentStandingsResponse::_internal_set_total_squads(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_squads_ = value;
+}
+
+// repeated .match.TournamentMatchView knockout_bracket = 6;
+inline int ListTournamentStandingsResponse::_internal_knockout_bracket_size() const {
+  return _internal_knockout_bracket().size();
+}
+inline int ListTournamentStandingsResponse::knockout_bracket_size() const {
+  return _internal_knockout_bracket_size();
+}
+inline void ListTournamentStandingsResponse::clear_knockout_bracket() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.knockout_bracket_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentMatchView& ListTournamentStandingsResponse::knockout_bracket(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.knockout_bracket)
+  return _internal_knockout_bracket().Get(index);
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL ListTournamentStandingsResponse::mutable_knockout_bracket(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListTournamentStandingsResponse.knockout_bracket)
+  return _internal_mutable_knockout_bracket()->Mutable(index);
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL ListTournamentStandingsResponse::add_knockout_bracket()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentMatchView* _add =
+      _internal_mutable_knockout_bracket()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:match.ListTournamentStandingsResponse.knockout_bracket)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>& ListTournamentStandingsResponse::knockout_bracket() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListTournamentStandingsResponse.knockout_bracket)
+  return _internal_knockout_bracket();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+ListTournamentStandingsResponse::mutable_knockout_bracket() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListTournamentStandingsResponse.knockout_bracket)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_knockout_bracket();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>&
+ListTournamentStandingsResponse::_internal_knockout_bracket() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.knockout_bracket_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentMatchView>* PROTOBUF_NONNULL
+ListTournamentStandingsResponse::_internal_mutable_knockout_bracket() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.knockout_bracket_;
+}
+
+// uint64 server_time_ms = 7;
+inline void ListTournamentStandingsResponse::clear_server_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ListTournamentStandingsResponse::server_time_ms() const {
+  // @@protoc_insertion_point(field_get:match.ListTournamentStandingsResponse.server_time_ms)
+  return _internal_server_time_ms();
+}
+inline void ListTournamentStandingsResponse::set_server_time_ms(::uint64_t value) {
+  _internal_set_server_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.ListTournamentStandingsResponse.server_time_ms)
+}
+inline ::uint64_t ListTournamentStandingsResponse::_internal_server_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_time_ms_;
+}
+inline void ListTournamentStandingsResponse::_internal_set_server_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// StartTournamentMatchRequest
+
+// uint64 match_id = 1;
+inline void StartTournamentMatchRequest::clear_match_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t StartTournamentMatchRequest::match_id() const {
+  // @@protoc_insertion_point(field_get:match.StartTournamentMatchRequest.match_id)
+  return _internal_match_id();
+}
+inline void StartTournamentMatchRequest::set_match_id(::uint64_t value) {
+  _internal_set_match_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.StartTournamentMatchRequest.match_id)
+}
+inline ::uint64_t StartTournamentMatchRequest::_internal_match_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.match_id_;
+}
+inline void StartTournamentMatchRequest::_internal_set_match_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.match_id_ = value;
+}
+
+// repeated uint64 lineup_player_ids = 2;
+inline int StartTournamentMatchRequest::_internal_lineup_player_ids_size() const {
+  return _internal_lineup_player_ids().size();
+}
+inline int StartTournamentMatchRequest::lineup_player_ids_size() const {
+  return _internal_lineup_player_ids_size();
+}
+inline void StartTournamentMatchRequest::clear_lineup_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lineup_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t StartTournamentMatchRequest::lineup_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:match.StartTournamentMatchRequest.lineup_player_ids)
+  return _internal_lineup_player_ids().Get(index);
+}
+inline void StartTournamentMatchRequest::set_lineup_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_lineup_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:match.StartTournamentMatchRequest.lineup_player_ids)
+}
+inline void StartTournamentMatchRequest::add_lineup_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_lineup_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.StartTournamentMatchRequest.lineup_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& StartTournamentMatchRequest::lineup_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.StartTournamentMatchRequest.lineup_player_ids)
+  return _internal_lineup_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL StartTournamentMatchRequest::mutable_lineup_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.StartTournamentMatchRequest.lineup_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_lineup_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+StartTournamentMatchRequest::_internal_lineup_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lineup_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+StartTournamentMatchRequest::_internal_mutable_lineup_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.lineup_player_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// StartTournamentMatchResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool StartTournamentMatchResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& StartTournamentMatchResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& StartTournamentMatchResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.StartTournamentMatchResponse.error_message)
+  return _internal_error_message();
+}
+inline void StartTournamentMatchResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.StartTournamentMatchResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartTournamentMatchResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartTournamentMatchResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.StartTournamentMatchResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartTournamentMatchResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartTournamentMatchResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.StartTournamentMatchResponse.error_message)
+  return _msg;
+}
+inline void StartTournamentMatchResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.StartTournamentMatchResponse.error_message)
+}
+
+// .match.TournamentMatchView match = 2;
+inline bool StartTournamentMatchResponse::has_match() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.match_ != nullptr);
+  return value;
+}
+inline void StartTournamentMatchResponse::clear_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.match_ != nullptr) _impl_.match_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TournamentMatchView& StartTournamentMatchResponse::_internal_match() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TournamentMatchView* p = _impl_.match_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TournamentMatchView>(&::match::TournamentMatchView_globals_);
+}
+inline const ::match::TournamentMatchView& StartTournamentMatchResponse::match() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.StartTournamentMatchResponse.match)
+  return _internal_match();
+}
+inline void StartTournamentMatchResponse::unsafe_arena_set_allocated_match(
+    ::match::TournamentMatchView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.match_);
+  }
+  _impl_.match_ = reinterpret_cast<::match::TournamentMatchView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.StartTournamentMatchResponse.match)
+}
+inline ::match::TournamentMatchView* PROTOBUF_NULLABLE StartTournamentMatchResponse::release_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentMatchView* released = _impl_.match_;
+  _impl_.match_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NULLABLE StartTournamentMatchResponse::unsafe_arena_release_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.StartTournamentMatchResponse.match)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentMatchView* temp = _impl_.match_;
+  _impl_.match_ = nullptr;
+  return temp;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL StartTournamentMatchResponse::_internal_mutable_match() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.match_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TournamentMatchView>(GetArena());
+    _impl_.match_ = reinterpret_cast<::match::TournamentMatchView*>(p);
+  }
+  return _impl_.match_;
+}
+inline ::match::TournamentMatchView* PROTOBUF_NONNULL StartTournamentMatchResponse::mutable_match()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TournamentMatchView* _msg = _internal_mutable_match();
+  // @@protoc_insertion_point(field_mutable:match.StartTournamentMatchResponse.match)
+  return _msg;
+}
+inline void StartTournamentMatchResponse::set_allocated_match(::match::TournamentMatchView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.match_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.match_ = reinterpret_cast<::match::TournamentMatchView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.StartTournamentMatchResponse.match)
+}
+
+// uint64 battle_id = 3;
+inline void StartTournamentMatchResponse::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t StartTournamentMatchResponse::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.StartTournamentMatchResponse.battle_id)
+  return _internal_battle_id();
+}
+inline void StartTournamentMatchResponse::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.StartTournamentMatchResponse.battle_id)
+}
+inline ::uint64_t StartTournamentMatchResponse::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void StartTournamentMatchResponse::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CheerTournamentSquadRequest
+
+// uint64 squad_id = 1;
+inline void CheerTournamentSquadRequest::clear_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t CheerTournamentSquadRequest::squad_id() const {
+  // @@protoc_insertion_point(field_get:match.CheerTournamentSquadRequest.squad_id)
+  return _internal_squad_id();
+}
+inline void CheerTournamentSquadRequest::set_squad_id(::uint64_t value) {
+  _internal_set_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.CheerTournamentSquadRequest.squad_id)
+}
+inline ::uint64_t CheerTournamentSquadRequest::_internal_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_id_;
+}
+inline void CheerTournamentSquadRequest::_internal_set_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CheerTournamentSquadResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool CheerTournamentSquadResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& CheerTournamentSquadResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& CheerTournamentSquadResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.CheerTournamentSquadResponse.error_message)
+  return _internal_error_message();
+}
+inline void CheerTournamentSquadResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.CheerTournamentSquadResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CheerTournamentSquadResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE CheerTournamentSquadResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.CheerTournamentSquadResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CheerTournamentSquadResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL CheerTournamentSquadResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.CheerTournamentSquadResponse.error_message)
+  return _msg;
+}
+inline void CheerTournamentSquadResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.CheerTournamentSquadResponse.error_message)
+}
+
+// uint64 squad_id = 2;
+inline void CheerTournamentSquadResponse::clear_squad_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t CheerTournamentSquadResponse::squad_id() const {
+  // @@protoc_insertion_point(field_get:match.CheerTournamentSquadResponse.squad_id)
+  return _internal_squad_id();
+}
+inline void CheerTournamentSquadResponse::set_squad_id(::uint64_t value) {
+  _internal_set_squad_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.CheerTournamentSquadResponse.squad_id)
+}
+inline ::uint64_t CheerTournamentSquadResponse::_internal_squad_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_id_;
+}
+inline void CheerTournamentSquadResponse::_internal_set_squad_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_id_ = value;
+}
+
+// uint32 squad_cheer_count = 3;
+inline void CheerTournamentSquadResponse::clear_squad_cheer_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_cheer_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t CheerTournamentSquadResponse::squad_cheer_count() const {
+  // @@protoc_insertion_point(field_get:match.CheerTournamentSquadResponse.squad_cheer_count)
+  return _internal_squad_cheer_count();
+}
+inline void CheerTournamentSquadResponse::set_squad_cheer_count(::uint32_t value) {
+  _internal_set_squad_cheer_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.CheerTournamentSquadResponse.squad_cheer_count)
+}
+inline ::uint32_t CheerTournamentSquadResponse::_internal_squad_cheer_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.squad_cheer_count_;
+}
+inline void CheerTournamentSquadResponse::_internal_set_squad_cheer_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.squad_cheer_count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClaimTournamentRewardRequest
+
+// uint32 season_id = 1;
+inline void ClaimTournamentRewardRequest::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ClaimTournamentRewardRequest::season_id() const {
+  // @@protoc_insertion_point(field_get:match.ClaimTournamentRewardRequest.season_id)
+  return _internal_season_id();
+}
+inline void ClaimTournamentRewardRequest::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.ClaimTournamentRewardRequest.season_id)
+}
+inline ::uint32_t ClaimTournamentRewardRequest::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void ClaimTournamentRewardRequest::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClaimTournamentRewardResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ClaimTournamentRewardResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ClaimTournamentRewardResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ClaimTournamentRewardResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ClaimTournamentRewardResponse.error_message)
+  return _internal_error_message();
+}
+inline void ClaimTournamentRewardResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ClaimTournamentRewardResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimTournamentRewardResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimTournamentRewardResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ClaimTournamentRewardResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimTournamentRewardResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimTournamentRewardResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.ClaimTournamentRewardResponse.error_message)
+  return _msg;
+}
+inline void ClaimTournamentRewardResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ClaimTournamentRewardResponse.error_message)
+}
+
+// repeated .match.TournamentPlayerRewardView claimed_rewards = 2;
+inline int ClaimTournamentRewardResponse::_internal_claimed_rewards_size() const {
+  return _internal_claimed_rewards().size();
+}
+inline int ClaimTournamentRewardResponse::claimed_rewards_size() const {
+  return _internal_claimed_rewards_size();
+}
+inline void ClaimTournamentRewardResponse::clear_claimed_rewards() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimed_rewards_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TournamentPlayerRewardView& ClaimTournamentRewardResponse::claimed_rewards(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ClaimTournamentRewardResponse.claimed_rewards)
+  return _internal_claimed_rewards().Get(index);
+}
+inline ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL ClaimTournamentRewardResponse::mutable_claimed_rewards(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ClaimTournamentRewardResponse.claimed_rewards)
+  return _internal_mutable_claimed_rewards()->Mutable(index);
+}
+inline ::match::TournamentPlayerRewardView* PROTOBUF_NONNULL ClaimTournamentRewardResponse::add_claimed_rewards()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TournamentPlayerRewardView* _add =
+      _internal_mutable_claimed_rewards()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.ClaimTournamentRewardResponse.claimed_rewards)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>& ClaimTournamentRewardResponse::claimed_rewards() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ClaimTournamentRewardResponse.claimed_rewards)
+  return _internal_claimed_rewards();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+ClaimTournamentRewardResponse::mutable_claimed_rewards() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.ClaimTournamentRewardResponse.claimed_rewards)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_claimed_rewards();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>&
+ClaimTournamentRewardResponse::_internal_claimed_rewards() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimed_rewards_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TournamentPlayerRewardView>* PROTOBUF_NONNULL
+ClaimTournamentRewardResponse::_internal_mutable_claimed_rewards() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.claimed_rewards_;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -22818,6 +37919,48 @@ struct is_proto_enum<::match::RankedMatchRatingStatus> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::RankedMatchRatingStatus>() {
   return ::match::RankedMatchRatingStatus_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentStage> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentStage>() {
+  return ::match::TournamentStage_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentSquadState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentSquadState>() {
+  return ::match::TournamentSquadState_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentMemberRole> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentMemberRole>() {
+  return ::match::TournamentMemberRole_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentMatchPhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentMatchPhase>() {
+  return ::match::TournamentMatchPhase_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentMatchState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentMatchState>() {
+  return ::match::TournamentMatchState_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentRewardTierKind> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentRewardTierKind>() {
+  return ::match::TournamentRewardTierKind_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TournamentRewardDeliveryState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TournamentRewardDeliveryState>() {
+  return ::match::TournamentRewardDeliveryState_descriptor();
 }
 
 }  // namespace protobuf

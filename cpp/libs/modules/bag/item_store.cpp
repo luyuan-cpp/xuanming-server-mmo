@@ -139,6 +139,19 @@ std::size_t ItemStore::TotalCountOf(uint32_t configId) const
     return totalSize;
 }
 
+std::size_t ItemStore::TotalTradableCountOf(uint32_t configId) const
+{
+    std::size_t totalSize = 0;
+    for (const auto &[guid, item] : items_)
+    {
+        if (item.config_id() == configId && !item.bound() && IsCountableByConfig(item))
+        {
+            totalSize += item.size();
+        }
+    }
+    return totalSize;
+}
+
 ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &required) const
 {
     // 一次遍历,按需求里的 config 分别累计可计单位与"扣下"的单位(带更新版本字段的)。与遍历顺序无关。
@@ -181,7 +194,7 @@ ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &requir
 
 // ── 堆叠语义 ─────────────────────────────────────────────────────────────
 
-ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted) const
+ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted, bool bound) const
 {
     ItemCountMap freeRoomByConfig;
     // 空余总量与遍历顺序无关；Bag 已在扣空时释放实例，加载也跳过旧档零堆。
@@ -194,7 +207,7 @@ ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted) con
         // 独立实例的堆不收任何并入(见 CanStack)。这里是 reserve 侧的估算,不跟着跳过的话
         // 它会把这种堆的空余算进去,而 commit 侧的 PlanStackIntoExistingStacks 并不往里填 ——
         // reserve 比 commit 乐观,就是"预检通过、写到一半放不下"。
-        if (IsIndependentInstance(item))
+        if (IsIndependentInstance(item) || item.bound() != bound)
         {
             continue;
         }
@@ -269,7 +282,8 @@ void ItemStore::ApplyStackFill(const std::vector<StackFill> &fillPlan,
 
 uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
                                 const DrainRank &drainRank,
-                                std::vector<StackDrain> *drainedOut)
+                                std::vector<StackDrain> *drainedOut,
+                                bool tradableOnly, bool *consumedBoundOut)
 {
     // 每个候选只查一次 rank,比较器不调用外部逻辑。空 rank 时仅按实例序。
     std::vector<std::pair<uint64_t, Items::value_type *>> ordered;
@@ -277,14 +291,21 @@ uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
     {
         assert(entry.first == entry.second.item_id());
         // 带更新版本字段的堆不当普通单位扣(IsCountableByConfig,与 TotalCountOf / CheckQuantities 同口径)。
-        if (entry.second.config_id() == configId && entry.second.size() > 0 && IsCountableByConfig(entry.second))
+        if (entry.second.config_id() == configId && entry.second.size() > 0 &&
+            (!tradableOnly || !entry.second.bound()) && IsCountableByConfig(entry.second))
         {
             ordered.emplace_back(drainRank ? drainRank(entry.first) : uint64_t{0}, &entry);
         }
     }
     std::sort(ordered.begin(), ordered.end(), [](const auto &lhs, const auto &rhs)
-              { return lhs.first != rhs.first ? lhs.first < rhs.first
-                                               : AcquiredBefore(lhs.second->second, rhs.second->second); });
+              {
+                  if (lhs.second->second.bound() != rhs.second->second.bound())
+                  {
+                      return lhs.second->second.bound(); // 消耗材料时优先扣绑定堆，保留可交易堆
+                  }
+                  return lhs.first != rhs.first ? lhs.first < rhs.first
+                                                : AcquiredBefore(lhs.second->second, rhs.second->second);
+              });
     const uint32_t requested = count;
     for (const auto &[rank, entry] : ordered)
     {
@@ -298,6 +319,10 @@ uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
         {
             continue;  // size==0 的僵尸堆:抽不出东西,也不该进回执
         }
+        if (item.bound() && consumedBoundOut != nullptr)
+        {
+            *consumedBoundOut = true;
+        }
         item.set_size(item.size() - take);                                // 抽走(抽光则 size=0)
         count -= take;                                                    // 更新还需抽取的数量
         if (drainedOut != nullptr)
@@ -310,9 +335,9 @@ uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
 
 bool ItemStore::HasMergeablePartials() const
 {
-    // 同一个 config 一旦出现 >= 2 个未满堆(一高一低 / 两个半堆),就能合并出
-    // 更少的实例。这一条完全独立于槽位紧不紧凑 —— 它是纯粹的实例层判据。
-    std::unordered_map<uint32_t, uint32_t> partialCountByConfig;
+    // 同一个 (config, bound) 一旦出现 >= 2 个未满堆(一高一低 / 两个半堆),就能合并出
+    // 更少的实例。绑定与可交易绝不跨组并堆。
+    std::map<std::pair<uint32_t, bool>, uint32_t> partialCountByKey;
     for (const auto &[guid, item] : items_)
     {
         LookupItemOrContinue(item.config_id());
@@ -320,7 +345,7 @@ bool ItemStore::HasMergeablePartials() const
         {
             continue;
         }
-        if (++partialCountByConfig[item.config_id()] >= 2)
+        if (++partialCountByKey[{item.config_id(), item.bound()}] >= 2)
         {
             return true;
         }
@@ -340,8 +365,8 @@ bool ItemStore::IsIndependentInstance(const ItemComp &item)
 
 void ItemStore::MergePartialStacks()
 {
-    // 按实例序入组,最早的非空堆先填满并留下。空堆仅交给回收,装备不参与并堆。
-    std::map<uint32_t, std::vector<ItemComp *>> groupsByConfig;
+    // 按实例序入组,按 (config_id, bound) 分组:绑定堆只与绑定堆合并,可交易堆只与可交易堆合并。
+    std::map<std::pair<uint32_t, bool>, std::vector<ItemComp *>> groupsByKey;
     for (auto *entry : InAcquireOrder())
     {
         auto &item = entry->second;
@@ -350,14 +375,15 @@ void ItemStore::MergePartialStacks()
         {
             continue;
         }
-        groupsByConfig[item.config_id()].push_back(&item);
+        groupsByKey[{item.config_id(), item.bound()}].push_back(&item);
     }
 
     // ② 合并每组 —— 把组内总数量重新分配:前几个填满,最后一个放余数,其余清 0。
     // 清成 0 的那些不在这里销毁也不单独记名:它们已经是 size==0,由调用方紧接着的
     // CollectEmptyInstances 一并扫出来交给桥层两层成对销毁。
-    for (auto &[configId, group] : groupsByConfig)
+    for (auto &[key, group] : groupsByKey)
     {
+        const uint32_t configId = key.first;
         LookupItemOrContinue(configId);  // 注入 itemRow,拿该 config 的堆叠上限
         const uint32_t maxStack = itemRow->max_stack_size();
 
@@ -429,7 +455,7 @@ bool ItemStore::CanStack(const ItemComp &leftItem, const ItemComp &rightItem)
     {
         return false;
     }
-    return leftItem.config_id() == rightItem.config_id();
+    return leftItem.config_id() == rightItem.config_id() && leftItem.bound() == rightItem.bound();
 }
 
 std::size_t ItemStore::StacksNeededFor(std::size_t totalSize, std::size_t maxStackSize)

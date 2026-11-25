@@ -347,7 +347,7 @@ bool PlayerSeasonSystem::IsEligibleBattle(const BattleSettlementData& settlement
     case match::MATCH_MODE_1V1:
     case match::MATCH_MODE_5V5:
     case match::MATCH_MODE_PVP_TEAM:
-        return true;
+        return !settlement.competitive_ranked() || settlement.participated();
     default:
         return false;
     }

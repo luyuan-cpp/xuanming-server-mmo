@@ -66,7 +66,7 @@ func DecodeDirectStart(record *pb.MatchDirectIntentRecord) (*pb.MatchDirectStart
 	return original, nil
 }
 func validateDirectActor(ctx context.Context, key *pb.MatchDirectIntentRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchAuthorityTicketRecord, error) {
-	if key.Kind == 2 {
+	if key.Kind == 2 || key.Kind == 4 {
 		return &pb.MatchAuthorityTicketRecord{}, nil
 	}
 	actor := originalPlayer(ctx, key.OwnerId)
@@ -88,7 +88,7 @@ func (s *Store) PrepareDirectAdmission(ctx context.Context, key *pb.MatchDirectI
 }
 
 func (s *Store) prepareDirectAdmissionOnce(ctx context.Context, key *pb.MatchDirectIntentRecord, payload []byte, formation *pb.MatchFormationRecord, group []*pb.MatchAuthorityTicketRecord) (*pb.MatchDirectIntentRecord, error) {
-	if key == nil || key.Kind < 1 || key.Kind > 3 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
+	if key == nil || key.Kind < 1 || key.Kind > 4 || key.OwnerId == 0 || (key.RequestHigh == 0 && key.RequestLow == 0) || len(payload) == 0 {
 		return nil, ErrDirectConflict
 	}
 	observed, err := s.DirectAdmission(ctx, key)
@@ -200,7 +200,7 @@ func (s *Store) prepareDirectAdmissionTx(ctx context.Context, tx *sql.Tx, key *p
 		if ticket.PlayerId == 0 || ticket.Ticket == "" || ticket.RequestId != formation.OperationId || (index > 0 && ordered[index-1].PlayerId == ticket.PlayerId) {
 			return nil, ErrDirectConflict
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", ticket.PlayerId, []byte{}); err != nil {
+		if _, err = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", ticket.PlayerId, []byte{}, []byte{}); err != nil {
 			return nil, err
 		}
 		old, err := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", ticket.PlayerId))

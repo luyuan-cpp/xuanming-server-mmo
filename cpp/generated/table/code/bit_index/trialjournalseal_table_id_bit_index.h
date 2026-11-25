@@ -16,6 +16,24 @@ const std::unordered_map<uint64_t, uint32_t> TrialJournalSealBitMap{
     { 1041, 9 },
     { 1042, 10 },
     { 1043, 11 },
+    { 2011, 12 },
+    { 2012, 13 },
+    { 2013, 14 },
+    { 2021, 15 },
+    { 2022, 16 },
+    { 2023, 17 },
+    { 2031, 18 },
+    { 2032, 19 },
+    { 2033, 20 },
+    { 2041, 21 },
+    { 2042, 22 },
+    { 2043, 23 },
+    { 3011, 24 },
+    { 3012, 25 },
+    { 3021, 26 },
+    { 3022, 27 },
+    { 3031, 28 },
+    { 3032, 29 },
 };
 
-constexpr uint32_t kTrialJournalSealBitmapCapacity = 12;
+constexpr uint32_t kTrialJournalSealBitmapCapacity = 30;

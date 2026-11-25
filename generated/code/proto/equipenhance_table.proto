@@ -18,6 +18,7 @@ message EquipEnhanceTable {
 	uint32 material_count = 7;
 	uint32 profile_id = 8;
 	uint32 level = 9;
+	uint32 pity_limit = 10;
 }
 
 message EquipEnhanceTableData {

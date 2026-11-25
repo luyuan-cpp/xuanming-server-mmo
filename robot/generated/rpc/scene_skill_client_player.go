@@ -100,3 +100,141 @@ func (sceneSkillClientPlayerRpc) decodeUpgradeSkill(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// GetSkillCraftingState 异步调用 SceneSkillClientPlayer.GetSkillCraftingState(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) GetSkillCraftingState(c *pkg.GameClient, req *scene.GetSkillCraftingStateRequest, timeout time.Duration, done func(*scene.GetSkillCraftingStateResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerGetSkillCraftingStateMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetSkillCraftingState(reply, err))
+	})
+}
+
+// GetSkillCraftingStateSync 同步调用 SceneSkillClientPlayer.GetSkillCraftingState(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) GetSkillCraftingStateSync(ctx context.Context, c *pkg.GameClient, req *scene.GetSkillCraftingStateRequest, timeout time.Duration) (*scene.GetSkillCraftingStateResponse, error) {
+	return r.decodeGetSkillCraftingState(c.CallSync(ctx, game.SceneSkillClientPlayerGetSkillCraftingStateMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeGetSkillCraftingState(reply *base.MessageContent, err error) (*scene.GetSkillCraftingStateResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetSkillCraftingStateResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.GetSkillCraftingState reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CraftSkillBook 异步调用 SceneSkillClientPlayer.CraftSkillBook(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) CraftSkillBook(c *pkg.GameClient, req *scene.CraftSkillBookRequest, timeout time.Duration, done func(*scene.CraftSkillBookResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerCraftSkillBookMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCraftSkillBook(reply, err))
+	})
+}
+
+// CraftSkillBookSync 同步调用 SceneSkillClientPlayer.CraftSkillBook(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) CraftSkillBookSync(ctx context.Context, c *pkg.GameClient, req *scene.CraftSkillBookRequest, timeout time.Duration) (*scene.CraftSkillBookResponse, error) {
+	return r.decodeCraftSkillBook(c.CallSync(ctx, game.SceneSkillClientPlayerCraftSkillBookMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeCraftSkillBook(reply *base.MessageContent, err error) (*scene.CraftSkillBookResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.CraftSkillBookResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.CraftSkillBook reply: %w", err)
+	}
+	return resp, nil
+}
+
+// LearnSkillBook 异步调用 SceneSkillClientPlayer.LearnSkillBook(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) LearnSkillBook(c *pkg.GameClient, req *scene.LearnSkillBookRequest, timeout time.Duration, done func(*scene.LearnSkillBookResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerLearnSkillBookMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeLearnSkillBook(reply, err))
+	})
+}
+
+// LearnSkillBookSync 同步调用 SceneSkillClientPlayer.LearnSkillBook(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) LearnSkillBookSync(ctx context.Context, c *pkg.GameClient, req *scene.LearnSkillBookRequest, timeout time.Duration) (*scene.LearnSkillBookResponse, error) {
+	return r.decodeLearnSkillBook(c.CallSync(ctx, game.SceneSkillClientPlayerLearnSkillBookMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeLearnSkillBook(reply *base.MessageContent, err error) (*scene.LearnSkillBookResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.LearnSkillBookResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.LearnSkillBook reply: %w", err)
+	}
+	return resp, nil
+}
+
+// DismantleSkillBook 异步调用 SceneSkillClientPlayer.DismantleSkillBook(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) DismantleSkillBook(c *pkg.GameClient, req *scene.DismantleSkillBookRequest, timeout time.Duration, done func(*scene.DismantleSkillBookResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerDismantleSkillBookMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeDismantleSkillBook(reply, err))
+	})
+}
+
+// DismantleSkillBookSync 同步调用 SceneSkillClientPlayer.DismantleSkillBook(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) DismantleSkillBookSync(ctx context.Context, c *pkg.GameClient, req *scene.DismantleSkillBookRequest, timeout time.Duration) (*scene.DismantleSkillBookResponse, error) {
+	return r.decodeDismantleSkillBook(c.CallSync(ctx, game.SceneSkillClientPlayerDismantleSkillBookMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeDismantleSkillBook(reply *base.MessageContent, err error) (*scene.DismantleSkillBookResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.DismantleSkillBookResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.DismantleSkillBook reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SetCraftProxyStall 异步调用 SceneSkillClientPlayer.SetCraftProxyStall(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) SetCraftProxyStall(c *pkg.GameClient, req *scene.SetCraftProxyStallRequest, timeout time.Duration, done func(*scene.SetCraftProxyStallResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerSetCraftProxyStallMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetCraftProxyStall(reply, err))
+	})
+}
+
+// SetCraftProxyStallSync 同步调用 SceneSkillClientPlayer.SetCraftProxyStall(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) SetCraftProxyStallSync(ctx context.Context, c *pkg.GameClient, req *scene.SetCraftProxyStallRequest, timeout time.Duration) (*scene.SetCraftProxyStallResponse, error) {
+	return r.decodeSetCraftProxyStall(c.CallSync(ctx, game.SceneSkillClientPlayerSetCraftProxyStallMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeSetCraftProxyStall(reply *base.MessageContent, err error) (*scene.SetCraftProxyStallResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SetCraftProxyStallResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.SetCraftProxyStall reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ListCraftProxyStalls 异步调用 SceneSkillClientPlayer.ListCraftProxyStalls(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) ListCraftProxyStalls(c *pkg.GameClient, req *scene.ListCraftProxyStallsRequest, timeout time.Duration, done func(*scene.ListCraftProxyStallsResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerListCraftProxyStallsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListCraftProxyStalls(reply, err))
+	})
+}
+
+// ListCraftProxyStallsSync 同步调用 SceneSkillClientPlayer.ListCraftProxyStalls(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) ListCraftProxyStallsSync(ctx context.Context, c *pkg.GameClient, req *scene.ListCraftProxyStallsRequest, timeout time.Duration) (*scene.ListCraftProxyStallsResponse, error) {
+	return r.decodeListCraftProxyStalls(c.CallSync(ctx, game.SceneSkillClientPlayerListCraftProxyStallsMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeListCraftProxyStalls(reply *base.MessageContent, err error) (*scene.ListCraftProxyStallsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ListCraftProxyStallsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.ListCraftProxyStalls reply: %w", err)
+	}
+	return resp, nil
+}

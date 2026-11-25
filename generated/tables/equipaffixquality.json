@@ -1,0 +1,44 @@
+{
+ "data": [
+  {
+   "apprentice_weight": 3500,
+   "artisan_weight": 2800,
+   "id": 1,
+   "master_weight": 2000,
+   "name": "凡品",
+   "ratio_pct": 80
+  },
+  {
+   "apprentice_weight": 3000,
+   "artisan_weight": 2800,
+   "id": 2,
+   "master_weight": 2500,
+   "name": "良品",
+   "ratio_pct": 85
+  },
+  {
+   "apprentice_weight": 2000,
+   "artisan_weight": 2200,
+   "id": 3,
+   "master_weight": 2500,
+   "name": "上品",
+   "ratio_pct": 90
+  },
+  {
+   "apprentice_weight": 1000,
+   "artisan_weight": 1500,
+   "id": 4,
+   "master_weight": 2000,
+   "name": "珍品",
+   "ratio_pct": 95
+  },
+  {
+   "apprentice_weight": 500,
+   "artisan_weight": 700,
+   "id": 5,
+   "master_weight": 1000,
+   "name": "极品",
+   "ratio_pct": 100
+  }
+ ]
+}

@@ -492,3 +492,256 @@ func (matchServiceRpc) decodeGetRankedBattleResult(reply *base.MessageContent, e
 	}
 	return resp, nil
 }
+
+// GetTournamentOverview 异步调用 MatchService.GetTournamentOverview(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetTournamentOverview(c *pkg.GameClient, req *match.GetTournamentOverviewRequest, timeout time.Duration, done func(*match.GetTournamentOverviewResponse, error)) {
+	c.Call(game.MatchServiceGetTournamentOverviewMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetTournamentOverview(reply, err))
+	})
+}
+
+// GetTournamentOverviewSync 同步调用 MatchService.GetTournamentOverview(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetTournamentOverviewSync(ctx context.Context, c *pkg.GameClient, req *match.GetTournamentOverviewRequest, timeout time.Duration) (*match.GetTournamentOverviewResponse, error) {
+	return r.decodeGetTournamentOverview(c.CallSync(ctx, game.MatchServiceGetTournamentOverviewMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetTournamentOverview(reply *base.MessageContent, err error) (*match.GetTournamentOverviewResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetTournamentOverviewResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetTournamentOverview reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CreateTournamentSquad 异步调用 MatchService.CreateTournamentSquad(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) CreateTournamentSquad(c *pkg.GameClient, req *match.CreateTournamentSquadRequest, timeout time.Duration, done func(*match.CreateTournamentSquadResponse, error)) {
+	c.Call(game.MatchServiceCreateTournamentSquadMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCreateTournamentSquad(reply, err))
+	})
+}
+
+// CreateTournamentSquadSync 同步调用 MatchService.CreateTournamentSquad(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) CreateTournamentSquadSync(ctx context.Context, c *pkg.GameClient, req *match.CreateTournamentSquadRequest, timeout time.Duration) (*match.CreateTournamentSquadResponse, error) {
+	return r.decodeCreateTournamentSquad(c.CallSync(ctx, game.MatchServiceCreateTournamentSquadMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeCreateTournamentSquad(reply *base.MessageContent, err error) (*match.CreateTournamentSquadResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.CreateTournamentSquadResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.CreateTournamentSquad reply: %w", err)
+	}
+	return resp, nil
+}
+
+// InviteTournamentMember 异步调用 MatchService.InviteTournamentMember(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) InviteTournamentMember(c *pkg.GameClient, req *match.InviteTournamentMemberRequest, timeout time.Duration, done func(*match.InviteTournamentMemberResponse, error)) {
+	c.Call(game.MatchServiceInviteTournamentMemberMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeInviteTournamentMember(reply, err))
+	})
+}
+
+// InviteTournamentMemberSync 同步调用 MatchService.InviteTournamentMember(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) InviteTournamentMemberSync(ctx context.Context, c *pkg.GameClient, req *match.InviteTournamentMemberRequest, timeout time.Duration) (*match.InviteTournamentMemberResponse, error) {
+	return r.decodeInviteTournamentMember(c.CallSync(ctx, game.MatchServiceInviteTournamentMemberMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeInviteTournamentMember(reply *base.MessageContent, err error) (*match.InviteTournamentMemberResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.InviteTournamentMemberResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.InviteTournamentMember reply: %w", err)
+	}
+	return resp, nil
+}
+
+// RespondTournamentInvite 异步调用 MatchService.RespondTournamentInvite(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) RespondTournamentInvite(c *pkg.GameClient, req *match.RespondTournamentInviteRequest, timeout time.Duration, done func(*match.RespondTournamentInviteResponse, error)) {
+	c.Call(game.MatchServiceRespondTournamentInviteMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRespondTournamentInvite(reply, err))
+	})
+}
+
+// RespondTournamentInviteSync 同步调用 MatchService.RespondTournamentInvite(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) RespondTournamentInviteSync(ctx context.Context, c *pkg.GameClient, req *match.RespondTournamentInviteRequest, timeout time.Duration) (*match.RespondTournamentInviteResponse, error) {
+	return r.decodeRespondTournamentInvite(c.CallSync(ctx, game.MatchServiceRespondTournamentInviteMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeRespondTournamentInvite(reply *base.MessageContent, err error) (*match.RespondTournamentInviteResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.RespondTournamentInviteResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.RespondTournamentInvite reply: %w", err)
+	}
+	return resp, nil
+}
+
+// LeaveTournamentSquad 异步调用 MatchService.LeaveTournamentSquad(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) LeaveTournamentSquad(c *pkg.GameClient, req *match.LeaveTournamentSquadRequest, timeout time.Duration, done func(*match.LeaveTournamentSquadResponse, error)) {
+	c.Call(game.MatchServiceLeaveTournamentSquadMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeLeaveTournamentSquad(reply, err))
+	})
+}
+
+// LeaveTournamentSquadSync 同步调用 MatchService.LeaveTournamentSquad(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) LeaveTournamentSquadSync(ctx context.Context, c *pkg.GameClient, req *match.LeaveTournamentSquadRequest, timeout time.Duration) (*match.LeaveTournamentSquadResponse, error) {
+	return r.decodeLeaveTournamentSquad(c.CallSync(ctx, game.MatchServiceLeaveTournamentSquadMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeLeaveTournamentSquad(reply *base.MessageContent, err error) (*match.LeaveTournamentSquadResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.LeaveTournamentSquadResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.LeaveTournamentSquad reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UpdateTournamentLineup 异步调用 MatchService.UpdateTournamentLineup(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) UpdateTournamentLineup(c *pkg.GameClient, req *match.UpdateTournamentLineupRequest, timeout time.Duration, done func(*match.UpdateTournamentLineupResponse, error)) {
+	c.Call(game.MatchServiceUpdateTournamentLineupMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUpdateTournamentLineup(reply, err))
+	})
+}
+
+// UpdateTournamentLineupSync 同步调用 MatchService.UpdateTournamentLineup(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) UpdateTournamentLineupSync(ctx context.Context, c *pkg.GameClient, req *match.UpdateTournamentLineupRequest, timeout time.Duration) (*match.UpdateTournamentLineupResponse, error) {
+	return r.decodeUpdateTournamentLineup(c.CallSync(ctx, game.MatchServiceUpdateTournamentLineupMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeUpdateTournamentLineup(reply *base.MessageContent, err error) (*match.UpdateTournamentLineupResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.UpdateTournamentLineupResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.UpdateTournamentLineup reply: %w", err)
+	}
+	return resp, nil
+}
+
+// RegisterTournamentSquad 异步调用 MatchService.RegisterTournamentSquad(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) RegisterTournamentSquad(c *pkg.GameClient, req *match.RegisterTournamentSquadRequest, timeout time.Duration, done func(*match.RegisterTournamentSquadResponse, error)) {
+	c.Call(game.MatchServiceRegisterTournamentSquadMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRegisterTournamentSquad(reply, err))
+	})
+}
+
+// RegisterTournamentSquadSync 同步调用 MatchService.RegisterTournamentSquad(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) RegisterTournamentSquadSync(ctx context.Context, c *pkg.GameClient, req *match.RegisterTournamentSquadRequest, timeout time.Duration) (*match.RegisterTournamentSquadResponse, error) {
+	return r.decodeRegisterTournamentSquad(c.CallSync(ctx, game.MatchServiceRegisterTournamentSquadMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeRegisterTournamentSquad(reply *base.MessageContent, err error) (*match.RegisterTournamentSquadResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.RegisterTournamentSquadResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.RegisterTournamentSquad reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ListTournamentStandings 异步调用 MatchService.ListTournamentStandings(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ListTournamentStandings(c *pkg.GameClient, req *match.ListTournamentStandingsRequest, timeout time.Duration, done func(*match.ListTournamentStandingsResponse, error)) {
+	c.Call(game.MatchServiceListTournamentStandingsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListTournamentStandings(reply, err))
+	})
+}
+
+// ListTournamentStandingsSync 同步调用 MatchService.ListTournamentStandings(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ListTournamentStandingsSync(ctx context.Context, c *pkg.GameClient, req *match.ListTournamentStandingsRequest, timeout time.Duration) (*match.ListTournamentStandingsResponse, error) {
+	return r.decodeListTournamentStandings(c.CallSync(ctx, game.MatchServiceListTournamentStandingsMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeListTournamentStandings(reply *base.MessageContent, err error) (*match.ListTournamentStandingsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ListTournamentStandingsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ListTournamentStandings reply: %w", err)
+	}
+	return resp, nil
+}
+
+// StartTournamentMatch 异步调用 MatchService.StartTournamentMatch(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) StartTournamentMatch(c *pkg.GameClient, req *match.StartTournamentMatchRequest, timeout time.Duration, done func(*match.StartTournamentMatchResponse, error)) {
+	c.Call(game.MatchServiceStartTournamentMatchMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeStartTournamentMatch(reply, err))
+	})
+}
+
+// StartTournamentMatchSync 同步调用 MatchService.StartTournamentMatch(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) StartTournamentMatchSync(ctx context.Context, c *pkg.GameClient, req *match.StartTournamentMatchRequest, timeout time.Duration) (*match.StartTournamentMatchResponse, error) {
+	return r.decodeStartTournamentMatch(c.CallSync(ctx, game.MatchServiceStartTournamentMatchMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeStartTournamentMatch(reply *base.MessageContent, err error) (*match.StartTournamentMatchResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.StartTournamentMatchResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.StartTournamentMatch reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CheerTournamentSquad 异步调用 MatchService.CheerTournamentSquad(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) CheerTournamentSquad(c *pkg.GameClient, req *match.CheerTournamentSquadRequest, timeout time.Duration, done func(*match.CheerTournamentSquadResponse, error)) {
+	c.Call(game.MatchServiceCheerTournamentSquadMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCheerTournamentSquad(reply, err))
+	})
+}
+
+// CheerTournamentSquadSync 同步调用 MatchService.CheerTournamentSquad(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) CheerTournamentSquadSync(ctx context.Context, c *pkg.GameClient, req *match.CheerTournamentSquadRequest, timeout time.Duration) (*match.CheerTournamentSquadResponse, error) {
+	return r.decodeCheerTournamentSquad(c.CallSync(ctx, game.MatchServiceCheerTournamentSquadMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeCheerTournamentSquad(reply *base.MessageContent, err error) (*match.CheerTournamentSquadResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.CheerTournamentSquadResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.CheerTournamentSquad reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ClaimTournamentReward 异步调用 MatchService.ClaimTournamentReward(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ClaimTournamentReward(c *pkg.GameClient, req *match.ClaimTournamentRewardRequest, timeout time.Duration, done func(*match.ClaimTournamentRewardResponse, error)) {
+	c.Call(game.MatchServiceClaimTournamentRewardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimTournamentReward(reply, err))
+	})
+}
+
+// ClaimTournamentRewardSync 同步调用 MatchService.ClaimTournamentReward(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ClaimTournamentRewardSync(ctx context.Context, c *pkg.GameClient, req *match.ClaimTournamentRewardRequest, timeout time.Duration) (*match.ClaimTournamentRewardResponse, error) {
+	return r.decodeClaimTournamentReward(c.CallSync(ctx, game.MatchServiceClaimTournamentRewardMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeClaimTournamentReward(reply *base.MessageContent, err error) (*match.ClaimTournamentRewardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ClaimTournamentRewardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ClaimTournamentReward reply: %w", err)
+	}
+	return resp, nil
+}

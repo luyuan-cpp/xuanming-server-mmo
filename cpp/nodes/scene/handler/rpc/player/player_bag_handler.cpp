@@ -199,14 +199,17 @@ void SceneBagClientPlayerHandler::EnhanceEquip(entt::entity player,const ::Enhan
 	PlayerEquipSystem::EnhanceOutcome outcome;
 	if (verdict == ClientRequestVerdict::kReplay)
 	{
-		// 首次已经扣过、掷过:不再扣、不再掷,回首次的成败与等级,两份快照取此刻的。
+		// 首次已经扣过、掷过:不再扣、不再掷,回首次的成败、等级与保底次数,两份快照取此刻的。
 		outcome.success = first.enhanceSuccess;
 		outcome.level = first.enhanceLevel;
+		outcome.pityCount = first.enhancePityCount;
 		response->set_replayed(true);
 	}
 	else
 	{
-		if (const auto err = PlayerEquipSystem::Enhance(player, request->item_id(), request->expected_level(), outcome);
+		const std::optional<uint32_t> expectedPity = request->has_expected_pity_count()
+			? std::optional<uint32_t>{request->expected_pity_count()} : std::nullopt;
+		if (const auto err = PlayerEquipSystem::Enhance(player, request->item_id(), request->expected_level(), outcome, expectedPity);
 			err != kSuccess)
 		{
 			response->mutable_error_message()->set_id(err);
@@ -216,6 +219,7 @@ void SceneBagClientPlayerHandler::EnhanceEquip(entt::entity player,const ::Enhan
 		ClientRequestResult result;
 		result.enhanceSuccess = outcome.success;
 		result.enhanceLevel = outcome.level;
+		result.enhancePityCount = outcome.pityCount;
 		client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kEnhanceEquip, std::move(fingerprint),
 									   result);
 	}
@@ -225,6 +229,27 @@ void SceneBagClientPlayerHandler::EnhanceEquip(entt::entity player,const ::Enhan
 	{
 		response->set_success(outcome.success);
 		response->set_enhance_level(outcome.level);
+		response->set_enhance_pity_count(outcome.pityCount);
+		uint32_t pityLimit = outcome.pityLimit;
+		if (pityLimit == 0 && verdict == ClientRequestVerdict::kReplay)
+		{
+			const auto findPityLimit = [&](const ::BagInfo& snapshot) {
+				for (const auto& item : snapshot.items())
+				{
+					if (item.item_id() == request->item_id() && item.has_enhance_next())
+					{
+						return item.enhance_next().pity_limit();
+					}
+				}
+				return uint32_t{0};
+			};
+			pityLimit = findPityLimit(response->bag());
+			if (pityLimit == 0)
+			{
+				pityLimit = findPityLimit(response->equipment());
+			}
+		}
+		response->set_enhance_pity_limit(pityLimit);
 	}
 ///<<< END WRITING YOUR CODE
 

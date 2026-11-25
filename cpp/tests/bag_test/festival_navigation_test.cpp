@@ -251,6 +251,45 @@ TEST_F(CurrentBiyuanNavigationTest, MissingChecksumRejectsBiyuanBeforeEntry) {
     fs::remove(folder / "scene.bin.sha256");
     LoadAndExpectRejected();
 }
+
+class CurrentBajingNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 2; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/island/bajingbody20261114";
+    }
+    fs::path SourceFolder() const override {
+        return fs::path(GetDataRootDir()) / MapPath();
+    }
+};
+
+TEST_F(CurrentBajingNavigationTest, VersionedBajingBodyRegistersExactMaskAndBlocksSea) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    EXPECT_TRUE(nav->versionedMask);
+    EXPECT_EQ(587, nav->mask.columns);
+    EXPECT_EQ(427, nav->mask.rows);
+    int count = 0;
+    for (int row = 0; row < nav->mask.rows; ++row) {
+        for (int col = 0; col < nav->mask.columns; ++col) {
+            count += nav->mask.Cell(col, row) ? 1 : 0;
+        }
+    }
+    EXPECT_EQ(24016, count);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+    Location westSea;
+    westSea.set_x(198.33333333333334); westSea.set_y(-12.5); westSea.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, westSea, accepted));
+}
+
+TEST_F(CurrentBajingNavigationTest, MissingChecksumRejectsBajingBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
 TEST_F(FestivalNavigationTest, MissingChecksumsRejectsRegistrationAndEntry) {
     fs::remove(folder / "scene.bin.sha256"); LoadAndExpectRejected();
 }

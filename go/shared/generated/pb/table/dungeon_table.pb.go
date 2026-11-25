@@ -29,6 +29,9 @@ type DungeonTable struct {
 	TimeLimit       uint32                 `protobuf:"varint,4,opt,name=time_limit,json=timeLimit,proto3" json:"time_limit,omitempty"`
 	Monster         []uint32               `protobuf:"varint,5,rep,packed,name=monster,proto3" json:"monster,omitempty"`
 	AllowPetCapture uint32                 `protobuf:"varint,6,opt,name=allow_pet_capture,json=allowPetCapture,proto3" json:"allow_pet_capture,omitempty"`
+	BossTrialKind   uint32                 `protobuf:"varint,7,opt,name=boss_trial_kind,json=bossTrialKind,proto3" json:"boss_trial_kind,omitempty"`
+	Difficulty      uint32                 `protobuf:"varint,8,opt,name=difficulty,proto3" json:"difficulty,omitempty"`
+	RoundLimit      uint32                 `protobuf:"varint,9,opt,name=round_limit,json=roundLimit,proto3" json:"round_limit,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -105,6 +108,27 @@ func (x *DungeonTable) GetAllowPetCapture() uint32 {
 	return 0
 }
 
+func (x *DungeonTable) GetBossTrialKind() uint32 {
+	if x != nil {
+		return x.BossTrialKind
+	}
+	return 0
+}
+
+func (x *DungeonTable) GetDifficulty() uint32 {
+	if x != nil {
+		return x.Difficulty
+	}
+	return 0
+}
+
+func (x *DungeonTable) GetRoundLimit() uint32 {
+	if x != nil {
+		return x.RoundLimit
+	}
+	return 0
+}
+
 type DungeonTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*DungeonTable        `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -153,7 +177,7 @@ var File_dungeon_table_proto protoreflect.FileDescriptor
 
 const file_dungeon_table_proto_rawDesc = "" +
 	"\n" +
-	"\x13dungeon_table.proto\"\xc2\x01\n" +
+	"\x13dungeon_table.proto\"\xab\x02\n" +
 	"\fDungeonTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\rR\asceneId\x12\"\n" +
@@ -161,7 +185,13 @@ const file_dungeon_table_proto_rawDesc = "" +
 	"\n" +
 	"time_limit\x18\x04 \x01(\rR\ttimeLimit\x12\x18\n" +
 	"\amonster\x18\x05 \x03(\rR\amonster\x12*\n" +
-	"\x11allow_pet_capture\x18\x06 \x01(\rR\x0fallowPetCapture\"5\n" +
+	"\x11allow_pet_capture\x18\x06 \x01(\rR\x0fallowPetCapture\x12&\n" +
+	"\x0fboss_trial_kind\x18\a \x01(\rR\rbossTrialKind\x12\x1e\n" +
+	"\n" +
+	"difficulty\x18\b \x01(\rR\n" +
+	"difficulty\x12\x1f\n" +
+	"\vround_limit\x18\t \x01(\rR\n" +
+	"roundLimit\"5\n" +
 	"\x10DungeonTableData\x12!\n" +
 	"\x04data\x18\x01 \x03(\v2\r.DungeonTableR\x04dataB>\n" +
 	"\x0ecom.game.tableB\x16DungeonTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

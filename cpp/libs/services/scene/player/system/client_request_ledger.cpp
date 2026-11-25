@@ -95,12 +95,15 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	}
 	result.enhanceSuccess = record->enhance_success();
 	result.enhanceLevel = record->enhance_level();
+	result.enhancePityCount = record->enhance_pity_count();
 	result.createdSchemeId = record->created_scheme_id();
 	result.equipmentItemId = record->equipment_item_id();
 	result.forgeRevision = record->forge_revision();
 	result.materialRewardRevision = record->material_reward_revision();
 	result.craftingMaterialCount = record->crafting_material_count();
 	result.enhancementStoneCount = record->enhancement_stone_count();
+	result.craftingTradableCount = record->crafting_tradable_count();
+	result.enhancementTradableCount = record->enhancement_tradable_count();
 	result.seasonCatchupPoints = record->season_catchup_points();
 	result.seasonCatchupSpent = record->season_catchup_spent();
 	result.trialMilestoneId = record->trial_milestone_id();
@@ -108,6 +111,13 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.trialMilestoneVoucherCount = record->trial_milestone_voucher_count();
 	result.redeemedArtifactItemId = record->redeemed_artifact_item_id();
 	result.redeemedArtifactConfigId = record->redeemed_artifact_config_id();
+	result.equipmentQualityTier = record->equipment_quality_tier();
+	result.equipmentPolishPityCount = record->equipment_polish_pity_count();
+	result.equipmentGuaranteedByPity = record->equipment_guaranteed_by_pity();
+	result.craftedSkillBookId = record->crafted_skill_book_id();
+	result.craftedSkillTableId = record->crafted_skill_table_id();
+	result.scrollCraftRevision = record->scroll_craft_revision();
+	result.scrollBonusFragments = record->scroll_bonus_fragments();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -131,12 +141,15 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_seq(seq);
 	record->set_enhance_success(result.enhanceSuccess);
 	record->set_enhance_level(result.enhanceLevel);
+	record->set_enhance_pity_count(result.enhancePityCount);
 	record->set_created_scheme_id(result.createdSchemeId);
 	record->set_equipment_item_id(result.equipmentItemId);
 	record->set_forge_revision(result.forgeRevision);
 	record->set_material_reward_revision(result.materialRewardRevision);
 	record->set_crafting_material_count(result.craftingMaterialCount);
 	record->set_enhancement_stone_count(result.enhancementStoneCount);
+	record->set_crafting_tradable_count(result.craftingTradableCount);
+	record->set_enhancement_tradable_count(result.enhancementTradableCount);
 	record->set_season_catchup_points(result.seasonCatchupPoints);
 	record->set_season_catchup_spent(result.seasonCatchupSpent);
 	record->set_trial_milestone_id(result.trialMilestoneId);
@@ -144,6 +157,13 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_trial_milestone_voucher_count(result.trialMilestoneVoucherCount);
 	record->set_redeemed_artifact_item_id(result.redeemedArtifactItemId);
 	record->set_redeemed_artifact_config_id(result.redeemedArtifactConfigId);
+	record->set_equipment_quality_tier(result.equipmentQualityTier);
+	record->set_equipment_polish_pity_count(result.equipmentPolishPityCount);
+	record->set_equipment_guaranteed_by_pity(result.equipmentGuaranteedByPity);
+	record->set_crafted_skill_book_id(result.craftedSkillBookId);
+	record->set_crafted_skill_table_id(result.craftedSkillTableId);
+	record->set_scroll_craft_revision(result.scrollCraftRevision);
+	record->set_scroll_bonus_fragments(result.scrollBonusFragments);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }
@@ -151,15 +171,42 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 std::string Validate(const ClientRequestLedgerComp &ledger)
 {
 	const auto& material = ledger.material_reward();
-	uint64_t dayStart = 0, nextDay = 0;
-	if (material.earned_today() > PlayerEquipmentMaterialRewardSystem::kDailyLimit ||
-		material.earned_today() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
-		material.available_units() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
-		(material.day_starts_at_ms() == 0 && (material.revision() != 0 || material.earned_today() != 0 || material.available_units() != 0)) ||
-		(material.day_starts_at_ms() != 0 && (material.earned_today() == 0 ||
-			!PlayerEquipmentMaterialRewardSystem::ResolveDay(material.day_starts_at_ms(), dayStart, nextDay) ||
-			dayStart != material.day_starts_at_ms())))
-		return "invalid equipment material reward ledger";
+	if (!material.migrated_to_v2())
+	{
+		// 兼容迁移前老存档：不得携带未迁移的 v2 字段，沿用旧日限与 10 份步长不变量。
+		uint64_t dayStart = 0, nextDay = 0;
+		if (material.lifetime_earned() != 0 || material.tradable_earned_total() != 0 ||
+			material.available_tradable_units() != 0 || material.week_starts_at_ms() != 0 ||
+			material.earned_this_week() != 0 ||
+			material.earned_today() > PlayerEquipmentMaterialRewardSystem::kDailyLimit ||
+			material.earned_today() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
+			material.available_units() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
+			(material.day_starts_at_ms() == 0 && (material.revision() != 0 || material.earned_today() != 0 || material.available_units() != 0)) ||
+			(material.day_starts_at_ms() != 0 && (material.earned_today() == 0 ||
+				!PlayerEquipmentMaterialRewardSystem::ResolveDay(material.day_starts_at_ms(), dayStart, nextDay) ||
+				dayStart != material.day_starts_at_ms())))
+			return "invalid equipment material reward ledger";
+	}
+	else
+	{
+		// 两阶段 v2 账本不变量（合入 A）：首套 660（可交易<=60）+ 二阶段每周 100 全绑定，5 份步长。
+		uint64_t weekStart = 0, nextWeek = 0;
+		if (material.lifetime_earned() > PlayerEquipmentMaterialRewardSystem::kLifetimeLimit ||
+			material.lifetime_earned() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
+			material.tradable_earned_total() > PlayerEquipmentMaterialRewardSystem::kTradableLifetimeLimit ||
+			material.tradable_earned_total() > material.lifetime_earned() / PlayerEquipmentMaterialRewardSystem::kBattleUnits ||
+			material.available_units() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
+			material.available_tradable_units() > material.available_units() ||
+			material.available_tradable_units() > material.tradable_earned_total() ||
+			material.earned_this_week() > PlayerEquipmentMaterialRewardSystem::kWeeklyLimit ||
+			material.earned_this_week() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
+			(material.week_starts_at_ms() == 0 && material.earned_this_week() != 0) ||
+			(material.week_starts_at_ms() != 0 && (material.earned_this_week() == 0 ||
+				material.lifetime_earned() < PlayerEquipmentMaterialRewardSystem::kLifetimeLimit ||
+				!PlayerEquipmentMaterialRewardSystem::ResolveWeek(material.week_starts_at_ms(), weekStart, nextWeek) ||
+				weekStart != material.week_starts_at_ms())))
+			return "invalid equipment material reward ledger";
+	}
 	if (ledger.records_size() > kMaxRecordsOnLoad)
 	{
 		return "too many records: " + std::to_string(ledger.records_size());
@@ -175,7 +222,10 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 		{
 			const uint64_t total = uint64_t{record.crafting_material_count()} + record.enhancement_stone_count();
 			if (record.material_reward_revision() == 0 || record.material_reward_revision() > material.revision() ||
-				(total != PlayerEquipmentMaterialRewardSystem::kBattleUnits && total != PlayerEquipmentMaterialRewardSystem::kDailyLimit) ||
+				total == 0 || total > PlayerEquipmentMaterialRewardSystem::kMaxClaimBatchUnits ||
+				total % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
+				record.crafting_tradable_count() > record.crafting_material_count() ||
+				record.enhancement_tradable_count() > record.enhancement_stone_count() ||
 				!materialRevisions.insert(record.material_reward_revision()).second)
 				return "invalid equipment material reward receipt";
 		}

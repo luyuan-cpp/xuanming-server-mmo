@@ -255,6 +255,7 @@ public:
     const PosMap &GridSlots() const { return layout_->Slots(); }
 
     std::size_t GetTotalItemCount(uint32_t config_id) const;
+    [[nodiscard]] std::size_t GetTotalTradableItemCount(uint32_t config_id) const;
     // 只读:本包里有没有这个实例身份。不改任何状态,可在 const 路径上用(GetItemCompByGuid 是非 const)。
     [[nodiscard]] bool ContainsGuid(Guid guid) const { return store_.Contains(guid); }
     ItemComp *GetItemCompByGuid(Guid guid);
@@ -263,7 +264,8 @@ public:
     // instancesNeededOut(可为 nullptr)回执:这一批总共要**新建多少个实例**。
     // 只读预测;真正入包(AddItems)按同一套规划重算一遍,再预留 ID。
     uint32_t CheckSpaceFor(const ItemCountMap &itemsToAdd,
-                           std::size_t *instancesNeededOut = nullptr);
+                           std::size_t *instancesNeededOut = nullptr,
+                           bool bound = false);
 
     // 按数量预检(只读、静默,不打日志):调用方按结论分支 —— 版本错位(kVersionSkew)是可重试的暂时状态,
     // 不得和确定不足一样记成终态拒绝(ItemStore::CheckQuantities,混版本设计 §4.4 第 6 批)。
@@ -293,7 +295,8 @@ public:
     // 全或无:任何一种不够就整体失败(kBagInsufficientItems),绝不做部分删除。
     // drainedOut(可为 nullptr)按抽取顺序收集被扣的 (guid, config, 数量)。
     uint32_t RemoveItems(const ItemCountMap &itemsToRemove,
-                         std::vector<DrainedInstance> *drainedOut = nullptr);
+                         std::vector<DrainedInstance> *drainedOut = nullptr,
+                         bool tradableOnly = false, bool *consumedBoundOut = nullptr);
 
     // ── 按 guid 的全或无扣出:reserve 段(聚宝斋 P2 托管)────────────────
     //
@@ -566,7 +569,8 @@ private:
     // RemoveItems 与 RemoveItemsClamped 共用,避免两条路径对"僵尸堆 / 0 数量"
     // 的处理日后悄悄分叉。
     void DrainOneConfig(uint32_t configId, uint32_t count,
-                        std::vector<DrainedInstance> *drainedOut);
+                        std::vector<DrainedInstance> *drainedOut,
+                        bool tradableOnly = false, bool *consumedBoundOut = nullptr);
 
     // 一件该 config 的实例在布局里占的形状。
     // **今天恒为 1x1**:配置表还没有宽高列,扁平布局也用不上。真要做格子背包时
@@ -608,7 +612,7 @@ private:
     // 两个调用方,结尾都是 CanReserve:CheckSpaceFor(公开预测)= PlanInstances + CanReserve;
     // AddItems(真入包)再把不能合堆的独立实例加进需求,然后 CanReserve。
     uint32_t PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instancesByConfigOut,
-                           std::size_t *totalInstancesOut);
+                           std::size_t *totalInstancesOut, bool bound = false);
 
     // reserve 段:这一批**新实例**摆不摆得下。零副作用。
     //

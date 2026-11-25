@@ -517,9 +517,13 @@ TEST_F(PlayerBattleSettlementTest, QualifyingBattleCreditsMaterialAllowanceWithA
     ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     const auto& allowance = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).material_reward();
     EXPECT_EQ(10u, allowance.available_units());
-    EXPECT_EQ(10u, allowance.earned_today());
+    EXPECT_EQ(10u, allowance.lifetime_earned());
+    EXPECT_EQ(1u, allowance.available_tradable_units());
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
-    EXPECT_EQ(1, Results().entries_size());
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_EQ(10u, Results().entries(0).material_credit_units_added());
+    EXPECT_EQ(1u, Results().entries(0).material_tradable_units_added());
+    EXPECT_FALSE(Results().entries(0).material_pvp_loss_ineligible());
 }
 
 TEST_F(PlayerBattleSettlementTest, MissingMaterialLedgerDefersQualifyingBattleBeforeGoldHealthAndMissions) {

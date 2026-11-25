@@ -112,6 +112,9 @@ static void DungeonTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	DungeonTableCheckNarrowedField(RowObject, TEXT("max_team_size"), TEXT("max_team_size"), RowIndex, 2147483647.0, TEXT("uint32"));
 	DungeonTableCheckNarrowedField(RowObject, TEXT("time_limit"), TEXT("time_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
 	DungeonTableCheckNarrowedField(RowObject, TEXT("allow_pet_capture"), TEXT("allow_pet_capture"), RowIndex, 2147483647.0, TEXT("uint32"));
+	DungeonTableCheckNarrowedField(RowObject, TEXT("boss_trial_kind"), TEXT("boss_trial_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
+	DungeonTableCheckNarrowedField(RowObject, TEXT("difficulty"), TEXT("difficulty"), RowIndex, 2147483647.0, TEXT("uint32"));
+	DungeonTableCheckNarrowedField(RowObject, TEXT("round_limit"), TEXT("round_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
 	DungeonTableCheckNarrowedField(RowObject, TEXT("monster"), TEXT("monster[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 

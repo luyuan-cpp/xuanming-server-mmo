@@ -5,9 +5,11 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"match/internal/svc"
 
+	battlepb "proto/battle"
 	matchpb "proto/match"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -78,5 +80,27 @@ func (l *GetQueueStatusLogic) GetQueueStatus(in *matchpb.GetQueueStatusRequest) 
 	} else if t.State == 3 {
 		state = matchpb.QueueState_QUEUE_STATE_READY
 	}
-	return &matchpb.GetQueueStatusResponse{State: state, QueueTicket: t.Ticket, BattleId: t.FormationId, SelectedRegion: t.SelectedRegion, QueuedSeconds: uint32((n - min(n, t.EnqueuedMs)) / 1000), RetryAfterMs: 3000, RequestCancelled: cancelled}, nil
+	queuedSec := uint32((n - min(n, t.EnqueuedMs)) / 1000)
+	resp := &matchpb.GetQueueStatusResponse{
+		State:            state,
+		QueueTicket:      t.Ticket,
+		BattleId:         t.FormationId,
+		SelectedRegion:   t.SelectedRegion,
+		QueuedSeconds:    queuedSec,
+		RetryAfterMs:     3000,
+		RequestCancelled: cancelled,
+	}
+	if t.Mode == uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		cat := l.svcCtx.ActiveRanked()
+		resp.WaitPromptSeconds = cat.WaitPromptSeconds()
+		resp.CurrentRatingSpread = cat.RankedCurve().SpreadPoints(int64(queuedSec))
+		resp.TeamSize = t.TeamSize
+		if len(t.RankedContext) > 0 {
+			var rctx battlepb.RankedMatchContext
+			if proto.Unmarshal(t.RankedContext, &rctx) == nil {
+				resp.SeasonId = rctx.GetSeasonId()
+			}
+		}
+	}
+	return resp, nil
 }

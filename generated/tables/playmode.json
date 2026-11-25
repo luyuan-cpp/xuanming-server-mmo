@@ -36,6 +36,10 @@
    "team_size_max": 0
   },
   {
+   "allowed_team_sizes": [
+    1,
+    3
+   ],
    "battle_config_id": 5,
    "enabled": true,
    "id": 6,
@@ -48,6 +52,139 @@
    "id": 7,
    "match_mode": 4,
    "team_size_max": 1
+  },
+  {
+   "battle_config_id": 101,
+   "enabled": true,
+   "id": 101,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 101,
+   "enabled": true,
+   "id": 201,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 102,
+   "enabled": true,
+   "id": 102,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 102,
+   "enabled": true,
+   "id": 202,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 103,
+   "enabled": true,
+   "id": 103,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 103,
+   "enabled": true,
+   "id": 203,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 104,
+   "enabled": true,
+   "id": 104,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 104,
+   "enabled": true,
+   "id": 204,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 105,
+   "enabled": true,
+   "id": 105,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 105,
+   "enabled": true,
+   "id": 205,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 106,
+   "enabled": true,
+   "id": 106,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 106,
+   "enabled": true,
+   "id": 206,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 107,
+   "enabled": true,
+   "id": 107,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 107,
+   "enabled": true,
+   "id": 207,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 108,
+   "enabled": true,
+   "id": 108,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 108,
+   "enabled": true,
+   "id": 208,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 109,
+   "enabled": true,
+   "id": 109,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 109,
+   "enabled": true,
+   "id": 209,
+   "match_mode": 5,
+   "team_size_max": 5
+  },
+  {
+   "battle_config_id": 110,
+   "enabled": true,
+   "id": 301,
+   "match_mode": 8,
+   "team_size_max": 0
   }
  ]
 }

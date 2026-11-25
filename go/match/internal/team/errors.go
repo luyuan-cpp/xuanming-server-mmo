@@ -71,4 +71,10 @@ const (
 	ErrPvpPartySize = uint32(table.TeamError_kTeamPvpPartySizeNotAllowed)
 	// ErrRatingGapTooLarge:计分模式开战时,队员在本模式的评分最高与最低之差超过 GlobalMatch.PartyRatingGapMax。
 	ErrRatingGapTooLarge = uint32(table.TeamError_kTeamRatingGapTooLarge)
+
+	// ---- 论剑排位组队预设门禁(docs/design/ranked-play-season-ui-candidate.md) ----
+	// ErrRankedPresetUnconfirmed:队员尚未确认当前规则版本下的论剑排位预设(parameters[0] = player_id)。
+	ErrRankedPresetUnconfirmed = uint32(table.TeamError_kTeamRankedPresetUnconfirmed)
+	// ErrRankedPresetInvalid:提交或冻结的论剑排位预设或规则版本非法。
+	ErrRankedPresetInvalid = uint32(table.TeamError_kTeamRankedPresetInvalid)
 )

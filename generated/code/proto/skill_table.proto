@@ -79,6 +79,8 @@ message SkillTable {
 	uint32 allow_dead_target = 56;
 	uint32 forbid_copy = 57;
 	uint32 season_id = 58;
+	uint32 scroll_id = 59;
+	uint32 rarity_tier = 60;
 	repeated Skillrequired_item required_item = 21;
 	repeated Skillrequired_resource required_resource = 22;
 	repeated Skillcost_resource cost_resource = 23;

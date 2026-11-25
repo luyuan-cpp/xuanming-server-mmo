@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// V1 装备词条 5 档窄区间品相比例与三档铸器熟练度权重配置表。源表 data/EquipAffixQuality.xlsx。
+package mmorpg.cfgtable.v1;
+import "cfg_options.proto";
+
+message EquipAffixQualityTable {
+  option (cfg_sheet) = "EquipAffixQuality";
+  option (cfg_source_file) = "EquipAffixQuality.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload) = true;
+
+  // 品相档位（1=凡品, 2=良品, 3=上品, 4=珍品, 5=极品）。
+  uint32 id = 1;
+  // 品相展示名。
+  string name = 2;
+  // 占词条满值的百分比（80/85/90/95/100），乘现行满值精确整除。
+  uint32 ratio_pct = 3;
+  // 学徒档位抽取权重（万分比总和 10000）。
+  uint32 apprentice_weight = 4;
+  // 巧匠档位抽取权重（万分比总和 10000）。
+  uint32 artisan_weight = 5;
+  // 宗师档位抽取权重（万分比总和 10000）。
+  uint32 master_weight = 6;
+}

@@ -205,6 +205,11 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
     ASSERT_GT(DungeonTableManager::Instance().FindAll().data().size(), 0) << "Dungeon 表为空 = 没有可打的副本";
     for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
         const auto group = provider.GetDungeonMonsterIds(dungeon.id());
+        if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindPolarity5v5) {
+            EXPECT_TRUE(group.empty()) << "纯 PVP 物法易势模板不应配怪物组 dungeon " << dungeon.id();
+            EXPECT_EQ(dungeon.round_limit(), turnbattle::kPolarityDefaultMaxRounds);
+            continue;
+        }
         EXPECT_FALSE(group.empty()) << "dungeon " << dungeon.id() << " 没配怪物组";
         for (const uint32_t monsterId : group) {
             EXPECT_NE(provider.FindMonster(monsterId), nullptr)
@@ -223,6 +228,9 @@ TEST_F(TableBattleDataProviderTest, EveryConfiguredMonsterHasCombatStatsAndRewar
 TEST_F(TableBattleDataProviderTest, EveryPlayerFacesOneWholeMonsterGroup) {
     turnbattle::TableBattleDataProvider provider;
     for (const auto& dungeon : DungeonTableManager::Instance().FindAll().data()) {
+        if (dungeon.boss_trial_kind() == turnbattle::kBossTrialKindPolarity5v5) {
+            continue;
+        }
         const auto group = provider.GetDungeonMonsterIds(dungeon.id());
         ASSERT_FALSE(group.empty()) << "dungeon " << dungeon.id() << " 没配怪物组";
         EXPECT_EQ(provider.GetDungeonMonstersPerPlayer(dungeon.id()), static_cast<uint32_t>(group.size()))

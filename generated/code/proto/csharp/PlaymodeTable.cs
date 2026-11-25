@@ -22,16 +22,17 @@ public static partial class PlaymodeTableReflection {
   static PlaymodeTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChRwbGF5bW9kZV90YWJsZS5wcm90byJxCg1QbGF5TW9kZVRhYmxlEgoKAmlk",
-          "GAEgASgNEhIKCm1hdGNoX21vZGUYAiABKA0SGAoQYmF0dGxlX2NvbmZpZ19p",
-          "ZBgDIAEoDRIPCgdlbmFibGVkGAQgASgIEhUKDXRlYW1fc2l6ZV9tYXgYBSAB",
-          "KA0iMQoRUGxheU1vZGVUYWJsZURhdGESHAoEZGF0YRgBIAMoCzIOLlBsYXlN",
-          "b2RlVGFibGVCPwoOY29tLmdhbWUudGFibGVCF1BsYXlNb2RlVGFibGVPdXRl",
-          "ckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
+          "ChRwbGF5bW9kZV90YWJsZS5wcm90byKNAQoNUGxheU1vZGVUYWJsZRIKCgJp",
+          "ZBgBIAEoDRISCgptYXRjaF9tb2RlGAIgASgNEhgKEGJhdHRsZV9jb25maWdf",
+          "aWQYAyABKA0SDwoHZW5hYmxlZBgEIAEoCBIaChJhbGxvd2VkX3RlYW1fc2l6",
+          "ZXMYBiADKA0SFQoNdGVhbV9zaXplX21heBgFIAEoDSIxChFQbGF5TW9kZVRh",
+          "YmxlRGF0YRIcCgRkYXRhGAEgAygLMg4uUGxheU1vZGVUYWJsZUI/Cg5jb20u",
+          "Z2FtZS50YWJsZUIXUGxheU1vZGVUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJh",
+          "dGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PlayModeTable), global::PlayModeTable.Parser, new[]{ "Id", "MatchMode", "BattleConfigId", "Enabled", "TeamSizeMax" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PlayModeTable), global::PlayModeTable.Parser, new[]{ "Id", "MatchMode", "BattleConfigId", "Enabled", "AllowedTeamSizes", "TeamSizeMax" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PlayModeTableData), global::PlayModeTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -78,6 +79,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     matchMode_ = other.matchMode_;
     battleConfigId_ = other.battleConfigId_;
     enabled_ = other.enabled_;
+    allowedTeamSizes_ = other.allowedTeamSizes_.Clone();
     teamSizeMax_ = other.teamSizeMax_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
@@ -136,6 +138,17 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     }
   }
 
+  /// <summary>Field number for the "allowed_team_sizes" field.</summary>
+  public const int AllowedTeamSizesFieldNumber = 6;
+  private static readonly pb::FieldCodec<uint> _repeated_allowedTeamSizes_codec
+      = pb::FieldCodec.ForUInt32(50);
+  private readonly pbc::RepeatedField<uint> allowedTeamSizes_ = new pbc::RepeatedField<uint>();
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public pbc::RepeatedField<uint> AllowedTeamSizes {
+    get { return allowedTeamSizes_; }
+  }
+
   /// <summary>Field number for the "team_size_max" field.</summary>
   public const int TeamSizeMaxFieldNumber = 5;
   private uint teamSizeMax_;
@@ -167,6 +180,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     if (MatchMode != other.MatchMode) return false;
     if (BattleConfigId != other.BattleConfigId) return false;
     if (Enabled != other.Enabled) return false;
+    if(!allowedTeamSizes_.Equals(other.allowedTeamSizes_)) return false;
     if (TeamSizeMax != other.TeamSizeMax) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
@@ -179,6 +193,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     if (MatchMode != 0) hash ^= MatchMode.GetHashCode();
     if (BattleConfigId != 0) hash ^= BattleConfigId.GetHashCode();
     if (Enabled != false) hash ^= Enabled.GetHashCode();
+    hash ^= allowedTeamSizes_.GetHashCode();
     if (TeamSizeMax != 0) hash ^= TeamSizeMax.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
@@ -218,6 +233,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
       output.WriteRawTag(40);
       output.WriteUInt32(TeamSizeMax);
     }
+    allowedTeamSizes_.WriteTo(output, _repeated_allowedTeamSizes_codec);
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -248,6 +264,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
       output.WriteRawTag(40);
       output.WriteUInt32(TeamSizeMax);
     }
+    allowedTeamSizes_.WriteTo(ref output, _repeated_allowedTeamSizes_codec);
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -270,6 +287,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     if (Enabled != false) {
       size += 1 + 1;
     }
+    size += allowedTeamSizes_.CalculateSize(_repeated_allowedTeamSizes_codec);
     if (TeamSizeMax != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TeamSizeMax);
     }
@@ -297,6 +315,7 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
     if (other.Enabled != false) {
       Enabled = other.Enabled;
     }
+    allowedTeamSizes_.Add(other.allowedTeamSizes_);
     if (other.TeamSizeMax != 0) {
       TeamSizeMax = other.TeamSizeMax;
     }
@@ -339,6 +358,11 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
           TeamSizeMax = input.ReadUInt32();
           break;
         }
+        case 50:
+        case 48: {
+          allowedTeamSizes_.AddEntriesFrom(input, _repeated_allowedTeamSizes_codec);
+          break;
+        }
       }
     }
   #endif
@@ -376,6 +400,11 @@ public sealed partial class PlayModeTable : pb::IMessage<PlayModeTable>
         }
         case 40: {
           TeamSizeMax = input.ReadUInt32();
+          break;
+        }
+        case 50:
+        case 48: {
+          allowedTeamSizes_.AddEntriesFrom(ref input, _repeated_allowedTeamSizes_codec);
           break;
         }
       }

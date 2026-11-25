@@ -34,6 +34,18 @@ struct DungeonAllow_pet_captureComp {
     uint32_t value;
 };
 
+struct DungeonBoss_trial_kindComp {
+    uint32_t value;
+};
+
+struct DungeonDifficultyComp {
+    uint32_t value;
+};
+
+struct DungeonRound_limitComp {
+    uint32_t value;
+};
+
 struct DungeonMonsterComp {
     std::span<const uint32_t> values;
 };
@@ -57,6 +69,15 @@ inline DungeonTime_limitComp MakeDungeonTime_limitComp(const DungeonTable& row) 
 }
 inline DungeonAllow_pet_captureComp MakeDungeonAllow_pet_captureComp(const DungeonTable& row) {
     return { row.allow_pet_capture() };
+}
+inline DungeonBoss_trial_kindComp MakeDungeonBoss_trial_kindComp(const DungeonTable& row) {
+    return { row.boss_trial_kind() };
+}
+inline DungeonDifficultyComp MakeDungeonDifficultyComp(const DungeonTable& row) {
+    return { row.difficulty() };
+}
+inline DungeonRound_limitComp MakeDungeonRound_limitComp(const DungeonTable& row) {
+    return { row.round_limit() };
 }
 inline DungeonMonsterComp MakeDungeonMonsterComp(const DungeonTable& row) {
     const auto& rf = row.monster();

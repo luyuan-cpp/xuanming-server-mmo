@@ -4921,3 +4921,95 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - Roslyn 离线编译 `MmorpgClient.Tests.EditMode.Tianyong`（64 个测试文件，含 `WorldMapOverviewTests.cs`、`CityTravelWindowTests.cs`、`MysteryMerchantWindowTests.cs`）：`exit=0, errors=0`；
   - 临时 `.NET 10` 控制台自检实跑 `WorldMapOverviewModels` 全部 12 组纯逻辑断言：`PURE_CSHARP_WORLD_MAP_MODELS_PASS 12/12`（临时目录已自动清理）。
 - **未覆盖与提交状态**：因本机 Unity 编辑器占用 `Temp/UnityLockfile`，未跑 Unity Batchmode EditMode Test Runner 实测 uGUI 树；三仓均未执行 `git commit` / `git push`，未触碰并行会话未提交改动。
+
+
+## 2026-11-24 赛季×PVP/PVE×强化材料统一经济落地（合入 A：+11 保底、两阶段 660+周100 总账、三首领试炼/护卫救援/物法易势 5V5、冷启动人数白名单）
+
+- **设计定案与旧稿降级**：
+  - 新增统一设计文档 [season-pvp-pve-economy-unified-v1.md](design/season-pvp-pve-economy-unified-v1.md)（锁定合入 A：`+1～+10` 100% 必成 + 唯一 `+11` 10% 概率不掉级 20 次硬保底；第一阶段永久 660 份总池含至多 60 份胜局可交易 + 第二阶段每周 100 份全绑定 UTC+8 周一 05:00 重置；三大首领试炼、护卫救援、物法易势 5V5；冷启动 `PVP_TEAM` 仅开放 `[1, 3]` 人数档与真实养成接入）；
+  - 为 `docs/design/ranked-play-season-ui-candidate.md` 与 `docs/design/ranked-play-v1-implementation.md` 追加过期/替代声明；在 `tools/scripts/gen_docs_index.py` 注册 `"season-*"` 并刷新 `docs/README.md`（`--check` 退出 0）。
+- **表与协议（`xuanming-server-mmo-cpp`）**：
+  - Schema & 数据表：`data/schema/{equipenhance,playmode,dungeon}_table.proto` 新增 `pity_limit`、`allowed_team_sizes`、`difficulty`、`boss_trial_kind`、`round_limit`；更新 `data/{EquipEnhance,Monster,Dungeon,PlayMode}.xlsx`（含四基础装 `+11` 唯一顶格行 `id=1011`、首领试炼 101–108、护卫救援 109、物法易势 110、`PlayMode` 行 6 冷启动白名单 `[1, 3]` 及行 301 物法易势入口）；导出 64/64 表成功（Deploy 14/14 OK）。
+  - 协议：`proto/common/component/{item_base_comp,client_request_ledger_comp,player_battle_result_comp}.proto`、`proto/scene/player_bag.proto`、`proto/battle/{battle_data,player_battle}.proto`、`proto/match/match_service.proto` 新增 `enhance_pity_count`、`expected_pity_count`、`pity_limit`/`pity_guaranteed_next`、两阶段 `EquipmentMaterialRewardLedger`/`Snapshot` 字段、`BattleTelegraphEntry`、`active_polarity`/`next_polarity_switch_round`/`protected_guard_actor_id`、`manual_action_rounds`/`effective_combat_contribution`/`battle_difficulty`/`boss_trial_kind` 与 `MATCH_MODE_POLARITY_5V5 = 8`；完成 `protogen` 全量生成。
+- **服务端实现（C++ `modules`/`battle`/`scene` + Go `match`）**：
+  - **Slice A（唯一 `+11` 概率+硬保底）**：`equip_attribute_rules.h`（`kV1MaxEnhanceLevel=11`、`kV1TopEnhanceBonusPermyriad=2400`、`kV1TopEnhancePityLimit=20`、`RollEnhanceWithPity`）、`player_equip.{h,cpp}`、`client_request_ledger.{h,cpp}`、`player_bag_handler.cpp`（预览公示单次概率与保底次数、`expected_pity_count` 乐观并发护栏、`client_request_id` 幂等重放保留保底计数）。
+  - **Slice B（两阶段 660+周100 材料总账 + 绑定分堆隔离 + PVP 防挂机）**：`item_store.{h,cpp}` 与 `bag_system.{h,cpp}` 按 `(config_id, bound)` 严格隔离堆叠/并堆/空位规划并在消耗时优先扣除绑定堆；`player_equipment_material_reward.{h,cpp}` 与 `client_request_ledger.cpp::Validate` 实现第一阶段永久 660（可交易上限 60、尾数 `<10` 不给可交易、老档历史余额保留为自用不抵扣新池）、第二阶段 UTC+8 周一 05:00 每周 100 全绑定防回拨、PVP 负/平有效对抗门槛（`!fled && total_rounds>=3 && manual_action_rounds>=2 && effective_combat_contribution`）及分堆领奖（可交易优先分给打造材料再分给百炼石）；`player_battle.cpp` 将新增份数、可交易份数及防挂机提示透传至 `PlayerBattleResult` 与 `BattleEndS2C`。
+  - **Slice C（TurnBattleEngine 试炼/救援/物法易势/防挂机）**：`turn_battle_constants.h`、`turn_battle_engine.{h,cpp}`、`configured_battle_effects.cpp` 实现显式 `round_limit` 优先、首领试炼固定 2 怪按真人数线性缩放血量、慢速重击后置于普通行动且先于回合末清防御（保证低速防御减半，受控取消且绝不回退普攻）、回春/护势驱散/灵障护盾/缚灵吸蓝四种护卫机制、护卫救援队 0 受保护护卫阵亡即判负、物法易势每 2 回合切换物理/法术直接主伤 `×115/100` 且满 16 回合判平，以及非 PVE 局 `manual_action_rounds`/`effective_combat_contribution` 权威统计（PVE 不写防挂机字段以保持自动/手动逐字节回归不变）。
+  - **Slice D（Go `match`）**：`catalog.go`、`joinqueuelogic.go`、`gather.go`、`spectate_visibility.go`、`battle_replay_policy.go`、`config.go`、`sql_launch.go` 强制校验 `allowed_team_sizes` 白名单与接通 `MATCH_MODE_POLARITY_5V5`（非排位不入 `ratingrule.Rated`）。
+- **Unity 客户端同步（`mmorpg-client`）**：
+  - 执行 `sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1`（64 表、83 proto、178 MessageId）；更新 `PlayerFeaturesClient.cs`、`EquipmentEnhancementView.cs`、`EquipmentWindow.Materials.cs`，透传 `ExpectedPityCount` 并展示 `+11` 保底进度与两阶段材料总账状态。
+- **验证结果**：
+  - C++ 静态守卫：`python -m unittest discover -s tools/scripts/tests -p "test_cpp*" -v` **42/42 OK**；`python tools/scripts/gen_docs_index.py --check` 退出 0；
+  - Go `match`：`go test -count=1 ./...` **全 23 包 PASS**（含新增 `TestLoadGeneratedTablesIncludesBossTrialsAndColdStartWhitelist` 实表加载验证）；
+  - C++ 串行 MSBuild（`Debug|x64 /m:1`）：`proto.lib`、`table.lib`、`proto_helpers.lib`、`rpc.lib`、`core.lib`、`modules.lib`、`battle.lib`、`scene.lib`、`turn_battle_engine_test.exe`、`battle.exe`、`scene.exe` 全部 0 错误编译链接通过；
+  - `turn_battle_engine_test.exe`（排除并行会话变动中的 `ModernSkillCatalogTest.*`、`RankedBattleTest.ParticipationFactsCoverManualAutoNoOpportunityFledAndAfk` 及已知基线 `TableBattleDataProviderTest` dungeon 5 无怪物组）：**450/450 PASS**（含全部 4 组 `SeasonBattleTest` 新试炼/救援/易势/防挂机用例与 `EquipAttributeRulesTest` `+11` 保底用例）；
+  - `bag_test` 实跑：因并行会话未收口的 `player_craft_quality_test.cpp` 阻塞 `bag_test.vcxproj` 全工程链接（未触碰并行文件），使用新编 `scene.lib`/`modules.lib`/`proto.lib`/`table.lib`/`battle.lib`/`core.lib` 与本任务涉及的 12 个测试 `.obj` 在 scratch 链接实跑 `PlayerEquipV1Test.*`、`PlayerEquipTest.*`、`EquipmentMaterialRewardTest.*`、`PlayerBattleSettlementTest.*`、`ClientRequest*Test.*`、`Bag*Test.*`：**426/426 PASS**；
+  - Unity 客户端：`client_compile_check.ps1` **`exit=0, files=657, errors=0`**。
+- **双版对账（AGENTS §12）与未覆盖项**：已登记 `xuanming-server-mmo/PARITY.md`（标为 `Java 待做`）；未跑多节点联机/TiDB 实盘与 Unity PlayMode UI 实景布局；未触碰并行会话改动，未执行 `git commit` / `git push`。
+
+
+## 2026-11-24 装备 5 档品相打磨重铸 + 率土式分卷宗技能制书 + 3 个回合叠层成长战法 + 主城原子代打（服务端全量 + 客户端契约同步，UI 交接 Codex）
+
+- **策划与契约定案**：
+  - 新增正式设计文档 [equipment-quality-and-skill-crafting-v1.md](design/equipment-quality-and-skill-crafting-v1.md)（含全部 6 个必备章节与 §7 Codex Unity UI 完整交接契约），同步对齐 [project-vision.md](design/project-vision.md)、[equipment-v1-affixes-artifacts.md](design/equipment-v1-affixes-artifacts.md)、[equipment-economy-charter.md](design/equipment-economy-charter.md)、[skill-planning/README.md](design/skill-planning/README.md) 并刷新 `docs/README.md` 与 `data/AGENTS.md`。
+- **表与协议（`xuanming-server-mmo-cpp`）**：
+  - Schema & 数据表：新增 `data/schema/{equipaffixquality,skillscrollcraft}_table.proto` 与 `data/{EquipAffixQuality,SkillScrollCraft}.xlsx`；扩展 `data/schema/skill_table.proto`（`scroll_id = 59`、`rarity_tier = 60`）与 `data/Skill.xlsx`（65 个永久技能分 3 卷：卷 1 本源 56 常规、卷 2 首发绝学 6 稀世、卷 3 兵法成长 3 常规，稀世占比 `6/65 = 9.23% <= 10%`）；新增 `Buff` `120200/120210/120220`（`GrowingAura` 5 层封顶）、`Item` `3405 定星保底符` / `3406 悟道残页` / `3407 绝学残卷` / `3408 天工秘墨`（沿用既有 `3403 重铸砂`）及 `Tip` `equip_error` 28023–28030、`skill_error` 7014–7022。
+  - 协议：新增 `proto/common/component/player_craft_comp.proto`（`CraftedSkillBookEntry`、`PlayerCraftComp` 挂 `player_database.craft_component = 32`）；扩展 `item_base_comp.proto`（`quality_tier`/`polish_pity_count`/`crafter_name`/`crafter_player_id`）、`client_request_ledger_comp.proto`（23–29）、`transaction_log.proto`（`TX_EQUIP_POLISH_REFORGE = 38`、`TX_SKILL_SCROLL_CRAFT = 39`、`TX_CRAFT_PROXY_FEE = 40`）、`player_bag.proto`（`REFORGE_AFFIX = 3`、`POLISH_AFFIX = 4`、品相/熟练度/代打/防染毒字段）及 `player_skill.proto`（`SceneSkillClientPlayer` 末尾追加 6 个 RPC：`459–464`）；执行 `dev.bat gen` 全量生成并完成 `.vcxproj`/`CMakeLists.txt` 注册。
+- **服务端实现（C++ `modules`/`battle`/`scene`）**：
+  - **战斗引擎**：`battle_effect_constants.h` 新增 `OutgoingPhysicalDamage = 18`、`OutgoingMagicDamage = 19`、`SelfGrowingDefense = 20`；`configured_battle_effects.cpp` 与 `turn_battle_engine.cpp` 实现三战法与 `O01`/`A14` 同层加算不复利、5 层封顶、不可普通 `A34` 驱散、阵亡暂停叠层且复活保留既有层数、严格遵守 60% 常驻减伤封顶。
+  - **装备品相与防染毒**：`item_store.{h,cpp}`、`bag_system.{h,cpp}`、`bag_service.{h,cpp}` 扩展纯可交易扣料 `tradableOnly` 与 `consumedBoundOut`；新增 `equip_craft_quality_rules.h` 并升级 `player_equipment_v1.{h,cpp}`（5 档品相精确缩放、旧档 `quality_tier=0` 按 100% 兼容、`G02` 速度豁免且禁重铸白嫖 5 档、只升不降 + 第 8 次硬保底 + 定星保底符、换词条 100% 继承品相与保底、可交易装备默认 `TRADEABLE_ONLY` 拦截绑定材料染毒、铸器熟练度与宗师署名、主城原子代打扣 5% 税销毁）。
+  - **技能制书与原子代打**：新增 `player_craft.{h,cpp}`（启动/热更强校验稀世 ≤ 10% 红线、常规随机/定向拓印、80% 拆页返 16 残页、稀世双轨消耗天工秘墨产物强制仅自用防洗白、人物/宝宝研习永久解锁不顶掉老技能、首测兼容解锁开关默认关、宗师摊位开关与列表），接入 `player_database_loader.cpp`、`player_skill.{h,cpp}`、`player_pet.{h,cpp}`、`player_skill_handler.cpp`、`player_handoff_gate.h` 与 `main.cpp`。
+- **验证结果**：
+  - `scene.exe --validate-tables generated/tables`：**全 66 表通过（exit=0）**；
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：**13/13 OK**；`python tools/scripts/gen_docs_index.py --check` 退出 0；
+  - Go 回归：`go/shared` `go build ./...` 退出 0，`go/data_service` `go test ./...` 全包通过；
+  - C++ 串行 MSBuild（`Debug|x64 /m:1`）：`table.lib`、`proto.lib`、`rpc.lib`、`grpc_client.lib`、`modules.lib`、`battle.lib`、`scene.lib`、`scene.exe`、`bag_test.exe`、`turn_battle_engine_test.exe`、`skill_test.exe` 全部 0 错误通过；
+  - 单测实跑：`GrowingPassiveSkillTest` **4/4 PASS** + `ModernSkillCatalogTest` **20/20 PASS**、`skill_test.exe` **98/98 PASS**、`PlayerCraftQualityTest` + `EquipCraftQualityRulesTest` + `PlayerEquipmentCraftTest` **29/29 PASS**（`PlayerCraftComp`/`CraftedSkillBookEntry` 已过 `PersistRoundTripTest` 未知字段携带验证）；
+  - Unity 客户端契约同步（`mmorpg-client`）：执行 `gen.bat client` 同步 66 张表、83 个 proto、`SceneSkillClientPlayerRpc.cs`（459–464）与 `PlayerCraftComp.cs`，`client_compile_check.ps1` **`exit=0, files=657, errors=0`**（UI 界面按设计文档 §7 交由 Codex 制作）。
+- **双版对账（AGENTS §12）与未覆盖项**：已登记 `xuanming-server-mmo/PARITY.md`（标为 `Java 待做`）；未改写并行会话既有未提交文件，未制作 Unity UI，未执行 `git commit` / `git push`。
+
+
+## 2026-11-24 论剑排位首发 V1：C++/Go + Java 双版服务端全闭环与 Unity 47 图全量 UGUI 接入
+
+- **范围与依据**：按 [ranked-play-season-ui-candidate.md](design/ranked-play-season-ui-candidate.md)（§1–5、§8 及验收表）、[ranked-play-v1-implementation.md](design/ranked-play-v1-implementation.md) 与异机 Codex UI 交接包（`D:\work\image\designs\lunjian-ui-v1\GEMINI_HANDOFF.md` 及 `gemini-handoff/*.json`）完成两版服务端业务闭环、Unity 47 张无字 PNG 导入、纯 C# 网络适配与完整 UGUI 界面接入。
+- **C++/Go 主仓（`xuanming-server-mmo-cpp`）**：
+  - Go `match`/`team`/`rank`：1V1–5V5 共用 `PVP_TEAM(7)` 单一 Elo（初分 1500、K=32、100/200/300 硬封顶、蛇形分队、真人补位、4 人队禁 5V5）、RPC 448–452、同事务结算/4-8-12 永久展示权益/跨季排空封榜与崩溃恢复、`GetQueueStatus` 透传 `wait_prompt_seconds`/`current_rating_spread`/`team_size`/`season_id`。
+  - C++ `scene` & `battle`：`ranked_preset_rules.h`（6 预设确定性派生、零宠物临时竞技宝宝 `pet_id=0`/`competitive_temporary=true`、配置指纹 fail-closed）、`player_battle.cpp`（跳过残血拦截与道具预留、结算严格资产隔离、透传 `material_credit_units_added`/`season_id`）、`player_equipment_material_reward.cpp`/`player_season.cpp`（参与门禁与每日 20 份共享额度上限）、`turn_battle_engine.{h,cpp}` & `battle_room_manager.{h,cpp}`（同速 SplitMix64 确定性决胜、回合上限判平、临时宠不回写、`BattleParticipationFact` 冻结）、`ranked_battle_test.cpp`。
+- **Java 独立仓（`xuanming-server-mmo`）**：
+  - 完整对齐实现 `game-battle-engine`（`BattleUnit`、`TurnBattleEngine`、`RankedBattleEngineTest`）、`game-battle`（`BattleRoomServiceImpl`）、`game-scene`（`RankedPresetRules`、`SceneBattleTables`、`PlayerBattleService`、`BattleSettlementService`、`EquipmentCraftService`、`SeasonService`、`RankedPresetRulesTest`）、`game-match`（`MatchModes`、`Tolerance`、`GlobalRegionPolicy`、`TeamAssignment`、`RankedTables`、`RankedStore`、`RatingStore`、`RatingRankOutbox`、`GlobalMatchService`、`GatherPipeline`、`RankedParityTest`），并已更新 `PARITY.md` 标记为「已对齐」。
+- **Unity 客户端（`mmorpg-client`）**：
+  - 按 `asset-manifest.json` 导入并 SHA-256 校验全部 **47 张**采用的无字 PNG 至 `Assets/Resources/UI/Ugui/LunjianV1/`（严格剔除旧 `ui-window.png` 与 `button-primary-cloud.png`，零九宫格边框，全套 `.meta` 齐备）。
+  - 纯 C# 适配层：`Assets/Scripts/Game/Ranked/{RankedModels,RankedClient}.cs`（RPC 448–451、结算 `PENDING` 有界轮询、会话/连接/代次隔离）、`TeamModels`/`TeamViewMapper`/`TeamClient`(452 + 持久恢复)/`BattleClient`/`BattleMatchEntryClient`/`RankClient.SeasonBoard`/`GameClient` 挂载与 `RankedClientTests.cs`。
+  - 完整 UGUI：`Assets/Scripts/UI/Ugui/Ranked/{RankedArtCatalog,RankedLobbyPanel,RankedSharedDrawer,RankedSettlementPanel,RankedUiRoot}.cs`，通过 `WorldHudNavigation` 注册「论剑」入口，严格按 `state-layout.json` 8 态与 `component-export-manifest.json` 坐标接入大厅、三页签抽屉（排行榜/赛季记录/已获外观）、个人结算页，并复用已有 `AppearanceUiRoot.ShowPanel()`（10 元易容卡）与 `GameplayUiRoot.OpenEquipmentMaterials()`（材料自选领取），接管 `BattleUiRoot` 排位现场终局与重登补弹结算；同步落盘客户端联调与接口清单文档 `mmorpg-client/Docs/lunjian-ranked-v1-integration.md`。
+- **实际验证结果（均由低档执行档 `exec-runner` 实跑）**：
+  - Go `xuanming-server-mmo-cpp`：`go/rank` `go build ./... && go test -count=1 ./...` 退出 0；`go/match` `go test -count=1 ./internal/ranked/... ./internal/ratingrule/... ./internal/team/... ./internal/constants/... ./internal/catalog/... ./internal/authority/...` 退出 0。
+  - C++ `xuanming-server-mmo-cpp`：串行 MSBuild（`/m:1 /p:MultiProcessorCompilation=false /p:CL_MPCount=1`）编过 `table.lib`、`battle.lib`、`scene.lib`、`battle.exe`、`scene.exe`、`turn_battle_engine_test.exe`（均退出 0）；`RankedBattleTest.*` **5/5 PASS**；`.\bin\scene.exe --validate-tables generated/tables` 退出 0（`tables=66`）；`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`test_battle_no_direct_table_singleton.py` **1/1 OK**、`check_log_text_english.py` 退出 0（注：全套 `turn_battle_engine_test` 475/477，余 2 处为既有 `TableBattleDataProviderTest` 断言每张 `DungeonTable` 必配怪物组，命中无怪 PVP 副本 5）。
+  - Java `xuanming-server-mmo`：`mvnw -B -pl "game-battle-engine,game-battle,game-scene,game-match,game-team" -am test-compile` 退出 0（18/18 模块）；8 套测试（`RankedBattleEngineTest` 5/5、`RankedPresetRulesTest` 3/3、`RankedParityTest` 2/2、`MatchModesTest` 6/6、`EloRulesTest` 18/18、`TeamAssignmentTest` 8/8、`SpectateVisibilityPolicyTest` 15/15、`ToleranceTest` 11/11）共 **68/68 PASS**（退出 0）。
+  - Unity `mmorpg-client`：`tools/client_compile_check.ps1` **`exit=0, files=662, errors=0`**；EditMode `RankedClientTests` **4/4 PASS**；47 张 PNG 存在性/禁用图排除/`.meta` 完整性检查全绿。
+- **待验证与试玩说明**：尚未在本地完整多进程 Docker/TiDB/Kafka/Redis 栈上跑双版实网 robot 贯通与 Unity PlayMode 真机像素截图；真人群测（1V1/5V5 排队时长、实战时长、最常见组合与反制案例）尚无真实玩家样本，全部数值与预设参数维持「试值」身份。未执行 `git commit` / `git push`，三仓既有并行会话改动完整保留。
+
+
+## 2026-11-24 首领试炼深度玩法 V2 升级设计（破绽反打、聚火溅射、A+B 三困难战阵、精英策应阵与决战二阶段）
+
+- **策划定稿与现状对齐**：升级并替换 [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md)（由 11-22 V1 升级为 11-24 V2 深度策略版），完整覆盖 `AGENTS.md §10.4` 要求的需求分析、设计分析、思想分析、漏洞分析（V1–V9 防线）、步骤分析与双机执行交接：
+  - **解决 5 大体验硬伤**：① 引入首领试炼敌方阵型「主目标聚火 100% / 副目标溅射 60%」与护势轻反制（蓄势），零侵入既有全服技能目标人数即激活选目标与转火博弈；② 统一反打状态「破绽（+35% 易伤至下回合末，不叠乘）」串联化劲破招、断疗反噬（6% 反伤）、崩势破盾与阵脚震荡；③ 护势护卫改联防 + 轻反制，多人局砍掉纯普攻白板怪改为最多 4 怪「精简精英阵」（新增破军卫/鼓噪卫）＋ 3～5 人「裂地双劈」双目标点名（含 2/2 完整破绽、1/2 轻破绽防连坐）；④ 目标时长压缩为普通 3～5 分钟 / 困难 5～7 分钟、指令窗收紧至 18 秒、新增「一键防御化劲」与记忆上回合技能，并在特殊护卫全灭或首领 ≤50% 血时触发二阶段「决战姿态（自身易伤 +15%、重劈缩至 2 回合）」消灭垃圾收尾；⑤ 困难页签（通关任意普通一次全解锁）同时保留 **方案 B 单卫动态进阶**（困难·回春进阶净 1 减益、困难·护势进阶「顺势应变」动态切阵）与 **方案 A 困难·双卫同阵**（新增 `boss_trial_kind = 7` / 血量压缩至 70%～75% 错峰防奶墙），三模式同享 15 份材料绝不逼打，并扩展「五行试炼志 V2」第 5 格、称号/印戳/留灯院人物志评语及专属美术/特效交接清单。
+  - **同步最新经济与源码底座**：全面对齐 11-24 已落地的 [season-pvp-pve-economy-unified-v1.md](design/season-pvp-pve-economy-unified-v1.md) 两阶段装备材料总账（660 永久池 + 周 100 绑定池，普通 10 / 困难 15）、`TurnBattleEngine` Slice C 及 `trial_journal_rules.h`，明确零改动既有 `Dungeon` `101..110`、`boss_trial_kind` `1..6` 与既有位图位序。
+- **本轮边界**：仅更新设计文档、刷新 `docs/README.md` 索引并追加本条进度；未修改服务端、独立 Java 服、客户端代码、协议或配置表，未执行构建/测试，未执行 `git commit` / `git push`。
+
+
+## 2026-11-24 《五行奇谈》核心玩法 V1 定稿与双端核心逻辑落地（正式自养会武 vs 免费预设解耦、规模开关、困难门禁、首宠灵狐、客户端纯 C# 门面与 ChatGPT UI 交接）
+
+- **策划拍板定稿**：重写 [core-gameplay-loop.md](design/core-gameplay-loop.md)（含 `AGENTS.md §10.4` 六段分析与双机分工），明确 4 项核心定稿：① 正式人宠会武（`PVP_TEAM`）固定使用本人真实养成，免费 3×3 预设严格收束至首季娱乐轮换（护卫救援 PVE 1–5 人 / 物法易势仅 5V5 公平团战，不计正式评分）；② 正式会武协议/引擎/UI 全量保留 `1V1–5V5` 开关能力（主力 `1V1/3V3/5V5` 冷启动先开 `[1,3]`，`2V2/4V4` 为特殊玩法开关）；③ 3 只不同机制首领（`101..108`）普通 10 / 困难 15 且任意普通首通解锁困难；④ PVP 负/平全绑定且须满足有效对抗门槛（≥3 回合、≥2 手动、有效贡献），可交易份数仅归胜局/PVE 通关，主城与养成线预留 4 个低打扰零卖数值小额消费位。
+- **协议与服务端实现（`xuanming-server-mmo-cpp`）**：
+  - **Proto（已跑 `proto-gen-run` 刷新 C++/Go/C# 与 `persist_schema_gen.txt`）**：新增 `RankedMatchContext.use_free_preset = 8`、`BattleSettlementData.use_free_preset = 30`、`PrepareBattleRequest.{battle_config_id=7, match_mode=8}`、`RankedSeasonInfo.{allowed_team_sizes=20, uses_own_progression=21, primary_team_sizes=22, special_team_sizes=23}`、`PlayerPetComp.starter_pet_granted = 7`、`PlayerTrialJournalComp.normal_boss_trial_cleared = 6`、`TrialJournalSnapshot.hard_boss_trial_unlocked = 14`。
+  - **C++ `battle` / `scene`**：`TurnBattleEngine` 解耦 `UsesFreePreset()` 与 `IsRankedBattle()`（自养正式排位禁临时宠，娱乐免费预设允许临时宠且同速 SplitMix64 公平）；`PlayerBattleSystem::PrepareBattle` 按 `use_free_preset` 选真实/免费快照并逐人强校困难首领试炼解锁门禁，`ApplySettlementToEntity` 修复隔离局（含护卫救援 109）试炼志同事务提交；`PlayerTrialJournalSystem` 持久化任意普通首领首通标记并输出 `hard_boss_trial_unlocked`；`PetSystem::EnsureStarterPetGranted` 接入 `PlayerLifecycleSystem` 进场自动为无宠角色一次性发放并出战灵狐（`pet_table_id=1`）；补齐 `ranked_battle_test.cpp`、`player_trial_journal_test.cpp`、`pet_entries_test.cpp` 单测。
+  - **Go `match`**：`catalog` 暴露 `AllowedTeamSizes` / `BossTrialKind` 并修正 `TrialContextFor` 使免费预设娱乐局（`109/110`）正常带出 `TrialContext`；`authority`/`logic`/`team` 将正式 `PVP_TEAM` 切换为 `UseFreePreset=false` 且不再因队友未确认免费预设阻塞开局，`RankedSeasonInfo` 下发开放/主力/特殊人数档，护卫救援 `109` 与物法易势 `110` 冻结免费预设上下文，`gather.go` 透传 `BattleConfigId`/`MatchMode` 且所有自养局正常装配玩家战斗剧本。
+- **Unity 客户端纯 C# 逻辑层与 ChatGPT UI 交接（`mmorpg-client`）**：
+  - 同步全量表/协议/消息号（68 表、83 proto、178 MessageId）；新增 `Assets/Scripts/Game/Season/{SeasonModels,SeasonClient}.cs`（RPC 453–455）并挂载 `GameClient.Season`；新增 `Assets/Scripts/Game/CoreLoop/{CoreGameplayLoopModels,CoreGameplayLoopClient}.cs`（3 首领卡片、1V1–5V5 开关模型、轮换卡片、战斗预告/换势 HUD、结算材料/反挂机拆解、主城 3 数字 + 4 零卖数值预留位、120s 取消转单人试炼状态机）；更新 `RankedModels`/`RankedClient`（默认切开放档 1V1、支持新季节规模字段与 `MaterialTradableUnitsAdded`）、`BattleMatchEntryClient`（支持开放规模校验与免费预设透传）、`TeamClient`（移除正式会武旧免费预设拦截）、`BattleClient.LastBattleEnd`；新增 `SeasonClientTests.cs`、`CoreGameplayLoopTests.cs`；落盘给 ChatGPT/Codex 的完整 UI 规范 `mmorpg-client/Docs/design/core-gameplay-loop-ui-handoff.md`，同步登记 `xuanming-server-mmo/PARITY.md`（Java 侧标记待做，未触碰并行会话改动）。
+- **实际验证结果**：
+  - 静态门禁：`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` **13/13 OK**。
+  - C++ 串行 MSBuild（Debug x64 `/m:1`）：`battle.exe`、`scene.exe`、`turn_battle_engine_test.exe`、`skill_test.exe`、`bag_test.exe` 全部 0 错误编过；`.\bin\scene.exe --validate-tables generated/tables` **PASS（68 表，version=62）**。
+  - C++ GTest：`turn_battle_engine_test`（`RankedBattleTest.*:*BossTrial*:*Polarity*:*GuardRescue*`）**12/12 PASS**；`skill_test`（`PetEntriesTest.*`）**10/10 PASS**；`bag_test`（`PlayerTrialJournalSystemTest.*:EquipmentMaterialRewardTest.*:PlayerSeasonSystemTest.*`）**34/34 PASS**。
+  - Go `match`：`go test -count=1 ./internal/catalog/... ./internal/ranked/... ./internal/team/... ./internal/authority/... ./internal/logic/...` **5/5 包全部 PASS**。
+  - Unity `mmorpg-client`：`tools/client_compile_check.ps1` **exit=0, files=678, errors=0**；Roslyn + NUnit 实跑 `SeasonClientTests` + `CoreGameplayLoopTests` + `TrialJournalClientTests` + `RankedClientTests` **13/13 PASS（failed=0）**。
+- **未执行范围**：未执行 `git commit` / `git push`；未启动完整多进程栈做实网双端联机；Java 独立服与 Unity 新 UGUI 窗口交由后续对齐与 ChatGPT 实施。

@@ -47,6 +47,24 @@ public final class DungeonTableComp {
         }
     }
 
+    public record Boss_trial_kind(int value) {
+        public static Boss_trial_kind from(DungeonTable row) {
+            return new Boss_trial_kind(row.getBossTrialKind());
+        }
+    }
+
+    public record Difficulty(int value) {
+        public static Difficulty from(DungeonTable row) {
+            return new Difficulty(row.getDifficulty());
+        }
+    }
+
+    public record Round_limit(int value) {
+        public static Round_limit from(DungeonTable row) {
+            return new Round_limit(row.getRoundLimit());
+        }
+    }
+
     public record Monster(List<Integer> values) {
         public static Monster from(DungeonTable row) {
             return new Monster(row.getMonsterList());

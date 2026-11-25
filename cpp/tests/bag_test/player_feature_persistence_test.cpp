@@ -162,6 +162,8 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerItemHoldComp>(player); // 物品数量预留(battle-item-reservation.md)
     EmplaceIfAbsent<PlayerMailOutboxComp>(player); // 待寄邮件(battle-overflow-mail.md)
     EmplaceIfAbsent<PlayerSeasonComp>(player); // 赛季印持久状态(season-skills-and-seal-design.md)
+    EmplaceIfAbsent<PlayerTrialJournalComp>(player); // 五行试炼志持久状态(long-term-progression-v2.md)
+    EmplaceIfAbsent<PlayerCraftComp>(player); // 装备品相/技能制书与代打持久状态(equipment-quality-and-skill-crafting-v1.md)
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。

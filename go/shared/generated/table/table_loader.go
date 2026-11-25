@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "8a3cb14b8c44ed4e"
+const SchemaDigest = "2d08ed0321d964c6"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -17,6 +17,7 @@ var hotReloadableTables = map[string]bool{
 	"ActivityVitalityRule": true,
 	"Buff": true,
 	"Cooldown": true,
+	"EquipAffixQuality": true,
 	"GuildDonate": true,
 	"GuildShop": true,
 	"MessageLimiter": true,
@@ -27,6 +28,7 @@ var hotReloadableTables = map[string]bool{
 	"SeasonSeal": true,
 	"Skill": true,
 	"SkillPermission": true,
+	"SkillScrollCraft": true,
 	"TrialJournalEntry": true,
 	"TrialJournalMilestone": true,
 	"TrialJournalSeal": true,
@@ -54,6 +56,7 @@ var allTableNames = []string{
 	"Cooldown",
 	"Dungeon",
 	"EquipAffixPool",
+	"EquipAffixQuality",
 	"EquipAffixRule",
 	"EquipArtifact",
 	"EquipAttribute",
@@ -90,8 +93,11 @@ var allTableNames = []string{
 	"SeasonSeal",
 	"Skill",
 	"SkillPermission",
+	"SkillScrollCraft",
 	"Test",
 	"TestMultiKey",
+	"TournamentReward",
+	"TournamentRule",
 	"TrialJournalEntry",
 	"TrialJournalMilestone",
 	"TrialJournalSeal",
@@ -144,6 +150,7 @@ type TableSet struct {
 	Cooldown *CooldownTableManager
 	Dungeon *DungeonTableManager
 	EquipAffixPool *EquipAffixPoolTableManager
+	EquipAffixQuality *EquipAffixQualityTableManager
 	EquipAffixRule *EquipAffixRuleTableManager
 	EquipArtifact *EquipArtifactTableManager
 	EquipAttribute *EquipAttributeTableManager
@@ -180,8 +187,11 @@ type TableSet struct {
 	SeasonSeal *SeasonSealTableManager
 	Skill *SkillTableManager
 	SkillPermission *SkillPermissionTableManager
+	SkillScrollCraft *SkillScrollCraftTableManager
 	Test *TestTableManager
 	TestMultiKey *TestMultiKeyTableManager
+	TournamentReward *TournamentRewardTableManager
+	TournamentRule *TournamentRuleTableManager
 	TrialJournalEntry *TrialJournalEntryTableManager
 	TrialJournalMilestone *TrialJournalMilestoneTableManager
 	TrialJournalSeal *TrialJournalSealTableManager
@@ -230,6 +240,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		Cooldown: NewCooldownTableManager(),
 		Dungeon: NewDungeonTableManager(),
 		EquipAffixPool: NewEquipAffixPoolTableManager(),
+		EquipAffixQuality: NewEquipAffixQualityTableManager(),
 		EquipAffixRule: NewEquipAffixRuleTableManager(),
 		EquipArtifact: NewEquipArtifactTableManager(),
 		EquipAttribute: NewEquipAttributeTableManager(),
@@ -266,8 +277,11 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		SeasonSeal: NewSeasonSealTableManager(),
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
+		SkillScrollCraft: NewSkillScrollCraftTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
+		TournamentReward: NewTournamentRewardTableManager(),
+		TournamentRule: NewTournamentRuleTableManager(),
 		TrialJournalEntry: NewTrialJournalEntryTableManager(),
 		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
 		TrialJournalSeal: NewTrialJournalSealTableManager(),
@@ -336,6 +350,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.EquipAffixPool.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare EquipAffixPool table failed: %w", err)
+	}
+	if err := ts.EquipAffixQuality.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare EquipAffixQuality table failed: %w", err)
 	}
 	if err := ts.EquipAffixRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare EquipAffixRule table failed: %w", err)
@@ -445,11 +462,20 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.SkillPermission.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare SkillPermission table failed: %w", err)
 	}
+	if err := ts.SkillScrollCraft.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare SkillScrollCraft table failed: %w", err)
+	}
 	if err := ts.Test.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Test table failed: %w", err)
 	}
 	if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare TestMultiKey table failed: %w", err)
+	}
+	if err := ts.TournamentReward.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TournamentReward table failed: %w", err)
+	}
+	if err := ts.TournamentRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare TournamentRule table failed: %w", err)
 	}
 	if err := ts.TrialJournalEntry.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare TrialJournalEntry table failed: %w", err)
@@ -538,6 +564,9 @@ func Commit(ts *TableSet) {
 	}
 	if ts.EquipAffixPool != nil {
 		EquipAffixPoolTableManagerInstance.swapSnapshot(ts.EquipAffixPool.snap.Load())
+	}
+	if ts.EquipAffixQuality != nil {
+		EquipAffixQualityTableManagerInstance.swapSnapshot(ts.EquipAffixQuality.snap.Load())
 	}
 	if ts.EquipAffixRule != nil {
 		EquipAffixRuleTableManagerInstance.swapSnapshot(ts.EquipAffixRule.snap.Load())
@@ -647,11 +676,20 @@ func Commit(ts *TableSet) {
 	if ts.SkillPermission != nil {
 		SkillPermissionTableManagerInstance.swapSnapshot(ts.SkillPermission.snap.Load())
 	}
+	if ts.SkillScrollCraft != nil {
+		SkillScrollCraftTableManagerInstance.swapSnapshot(ts.SkillScrollCraft.snap.Load())
+	}
 	if ts.Test != nil {
 		TestTableManagerInstance.swapSnapshot(ts.Test.snap.Load())
 	}
 	if ts.TestMultiKey != nil {
 		TestMultiKeyTableManagerInstance.swapSnapshot(ts.TestMultiKey.snap.Load())
+	}
+	if ts.TournamentReward != nil {
+		TournamentRewardTableManagerInstance.swapSnapshot(ts.TournamentReward.snap.Load())
+	}
+	if ts.TournamentRule != nil {
+		TournamentRuleTableManagerInstance.swapSnapshot(ts.TournamentRule.snap.Load())
 	}
 	if ts.TrialJournalEntry != nil {
 		TrialJournalEntryTableManagerInstance.swapSnapshot(ts.TrialJournalEntry.snap.Load())
@@ -733,6 +771,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		Cooldown: NewCooldownTableManager(),
 		Dungeon: NewDungeonTableManager(),
 		EquipAffixPool: NewEquipAffixPoolTableManager(),
+		EquipAffixQuality: NewEquipAffixQualityTableManager(),
 		EquipAffixRule: NewEquipAffixRuleTableManager(),
 		EquipArtifact: NewEquipArtifactTableManager(),
 		EquipAttribute: NewEquipAttributeTableManager(),
@@ -769,8 +808,11 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		SeasonSeal: NewSeasonSealTableManager(),
 		Skill: NewSkillTableManager(),
 		SkillPermission: NewSkillPermissionTableManager(),
+		SkillScrollCraft: NewSkillScrollCraftTableManager(),
 		Test: NewTestTableManager(),
 		TestMultiKey: NewTestMultiKeyTableManager(),
+		TournamentReward: NewTournamentRewardTableManager(),
+		TournamentRule: NewTournamentRuleTableManager(),
 		TrialJournalEntry: NewTrialJournalEntryTableManager(),
 		TrialJournalMilestone: NewTrialJournalMilestoneTableManager(),
 		TrialJournalSeal: NewTrialJournalSealTableManager(),
@@ -778,7 +820,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(64)
+	wg.Add(68)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -903,6 +945,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.EquipAffixPool.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load EquipAffixPool table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.EquipAffixQuality.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load EquipAffixQuality table: %v", err)
 		}
 	}()
 	go func() {
@@ -1123,6 +1171,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 	}()
 	go func() {
 		defer wg.Done()
+		if err := ts.SkillScrollCraft.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load SkillScrollCraft table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
 		if err := ts.Test.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Test table: %v", err)
 		}
@@ -1131,6 +1185,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.TestMultiKey.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load TestMultiKey table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TournamentReward.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TournamentReward table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.TournamentRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load TournamentRule table: %v", err)
 		}
 	}()
 	go func() {

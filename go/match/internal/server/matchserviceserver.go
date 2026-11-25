@@ -123,3 +123,69 @@ func (s *MatchServiceServer) DeleteBattleScript(ctx context.Context, in *matchpb
 func (s *MatchServiceServer) SetBattleScriptLoadout(ctx context.Context, in *matchpb.SetBattleScriptLoadoutRequest) (*matchpb.SetBattleScriptLoadoutResponse, error) {
 	return logic.NewBattleScriptLogic(ctx, s.svcCtx).SetBattleScriptLoadout(in)
 }
+
+// GetRankedProfile 读取论剑排位大厅档案、本季进度、预设与展示权益(448)。
+func (s *MatchServiceServer) GetRankedProfile(ctx context.Context, in *matchpb.GetRankedProfileRequest) (*matchpb.GetRankedProfileResponse, error) {
+	return logic.NewRankedLogic(ctx, s.svcCtx).GetRankedProfile(in)
+}
+
+// SaveRankedPreset 保存单排默认论剑预设(449)。
+func (s *MatchServiceServer) SaveRankedPreset(ctx context.Context, in *matchpb.SaveRankedPresetRequest) (*matchpb.SaveRankedPresetResponse, error) {
+	return logic.NewRankedLogic(ctx, s.svcCtx).SaveRankedPreset(in)
+}
+
+// UpdateRankedCosmetic 校验归属并更新论剑展示权益佩戴(450)。
+func (s *MatchServiceServer) UpdateRankedCosmetic(ctx context.Context, in *matchpb.UpdateRankedCosmeticRequest) (*matchpb.UpdateRankedCosmeticResponse, error) {
+	return logic.NewRankedLogic(ctx, s.svcCtx).UpdateRankedCosmetic(in)
+}
+
+// GetRankedBattleResult 查询单局或最近一局论剑排位权威结算摘要(451)。
+func (s *MatchServiceServer) GetRankedBattleResult(ctx context.Context, in *matchpb.GetRankedBattleResultRequest) (*matchpb.GetRankedBattleResultResponse, error) {
+	return logic.NewRankedLogic(ctx, s.svcCtx).GetRankedBattleResult(in)
+}
+
+// ---- 全服赛季战队锦标赛《群仙问道赛》V1(465..475) ----
+
+func (s *MatchServiceServer) GetTournamentOverview(ctx context.Context, in *matchpb.GetTournamentOverviewRequest) (*matchpb.GetTournamentOverviewResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).GetTournamentOverview(in)
+}
+
+func (s *MatchServiceServer) CreateTournamentSquad(ctx context.Context, in *matchpb.CreateTournamentSquadRequest) (*matchpb.CreateTournamentSquadResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).CreateTournamentSquad(in)
+}
+
+func (s *MatchServiceServer) InviteTournamentMember(ctx context.Context, in *matchpb.InviteTournamentMemberRequest) (*matchpb.InviteTournamentMemberResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).InviteTournamentMember(in)
+}
+
+func (s *MatchServiceServer) RespondTournamentInvite(ctx context.Context, in *matchpb.RespondTournamentInviteRequest) (*matchpb.RespondTournamentInviteResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).RespondTournamentInvite(in)
+}
+
+func (s *MatchServiceServer) LeaveTournamentSquad(ctx context.Context, in *matchpb.LeaveTournamentSquadRequest) (*matchpb.LeaveTournamentSquadResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).LeaveTournamentSquad(in)
+}
+
+func (s *MatchServiceServer) UpdateTournamentLineup(ctx context.Context, in *matchpb.UpdateTournamentLineupRequest) (*matchpb.UpdateTournamentLineupResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).UpdateTournamentLineup(in)
+}
+
+func (s *MatchServiceServer) RegisterTournamentSquad(ctx context.Context, in *matchpb.RegisterTournamentSquadRequest) (*matchpb.RegisterTournamentSquadResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).RegisterTournamentSquad(in)
+}
+
+func (s *MatchServiceServer) ListTournamentStandings(ctx context.Context, in *matchpb.ListTournamentStandingsRequest) (*matchpb.ListTournamentStandingsResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).ListTournamentStandings(in)
+}
+
+func (s *MatchServiceServer) StartTournamentMatch(ctx context.Context, in *matchpb.StartTournamentMatchRequest) (*matchpb.StartTournamentMatchResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).StartTournamentMatch(in)
+}
+
+func (s *MatchServiceServer) CheerTournamentSquad(ctx context.Context, in *matchpb.CheerTournamentSquadRequest) (*matchpb.CheerTournamentSquadResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).CheerTournamentSquad(in)
+}
+
+func (s *MatchServiceServer) ClaimTournamentReward(ctx context.Context, in *matchpb.ClaimTournamentRewardRequest) (*matchpb.ClaimTournamentRewardResponse, error) {
+	return logic.NewTournamentLogic(ctx, s.svcCtx).ClaimTournamentReward(in)
+}

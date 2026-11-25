@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"match/internal/metrics"
+	pb "proto/match"
 	rankpb "proto/rank"
 	"shared/generated/pb/table"
 	"shared/grpckeepalive"
@@ -89,7 +90,13 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 						}
 					}()
 				}
-				return s.PublishRankOnce(call, client, secret)
+				if err := s.PublishRankOnce(call, client, secret); err != nil {
+					return err
+				}
+				if s.ownsWork("ranked-rollover:0") {
+					return s.AdvanceRankedSeasonRollover(call, client, nil, secret, nil)
+				}
+				return nil
 			}()
 		})
 		cancel()
@@ -119,10 +126,16 @@ func rankPublishBudgetLeft(ctx context.Context) bool {
 	return !limited || time.Until(deadline) > rankPublishBatchReserve
 }
 
-// rankShardProgress 是 match_rank_source 的一行:一个计分模式的一片。
+// rankShardProgress 是 match_rank_source 的一行:一个计分模式在某个来源世代(source_epoch)的一片。
 type rankShardProgress struct {
+	epoch                      uint64
 	mode, shard                uint32
 	produced, committed, board uint64
+}
+
+type rankBoardKey struct {
+	epoch uint64
+	mode  uint32
 }
 
 func (p rankShardProgress) backlog() uint64 {
@@ -133,13 +146,16 @@ func (p rankShardProgress) backlog() uint64 {
 }
 
 // orderRankShardsByBacklog 让积压多的片先投(各模式的片放在一起比)。预算不够时没轮到的片积压继续涨、被投的片在减,
-// 下一轮就轮到它们,高号片、冷门模式的片不会一直排在后面饿死;积压相同按读出的 (模式, 片号) 序。
+// 下一轮就轮到它们,高号片、冷门模式的片不会一直排在后面饿死;积压相同按读出的 (世代, 模式, 片号) 序。
 func orderRankShardsByBacklog(shards []rankShardProgress) {
 	sort.SliceStable(shards, func(i, j int) bool { return shards[i].backlog() > shards[j].backlog() })
 }
 
 func (s *Store) readRankShards(ctx context.Context) ([]rankShardProgress, error) {
-	rows, e := s.DB.QueryContext(ctx, "SELECT mode,shard,produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE source_epoch=1 ORDER BY mode,shard")
+	pvpTeam := uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM)
+	rows, e := s.DB.QueryContext(ctx,
+		"SELECT source_epoch,mode,shard,produced_cursor,committed_cursor,board_id FROM match_rank_source WHERE (mode<>? AND source_epoch=1) OR (mode=? AND source_epoch>=1) ORDER BY source_epoch,mode,shard",
+		pvpTeam, pvpTeam)
 	if e != nil {
 		return nil, e
 	}
@@ -147,7 +163,7 @@ func (s *Store) readRankShards(ctx context.Context) ([]rankShardProgress, error)
 	var shards []rankShardProgress
 	for rows.Next() {
 		var p rankShardProgress
-		if e = rows.Scan(&p.mode, &p.shard, &p.produced, &p.committed, &p.board); e != nil {
+		if e = rows.Scan(&p.epoch, &p.mode, &p.shard, &p.produced, &p.committed, &p.board); e != nil {
 			return nil, e
 		}
 		shards = append(shards, p)
@@ -155,37 +171,38 @@ func (s *Store) readRankShards(ctx context.Context) ([]rankShardProgress, error)
 	return shards, rows.Err()
 }
 
-// PublishRankOnce 投一轮:每个计分模式一张榜(rankBoardTypes),每片按自己的游标顺序投到本模式的榜;
-// 片之间、模式之间没有先后(版本防旧值覆盖,见 ApplyRating)。每个副本只投自己负责的 (模式, 来源片)
-// (work_owner.go 的 rankWorkKey):加副本就分摊投榜,不再每个副本把全部片各投一遍;两个副本偶尔同投一片也安全,
-// rank 按 (榜, 片, 游标) 幂等,本地游标只前进不后退。
-// 一片失败、或一个模式的榜这一轮绑不上,都不拦别的片和别的模式,下一轮从原游标接着投;返回遇到的第一个错误。
+// PublishRankOnce 投一轮:每个计分模式(PVP_TEAM 按赛季 epoch)一张榜,每片按自己的游标顺序投到对应榜。
 func (s *Store) PublishRankOnce(ctx context.Context, client rankpb.RankAdminClient, secret string) error {
 	shards, e := s.readRankShards(ctx)
 	if e != nil {
 		return e
 	}
 	var first error
-	boards := map[uint32]uint64{}
+	boards := map[rankBoardKey]uint64{}
+	latestBoardByMode := map[uint32]rankBoardKey{}
 	for _, p := range shards {
-		if _, seen := boards[p.mode]; seen {
+		key := rankBoardKey{epoch: p.epoch, mode: p.mode}
+		if prev, ok := latestBoardByMode[p.mode]; !ok || p.epoch >= prev.epoch {
+			latestBoardByMode[p.mode] = key
+		}
+		if _, seen := boards[key]; seen {
 			continue
 		}
-		board, e := s.bindRankBoard(ctx, client, secret, p.mode, shards)
+		board, e := s.bindRankBoard(ctx, client, secret, p.epoch, p.mode, shards)
 		if e != nil {
 			if first == nil {
 				first = e
 			}
-			board = 0 // 这个模式本轮不投;记 0 只是为了不再重复绑定
+			board = 0 // 这个世代本轮不投;记 0 只是为了不再重复绑定
 		}
-		boards[p.mode] = board
+		boards[key] = board
 	}
 	orderRankShardsByBacklog(shards)
 	for _, p := range shards {
 		if !rankPublishBudgetLeft(ctx) {
 			break
 		}
-		board := boards[p.mode]
+		board := boards[rankBoardKey{epoch: p.epoch, mode: p.mode}]
 		if board == 0 || !s.ownsWork(rankWorkKey(p.mode, p.shard)) {
 			continue
 		}
@@ -198,22 +215,22 @@ func (s *Store) PublishRankOnce(ctx context.Context, client rankpb.RankAdminClie
 			}
 		}
 	}
-	if e = s.publishRankRemovals(ctx, client, secret, boards); e != nil && first == nil {
+	activeBoards := make(map[uint32]uint64, len(latestBoardByMode))
+	activeGen := make(map[uint32]uint64, len(latestBoardByMode))
+	for mode, key := range latestBoardByMode {
+		activeBoards[mode] = boards[key]
+		activeGen[mode] = key.epoch
+	}
+	if e = s.publishRankRemovals(ctx, client, secret, activeBoards, activeGen); e != nil && first == nil {
 		first = e
 	}
 	return first
 }
 
-// rankRemovalPage 是一轮最多处理的待摘榜行数。只有删角会写这张表,量很小;各副本都处理、不按片分工:
-// rank 按 (榜, 代次, 请求号) 幂等,删行按主键,两个副本同摘一行只是多一次调用。
+// rankRemovalPage 是一轮最多处理的待摘榜行数。
 const rankRemovalPage = 16
 
-// publishRankRemovals 把删角收尾记下的待摘榜行(match_rank_removal)投给 rank:RemoveRankEntry 删掉分数并在同一事务立墓碑,
-// 确认之后删行(docs/design/account-deletion.md §6.2)。请求号取 player_id:一名玩家在一张榜上只摘一次,重放同号同载荷,rank 回成功。
-// 代次固定 1(bindRankBoard 打开的是 Generation 1 的永久榜)。榜已封或已隐藏、榜不存在都没有可摘的了,同样删行;
-// 其余拒绝与调用失败留着行,下一轮重投,回第一个错误。本模式的榜这一轮没绑上(boards 里没有或是 0)就跳过。
-// 墓碑让行的先后无所谓:摘榜之前已经产出、还没投出去的旧批次里有他,迟到时被墓碑拒掉。
-func (s *Store) publishRankRemovals(ctx context.Context, client rankpb.RankAdminClient, secret string, boards map[uint32]uint64) error {
+func (s *Store) publishRankRemovals(ctx context.Context, client rankpb.RankAdminClient, secret string, boards, generations map[uint32]uint64) error {
 	rows, e := s.DB.QueryContext(ctx, "SELECT mode,player_id FROM match_rank_removal ORDER BY mode,player_id LIMIT ?", rankRemovalPage)
 	if e != nil {
 		return e
@@ -243,15 +260,19 @@ func (s *Store) publishRankRemovals(ctx context.Context, client rankpb.RankAdmin
 		if board == 0 {
 			continue
 		}
-		if e = s.removeFromRank(ctx, client, secret, board, r.mode, r.player); e != nil && first == nil {
+		gen := generations[r.mode]
+		if gen == 0 {
+			gen = 1
+		}
+		if e = s.removeFromRank(ctx, client, secret, board, gen, r.mode, r.player); e != nil && first == nil {
 			first = e
 		}
 	}
 	return first
 }
 
-func (s *Store) removeFromRank(ctx context.Context, client rankpb.RankAdminClient, secret string, board uint64, mode uint32, player uint64) error {
-	request := &rankpb.RemoveRankEntryRequest{BoardId: board, Generation: 1, EntityId: player, RequestId: player}
+func (s *Store) removeFromRank(ctx context.Context, client rankpb.RankAdminClient, secret string, board, generation uint64, mode uint32, player uint64) error {
+	request := &rankpb.RemoveRankEntryRequest{BoardId: board, Generation: generation, EntityId: player, RequestId: player}
 	if e := serviceauth.Sign(rankpb.RankAdmin_RemoveRankEntry_FullMethodName, request, "match", secret, uint64(time.Now().UnixMilli())); e != nil {
 		return e
 	}
@@ -268,10 +289,10 @@ func (s *Store) removeFromRank(ctx context.Context, client rankpb.RankAdminClien
 	return e
 }
 
-// bindRankBoard 找出一个计分模式的榜(还没有就向 rank 打开),并给本模式里还没记榜号的片补上。
-// 同一模式各片记录的榜必须一致;不同模式各是各的榜。打开请求的业务号取 board_type:每张榜一个固定请求,
-// 重放(包括别的副本同时打开)得到同一个 board_id,rank 按榜键幂等。1V1 的请求与拆分前逐字节相同。
-func (s *Store) bindRankBoard(ctx context.Context, client rankpb.RankAdminClient, secret string, mode uint32, shards []rankShardProgress) (uint64, error) {
+// bindRankBoard 找出一个计分模式在指定 epoch 下的榜(还没有就向 rank 打开),并补齐 board_id。
+// 1V1 / 5V5 保持 period="all", generation=1, request_id=boardType 与旧契约逐字节一致;
+// PVP_TEAM 按赛季表解析 period=season_key, generation=rank_generation(若无赛季行回退 period="all", generation=1)。
+func (s *Store) bindRankBoard(ctx context.Context, client rankpb.RankAdminClient, secret string, epoch uint64, mode uint32, shards []rankShardProgress) (uint64, error) {
 	boardType, rated := RankBoardType(mode)
 	if !rated {
 		return 0, fmt.Errorf("评级来源里有不计分模式 %d 的行", mode)
@@ -279,7 +300,7 @@ func (s *Store) bindRankBoard(ctx context.Context, client rankpb.RankAdminClient
 	var board uint64
 	unbound := false
 	for _, p := range shards {
-		if p.mode != mode {
+		if p.mode != mode || p.epoch != epoch {
 			continue
 		}
 		switch {
@@ -288,11 +309,36 @@ func (s *Store) bindRankBoard(ctx context.Context, client rankpb.RankAdminClient
 		case board == 0:
 			board = p.board
 		case board != p.board:
-			return 0, fmt.Errorf("模式 %d 的评级来源各片记录的榜不一致", mode)
+			return 0, fmt.Errorf("模式 %d 世代 %d 的评级来源各片记录的榜不一致", mode, epoch)
+		}
+	}
+	period := "all"
+	generation := uint64(1)
+	requestID := uint64(boardType)
+	isSeasonBoard := false
+	if mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+		var seasonKey string
+		var rankGen, seasonBoard uint64
+		if err := s.DB.QueryRowContext(ctx, "SELECT season_key,rank_generation,rank_board_id FROM match_ranked_season WHERE source_epoch=? LIMIT 1", epoch).Scan(&seasonKey, &rankGen, &seasonBoard); err == nil && seasonKey != "" {
+			period = seasonKey
+			generation = rankGen
+			if generation == 0 {
+				generation = epoch
+			}
+			requestID = uint64(boardType)*100000 + epoch
+			isSeasonBoard = true
+			if board == 0 && seasonBoard != 0 {
+				board = seasonBoard
+			}
 		}
 	}
 	if board == 0 {
-		request := &rankpb.OpenRankGenerationRequest{Board: &rankpb.RankBoardKey{BoardType: boardType, Scope: rankpb.RankScope_RANK_SCOPE_GLOBAL, Period: "all", Generation: 1}, Producer: "match", SourceEpoch: 1, RequestId: uint64(boardType)}
+		request := &rankpb.OpenRankGenerationRequest{
+			Board:       &rankpb.RankBoardKey{BoardType: boardType, Scope: rankpb.RankScope_RANK_SCOPE_GLOBAL, Period: period, Generation: generation},
+			Producer:    "match",
+			SourceEpoch: epoch,
+			RequestId:   requestID,
+		}
 		if e := serviceauth.Sign(rankpb.RankAdmin_OpenRankGeneration_FullMethodName, request, "match", secret, uint64(time.Now().UnixMilli())); e != nil {
 			return 0, e
 		}
@@ -301,15 +347,17 @@ func (s *Store) bindRankBoard(ctx context.Context, client rankpb.RankAdminClient
 			return 0, e
 		}
 		if response.GetErrorMessage().GetId() != 0 || response.BoardId == 0 {
-			return 0, fmt.Errorf("模式 %d 的评级榜代次打开被拒", mode)
+			return 0, fmt.Errorf("模式 %d 世代 %d 的评级榜代次打开被拒", mode, epoch)
 		}
 		board = response.BoardId
 	}
-	// 新片的行是后来才建的,board_id 还是 0,这里补上。
 	if unbound {
-		if _, e := s.DB.ExecContext(ctx, "UPDATE match_rank_source SET board_id=? WHERE source_epoch=1 AND mode=? AND board_id=0", board, mode); e != nil {
+		if _, e := s.DB.ExecContext(ctx, "UPDATE match_rank_source SET board_id=? WHERE source_epoch=? AND mode=? AND board_id=0", board, epoch, mode); e != nil {
 			return 0, e
 		}
+	}
+	if isSeasonBoard {
+		_, _ = s.DB.ExecContext(ctx, "UPDATE match_ranked_season SET rank_board_id=? WHERE source_epoch=? AND rank_board_id=0", board, epoch)
 	}
 	return board, nil
 }
@@ -318,7 +366,7 @@ func (s *Store) publishRankShard(ctx context.Context, client rankpb.RankAdminCli
 	committed := p.committed
 	for sent := 0; committed < p.produced && sent < rankPublishPerShard && rankPublishBudgetLeft(ctx); sent++ {
 		var body []byte
-		if e := s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=1 AND mode=? AND shard=? AND source_cursor=?", p.mode, p.shard, committed+1).Scan(&body); e != nil {
+		if e := s.DB.QueryRowContext(ctx, "SELECT entries FROM match_rank_outbox WHERE source_epoch=? AND mode=? AND shard=? AND source_cursor=?", p.epoch, p.mode, p.shard, committed+1).Scan(&body); e != nil {
 			return e
 		}
 		request := &rankpb.SubmitRankScoresRequest{}
@@ -333,12 +381,11 @@ func (s *Store) publishRankShard(ctx context.Context, client rankpb.RankAdminCli
 		if e != nil {
 			return e
 		}
-		// 发布者没有选主,别的副本可能已经投得更远:榜回「重复」和更大的游标,这批的结局已定,不算故障,本地游标推到榜确认的位置。
 		reached := response.CommittedCursor
 		if response.GetErrorMessage().GetId() != 0 || reached < request.SourceCursor || (reached > request.SourceCursor && !response.Duplicated) {
 			return errors.New("评级投榜未确认连续游标")
 		}
-		if _, e = s.DB.ExecContext(ctx, "UPDATE match_rank_source SET committed_cursor=? WHERE source_epoch=1 AND mode=? AND shard=? AND committed_cursor<?", reached, p.mode, p.shard, reached); e != nil {
+		if _, e = s.DB.ExecContext(ctx, "UPDATE match_rank_source SET committed_cursor=? WHERE source_epoch=? AND mode=? AND shard=? AND committed_cursor<?", reached, p.epoch, p.mode, p.shard, reached); e != nil {
 			return e
 		}
 		committed = reached

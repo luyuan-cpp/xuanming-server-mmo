@@ -50,11 +50,11 @@ constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLed
     {
       PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -64,33 +64,75 @@ constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLed
       ::_pbi::TcParser::GetTable<::EquipmentMaterialRewardLedger>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 revision = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.revision_), 2>(),
-       {32, 2, 0,
-        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 day_starts_at_ms = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_)}},
       // uint32 earned_today = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.earned_today_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.earned_today_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_)}},
       // uint64 available_units = 3;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.available_units_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_units_)}},
+      // uint64 revision = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.revision_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_)}},
+      // uint32 lifetime_earned = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.lifetime_earned_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.lifetime_earned_)}},
+      // uint32 tradable_earned_total = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.tradable_earned_total_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.tradable_earned_total_)}},
+      // uint64 available_tradable_units = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.available_tradable_units_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_tradable_units_)}},
+      // uint64 week_starts_at_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.week_starts_at_ms_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.week_starts_at_ms_)}},
+      // uint32 earned_this_week = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.earned_this_week_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_this_week_)}},
+      // bool migrated_to_v2 = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 day_starts_at_ms = 1;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 earned_today = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 available_units = 3;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_units_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 revision = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 lifetime_earned = 5;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.lifetime_earned_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tradable_earned_total = 6;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.tradable_earned_total_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 available_tradable_units = 7;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_tradable_units_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 week_starts_at_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.week_starts_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 earned_this_week = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_this_week_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool migrated_to_v2 = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -105,8 +147,14 @@ inline constexpr EquipmentMaterialRewardLedger::Impl_::Impl_(
       : _cached_size_{0},
         day_starts_at_ms_{::uint64_t{0u}},
         available_units_{::uint64_t{0u}},
+        earned_today_{0u},
+        lifetime_earned_{0u},
         revision_{::uint64_t{0u}},
-        earned_today_{0u} {}
+        available_tradable_units_{::uint64_t{0u}},
+        tradable_earned_total_{0u},
+        earned_this_week_{0u},
+        week_starts_at_ms_{::uint64_t{0u}},
+        migrated_to_v2_{false} {}
 
 template <typename>
 constexpr EquipmentMaterialRewardLedger::EquipmentMaterialRewardLedger(::_pbi::ConstantInitialized,
@@ -212,11 +260,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      19, 248,  // max_field_number, fast_idx_mask
+      29, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294443008,  // skipmap
+      3758096384,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      19,  // num_field_entries
+      29,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -232,87 +280,117 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)}},
       // uint32 kind = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.kind_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.kind_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.kind_)}},
       // bytes fingerprint = 3;
       {::_pbi::TcParser::FastBS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.fingerprint_)}},
       // uint64 seq = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.seq_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.seq_), 2>(),
+       {32, 2, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.seq_)}},
       // bool enhance_success = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClientRequestRecord, _impl_.enhance_success_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClientRequestRecord, _impl_.enhance_success_), 14>(),
+       {40, 14, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_success_)}},
       // uint32 enhance_level = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhance_level_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhance_level_), 4>(),
+       {48, 4, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_level_)}},
       // uint32 created_scheme_id = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.created_scheme_id_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.created_scheme_id_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_)}},
       // uint64 equipment_item_id = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.equipment_item_id_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.equipment_item_id_), 5>(),
+       {64, 5, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_)}},
       // uint64 forge_revision = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.forge_revision_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.forge_revision_), 6>(),
+       {72, 6, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_)}},
       // uint64 material_reward_revision = 10;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.material_reward_revision_), 9>(),
        {80, 9, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.material_reward_revision_)}},
       // uint32 crafting_material_count = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.crafting_material_count_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.crafting_material_count_), 8>(),
+       {88, 8, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_)}},
       // uint32 enhancement_stone_count = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhancement_stone_count_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhancement_stone_count_), 10>(),
+       {96, 10, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_)}},
       // uint32 season_catchup_points = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.season_catchup_points_), 13>(),
-       {104, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.season_catchup_points_), 11>(),
+       {104, 11, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_)}},
       // uint64 season_catchup_spent = 14;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.season_catchup_spent_), 12>(),
        {112, 12, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_)}},
       // uint32 trial_milestone_id = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.trial_milestone_id_), 14>(),
-       {120, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.trial_milestone_id_), 13>(),
+       {120, 13, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_id_)}},
       // uint32 trial_milestone_sand_count = 16;
       {::_pbi::TcParser::FastV32S2,
-       {384, 15, 0,
+       {384, 16, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_sand_count_)}},
       // uint32 trial_milestone_voucher_count = 17;
       {::_pbi::TcParser::FastV32S2,
-       {392, 16, 0,
+       {392, 17, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_voucher_count_)}},
       // uint64 redeemed_artifact_item_id = 18;
       {::_pbi::TcParser::FastV64S2,
-       {400, 17, 0,
+       {400, 18, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_item_id_)}},
       // uint32 redeemed_artifact_config_id = 19;
       {::_pbi::TcParser::FastV32S2,
-       {408, 18, 0,
+       {408, 19, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 enhance_pity_count = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 20, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_pity_count_)}},
+      // uint32 crafting_tradable_count = 21;
+      {::_pbi::TcParser::FastV32S2,
+       {424, 21, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_tradable_count_)}},
+      // uint32 enhancement_tradable_count = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 22, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_tradable_count_)}},
+      // uint32 equipment_quality_tier = 23;
+      {::_pbi::TcParser::FastV32S2,
+       {440, 23, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_quality_tier_)}},
+      // uint32 equipment_polish_pity_count = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 24, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_pity_count_)}},
+      // bool equipment_guaranteed_by_pity = 25;
+      {::_pbi::TcParser::FastV8S2,
+       {456, 15, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_guaranteed_by_pity_)}},
+      // uint64 crafted_skill_book_id = 26;
+      {::_pbi::TcParser::FastV64S2,
+       {464, 25, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafted_skill_book_id_)}},
+      // uint32 crafted_skill_table_id = 27;
+      {::_pbi::TcParser::FastV32S2,
+       {472, 27, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafted_skill_table_id_)}},
+      // uint64 scroll_craft_revision = 28;
+      {::_pbi::TcParser::FastV64S2,
+       {480, 26, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_craft_revision_)}},
+      // uint32 scroll_bonus_fragments = 29;
+      {::_pbi::TcParser::FastV32S2,
+       {488, 28, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -321,41 +399,61 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       // uint64 key = 1;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 kind = 2;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.kind_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.kind_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes fingerprint = 3;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.fingerprint_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 seq = 4;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.seq_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool enhance_success = 5;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_success_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_success_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 enhance_level = 6;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_level_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_level_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 created_scheme_id = 7;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 equipment_item_id = 8;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 forge_revision = 9;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 material_reward_revision = 10;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.material_reward_revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 crafting_material_count = 11;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 enhancement_stone_count = 12;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 season_catchup_points = 13;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_points_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 season_catchup_spent = 14;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.season_catchup_spent_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 trial_milestone_id = 15;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 trial_milestone_sand_count = 16;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_sand_count_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_sand_count_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 trial_milestone_voucher_count = 17;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_voucher_count_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.trial_milestone_voucher_count_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 redeemed_artifact_item_id = 18;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_item_id_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_item_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 redeemed_artifact_config_id = 19;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 enhance_pity_count = 20;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_pity_count_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 crafting_tradable_count = 21;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_tradable_count_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 enhancement_tradable_count = 22;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_tradable_count_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equipment_quality_tier = 23;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_quality_tier_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equipment_polish_pity_count = 24;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_pity_count_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool equipment_guaranteed_by_pity = 25;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_guaranteed_by_pity_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 crafted_skill_book_id = 26;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafted_skill_book_id_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 crafted_skill_table_id = 27;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafted_skill_table_id_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 scroll_craft_revision = 28;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 scroll_bonus_fragments = 29;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -372,23 +470,33 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         key_{::uint64_t{0u}},
-        kind_{0u},
-        enhance_success_{false},
         seq_{::uint64_t{0u}},
+        kind_{0u},
         enhance_level_{0u},
-        created_scheme_id_{0u},
         equipment_item_id_{::uint64_t{0u}},
         forge_revision_{::uint64_t{0u}},
-        material_reward_revision_{::uint64_t{0u}},
+        created_scheme_id_{0u},
         crafting_material_count_{0u},
+        material_reward_revision_{::uint64_t{0u}},
         enhancement_stone_count_{0u},
-        season_catchup_spent_{::uint64_t{0u}},
         season_catchup_points_{0u},
+        season_catchup_spent_{::uint64_t{0u}},
         trial_milestone_id_{0u},
+        enhance_success_{false},
+        equipment_guaranteed_by_pity_{false},
         trial_milestone_sand_count_{0u},
         trial_milestone_voucher_count_{0u},
         redeemed_artifact_item_id_{::uint64_t{0u}},
-        redeemed_artifact_config_id_{0u} {}
+        redeemed_artifact_config_id_{0u},
+        enhance_pity_count_{0u},
+        crafting_tradable_count_{0u},
+        enhancement_tradable_count_{0u},
+        equipment_quality_tier_{0u},
+        equipment_polish_pity_count_{0u},
+        crafted_skill_book_id_{::uint64_t{0u}},
+        scroll_craft_revision_{::uint64_t{0u}},
+        crafted_skill_table_id_{0u},
+        scroll_bonus_fragments_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -668,7 +776,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        22, // hasbit index offset
+        32, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -688,36 +796,68 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.trial_milestone_voucher_count_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.redeemed_artifact_item_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.redeemed_artifact_config_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhance_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafting_tradable_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhancement_tradable_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_quality_tier_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_polish_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_guaranteed_by_pity_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafted_skill_book_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafted_skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.scroll_craft_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.scroll_bonus_fragments_),
         1,
-        2,
-        0,
-        4,
         3,
+        0,
+        2,
+        14,
+        4,
+        7,
         5,
         6,
-        7,
-        8,
         9,
+        8,
         10,
         11,
-        13,
         12,
-        14,
-        15,
+        13,
         16,
         17,
         18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        15,
+        25,
+        27,
+        26,
+        28,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
-        7, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.earned_today_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.available_units_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.revision_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.lifetime_earned_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.tradable_earned_total_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.available_tradable_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.week_starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.earned_this_week_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_),
         0,
-        3,
-        1,
         2,
+        1,
+        4,
+        3,
+        6,
+        5,
+        8,
+        7,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
         7, // hasbit index offset
@@ -734,8 +874,8 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {41, sizeof(::EquipmentMaterialRewardLedger)},
-        {52, sizeof(::ClientRequestLedgerComp)},
+        {61, sizeof(::EquipmentMaterialRewardLedger)},
+        {84, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -746,7 +886,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\240\004\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\352\006\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -760,21 +900,33 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "d_count\030\020 \001(\r\022%\n\035trial_milestone_voucher"
     "_count\030\021 \001(\r\022!\n\031redeemed_artifact_item_i"
     "d\030\022 \001(\004\022#\n\033redeemed_artifact_config_id\030\023"
-    " \001(\r\"z\n\035EquipmentMaterialRewardLedger\022\030\n"
-    "\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned_today\030"
-    "\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n\010revisi"
-    "on\030\004 \001(\004\"\243\001\n\027ClientRequestLedgerComp\022%\n\007"
-    "records\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010n"
-    "ext_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n"
-    "\017material_reward\030\004 \001(\0132\036.EquipmentMateri"
-    "alRewardLedgerB\022Z\020common/componentb\006prot"
-    "o3"
+    " \001(\r\022\032\n\022enhance_pity_count\030\024 \001(\r\022\037\n\027craf"
+    "ting_tradable_count\030\025 \001(\r\022\"\n\032enhancement"
+    "_tradable_count\030\026 \001(\r\022\036\n\026equipment_quali"
+    "ty_tier\030\027 \001(\r\022#\n\033equipment_polish_pity_c"
+    "ount\030\030 \001(\r\022$\n\034equipment_guaranteed_by_pi"
+    "ty\030\031 \001(\010\022\035\n\025crafted_skill_book_id\030\032 \001(\004\022"
+    "\036\n\026crafted_skill_table_id\030\033 \001(\r\022\035\n\025scrol"
+    "l_craft_revision\030\034 \001(\004\022\036\n\026scroll_bonus_f"
+    "ragments\030\035 \001(\r\"\241\002\n\035EquipmentMaterialRewa"
+    "rdLedger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014ea"
+    "rned_today\030\002 \001(\r\022\027\n\017available_units\030\003 \001("
+    "\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005"
+    " \001(\r\022\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030a"
+    "vailable_tradable_units\030\007 \001(\004\022\031\n\021week_st"
+    "arts_at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001"
+    "(\r\022\026\n\016migrated_to_v2\030\n \001(\010\"\243\001\n\027ClientReq"
+    "uestLedgerComp\022%\n\007records\030\001 \003(\0132\024.Client"
+    "RequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge"
+    "_revision\030\003 \001(\004\0227\n\017material_reward\030\004 \001(\013"
+    "2\036.EquipmentMaterialRewardLedgerB\022Z\020comm"
+    "on/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    922,
+    1420,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -824,9 +976,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, redeemed_artifact_config_id_) -
+           offsetof(Impl_, scroll_bonus_fragments_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::redeemed_artifact_config_id_));
+               sizeof(Impl_::scroll_bonus_fragments_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -841,9 +993,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, redeemed_artifact_config_id_) -
+           offsetof(Impl_, scroll_bonus_fragments_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::redeemed_artifact_config_id_));
+               sizeof(Impl_::scroll_bonus_fragments_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -899,18 +1051,23 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.key_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.equipment_item_id_) -
-        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.equipment_item_id_));
+        reinterpret_cast<char*>(&_impl_.created_scheme_id_) -
+        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.created_scheme_id_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.forge_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.trial_milestone_sand_count_) -
-        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.trial_milestone_sand_count_));
+    ::memset(&_impl_.crafting_material_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.equipment_guaranteed_by_pity_) -
+        reinterpret_cast<char*>(&_impl_.crafting_material_count_)) + sizeof(_impl_.equipment_guaranteed_by_pity_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
-    ::memset(&_impl_.trial_milestone_voucher_count_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.redeemed_artifact_config_id_) -
-        reinterpret_cast<char*>(&_impl_.trial_milestone_voucher_count_)) + sizeof(_impl_.redeemed_artifact_config_id_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.trial_milestone_sand_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.equipment_quality_tier_) -
+        reinterpret_cast<char*>(&_impl_.trial_milestone_sand_count_)) + sizeof(_impl_.equipment_quality_tier_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+    ::memset(&_impl_.equipment_polish_pity_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.scroll_bonus_fragments_) -
+        reinterpret_cast<char*>(&_impl_.equipment_polish_pity_count_)) + sizeof(_impl_.scroll_bonus_fragments_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -945,7 +1102,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 kind = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -962,7 +1119,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 seq = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -971,7 +1128,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // bool enhance_success = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_enhance_success() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -980,7 +1137,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 enhance_level = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_enhance_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -989,7 +1146,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 created_scheme_id = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_created_scheme_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -998,7 +1155,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 equipment_item_id = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_equipment_item_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1007,7 +1164,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 forge_revision = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1025,7 +1182,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 crafting_material_count = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_crafting_material_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1034,7 +1191,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 enhancement_stone_count = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_enhancement_stone_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1043,7 +1200,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 season_catchup_points = 13;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_season_catchup_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1061,7 +1218,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 trial_milestone_id = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_trial_milestone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1070,7 +1227,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 trial_milestone_sand_count = 16;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_trial_milestone_sand_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1079,7 +1236,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 trial_milestone_voucher_count = 17;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_trial_milestone_voucher_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1088,7 +1245,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 redeemed_artifact_item_id = 18;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_redeemed_artifact_item_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1097,11 +1254,101 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 redeemed_artifact_config_id = 19;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_redeemed_artifact_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           19, this_._internal_redeemed_artifact_config_id(), target);
+    }
+  }
+
+  // uint32 enhance_pity_count = 20;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_enhance_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_enhance_pity_count(), target);
+    }
+  }
+
+  // uint32 crafting_tradable_count = 21;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_crafting_tradable_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          21, this_._internal_crafting_tradable_count(), target);
+    }
+  }
+
+  // uint32 enhancement_tradable_count = 22;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_enhancement_tradable_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_enhancement_tradable_count(), target);
+    }
+  }
+
+  // uint32 equipment_quality_tier = 23;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_equipment_quality_tier() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          23, this_._internal_equipment_quality_tier(), target);
+    }
+  }
+
+  // uint32 equipment_polish_pity_count = 24;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_equipment_polish_pity_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_equipment_polish_pity_count(), target);
+    }
+  }
+
+  // bool equipment_guaranteed_by_pity = 25;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_equipment_guaranteed_by_pity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          25, this_._internal_equipment_guaranteed_by_pity(), target);
+    }
+  }
+
+  // uint64 crafted_skill_book_id = 26;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_crafted_skill_book_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          26, this_._internal_crafted_skill_book_id(), target);
+    }
+  }
+
+  // uint32 crafted_skill_table_id = 27;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_crafted_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          27, this_._internal_crafted_skill_table_id(), target);
+    }
+  }
+
+  // uint64 scroll_craft_revision = 28;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_scroll_craft_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          28, this_._internal_scroll_craft_revision(), target);
+    }
+  }
+
+  // uint32 scroll_bonus_fragments = 29;
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (this_._internal_scroll_bonus_fragments() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          29, this_._internal_scroll_bonus_fragments(), target);
     }
   }
 
@@ -1145,54 +1392,55 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
             this_._internal_key());
       }
     }
-    // uint32 kind = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (this_._internal_kind() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_kind());
-      }
-    }
-    // bool enhance_success = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (this_._internal_enhance_success() != 0) {
-        total_size += 2;
-      }
-    }
     // uint64 seq = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_seq());
       }
     }
+    // uint32 kind = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_kind());
+      }
+    }
     // uint32 enhance_level = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_enhance_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enhance_level());
       }
     }
-    // uint32 created_scheme_id = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_created_scheme_id() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_created_scheme_id());
-      }
-    }
     // uint64 equipment_item_id = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_equipment_item_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_equipment_item_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 forge_revision = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_forge_revision());
+      }
+    }
+    // uint32 created_scheme_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_created_scheme_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_created_scheme_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint32 crafting_material_count = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_crafting_material_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_crafting_material_count());
       }
     }
     // uint64 material_reward_revision = 10;
@@ -1202,18 +1450,18 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
             this_._internal_material_reward_revision());
       }
     }
-    // uint32 crafting_material_count = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
-      if (this_._internal_crafting_material_count() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_crafting_material_count());
-      }
-    }
     // uint32 enhancement_stone_count = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_enhancement_stone_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enhancement_stone_count());
+      }
+    }
+    // uint32 season_catchup_points = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_season_catchup_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_catchup_points());
       }
     }
     // uint64 season_catchup_spent = 14;
@@ -1223,48 +1471,118 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
             this_._internal_season_catchup_spent());
       }
     }
-    // uint32 season_catchup_points = 13;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
-      if (this_._internal_season_catchup_points() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_season_catchup_points());
-      }
-    }
     // uint32 trial_milestone_id = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_trial_milestone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_trial_milestone_id());
       }
     }
-    // uint32 trial_milestone_sand_count = 16;
+    // bool enhance_success = 5;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_enhance_success() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool equipment_guaranteed_by_pity = 25;
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_equipment_guaranteed_by_pity() != 0) {
+        total_size += 3;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    // uint32 trial_milestone_sand_count = 16;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_trial_milestone_sand_count() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_trial_milestone_sand_count());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
     // uint32 trial_milestone_voucher_count = 17;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_trial_milestone_voucher_count() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_trial_milestone_voucher_count());
       }
     }
     // uint64 redeemed_artifact_item_id = 18;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_redeemed_artifact_item_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_redeemed_artifact_item_id());
       }
     }
     // uint32 redeemed_artifact_config_id = 19;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_redeemed_artifact_config_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_redeemed_artifact_config_id());
+      }
+    }
+    // uint32 enhance_pity_count = 20;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_enhance_pity_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_enhance_pity_count());
+      }
+    }
+    // uint32 crafting_tradable_count = 21;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_crafting_tradable_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_crafting_tradable_count());
+      }
+    }
+    // uint32 enhancement_tradable_count = 22;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_enhancement_tradable_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_enhancement_tradable_count());
+      }
+    }
+    // uint32 equipment_quality_tier = 23;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_equipment_quality_tier() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_equipment_quality_tier());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+    // uint32 equipment_polish_pity_count = 24;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_equipment_polish_pity_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_equipment_polish_pity_count());
+      }
+    }
+    // uint64 crafted_skill_book_id = 26;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_crafted_skill_book_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_crafted_skill_book_id());
+      }
+    }
+    // uint64 scroll_craft_revision = 28;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_scroll_craft_revision() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_scroll_craft_revision());
+      }
+    }
+    // uint32 crafted_skill_table_id = 27;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_crafted_skill_table_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_crafted_skill_table_id());
+      }
+    }
+    // uint32 scroll_bonus_fragments = 29;
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (this_._internal_scroll_bonus_fragments() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_scroll_bonus_fragments());
       }
     }
   }
@@ -1301,40 +1619,40 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_kind() != 0) {
-        _this->_impl_.kind_ = from._impl_.kind_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (from._internal_enhance_success() != 0) {
-        _this->_impl_.enhance_success_ = from._impl_.enhance_success_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_seq() != 0) {
         _this->_impl_.seq_ = from._impl_.seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_enhance_level() != 0) {
         _this->_impl_.enhance_level_ = from._impl_.enhance_level_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_equipment_item_id() != 0) {
+        _this->_impl_.equipment_item_id_ = from._impl_.equipment_item_id_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_created_scheme_id() != 0) {
-        _this->_impl_.created_scheme_id_ = from._impl_.created_scheme_id_;
+      if (from._internal_forge_revision() != 0) {
+        _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_equipment_item_id() != 0) {
-        _this->_impl_.equipment_item_id_ = from._impl_.equipment_item_id_;
+      if (from._internal_created_scheme_id() != 0) {
+        _this->_impl_.created_scheme_id_ = from._impl_.created_scheme_id_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_forge_revision() != 0) {
-        _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
+      if (from._internal_crafting_material_count() != 0) {
+        _this->_impl_.crafting_material_count_ = from._impl_.crafting_material_count_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
@@ -1343,13 +1661,13 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
-      if (from._internal_crafting_material_count() != 0) {
-        _this->_impl_.crafting_material_count_ = from._impl_.crafting_material_count_;
+      if (from._internal_enhancement_stone_count() != 0) {
+        _this->_impl_.enhancement_stone_count_ = from._impl_.enhancement_stone_count_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      if (from._internal_enhancement_stone_count() != 0) {
-        _this->_impl_.enhancement_stone_count_ = from._impl_.enhancement_stone_count_;
+      if (from._internal_season_catchup_points() != 0) {
+        _this->_impl_.season_catchup_points_ = from._impl_.season_catchup_points_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
@@ -1358,35 +1676,87 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
-      if (from._internal_season_catchup_points() != 0) {
-        _this->_impl_.season_catchup_points_ = from._impl_.season_catchup_points_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_trial_milestone_id() != 0) {
         _this->_impl_.trial_milestone_id_ = from._impl_.trial_milestone_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_enhance_success() != 0) {
+        _this->_impl_.enhance_success_ = from._impl_.enhance_success_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_equipment_guaranteed_by_pity() != 0) {
+        _this->_impl_.equipment_guaranteed_by_pity_ = from._impl_.equipment_guaranteed_by_pity_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_trial_milestone_sand_count() != 0) {
         _this->_impl_.trial_milestone_sand_count_ = from._impl_.trial_milestone_sand_count_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_trial_milestone_voucher_count() != 0) {
         _this->_impl_.trial_milestone_voucher_count_ = from._impl_.trial_milestone_voucher_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_redeemed_artifact_item_id() != 0) {
         _this->_impl_.redeemed_artifact_item_id_ = from._impl_.redeemed_artifact_item_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_redeemed_artifact_config_id() != 0) {
         _this->_impl_.redeemed_artifact_config_id_ = from._impl_.redeemed_artifact_config_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_enhance_pity_count() != 0) {
+        _this->_impl_.enhance_pity_count_ = from._impl_.enhance_pity_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_crafting_tradable_count() != 0) {
+        _this->_impl_.crafting_tradable_count_ = from._impl_.crafting_tradable_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_enhancement_tradable_count() != 0) {
+        _this->_impl_.enhancement_tradable_count_ = from._impl_.enhancement_tradable_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_equipment_quality_tier() != 0) {
+        _this->_impl_.equipment_quality_tier_ = from._impl_.equipment_quality_tier_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x1f000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_equipment_polish_pity_count() != 0) {
+        _this->_impl_.equipment_polish_pity_count_ = from._impl_.equipment_polish_pity_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_crafted_skill_book_id() != 0) {
+        _this->_impl_.crafted_skill_book_id_ = from._impl_.crafted_skill_book_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_scroll_craft_revision() != 0) {
+        _this->_impl_.scroll_craft_revision_ = from._impl_.scroll_craft_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_crafted_skill_table_id() != 0) {
+        _this->_impl_.crafted_skill_table_id_ = from._impl_.crafted_skill_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (from._internal_scroll_bonus_fragments() != 0) {
+        _this->_impl_.scroll_bonus_fragments_ = from._impl_.scroll_bonus_fragments_;
       }
     }
   }
@@ -1411,8 +1781,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.redeemed_artifact_config_id_)
-      + sizeof(ClientRequestRecord::_impl_.redeemed_artifact_config_id_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.scroll_bonus_fragments_)
+      + sizeof(ClientRequestRecord::_impl_.scroll_bonus_fragments_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));
@@ -1453,9 +1823,9 @@ inline void EquipmentMaterialRewardLedger::SharedCtor(::_pb::Arena* PROTOBUF_NUL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, day_starts_at_ms_),
            0,
-           offsetof(Impl_, earned_today_) -
+           offsetof(Impl_, migrated_to_v2_) -
                offsetof(Impl_, day_starts_at_ms_) +
-               sizeof(Impl_::earned_today_));
+               sizeof(Impl_::migrated_to_v2_));
 }
 EquipmentMaterialRewardLedger::~EquipmentMaterialRewardLedger() {
   // @@protoc_insertion_point(destructor:EquipmentMaterialRewardLedger)
@@ -1505,10 +1875,15 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.day_starts_at_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.earned_today_) -
-        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.earned_today_));
+        reinterpret_cast<char*>(&_impl_.earned_this_week_) -
+        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.earned_this_week_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.week_starts_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.migrated_to_v2_) -
+        reinterpret_cast<char*>(&_impl_.week_starts_at_ms_)) + sizeof(_impl_.migrated_to_v2_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1543,7 +1918,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
   }
 
   // uint32 earned_today = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_earned_today() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1561,11 +1936,65 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
   }
 
   // uint64 revision = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           4, this_._internal_revision(), target);
+    }
+  }
+
+  // uint32 lifetime_earned = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_lifetime_earned() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_lifetime_earned(), target);
+    }
+  }
+
+  // uint32 tradable_earned_total = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_tradable_earned_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_tradable_earned_total(), target);
+    }
+  }
+
+  // uint64 available_tradable_units = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_available_tradable_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_available_tradable_units(), target);
+    }
+  }
+
+  // uint64 week_starts_at_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_week_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_week_starts_at_ms(), target);
+    }
+  }
+
+  // uint32 earned_this_week = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_earned_this_week() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_earned_this_week(), target);
+    }
+  }
+
+  // bool migrated_to_v2 = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_migrated_to_v2() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          10, this_._internal_migrated_to_v2(), target);
     }
   }
 
@@ -1594,7 +2023,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // uint64 day_starts_at_ms = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_day_starts_at_ms() != 0) {
@@ -1609,18 +2038,61 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
             this_._internal_available_units());
       }
     }
-    // uint64 revision = 4;
+    // uint32 earned_today = 2;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_earned_today() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_earned_today());
+      }
+    }
+    // uint32 lifetime_earned = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_lifetime_earned() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_lifetime_earned());
+      }
+    }
+    // uint64 revision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_revision());
       }
     }
-    // uint32 earned_today = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (this_._internal_earned_today() != 0) {
+    // uint64 available_tradable_units = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_available_tradable_units() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_available_tradable_units());
+      }
+    }
+    // uint32 tradable_earned_total = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_tradable_earned_total() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_earned_today());
+            this_._internal_tradable_earned_total());
+      }
+    }
+    // uint32 earned_this_week = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_earned_this_week() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_earned_this_week());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 week_starts_at_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_week_starts_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_week_starts_at_ms());
+      }
+    }
+    // bool migrated_to_v2 = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_migrated_to_v2() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -1641,7 +2113,7 @@ void EquipmentMaterialRewardLedger::MergeImpl(::google::protobuf::MessageLite& t
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_day_starts_at_ms() != 0) {
         _this->_impl_.day_starts_at_ms_ = from._impl_.day_starts_at_ms_;
@@ -1653,13 +2125,45 @@ void EquipmentMaterialRewardLedger::MergeImpl(::google::protobuf::MessageLite& t
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_earned_today() != 0) {
+        _this->_impl_.earned_today_ = from._impl_.earned_today_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_lifetime_earned() != 0) {
+        _this->_impl_.lifetime_earned_ = from._impl_.lifetime_earned_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_revision() != 0) {
         _this->_impl_.revision_ = from._impl_.revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (from._internal_earned_today() != 0) {
-        _this->_impl_.earned_today_ = from._impl_.earned_today_;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_available_tradable_units() != 0) {
+        _this->_impl_.available_tradable_units_ = from._impl_.available_tradable_units_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_tradable_earned_total() != 0) {
+        _this->_impl_.tradable_earned_total_ = from._impl_.tradable_earned_total_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_earned_this_week() != 0) {
+        _this->_impl_.earned_this_week_ = from._impl_.earned_this_week_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_week_starts_at_ms() != 0) {
+        _this->_impl_.week_starts_at_ms_ = from._impl_.week_starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_migrated_to_v2() != 0) {
+        _this->_impl_.migrated_to_v2_ = from._impl_.migrated_to_v2_;
       }
     }
   }
@@ -1681,8 +2185,8 @@ void EquipmentMaterialRewardLedger::InternalSwap(EquipmentMaterialRewardLedger* 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_)
-      + sizeof(EquipmentMaterialRewardLedger::_impl_.earned_today_)
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_)
+      + sizeof(EquipmentMaterialRewardLedger::_impl_.migrated_to_v2_)
       - PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_)>(
           reinterpret_cast<char*>(&_impl_.day_starts_at_ms_),
           reinterpret_cast<char*>(&other->_impl_.day_starts_at_ms_));

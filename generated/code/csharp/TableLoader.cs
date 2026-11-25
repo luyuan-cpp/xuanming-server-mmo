@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 64;
+        public const int TableCount = 68;
 
         private static Action s_loadSuccessCallback;
 
@@ -59,6 +59,7 @@ namespace MmorpgClient.Table
                 CooldownTableManager.FileName(useBinary),
                 DungeonTableManager.FileName(useBinary),
                 EquipAffixPoolTableManager.FileName(useBinary),
+                EquipAffixQualityTableManager.FileName(useBinary),
                 EquipAffixRuleTableManager.FileName(useBinary),
                 EquipArtifactTableManager.FileName(useBinary),
                 EquipAttributeTableManager.FileName(useBinary),
@@ -95,8 +96,11 @@ namespace MmorpgClient.Table
                 SeasonSealTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
                 SkillPermissionTableManager.FileName(useBinary),
+                SkillScrollCraftTableManager.FileName(useBinary),
                 TestTableManager.FileName(useBinary),
                 TestMultiKeyTableManager.FileName(useBinary),
+                TournamentRewardTableManager.FileName(useBinary),
+                TournamentRuleTableManager.FileName(useBinary),
                 TrialJournalEntryTableManager.FileName(useBinary),
                 TrialJournalMilestoneTableManager.FileName(useBinary),
                 TrialJournalSealTableManager.FileName(useBinary),
@@ -130,6 +134,7 @@ namespace MmorpgClient.Table
             CooldownTableManager.Instance.Load(configDir, useBinary);
             DungeonTableManager.Instance.Load(configDir, useBinary);
             EquipAffixPoolTableManager.Instance.Load(configDir, useBinary);
+            EquipAffixQualityTableManager.Instance.Load(configDir, useBinary);
             EquipAffixRuleTableManager.Instance.Load(configDir, useBinary);
             EquipArtifactTableManager.Instance.Load(configDir, useBinary);
             EquipAttributeTableManager.Instance.Load(configDir, useBinary);
@@ -166,8 +171,11 @@ namespace MmorpgClient.Table
             SeasonSealTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
+            SkillScrollCraftTableManager.Instance.Load(configDir, useBinary);
             TestTableManager.Instance.Load(configDir, useBinary);
             TestMultiKeyTableManager.Instance.Load(configDir, useBinary);
+            TournamentRewardTableManager.Instance.Load(configDir, useBinary);
+            TournamentRuleTableManager.Instance.Load(configDir, useBinary);
             TrialJournalEntryTableManager.Instance.Load(configDir, useBinary);
             TrialJournalMilestoneTableManager.Instance.Load(configDir, useBinary);
             TrialJournalSealTableManager.Instance.Load(configDir, useBinary);
@@ -239,6 +247,8 @@ namespace MmorpgClient.Table
                 DungeonTableManager.Instance.LoadFromBytes, DungeonTableManager.Instance.LoadFromJson);
             LoadOne(EquipAffixPoolTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipAffixPoolTableManager.Instance.LoadFromBytes, EquipAffixPoolTableManager.Instance.LoadFromJson);
+            LoadOne(EquipAffixQualityTableManager.FileName(useBinary), byteProvider, useBinary,
+                EquipAffixQualityTableManager.Instance.LoadFromBytes, EquipAffixQualityTableManager.Instance.LoadFromJson);
             LoadOne(EquipAffixRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipAffixRuleTableManager.Instance.LoadFromBytes, EquipAffixRuleTableManager.Instance.LoadFromJson);
             LoadOne(EquipArtifactTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -311,10 +321,16 @@ namespace MmorpgClient.Table
                 SkillTableManager.Instance.LoadFromBytes, SkillTableManager.Instance.LoadFromJson);
             LoadOne(SkillPermissionTableManager.FileName(useBinary), byteProvider, useBinary,
                 SkillPermissionTableManager.Instance.LoadFromBytes, SkillPermissionTableManager.Instance.LoadFromJson);
+            LoadOne(SkillScrollCraftTableManager.FileName(useBinary), byteProvider, useBinary,
+                SkillScrollCraftTableManager.Instance.LoadFromBytes, SkillScrollCraftTableManager.Instance.LoadFromJson);
             LoadOne(TestTableManager.FileName(useBinary), byteProvider, useBinary,
                 TestTableManager.Instance.LoadFromBytes, TestTableManager.Instance.LoadFromJson);
             LoadOne(TestMultiKeyTableManager.FileName(useBinary), byteProvider, useBinary,
                 TestMultiKeyTableManager.Instance.LoadFromBytes, TestMultiKeyTableManager.Instance.LoadFromJson);
+            LoadOne(TournamentRewardTableManager.FileName(useBinary), byteProvider, useBinary,
+                TournamentRewardTableManager.Instance.LoadFromBytes, TournamentRewardTableManager.Instance.LoadFromJson);
+            LoadOne(TournamentRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                TournamentRuleTableManager.Instance.LoadFromBytes, TournamentRuleTableManager.Instance.LoadFromJson);
             LoadOne(TrialJournalEntryTableManager.FileName(useBinary), byteProvider, useBinary,
                 TrialJournalEntryTableManager.Instance.LoadFromBytes, TrialJournalEntryTableManager.Instance.LoadFromJson);
             LoadOne(TrialJournalMilestoneTableManager.FileName(useBinary), byteProvider, useBinary,

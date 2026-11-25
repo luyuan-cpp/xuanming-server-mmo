@@ -37,4 +37,22 @@ enum skill_error {
 
   kSkillUpgradeBusy = 7013;
 
+  kSkillScrollInvalid = 7014;
+
+  kSkillBookNotFound = 7015;
+
+  kSkillBookNotDismantlable = 7016;
+
+  kSkillCraftMaterialNotEnough = 7017;
+
+  kSkillCraftRevisionChanged = 7018;
+
+  kSkillCraftBookRequired = 7019;
+
+  kSkillAlreadyBookUnlocked = 7020;
+
+  kSkillProxyStallRequiresMaster = 7021;
+
+  kSkillProxyFeeInvalid = 7022;
+
 };

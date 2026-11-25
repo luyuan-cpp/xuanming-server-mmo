@@ -210,7 +210,7 @@ EffectiveSealCounts CountEffectiveSeals(const PlayerTrialJournalComp& comp, uint
                     ++counts.permanentLit;
                 }
             }
-            if (lit && entry.chapter_id() == trialjournal::kChapterBreakthrough &&
+            if (lit && entry.season_id() == 0 &&
                 entry.difficulty() == 1 &&
                 seal->condition_type() == static_cast<uint32_t>(trialjournal::SealConditionType::kClear)) {
                 counts.anyNormalBreakthroughCleared = true;
@@ -287,6 +287,8 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, TrialJournalSnapshot&
 
     const uint32_t activeSeasonId = PlayerSeasonSystem::ActiveSeasonId(nowMs);
     const auto counts = CountEffectiveSeals(*journal, activeSeasonId);
+    const bool hardBossTrialUnlocked =
+        journal->normal_boss_trial_cleared() || counts.anyNormalBreakthroughCleared;
 
     // 收集当前全部有效目录行，按 chapter_id 与 sort_order 排序。
     std::map<uint32_t, std::vector<const TrialJournalEntryTable*>> entriesByChapter;
@@ -300,6 +302,7 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, TrialJournalSnapshot&
     out.set_state_revision(journal->state_revision());
     out.set_total_permanent_lit_seals(counts.permanentLit);
     out.set_total_permanent_seals(counts.permanentTotal);
+    out.set_hard_boss_trial_unlocked(hardBossTrialUnlocked);
     out.set_voucher_balance(
         BagService::RemovableCount(player, bags->bags[kInventory], trialjournal::kBoundArtifactVoucherItemId));
     out.set_bound_sand_balance(
@@ -392,7 +395,7 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, TrialJournalSnapshot&
                 entryView->set_can_enter(false);
                 entryView->set_enter_blocked_reason("当前正在战斗中，暂不能前往试炼");
             } else if (entry->unlock_mode() == trialjournal::kUnlockModeRequireAnyNormalBreakthroughClear &&
-                       !counts.anyNormalBreakthroughCleared) {
+                       !hardBossTrialUnlocked) {
                 entryView->set_can_enter(false);
                 entryView->set_enter_blocked_reason("本人普通首领试炼通关一次后开启困难");
             } else {
@@ -542,7 +545,40 @@ bool PlayerTrialJournalSystem::ValidateTables() {
     return true;
 }
 
+namespace {
+
+bool IsNormalBossTrialVictory(const BattleSettlementData& settlement) {
+    return settlement.battle_id() != 0 &&
+           settlement.player_id() != 0 &&
+           !settlement.fled() &&
+           settlement.total_rounds() > 0 &&
+           settlement.boss_trial_kind() >= 1u &&
+           settlement.boss_trial_kind() <= 4u &&
+           settlement.battle_difficulty() == 1u &&
+           trialjournal::IsPlayerVictory(settlement.outcome(), settlement.player_team_index());
+}
+
+} // namespace
+
+bool PlayerTrialJournalSystem::HasClearedAnyNormalBossTrial(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        return false;
+    }
+    const auto* journal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
+    if (journal == nullptr) {
+        return false;
+    }
+    if (journal->normal_boss_trial_cleared()) {
+        return true;
+    }
+    const auto counts = CountEffectiveSeals(*journal, /*activeSeasonId=*/0u);
+    return counts.anyNormalBreakthroughCleared;
+}
+
 bool PlayerTrialJournalSystem::HasJournalUpdate(const BattleSettlementData& settlement) {
+    if (IsNormalBossTrialVictory(settlement)) {
+        return true;
+    }
     if (!trialjournal::IsValidTrialSettlement(settlement)) {
         return false;
     }
@@ -558,14 +594,31 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
                                                        SettlementDelta& delta) {
     candidate = current;
     delta = SettlementDelta{};
+    if (IsNormalBossTrialVictory(settlement) && !candidate.normal_boss_trial_cleared()) {
+        candidate.set_normal_boss_trial_cleared(true);
+        delta.changed = true;
+    }
     if (!trialjournal::IsValidTrialSettlement(settlement)) {
+        if (delta.changed) {
+            BumpRevision(candidate);
+        }
         return kSuccess;
     }
 
     const auto& facts = settlement.trial_facts();
     const auto* entry = TrialJournalEntryTableManager::Instance().FindByIdSilent(facts.journal_entry_id()).first;
     if (entry == nullptr) {
+        if (delta.changed) {
+            BumpRevision(candidate);
+        }
         return kSuccess;
+    }
+    // 赛季卷严格按赛季号匹配，且拒收已过季迟到结算写进非当前季档。
+    if (entry->season_id() != 0) {
+        const uint32_t activeSeasonId = PlayerSeasonSystem::ActiveSeasonId(nowMs);
+        if (facts.season_id() != entry->season_id() || activeSeasonId != entry->season_id()) {
+            return kSuccess;
+        }
     }
     delta.entryId = entry->id();
 
@@ -589,8 +642,9 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
         }
     }
 
-    // 2. 只有胜出才刷新对应 (entry_id, frozen_rule_version) 的单人或好友合战最佳回合（迟到旧版只更新旧版，不覆写新版）。
-    if (trialjournal::IsPlayerVictory(settlement.outcome(), settlement.player_team_index())) {
+    // 2. 只有 PVE 试炼/护卫救援（source_kind 1/2）胜出才刷新单人或好友合战最佳回合（PVP 卷三格只点亮战法印）。
+    if ((entry->source_kind() == 1u || entry->source_kind() == 2u) &&
+        trialjournal::IsPlayerVictory(settlement.outcome(), settlement.player_team_index())) {
         const uint64_t achievedAtMs = settlement.finished_at_ms() != 0 ? settlement.finished_at_ms() : nowMs;
         if (trialjournal::IsSoloTrial(facts)) {
             const auto* existing = FindEntryRecord(candidate, entry->id(), facts.trial_rule_version());
@@ -740,6 +794,7 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
         sandParam.itemPBComp.set_item_id(kInvalidGuid);
         sandParam.itemPBComp.set_config_id(trialjournal::kBoundReforgeSandItemId);
         sandParam.itemPBComp.set_size(milestone->bound_sand_count());
+        sandParam.itemPBComp.set_bound(true);
         gainedParams.push_back(std::move(sandParam));
     }
     if (milestone->bound_artifact_voucher_count() > 0) {
@@ -748,11 +803,13 @@ void PlayerTrialJournalSystem::ClaimMilestone(entt::entity player,
         voucherParam.itemPBComp.set_item_id(kInvalidGuid);
         voucherParam.itemPBComp.set_config_id(trialjournal::kBoundArtifactVoucherItemId);
         voucherParam.itemPBComp.set_size(milestone->bound_artifact_voucher_count());
+        voucherParam.itemPBComp.set_bound(true);
         gainedParams.push_back(std::move(voucherParam));
     }
 
     if (!gainedCounts.empty()) {
-        if (const uint32_t spaceErr = BagService::CheckInventoryExchangeSpace(player, {}, gainedCounts);
+        if (const uint32_t spaceErr = BagService::CheckInventoryExchangeSpace(
+                player, {}, gainedCounts, /*tradableOnly=*/false, /*gainedBound=*/true);
             spaceErr != kSuccess) {
             finish(kTrialJournalBagFull);
             return;
@@ -908,7 +965,8 @@ void PlayerTrialJournalSystem::RedeemArtifactVoucher(entt::entity player,
         finish(kTrialJournalUnavailable);
         return;
     }
-    if (BagService::CheckInventoryExchangeSpace(player, consumed, gainedCounts) != kSuccess) {
+    if (BagService::CheckInventoryExchangeSpace(player, consumed, gainedCounts,
+                                                /*tradableOnly=*/false, /*gainedBound=*/true) != kSuccess) {
         finish(kTrialJournalBagFull);
         return;
     }

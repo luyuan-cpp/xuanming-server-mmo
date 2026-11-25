@@ -123,6 +123,7 @@ set(SOURCE_FILES
     player/system/player_appearance.cpp
     player/system/player_season.cpp
     player/system/player_trial_journal.cpp
+    player/system/player_craft.cpp
     player/system/player_rename.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp

@@ -325,9 +325,9 @@ func (g GlobalMatchConf) validateSubPools() error {
 	split := false
 	for _, entry := range g.SubPools {
 		switch matchpb.MatchMode(entry.Mode) {
-		case matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
+		case matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_TEAM, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
 		default:
-			return fmt.Errorf("GlobalMatch.SubPools: mode %d has no multi-player pools to split (allowed: PVE_TEAM, 1V1, 5V5, PVP_TEAM)", entry.Mode)
+			return fmt.Errorf("GlobalMatch.SubPools: mode %d has no multi-player pools to split (allowed: PVE_TEAM, 1V1, 5V5, PVP_TEAM, POLARITY_5V5)", entry.Mode)
 		}
 		if entry.Count < 1 || entry.Count > MaxSubPools {
 			return fmt.Errorf("GlobalMatch.SubPools: mode %d config %d Count must be in 1..%d, got %d", entry.Mode, entry.ConfigId, MaxSubPools, entry.Count)

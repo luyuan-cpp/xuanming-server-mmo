@@ -56,6 +56,9 @@ message EquipEnhancePreview {
   uint32 bonus_permyriad = 7;     // 升到 next_level 后基础属性的总加成(万分比)
   uint32 fail_level_loss = 8;     // 失败时掉几级,0 = 不掉
   string material_icon_key = 9;
+  uint32 pity_limit = 10;         // 保底必成上限次数（0 = 无保底；>0 时满 pity_limit 次必成，客户端须精确公示）
+  uint32 current_pity_count = 11; // 当前已累计失败次数（0..pity_limit-1）
+  bool pity_guaranteed_next = 12; // true = 本次点击已达保底（100% 必成）
 }
 
 // 实例与布局分离；显示信息不写入玩家持久化记录。
@@ -85,6 +88,10 @@ message BagItemInfo {
   uint32 equip_profile = 21;
   repeated EquipFixedAffixSlotInfo fixed_affix_slots = 22;
   EquipArtifactInfo artifact = 23;
+  uint32 enhance_pity_count = 24; // 装备：当前目标强化等级的失败保底累计次数
+  bool bound = 25;                // true = 仅自用绑定（不可交易/上架/赠送）
+  string crafter_name = 26;       // 宗师打造/打磨极品永久署名（空 = 无署名）
+  uint64 crafter_player_id = 27;  // 宗师玩家 ID（仅追溯）
 }
 
 message BagSlotInfo {
@@ -185,6 +192,9 @@ message EnhanceEquipRequest {
   // 0 = 旧客户端,不去重。键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):
   // 下线重登、换节点、scene 重启之后照样认得;被挤出账本的旧键再来按新的一次强化处理,仍有 expected_level 兜底。
   uint64 client_request_id = 3;
+  // 乐观比较当前保底累计次数（+11 等概率保底行使用）：客户端显式携带时须与服务器一致，否则拒回 kEquipEnhanceLevelChanged，
+  // 配合 client_request_id 杜绝概率失败不改等级场景下的弱网重复扣料。
+  optional uint32 expected_pity_count = 4;
 }
 message EnhanceEquipResponse {
   TipInfoMessage error_message = 1;
@@ -197,6 +207,8 @@ message EnhanceEquipResponse {
   // true = 这一次是重发(client_request_id 命中了已受理的那一次):没有再扣、没有再掷;
   // success / enhance_level 是首次的结果,bag / equipment 是此刻的状态。客户端按首次那一次的结果展示。
   bool replayed = 6;
+  uint32 enhance_pity_count = 7; // 操作后的保底累计次数（成功归零，失败 +1）
+  uint32 enhance_pity_limit = 8; // 本级保底上限（0 = 无保底）
 }
 
 // 镶嵌:把人物背包里的一颗宝石嵌进装备的指定孔位。按宝石的 config 消耗 1 颗(不指定哪一堆);
@@ -256,6 +268,34 @@ message EquipFixedAffixInfo {
   uint32 unit = 9; // 1相对百分比、2概率/抗性百分点。
   uint32 material_config_id = 10;
   uint32 material_count = 11;
+  uint32 quality_tier = 12;               // 5 档品相（1凡品..5极品，0 = 规则目录展示满值）。
+  string quality_name = 13;               // 品相展示名（凡品/良品/上品/珍品/极品）。
+  uint32 quality_ratio_pct = 14;          // 占满值百分比（80/85/90/95/100）。
+  uint32 max_value_bps = 15;              // 该词条满值万分比（与表 value_permyriad 一致）。
+  uint32 polish_pity_count = 16;          // 当前累计未出极品次数（0..7）。
+  uint32 polish_pity_limit = 17;          // 保底上限（8 次必出极品；豁免速度词条为 0）。
+  bool polish_exempt = 18;                // true = G02 速度词条豁免品相随机，固定满值。
+  uint32 polish_material_config_id = 19;  // 打磨消耗材料（3403 重铸砂）。
+  uint32 polish_material_count = 20;      // 打磨消耗数（1）。
+  uint64 polish_gold_cost = 21;           // 打磨消耗银两（20）。
+  uint32 reforge_material_config_id = 22; // 重铸换词条消耗材料（3403 重铸砂）。
+  uint32 reforge_material_count = 23;     // 重铸消耗数（1）。
+  uint64 reforge_gold_cost = 24;          // 重铸消耗银两（20）。
+}
+message EquipAffixQualityInfo {
+  uint32 quality_tier = 1;
+  string name = 2;
+  uint32 ratio_pct = 3;
+  uint32 apprentice_rate_bps = 4;
+  uint32 artisan_rate_bps = 5;
+  uint32 master_rate_bps = 6;
+}
+message CraftMasteryInfo {
+  uint32 tier = 1;                  // 1学徒、2巧匠、3宗师。
+  string tier_name = 2;
+  uint32 exp = 3;
+  uint32 next_tier_exp = 4;         // 满级宗师为 0。
+  uint32 top_quality_rate_bps = 5;  // 当前生效的极品概率（万分比：500/700/1000）或制卷返页概率。
 }
 message EquipFixedAffixSlotInfo {
   uint32 slot = 1;
@@ -278,12 +318,18 @@ message EquipmentCraftChoice {
     UNSPECIFIED = 0;
     CREATE_ITEM = 1;
     INSTALL_AFFIX = 2;
+    REFORGE_AFFIX = 3; // 同槽重铸换词条（1重铸砂+20银两，100%无损保留当前品相与保底进度）。
+    POLISH_AFFIX = 4;  // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
   }
   Operation operation = 1;
-  uint32 config_id = 2; // CREATE_ITEM使用；INSTALL_AFFIX必须为0。
-  uint64 item_id = 3;   // INSTALL_AFFIX使用；CREATE_ITEM必须为0。
+  uint32 config_id = 2; // CREATE_ITEM使用；其余操作必须为0。
+  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX使用；CREATE_ITEM必须为0。
   uint32 affix_slot = 4;
-  uint32 affix_id = 5;
+  uint32 affix_id = 5;  // INSTALL_AFFIX / REFORGE_AFFIX使用；POLISH_AFFIX为0。
+  bool use_guarantee_charm = 6;        // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。
+  bool allow_bound_materials = 7;      // 防染毒确认：可交易装备默认仅耗可交易材料，需玩家二次确认后传true才可混扣绑定材料。
+  uint64 proxy_master_player_id = 8;   // 主城宗师原子代打摊位摊主ID（0=本人打造）。
+  optional uint32 expected_polish_pity_count = 9; // POLISH_AFFIX可选乐观保底计数校验，配合client_request_id防重放。
 }
 message EquipmentCraftMaterial {
   uint32 config_id = 1;
@@ -305,6 +351,8 @@ message GetEquipmentCraftRulesResponse {
   uint64 forge_revision = 3;
   repeated EquipmentCraftRecipe recipes = 4;
   repeated EquipFixedAffixInfo affixes = 5;
+  repeated EquipAffixQualityInfo quality_tiers = 6; // 5 档品相与概率公示表。
+  CraftMasteryInfo forge_mastery = 7;               // 本人铸器手艺熟练度快照。
 }
 message EquipmentCraftPreview {
   EquipmentCraftChoice choice = 1;
@@ -314,6 +362,11 @@ message EquipmentCraftPreview {
   EquipmentCraftMaterial material = 5;
   bool available = 6;
   uint32 unavailable_tip = 7;
+  uint64 gold_cost = 8;
+  EquipmentCraftMaterial extra_material = 9; // 定星保底符等可选附加材料展示。
+  uint64 proxy_fee_gold = 10;                // 主城宗师代打手工费（银两）。
+  string proxy_master_name = 11;             // 代打宗师名。
+  bool will_bind_item = 12;                  // true = 本次混用绑定材料将使原可交易装备变为仅自用。
 }
 message PreviewEquipmentCraftRequest { EquipmentCraftChoice choice = 1; }
 message PreviewEquipmentCraftResponse {
@@ -343,6 +396,10 @@ message CommitEquipmentCraftResponse {
   uint64 current_forge_revision = 8;
   BagInfo bag = 9;
   BagInfo equipment = 10;
+  uint32 result_quality_tier = 11;        // 装条/打磨后的品相档位（1..5）。
+  uint32 result_polish_pity_count = 12;   // 打磨后的单条保底计数（出极品归0）。
+  bool guaranteed_by_pity = 13;           // true = 本次由8次硬保底或定星保底符保底出极品。
+  CraftMasteryInfo forge_mastery = 14;    // 操作后的最新铸器熟练度。
 }
 
 // 额度由权威战斗结算产生。PVE/PVP共享游戏日上限，未领取余额跨日保留。
@@ -360,6 +417,17 @@ message EquipmentMaterialRewardSnapshot {
   EquipmentCraftMaterial crafting_material = 10;
   EquipmentCraftMaterial enhancement_stone = 11;
   bool can_claim = 12;
+  uint32 lifetime_earned = 13;          // 阶段一永久首套累计已获份数（上限 660）
+  uint32 lifetime_limit = 14;           // 阶段一首套上限（660）
+  uint32 tradable_earned_total = 15;    // 阶段一累计已获可交易份数（上限 60）
+  uint32 tradable_lifetime_limit = 16;  // 阶段一可交易上限（60）
+  uint64 available_tradable_units = 17; // 当前未领总余额中可交易子集
+  uint32 batch_tradable_units = 18;     // 本次可领批次中包含的可交易份数（优先分给打造的份数，余数分给强化石）
+  bool weekly_phase_active = 19;        // true = 已满 660 进入阶段二（+11 顶格周平滑精进期，每周 100 绑定）
+  uint64 week_starts_at_ms = 20;        // 阶段二当前游戏周起点（UTC+8 周一 05:00）
+  uint64 next_week_reset_at_ms = 21;    // 阶段二下次周重置时刻
+  uint32 earned_this_week = 22;         // 阶段二本周已获绑定份数
+  uint32 weekly_limit = 23;             // 阶段二每周上限（100）
 }
 message GetEquipmentMaterialRewardRequest {}
 message GetEquipmentMaterialRewardResponse {

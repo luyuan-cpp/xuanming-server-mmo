@@ -39,6 +39,15 @@ const (
 	SkillError_kSkillMaxRankReached                 SkillError = 7011
 	SkillError_kSkillGoldNotEnough                  SkillError = 7012
 	SkillError_kSkillUpgradeBusy                    SkillError = 7013
+	SkillError_kSkillScrollInvalid                  SkillError = 7014
+	SkillError_kSkillBookNotFound                   SkillError = 7015
+	SkillError_kSkillBookNotDismantlable            SkillError = 7016
+	SkillError_kSkillCraftMaterialNotEnough         SkillError = 7017
+	SkillError_kSkillCraftRevisionChanged           SkillError = 7018
+	SkillError_kSkillCraftBookRequired              SkillError = 7019
+	SkillError_kSkillAlreadyBookUnlocked            SkillError = 7020
+	SkillError_kSkillProxyStallRequiresMaster       SkillError = 7021
+	SkillError_kSkillProxyFeeInvalid                SkillError = 7022
 )
 
 // Enum value maps for SkillError.
@@ -59,6 +68,15 @@ var (
 		7011: "kSkillMaxRankReached",
 		7012: "kSkillGoldNotEnough",
 		7013: "kSkillUpgradeBusy",
+		7014: "kSkillScrollInvalid",
+		7015: "kSkillBookNotFound",
+		7016: "kSkillBookNotDismantlable",
+		7017: "kSkillCraftMaterialNotEnough",
+		7018: "kSkillCraftRevisionChanged",
+		7019: "kSkillCraftBookRequired",
+		7020: "kSkillAlreadyBookUnlocked",
+		7021: "kSkillProxyStallRequiresMaster",
+		7022: "kSkillProxyFeeInvalid",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -76,6 +94,15 @@ var (
 		"kSkillMaxRankReached":                 7011,
 		"kSkillGoldNotEnough":                  7012,
 		"kSkillUpgradeBusy":                    7013,
+		"kSkillScrollInvalid":                  7014,
+		"kSkillBookNotFound":                   7015,
+		"kSkillBookNotDismantlable":            7016,
+		"kSkillCraftMaterialNotEnough":         7017,
+		"kSkillCraftRevisionChanged":           7018,
+		"kSkillCraftBookRequired":              7019,
+		"kSkillAlreadyBookUnlocked":            7020,
+		"kSkillProxyStallRequiresMaster":       7021,
+		"kSkillProxyFeeInvalid":                7022,
 	}
 )
 
@@ -110,7 +137,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\xc1\x03\n" +
+	"\x15skill_error_tip.proto*\xd7\x05\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -126,7 +153,16 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x14kSkillLevelNotEnough\x10\xe26\x12\x19\n" +
 	"\x14kSkillMaxRankReached\x10\xe36\x12\x18\n" +
 	"\x13kSkillGoldNotEnough\x10\xe46\x12\x16\n" +
-	"\x11kSkillUpgradeBusy\x10\xe56B$\n" +
+	"\x11kSkillUpgradeBusy\x10\xe56\x12\x18\n" +
+	"\x13kSkillScrollInvalid\x10\xe66\x12\x17\n" +
+	"\x12kSkillBookNotFound\x10\xe76\x12\x1e\n" +
+	"\x19kSkillBookNotDismantlable\x10\xe86\x12!\n" +
+	"\x1ckSkillCraftMaterialNotEnough\x10\xe96\x12\x1f\n" +
+	"\x1akSkillCraftRevisionChanged\x10\xea6\x12\x1c\n" +
+	"\x17kSkillCraftBookRequired\x10\xeb6\x12\x1e\n" +
+	"\x19kSkillAlreadyBookUnlocked\x10\xec6\x12#\n" +
+	"\x1ekSkillProxyStallRequiresMaster\x10\xed6\x12\x1a\n" +
+	"\x15kSkillProxyFeeInvalid\x10\xee6B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

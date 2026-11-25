@@ -48,6 +48,14 @@ const (
 	EquipError_kEquipGemTypeMismatch          EquipError = 28020
 	EquipError_kEquipGemBagFull               EquipError = 28021
 	EquipError_kEquipEnhanceLevelChanged      EquipError = 28022
+	EquipError_kEquipAffixAlreadyMaxQuality   EquipError = 28023
+	EquipError_kEquipAffixPolishExempt        EquipError = 28024
+	EquipError_kEquipAffixSlotEmpty           EquipError = 28025
+	EquipError_kEquipAffixReforgeSame         EquipError = 28026
+	EquipError_kEquipBindConfirmRequired      EquipError = 28027
+	EquipError_kEquipPolishPityChanged        EquipError = 28028
+	EquipError_kEquipCraftGoldNotEnough       EquipError = 28029
+	EquipError_kEquipProxyMasterUnavailable   EquipError = 28030
 )
 
 // Enum value maps for EquipError.
@@ -77,6 +85,14 @@ var (
 		28020: "kEquipGemTypeMismatch",
 		28021: "kEquipGemBagFull",
 		28022: "kEquipEnhanceLevelChanged",
+		28023: "kEquipAffixAlreadyMaxQuality",
+		28024: "kEquipAffixPolishExempt",
+		28025: "kEquipAffixSlotEmpty",
+		28026: "kEquipAffixReforgeSame",
+		28027: "kEquipBindConfirmRequired",
+		28028: "kEquipPolishPityChanged",
+		28029: "kEquipCraftGoldNotEnough",
+		28030: "kEquipProxyMasterUnavailable",
 	}
 	EquipError_value = map[string]int32{
 		"kEquip_errorOK":                 0,
@@ -103,6 +119,14 @@ var (
 		"kEquipGemTypeMismatch":          28020,
 		"kEquipGemBagFull":               28021,
 		"kEquipEnhanceLevelChanged":      28022,
+		"kEquipAffixAlreadyMaxQuality":   28023,
+		"kEquipAffixPolishExempt":        28024,
+		"kEquipAffixSlotEmpty":           28025,
+		"kEquipAffixReforgeSame":         28026,
+		"kEquipBindConfirmRequired":      28027,
+		"kEquipPolishPityChanged":        28028,
+		"kEquipCraftGoldNotEnough":       28029,
+		"kEquipProxyMasterUnavailable":   28030,
 	}
 )
 
@@ -137,7 +161,7 @@ var File_equip_error_tip_proto protoreflect.FileDescriptor
 
 const file_equip_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15equip_error_tip.proto*\x91\x05\n" +
+	"\x15equip_error_tip.proto*\x92\a\n" +
 	"\vequip_error\x12\x12\n" +
 	"\x0ekEquip_errorOK\x10\x00\x12\x18\n" +
 	"\x12kEquipItemNotFound\x10\xe0\xda\x01\x12\x18\n" +
@@ -162,7 +186,15 @@ const file_equip_error_tip_proto_rawDesc = "" +
 	"\x14kEquipGemSocketEmpty\x10\xf3\xda\x01\x12\x1b\n" +
 	"\x15kEquipGemTypeMismatch\x10\xf4\xda\x01\x12\x16\n" +
 	"\x10kEquipGemBagFull\x10\xf5\xda\x01\x12\x1f\n" +
-	"\x19kEquipEnhanceLevelChanged\x10\xf6\xda\x01B$\n" +
+	"\x19kEquipEnhanceLevelChanged\x10\xf6\xda\x01\x12\"\n" +
+	"\x1ckEquipAffixAlreadyMaxQuality\x10\xf7\xda\x01\x12\x1d\n" +
+	"\x17kEquipAffixPolishExempt\x10\xf8\xda\x01\x12\x1a\n" +
+	"\x14kEquipAffixSlotEmpty\x10\xf9\xda\x01\x12\x1c\n" +
+	"\x16kEquipAffixReforgeSame\x10\xfa\xda\x01\x12\x1f\n" +
+	"\x19kEquipBindConfirmRequired\x10\xfb\xda\x01\x12\x1d\n" +
+	"\x17kEquipPolishPityChanged\x10\xfc\xda\x01\x12\x1e\n" +
+	"\x18kEquipCraftGoldNotEnough\x10\xfd\xda\x01\x12\"\n" +
+	"\x1ckEquipProxyMasterUnavailable\x10\xfe\xda\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -770,8 +770,29 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 			switch (BagService::CheckRemovable(player, bag, quantities))
 			{
 			case BagService::RemovalVerdict::kEnough:
+				// 交易/寄售/帮会捐献禁止扣走绑定堆，否则会把仅自用道具洗成可交易资产。
+				for (const auto& [configId, count] : quantities)
+				{
+					if (count > bag.GetTotalTradableItemCount(configId))
+					{
+						RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+						return;
+					}
+					if (count > BagService::RemovableTradableCount(player, bag, configId))
+					{
+						quantityHeld = true;
+					}
+				}
 				break;
 			case BagService::RemovalVerdict::kHeld:
+				for (const auto& [configId, count] : quantities)
+				{
+					if (count > bag.GetTotalTradableItemCount(configId))
+					{
+						RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
+						return;
+					}
+				}
 				quantityHeld = true;
 				break;
 			case BagService::RemovalVerdict::kVersionSkew:
@@ -789,7 +810,7 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 			for (auto guid : guids)
 			{
 				const auto* item = bag.GetItemCompByGuid(guid);
-				if (item == nullptr || item->ByteSizeLong() > kInstanceBytesLimit)
+				if (item == nullptr || item->bound() || item->ByteSizeLong() > kInstanceBytesLimit)
 				{ RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response); return; }
 				auto* transfer = snapshot.add_items();
 				transfer->set_item_uuid(guid); transfer->set_config_id(item->config_id()); transfer->set_stack_size(item->size());
@@ -859,7 +880,8 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	}
 	else if (!quantities.empty())
 	{
-		error = BagService::RemoveItemsExact(player, bags->bags[kInventory], quantities, txType, request.correlation_id());
+		error = BagService::RemoveItemsExact(player, bags->bags[kInventory], quantities, txType,
+			request.correlation_id(), {}, /*tradableOnly=*/true);
 		mutated = error == kSuccess;
 	}
 	if (error == kSuccess && !guids.empty())

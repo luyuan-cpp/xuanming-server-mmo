@@ -26,6 +26,7 @@
 #include "type_alias/player_session_type_alias.h"
 #include "network/node_utils.h"
 #include "battle/system/player_battle.h"
+#include "player/system/player_pet.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/team_comp.pb.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
@@ -3425,6 +3426,10 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//    (turn-based §22 D72)。
 	//    放在场景绑定成功之后:会话快照与 gate 路由此时才可靠。
 	PlayerBattleSystem::OnPlayerEnterScene(player, enterInfo.enter_gs_type());
+	if (!canContinueEntry()) return stopEntry();
+
+	// 6.5 起步首宠一次性发放（core-gameplay-loop.md §3）：无宠且未领过的新号/老号自动领 1 只灵狐并出战；已有宠只置标记不补发。
+	PetSystem::EnsureStarterPetGranted(player);
 	if (!canContinueEntry()) return stopEntry();
 
 	// 7. 落地恢复钩子(landing-recovery-sync-digest.md §5.1):唤醒资产通道立即重投该玩家的 PENDING 行。

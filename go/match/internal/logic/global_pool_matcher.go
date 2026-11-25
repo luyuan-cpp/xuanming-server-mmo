@@ -470,6 +470,9 @@ func poolPolicy(s *svc.ServiceContext, pool catalog.Pool) poolgroup.Policy {
 		Sides:              pool.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM,
 		PremadeGapStepMs:   s.Config.GlobalMatch.PremadeGapStepMs(),
 		ToleranceCenti: func(anchorWaitMs uint64) float64 {
+			if pool.Mode == pb.MatchMode_MATCH_MODE_PVP_TEAM {
+				return s.ActiveRanked().RankedCurve().AnchorCenti(anchorWaitMs)
+			}
 			return anchorToleranceFor(s, rated, int64(anchorWaitMs/1000)) * 100
 		},
 	}

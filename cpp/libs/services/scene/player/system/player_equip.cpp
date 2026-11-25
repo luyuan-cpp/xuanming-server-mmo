@@ -111,18 +111,26 @@ const EquipEnhanceTable* EnhanceRow(uint32_t profile, uint32_t level) {
 	return found;
 }
 
-// V1 的保证是 profile 契约；热更或坏表不能把必成、零金币和 +10 偷换成旧规则。
+// V1 的保证是 profile 契约：+1..+10 全程 100% 必成（每级 +2%，零金币，无保底）；
+// 唯一满配突破级 +11 走概率提前成 + 硬保底必成（+24% 总加成，不掉级，零金币）。
 bool IsEnhanceRowAvailable(const EquipEnhanceTable& row) {
 	if (row.profile_id() == equiprules::ToRaw(equiprules::EquipmentProfile::kLegacy))
 		return row.success_rate() > 0;
 	if (row.profile_id() != equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic)) return false;
 	const uint32_t level = EnhanceRowLevel(row);
 	const auto* material = ItemRow(row.material_id());
-	return level > 0 && level <= equiprules::kV1MaxEnhanceLevel &&
-		row.bonus_permyriad() == equiprules::kV1EnhanceBonusPerLevel * level &&
-		row.success_rate() == equiprules::kPermyriadBase && row.fail_level_loss() == 0 &&
-		row.cost_gold() == 0 && row.material_id() != 0 && row.material_count() > 0 && material != nullptr &&
+	const bool baseMaterialOk = row.fail_level_loss() == 0 && row.cost_gold() == 0 &&
+		row.material_id() != 0 && row.material_count() > 0 && material != nullptr &&
 		material->equip_kind() == 0 && material->battle_usable() == 0;
+	if (!baseMaterialOk || level == 0 || level > equiprules::kV1MaxEnhanceLevel) return false;
+	if (level <= equiprules::kV1GuaranteedMaxEnhanceLevel) {
+		return row.bonus_permyriad() == equiprules::kV1EnhanceBonusPerLevel * level &&
+			row.success_rate() == equiprules::kPermyriadBase && row.pity_limit() == 0;
+	}
+	return level == equiprules::kV1MaxEnhanceLevel &&
+		row.bonus_permyriad() == equiprules::kV1TopEnhanceBonusPermyriad &&
+		row.success_rate() > 0 && row.success_rate() < equiprules::kPermyriadBase &&
+		row.pity_limit() > 0;
 }
 
 // EquipGem 表的原始查找:只回答「表里有没有这一行」。消费侧(已嵌在装备上的宝石算不算数)用它;
@@ -773,6 +781,12 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 			LOG_ERROR << "[PlayerEquip] Table validation: invalid V1 enhancement contract: id=" << row.id()
 					  << " profile=" << row.profile_id() << " level=" << level;
 		}
+		if (row.profile_id() == 0 && row.pity_limit() > 0 && row.success_rate() >= equiprules::kPermyriadBase) {
+			++problems;
+			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id()
+					  << " sets pity_limit=" << row.pity_limit() << " on a guaranteed row (success_rate="
+					  << row.success_rate() << ")";
+		}
 		if (row.success_rate() == 0 || row.success_rate() > equiprules::kPermyriadBase) {
 			++problems;
 			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " success_rate="
@@ -1228,7 +1242,8 @@ uint32_t PlayerEquipSystem::GmGrantItem(entt::entity player, uint32_t configId, 
 // 写入口:强化 / 镶嵌 / 取下(二期 §4.3;步骤号对应设计文档里三张步骤表)
 // ---------------------------------------------------------------------------
 
-uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome) {
+uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome,
+									std::optional<uint32_t> expectedPityCount) {
 	outcome = EnhanceOutcome{};
 	// 1. 统一前置
 	if (const auto err = CheckWritable(player); err != kSuccess) {
@@ -1260,11 +1275,14 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	}
 	// 4. 存档等级按表上限夹取(策划下调上限后,超出的那几级不洗存档、也不许再往上强化)
 	const uint32_t currentLevel = std::min<uint32_t>(located.item->get().equip().enhance_level(), maxLevel);
+	const uint32_t currentPity = located.item->get().equip().enhance_pity_count();
 	// 4a. 乐观比较(审计 r2-equip#1,与 UpgradeSkill 的 expected_rank 同构):比有效等级 —— 快照里下发给客户端的就是它。
-	//     对不上 = 旧请求的重发(上一次已经成功或掉过级),或客户端快照过期:整笔拒绝,不扣、不掷。
-	if (expectedLevel != currentLevel) {
-		LOG_INFO << "[PlayerEquip] Enhance refused, expected_level is stale: player_id=" << tlsEcs.GetPlayerId(player)
-				 << " guid=" << itemId << " expected_level=" << expectedLevel << " current_level=" << currentLevel;
+	//     若客户端携带了 expectedPityCount，同样做乐观比较，防止保底档失败不掉级时弱网重放误扣。
+	if (expectedLevel != currentLevel ||
+		(expectedPityCount.has_value() && *expectedPityCount != currentPity)) {
+		LOG_INFO << "[PlayerEquip] Enhance refused, expected_level or expected_pity_count is stale: player_id="
+				 << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " expected_level=" << expectedLevel
+				 << " current_level=" << currentLevel << " current_pity=" << currentPity;
 		return kEquipEnhanceLevelChanged;
 	}
 	if (currentLevel >= maxLevel) {
@@ -1279,11 +1297,12 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		return kEquipInternalError;
 	}
 	if (!IsEnhanceRowAvailable(*enhanceRow)) {
-		return kEquipEnhanceUnavailable;  // 必败的行:不为一次不可能成功的强化收费
+		return kEquipEnhanceUnavailable;  // 必败或违反 V1 契约的行:不收费
 	}
 	// 规则抄进局部量:提交段不再读表行,也让下面每一步用的是同一份数。
 	const uint32_t successRate = enhanceRow->success_rate();
 	const uint32_t failLevelLoss = enhanceRow->fail_level_loss();
+	const uint32_t pityLimit = enhanceRow->pity_limit();
 	const uint64_t costGold = enhanceRow->cost_gold();
 	const uint32_t materialId = enhanceRow->material_id();
 	const uint32_t materialCount = enhanceRow->material_count();
@@ -1331,9 +1350,15 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	// ---- 提交:scene 单线程、冻结已被第 1 步挡掉、余额与持有量都问过,以下各步正常不会失败;
 	//      失败分支只为留下可对账的日志。金币与材料成败都扣,不退(那是设计,不是故障)----
 	// 9. 先掷后扣:流水的 extra 要带成败。结果在回包之前不外露,先掷不影响公平。
-	const bool success = equiprules::RollEnhanceSuccess(successRate, [](uint64_t n) { return RandBelow(n); });
+	const equiprules::EnhanceRollResult roll =
+		equiprules::RollEnhanceWithPity(successRate, currentPity, pityLimit, [](uint64_t n) { return RandBelow(n); });
+	const bool success = roll.success;
 	const std::string extra = "{\"from\":" + std::to_string(currentLevel) + ",\"success\":" +
-							  (success ? "true" : "false") + "}";
+							  (success ? "true" : "false") +
+							  (pityLimit > 0 ? (",\"pity\":" + std::to_string(roll.nextPityCount) +
+												",\"pity_triggered\":" + (roll.triggeredByPity ? "true" : "false"))
+											 : std::string{}) +
+							  "}";
 	// 10. 扣金币。失败 = 什么都没动。
 	if (costGold > 0) {
 		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(costGold),
@@ -1360,7 +1385,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 			return kEquipInternalError;
 		}
 	}
-	// 12. 写等级。一律重新按 guid 取:located.item 是纯校验段的借用,不带进提交段。
+	// 12. 写等级与保底次数。一律重新按 guid 取:located.item 是纯校验段的借用,不带进提交段。
 	ItemComp* instance = RefetchInitializedInstance(holder, itemId);
 	if (instance == nullptr) {
 		LOG_ERROR << "[PlayerEquip][INSTANCE_LOST] Enhance cost already charged, but the equipment could not be fetched when writing the level, manual compensation required: player_id="
@@ -1373,6 +1398,7 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	const uint32_t newLevel =
 		success ? targetLevel : equiprules::LevelAfterFailure(currentLevel, failLevelLoss);
 	instance->mutable_equip()->set_enhance_level(newLevel);
+	instance->mutable_equip()->set_enhance_pity_count(roll.nextPityCount);
 	// 14. 穿着的那件等级变了 → 加成变了(失败且不掉级时等级没变,不必重算)
 	if (worn && newLevel != currentLevel) {
 		OnEquipmentChanged(player);
@@ -1380,10 +1406,14 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	// 15.
 	LOG_INFO << "[PlayerEquip] Enhance: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
 			 << " from_level=" << currentLevel << " to_level=" << newLevel << " success=" << success
+			 << " pity=" << roll.nextPityCount << "/" << pityLimit << " pity_triggered=" << roll.triggeredByPity
 			 << " worn=" << worn << " cost_gold=" << costGold << " material_id=" << (needsMaterial ? materialId : 0)
 			 << " material_count=" << (needsMaterial ? materialCount : 0);
 	outcome.success = success;
 	outcome.level = newLevel;
+	outcome.pityCount = roll.nextPityCount;
+	outcome.pityLimit = pityLimit;
+	outcome.triggeredByPity = roll.triggeredByPity;
 	// 16. 掷出的结果尽快落库(总体方案 §4.5):崩溃回档会让玩家丢掉这次结果,也让同一次强化有机会重掷。
 	//     扣了金币或材料时,资产流水已经请求过存盘(AuditOutbox 的入队钩子);这里再请求一次,
 	//     表里这一级既不要金币也不要材料时同样约 1 秒内提交。重复请求合并成一笔。
@@ -1658,6 +1688,9 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 	info.set_name(row->name());
 	info.set_description(row->description());
 	info.set_icon_key(row->icon_key());
+	if (item.bound()) {
+		info.set_bound(true);
+	}
 	if (row->equip_kind() == 0) {
 		// 宝石物品:下发类型与它提供的属性(客户端零配表,靠它决定「这颗能嵌进哪些孔」)。
 		// 判据与镶嵌入口是同一个(GemRowIfGem);不是宝石的非装备一个新字段都不写,与一期逐位一致。
@@ -1686,6 +1719,10 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 	info.set_enhance_level(enhanceLevel);
 	info.set_enhance_max_level(maxEnhanceLevel);
 	info.set_enhance_bonus_permyriad(enhancePermyriad);
+	const uint32_t currentPity = item.has_equip() ? item.equip().enhance_pity_count() : 0u;
+	if (currentPity > 0) {
+		info.set_enhance_pity_count(currentPity);
+	}
 	// 下一级预览:判据与 Enhance 的第 2–5 步相同(已初始化、未到上限、下一级的行存在且不是必败行),
 	// 所以「带了预览」=「强化入口不会因为这几条拒绝」。金币 / 材料够不够是玩家自己的事,不在这里判。
 	const EquipEnhanceTable* nextEnhanceRow = nullptr;
@@ -1702,6 +1739,11 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 		next->set_cost_gold(nextEnhanceRow->cost_gold());
 		next->set_bonus_permyriad(nextEnhanceRow->bonus_permyriad());
 		next->set_fail_level_loss(nextEnhanceRow->fail_level_loss());
+		if (nextEnhanceRow->pity_limit() > 0) {
+			next->set_pity_limit(nextEnhanceRow->pity_limit());
+			next->set_current_pity_count(currentPity);
+			next->set_pity_guaranteed_next(currentPity + 1 >= nextEnhanceRow->pity_limit());
+		}
 		// 「要材料」与 Enhance 同判据(material_id != 0 且 material_count > 0);不要材料时两个字段都留 0,
 		// 客户端不会画出「某材料 ×0」。材料名 / 图标取材料的 Item 行,查不到留空(不编造)。
 		if (nextEnhanceRow->material_id() != 0 && nextEnhanceRow->material_count() > 0) {

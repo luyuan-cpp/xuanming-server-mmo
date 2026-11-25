@@ -19,6 +19,7 @@ func TestRatedModes(t *testing.T) {
 		pb.MatchMode_MATCH_MODE_PVE_TEAM:      false,
 		pb.MatchMode_MATCH_MODE_PVP_CHALLENGE: false,
 		pb.MatchMode_MATCH_MODE_3V3:           false,
+		pb.MatchMode_MATCH_MODE_POLARITY_5V5:  false,
 		pb.MatchMode_MATCH_MODE_UNSPECIFIED:   false,
 	} {
 		if Rated(mode) != want {

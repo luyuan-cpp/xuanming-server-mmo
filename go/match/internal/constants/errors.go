@@ -115,4 +115,29 @@ const (
 	ErrBattleScriptLoadoutInvalid = uint32(table.MatchError_kMatchBattleScriptLoadoutInvalid)
 	// ErrBattleScriptLoadoutFull:本人的选用条目已达上限。
 	ErrBattleScriptLoadoutFull = uint32(table.MatchError_kMatchBattleScriptLoadoutFull)
+
+	// ---- 论剑排位首发 V1(docs/design/ranked-play-season-ui-candidate.md) ----
+	// ErrRankedSeasonSettling:旧季换季排空与封榜结算中,暂不接受新排位报名或预设改动。
+	ErrRankedSeasonSettling = uint32(table.MatchError_kMatchRankedSeasonSettling)
+	// ErrRankedPresetInvalid:所选排位预设、搭配或展示权益非法(非表内合法预设或未拥有该权益)。
+	ErrRankedPresetInvalid = uint32(table.MatchError_kMatchRankedPresetInvalid)
+	// ErrRankedRuleVersionMismatch:客户端携带的排位规则版本与当前生效版本不一致,须刷新大厅。
+	ErrRankedRuleVersionMismatch = uint32(table.MatchError_kMatchRankedRuleVersionMismatch)
+
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V1(docs/design/season-team-tournament-v1.md) ----
+	ErrTournamentNotOpen           = uint32(table.MatchError_kMatchTournamentNotOpen)
+	ErrTournamentStageClosed       = uint32(table.MatchError_kMatchTournamentStageClosed)
+	ErrTournamentSquadNameInvalid  = uint32(table.MatchError_kMatchTournamentSquadNameInvalid)
+	ErrTournamentAlreadyInSquad    = uint32(table.MatchError_kMatchTournamentAlreadyInSquad)
+	ErrTournamentSquadNotFound     = uint32(table.MatchError_kMatchTournamentSquadNotFound)
+	ErrTournamentNotCaptain        = uint32(table.MatchError_kMatchTournamentNotCaptain)
+	ErrTournamentSquadFull         = uint32(table.MatchError_kMatchTournamentSquadFull)
+	ErrTournamentSquadLocked       = uint32(table.MatchError_kMatchTournamentSquadLocked)
+	ErrTournamentInviteNotFound    = uint32(table.MatchError_kMatchTournamentInviteNotFound)
+	ErrTournamentMemberNotEnough   = uint32(table.MatchError_kMatchTournamentMemberNotEnough)
+	ErrTournamentLineupInvalid     = uint32(table.MatchError_kMatchTournamentLineupInvalid)
+	ErrTournamentQualifierLimit    = uint32(table.MatchError_kMatchTournamentQualifierLimit)
+	ErrTournamentMatchNotReady     = uint32(table.MatchError_kMatchTournamentMatchNotReady)
+	ErrTournamentAlreadyCheered    = uint32(table.MatchError_kMatchTournamentAlreadyCheered)
+	ErrTournamentRewardUnavailable = uint32(table.MatchError_kMatchTournamentRewardUnavailable)
 )

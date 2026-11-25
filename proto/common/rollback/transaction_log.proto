@@ -133,6 +133,11 @@ enum TransactionType
   // correlation_id = 客户端幂等键 client_request_id。只追加,不复用旧编号。
   TX_TRIAL_JOURNAL_MILESTONE = 36;
   TX_TRIAL_ARTIFACT_REDEEM = 37;
+
+  // ── V1 装备词条品相打磨/重铸、分卷宗技能制书与主城原子代打(docs/design/equipment-quality-and-skill-crafting-v1.md) ──
+  TX_EQUIP_POLISH_REFORGE = 38;
+  TX_SKILL_SCROLL_CRAFT = 39;
+  TX_CRAFT_PROXY_FEE = 40;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

@@ -170,7 +170,9 @@
     <ClCompile Include="equipment_v1_battle_test.cpp" />
     <ClCompile Include="season_battle_test.cpp" />
     <ClCompile Include="trial_journal_battle_test.cpp" />
+    <ClCompile Include="ranked_battle_test.cpp" />
     <ClCompile Include="skill_trigger_test.cpp" />
+    <ClCompile Include="growing_passive_skill_test.cpp" />
     <ClCompile Include="player_revive_rule_test.cpp" />
     <ClCompile Include="attribute_allocation_rules_test.cpp" />
     <ClCompile Include="equip_attribute_rules_test.cpp" />

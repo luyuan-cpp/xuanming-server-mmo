@@ -127,6 +127,38 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipEnhanceLevelChanged = 28022;</code>
      */
     kEquipEnhanceLevelChanged(28022),
+    /**
+     * <code>kEquipAffixAlreadyMaxQuality = 28023;</code>
+     */
+    kEquipAffixAlreadyMaxQuality(28023),
+    /**
+     * <code>kEquipAffixPolishExempt = 28024;</code>
+     */
+    kEquipAffixPolishExempt(28024),
+    /**
+     * <code>kEquipAffixSlotEmpty = 28025;</code>
+     */
+    kEquipAffixSlotEmpty(28025),
+    /**
+     * <code>kEquipAffixReforgeSame = 28026;</code>
+     */
+    kEquipAffixReforgeSame(28026),
+    /**
+     * <code>kEquipBindConfirmRequired = 28027;</code>
+     */
+    kEquipBindConfirmRequired(28027),
+    /**
+     * <code>kEquipPolishPityChanged = 28028;</code>
+     */
+    kEquipPolishPityChanged(28028),
+    /**
+     * <code>kEquipCraftGoldNotEnough = 28029;</code>
+     */
+    kEquipCraftGoldNotEnough(28029),
+    /**
+     * <code>kEquipProxyMasterUnavailable = 28030;</code>
+     */
+    kEquipProxyMasterUnavailable(28030),
     UNRECOGNIZED(-1),
     ;
 
@@ -235,6 +267,38 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEquipEnhanceLevelChanged = 28022;</code>
      */
     public static final int kEquipEnhanceLevelChanged_VALUE = 28022;
+    /**
+     * <code>kEquipAffixAlreadyMaxQuality = 28023;</code>
+     */
+    public static final int kEquipAffixAlreadyMaxQuality_VALUE = 28023;
+    /**
+     * <code>kEquipAffixPolishExempt = 28024;</code>
+     */
+    public static final int kEquipAffixPolishExempt_VALUE = 28024;
+    /**
+     * <code>kEquipAffixSlotEmpty = 28025;</code>
+     */
+    public static final int kEquipAffixSlotEmpty_VALUE = 28025;
+    /**
+     * <code>kEquipAffixReforgeSame = 28026;</code>
+     */
+    public static final int kEquipAffixReforgeSame_VALUE = 28026;
+    /**
+     * <code>kEquipBindConfirmRequired = 28027;</code>
+     */
+    public static final int kEquipBindConfirmRequired_VALUE = 28027;
+    /**
+     * <code>kEquipPolishPityChanged = 28028;</code>
+     */
+    public static final int kEquipPolishPityChanged_VALUE = 28028;
+    /**
+     * <code>kEquipCraftGoldNotEnough = 28029;</code>
+     */
+    public static final int kEquipCraftGoldNotEnough_VALUE = 28029;
+    /**
+     * <code>kEquipProxyMasterUnavailable = 28030;</code>
+     */
+    public static final int kEquipProxyMasterUnavailable_VALUE = 28030;
 
 
     public final int getNumber() {
@@ -285,6 +349,14 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
         case 28020: return kEquipGemTypeMismatch;
         case 28021: return kEquipGemBagFull;
         case 28022: return kEquipEnhanceLevelChanged;
+        case 28023: return kEquipAffixAlreadyMaxQuality;
+        case 28024: return kEquipAffixPolishExempt;
+        case 28025: return kEquipAffixSlotEmpty;
+        case 28026: return kEquipAffixReforgeSame;
+        case 28027: return kEquipBindConfirmRequired;
+        case 28028: return kEquipPolishPityChanged;
+        case 28029: return kEquipCraftGoldNotEnough;
+        case 28030: return kEquipProxyMasterUnavailable;
         default: return null;
       }
     }
@@ -350,7 +422,7 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025equip_error_tip.proto*\221\005\n\013equip_error\022" +
+      "\n\025equip_error_tip.proto*\222\007\n\013equip_error\022" +
       "\022\n\016kEquip_errorOK\020\000\022\030\n\022kEquipItemNotFoun" +
       "d\020\340\332\001\022\030\n\022kEquipNotEquipment\020\341\332\001\022\032\n\024kEqui" +
       "pLevelNotEnough\020\342\332\001\022\031\n\023kEquipClassMismat" +
@@ -367,8 +439,14 @@ public final class EquipErrorTip extends com.google.protobuf.GeneratedFile {
       "upied\020\362\332\001\022\032\n\024kEquipGemSocketEmpty\020\363\332\001\022\033\n" +
       "\025kEquipGemTypeMismatch\020\364\332\001\022\026\n\020kEquipGemB" +
       "agFull\020\365\332\001\022\037\n\031kEquipEnhanceLevelChanged\020" +
-      "\366\332\001B$\n\016com.game.tableZ\022generated/pb/tabl" +
-      "eb\006proto3"
+      "\366\332\001\022\"\n\034kEquipAffixAlreadyMaxQuality\020\367\332\001\022" +
+      "\035\n\027kEquipAffixPolishExempt\020\370\332\001\022\032\n\024kEquip" +
+      "AffixSlotEmpty\020\371\332\001\022\034\n\026kEquipAffixReforge" +
+      "Same\020\372\332\001\022\037\n\031kEquipBindConfirmRequired\020\373\332" +
+      "\001\022\035\n\027kEquipPolishPityChanged\020\374\332\001\022\036\n\030kEqu" +
+      "ipCraftGoldNotEnough\020\375\332\001\022\"\n\034kEquipProxyM" +
+      "asterUnavailable\020\376\332\001B$\n\016com.game.tableZ\022" +
+      "generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

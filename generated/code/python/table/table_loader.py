@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 64 张表全部读完，一张都没换；
+拆成了两步。这里先把 68 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -58,6 +58,7 @@ from .condition_table import ConditionTableManager
 from .cooldown_table import CooldownTableManager
 from .dungeon_table import DungeonTableManager
 from .equipaffixpool_table import EquipAffixPoolTableManager
+from .equipaffixquality_table import EquipAffixQualityTableManager
 from .equipaffixrule_table import EquipAffixRuleTableManager
 from .equipartifact_table import EquipArtifactTableManager
 from .equipattribute_table import EquipAttributeTableManager
@@ -94,8 +95,11 @@ from .seasonrule_table import SeasonRuleTableManager
 from .seasonseal_table import SeasonSealTableManager
 from .skill_table import SkillTableManager
 from .skillpermission_table import SkillPermissionTableManager
+from .skillscrollcraft_table import SkillScrollCraftTableManager
 from .test_table import TestTableManager
 from .testmultikey_table import TestMultiKeyTableManager
+from .tournamentreward_table import TournamentRewardTableManager
+from .tournamentrule_table import TournamentRuleTableManager
 from .trialjournalentry_table import TrialJournalEntryTableManager
 from .trialjournalmilestone_table import TrialJournalMilestoneTableManager
 from .trialjournalseal_table import TrialJournalSealTableManager
@@ -134,6 +138,7 @@ MANAGERS: dict[str, TableManager] = {
     "Cooldown": CooldownTableManager.instance(),
     "Dungeon": DungeonTableManager.instance(),
     "EquipAffixPool": EquipAffixPoolTableManager.instance(),
+    "EquipAffixQuality": EquipAffixQualityTableManager.instance(),
     "EquipAffixRule": EquipAffixRuleTableManager.instance(),
     "EquipArtifact": EquipArtifactTableManager.instance(),
     "EquipAttribute": EquipAttributeTableManager.instance(),
@@ -170,8 +175,11 @@ MANAGERS: dict[str, TableManager] = {
     "SeasonSeal": SeasonSealTableManager.instance(),
     "Skill": SkillTableManager.instance(),
     "SkillPermission": SkillPermissionTableManager.instance(),
+    "SkillScrollCraft": SkillScrollCraftTableManager.instance(),
     "Test": TestTableManager.instance(),
     "TestMultiKey": TestMultiKeyTableManager.instance(),
+    "TournamentReward": TournamentRewardTableManager.instance(),
+    "TournamentRule": TournamentRuleTableManager.instance(),
     "TrialJournalEntry": TrialJournalEntryTableManager.instance(),
     "TrialJournalMilestone": TrialJournalMilestoneTableManager.instance(),
     "TrialJournalSeal": TrialJournalSealTableManager.instance(),
@@ -196,7 +204,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 64 张表。
+    """串行加载全部 68 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

@@ -71,4 +71,10 @@ public final class EquipEnhanceTableComp {
         }
     }
 
+    public record Pity_limit(int value) {
+        public static Pity_limit from(EquipEnhanceTable row) {
+            return new Pity_limit(row.getPityLimit());
+        }
+    }
+
 }

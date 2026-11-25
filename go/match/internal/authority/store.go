@@ -16,8 +16,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"match/internal/catalog"
 	"match/internal/config"
+	"match/internal/ranked"
 	"match/internal/ratingrule"
 	"match/internal/scope"
+	"match/internal/tournament"
 	battlepb "proto/battle"
 	pb "proto/match"
 	"schemamigrate"
@@ -39,8 +41,10 @@ type Store struct {
 	fenceStates rolefence.StateReader
 	admissions  rolefence.AdmissionVerifier
 	// catalog 由 ConfigureMatchCatalog 装配,运行期可由表包热更通过 SwapCatalog 原子替换;schedule 之后只读。
-	catalog  atomic.Pointer[catalog.Catalog]
-	schedule scope.Schedule
+	catalog           atomic.Pointer[catalog.Catalog]
+	rankedCatalog     atomic.Pointer[ranked.Catalog]
+	tournamentCatalog atomic.Pointer[tournament.Catalog]
+	schedule      scope.Schedule
 	// zones 是合服映射缓存，BindMergedZones 启动时写一次，之后只读（见 merged_zones.go）。
 	zones *placement.MergedZoneCache
 	// ratingCurve 是组内评分极差的容差曲线，EnsureGlobalPolicy 与 TeamConfig 一起装配（同一份策略指纹准入），
@@ -52,8 +56,8 @@ type Store struct {
 	deadlineProbe DeadlineAbortProbe
 }
 
-const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision"
-const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed,release_track"
+const ticketColumns = "player_id,ticket,request_id,mode,config_id,team_size,state,enqueued_ms,not_before_ms,zone_id,rating_centi,formation_id,team_id,network_profile,expires_ms,selected_region,owner_account,owner_revision,ranked_context"
+const formationColumns = "battle_id,operation_id,state,physical_region,target_node_id,target_instance_id,target_endpoint,mode,config_id,members,create_request,created_ms,deadline_ms,retry_at_ms,activity_context,requeue_on_failure,prepared,outcome_protocol_version,preflight_supported_version,preflight_instance_id,adopted_outcome_protocol_version,adopted_outcome_observed,release_track,ranked_context,ranked_season_id"
 
 var ErrJoinCancelled = errors.New("匹配请求已经撤销")
 
@@ -103,7 +107,7 @@ type scanner interface{ Scan(...any) error }
 
 func scanTicket(s scanner) (*pb.MatchAuthorityTicketRecord, error) {
 	t := &pb.MatchAuthorityTicketRecord{}
-	err := s.Scan(&t.PlayerId, &t.Ticket, &t.RequestId, &t.Mode, &t.ConfigId, &t.TeamSize, &t.State, &t.EnqueuedMs, &t.NotBeforeMs, &t.ZoneId, &t.RatingCenti, &t.FormationId, &t.TeamId, &t.NetworkProfile, &t.ExpiresMs, &t.SelectedRegion, &t.OwnerAccount, &t.OwnerRevision)
+	err := s.Scan(&t.PlayerId, &t.Ticket, &t.RequestId, &t.Mode, &t.ConfigId, &t.TeamSize, &t.State, &t.EnqueuedMs, &t.NotBeforeMs, &t.ZoneId, &t.RatingCenti, &t.FormationId, &t.TeamId, &t.NetworkProfile, &t.ExpiresMs, &t.SelectedRegion, &t.OwnerAccount, &t.OwnerRevision, &t.RankedContext)
 	return t, err
 }
 func (s *Store) Ticket(ctx context.Context, pid uint64) (*pb.MatchAuthorityTicketRecord, error) {
@@ -255,7 +259,7 @@ func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, 
 	if e = s.lockActor(ctx, tx, t.PlayerId); e != nil {
 		return nil, false, e
 	}
-	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
+	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", t.PlayerId, []byte{}, []byte{}); e != nil {
 		return nil, false, e
 	}
 	old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", t.PlayerId))
@@ -375,11 +379,19 @@ func (s *Store) joinOnce(ctx context.Context, t *pb.MatchAuthorityTicketRecord, 
 	if e != nil {
 		return nil, false, e
 	}
+	if t.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) && len(t.RankedContext) > 0 {
+		if e = s.requireRankedAdmissionOpenTx(ctx, tx, n); e != nil {
+			return nil, false, e
+		}
+	}
 	t.State = 1
 	t.EnqueuedMs = n
 	t.NetworkProfile = b
 	t.ExpiresMs = exp
-	_, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,pool_region=?,owner_account=?,owner_revision=? WHERE player_id=?", t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, t.EnqueuedMs, t.ZoneId, t.RatingCenti, t.TeamId, t.NetworkProfile, t.ExpiresMs, poolRegion, t.OwnerAccount, t.OwnerRevision, t.PlayerId)
+	if t.RankedContext == nil {
+		t.RankedContext = []byte{}
+	}
+	_, e = tx.ExecContext(ctx, "UPDATE match_authority_ticket SET ticket=?,request_id=?,mode=?,config_id=?,team_size=?,state=1,enqueued_ms=?,not_before_ms=0,zone_id=?,rating_centi=?,formation_id=0,team_id=?,network_profile=?,expires_ms=?,selected_region=0,pool_region=?,owner_account=?,owner_revision=?,ranked_context=? WHERE player_id=?", t.Ticket, t.RequestId, t.Mode, t.ConfigId, t.TeamSize, t.EnqueuedMs, t.ZoneId, t.RatingCenti, t.TeamId, t.NetworkProfile, t.ExpiresMs, poolRegion, t.OwnerAccount, t.OwnerRevision, t.RankedContext, t.PlayerId)
 	if e != nil {
 		return nil, false, e
 	}
@@ -440,7 +452,7 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 	if e = s.lockActor(ctx, tx, pid); e != nil {
 		return e
 	}
-	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", pid, []byte{}); e != nil {
+	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", pid, []byte{}, []byte{}); e != nil {
 		return e
 	}
 	old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", pid))
@@ -626,6 +638,16 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 		if err := s.requireRatedSpread(f.Mode, current, n); err != nil {
 			return err
 		}
+		if f.Mode == uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) {
+			if err := s.freezeRankedFormationContextTx(ctx, tx, f, current, n); err != nil {
+				return err
+			}
+		} else if f.Mode == uint32(pb.MatchMode_MATCH_MODE_POLARITY_5V5) ||
+			s.Catalog().BossTrialKind(f.ConfigId) == 5 {
+			if err := s.freezeFreePresetFormationContextTx(ctx, tx, f, current); err != nil {
+				return err
+			}
+		}
 	}
 	f.CreatedMs = n
 	f.DeadlineMs = s.battleDeadlineMs(n, f.ConfigId)
@@ -650,8 +672,11 @@ func (s *Store) claimTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRec
 	if f.ActivityContext == nil {
 		f.ActivityContext = []byte{}
 	}
+	if f.RankedContext == nil {
+		f.RankedContext = []byte{}
+	}
 	// release_track 是选点时按选中 battle 节点记下的轨道(发布轨道设计 §2.6),写入后不再改。
-	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 23), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack)
+	_, e = tx.ExecContext(ctx, "INSERT INTO match_formation("+formationColumns+") VALUES("+strings.TrimSuffix(strings.Repeat("?,", 25), ",")+")", f.BattleId, f.OperationId, 1, f.PhysicalRegion, f.TargetNodeId, f.TargetInstanceId, f.TargetEndpoint, f.Mode, f.ConfigId, mb, []byte{}, f.CreatedMs, f.DeadlineMs, f.RetryAtMs, f.ActivityContext, f.RequeueOnFailure, []byte{}, uint32(0), uint32(0), "", uint32(0), false, f.ReleaseTrack, f.RankedContext, f.RankedSeasonId)
 	if e != nil {
 		return e
 	}
@@ -707,7 +732,7 @@ func (s *Store) reserveGroupTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForma
 		if t.PlayerId == 0 || (i > 0 && ordered[i-1].PlayerId == t.PlayerId) {
 			return errors.New("整组身份无效")
 		}
-		if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0)", t.PlayerId, []byte{}); e != nil {
+		if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO match_authority_ticket("+ticketColumns+") VALUES(?,'','',0,0,0,0,0,0,0,0,0,0,?,0,0,'',0,?)", t.PlayerId, []byte{}, []byte{}); e != nil {
 			return e
 		}
 		old, e := scanTicket(tx.QueryRowContext(ctx, "SELECT "+ticketColumns+" FROM match_authority_ticket WHERE player_id=? FOR UPDATE", t.PlayerId))
@@ -858,11 +883,17 @@ func scanFormation(s scanner) (*pb.MatchFormationRecord, error) {
 	var members, prepared []byte
 	// release_track 是迁移补出来的 MEDIUMTEXT 列(proto2mysql 对非键 string 列不写默认值):补列之前写的行读出来是 NULL,按空串处理,即 stable。
 	var releaseTrack sql.NullString
-	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared, &f.OutcomeProtocolVersion, &f.PreflightSupportedVersion, &f.PreflightInstanceId, &f.AdoptedOutcomeProtocolVersion, &f.AdoptedOutcomeObserved, &releaseTrack)
+	var rankedCtx []byte
+	var rankedSeason sql.NullInt64
+	e := s.Scan(&f.BattleId, &f.OperationId, &f.State, &f.PhysicalRegion, &f.TargetNodeId, &f.TargetInstanceId, &f.TargetEndpoint, &f.Mode, &f.ConfigId, &members, &f.CreateRequest, &f.CreatedMs, &f.DeadlineMs, &f.RetryAtMs, &f.ActivityContext, &f.RequeueOnFailure, &prepared, &f.OutcomeProtocolVersion, &f.PreflightSupportedVersion, &f.PreflightInstanceId, &f.AdoptedOutcomeProtocolVersion, &f.AdoptedOutcomeObserved, &releaseTrack, &rankedCtx, &rankedSeason)
 	if e != nil {
 		return nil, e
 	}
 	f.ReleaseTrack = releaseTrack.String
+	f.RankedContext = rankedCtx
+	if rankedSeason.Valid && rankedSeason.Int64 > 0 {
+		f.RankedSeasonId = uint32(rankedSeason.Int64)
+	}
 	m := &pb.MatchFormationRecord{}
 	if e = proto.Unmarshal(members, m); e != nil {
 		return nil, e

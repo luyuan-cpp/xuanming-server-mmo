@@ -185,7 +185,7 @@ func main() {
 	// 消费组 match-rating 是全局作用域,canary 副本不加入(发布轨道设计 §2.5),全部结果由 stable 归档与计分。
 	startResultConsumer := func() error {
 		return matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
-			if !c.RatingEnabled {
+			if !c.RatingEnabled && matchpb.MatchMode(event.GetMatchMode()) != matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
 				return nil
 			}
 			_, err := matchlogic.ApplyBattleResult(svcCtx, event)
@@ -228,6 +228,7 @@ func main() {
 		matchlogic.StartGlobalSpectatorRecovery(ctx, svcCtx)
 		// 完整结果归档与队伍反向端口均就绪后才开放成局。全球模式下单排、整队与 PVP 都由同一个按池撮合循环负责。
 		matchlogic.StartMatcherLoop(ctx, svcCtx)
+		matchlogic.StartTournamentLoop(ctx, svcCtx)
 	} else {
 		// canary 副本:撮合、恢复、巡检、观战与 team 维护都由 stable 承担;备战槽属于数据面,RPC 提交的成局要用,单独建。
 		matchlogic.InitGatherSlots(svcCtx)

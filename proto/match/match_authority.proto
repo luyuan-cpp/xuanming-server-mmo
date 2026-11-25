@@ -549,3 +549,145 @@ message MatchRankedBattleRecord {
   uint64 settled_at_ms = 4;
   bytes summary = 5; // 确定性序列化 RankedBattleSettlementView
 }
+
+// ---- 全服赛季战队锦标赛《群仙问道赛》V1 权威表(docs/design/season-team-tournament-v1.md) ----
+
+// 锦标赛赛季与四阶段状态机(单赛季一行)。
+message MatchTournamentSeasonRecord {
+  option (OptionTableName) = "match_tournament_season";
+  option (OptionPrimaryKey) = "season_id";
+  option (OptionIndex) = "stage,season_id";
+  uint32 season_id = 1;
+  string season_key = 2;
+  string season_name = 3;
+  uint32 rule_version = 4;
+  uint32 stage = 5; // TournamentStage: 1 REGISTRATION / 2 QUALIFIER / 3 KNOCKOUT / 4 SETTLED
+  uint64 registration_start_ms = 6;
+  uint64 qualifier_start_ms = 7;
+  uint64 knockout_start_ms = 8;
+  uint64 settle_start_ms = 9;
+  uint64 end_ms = 10;
+  uint32 battle_team_size = 11;
+  uint32 roster_max_size = 12;
+  uint32 knockout_team_count = 13;
+  uint64 champion_squad_id = 14;
+  string champion_squad_name = 15;
+  string champion_member_summary = 16;
+  uint64 settled_ms = 17;
+  uint64 updated_ms = 18;
+}
+
+// 全服报名战队(主键 squad_id 由 BattleIDGen 永久发号;同赛季归一化名唯一)。
+message MatchTournamentSquadRecord {
+  option (OptionTableName) = "match_tournament_squad";
+  option (OptionPrimaryKey) = "squad_id";
+  option (OptionUniqueKey) = "season_id,name_norm";
+  option (OptionIndex) = "season_id,state,qualifier_points,squad_id;season_id,final_rank,squad_id";
+  uint64 squad_id = 1;
+  uint32 season_id = 2;
+  string name = 3;
+  string name_norm = 4; // 归一化队名(TrimSpace+NFKC+Lower),同赛季唯一
+  uint64 captain_player_id = 5;
+  uint32 state = 6; // TournamentSquadState
+  uint32 member_count = 7;
+  uint32 qualifier_points = 8;
+  uint32 qualifier_played = 9;
+  uint32 qualifier_wins = 10;
+  uint32 qualifier_losses = 11;
+  uint32 qualifier_draws = 12;
+  uint32 seed_rank = 13;
+  uint32 final_rank = 14;
+  uint32 cheer_count = 15;
+  uint64 registered_ms = 16;
+  uint64 updated_ms = 17;
+}
+
+// 战队成员名册(主键 (season_id, player_id) 物理保证一人一季仅隶属一支战队)。
+message MatchTournamentMemberRecord {
+  option (OptionTableName) = "match_tournament_member";
+  option (OptionPrimaryKey) = "season_id,player_id";
+  option (OptionIndex) = "squad_id,player_id";
+  uint32 season_id = 1;
+  uint64 player_id = 2;
+  uint64 squad_id = 3;
+  uint32 role = 4;         // TournamentMemberRole
+  uint32 starter_slot = 5; // 1..battle_team_size 为首发,0 为替补
+  string player_name = 6;
+  uint32 zone_id = 7;
+  uint64 joined_ms = 8;
+}
+
+// 跨区战队邀请(待应答列表按受邀者查询)。
+message MatchTournamentInviteRecord {
+  option (OptionTableName) = "match_tournament_invite";
+  option (OptionPrimaryKey) = "squad_id,invitee_player_id";
+  option (OptionIndex) = "invitee_player_id,state,expires_ms,squad_id";
+  uint64 squad_id = 1;
+  uint64 invitee_player_id = 2;
+  uint32 season_id = 3;
+  uint64 inviter_player_id = 4;
+  uint32 state = 5; // 1 待应答 / 2 已接受 / 3 已拒绝 / 4 已过期取消
+  uint64 created_ms = 6;
+  uint64 expires_ms = 7;
+}
+
+// 赛程对局表(海选约战配对 + 淘汰赛对阵树)。
+message MatchTournamentMatchRecord {
+  option (OptionTableName) = "match_tournament_match";
+  option (OptionPrimaryKey) = "match_id";
+  option (OptionIndex) = "season_id,phase,round_index,slot_index;battle_id;season_id,phase,state,match_id";
+  uint64 match_id = 1;
+  uint32 season_id = 2;
+  uint32 phase = 3;          // TournamentMatchPhase
+  uint32 round_index = 4;
+  uint32 slot_index = 5;
+  uint64 squad_a_id = 6;
+  uint64 squad_b_id = 7;     // 0 = 海选等待对手或淘汰赛轮空
+  bytes lineup_a = 8;        // 逗号分隔 uint64 成员 ID 或 protobuf 编码
+  bytes lineup_b = 9;
+  bool ready_a = 10;
+  bool ready_b = 11;
+  uint32 state = 12;         // TournamentMatchState
+  uint64 battle_id = 13;
+  uint64 winner_squad_id = 14;
+  uint32 outcome = 15;       // battle.eBattleOutcome
+  bool featured_spectate = 16;
+  uint64 scheduled_start_ms = 17;
+  uint64 deadline_ms = 18;
+  uint64 finished_ms = 19;
+  uint64 updated_ms = 20;
+}
+
+// 全服免费助威(主键 (season_id, player_id) 物理防重复助威,零消费零押注)。
+message MatchTournamentCheerRecord {
+  option (OptionTableName) = "match_tournament_cheer";
+  option (OptionPrimaryKey) = "season_id,player_id";
+  option (OptionIndex) = "season_id,squad_id,player_id";
+  uint32 season_id = 1;
+  uint64 player_id = 2;
+  uint64 squad_id = 3;
+  bool rewarded = 4;
+  uint64 created_ms = 5;
+}
+
+// 赛季锦标赛奖励账与幂等发件箱(主键 (season_id, player_id, tier_kind) 物理防重发)。
+message MatchTournamentRewardRecord {
+  option (OptionTableName) = "match_tournament_reward";
+  option (OptionPrimaryKey) = "season_id,player_id,tier_kind";
+  option (OptionIndex) = "player_id,season_id,tier_kind;delivery_state,updated_ms,reward_id";
+  uint32 season_id = 1;
+  uint64 player_id = 2;
+  uint32 tier_kind = 3;      // TournamentRewardTierKind
+  uint64 reward_id = 4;      // 发号器永久 ID,作为 MailAdmin.SendPersonalMail 的幂等 request_id
+  uint64 squad_id = 5;
+  uint32 final_rank = 6;
+  uint32 tier_id = 7;        // TournamentReward 表行 id
+  uint64 gold_amount = 8;
+  bytes attachments = 9;     // 确定性序列化的 mailpb.MailAttachments(仅自用绑定)
+  string title_code = 10;
+  string badge_code = 11;
+  uint32 delivery_state = 12;// TournamentRewardDeliveryState: 1 待领/待发 / 2 已发/已领 / 3 放弃
+  uint64 mail_id = 13;
+  uint64 claimed_ms = 14;
+  uint64 updated_ms = 15;
+}

@@ -21,28 +21,39 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchService_GetNetworkProbePlan_FullMethodName    = "/match.MatchService/GetNetworkProbePlan"
-	MatchService_CommitNetworkProbe_FullMethodName     = "/match.MatchService/CommitNetworkProbe"
-	MatchService_JoinQueue_FullMethodName              = "/match.MatchService/JoinQueue"
-	MatchService_CancelQueue_FullMethodName            = "/match.MatchService/CancelQueue"
-	MatchService_GetQueueStatus_FullMethodName         = "/match.MatchService/GetQueueStatus"
-	MatchService_ChallengePlayer_FullMethodName        = "/match.MatchService/ChallengePlayer"
-	MatchService_RespondChallenge_FullMethodName       = "/match.MatchService/RespondChallenge"
-	MatchService_NotifyChallengeInvite_FullMethodName  = "/match.MatchService/NotifyChallengeInvite"
-	MatchService_NotifyChallengeResult_FullMethodName  = "/match.MatchService/NotifyChallengeResult"
-	MatchService_WatchBattle_FullMethodName            = "/match.MatchService/WatchBattle"
-	MatchService_RequestBattleTicket_FullMethodName    = "/match.MatchService/RequestBattleTicket"
-	MatchService_ListWatchableBattles_FullMethodName   = "/match.MatchService/ListWatchableBattles"
-	MatchService_ListBattleReports_FullMethodName      = "/match.MatchService/ListBattleReports"
-	MatchService_GetBattleReport_FullMethodName        = "/match.MatchService/GetBattleReport"
-	MatchService_ListBattleScripts_FullMethodName      = "/match.MatchService/ListBattleScripts"
-	MatchService_SubmitBattleScript_FullMethodName     = "/match.MatchService/SubmitBattleScript"
-	MatchService_DeleteBattleScript_FullMethodName     = "/match.MatchService/DeleteBattleScript"
-	MatchService_SetBattleScriptLoadout_FullMethodName = "/match.MatchService/SetBattleScriptLoadout"
-	MatchService_GetRankedProfile_FullMethodName       = "/match.MatchService/GetRankedProfile"
-	MatchService_SaveRankedPreset_FullMethodName       = "/match.MatchService/SaveRankedPreset"
-	MatchService_UpdateRankedCosmetic_FullMethodName   = "/match.MatchService/UpdateRankedCosmetic"
-	MatchService_GetRankedBattleResult_FullMethodName  = "/match.MatchService/GetRankedBattleResult"
+	MatchService_GetNetworkProbePlan_FullMethodName     = "/match.MatchService/GetNetworkProbePlan"
+	MatchService_CommitNetworkProbe_FullMethodName      = "/match.MatchService/CommitNetworkProbe"
+	MatchService_JoinQueue_FullMethodName               = "/match.MatchService/JoinQueue"
+	MatchService_CancelQueue_FullMethodName             = "/match.MatchService/CancelQueue"
+	MatchService_GetQueueStatus_FullMethodName          = "/match.MatchService/GetQueueStatus"
+	MatchService_ChallengePlayer_FullMethodName         = "/match.MatchService/ChallengePlayer"
+	MatchService_RespondChallenge_FullMethodName        = "/match.MatchService/RespondChallenge"
+	MatchService_NotifyChallengeInvite_FullMethodName   = "/match.MatchService/NotifyChallengeInvite"
+	MatchService_NotifyChallengeResult_FullMethodName   = "/match.MatchService/NotifyChallengeResult"
+	MatchService_WatchBattle_FullMethodName             = "/match.MatchService/WatchBattle"
+	MatchService_RequestBattleTicket_FullMethodName     = "/match.MatchService/RequestBattleTicket"
+	MatchService_ListWatchableBattles_FullMethodName    = "/match.MatchService/ListWatchableBattles"
+	MatchService_ListBattleReports_FullMethodName       = "/match.MatchService/ListBattleReports"
+	MatchService_GetBattleReport_FullMethodName         = "/match.MatchService/GetBattleReport"
+	MatchService_ListBattleScripts_FullMethodName       = "/match.MatchService/ListBattleScripts"
+	MatchService_SubmitBattleScript_FullMethodName      = "/match.MatchService/SubmitBattleScript"
+	MatchService_DeleteBattleScript_FullMethodName      = "/match.MatchService/DeleteBattleScript"
+	MatchService_SetBattleScriptLoadout_FullMethodName  = "/match.MatchService/SetBattleScriptLoadout"
+	MatchService_GetRankedProfile_FullMethodName        = "/match.MatchService/GetRankedProfile"
+	MatchService_SaveRankedPreset_FullMethodName        = "/match.MatchService/SaveRankedPreset"
+	MatchService_UpdateRankedCosmetic_FullMethodName    = "/match.MatchService/UpdateRankedCosmetic"
+	MatchService_GetRankedBattleResult_FullMethodName   = "/match.MatchService/GetRankedBattleResult"
+	MatchService_GetTournamentOverview_FullMethodName   = "/match.MatchService/GetTournamentOverview"
+	MatchService_CreateTournamentSquad_FullMethodName   = "/match.MatchService/CreateTournamentSquad"
+	MatchService_InviteTournamentMember_FullMethodName  = "/match.MatchService/InviteTournamentMember"
+	MatchService_RespondTournamentInvite_FullMethodName = "/match.MatchService/RespondTournamentInvite"
+	MatchService_LeaveTournamentSquad_FullMethodName    = "/match.MatchService/LeaveTournamentSquad"
+	MatchService_UpdateTournamentLineup_FullMethodName  = "/match.MatchService/UpdateTournamentLineup"
+	MatchService_RegisterTournamentSquad_FullMethodName = "/match.MatchService/RegisterTournamentSquad"
+	MatchService_ListTournamentStandings_FullMethodName = "/match.MatchService/ListTournamentStandings"
+	MatchService_StartTournamentMatch_FullMethodName    = "/match.MatchService/StartTournamentMatch"
+	MatchService_CheerTournamentSquad_FullMethodName    = "/match.MatchService/CheerTournamentSquad"
+	MatchService_ClaimTournamentReward_FullMethodName   = "/match.MatchService/ClaimTournamentReward"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -99,6 +110,18 @@ type MatchServiceClient interface {
 	SaveRankedPreset(ctx context.Context, in *SaveRankedPresetRequest, opts ...grpc.CallOption) (*SaveRankedPresetResponse, error)
 	UpdateRankedCosmetic(ctx context.Context, in *UpdateRankedCosmeticRequest, opts ...grpc.CallOption) (*UpdateRankedCosmeticResponse, error)
 	GetRankedBattleResult(ctx context.Context, in *GetRankedBattleResultRequest, opts ...grpc.CallOption) (*GetRankedBattleResultResponse, error)
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V1(docs/design/season-team-tournament-v1.md):请求只认会话本人 ----
+	GetTournamentOverview(ctx context.Context, in *GetTournamentOverviewRequest, opts ...grpc.CallOption) (*GetTournamentOverviewResponse, error)
+	CreateTournamentSquad(ctx context.Context, in *CreateTournamentSquadRequest, opts ...grpc.CallOption) (*CreateTournamentSquadResponse, error)
+	InviteTournamentMember(ctx context.Context, in *InviteTournamentMemberRequest, opts ...grpc.CallOption) (*InviteTournamentMemberResponse, error)
+	RespondTournamentInvite(ctx context.Context, in *RespondTournamentInviteRequest, opts ...grpc.CallOption) (*RespondTournamentInviteResponse, error)
+	LeaveTournamentSquad(ctx context.Context, in *LeaveTournamentSquadRequest, opts ...grpc.CallOption) (*LeaveTournamentSquadResponse, error)
+	UpdateTournamentLineup(ctx context.Context, in *UpdateTournamentLineupRequest, opts ...grpc.CallOption) (*UpdateTournamentLineupResponse, error)
+	RegisterTournamentSquad(ctx context.Context, in *RegisterTournamentSquadRequest, opts ...grpc.CallOption) (*RegisterTournamentSquadResponse, error)
+	ListTournamentStandings(ctx context.Context, in *ListTournamentStandingsRequest, opts ...grpc.CallOption) (*ListTournamentStandingsResponse, error)
+	StartTournamentMatch(ctx context.Context, in *StartTournamentMatchRequest, opts ...grpc.CallOption) (*StartTournamentMatchResponse, error)
+	CheerTournamentSquad(ctx context.Context, in *CheerTournamentSquadRequest, opts ...grpc.CallOption) (*CheerTournamentSquadResponse, error)
+	ClaimTournamentReward(ctx context.Context, in *ClaimTournamentRewardRequest, opts ...grpc.CallOption) (*ClaimTournamentRewardResponse, error)
 }
 
 type matchServiceClient struct {
@@ -329,6 +352,116 @@ func (c *matchServiceClient) GetRankedBattleResult(ctx context.Context, in *GetR
 	return out, nil
 }
 
+func (c *matchServiceClient) GetTournamentOverview(ctx context.Context, in *GetTournamentOverviewRequest, opts ...grpc.CallOption) (*GetTournamentOverviewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTournamentOverviewResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetTournamentOverview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) CreateTournamentSquad(ctx context.Context, in *CreateTournamentSquadRequest, opts ...grpc.CallOption) (*CreateTournamentSquadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTournamentSquadResponse)
+	err := c.cc.Invoke(ctx, MatchService_CreateTournamentSquad_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) InviteTournamentMember(ctx context.Context, in *InviteTournamentMemberRequest, opts ...grpc.CallOption) (*InviteTournamentMemberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InviteTournamentMemberResponse)
+	err := c.cc.Invoke(ctx, MatchService_InviteTournamentMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) RespondTournamentInvite(ctx context.Context, in *RespondTournamentInviteRequest, opts ...grpc.CallOption) (*RespondTournamentInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RespondTournamentInviteResponse)
+	err := c.cc.Invoke(ctx, MatchService_RespondTournamentInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) LeaveTournamentSquad(ctx context.Context, in *LeaveTournamentSquadRequest, opts ...grpc.CallOption) (*LeaveTournamentSquadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LeaveTournamentSquadResponse)
+	err := c.cc.Invoke(ctx, MatchService_LeaveTournamentSquad_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) UpdateTournamentLineup(ctx context.Context, in *UpdateTournamentLineupRequest, opts ...grpc.CallOption) (*UpdateTournamentLineupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateTournamentLineupResponse)
+	err := c.cc.Invoke(ctx, MatchService_UpdateTournamentLineup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) RegisterTournamentSquad(ctx context.Context, in *RegisterTournamentSquadRequest, opts ...grpc.CallOption) (*RegisterTournamentSquadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterTournamentSquadResponse)
+	err := c.cc.Invoke(ctx, MatchService_RegisterTournamentSquad_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) ListTournamentStandings(ctx context.Context, in *ListTournamentStandingsRequest, opts ...grpc.CallOption) (*ListTournamentStandingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTournamentStandingsResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListTournamentStandings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) StartTournamentMatch(ctx context.Context, in *StartTournamentMatchRequest, opts ...grpc.CallOption) (*StartTournamentMatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartTournamentMatchResponse)
+	err := c.cc.Invoke(ctx, MatchService_StartTournamentMatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) CheerTournamentSquad(ctx context.Context, in *CheerTournamentSquadRequest, opts ...grpc.CallOption) (*CheerTournamentSquadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheerTournamentSquadResponse)
+	err := c.cc.Invoke(ctx, MatchService_CheerTournamentSquad_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) ClaimTournamentReward(ctx context.Context, in *ClaimTournamentRewardRequest, opts ...grpc.CallOption) (*ClaimTournamentRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimTournamentRewardResponse)
+	err := c.cc.Invoke(ctx, MatchService_ClaimTournamentReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -383,6 +516,18 @@ type MatchServiceServer interface {
 	SaveRankedPreset(context.Context, *SaveRankedPresetRequest) (*SaveRankedPresetResponse, error)
 	UpdateRankedCosmetic(context.Context, *UpdateRankedCosmeticRequest) (*UpdateRankedCosmeticResponse, error)
 	GetRankedBattleResult(context.Context, *GetRankedBattleResultRequest) (*GetRankedBattleResultResponse, error)
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V1(docs/design/season-team-tournament-v1.md):请求只认会话本人 ----
+	GetTournamentOverview(context.Context, *GetTournamentOverviewRequest) (*GetTournamentOverviewResponse, error)
+	CreateTournamentSquad(context.Context, *CreateTournamentSquadRequest) (*CreateTournamentSquadResponse, error)
+	InviteTournamentMember(context.Context, *InviteTournamentMemberRequest) (*InviteTournamentMemberResponse, error)
+	RespondTournamentInvite(context.Context, *RespondTournamentInviteRequest) (*RespondTournamentInviteResponse, error)
+	LeaveTournamentSquad(context.Context, *LeaveTournamentSquadRequest) (*LeaveTournamentSquadResponse, error)
+	UpdateTournamentLineup(context.Context, *UpdateTournamentLineupRequest) (*UpdateTournamentLineupResponse, error)
+	RegisterTournamentSquad(context.Context, *RegisterTournamentSquadRequest) (*RegisterTournamentSquadResponse, error)
+	ListTournamentStandings(context.Context, *ListTournamentStandingsRequest) (*ListTournamentStandingsResponse, error)
+	StartTournamentMatch(context.Context, *StartTournamentMatchRequest) (*StartTournamentMatchResponse, error)
+	CheerTournamentSquad(context.Context, *CheerTournamentSquadRequest) (*CheerTournamentSquadResponse, error)
+	ClaimTournamentReward(context.Context, *ClaimTournamentRewardRequest) (*ClaimTournamentRewardResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -458,6 +603,39 @@ func (UnimplementedMatchServiceServer) UpdateRankedCosmetic(context.Context, *Up
 }
 func (UnimplementedMatchServiceServer) GetRankedBattleResult(context.Context, *GetRankedBattleResultRequest) (*GetRankedBattleResultResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetRankedBattleResult not implemented")
+}
+func (UnimplementedMatchServiceServer) GetTournamentOverview(context.Context, *GetTournamentOverviewRequest) (*GetTournamentOverviewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTournamentOverview not implemented")
+}
+func (UnimplementedMatchServiceServer) CreateTournamentSquad(context.Context, *CreateTournamentSquadRequest) (*CreateTournamentSquadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTournamentSquad not implemented")
+}
+func (UnimplementedMatchServiceServer) InviteTournamentMember(context.Context, *InviteTournamentMemberRequest) (*InviteTournamentMemberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InviteTournamentMember not implemented")
+}
+func (UnimplementedMatchServiceServer) RespondTournamentInvite(context.Context, *RespondTournamentInviteRequest) (*RespondTournamentInviteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RespondTournamentInvite not implemented")
+}
+func (UnimplementedMatchServiceServer) LeaveTournamentSquad(context.Context, *LeaveTournamentSquadRequest) (*LeaveTournamentSquadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LeaveTournamentSquad not implemented")
+}
+func (UnimplementedMatchServiceServer) UpdateTournamentLineup(context.Context, *UpdateTournamentLineupRequest) (*UpdateTournamentLineupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateTournamentLineup not implemented")
+}
+func (UnimplementedMatchServiceServer) RegisterTournamentSquad(context.Context, *RegisterTournamentSquadRequest) (*RegisterTournamentSquadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterTournamentSquad not implemented")
+}
+func (UnimplementedMatchServiceServer) ListTournamentStandings(context.Context, *ListTournamentStandingsRequest) (*ListTournamentStandingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTournamentStandings not implemented")
+}
+func (UnimplementedMatchServiceServer) StartTournamentMatch(context.Context, *StartTournamentMatchRequest) (*StartTournamentMatchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartTournamentMatch not implemented")
+}
+func (UnimplementedMatchServiceServer) CheerTournamentSquad(context.Context, *CheerTournamentSquadRequest) (*CheerTournamentSquadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheerTournamentSquad not implemented")
+}
+func (UnimplementedMatchServiceServer) ClaimTournamentReward(context.Context, *ClaimTournamentRewardRequest) (*ClaimTournamentRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimTournamentReward not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -876,6 +1054,204 @@ func _MatchService_GetRankedBattleResult_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_GetTournamentOverview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTournamentOverviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetTournamentOverview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetTournamentOverview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetTournamentOverview(ctx, req.(*GetTournamentOverviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_CreateTournamentSquad_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTournamentSquadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).CreateTournamentSquad(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_CreateTournamentSquad_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).CreateTournamentSquad(ctx, req.(*CreateTournamentSquadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_InviteTournamentMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InviteTournamentMemberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).InviteTournamentMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_InviteTournamentMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).InviteTournamentMember(ctx, req.(*InviteTournamentMemberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_RespondTournamentInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RespondTournamentInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).RespondTournamentInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_RespondTournamentInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).RespondTournamentInvite(ctx, req.(*RespondTournamentInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_LeaveTournamentSquad_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaveTournamentSquadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).LeaveTournamentSquad(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_LeaveTournamentSquad_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).LeaveTournamentSquad(ctx, req.(*LeaveTournamentSquadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_UpdateTournamentLineup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTournamentLineupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).UpdateTournamentLineup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_UpdateTournamentLineup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).UpdateTournamentLineup(ctx, req.(*UpdateTournamentLineupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_RegisterTournamentSquad_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterTournamentSquadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).RegisterTournamentSquad(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_RegisterTournamentSquad_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).RegisterTournamentSquad(ctx, req.(*RegisterTournamentSquadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_ListTournamentStandings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTournamentStandingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListTournamentStandings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListTournamentStandings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListTournamentStandings(ctx, req.(*ListTournamentStandingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_StartTournamentMatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartTournamentMatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).StartTournamentMatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_StartTournamentMatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).StartTournamentMatch(ctx, req.(*StartTournamentMatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_CheerTournamentSquad_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheerTournamentSquadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).CheerTournamentSquad(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_CheerTournamentSquad_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).CheerTournamentSquad(ctx, req.(*CheerTournamentSquadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_ClaimTournamentReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimTournamentRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ClaimTournamentReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ClaimTournamentReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ClaimTournamentReward(ctx, req.(*ClaimTournamentRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -970,6 +1346,50 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRankedBattleResult",
 			Handler:    _MatchService_GetRankedBattleResult_Handler,
+		},
+		{
+			MethodName: "GetTournamentOverview",
+			Handler:    _MatchService_GetTournamentOverview_Handler,
+		},
+		{
+			MethodName: "CreateTournamentSquad",
+			Handler:    _MatchService_CreateTournamentSquad_Handler,
+		},
+		{
+			MethodName: "InviteTournamentMember",
+			Handler:    _MatchService_InviteTournamentMember_Handler,
+		},
+		{
+			MethodName: "RespondTournamentInvite",
+			Handler:    _MatchService_RespondTournamentInvite_Handler,
+		},
+		{
+			MethodName: "LeaveTournamentSquad",
+			Handler:    _MatchService_LeaveTournamentSquad_Handler,
+		},
+		{
+			MethodName: "UpdateTournamentLineup",
+			Handler:    _MatchService_UpdateTournamentLineup_Handler,
+		},
+		{
+			MethodName: "RegisterTournamentSquad",
+			Handler:    _MatchService_RegisterTournamentSquad_Handler,
+		},
+		{
+			MethodName: "ListTournamentStandings",
+			Handler:    _MatchService_ListTournamentStandings_Handler,
+		},
+		{
+			MethodName: "StartTournamentMatch",
+			Handler:    _MatchService_StartTournamentMatch_Handler,
+		},
+		{
+			MethodName: "CheerTournamentSquad",
+			Handler:    _MatchService_CheerTournamentSquad_Handler,
+		},
+		{
+			MethodName: "ClaimTournamentReward",
+			Handler:    _MatchService_ClaimTournamentReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

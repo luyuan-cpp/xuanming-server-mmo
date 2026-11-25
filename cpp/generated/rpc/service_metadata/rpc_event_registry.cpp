@@ -305,6 +305,17 @@ namespace match{void SendMatchServiceGetRankedProfileErased(entt::registry& , en
 namespace match{void SendMatchServiceSaveRankedPresetErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceUpdateRankedCosmeticErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetRankedBattleResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTournamentOverviewErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceCreateTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceInviteTournamentMemberErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceRespondTournamentInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceLeaveTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceUpdateTournamentLineupErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceRegisterTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceListTournamentStandingsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceStartTournamentMatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceCheerTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceClaimTournamentRewardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -410,7 +421,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 459,
+static_assert(kMaxRpcMethodCount == 476,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1462,6 +1473,61 @@ void InitMessageInfo()
         std::make_unique<::match::GetRankedBattleResultRequest>(),
         std::make_unique<::match::GetRankedBattleResultResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetRankedBattleResultErased, "/match.MatchService/GetRankedBattleResult"};
+    gRpcMethodRegistry[MatchServiceGetTournamentOverviewMessageId] = RpcMethodMeta{
+        "MatchService", "GetTournamentOverview",
+        std::make_unique<::match::GetTournamentOverviewRequest>(),
+        std::make_unique<::match::GetTournamentOverviewResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTournamentOverviewErased, "/match.MatchService/GetTournamentOverview"};
+    gRpcMethodRegistry[MatchServiceCreateTournamentSquadMessageId] = RpcMethodMeta{
+        "MatchService", "CreateTournamentSquad",
+        std::make_unique<::match::CreateTournamentSquadRequest>(),
+        std::make_unique<::match::CreateTournamentSquadResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceCreateTournamentSquadErased, "/match.MatchService/CreateTournamentSquad"};
+    gRpcMethodRegistry[MatchServiceInviteTournamentMemberMessageId] = RpcMethodMeta{
+        "MatchService", "InviteTournamentMember",
+        std::make_unique<::match::InviteTournamentMemberRequest>(),
+        std::make_unique<::match::InviteTournamentMemberResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceInviteTournamentMemberErased, "/match.MatchService/InviteTournamentMember"};
+    gRpcMethodRegistry[MatchServiceRespondTournamentInviteMessageId] = RpcMethodMeta{
+        "MatchService", "RespondTournamentInvite",
+        std::make_unique<::match::RespondTournamentInviteRequest>(),
+        std::make_unique<::match::RespondTournamentInviteResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceRespondTournamentInviteErased, "/match.MatchService/RespondTournamentInvite"};
+    gRpcMethodRegistry[MatchServiceLeaveTournamentSquadMessageId] = RpcMethodMeta{
+        "MatchService", "LeaveTournamentSquad",
+        std::make_unique<::match::LeaveTournamentSquadRequest>(),
+        std::make_unique<::match::LeaveTournamentSquadResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceLeaveTournamentSquadErased, "/match.MatchService/LeaveTournamentSquad"};
+    gRpcMethodRegistry[MatchServiceUpdateTournamentLineupMessageId] = RpcMethodMeta{
+        "MatchService", "UpdateTournamentLineup",
+        std::make_unique<::match::UpdateTournamentLineupRequest>(),
+        std::make_unique<::match::UpdateTournamentLineupResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceUpdateTournamentLineupErased, "/match.MatchService/UpdateTournamentLineup"};
+    gRpcMethodRegistry[MatchServiceRegisterTournamentSquadMessageId] = RpcMethodMeta{
+        "MatchService", "RegisterTournamentSquad",
+        std::make_unique<::match::RegisterTournamentSquadRequest>(),
+        std::make_unique<::match::RegisterTournamentSquadResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceRegisterTournamentSquadErased, "/match.MatchService/RegisterTournamentSquad"};
+    gRpcMethodRegistry[MatchServiceListTournamentStandingsMessageId] = RpcMethodMeta{
+        "MatchService", "ListTournamentStandings",
+        std::make_unique<::match::ListTournamentStandingsRequest>(),
+        std::make_unique<::match::ListTournamentStandingsResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListTournamentStandingsErased, "/match.MatchService/ListTournamentStandings"};
+    gRpcMethodRegistry[MatchServiceStartTournamentMatchMessageId] = RpcMethodMeta{
+        "MatchService", "StartTournamentMatch",
+        std::make_unique<::match::StartTournamentMatchRequest>(),
+        std::make_unique<::match::StartTournamentMatchResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceStartTournamentMatchErased, "/match.MatchService/StartTournamentMatch"};
+    gRpcMethodRegistry[MatchServiceCheerTournamentSquadMessageId] = RpcMethodMeta{
+        "MatchService", "CheerTournamentSquad",
+        std::make_unique<::match::CheerTournamentSquadRequest>(),
+        std::make_unique<::match::CheerTournamentSquadResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceCheerTournamentSquadErased, "/match.MatchService/CheerTournamentSquad"};
+    gRpcMethodRegistry[MatchServiceClaimTournamentRewardMessageId] = RpcMethodMeta{
+        "MatchService", "ClaimTournamentReward",
+        std::make_unique<::match::ClaimTournamentRewardRequest>(),
+        std::make_unique<::match::ClaimTournamentRewardResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceClaimTournamentRewardErased, "/match.MatchService/ClaimTournamentReward"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -2153,6 +2219,36 @@ void InitMessageInfo()
         std::make_unique<::UpgradeSkillRequest>(),
         std::make_unique<::UpgradeSkillResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerGetSkillCraftingStateMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "GetSkillCraftingState",
+        std::make_unique<::GetSkillCraftingStateRequest>(),
+        std::make_unique<::GetSkillCraftingStateResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerCraftSkillBookMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "CraftSkillBook",
+        std::make_unique<::CraftSkillBookRequest>(),
+        std::make_unique<::CraftSkillBookResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerLearnSkillBookMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "LearnSkillBook",
+        std::make_unique<::LearnSkillBookRequest>(),
+        std::make_unique<::LearnSkillBookResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerDismantleSkillBookMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "DismantleSkillBook",
+        std::make_unique<::DismantleSkillBookRequest>(),
+        std::make_unique<::DismantleSkillBookResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerSetCraftProxyStallMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "SetCraftProxyStall",
+        std::make_unique<::SetCraftProxyStallRequest>(),
+        std::make_unique<::SetCraftProxyStallResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerListCraftProxyStallsMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "ListCraftProxyStalls",
+        std::make_unique<::ListCraftProxyStallsRequest>(),
+        std::make_unique<::ListCraftProxyStallsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- ScenePlayerSync ---
     gRpcMethodRegistry[ScenePlayerSyncSyncBaseAttributeMessageId] = RpcMethodMeta{
@@ -2721,6 +2817,17 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceSaveRankedPresetMessageId:
 	case MatchServiceUpdateRankedCosmeticMessageId:
 	case MatchServiceGetRankedBattleResultMessageId:
+	case MatchServiceGetTournamentOverviewMessageId:
+	case MatchServiceCreateTournamentSquadMessageId:
+	case MatchServiceInviteTournamentMemberMessageId:
+	case MatchServiceRespondTournamentInviteMessageId:
+	case MatchServiceLeaveTournamentSquadMessageId:
+	case MatchServiceUpdateTournamentLineupMessageId:
+	case MatchServiceRegisterTournamentSquadMessageId:
+	case MatchServiceListTournamentStandingsMessageId:
+	case MatchServiceStartTournamentMatchMessageId:
+	case MatchServiceCheerTournamentSquadMessageId:
+	case MatchServiceClaimTournamentRewardMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -2799,6 +2906,12 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:
+	case SceneSkillClientPlayerGetSkillCraftingStateMessageId:
+	case SceneSkillClientPlayerCraftSkillBookMessageId:
+	case SceneSkillClientPlayerLearnSkillBookMessageId:
+	case SceneSkillClientPlayerDismantleSkillBookMessageId:
+	case SceneSkillClientPlayerSetCraftProxyStallMessageId:
+	case SceneSkillClientPlayerListCraftProxyStallsMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:
 	case SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId:
 	case SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId:

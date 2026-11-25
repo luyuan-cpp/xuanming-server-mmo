@@ -25,6 +25,12 @@ const (
 	SceneSkillClientPlayer_NotifySkillInterrupted_FullMethodName = "/SceneSkillClientPlayer/NotifySkillInterrupted"
 	SceneSkillClientPlayer_ListSkills_FullMethodName             = "/SceneSkillClientPlayer/ListSkills"
 	SceneSkillClientPlayer_UpgradeSkill_FullMethodName           = "/SceneSkillClientPlayer/UpgradeSkill"
+	SceneSkillClientPlayer_GetSkillCraftingState_FullMethodName  = "/SceneSkillClientPlayer/GetSkillCraftingState"
+	SceneSkillClientPlayer_CraftSkillBook_FullMethodName         = "/SceneSkillClientPlayer/CraftSkillBook"
+	SceneSkillClientPlayer_LearnSkillBook_FullMethodName         = "/SceneSkillClientPlayer/LearnSkillBook"
+	SceneSkillClientPlayer_DismantleSkillBook_FullMethodName     = "/SceneSkillClientPlayer/DismantleSkillBook"
+	SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName     = "/SceneSkillClientPlayer/SetCraftProxyStall"
+	SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName   = "/SceneSkillClientPlayer/ListCraftProxyStalls"
 )
 
 // SceneSkillClientPlayerClient is the client API for SceneSkillClientPlayer service.
@@ -36,6 +42,13 @@ type SceneSkillClientPlayerClient interface {
 	NotifySkillInterrupted(ctx context.Context, in *SkillInterruptedS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	ListSkills(ctx context.Context, in *ListSkillsRequest, opts ...grpc.CallOption) (*ListSkillsResponse, error)
 	UpgradeSkill(ctx context.Context, in *UpgradeSkillRequest, opts ...grpc.CallOption) (*UpgradeSkillResponse, error)
+	// ── 以下按 method index 顺序追加，不可重排 ──
+	GetSkillCraftingState(ctx context.Context, in *GetSkillCraftingStateRequest, opts ...grpc.CallOption) (*GetSkillCraftingStateResponse, error)
+	CraftSkillBook(ctx context.Context, in *CraftSkillBookRequest, opts ...grpc.CallOption) (*CraftSkillBookResponse, error)
+	LearnSkillBook(ctx context.Context, in *LearnSkillBookRequest, opts ...grpc.CallOption) (*LearnSkillBookResponse, error)
+	DismantleSkillBook(ctx context.Context, in *DismantleSkillBookRequest, opts ...grpc.CallOption) (*DismantleSkillBookResponse, error)
+	SetCraftProxyStall(ctx context.Context, in *SetCraftProxyStallRequest, opts ...grpc.CallOption) (*SetCraftProxyStallResponse, error)
+	ListCraftProxyStalls(ctx context.Context, in *ListCraftProxyStallsRequest, opts ...grpc.CallOption) (*ListCraftProxyStallsResponse, error)
 }
 
 type sceneSkillClientPlayerClient struct {
@@ -96,6 +109,66 @@ func (c *sceneSkillClientPlayerClient) UpgradeSkill(ctx context.Context, in *Upg
 	return out, nil
 }
 
+func (c *sceneSkillClientPlayerClient) GetSkillCraftingState(ctx context.Context, in *GetSkillCraftingStateRequest, opts ...grpc.CallOption) (*GetSkillCraftingStateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSkillCraftingStateResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_GetSkillCraftingState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) CraftSkillBook(ctx context.Context, in *CraftSkillBookRequest, opts ...grpc.CallOption) (*CraftSkillBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CraftSkillBookResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_CraftSkillBook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) LearnSkillBook(ctx context.Context, in *LearnSkillBookRequest, opts ...grpc.CallOption) (*LearnSkillBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LearnSkillBookResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_LearnSkillBook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) DismantleSkillBook(ctx context.Context, in *DismantleSkillBookRequest, opts ...grpc.CallOption) (*DismantleSkillBookResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DismantleSkillBookResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_DismantleSkillBook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) SetCraftProxyStall(ctx context.Context, in *SetCraftProxyStallRequest, opts ...grpc.CallOption) (*SetCraftProxyStallResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetCraftProxyStallResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) ListCraftProxyStalls(ctx context.Context, in *ListCraftProxyStallsRequest, opts ...grpc.CallOption) (*ListCraftProxyStallsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCraftProxyStallsResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSkillClientPlayerServer is the server API for SceneSkillClientPlayer service.
 // All implementations must embed UnimplementedSceneSkillClientPlayerServer
 // for forward compatibility.
@@ -105,6 +178,13 @@ type SceneSkillClientPlayerServer interface {
 	NotifySkillInterrupted(context.Context, *SkillInterruptedS2C) (*base.Empty, error)
 	ListSkills(context.Context, *ListSkillsRequest) (*ListSkillsResponse, error)
 	UpgradeSkill(context.Context, *UpgradeSkillRequest) (*UpgradeSkillResponse, error)
+	// ── 以下按 method index 顺序追加，不可重排 ──
+	GetSkillCraftingState(context.Context, *GetSkillCraftingStateRequest) (*GetSkillCraftingStateResponse, error)
+	CraftSkillBook(context.Context, *CraftSkillBookRequest) (*CraftSkillBookResponse, error)
+	LearnSkillBook(context.Context, *LearnSkillBookRequest) (*LearnSkillBookResponse, error)
+	DismantleSkillBook(context.Context, *DismantleSkillBookRequest) (*DismantleSkillBookResponse, error)
+	SetCraftProxyStall(context.Context, *SetCraftProxyStallRequest) (*SetCraftProxyStallResponse, error)
+	ListCraftProxyStalls(context.Context, *ListCraftProxyStallsRequest) (*ListCraftProxyStallsResponse, error)
 	mustEmbedUnimplementedSceneSkillClientPlayerServer()
 }
 
@@ -129,6 +209,24 @@ func (UnimplementedSceneSkillClientPlayerServer) ListSkills(context.Context, *Li
 }
 func (UnimplementedSceneSkillClientPlayerServer) UpgradeSkill(context.Context, *UpgradeSkillRequest) (*UpgradeSkillResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpgradeSkill not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) GetSkillCraftingState(context.Context, *GetSkillCraftingStateRequest) (*GetSkillCraftingStateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSkillCraftingState not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) CraftSkillBook(context.Context, *CraftSkillBookRequest) (*CraftSkillBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CraftSkillBook not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) LearnSkillBook(context.Context, *LearnSkillBookRequest) (*LearnSkillBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LearnSkillBook not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) DismantleSkillBook(context.Context, *DismantleSkillBookRequest) (*DismantleSkillBookResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DismantleSkillBook not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) SetCraftProxyStall(context.Context, *SetCraftProxyStallRequest) (*SetCraftProxyStallResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetCraftProxyStall not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) ListCraftProxyStalls(context.Context, *ListCraftProxyStallsRequest) (*ListCraftProxyStallsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCraftProxyStalls not implemented")
 }
 func (UnimplementedSceneSkillClientPlayerServer) mustEmbedUnimplementedSceneSkillClientPlayerServer() {
 }
@@ -242,6 +340,114 @@ func _SceneSkillClientPlayer_UpgradeSkill_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSkillClientPlayer_GetSkillCraftingState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSkillCraftingStateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).GetSkillCraftingState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_GetSkillCraftingState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).GetSkillCraftingState(ctx, req.(*GetSkillCraftingStateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_CraftSkillBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CraftSkillBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).CraftSkillBook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_CraftSkillBook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).CraftSkillBook(ctx, req.(*CraftSkillBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_LearnSkillBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LearnSkillBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).LearnSkillBook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_LearnSkillBook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).LearnSkillBook(ctx, req.(*LearnSkillBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_DismantleSkillBook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DismantleSkillBookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).DismantleSkillBook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_DismantleSkillBook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).DismantleSkillBook(ctx, req.(*DismantleSkillBookRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_SetCraftProxyStall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetCraftProxyStallRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).SetCraftProxyStall(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).SetCraftProxyStall(ctx, req.(*SetCraftProxyStallRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_ListCraftProxyStalls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCraftProxyStallsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).ListCraftProxyStalls(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).ListCraftProxyStalls(ctx, req.(*ListCraftProxyStallsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSkillClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSkillClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +474,30 @@ var SceneSkillClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpgradeSkill",
 			Handler:    _SceneSkillClientPlayer_UpgradeSkill_Handler,
+		},
+		{
+			MethodName: "GetSkillCraftingState",
+			Handler:    _SceneSkillClientPlayer_GetSkillCraftingState_Handler,
+		},
+		{
+			MethodName: "CraftSkillBook",
+			Handler:    _SceneSkillClientPlayer_CraftSkillBook_Handler,
+		},
+		{
+			MethodName: "LearnSkillBook",
+			Handler:    _SceneSkillClientPlayer_LearnSkillBook_Handler,
+		},
+		{
+			MethodName: "DismantleSkillBook",
+			Handler:    _SceneSkillClientPlayer_DismantleSkillBook_Handler,
+		},
+		{
+			MethodName: "SetCraftProxyStall",
+			Handler:    _SceneSkillClientPlayer_SetCraftProxyStall_Handler,
+		},
+		{
+			MethodName: "ListCraftProxyStalls",
+			Handler:    _SceneSkillClientPlayer_ListCraftProxyStalls_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

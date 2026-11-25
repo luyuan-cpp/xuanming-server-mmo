@@ -217,6 +217,14 @@ type SkillSeason_idComp struct {
     Value uint32
 }
 
+type SkillScroll_idComp struct {
+    Value uint32
+}
+
+type SkillRarity_tierComp struct {
+    Value uint32
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -440,6 +448,14 @@ func MakeSkillForbid_copyComp(row *pb.SkillTable) SkillForbid_copyComp {
 
 func MakeSkillSeason_idComp(row *pb.SkillTable) SkillSeason_idComp {
     return SkillSeason_idComp{Value: row.SeasonId}
+}
+
+func MakeSkillScroll_idComp(row *pb.SkillTable) SkillScroll_idComp {
+    return SkillScroll_idComp{Value: row.ScrollId}
+}
+
+func MakeSkillRarity_tierComp(row *pb.SkillTable) SkillRarity_tierComp {
+    return SkillRarity_tierComp{Value: row.RarityTier}
 }
 
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {

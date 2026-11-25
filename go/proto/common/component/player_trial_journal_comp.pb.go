@@ -357,8 +357,10 @@ type PlayerTrialJournalComp struct {
 	StateRevision        uint64                       `protobuf:"varint,3,opt,name=state_revision,json=stateRevision,proto3" json:"state_revision,omitempty"`                       // 单调写修订号（防旧响应覆盖客户端较新快照）
 	Records              []*TrialJournalEntryRecord   `protobuf:"bytes,4,rep,name=records,proto3" json:"records,omitempty"`
 	SeasonRecords        []*SeasonTrialJournalArchive `protobuf:"bytes,5,rep,name=season_records,json=seasonRecords,proto3" json:"season_records,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// true = 至少通关过任意一只普通难度首领试炼（boss_trial_kind 1..4 && difficulty == 1），解锁全部困难首领试炼准入。
+	NormalBossTrialCleared bool `protobuf:"varint,6,opt,name=normal_boss_trial_cleared,json=normalBossTrialCleared,proto3" json:"normal_boss_trial_cleared,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PlayerTrialJournalComp) Reset() {
@@ -426,6 +428,13 @@ func (x *PlayerTrialJournalComp) GetSeasonRecords() []*SeasonTrialJournalArchive
 	return nil
 }
 
+func (x *PlayerTrialJournalComp) GetNormalBossTrialCleared() bool {
+	if x != nil {
+		return x.NormalBossTrialCleared
+	}
+	return false
+}
+
 var File_proto_common_component_player_trial_journal_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_trial_journal_comp_proto_rawDesc = "" +
@@ -459,13 +468,14 @@ const file_proto_common_component_player_trial_journal_comp_proto_rawDesc = "" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12 \n" +
 	"\flit_seal_ids\x18\x02 \x03(\rR\n" +
 	"litSealIds\x122\n" +
-	"\x15claimed_milestone_ids\x18\x03 \x03(\rR\x13claimedMilestoneIds\"\x90\x02\n" +
+	"\x15claimed_milestone_ids\x18\x03 \x03(\rR\x13claimedMilestoneIds\"\xcb\x02\n" +
 	"\x16PlayerTrialJournalComp\x12\"\n" +
 	"\rlit_seal_bits\x18\x01 \x01(\fR\vlitSealBits\x124\n" +
 	"\x16claimed_milestone_bits\x18\x02 \x01(\fR\x14claimedMilestoneBits\x12%\n" +
 	"\x0estate_revision\x18\x03 \x01(\x04R\rstateRevision\x122\n" +
 	"\arecords\x18\x04 \x03(\v2\x18.TrialJournalEntryRecordR\arecords\x12A\n" +
-	"\x0eseason_records\x18\x05 \x03(\v2\x1a.SeasonTrialJournalArchiveR\rseasonRecordsB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x0eseason_records\x18\x05 \x03(\v2\x1a.SeasonTrialJournalArchiveR\rseasonRecords\x129\n" +
+	"\x19normal_boss_trial_cleared\x18\x06 \x01(\bR\x16normalBossTrialClearedB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_trial_journal_comp_proto_rawDescOnce sync.Once

@@ -2,10 +2,13 @@ package commerce
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"math"
 
 	tradepb "proto/trade"
 	"shared/currencytype"
+	"trade/internal/data"
 )
 
 const (
@@ -218,4 +221,90 @@ func (g *PlayerTradeGuard) evalAcquaintanceLocked(ctx context.Context, sellerID,
 		CoolingLockDurationMs: lockMs,
 		Reason:                "acquaintance_deviation_cooling_lock",
 	}, nil
+}
+
+const maxDailyPlayerTradeScanRows = 1000
+
+func saturatingAddUint64(a, b uint64) uint64 {
+	if a > math.MaxUint64-b {
+		return math.MaxUint64
+	}
+	return a + b
+}
+
+func workflowCurrencyOutflow(rawWorkflow []byte, currencyType uint32, asSeller bool) (uint64, error) {
+	if len(rawWorkflow) == 0 {
+		return 0, nil
+	}
+	w, err := data.Workflow(&tradepb.TradeCommerceRecord{WorkflowProto: rawWorkflow})
+	if err != nil {
+		return 0, err
+	}
+	sel := w.GetBuyerAssets()
+	if asSeller {
+		sel = w.GetSellerAssets()
+	}
+	if sel == nil || sel.GetCurrencyAmount() == 0 || sel.GetCurrencyType() != currencyType {
+		return 0, nil
+	}
+	return sel.GetCurrencyAmount(), nil
+}
+
+// SQLDailyPlayerTradeTracker 直接复读 mmorpg_trade.trade_commerce 中当日在途与已结案的游戏内当面交易（kind=2），
+// 按买卖双侧走各自索引累加流出总额，堵死拆分小单绕过 MaxDailyCurrencyAmount 的漏洞。
+type SQLDailyPlayerTradeTracker struct {
+	DB *sql.DB
+}
+
+func (t *SQLDailyPlayerTradeTracker) DailyCurrencyOutflow(ctx context.Context, playerID uint64, currencyType uint32, dayStartMs uint64) (uint64, error) {
+	if t == nil || t.DB == nil {
+		return 0, errors.New("当面交易单日限额存储未装配")
+	}
+	if playerID == 0 || !currencytype.IsKnown(currencyType) {
+		return 0, ErrInvalid
+	}
+	sellerSum, err := t.sumSide(ctx,
+		"SELECT workflow_proto FROM trade_commerce WHERE seller_player_id=? AND kind=2 AND status IN (1,3,4,5,10,11) AND created_ms>=? ORDER BY commerce_id DESC LIMIT ?",
+		playerID, currencyType, dayStartMs, true)
+	if err != nil {
+		return 0, err
+	}
+	buyerSum, err := t.sumSide(ctx,
+		"SELECT workflow_proto FROM trade_commerce WHERE buyer_player_id=? AND kind=2 AND status IN (1,3,4,5,10,11) AND created_ms>=? ORDER BY commerce_id DESC LIMIT ?",
+		playerID, currencyType, dayStartMs, false)
+	if err != nil {
+		return 0, err
+	}
+	return saturatingAddUint64(sellerSum, buyerSum), nil
+}
+
+func (t *SQLDailyPlayerTradeTracker) sumSide(ctx context.Context, query string, playerID uint64, currencyType uint32, dayStartMs uint64, asSeller bool) (uint64, error) {
+	rows, err := t.DB.QueryContext(ctx, query, playerID, dayStartMs, maxDailyPlayerTradeScanRows)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var total uint64
+	var scanned int
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return 0, err
+		}
+		scanned++
+		part, err := workflowCurrencyOutflow(raw, currencyType, asSeller)
+		if err != nil {
+			return 0, err
+		}
+		total = saturatingAddUint64(total, part)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if scanned >= maxDailyPlayerTradeScanRows {
+		// 单日单侧当面交易笔数触顶直接饱和拒放，防止刷海量小单绕过累计限额。
+		return math.MaxUint64, nil
+	}
+	return total, nil
 }

@@ -1026,11 +1026,11 @@ constexpr PlayerPetComp::ParseTableT_ PlayerPetComp::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1054,18 +1054,21 @@ constexpr PlayerPetComp::ParseTableT_ PlayerPetComp::InternalGenerateParseTable_
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_sequence_)}},
       // uint32 last_purchase_pet_table_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_table_id_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_table_id_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_)}},
       // uint64 last_purchase_pet_id = 5;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_id_), 3>(),
        {40, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_id_)}},
       // uint64 last_purchase_price_gold = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_price_gold_), 4>(),
-       {48, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_price_gold_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool starter_pet_granted = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerPetComp, _impl_.starter_pet_granted_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.starter_pet_granted_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1076,11 +1079,13 @@ constexpr PlayerPetComp::ParseTableT_ PlayerPetComp::InternalGenerateParseTable_
       // uint64 last_purchase_sequence = 3;
       {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_sequence_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 last_purchase_pet_table_id = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 last_purchase_pet_id = 5;
       {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 last_purchase_price_gold = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool starter_pet_granted = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.starter_pet_granted_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1107,8 +1112,9 @@ inline constexpr PlayerPetComp::Impl_::Impl_(
         active_pet_id_{::uint64_t{0u}},
         last_purchase_sequence_{::uint64_t{0u}},
         last_purchase_pet_id_{::uint64_t{0u}},
-        last_purchase_price_gold_{::uint64_t{0u}},
-        last_purchase_pet_table_id_{0u} {}
+        last_purchase_pet_table_id_{0u},
+        starter_pet_granted_{false},
+        last_purchase_price_gold_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr PlayerPetComp::PlayerPetComp(::_pbi::ConstantInitialized,
@@ -1285,19 +1291,21 @@ const ::uint32_t
         12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.pets_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.active_pet_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_sequence_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_pet_table_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_pet_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_price_gold_),
+        PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.starter_pet_granted_),
         0,
         1,
         2,
-        5,
-        3,
         4,
+        3,
+        6,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1344,18 +1352,19 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fpet_5
     "alue\030\002 \001(\r:\0028\001\0325\n\023EntryAllocatedEntry\022\013\n"
     "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0326\n\024EntryLa"
     "stTargetEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001("
-    "\r:\0028\001\"\306\001\n\rPlayerPetComp\022\032\n\004pets\030\001 \003(\0132\014."
+    "\r:\0028\001\"\343\001\n\rPlayerPetComp\022\032\n\004pets\030\001 \003(\0132\014."
     "PetInstance\022\025\n\ractive_pet_id\030\002 \001(\004\022\036\n\026la"
     "st_purchase_sequence\030\003 \001(\004\022\"\n\032last_purch"
     "ase_pet_table_id\030\004 \001(\r\022\034\n\024last_purchase_"
     "pet_id\030\005 \001(\004\022 \n\030last_purchase_price_gold"
-    "\030\006 \001(\004B\022Z\020common/componentb\006proto3"
+    "\030\006 \001(\004\022\033\n\023starter_pet_granted\030\007 \001(\010B\022Z\020c"
+    "ommon/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto = {
     false,
     false,
-    1114,
+    1143,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto,
     "proto/common/component/player_pet_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto_once,
@@ -2401,9 +2410,9 @@ PlayerPetComp::PlayerPetComp(
                offsetof(Impl_, active_pet_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, active_pet_id_),
-           offsetof(Impl_, last_purchase_pet_table_id_) -
+           offsetof(Impl_, last_purchase_price_gold_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::last_purchase_pet_table_id_));
+               sizeof(Impl_::last_purchase_price_gold_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerPetComp)
 }
@@ -2422,9 +2431,9 @@ inline void PlayerPetComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, active_pet_id_),
            0,
-           offsetof(Impl_, last_purchase_pet_table_id_) -
+           offsetof(Impl_, last_purchase_price_gold_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::last_purchase_pet_table_id_));
+               sizeof(Impl_::last_purchase_price_gold_));
 }
 PlayerPetComp::~PlayerPetComp() {
   // @@protoc_insertion_point(destructor:PlayerPetComp)
@@ -2477,10 +2486,10 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.pets_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
     ::memset(&_impl_.active_pet_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.last_purchase_pet_table_id_) -
-        reinterpret_cast<char*>(&_impl_.active_pet_id_)) + sizeof(_impl_.last_purchase_pet_table_id_));
+        reinterpret_cast<char*>(&_impl_.last_purchase_price_gold_) -
+        reinterpret_cast<char*>(&_impl_.active_pet_id_)) + sizeof(_impl_.last_purchase_price_gold_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2537,7 +2546,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint32 last_purchase_pet_table_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_last_purchase_pet_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2555,11 +2564,20 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint64 last_purchase_price_gold = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_last_purchase_price_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           6, this_._internal_last_purchase_price_gold(), target);
+    }
+  }
+
+  // bool starter_pet_granted = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_starter_pet_granted() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          7, this_._internal_starter_pet_granted(), target);
     }
   }
 
@@ -2588,7 +2606,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // repeated .PetInstance pets = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_pets_size();
@@ -2617,18 +2635,24 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
             this_._internal_last_purchase_pet_id());
       }
     }
-    // uint64 last_purchase_price_gold = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_last_purchase_price_gold() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_last_purchase_price_gold());
-      }
-    }
     // uint32 last_purchase_pet_table_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_last_purchase_pet_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_last_purchase_pet_table_id());
+      }
+    }
+    // bool starter_pet_granted = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_starter_pet_granted() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 last_purchase_price_gold = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_last_purchase_price_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_last_purchase_price_gold());
       }
     }
   }
@@ -2650,7 +2674,7 @@ void PlayerPetComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_pets()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -2672,13 +2696,18 @@ void PlayerPetComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_last_purchase_price_gold() != 0) {
-        _this->_impl_.last_purchase_price_gold_ = from._impl_.last_purchase_price_gold_;
+      if (from._internal_last_purchase_pet_table_id() != 0) {
+        _this->_impl_.last_purchase_pet_table_id_ = from._impl_.last_purchase_pet_table_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (from._internal_last_purchase_pet_table_id() != 0) {
-        _this->_impl_.last_purchase_pet_table_id_ = from._impl_.last_purchase_pet_table_id_;
+      if (from._internal_starter_pet_granted() != 0) {
+        _this->_impl_.starter_pet_granted_ = from._impl_.starter_pet_granted_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_last_purchase_price_gold() != 0) {
+        _this->_impl_.last_purchase_price_gold_ = from._impl_.last_purchase_price_gold_;
       }
     }
   }
@@ -2701,8 +2730,8 @@ void PlayerPetComp::InternalSwap(PlayerPetComp* PROTOBUF_RESTRICT PROTOBUF_NONNU
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.pets_.InternalSwap(&other->_impl_.pets_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_)
-      + sizeof(PlayerPetComp::_impl_.last_purchase_pet_table_id_)
+      PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_)
+      + sizeof(PlayerPetComp::_impl_.last_purchase_price_gold_)
       - PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.active_pet_id_)>(
           reinterpret_cast<char*>(&_impl_.active_pet_id_),
           reinterpret_cast<char*>(&other->_impl_.active_pet_id_));

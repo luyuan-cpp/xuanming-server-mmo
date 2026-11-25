@@ -108,6 +108,11 @@ std::size_t Bag::GetTotalItemCount(uint32_t config_id) const
 	return store_.TotalCountOf(config_id);
 }
 
+std::size_t Bag::GetTotalTradableItemCount(uint32_t config_id) const
+{
+	return store_.TotalTradableCountOf(config_id);
+}
+
 ItemComp *Bag::GetItemCompByGuid(Guid guid)
 {
 	return store_.Find(guid);
@@ -124,16 +129,16 @@ ItemComp *Bag::GetItemCompByPos(uint32_t pos)
 // ── 容量预检:plan 问实例层,reserve 问布局层 ─────────────────────────────
 
 uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instancesByConfigOut,
-							std::size_t *totalInstancesOut)
+							std::size_t *totalInstancesOut, bool bound)
 {
-	// plan(实例层,零副作用):可叠加物品先填满同 config 现有堆叠的空余,只有
+	// plan(实例层,零副作用):可叠加物品先填满同 config 且同 bound 状态的既有堆叠空余,只有
 	// 溢出部分才需要**新建实例**;不可叠加(maxStack==1)每个单位一个实例。
 	//
 	// 拆分前"要几个实例"和"占几格"被 GridsNeededFor 这一个名字混成了一件事;
 	// 现在前者在这里算,后者由 CanReserve 回答。
 	AssertCapacityInvariant();
 
-	const ItemCountMap freeRoomByConfig = store_.MeasureFreeRoomPerConfig(itemsToAdd);
+	const ItemCountMap freeRoomByConfig = store_.MeasureFreeRoomPerConfig(itemsToAdd, bound);
 
 	// 逐 config 算出"要为它新建几个实例",顺带按 config 留一份明细 ——
 	// 具名槽的 reserve 要按**部位**汇总,只有一个总数是答不出来的
@@ -181,14 +186,14 @@ uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instan
 	return kSuccess;
 }
 
-uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instancesNeededOut)
+uint32_t Bag::CheckSpaceFor(const ItemCountMap &itemsToAdd, std::size_t *instancesNeededOut, bool bound)
 {
 	// 只读预检(不改背包):背包能否一次性放下 itemsToAdd 的每一项?
 	// 与真入包(AddItems)同一套 PlanInstances + CanReserve:背包满了就拒、从不腾位,
 	// 所以同一份数量清单这里说"放得下",同一时刻交给 AddItems 在空间上也放得下。
 	ItemCountMap instancesByConfig;
 	std::size_t instancesNeeded = 0;
-	RETURN_ON_ERROR(PlanInstances(itemsToAdd, &instancesByConfig, &instancesNeeded));
+	RETURN_ON_ERROR(PlanInstances(itemsToAdd, &instancesByConfig, &instancesNeeded, bound));
 
 	// 整批一次判定。今天 FootprintFor 恒为 1x1,所以格子数那一问一次就够;等
 	// 物品真有了宽高(格子背包),CanReserve 里要改成按 config 分组、逐形状问。
@@ -220,7 +225,8 @@ uint32_t Bag::CheckItemsAvailable(const ItemCountMap &requiredItems) const
 }
 
 uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove,
-						  std::vector<DrainedInstance> *drainedOut)
+						  std::vector<DrainedInstance> *drainedOut,
+						  bool tradableOnly, bool *consumedBoundOut)
 {
 	// 事务语义:先确认每种物品都够扣,任何一种不够就整体失败,绝不做部分删除。
 	// 调用方应先用 CheckQuantities 静默预检;走到这里还不够说明调用方漏了预检,打调用栈。
@@ -228,11 +234,21 @@ uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove,
 	{
 		return PrintStackAndReturnError(availability);
 	}
+	if (tradableOnly)
+	{
+		for (const auto &[configId, count] : itemsToRemove)
+		{
+			if (count > store_.TotalTradableCountOf(configId))
+			{
+				return PrintStackAndReturnError(kBagInsufficientItems);
+			}
+		}
+	}
 
 	// 数量扣光后由桥层立即成对释放实例与槽位，后续整理无需再回收零堆。
 	for (const auto &[configId, count] : SortedByConfigId(itemsToRemove))
 	{
-		DrainOneConfig(configId, count, drainedOut);
+		DrainOneConfig(configId, count, drainedOut, tradableOnly, consumedBoundOut);
 	}
 	AssertLayerConsistency();
 	return kSuccess;
@@ -331,7 +347,8 @@ uint32_t Bag::RemoveItemsClamped(const ItemCountMap &itemsToRemove,
 }
 
 void Bag::DrainOneConfig(uint32_t configId, uint32_t count,
-                         std::vector<DrainedInstance> *drainedOut)
+                         std::vector<DrainedInstance> *drainedOut,
+                         bool tradableOnly, bool *consumedBoundOut)
 {
     if (count == 0)
     {
@@ -340,7 +357,7 @@ void Bag::DrainOneConfig(uint32_t configId, uint32_t count,
     const ItemStore::DrainRank bySlot = [this](Guid guid)
         { return static_cast<uint64_t>(layout_->SlotOf(guid)); };
     std::vector<ItemStore::StackDrain> drains;
-    store_.DrainStacks(configId, count, bySlot, &drains);
+    store_.DrainStacks(configId, count, bySlot, &drains, tradableOnly, consumedBoundOut);
     for (const auto &drain : drains)
     {
         if (drainedOut != nullptr)
@@ -623,7 +640,8 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	{
 		return kSuccess;
 	}
-	ItemCountMap stackUnits;
+	ItemCountMap unboundStackUnits;
+	ItemCountMap boundStackUnits;
 	ItemCountMap separateInstances;
 	std::unordered_set<Guid> preassigned;
 	for (const auto &param : itemsToAdd)
@@ -645,8 +663,11 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		}
 		// 独立实例（已带实例数据，或带着本版本不认识的字段）不能合堆；单独计实例数，不拿普通材料的空余抵扣它。
 		// 判据必须与提交侧 CanStack 同一个（ItemStore::IsIndependentInstance），否则规划少铸号、提交时号不够。
+		// 绑定堆与可交易堆必须分组规划空余，不能互相合堆。
 		const bool independent = ItemStore::IsIndependentInstance(item);
-		auto &units = independent ? separateInstances[item.config_id()] : stackUnits[item.config_id()];
+		auto &units = independent
+			? separateInstances[item.config_id()]
+			: (item.bound() ? boundStackUnits[item.config_id()] : unboundStackUnits[item.config_id()]);
 		const auto added = independent ? ItemStore::StacksNeededFor(item.size(), maxStack) : item.size();
 		if (added > std::numeric_limits<uint32_t>::max() - units)
 		{
@@ -662,11 +683,22 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		}
 	}
 
-	// plan + reserve:可合堆的单位先填既有堆,溢出部分与独立实例各要新建几个实例,照现状摆不摆得下。
+	// plan + reserve:可合堆的单位按绑定状态分别先填既有堆,溢出部分与独立实例各要新建几个实例,照现状摆不摆得下。
 	// 满了就拒、从不腾位:背包没有淘汰策略(2026-11-12 删除了整条淘汰轴,docs/design/bag-rule-policy-layering.md §3)。
 	ItemCountMap instancesByConfig;
 	std::size_t newInstanceCount = 0;
-	RETURN_ON_ERROR(PlanInstances(stackUnits, &instancesByConfig, &newInstanceCount));
+	RETURN_ON_ERROR(PlanInstances(unboundStackUnits, &instancesByConfig, &newInstanceCount, /*bound=*/false));
+	if (!boundStackUnits.empty())
+	{
+		ItemCountMap boundInstancesByConfig;
+		std::size_t boundInstanceCount = 0;
+		RETURN_ON_ERROR(PlanInstances(boundStackUnits, &boundInstancesByConfig, &boundInstanceCount, /*bound=*/true));
+		for (const auto &[configId, count] : boundInstancesByConfig)
+		{
+			instancesByConfig[configId] += count;
+		}
+		newInstanceCount += boundInstanceCount;
+	}
 	for (const auto &[configId, count] : separateInstances)
 	{
 		instancesByConfig[configId] += count;

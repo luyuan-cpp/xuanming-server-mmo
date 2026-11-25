@@ -1,4 +1,5 @@
 #include "player_battle.h"
+#include "ranked_preset_rules.h"
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_equipment_material_reward.h"
 #include "player/system/player_season.h"
@@ -92,6 +93,7 @@
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
+#include "table/code/dungeon_table.h"
 // 战斗配表指纹(七张战斗表确定性序列化 sha256,随快照携带给 match/battle 比对)。
 #include "services/battle/data/battle_table_fingerprint.h"
 
@@ -1026,11 +1028,19 @@ namespace
 		*message.mutable_settlement() = settlement;
 		// 掉落放不进两个包、整批改投了邮件(battle-overflow-mail.md):这件事记在这一局的近期结果里(与结算同一次存档提交),
 		// 从那里取,结算屏据此提示去邮箱领取。结果已被淘汰出列表(之后又结算了 10 局以上)时不带这个提示。
+		message.set_season_id(settlement.season_id());
 		if (const auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player); history != nullptr)
 		{
 			if (const auto* result = battle_result::FindByBattle(*history, settlement.battle_id()); result != nullptr)
 			{
 				message.set_items_mailed(result->items_mailed());
+				message.set_material_credit_units_added(result->material_credit_units_added());
+				message.set_material_tradable_units_added(result->material_tradable_units_added());
+				message.set_material_pvp_loss_ineligible(result->material_pvp_loss_ineligible());
+				if (result->season_id() != 0)
+				{
+					message.set_season_id(result->season_id());
+				}
 			}
 		}
 		SendToPlayerClient(BattleClientPlayerNotifyBattleEndMessageId, message, player);
@@ -1269,6 +1279,147 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	return true;
 }
 
+namespace
+{
+	// 论剑首发 V1 竞技快照:完全脱离玩家真实装备/等级/血蓝/技能/宝宝战力与场外 Buff/消耗品,
+	// 仅保留身份、外观(含 10 元形象卡/试用)与合法出战宝宝的展示名称/外观;零宠物账号使用预设默认宝宝外观并置 pet_id=0。
+	bool BuildCompetitiveBattleSnapshot(entt::entity player, const ::RankedMatchContext& rankedCtx,
+										::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId)
+	{
+		const uint64_t playerId = tlsEcs.GetPlayerId(player);
+		const auto& registry = tlsEcs.actorRegistry;
+		if (!registry.all_of<PlayerProfileComp, PlayerPetComp>(player))
+		{
+			LOG_ERROR << "[PlayerBattle] Competitive snapshot failed: persisted profile or pet component missing, player_id=" << playerId;
+			errorTipId = kServiceUnavailable;
+			return false;
+		}
+		GateRoute gateRoute;
+		if (!ResolveGateRoute(player, gateRoute))
+		{
+			LOG_ERROR << "[PlayerBattle] Competitive snapshot failed: missing session snapshot, player_id=" << playerId;
+			errorTipId = kSessionNotFound;
+			return false;
+		}
+		if (!rankedpreset::ValidateTables())
+		{
+			errorTipId = kInvalidTableData;
+			return false;
+		}
+		const auto* rule = RankedRuleTableManager::Instance().FindByIdSilent(rankedpreset::kRuleRowId).first;
+		if (rule == nullptr || rankedCtx.rule_version() != rule->rule_version())
+		{
+			LOG_WARN << "[PlayerBattle] Competitive snapshot rejected: rule_version mismatch player_id=" << playerId
+					 << " request_version=" << rankedCtx.rule_version()
+					 << " local_version=" << (rule != nullptr ? rule->rule_version() : 0u);
+			errorTipId = kInvalidParameter;
+			return false;
+		}
+		const std::string localFp = rankedpreset::ComputeConfigFingerprint();
+		if (localFp.empty() || (!rankedCtx.config_fingerprint().empty() && rankedCtx.config_fingerprint() != localFp))
+		{
+			LOG_ERROR << "[PlayerBattle] Competitive snapshot rejected: config_fingerprint mismatch player_id=" << playerId
+					  << " request_fp=" << rankedCtx.config_fingerprint() << " local_fp=" << localFp;
+			errorTipId = kFeatureUnavailable;
+			return false;
+		}
+		uint32_t charPresetId = 0;
+		uint32_t petPresetId = 0;
+		for (const auto& member : rankedCtx.members())
+		{
+			if (member.player_id() == playerId)
+			{
+				charPresetId = member.presets().character_preset_id();
+				petPresetId = member.presets().pet_preset_id();
+				break;
+			}
+		}
+		const auto* charPreset = RankedPresetTableManager::Instance().FindByIdSilent(charPresetId).first;
+		const auto* petPreset = RankedPresetTableManager::Instance().FindByIdSilent(petPresetId).first;
+		if (charPreset == nullptr || charPreset->role_kind() != rankedpreset::kRoleKindCharacter ||
+			petPreset == nullptr || petPreset->role_kind() != rankedpreset::kRoleKindPet)
+		{
+			LOG_WARN << "[PlayerBattle] Competitive snapshot rejected: invalid preset selection player_id=" << playerId
+					 << " char_preset=" << charPresetId << " pet_preset=" << petPresetId;
+			errorTipId = kInvalidParameter;
+			return false;
+		}
+
+		rankedpreset::DerivedStats charStats;
+		BaseAttributesComp baseAttrs;
+		if (!rankedpreset::BuildCompetitiveCharacterStats(*rule, *charPreset, charStats, baseAttrs))
+		{
+			errorTipId = kInvalidTableData;
+			return false;
+		}
+
+		snapshot.Clear();
+		const auto& profile = registry.get<PlayerProfileComp>(player);
+		snapshot.set_player_id(playerId);
+		snapshot.set_player_name(profile.name());
+		snapshot.set_appearance_id(PlayerAppearanceSystem::EffectiveAppearanceId(player, TimeSystem::NowSecondsUTC()));
+		snapshot.set_gender(profile.gender());
+		snapshot.set_class_id(rule->reference_class_id());
+		snapshot.set_level(playerlevel::CappedLevel(rule->competitive_level()));
+		*snapshot.mutable_base_attributes() = baseAttrs;
+		snapshot.set_max_health(charStats.maxHealth);
+		snapshot.set_max_mana(charStats.maxMana);
+		snapshot.set_physical_attack(charStats.physicalAttack);
+		snapshot.set_magic_attack(charStats.magicAttack);
+		snapshot.set_defense(charStats.defense);
+		snapshot.set_pet_capture_slots(0);
+
+		for (const uint32_t skillId : charPreset->skill_ids())
+		{
+			const auto* skillRow = SkillTableManager::Instance().FindByIdSilent(skillId).first;
+			if (skillRow == nullptr)
+			{
+				errorTipId = kInvalidTableData;
+				return false;
+			}
+			(*snapshot.mutable_skill_ranks())[skillId] = 1;
+			if (rankedpreset::IsRankedCastableSkill(*skillRow))
+			{
+				snapshot.add_skill_table_ids(skillId);
+			}
+		}
+
+		uint32_t cosmeticPetTableId = 0;
+		std::string cosmeticPetName;
+		const auto& petComp = registry.get<PlayerPetComp>(player);
+		if (petComp.active_pet_id() != 0)
+		{
+			for (const auto& pet : petComp.pets())
+			{
+				if (pet.pet_id() == petComp.active_pet_id())
+				{
+					cosmeticPetTableId = pet.pet_table_id();
+					cosmeticPetName = pet.name();
+					break;
+				}
+			}
+		}
+		if (!rankedpreset::BuildCompetitivePetSnapshot(*rule, *petPreset, playerId, cosmeticPetTableId,
+													   cosmeticPetName, *snapshot.add_pets()))
+		{
+			errorTipId = kInvalidTableData;
+			return false;
+		}
+
+		auto* routing = snapshot.mutable_routing();
+		routing->set_session_id(gateRoute.sessionId);
+		routing->set_gate_node_id(gateRoute.gateNodeId);
+		routing->set_gate_instance_id(gateRoute.gateInstanceId);
+		const auto& selfNode = GetNodeInfo();
+		routing->set_scene_node_id(selfNode.node_id());
+		routing->set_scene_instance_id(selfNode.node_uuid());
+		routing->set_zone_id(GetZoneId());
+		snapshot.set_team_index(0);
+		snapshot.set_table_fingerprint(turnbattle::BattleTableFingerprint::Current());
+		return true;
+	}
+} // namespace
+
 void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::PrepareBattleResponse& response)
 {
 	const uint64_t playerId = request.player_id();
@@ -1325,24 +1476,64 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		return;
 	}
 
-	// 0 血玩家不得入局(纵深防御:结算/登录已做基础复活,这里兜底):
-	// 引擎会在开局即判定该方战败,对手白拿一局,自己白排一次队。
-	if (const auto* attrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
-		attrs != nullptr && attrs->health() == 0)
+	const bool useFreePreset = request.has_ranked_context() && request.ranked_context().use_free_preset();
+	const bool isFormalRanked = request.has_ranked_context() && request.ranked_context().season_id() != 0;
+	const DungeonTable* dungeonRow = request.battle_config_id() != 0
+		? DungeonTableManager::Instance().FindByIdSilent(request.battle_config_id()).first
+		: nullptr;
+	const uint32_t bossTrialKind = dungeonRow != nullptr ? dungeonRow->boss_trial_kind() : turnbattle::kBossTrialKindNone;
+	const bool isBossTrial = bossTrialKind >= turnbattle::kBossTrialKindBreakRejuv &&
+							 bossTrialKind <= turnbattle::kBossTrialKindVenom;
+	const bool isGuardRescue = bossTrialKind == turnbattle::kBossTrialKindGuardianRescue;
+
+	// 困难首领试炼准入硬校验（core-gameplay-loop.md §1）：普通首通任意一只后解锁，组队困难全员各校一次。
+	if (isBossTrial && dungeonRow->difficulty() >= 2u &&
+		!PlayerTrialJournalSystem::HasClearedAnyNormalBossTrial(player))
 	{
-		LOG_WARN << "[PlayerBattle] PrepareBattle rejected: player has 0 health(dead and not revived), player_id=" << playerId
-				 << " battle_id=" << battleId;
+		LOG_WARN << "[PlayerBattle] PrepareBattle rejected: hard boss trial locked, player_id=" << playerId
+				 << " battle_id=" << battleId << " battle_config_id=" << request.battle_config_id();
 		response.mutable_error_message()->set_id(kFeatureUnavailable);
 		return;
 	}
 
-	// 先组快照,失败不留任何冻结痕迹
+	// 免费预设娱乐场、正式人宠会武与首领试炼均以局内满血蓝无耗材快照入场，不受场外残血或 0 血阻断。
+	const bool isolateBattleTempState = useFreePreset || isFormalRanked || isBossTrial || isGuardRescue;
+	if (!isolateBattleTempState)
+	{
+		if (const auto* attrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
+			attrs != nullptr && attrs->health() == 0)
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: player has 0 health(dead and not revived), player_id=" << playerId
+					 << " battle_id=" << battleId;
+			response.mutable_error_message()->set_id(kFeatureUnavailable);
+			return;
+		}
+	}
+
+	// 先组快照,失败不留任何冻结痕迹：仅免费预设娱乐场(use_free_preset=true)构建免费 3×3 预设快照；
+	// 正式人宠会武(season_id != 0 && !use_free_preset)与首领试炼均使用本人真实装备/词条/法宝/技能/宝宝快照。
 	uint32_t errorTipId = kSuccess;
-	if (!BuildBattleSnapshot(player, *response.mutable_snapshot(), errorTipId))
+	const bool built = useFreePreset
+		? BuildCompetitiveBattleSnapshot(player, request.ranked_context(), *response.mutable_snapshot(), errorTipId)
+		: BuildBattleSnapshot(player, *response.mutable_snapshot(), errorTipId);
+	if (!built)
 	{
 		response.clear_snapshot();
 		response.mutable_error_message()->set_id(errorTipId);
 		return;
+	}
+	if (!useFreePreset && isolateBattleTempState)
+	{
+		auto* snap = response.mutable_snapshot();
+		snap->mutable_base_attributes()->set_health(snap->max_health());
+		snap->mutable_base_attributes()->set_mana(snap->max_mana());
+		for (auto& petSnap : *snap->mutable_pets())
+		{
+			petSnap.mutable_base_attributes()->set_health(petSnap.max_health());
+			petSnap.mutable_base_attributes()->set_mana(petSnap.max_mana());
+		}
+		snap->clear_items();
+		snap->set_pet_capture_slots(0);
 	}
 
 	// 备战作废期限:match 在 gather 阶段崩溃时,已冻结成员只等这个短期限而不是整场战斗时限;
@@ -2142,7 +2333,8 @@ PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, c
 void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::BattleSettlementData& settlement,
                         const SettlementCurrencyGains& currencyGains, const ItemCountMap& granted, const ItemCountMap& consumed,
                         const bool itemsMailed,
-                        const PlayerTrialJournalSystem::SettlementDelta* trialDelta = nullptr)
+                        const PlayerTrialJournalSystem::SettlementDelta* trialDelta = nullptr,
+                        const PlayerEquipmentMaterialRewardSystem::BattleCreditDelta* materialDelta = nullptr)
 {
     const uint64_t battleId = settlement.battle_id();
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
@@ -2155,6 +2347,13 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
     }
     auto entry = BuildBattleResult(settlement, currencyGains, granted, consumed, TimeSystem::NowMillisecondsUTC());
     entry.set_items_mailed(itemsMailed);
+    entry.set_season_id(settlement.season_id());
+    if (materialDelta != nullptr)
+    {
+        entry.set_material_credit_units_added(materialDelta->totalUnitsAdded);
+        entry.set_material_tradable_units_added(materialDelta->tradableUnitsAdded);
+        entry.set_material_pvp_loss_ineligible(materialDelta->pvpLossIneligible);
+    }
     if (trialDelta != nullptr && trialDelta->entryId != 0)
     {
         entry.set_trial_journal_entry_id(trialDelta->entryId);
@@ -2458,12 +2657,19 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     const bool creditsMaterialReward = PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
     ClientRequestLedgerComp materialRewardCandidate;
     std::string materialRewardBefore;
+    PlayerEquipmentMaterialRewardSystem::BattleCreditDelta materialCreditDelta;
     if (creditsMaterialReward) {
         const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
         if (ledger == nullptr || tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) return false;
         materialRewardBefore = ledger->SerializeAsString();
         if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
-            settlementNowMs, materialRewardCandidate) != kSuccess) return false;
+            settlementNowMs, materialRewardCandidate, &materialCreditDelta) != kSuccess) return false;
+    } else if (const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+               ledger != nullptr && !tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) {
+        // 非达标局（例如 PVP 挂机未满足 3 回合/2 手动/有效贡献）同样记录 pvpLossIneligible 提示，不改动账本。
+        ClientRequestLedgerComp unusedCandidate;
+        (void)PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
+            settlementNowMs, unusedCandidate, &materialCreditDelta);
     }
 
     // 赛季印进度同在首次收件箱应用时原子入账（仅正规 PVE 胜利与正规排位 PVP，受封顶夹取）。
@@ -2491,6 +2697,46 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         trialJournalBefore = trialJournalComp->SerializeAsString();
         if (PlayerTrialJournalSystem::PrepareBattleCredit(*trialJournalComp, settlement, settlementNowMs,
             trialJournalCandidate, trialJournalDelta) != kSuccess) return false;
+    }
+
+    // 正式人宠会武(competitive_ranked)与免费预设娱乐场(use_free_preset)严格资产隔离：
+    // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季进度、试炼志（如护卫救援）与近期战果。
+    if (settlement.competitive_ranked() || settlement.use_free_preset()) {
+        const auto rankedIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+        if (!rankedIdentity || !IsSettlementApplicable(player) ||
+            !tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) {
+            return false;
+        }
+        auto* currentLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        auto* currentSeason = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+        auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
+        if (creditsMaterialReward && (currentLedger == nullptr ||
+            currentLedger->SerializeAsString() != materialRewardBefore ||
+            tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) {
+            return false;
+        }
+        if (creditsSeasonProgress && (currentSeason == nullptr ||
+            currentSeason->SerializeAsString() != seasonProgressBefore)) {
+            return false;
+        }
+        if (creditsTrialJournal && (currentTrialJournal == nullptr ||
+            currentTrialJournal->SerializeAsString() != trialJournalBefore)) {
+            return false;
+        }
+        if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
+        if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
+        if (creditsTrialJournal && trialJournalDelta.changed) currentTrialJournal->Swap(&trialJournalCandidate);
+        if (BagService::ReleaseHold(player, battleId)) {
+            LOG_INFO << "[PlayerBattle] metric=battle_item_hold_released player_id=" << playerId << " battle_id=" << battleId
+                     << " reason=isolated_settlement_applied";
+        }
+        if (seasonPointsIncreased) {
+            PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
+            PlayerAttributeSystem::PushPanel(player);
+        }
+        RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
+                           /*itemsMailed=*/false, nullptr, &materialCreditDelta);
+        return true;
     }
 
     const auto inboxIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
@@ -2741,7 +2987,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 那一批也算:它已经是玩家的,经邮件领取)、未被封禁的币种、按实际持有夹紧的消耗。
     RecordBattleResult(player, playerId, settlement, currencyGains, inboxGained, actualConsumption,
                        /*itemsMailed=*/!mailed.empty(),
-                       creditsTrialJournal ? &trialJournalDelta : nullptr);
+                       creditsTrialJournal ? &trialJournalDelta : nullptr,
+                       &materialCreditDelta);
     return true; // 永久Inbox域水位由调用方与本次效果同帧记入同一快照。
 }
 

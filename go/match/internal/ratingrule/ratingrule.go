@@ -129,3 +129,61 @@ func orDefault(value, fallback int64) int64 {
 	}
 	return value
 }
+
+// RankedCurve 是论剑排位(PVP_TEAM)硬上限分差曲线:默认 0-30s 为 100 分,30-90s 为 200 分,
+// 90s 及以上封顶 300 分,永不退化为 +Inf(docs/design/ranked-play-season-ui-candidate.md §2.3)。
+type RankedCurve struct {
+	Tier1Seconds uint32
+	Tier1Points  uint32
+	Tier2Seconds uint32
+	Tier2Points  uint32
+	Tier3Points  uint32
+}
+
+// DefaultRankedCurve 返回论剑首发 V1 默认硬上限分差窗口(30s/100, 90s/200, 300)。
+func DefaultRankedCurve() RankedCurve {
+	return RankedCurve{
+		Tier1Seconds: 30,
+		Tier1Points:  100,
+		Tier2Seconds: 90,
+		Tier2Points:  200,
+		Tier3Points:  300,
+	}
+}
+
+func (c RankedCurve) normalized() RankedCurve {
+	d := DefaultRankedCurve()
+	if c.Tier1Seconds == 0 || c.Tier2Seconds <= c.Tier1Seconds || c.Tier1Points == 0 || c.Tier2Points < c.Tier1Points || c.Tier3Points < c.Tier2Points {
+		return d
+	}
+	return c
+}
+
+// SpreadPoints 返回等待 waitSeconds 秒时允许的最大排位分差(评分点,硬上限封顶)。
+func (c RankedCurve) SpreadPoints(waitSeconds int64) uint32 {
+	n := c.normalized()
+	if waitSeconds < 0 {
+		waitSeconds = 0
+	}
+	if uint64(waitSeconds) < uint64(n.Tier1Seconds) {
+		return n.Tier1Points
+	}
+	if uint64(waitSeconds) < uint64(n.Tier2Seconds) {
+		return n.Tier2Points
+	}
+	return n.Tier3Points
+}
+
+// Anchor 返回等待 waitSeconds 秒时允许的最大排位分差(评分点,永不返回 +Inf)。
+func (c RankedCurve) Anchor(waitSeconds int64) float64 {
+	return float64(c.SpreadPoints(waitSeconds))
+}
+
+// AnchorCenti 返回等待 waitMs 毫秒时允许的最大排位分差(×100,永不返回 +Inf)。
+func (c RankedCurve) AnchorCenti(waitMs uint64) float64 {
+	seconds := waitMs / 1000
+	if seconds > math.MaxInt64 {
+		seconds = math.MaxInt64
+	}
+	return float64(c.SpreadPoints(int64(seconds))) * 100
+}

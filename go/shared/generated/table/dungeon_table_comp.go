@@ -33,6 +33,18 @@ type DungeonAllow_pet_captureComp struct {
     Value uint32
 }
 
+type DungeonBoss_trial_kindComp struct {
+    Value uint32
+}
+
+type DungeonDifficultyComp struct {
+    Value uint32
+}
+
+type DungeonRound_limitComp struct {
+    Value uint32
+}
+
 type DungeonMonsterComp struct {
     Values []uint32
 }
@@ -60,6 +72,18 @@ func MakeDungeonTime_limitComp(row *pb.DungeonTable) DungeonTime_limitComp {
 
 func MakeDungeonAllow_pet_captureComp(row *pb.DungeonTable) DungeonAllow_pet_captureComp {
     return DungeonAllow_pet_captureComp{Value: row.AllowPetCapture}
+}
+
+func MakeDungeonBoss_trial_kindComp(row *pb.DungeonTable) DungeonBoss_trial_kindComp {
+    return DungeonBoss_trial_kindComp{Value: row.BossTrialKind}
+}
+
+func MakeDungeonDifficultyComp(row *pb.DungeonTable) DungeonDifficultyComp {
+    return DungeonDifficultyComp{Value: row.Difficulty}
+}
+
+func MakeDungeonRound_limitComp(row *pb.DungeonTable) DungeonRound_limitComp {
+    return DungeonRound_limitComp{Value: row.RoundLimit}
 }
 
 func MakeDungeonMonsterComp(row *pb.DungeonTable) DungeonMonsterComp {

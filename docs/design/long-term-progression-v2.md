@@ -1,9 +1,9 @@
-# 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2）
+# 《五行奇谈》长期养成与「五行试炼志」玩法优化设计（V2.1 终版）
 
-> 日期：2026-11-23  
-> 状态：**设计方案落盘（尚未写代码、未改协议/配表、未运行编译或联机验收）**  
-> 与 V1 的关系：本稿依据 2026-11-23 最新核心循环（永久 660 封顶、取消每日打卡）、世界地图 V2（1+3 生态与三图明雷首领）、赛季技能与单槽赛季印（方案 A）以及已落地的永久多人物收藏衣柜，**全面升级并替代** [long-term-progression-v1.md](long-term-progression-v1.md)（V1 原稿保留作历史基线参考）。  
-> 协作分工：Gemini 负责双服（C++/Go + 独立 Java）协议、配表、战斗统计与业务逻辑；另一台电脑的 Codex 负责 Unity「五行试炼志」UI、美术表现与联机交互验收。
+> 日期：2026-11-24  
+> 状态：**M1（卷一 · 破阵试炼）+ M2（卷二 · 灵障玄毒 + M901 五行宗师「星阵宗师」专属形象）+ M3（卷三 · 季游奇谈 S1）全三卷权威配表、Go `match`、C++ `battle`/`scene` 与 Unity 纯 C# 层均已落码**  
+> 与 V1 的关系：本稿依据 2026-11-24 最新核心循环（两阶段 660 + 周 100 总账、三大首领试炼 `Dungeon 101–108`、护卫救援 `Dungeon 109`、物法易势 5V5 `Dungeon 110`）、赛季技能与单槽赛季印（方案 A）以及已落地的永久多人物收藏衣柜，**全面升级并替代** [long-term-progression-v1.md](long-term-progression-v1.md)（V1 原稿保留作历史基线参考）。  
+> 协作分工：本侧完成权威配表、Go `match`、C++ `battle`/`scene` 与 Unity `mmorpg-client` 纯 C# 适配层与单测；Unity uGUI 界面按 `D:\work\image\designs` 风格交由 ChatGPT / 异机 UI 制作并直接对接本文 §6.2 规格书。
 
 ---
 
@@ -50,11 +50,12 @@ UI 入口仍挂在「首领试炼 → 五行试炼志」（同时可在大世界
 
 | 卷别 | 主题与承载玩法 | 持久化策略 | 开放节奏 | 战法印数量 |
 |---|---|---|---|---:|
-| **卷一 · 破阵试炼** | 常驻[首领试炼](boss-trial-planning-ui.md)（普通/困难 × 回春/护势，4 格） | **永久位图**（导表 `cfg_bit_index`） | **M1 首发即全开** | **12 印** |
-| **卷二 · 三境明雷** | [世界地图 V2](world-map-play-v2.md) 三图明雷首领（八仙岛「风眼引风」/ 碧渊水宫「水镜钟鸣」/ 月汐湾「涨退潮」，3 格） | **永久位图**（同表追加行，零迁移） | **M2 随三图明雷配表接入** | **9 印** |
-| **卷三 · 季游奇谈** | 当季轮换玩法（「护卫救援」「物法易势」）与常驻「人宠会武」轻策略题（每季 4 题） | **按 `season_id` 独立存档**（绝不塞永久位图） | **M3 随首季轮换接入** | **每季 4 印** |
+| **卷一 · 破阵试炼** | 首领试炼·破阵首领（`Dungeon 101–104`：普通/困难 × 回春/护势，4 格） | **永久位图**（导表 `cfg_bit_index`） | **已落码全开** | **12 印** |
+| **卷二 · 灵障玄毒** | 首领试炼·灵障首领 & 玄毒首领（`Dungeon 105–108`：普通/困难 × 灵障/玄毒，4 格） | **永久位图**（同表追加行，零迁移） | **已落码全开** | **12 印** |
+| **卷三 · 季游奇谈（S1）** | 破阵之季限时/轮换与会武轻策略题（`Dungeon 109` 护卫救援 / `Dungeon 110` 物法易势 5V5 / `Dungeon 5` 人宠会武，3 格） | **按 `season_id` 独立存档**（`SeasonTrialJournalArchive`，绝不塞永久位图） | **已落码全开（S1）** | **每季 6 印** |
+| *（预留）卷四 · 三境明雷* | *世界地图 V2 三图明雷首领（八仙岛风眼 / 碧渊水宫水镜 / 月汐湾涨退潮）* | *同永久位图表向后追加行，零迁移* | *随野外明雷副本上线后开卷* | *预留 9 印* |
 
-> **关键不逼肝原则**：卷三为每季趣味加餐，错过整季**绝不影响**永久卷一、卷二的 21 枚印记、全部 8 件法宝的免费集齐以及终极专属永久角色形象的获取。
+> **关键不逼肝原则**：卷三为每季趣味加餐，错过整季**绝不影响**永久卷一、卷二的 24 枚印记、全部 8 件法宝的免费集齐以及终极专属永久角色形象「星阵宗师」（`M901`，18/24 印）的获取。
 
 ### 2.2 「攻·守·巧」多维战法印：让每一种流派与每一件法宝都有主场
 
@@ -72,24 +73,26 @@ UI 入口仍挂在「首领试炼 → 五行试炼志」（同时可在大世界
 > **为什么「无损」按本人及本人宝宝判定，而非全队连坐？**  
 > 在 2～5 人合作中，如果因为一位陌生队友失误倒地就牵连其他认真防御/套盾的玩家拿不到「无损」，会滋生野队甩锅与踢人；按本人及本人出战宝宝在整场从未触发 `BATTLE_EVENT_DEATH`（含死亡后再复活仍算曾倒地）判定，单人时等价于全队无损，多人时专注做好自己的人宠保命与治疗协作，体验远更健康。
 
-#### 卷二 · 三境明雷（3 格 × 3 印 = 9 枚永久印，M2 配表扩展）
+#### 卷二 · 灵障玄毒（4 格 × 3 印 = 12 枚永久印，直连已落地 `Dungeon 105–108`）
 
-直接对齐 [world-map-play-v2.md](world-map-play-v2.md#21-严格控图与四图生态分工一图一玩法绝不同质换皮) 的三图特色机制：
+围绕已落地的灵障首领（每 3 回合叠加吸收护盾 + 预告法术重击，怪物 `104/105` 复用宝宝库 `岚铎仙/汐螺`）与玄毒首领（护卫周期封控吸蓝 + 玄毒群法，怪物 `106/107` 复用宝宝库 `赤砂魁/月弦师`），把 `F01 破阵刃`、`F02 照影镜`、`F08 清心符` 与赛季技能全部纳入常驻 PVE 主舞台：
 
-| 地图明雷格 | 印记 ① · 通 | 印记 ② · 守 | 印记 ③ · 巧 |
+| 关卡格（Entry / Dungeon） | 印记 ① · 破阵（通） | 印记 ② · 速破 / 无损 | 印记 ③ · 巧策（机制解题） | 适配流派与法宝 |
+|---|---|---|---|---|
+| **普通·灵障** (`201` / `105`) | `2011` 首次有效通关 | `2012` **速破**：7 回合内有效通关 | `2013` **破障**：本人击破灵障护盾或触发破盾削盾并通关 | `F01 破阵刃`、`F02 照影镜`、`破阵锐印/玄印` |
+| **普通·玄毒** (`202` / `107`) | `2021` 首次有效通关 | `2022` **速破**：7 回合内有效通关 | `2023` **明心**：本人抵御缚灵/净化或施放赛季技并通关 | `F08 清心符`、净化辅助、免费赛季技 |
+| **困难·灵障** (`203` / `106`) | `2031` 首次有效通关困难 | `2032` **无损**：本人及本人宝宝全程零倒地 | `2033` **破障**：困难模式击破灵障护盾或触发破盾削盾并通关 | 破盾输出 + 护盾减伤保命 |
+| **困难·玄毒** (`204` / `108`) | `2041` 首次有效通关困难 | `2042` **无损**：本人及本人宝宝全程零倒地 | `2043` **明心**：困难模式抵御缚灵/净化或施放赛季技并通关 | 抗控净化 + 回蓝续航 |
+
+> 注：原构想的野外三图明雷首领（八仙岛「风眼引风」/ 碧渊水宫「水镜钟鸣」/ 月汐湾「涨退潮」）保留在 `TrialJournalSealConditionType` 枚举 `6/7/8` 中，待世界地图明雷副本正式落地后直接向后追加为**卷四 · 三境明雷**，零代码迁移、零位图重构。
+
+#### 卷三 · 季游奇谈（S1 破阵之季，3 格 × 2 印 = 6 枚赛季印，按 `season_id = 1` 隔离存储）
+
+| 关卡格（Entry / Dungeon） | 印记 ① | 印记 ② | 备注 |
 |---|---|---|---|
-| **八仙岛 · 风眼引风** | 首次有效击败 | **无损**：本人及本人宝宝全程零倒地 | **从容御风**：本场被慢动作风击点名后未因风击倒地且表配回合内胜出（考防御与护盾节奏） |
-| **碧渊水宫 · 水镜钟鸣** | 首次有效击败 | **无损**：本人及本人宝宝全程零倒地 | **应钟合鸣**：在「阳钟」回合打出有效物理直伤且在「阴鼓」回合打出有效法术直伤并胜出（考双系人宠协作） |
-| **月汐湾 · 涨退潮** | 首次有效击败 | **无损**：本人及本人宝宝全程零倒地 | **趁汐破阵**：在「退潮」易伤回合完成对首领的终结击杀（或单轮退潮打出表配爆发门槛）并胜出 |
-
-#### 卷三 · 季游奇谈（首季「破阵之季」4 题示例，M3 按季隔离）
-
-补齐剩余 3 件偏 PVP/破盾/抗控法宝（`F01 破阵刃`、`F02 照影镜`、`F08 清心符`）及赛季技能/赛季印的亮印舞台：
-
-1. **护卫保全**：在当季「护卫救援」中成功击败首领并保住回春护卫；
-2. **易势克敌**：在当季「物法易势」中取得 1 场有效胜利；
-3. **破障锋芒**：在正式「人宠会武」或当季试炼战中，本人触发破盾效果（`F01 破阵刃` / `F02 照影镜` / `破阵锐印` / `破阵玄印`）产生实际削盾并完成合格对局；
-4. **明心应劫**：在正式「人宠会武」或当季试炼战中，本人触发 `F08 清心符` 抗控判定、成功净化己方障碍或使用当季免费赛季技能完成 1 场有效胜利。
+| **护卫救援** (`301` / `109`, PVE) | `3011` **护卫保全**：8 回合内击败首领并保住受保护回春护卫 | `3012` **护卫无损**：本人及本人出战宝宝全程零倒地胜出 | 支持单人/组队，同时记录单人/合战最佳回合 |
+| **物法易势 5V5** (`302` / `110`, 娱乐 PVP) | `3021` **易势克敌**：取得 1 场有效胜利 | `3022` **双势兼济**：己方物理与法术均造成有效直伤并胜出 | 6 套免费预设、不计正式分，仅点亮赛季印不记回合速通 |
+| **人宠会武** (`303` / `5`, 正式 PVP) | `3031` **破障锋芒**：合格对局中本人触发破盾效果并造成有效削盾 | `3032` **明心应劫**：合格对局中本人触发清心抗控、净化或施放本季赛季技 | 合格对局（含防挂机门槛）即可亮印，不强制胜局 |
 
 ### 2.3 个人纪录与复盘快照：把“干数字”变成“策略手记”
 
@@ -118,16 +121,16 @@ UI 入口仍挂在「首领试炼 → 五行试炼志」（同时可在大世界
 | **M102 · 破阵试剑** | 卷一累计点亮 **6 印** | 仅自用「法宝拓印」× 1（自选兑换 1 件仅自用法宝） | 名片印戳「破阵试剑」 |
 | **M103 · 攻守兼备** | 卷一累计点亮 **9 印** | 仅自用「法宝拓印」× 1 ＋ 仅自用「重铸砂」× 2 | — |
 | **M104 · 破阵尽墨** | 卷一满印 **12/12** | 仅自用「法宝拓印」× 1 | 名片印戳「破阵尽墨」＋ 解锁留灯院评语《祝停云·破阵跋》 |
-| **M201 · 踏遍灵脉** | 卷二累计点亮 **3 印** | 仅自用「法宝拓印」× 1 ＋ 仅自用「重铸砂」× 2 | — |
-| **M202 · 三境问道** | 卷二累计点亮 **6 印** | 仅自用「法宝拓印」× 1 | — |
-| **M203 · 五行澄明** | 卷二满印 **9/9** | 仅自用「法宝拓印」× 1 | 名片印戳「三境问道」＋ 解锁留灯院评语《阿禾·三境记》 |
-| **M901 · 试炼宗师（终极）** | 永久卷一＋卷二合计 **18/21 印**（留 3 印容错，不逼全清速破） | — | **调用 `GrantAppearance` 永久解锁 1 名玩法专属角色形象**（`card_unlockable = 0`，零属性，不可买断） |
-| **S101 / S102（卷三按季）** | 当季卷三点亮 **2/4** 与 **4/4** | 每档仅自用「重铸砂」× 1（整季至多 2 砂） | 4/4 解锁当季纪念名片纹样（永久可展示） |
+| **M201 · 破障初成** | 卷二累计点亮 **3 印** | 仅自用「法宝拓印」× 1 ＋ 仅自用「重铸砂」× 2 | — |
+| **M202 · 涤毒明心** | 卷二累计点亮 **6 印** | 仅自用「法宝拓印」× 1 | — |
+| **M203 · 三首问道** | 卷二累计点亮 **9/12 印**（留 3 印容错） | 仅自用「法宝拓印」× 1（集齐 8 法宝闭环） | 名片印戳「三首问道」＋ 解锁留灯院评语《阿禾·三首记》 |
+| **M901 · 五行宗师（终极）** | 永久卷一＋卷二合计 **18/24 印**（留 **6 印容错**，不逼全清速破/无损） | — | **调用 `GrantAppearance` 免费永久解锁专属角色形象「星阵宗师」**（`CharacterAppearance id=11`, `20_star_formation_master_girl`, `card_unlockable=0`, 零属性不可买断）＋ 名片印戳「五行宗师」＋《留灯院·试炼宗师跋》 |
+| **301 / 302（卷三 S1 按季）** | 当季卷三点亮 **2/6** 与 **4/6 印**（留 2 印容错，不强迫同时打全模式） | 每档仅自用「重铸砂」× 1（整季至多 2 砂） | 4/6 解锁破阵之季纪念印戳「破阵季游」（永久可展示） |
 
 #### 算账校验（为什么这套数字刚好平衡且不伤交易/氪金？）
 1. **8 件法宝完整闭环**：首套 600 材料内选 2 件法宝 ＋ 永久卷一 3 张拓印 ＋ 卷二 3 张拓印 = **恰好 8 件全法宝免费体验闭环**（支持玩家凭拓印换未拥有法宝，也允许按[装备 V1](equipment-v1-affixes-artifacts.md)规则换第二件同名法宝尝试双件流派）。
 2. **不冲垮旧装拆砂与聚宝斋市场**：永久全通共赠 6 份绑定重铸砂（足够玩家安心免费体验 2～3 次流派试配），若玩家想频繁换多套词条或打造**可交易成品装/多套备用装**，旧装拆砂银两集市与聚宝斋依然保有真实刚需。
-3. **18/21 容错保护全流派**：终极形象不需要“所有格都强迫打通速通/无损”，哪怕某玩家只玩治疗辅助流跳过普通速破印，也能稳稳拿满 18 印解锁专属形象。
+3. **18/24（6 印容错）保护全流派**：终极形象「星阵宗师」不需要“所有格都强迫打通速通/无损”，哪怕某玩家只玩治疗辅助流跳过 4 个普通速破印 + 2 个高压巧策印，也能稳稳拿满 18 印解锁专属形象；卷三 4/6 同样允许纯 PVE 或纯 PVP 玩家按喜好挑题拿满赛季奖励。
 4. **「自用法宝拓印」硬性规则**：
    - 道具自身强制仅自用（不可交易、不可上架、不可赠送）；
    - 通过独立兑换接口 `RedeemBoundArtifactVoucher`（带 `client_request_id` 幂等键）消耗 1 张拓印，指定产出 8 件 V1 法宝之一的**仅自用实例**；
@@ -256,73 +259,155 @@ UI 入口仍挂在「首领试炼 → 五行试炼志」（同时可在大世界
 
 ---
 
-### 6.2 另一台电脑 Codex 的 Unity UI 制作交接
+### 6.2 给 ChatGPT / UI 侧的 Unity uGUI 制作与接线完整规格书
 
-> **当前进展（2026-11-24）**：C++ 服务端权威配表、协议（456–458）、Battle 引擎战法事实冻结、Scene 持久化/结算/里程碑/法宝拓印系统与单测，以及 `mmorpg-client` 侧的客户端表数据、Protobuf 生成类、RPC 桩与纯 C# 适配层（`TrialJournalClient` / `TrialJournalModels` / `TrialJournalClientTests`）**均已完成并通过编译/单测门禁**。
-> 以下提示词可直接复制给 Codex，按 `D:\work\image\designs` 风格直接制作 Unity uGUI 界面与美术组件，并直接对接现有纯 C# 适配层（无需重写网络、幂等键或状态修订逻辑）。
+> **当前代码就绪范围（2026-11-24，已全量通过编译、单测与实表校验）**：全三卷（**卷一 · 破阵试炼** 4 格 12 印 + **卷二 · 灵障玄毒** 4 格 12 印 + **卷三 · 季游奇谈 S1** 3 格 6 印 + **M901 五行宗师专属形象「星阵宗师」** `20_star_formation_master_girl`）的权威配置表（68 表实表校验通过）、协议（456–458）、Go `match` 全 11 格建房上下文、C++ `battle` 权威战法事实冻结、C++ `scene` 持久化/里程碑绑定发奖/法宝拓印兑换/宗师授形/交易绑定拦截，以及 `mmorpg-client` 纯 C# 协调层（`GameClient.TrialJournal`、`TrialJournalClient`、`TrialJournalModels`、`BattleMatchEntryClient` 首领试炼与物法易势一键入队、`BattleArtCatalog` 宝宝库怪物立绘复用、`QdaoCharacterCatalog` 星阵宗师衣柜立绘放行）**均已落码并验证通过**（静态门禁 13/13、Go `match` catalog+logic 与 `login` clientplayerlogin 全绿、C++ `turn_battle_engine_test` 26/26、`bag_test` 36/36、`scene.exe --validate-tables` 68 表 PASS、`mmorpg-client` 主程序集 674 文件 + EditMode Role 7 文件 + Battle 69 文件全 0 错误）。
+> 以下规格书可直接完整复制给 ChatGPT 制作 Unity uGUI 窗口与表现组件，无需改动任何服务端或纯 C# 网络层代码。
 
 ```text
-请按 docs/design/long-term-progression-v2.md 为《五行奇谈》制作「五行试炼志」Unity UI、美术组件与交互逻辑（只做 UI 表现与接线，不改动服务端或纯 C# 网络适配层）。
+请为《五行奇谈》（Unity uGUI，仓库 mmorpg-client）制作「五行试炼志」完整界面、美术组件与交互接线（仅写 UI 表现层 Assets/Scripts/UI/Ugui/TrialJournal/* 及入口接入，不修改服务端、不修改 Generated 目录、不重写纯 C# 网络适配层）。
 
-【视觉风格锚点（严格对齐 D:\work\image\designs）】
-1. 主视觉基准：
-   - 面板与纸底/页签/金线边框锚点：D:\work\image\designs\mail-ui-v1\01-mail-event.png、D:\work\image\designs\team-ui-v2\team-ui-v2.png
-   - 2560×1080 等比 contain 导出规范（≥48px 安全透明边距）、底角分层云气与 39 套通用控件规范：D:\work\image\designs\ui-redesign-20261123\（见其 README.md 与 overview.png）
-   - 暖米白手记阅读层 / 徽章印戳 / 卷册质感参考：D:\work\image\designs\appearance-chronicle-v2\ 与 D:\work\image\designs\ui-art-delivery-20261123\（可复用的已导入切图位于 mmorpg-client/Assets/Resources/UI/Ugui/AppearanceChronicleV2/）
-   - 挑战关卡卡片 / 里程碑轨道 / 结算印记风格参考：D:\work\image\designs\lunjian-ui-v1\
-   - 法宝拓印兑换卡片风格参考：D:\work\image\designs\equipment-ui-20261117\
-2. 画布与合规要求：
-   - 横屏道家 Q 版风格（暖米白纸底、深玉绿页签、细金线印框），保持底板无字、文本独立分层；
-   - 适配手机安全区（Screen.safeArea 与微信/抖音小游戏右上角胶囊避让）及多分辨率（1280×720 / 1920×1080 / 2560×1080）；
-   - 严守 WebGL2（小游戏单线程禁阻塞）与 iOS/Android IL2CPP 约束，触控交互不依赖鼠标 Hover；所有新增/修改的资源与脚本同步 .meta，完成后执行 tools/client_compile_check.ps1。
+======================================================================
+一、视觉风格与设计资产锚点（严格对齐 D:\work\image\designs）
+======================================================================
+1. 风格基线（道家 Q 版暖米白手记 + 深玉绿印章 + 细金线框，底板无字、文本独立分层）：
+   - 主面板与纸底/页签/边框参考：D:\work\image\designs\mail-ui-v1\01-mail-event.png、D:\work\image\designs\team-ui-v2\team-ui-v2.png
+   - 手记阅读层/卷册/双栏排版参考：D:\work\image\designs\appearance-chronicle-v2\qa\01-00_reference_topright_boy-detail-2560.png、05-biography-2560.png
+   - 挑战卡片/抽屉页签/进度轨道参考：D:\work\image\designs\lunjian-ui-v1\
+   - 法宝兑换卡片参考：D:\work\image\designs\equipment-ui-20261117\
+   - 2560×1080 安全边距规范（≥48px 透明边）与 39 套控件参考：D:\work\image\designs\ui-redesign-20261123\README.md
+2. 权威色板与字阶（摘自 appearance-chronicle-v2/preview/team-theme.css）：
+   - 深玉绿主色（主标题/激活页签/重要数值）：#205b46
+   - 墨绿正文色：#304736
+   - 暖褐次要说明色：#70634e / #827458
+   - 淡金线与分割线：#c7b68e / #d6c69d / #d9cbaa
+   - 宣纸暖米白底：#fbf6e9
+   - 选中卡片柔绿高亮底 + 描边：#d4e8cf + 2px #3b8266
+   - 主按钮浅金白字：#fff3d6（配 1px 暗绿阴影 #254b38）
+   - 战法印点亮金印强调色：#c8922b（未点亮用 #b8ab92 空心印框 + 文字双标识，不可仅靠红绿区分）
+3. 仓库内已导入可直接复用的无字 9-slice 切图（零新画也可直接成品质感）：
+   - 主框架与卷册控件（Assets/Resources/UI/Ugui/AppearanceChronicleV2/）：
+     main_frame / title_plate / section_plate / application_card / member_row / portrait_frame / portrait_pedestal / appearance_card_slot / button_primary / button_secondary / badge_leader / badge_self / close
+   - 抽屉与页签控件（Assets/Resources/UI/Ugui/LunjianV1/）：
+     drawer-panel / drawer-tab-idle / drawer-tab-selected / drawer-collapse / appearance-row-locked / appearance-row-owned / frame-pattern
+   - 8 件法宝图标（Assets/Resources/UI/Ugui/Equipment20261117/Icons/）：
+     effect_id 1→artifact_pozhen, 2→artifact_zhaoying, 3→artifact_huixiang, 4→artifact_jisheng,
+     5→artifact_guyuan, 6→artifact_huxin, 7→artifact_guiyuan, 8→artifact_qingxin
+     道具图标：material_enhancement（仅自用重铸砂 3403）、reward_choice（仅自用法宝拓印 3404）
+   - 首领与护卫高清立绘（已自动复用宝宝美术库，直接调 API 加载，无需手绘怪物图）：
+     先调 TrialJournalModels.TryGetEntryMonsterIds(entry.EntryId, out uint bossId, out uint guardId)，
+     再调 BattleArtCatalog.LoadMonsterPortrait(bossId) 与 BattleArtCatalog.LoadMonsterPortrait(guardId)
+     （101 破阵首领→苍嶂麟 / 102 回春护卫→露华灵 / 103 护势护卫→玄潮龟 / 104 灵障首领→岚铎仙 / 105 灵障护卫→汐螺 / 106 玄毒首领→赤砂魁 / 107 缚灵护卫→月弦师）。
+   - M901 终极专属形象「星阵宗师」1024×1024 HD 立绘（直接调 API，零新资源）：
+     QdaoCharacterCatalog.AcquireCreationPortrait("20_star_formation_master_girl")（或 QdaoCharacterCatalog.LoadPortrait("20_star_formation_master_girl")）。
 
-【已就绪的 Unity 纯 C# 代码与生成物（直接对接，禁止手改 Generated 目录）】
-- 生成 RPC 桩：Assets/Scripts/Net/Generated/Rpc/SceneTrialJournalClientPlayerRpc.cs
-  - GetTrialJournalMessageId = 456
-  - ClaimTrialJournalMilestoneMessageId = 457
-  - RedeemBoundArtifactVoucherMessageId = 458
-- 生成 Proto 与错误码：
-  - Assets/Scripts/Proto/Generated/PlayerTrialJournal.cs（TrialJournalSnapshot / TrialJournalChapterView / TrialJournalEntryView [含 SoloRecorded / SoloBest / CoopRecorded / CoopBest / HasLegacyRecordOnly] / TrialJournalSealView / TrialJournalMilestoneView / TrialRedeemableArtifactOption）
-  - Assets/Scripts/Proto/Generated/PlayerTrialJournalComp.cs（TrialJournalSoloRecord / TrialJournalCoopRecord / TrialJournalLoadoutSnapshot）
-  - Assets/Scripts/Proto/Generated/TrialJournalErrorTip.cs（trial_journal_error: 35000–35008）
-  - Assets/Scripts/Proto/Generated/PlayerBattleResultComp.cs（结算页行内字段：TrialJournalEntryId / TrialNewlyLitSealIds / TrialNewSoloBest / TrialNewCoopBest）
-- 生成配表管理器（只按 id 现查 FindById，禁止长期缓存表行引用）：
-  - TrialJournalEntryTableManager / TrialJournalSealTableManager / TrialJournalMilestoneTableManager
-- 纯 C# 业务适配层（已过编译检查，UI 直接订阅与调用）：
-  - Assets/Scripts/Game/TrialJournal/TrialJournalClient.cs
-    - 属性：Snapshot / SnapshotPending / ActionPending / RequiresReconnect / Status / StatusIsError / Ready / ClaimableMilestoneCount
-    - 方法：RequestSnapshot(force) / ClaimMilestone(milestoneId) / RedeemArtifactVoucher(artifactItemConfigId) / HandleSceneEntered() / HandleBattleSettled() / Tick()
-    - 事件：Changed / Notice / MilestoneClaimed / ArtifactRedeemed（UI 在 OnDisable/OnDestroy 对称退订）
-  - Assets/Scripts/Game/TrialJournal/TrialJournalModels.cs
-    - 方法：DescribeTip / SealSlotLabel / FindChapter / FindEntry / FindMilestone / FilterMilestones / CountClaimableMilestones / CanRedeemAnyArtifact / FormatSoloLoadoutSummary / FormatCoopSummary / CollectUnlockedCommentaries
+======================================================================
+二、已就绪的 Unity 纯 C# 接口（直接调用，禁止手改 Generated/Game 层）
+======================================================================
+1. 宿主单例访问：
+   - GameClient.Instance.TrialJournal（TrialJournalClient，已接好入场首拉、Tick 节流、战斗结算防丢刷新与断线/切角复位）
+   - TeamUiRoot.Instance?.MatchEntry（BattleMatchEntryClient）
+2. TrialJournalClient 公开契约（Assets/Scripts/Game/TrialJournal/TrialJournalClient.cs）：
+   - 只读属性：Snapshot / SnapshotPending / ActionPending / RequiresReconnect / Status / StatusIsError / Ready / ClaimableMilestoneCount
+   - 方法：
+     * RequestSnapshot(bool force = false)      // 打开界面时调一次 RequestSnapshot(force: false)
+     * ClaimMilestone(uint milestoneId)         // 领取里程碑（内置幂等键 + 节流 + 弱网单次重发）
+     * RedeemArtifactVoucher(uint itemConfigId) // 消耗 1 张拓印兑换 3301..3308 自用法宝
+   - 事件（必须在 OnDisable / OnDestroy 对称退订）：
+     * Changed / Notice(string) / MilestoneClaimed(TrialMilestoneClaimedEvent) / ArtifactRedeemed(TrialArtifactRedeemedEvent)
+3. TrialJournalModels 工具方法（Assets/Scripts/Game/TrialJournal/TrialJournalModels.cs）：
+   - DescribeTip(uint tipId) / SealSlotLabel(uint sealSlotKind) -> "通"|"守"|"巧"|"速"
+   - FindChapter(snapshot, chapterId) / FindEntry(snapshot, entryId) / FindMilestone(snapshot, milestoneId)
+   - FilterMilestones(snapshot, scopeChapterId) / CountClaimableMilestones(snapshot, scopeChapterId)
+   - FindGrandmasterMilestone(snapshot) -> M901「五行宗师」视图（GrantAppearanceId = "20_star_formation_master_girl"）
+   - CanRedeemAnyArtifact(snapshot) -> VoucherBalance >= 1 且可操作
+   - TryParseJumpTarget(entry.JumpTarget, out TrialJumpTarget target) -> 解析全部 11 格
+   - TryGetEntryMonsterIds(entry.EntryId, out bossMonsterId, out guardMonsterId) -> PVE 9 格怪物头像 ID
+   - FormatSoloLoadoutSummary(soloBest.Loadout, petLookup, artifactLookup, seasonSealLookup)
+   - FormatCoopSummary(coopBest)
+   - CollectUnlockedCommentaries(snapshot)
+   - FormatBattleResultSummary(PlayerBattleResult result, TrialJournalSnapshot snapshot = null) -> 战斗结算行内摘要
+4. BattleMatchEntryClient 挑战启动接口（Assets/Scripts/Game/Battle/BattleMatchEntryClient.cs）：
+   - StartFromTrialJump(TrialJumpTarget target)：
+     * target.Kind == BossTrial    -> 自动按单人(PveSolo)或队长整队(PveTeam)发起对应 Dungeon 101..109
+     * target.Kind == Polarity5v5  -> 自动发起单人物法易势 5V5 (Dungeon 110)；在队内自动返回 false 并提示先离队
+     * target.Kind == RankedPvp    -> UI 收到 RankedPvp 时改为关闭试炼志并打开论剑排位抽屉（RankedUiRoot），不盲排！
+5. 权威数据规模（全部由 Snapshot 动态渲染，不写死数量）：
+   - 卷一 · 破阵试炼（chapter_id=1, 永久）：4 格（101 普通·回春 / 102 普通·护势 / 103 困难·回春 / 104 困难·护势），共 12 印；里程碑 M101(3印 +2砂) / M102(6印 +1拓印 +破阵试剑) / M103(9印 +1拓印 +2砂) / M104(12印 +1拓印 +破阵尽墨 +《祝停云·破阵跋》)。
+   - 卷二 · 灵障玄毒（chapter_id=2, 永久）：4 格（201 普通·灵障 / 202 普通·玄毒 / 203 困难·灵障 / 204 困难·玄毒），共 12 印；里程碑 M201(3印 +1拓印 +2砂) / M202(6印 +1拓印) / M203(9印 +1拓印 +三首问道 +《阿禾·三首记》)。
+   - 全永久终极里程碑 M901（scope_chapter_id=0, required_seals=18/24 留 6 印容错）：零战力永久解锁角色形象「星阵宗师」（20_star_formation_master_girl）+ 名片印戳「五行宗师」+《留灯院·试炼宗师跋》。
+   - 卷三 · 季游奇谈 S1 破阵之季（chapter_id=3, season_id=1, 赛季隔离）：3 格（301 护卫救援 2印 / 302 物法易势 5V5 2印 / 303 人宠会武 2印），共 6 印；里程碑 301(2印 +1砂) / 302(4印 +1砂 +破阵季游)。
 
-【页面入口与结构（一页式手记，不做多套冗余整页）】
-1. 入口：既有「首领试炼」页加「五行试炼志」按钮；战斗结算页当 PlayerBattleResult.TrialJournalEntryId != 0 时显示次要按钮「看试炼志」（若 TrialNewlyLitSealIds 非空或刷新纪录，在结算页行内直接展示新亮印记名/新纪录标签，无弹窗打断）。主城不加红点或催促提示。
-2. 顶栏：返回、标题「五行试炼志」、顶部卷册切换页签：
-   - 首发激活「卷一 · 破阵试炼」；预留由 Snapshot.Chapters 驱动的「卷二 · 三境明雷」「卷三 · 季游奇谈」（服务端目录未开放的卷自动隐藏，不显示灰色空壳）。
-   - 右侧紧凑进度条：当前卷 LitSealCount / TotalSealCount（如 6/12），可领里程碑时给克制高光提示，点击展开下方或侧栏「印记里程碑」抽屉。
-3. 主体两栏（窄屏自动上下布局并支持纵向滚动）：
-   - 左/上区 · 关卡格列表：首发 4 格（101 普通·回春 / 102 普通·护势 / 103 困难·回春 / 104 困难·护势）。每格卡片显示难度与护卫图标、3 枚小印章图标（按 SealSlotLabel：通 / 速或守 / 巧，空框=未点亮，实金印=已点亮），以及单人最好回合角标（SoloRecorded ? $"单人 {SoloBest.BestRounds} 回合" : ""）。
-   - 右/下区 · 当前选中格详情：
-     ① 3 枚战法印详细条件与完成状态（文字与图形双标识，不只靠红绿颜色）；
-     ② 「我的战绩与复盘」卡片：
-        - 单人最佳：SoloRecorded 时显示「最好 N 回合」与 TrialJournalModels.FormatSoloLoadoutSummary(SoloBest.Loadout, ...) 复盘标签及 RuleVersionName；若 HasLegacyRecordOnly 为 true 显示 TrialJournalModels.LegacyRecordOnlyHint；
-        - 好友合战：CoopRecorded 时显示 TrialJournalModels.FormatCoopSummary(CoopBest)；无记录显示「和好友通关即可留下合战纪录」；
-     ③ 唯一主按钮「前往试炼」：按 Entry.JumpTarget 跳转既有首领试炼准备页并预选该难度与护卫（不直接开战、不拆队、不扣资源；!CanEnter 时禁用并就地显示 EnterBlockedReason）。
-4. 里程碑与法宝拓印兑换轻抽屉：
-   - 点击卷进度条展开当前卷里程碑（M101 3印 / M102 6印 / M103 9印 / M104 12印）与后续全永久汇总里程碑。
-   - 状态区分：未达标 / 可领取（Claimable == true 时高亮按钮「收取」，不主动弹窗）/ 已领取。领取前展示自用标签（「仅自用重铸砂」「仅自用法宝拓印」），领完含 CommentaryTitle 的档位（如 M104《祝停云·破阵跋》）原地开放「读评语」轻阅读层（沿用 appearance-chronicle-v2 暖米白读故事样式，读/跳过均零副作用）。
-   - 当 TrialJournalModels.CanRedeemAnyArtifact(Snapshot) 为真（VoucherBalance >= 1）时，开放「拓印换法宝」轻弹窗：遍历 Snapshot.RedeemableArtifacts（8 件 V1 法宝 3301–3308），显示名称、效果说明、当前 OwnedCount（允许兑换同名第二件）、清晰标明「兑换所得法宝仅自用、不可交易或拆解」，二次确认后调用 client.RedeemArtifactVoucher(option.ItemConfigId)。
+======================================================================
+三、页面布局与组件层级（一页式手记 + 两个轻抽屉）
+======================================================================
+1. 外部入口（两处，主城 HUD 绝不加催促红点）：
+   - 「首领试炼 / 战斗排队面板」加「五行试炼志」按钮（当 TrialJournal.ClaimableMilestoneCount > 0 时仅在按钮右上角给克制金点）。
+   - 战斗结算页（BattleResultPanel）：当 PlayerBattleResult.TrialJournalEntryId != 0 时：
+     * 行内显示 TrialJournalModels.FormatBattleResultSummary(result, TrialJournal.Snapshot)（新亮战法印名 / 新纪录标签，零弹窗打断）；
+     * 次要按钮「看试炼志」直接打开 TrialJournalWindow 并自动选中 result.TrialJournalEntryId 所在卷和格。
+2. 主窗口 TrialJournalWindow（RectTransform 适配 Screen.safeArea + 微信/抖音小游戏右上角胶囊避让）：
+   - 【顶栏 Header】
+     * 左：标题牌「五行试炼志」（title_plate）+ 返回/关闭按钮（close）
+     * 中：动态卷册切换页签（遍历 Snapshot.Chapters 渲染「卷一 · 破阵试炼」「卷二 · 灵障玄毒」「卷三 · 季游奇谈」；服务端未开的卷自动隐藏；卷内有可领里程碑时页签右上角给小金点）
+     * 右：两个紧凑胶囊入口：
+       ① 当前卷印记进度条（如「卷一 6/12」，点击打开「印记里程碑与宗师录」抽屉；右侧小角标展示总永久进度「永久 14/24 · 宗师 18 印」）
+       ② 法宝拓印余额按钮（显示 `拓印 ×N` 与 `自用砂 ×M`，VoucherBalance >= 1 时高亮并可点击打开「拓印换法宝」轻弹窗）
+   - 【主体 Body — 宽屏左右 38% / 62% 双栏；窄屏（宽<1000）自动切换上下可滚动布局】
+     * 左栏 · 关卡格列表（ScrollRect + VerticalLayoutGroup）：
+       - 卡片底图 member_row，选中态叠加 #d4e8cf + #3b8266 描边；
+       - 左侧：portrait_frame 嵌首领头像（PVE 用 BattleArtCatalog.LoadMonsterPortrait(bossId)，PVP 302/303 用 LunjianV1 徽章图）+ 右下角叠一枚小护卫头像圆标；
+       - 中部：DisplayName（如「困难·灵障」）+ 难度标签（普通=墨绿 / 困难=鎏金 / 赛季=靛青）+ 底部 2~3 枚微型印章状态点（按 SealSlotLabel：通/速/守/巧，已点亮实心鎏金印，未点亮浅褐空心印框）；
+       - 右侧：PVE 格若 SoloRecorded 显示「单人 N 回合」角标；若 !CanEnter 显示小锁图标。
+     * 右栏 · 当前选中格详情（application_card）：
+       - 顶部横幅：首领 + 护卫双立绘（或 PVP 季游横幅）+ DisplayName + 机制简介 Entry.Desc + 规则版名小标签（RuleVersionName，若为卷三则显示「破阵之季限时 · 独立存档不影响永久印」）；
+       - 中段 ① · 战法印清单（2~3 条）：每行含「印章图标（空框/实金印）+ 分类徽标（通/守/巧/速）+ 印记标题 + 触发条件说明 + 状态文字（已点亮 / 未点亮）」；
+       - 中段 ② · 我的战绩与复盘卡（仅 PVE 格 source_kind 1/2 展示；PVP 格 302/303 改为显示「本模式仅点亮赛季战法印，不计回合速通，零掉分试练」）：
+         * 单人最佳：SoloRecorded 时显示「单人最佳 N 回合」+ TrialJournalModels.FormatSoloLoadoutSummary(...) 复盘徽标（灵宠 + 法宝 + 赛季印）；若 HasLegacyRecordOnly 为 true 显示 TrialJournalModels.LegacyRecordOnlyHint；
+         * 好友合战：CoopRecorded 时显示 TrialJournalModels.FormatCoopSummary(CoopBest)；未记录显示「与好友组队通关可在此留下合战纪录（不参与全服竞速排名）」；
+       - 底栏唯一主按钮：
+         * 先用 TrialJournalModels.TryParseJumpTarget(entry.JumpTarget, out var jump)：
+         * 若 !entry.CanEnter：按钮置灰禁用，下方直接显示 entry.EnterBlockedReason（如「通关任意普通首领试炼后解锁困难」）；
+         * 若 jump.Kind == BossTrial：按钮文案「前往挑战」（单人/队长整队直调 MatchEntry.StartFromTrialJump(jump)，并在按钮旁小字展示 jump.DisplayHint）；
+         * 若 jump.Kind == Polarity5v5：按钮文案「报名物法易势 5V5」（直调 MatchEntry.StartFromTrialJump(jump)）；
+         * 若 jump.Kind == RankedPvp：按钮文案「前往论剑排位」（关闭本窗并打开 RankedUiRoot）。
+3. 轻抽屉 A · 印记里程碑与宗师录（TrialJournalMilestoneDrawer，底图 drawer-panel）：
+   - 顶部固定置顶卡片：**M901 · 五行宗师专属形象预览卡**（通过 TrialJournalModels.FindGrandmasterMilestone(Snapshot) 获取）：
+     * 左侧 portrait_pedestal 展示「星阵宗师」HD 全身/半身立绘（20_star_formation_master_girl）；
+     * 右侧展示「永久 18/24 印（留 6 印容错）免费永久解锁 · 零数值加成 · 不可买断」、进度条（TotalPermanentLitSeals / 18）、以及「收取形象」/「已解锁·读跋文」/「未达标」状态按钮；领取成功收到 MilestoneClaimedEvent（GrantedAppearanceId 非空）时播轻祝贺横幅并提供「查看评语」。
+   - 下方列表：当前选中卷的里程碑行（M101~M104 / M201~M203 / 301~302），每行明确标出「仅自用重铸砂 ×N」「仅自用法宝拓印 ×N」「名片印戳」「评语卷轴」，按钮态严格三选一：未达标（灰）/ 收取（高亮主按钮，调 client.ClaimMilestone）/ 已领取（淡绿印戳；含 CommentaryTitle 时右侧多一个「读评语」次要按钮，打开暖米白轻阅读层展示 CommentaryTitle + CommentaryBody）。
+4. 轻弹窗 B · 自用法宝拓印兑换（TrialJournalVoucherModal）：
+   - 顶部展示「当前持有自用法宝拓印：N 张」及醒目提示条：「兑换所得法宝永久仅自用，不可交易、不可上架、不可拆解；允许兑换同名第二件尝试双件流派」；
+   - 2×4 网格遍历 Snapshot.RedeemableArtifacts（3301–3308），每格显示对应 artifact_*.png 图标、法宝名、核心效果、当前已持有数量（OwnedCount > 0 时标「已持有 N 件」）；
+   - 点击选中 → 二次确认条展示所选法宝名 → 点击「确认兑换」调 client.RedeemArtifactVoucher(option.ItemConfigId)，成功后刷新列表并 toast 提示「已放入人物背包」。
 
-【必须覆盖的交互与异常态】
-- 首次加载（「正在翻开试炼志」，不假显示 0/12）、刷新中保留旧内容、真空档 / 部分点亮 / 满印（12/12）、规则换代（HasLegacyRecordOnly）、背包满领里程碑被拒（不改已领态，展示 TrialJournalModels.DescribeTip 并提示整理背包）、ActionPending 期间禁用连点、RequiresReconnect 断线重连恢复提示、切换角色清空视图。
-- 离线预览/验收模式须内置可切换样例菜单并明确标「UI 演示数据」，覆盖：① 真空档（0/12）；② 进度中（6/12，含单人/合战复盘与 M102 可领）；③ 领取 M102 → 拓印换法宝流程；④ 满印（12/12 + 《祝停云·破阵跋》阅读）；⑤ 背包满与断线重试态。严禁在 UI 侧计算战斗判定、改写背包或伪造发奖。
+======================================================================
+四、必须覆盖的 9 种状态、离线演示夹具与工程红线
+======================================================================
+1. 必须完整处理的状态：
+   ① 首次加载（Snapshot == null && SnapshotPending）：骨架屏/「正在翻开试炼志…」，绝不假显示 0/24；
+   ② 刷新中（Snapshot != null && SnapshotPending）：保留旧画面 + 顶角微弱刷新指示；
+   ③ 真空档（0 印、困难全锁、无纪录）；
+   ④ 进行中（部分点亮 + 有可领里程碑 + 有拓印余额）；
+   ⑤ 宗师达标（18/24 印可领 M901「星阵宗师」）；
+   ⑥ 卷三赛季隔离态（展示 S1 进度并明确提示赛季独立存档）；
+   ⑦ 规则换代（HasLegacyRecordOnly == true 显示 LegacyRecordOnlyHint）；
+   ⑧ 写入保护与错误态：ActionPending 期间禁用全部领取/兑换按钮防连点；背包满/错误码展示 client.Status（来自 TrialJournalModels.DescribeTip），绝不本地偷改已领状态；
+   ⑨ 断线与切角：RequiresReconnect == true 显示「网络异常，操作结果未知。请重新登录后查看」并禁用写入按钮；Snapshot 变 null 时立刻清屏复位。
+2. 内置离线演示验收模式（仅开发/预演开关开启，顶部挂醒目角标「UI 演示数据」）：
+   提供 6 组一键切换夹具：① 真空档 0/24；② 卷一进行中（6/12 + 单人/合战复盘 + M102 可领 + 拓印×1）；③ 卷二灵障玄毒（18/24 + M901「星阵宗师」可领）；④ 卷三季游 S1（4/6 + 302 可领）；⑤ 满印与留灯院评语阅读（《祝停云·破阵跋》《阿禾·三首记》《留灯院·试炼宗师跋》）；⑥ 背包满报错与断线恢复态。
+3. 工程红线：
+   - 纯触控友好（不依赖鼠标 Hover 悬停提示）；适配 1280×720 / 1920×1080 / 2560×1080 与手机异形屏安全区；
+   - WebGL2 单线程与 IL2CPP AOT 安全（无阻塞等待、无反射、无动态 Emit）；
+   - 所有新增 `.cs` / `.png` / `.prefab` 必须配唯一 GUID `.meta`，完成后执行 `pwsh -File tools/client_compile_check.ps1` 确认 0 错误；
+   - UI 层严禁自行推导战法印达成、改写背包或伪造发奖，一切展示严格以 `TrialJournalClient.Snapshot` 为唯一真相。
 ```
 
 ---
 
-## 7. 待后续数据验证的参数项（不阻塞 M1 开工）
+## 7. 待后续数据验证与平滑扩展项
 
-1. **普通难度「速破印」回合阈值**：首测配表暂定 `≤ 7` 回合，待实机首测统计普通基准配置（正常装备 + 普通出战宝宝）平均通关回合后，仅调整 `TrialJournalSeal.condition_param` 即可，不改代码。
-2. **终极专属永久角色形象的具体人选**：M2 接入 M901 前，从角色表确定 1 名 `card_unlockable = 0` 的玩法专属形象 ID（可由人物志团队从新形象中指定，如“问道宗师”系新外观），不阻塞 M1 卷一开发。
-3. **重铸砂物品表号统一**：M1 落表时，里程碑发放的「仅自用重铸砂」直接复用[旧装回收 V1](equipment-recycling-trade-economy-v1.md)确定的同一重铸砂物品模板 ID 与绑定标记，不另起平行道具。
+1. **普通难度「速破印」回合阈值**：首测配表暂定 `≤ 7` 回合（覆盖卷一 `1012/1022` 与卷二 `2012/2022`），待实机首测统计普通基准配置平均通关回合后，仅调整 `TrialJournalSeal.condition_param` 即可，不改代码。
+2. **终极专属永久角色形象已定版**：`M901 · 五行宗师` 已锁定 `CharacterAppearance id=11`（`20_star_formation_master_girl`，「星阵宗师」，`card_unlockable=0`、`starter_creatable=0`、`series_id=0`），复用现有 V14 1024×1024 HD 立绘与战斗动作资源。
+3. **重铸砂与拓印物品表号已统一**：仅自用重铸砂复用 `Item 3403`（`bound=true`），自用法宝拓印使用 `Item 3404`（`bound=true`），均受 `Bag` 绑定分堆与 `AssetOp` 交易寄售拦截保护。
+4. **后续卷四平滑扩展（野外三图明雷首领）**：`TrialJournalSealConditionType` 已预留 `6/7/8`（风眼/水镜/潮汐），待世界地图 V2 三图明雷副本正式上线后，直接向 `TrialJournalEntry/Seal/Milestone` 追加 `chapter_id=4` 行即可零迁移接入。

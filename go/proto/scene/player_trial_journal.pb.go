@@ -707,8 +707,10 @@ type TrialJournalSnapshot struct {
 	Chapters                []*TrialJournalChapterView       `protobuf:"bytes,11,rep,name=chapters,proto3" json:"chapters,omitempty"`
 	Milestones              []*TrialJournalMilestoneView     `protobuf:"bytes,12,rep,name=milestones,proto3" json:"milestones,omitempty"`
 	RedeemableArtifacts     []*TrialRedeemableArtifactOption `protobuf:"bytes,13,rep,name=redeemable_artifacts,json=redeemableArtifacts,proto3" json:"redeemable_artifacts,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// true = 本角色已通关任意普通难度首领试炼，具备困难难度首领试炼准入资格（组队困难需全员均为 true）。
+	HardBossTrialUnlocked bool `protobuf:"varint,14,opt,name=hard_boss_trial_unlocked,json=hardBossTrialUnlocked,proto3" json:"hard_boss_trial_unlocked,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *TrialJournalSnapshot) Reset() {
@@ -830,6 +832,13 @@ func (x *TrialJournalSnapshot) GetRedeemableArtifacts() []*TrialRedeemableArtifa
 		return x.RedeemableArtifacts
 	}
 	return nil
+}
+
+func (x *TrialJournalSnapshot) GetHardBossTrialUnlocked() bool {
+	if x != nil {
+		return x.HardBossTrialUnlocked
+	}
+	return false
 }
 
 type GetTrialJournalRequest struct {
@@ -1268,7 +1277,7 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x19\n" +
 	"\bicon_key\x18\x05 \x01(\tR\aiconKey\x12\x1f\n" +
 	"\vowned_count\x18\x06 \x01(\rR\n" +
-	"ownedCount\"\x96\x05\n" +
+	"ownedCount\"\xcf\x05\n" +
 	"\x14TrialJournalSnapshot\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12-\n" +
 	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReason\x12%\n" +
@@ -1286,7 +1295,8 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\n" +
 	"milestones\x18\f \x03(\v2\x1a.TrialJournalMilestoneViewR\n" +
 	"milestones\x12Q\n" +
-	"\x14redeemable_artifacts\x18\r \x03(\v2\x1e.TrialRedeemableArtifactOptionR\x13redeemableArtifacts\"\x18\n" +
+	"\x14redeemable_artifacts\x18\r \x03(\v2\x1e.TrialRedeemableArtifactOptionR\x13redeemableArtifacts\x127\n" +
+	"\x18hard_boss_trial_unlocked\x18\x0e \x01(\bR\x15hardBossTrialUnlocked\"\x18\n" +
 	"\x16GetTrialJournalRequest\"\x82\x01\n" +
 	"\x17GetTrialJournalResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +

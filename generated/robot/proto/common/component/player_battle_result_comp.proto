@@ -54,6 +54,8 @@ message PlayerBattleResult {
   repeated uint32 trial_newly_lit_seal_ids = 22; // 本局首次点亮的战法印 ID 列表
   bool trial_new_solo_best = 23; // 本局是否刷新单人最少回合纪录
   bool trial_new_coop_best = 24; // 本局是否刷新好友合战最快回合纪录
+  uint32 material_tradable_units_added = 25; // 本局实际新增材料中可交易份数（0 或 1；仅胜局且账号/阶段余量充足时为 1）
+  bool material_pvp_loss_ineligible = 26;    // true = 本局为未达防挂机有效对抗门槛的 PVP 负/平局（+0 且不扣永久 660 额度）
 }
 
 message PlayerBattleResultComp {

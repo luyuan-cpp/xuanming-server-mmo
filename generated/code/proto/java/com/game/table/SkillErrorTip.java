@@ -91,6 +91,42 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillUpgradeBusy = 7013;</code>
      */
     kSkillUpgradeBusy(7013),
+    /**
+     * <code>kSkillScrollInvalid = 7014;</code>
+     */
+    kSkillScrollInvalid(7014),
+    /**
+     * <code>kSkillBookNotFound = 7015;</code>
+     */
+    kSkillBookNotFound(7015),
+    /**
+     * <code>kSkillBookNotDismantlable = 7016;</code>
+     */
+    kSkillBookNotDismantlable(7016),
+    /**
+     * <code>kSkillCraftMaterialNotEnough = 7017;</code>
+     */
+    kSkillCraftMaterialNotEnough(7017),
+    /**
+     * <code>kSkillCraftRevisionChanged = 7018;</code>
+     */
+    kSkillCraftRevisionChanged(7018),
+    /**
+     * <code>kSkillCraftBookRequired = 7019;</code>
+     */
+    kSkillCraftBookRequired(7019),
+    /**
+     * <code>kSkillAlreadyBookUnlocked = 7020;</code>
+     */
+    kSkillAlreadyBookUnlocked(7020),
+    /**
+     * <code>kSkillProxyStallRequiresMaster = 7021;</code>
+     */
+    kSkillProxyStallRequiresMaster(7021),
+    /**
+     * <code>kSkillProxyFeeInvalid = 7022;</code>
+     */
+    kSkillProxyFeeInvalid(7022),
     UNRECOGNIZED(-1),
     ;
 
@@ -163,6 +199,42 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillUpgradeBusy = 7013;</code>
      */
     public static final int kSkillUpgradeBusy_VALUE = 7013;
+    /**
+     * <code>kSkillScrollInvalid = 7014;</code>
+     */
+    public static final int kSkillScrollInvalid_VALUE = 7014;
+    /**
+     * <code>kSkillBookNotFound = 7015;</code>
+     */
+    public static final int kSkillBookNotFound_VALUE = 7015;
+    /**
+     * <code>kSkillBookNotDismantlable = 7016;</code>
+     */
+    public static final int kSkillBookNotDismantlable_VALUE = 7016;
+    /**
+     * <code>kSkillCraftMaterialNotEnough = 7017;</code>
+     */
+    public static final int kSkillCraftMaterialNotEnough_VALUE = 7017;
+    /**
+     * <code>kSkillCraftRevisionChanged = 7018;</code>
+     */
+    public static final int kSkillCraftRevisionChanged_VALUE = 7018;
+    /**
+     * <code>kSkillCraftBookRequired = 7019;</code>
+     */
+    public static final int kSkillCraftBookRequired_VALUE = 7019;
+    /**
+     * <code>kSkillAlreadyBookUnlocked = 7020;</code>
+     */
+    public static final int kSkillAlreadyBookUnlocked_VALUE = 7020;
+    /**
+     * <code>kSkillProxyStallRequiresMaster = 7021;</code>
+     */
+    public static final int kSkillProxyStallRequiresMaster_VALUE = 7021;
+    /**
+     * <code>kSkillProxyFeeInvalid = 7022;</code>
+     */
+    public static final int kSkillProxyFeeInvalid_VALUE = 7022;
 
 
     public final int getNumber() {
@@ -204,6 +276,15 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
         case 7011: return kSkillMaxRankReached;
         case 7012: return kSkillGoldNotEnough;
         case 7013: return kSkillUpgradeBusy;
+        case 7014: return kSkillScrollInvalid;
+        case 7015: return kSkillBookNotFound;
+        case 7016: return kSkillBookNotDismantlable;
+        case 7017: return kSkillCraftMaterialNotEnough;
+        case 7018: return kSkillCraftRevisionChanged;
+        case 7019: return kSkillCraftBookRequired;
+        case 7020: return kSkillAlreadyBookUnlocked;
+        case 7021: return kSkillProxyStallRequiresMaster;
+        case 7022: return kSkillProxyFeeInvalid;
         default: return null;
       }
     }
@@ -269,7 +350,7 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025skill_error_tip.proto*\301\003\n\013skill_error\022" +
+      "\n\025skill_error_tip.proto*\327\005\n\013skill_error\022" +
       "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt" +
       "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k" +
       "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN" +
@@ -280,9 +361,15 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       "SkillRankChanged\020\3406\022\036\n\031kSkillUpgradeCoun" +
       "tInvalid\020\3416\022\031\n\024kSkillLevelNotEnough\020\3426\022\031" +
       "\n\024kSkillMaxRankReached\020\3436\022\030\n\023kSkillGoldN" +
-      "otEnough\020\3446\022\026\n\021kSkillUpgradeBusy\020\3456B$\n\016c" +
-      "om.game.tableZ\022generated/pb/tableb\006proto" +
-      "3"
+      "otEnough\020\3446\022\026\n\021kSkillUpgradeBusy\020\3456\022\030\n\023k" +
+      "SkillScrollInvalid\020\3466\022\027\n\022kSkillBookNotFo" +
+      "und\020\3476\022\036\n\031kSkillBookNotDismantlable\020\3506\022!" +
+      "\n\034kSkillCraftMaterialNotEnough\020\3516\022\037\n\032kSk" +
+      "illCraftRevisionChanged\020\3526\022\034\n\027kSkillCraf" +
+      "tBookRequired\020\3536\022\036\n\031kSkillAlreadyBookUnl" +
+      "ocked\020\3546\022#\n\036kSkillProxyStallRequiresMast" +
+      "er\020\3556\022\032\n\025kSkillProxyFeeInvalid\020\3566B$\n\016com" +
+      ".game.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

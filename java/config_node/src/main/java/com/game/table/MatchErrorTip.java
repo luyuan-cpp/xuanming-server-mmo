@@ -183,6 +183,66 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchRankedRuleVersionMismatch = 16036;</code>
      */
     kMatchRankedRuleVersionMismatch(16036),
+    /**
+     * <code>kMatchTournamentNotOpen = 16037;</code>
+     */
+    kMatchTournamentNotOpen(16037),
+    /**
+     * <code>kMatchTournamentStageClosed = 16038;</code>
+     */
+    kMatchTournamentStageClosed(16038),
+    /**
+     * <code>kMatchTournamentSquadNameInvalid = 16039;</code>
+     */
+    kMatchTournamentSquadNameInvalid(16039),
+    /**
+     * <code>kMatchTournamentAlreadyInSquad = 16040;</code>
+     */
+    kMatchTournamentAlreadyInSquad(16040),
+    /**
+     * <code>kMatchTournamentSquadNotFound = 16041;</code>
+     */
+    kMatchTournamentSquadNotFound(16041),
+    /**
+     * <code>kMatchTournamentNotCaptain = 16042;</code>
+     */
+    kMatchTournamentNotCaptain(16042),
+    /**
+     * <code>kMatchTournamentSquadFull = 16043;</code>
+     */
+    kMatchTournamentSquadFull(16043),
+    /**
+     * <code>kMatchTournamentSquadLocked = 16044;</code>
+     */
+    kMatchTournamentSquadLocked(16044),
+    /**
+     * <code>kMatchTournamentInviteNotFound = 16045;</code>
+     */
+    kMatchTournamentInviteNotFound(16045),
+    /**
+     * <code>kMatchTournamentMemberNotEnough = 16046;</code>
+     */
+    kMatchTournamentMemberNotEnough(16046),
+    /**
+     * <code>kMatchTournamentLineupInvalid = 16047;</code>
+     */
+    kMatchTournamentLineupInvalid(16047),
+    /**
+     * <code>kMatchTournamentQualifierLimit = 16048;</code>
+     */
+    kMatchTournamentQualifierLimit(16048),
+    /**
+     * <code>kMatchTournamentMatchNotReady = 16049;</code>
+     */
+    kMatchTournamentMatchNotReady(16049),
+    /**
+     * <code>kMatchTournamentAlreadyCheered = 16050;</code>
+     */
+    kMatchTournamentAlreadyCheered(16050),
+    /**
+     * <code>kMatchTournamentRewardUnavailable = 16051;</code>
+     */
+    kMatchTournamentRewardUnavailable(16051),
     UNRECOGNIZED(-1),
     ;
 
@@ -347,6 +407,66 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchRankedRuleVersionMismatch = 16036;</code>
      */
     public static final int kMatchRankedRuleVersionMismatch_VALUE = 16036;
+    /**
+     * <code>kMatchTournamentNotOpen = 16037;</code>
+     */
+    public static final int kMatchTournamentNotOpen_VALUE = 16037;
+    /**
+     * <code>kMatchTournamentStageClosed = 16038;</code>
+     */
+    public static final int kMatchTournamentStageClosed_VALUE = 16038;
+    /**
+     * <code>kMatchTournamentSquadNameInvalid = 16039;</code>
+     */
+    public static final int kMatchTournamentSquadNameInvalid_VALUE = 16039;
+    /**
+     * <code>kMatchTournamentAlreadyInSquad = 16040;</code>
+     */
+    public static final int kMatchTournamentAlreadyInSquad_VALUE = 16040;
+    /**
+     * <code>kMatchTournamentSquadNotFound = 16041;</code>
+     */
+    public static final int kMatchTournamentSquadNotFound_VALUE = 16041;
+    /**
+     * <code>kMatchTournamentNotCaptain = 16042;</code>
+     */
+    public static final int kMatchTournamentNotCaptain_VALUE = 16042;
+    /**
+     * <code>kMatchTournamentSquadFull = 16043;</code>
+     */
+    public static final int kMatchTournamentSquadFull_VALUE = 16043;
+    /**
+     * <code>kMatchTournamentSquadLocked = 16044;</code>
+     */
+    public static final int kMatchTournamentSquadLocked_VALUE = 16044;
+    /**
+     * <code>kMatchTournamentInviteNotFound = 16045;</code>
+     */
+    public static final int kMatchTournamentInviteNotFound_VALUE = 16045;
+    /**
+     * <code>kMatchTournamentMemberNotEnough = 16046;</code>
+     */
+    public static final int kMatchTournamentMemberNotEnough_VALUE = 16046;
+    /**
+     * <code>kMatchTournamentLineupInvalid = 16047;</code>
+     */
+    public static final int kMatchTournamentLineupInvalid_VALUE = 16047;
+    /**
+     * <code>kMatchTournamentQualifierLimit = 16048;</code>
+     */
+    public static final int kMatchTournamentQualifierLimit_VALUE = 16048;
+    /**
+     * <code>kMatchTournamentMatchNotReady = 16049;</code>
+     */
+    public static final int kMatchTournamentMatchNotReady_VALUE = 16049;
+    /**
+     * <code>kMatchTournamentAlreadyCheered = 16050;</code>
+     */
+    public static final int kMatchTournamentAlreadyCheered_VALUE = 16050;
+    /**
+     * <code>kMatchTournamentRewardUnavailable = 16051;</code>
+     */
+    public static final int kMatchTournamentRewardUnavailable_VALUE = 16051;
 
 
     public final int getNumber() {
@@ -411,6 +531,21 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16034: return kMatchRankedSeasonSettling;
         case 16035: return kMatchRankedPresetInvalid;
         case 16036: return kMatchRankedRuleVersionMismatch;
+        case 16037: return kMatchTournamentNotOpen;
+        case 16038: return kMatchTournamentStageClosed;
+        case 16039: return kMatchTournamentSquadNameInvalid;
+        case 16040: return kMatchTournamentAlreadyInSquad;
+        case 16041: return kMatchTournamentSquadNotFound;
+        case 16042: return kMatchTournamentNotCaptain;
+        case 16043: return kMatchTournamentSquadFull;
+        case 16044: return kMatchTournamentSquadLocked;
+        case 16045: return kMatchTournamentInviteNotFound;
+        case 16046: return kMatchTournamentMemberNotEnough;
+        case 16047: return kMatchTournamentLineupInvalid;
+        case 16048: return kMatchTournamentQualifierLimit;
+        case 16049: return kMatchTournamentMatchNotReady;
+        case 16050: return kMatchTournamentAlreadyCheered;
+        case 16051: return kMatchTournamentRewardUnavailable;
         default: return null;
       }
     }
@@ -476,7 +611,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\224\t\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\254\r\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -505,9 +640,22 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "ptLoadoutInvalid\020\240}\022\"\n\035kMatchBattleScrip" +
       "tLoadoutFull\020\241}\022\037\n\032kMatchRankedSeasonSet" +
       "tling\020\242}\022\036\n\031kMatchRankedPresetInvalid\020\243}" +
-      "\022$\n\037kMatchRankedRuleVersionMismatch\020\244}B$" +
-      "\n\016com.game.tableZ\022generated/pb/tableb\006pr" +
-      "oto3"
+      "\022$\n\037kMatchRankedRuleVersionMismatch\020\244}\022\034" +
+      "\n\027kMatchTournamentNotOpen\020\245}\022 \n\033kMatchTo" +
+      "urnamentStageClosed\020\246}\022%\n kMatchTourname" +
+      "ntSquadNameInvalid\020\247}\022#\n\036kMatchTournamen" +
+      "tAlreadyInSquad\020\250}\022\"\n\035kMatchTournamentSq" +
+      "uadNotFound\020\251}\022\037\n\032kMatchTournamentNotCap" +
+      "tain\020\252}\022\036\n\031kMatchTournamentSquadFull\020\253}\022" +
+      " \n\033kMatchTournamentSquadLocked\020\254}\022#\n\036kMa" +
+      "tchTournamentInviteNotFound\020\255}\022$\n\037kMatch" +
+      "TournamentMemberNotEnough\020\256}\022\"\n\035kMatchTo" +
+      "urnamentLineupInvalid\020\257}\022#\n\036kMatchTourna" +
+      "mentQualifierLimit\020\260}\022\"\n\035kMatchTournamen" +
+      "tMatchNotReady\020\261}\022#\n\036kMatchTournamentAlr" +
+      "eadyCheered\020\262}\022&\n!kMatchTournamentReward" +
+      "Unavailable\020\263}B$\n\016com.game.tableZ\022genera" +
+      "ted/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+// TournamentRule 表的权威 schema。源表 data/TournamentRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 全服赛季战队锦标赛《群仙问道赛》单行全局规则(固定 id=1;设计 docs/design/season-team-tournament-v1.md)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message TournamentRuleTable {
+  option (cfg_sheet)       = "TournamentRule";
+  option (cfg_source_file) = "TournamentRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 规则版本号(修改核心参数时递增)
+  uint32 rule_version = 2;
+  // 总开关(true=开放,false=暂停)
+  bool enabled = 3;
+  // 锦标赛专用战斗模板(FK -> Dungeon.id,首测=5,time_limit=720)
+  uint32 battle_config_id = 4 [(cfg_fk) = "Dungeon"];
+  // 单场每侧出战人数(1..5,首测=3)
+  uint32 battle_team_size = 5;
+  // 战队名册人数上限(battle_team_size..7,首测=4即3首发+1替补)
+  uint32 roster_max_size = 6;
+  // 参赛最低角色等级(首测=15)
+  uint32 min_level = 7;
+  // 报名阶段天数(首测=42)
+  uint32 registration_days = 8;
+  // 海选积分赛天数(首测=7)
+  uint32 qualifier_days = 9;
+  // 淘汰赛与总决赛天数(首测=2)
+  uint32 knockout_days = 10;
+  // 封榜展示期天数(首测=5)
+  uint32 settle_display_days = 11;
+  // 每支战队海选最多场次(首测=6)
+  uint32 qualifier_max_matches = 12;
+  // 领取参赛保底奖所需完赛场次(首测=2)
+  uint32 participation_min_matches = 13;
+  // 淘汰赛最大晋级队数(2/4/8/16,首测=16)
+  uint32 knockout_max_teams = 14;
+  // 单轮淘汰赛超时窗口秒数(首测=1800即30分钟)
+  uint32 knockout_round_timeout_seconds = 15;
+  // 海选胜场积分(首测=3)
+  uint32 qualifier_win_points = 16;
+  // 海选平局积分(首测=1)
+  uint32 qualifier_draw_points = 17;
+  // 海选负场积分(首测=0)
+  uint32 qualifier_loss_points = 18;
+  // 战队邀请有效秒数(首测=259200即72小时)
+  uint32 invite_ttl_seconds = 19;
+  // 规则说明
+  string desc = 20;
+}

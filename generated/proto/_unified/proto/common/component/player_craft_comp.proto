@@ -1,0 +1,28 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 玩家亲手拓印/打造、尚未研习的技能书实例（docs/design/equipment-quality-and-skill-crafting-v1.md）。
+// 独立于 Item 表承载，后续新增上百个技能时无需污染永久 Item 表。
+message CraftedSkillBookEntry {
+  uint64 book_id = 1;            // 玩家维度单调唯一书号（>= 1）。
+  uint32 skill_table_id = 2;     // SkillTable.id。
+  uint32 scroll_id = 3;          // 产出所属卷宗 SkillScrollCraft.id。
+  uint32 rarity_tier = 4;        // 0 常规 / 1 稀世绝学。
+  bool bound = 5;                // true = 仅自用绑定（消耗绑定残页或绑定天工秘墨产物强制绑定，防洗白）。
+  string crafter_name = 6;       // 宗师署名（非空时展示「宗师 XXX 亲手撰」）。
+  uint64 crafter_player_id = 7;  // 宗师玩家 ID（仅追溯，0 = 非宗师出品）。
+}
+
+// 玩家轻量化手艺熟练度、未学技能书架、已通过书解锁的永久技能及主城原子代打配置。
+// 随 player_database.craft_component = 32（GROWTH 组）同事务落盘，旧存档缺失默认为空合法。
+message PlayerCraftComp {
+  uint32 forge_mastery_exp = 1;           // 铸器熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
+  uint32 scroll_mastery_exp = 2;          // 制卷熟练度经验（只增不减；学徒 0..19 / 巧匠 20..59 / 宗师 60+）。
+  uint64 scroll_craft_revision = 3;       // 技能制书/研习/拆页的持久防重水位，每次成功 +1。
+  uint64 next_book_seq = 4;               // 下一本未学技能书的本地单调 ID（0 视为 1）。
+  repeated CraftedSkillBookEntry skill_books = 5; // 玩家当前持有的未学技能书（无序，按 book_id 索引）。
+  bool proxy_stall_open = 6;              // 宗师是否在主城西市开启原子代打/代制服务摊位。
+  uint64 proxy_forge_fee_gold = 7;        // 装备代打/代打磨固定银两手工费（合法区间 50..100）。
+  uint64 proxy_scroll_fee_gold = 8;       // 技能制书代制固定银两手工费（合法区间 50..100）。
+  repeated uint32 book_unlocked_skill_ids = 9; // 已通过研习技能书永久解锁的 SkillTable.id（永久保值、不重置）。
+}

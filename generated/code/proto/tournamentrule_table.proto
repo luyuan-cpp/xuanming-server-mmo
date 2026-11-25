@@ -1,0 +1,36 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "TournamentRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message TournamentRuleTable {
+	uint32 id = 1;
+	uint32 rule_version = 2;
+	bool enabled = 3;
+	uint32 battle_config_id = 4;
+	uint32 battle_team_size = 5;
+	uint32 roster_max_size = 6;
+	uint32 min_level = 7;
+	uint32 registration_days = 8;
+	uint32 qualifier_days = 9;
+	uint32 knockout_days = 10;
+	uint32 settle_display_days = 11;
+	uint32 qualifier_max_matches = 12;
+	uint32 participation_min_matches = 13;
+	uint32 knockout_max_teams = 14;
+	uint32 knockout_round_timeout_seconds = 15;
+	uint32 qualifier_win_points = 16;
+	uint32 qualifier_draw_points = 17;
+	uint32 qualifier_loss_points = 18;
+	uint32 invite_ttl_seconds = 19;
+	string desc = 20;
+}
+
+message TournamentRuleTableData {
+	repeated TournamentRuleTable data = 1;
+}

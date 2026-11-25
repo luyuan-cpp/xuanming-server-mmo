@@ -68,7 +68,8 @@ public:
 	static uint32_t BuildSkillBook(entt::entity player, ListSkillsResponse& response);
 	// 人物/宝宝共用的目录投影；身份与持有状态由各自唯一写入口校验。
 	static void FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
-		uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view);
+		uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view,
+		bool craftUnlockRequired = false, bool unlockedByBook = false);
 	static bool IsFreeSkillFor(const SkillTable& row, uint32_t casterMask);
 
 	// 修习(学习 = 0 → 1;rank 0 的已有条目原地复用)。整笔拒绝时填 error_message 且不扣钱、不改等级;

@@ -294,9 +294,10 @@ TEST_F(PlayerEquipV1Test, FourBasicPiecesEachReachTenWithExactlySeventyFiveStone
             ASSERT_NE(nullptr, current);
             const auto info = Display(*current);
             ASSERT_TRUE(info.has_enhance_next());
-            EXPECT_EQ(10u, info.enhance_max_level());
+            EXPECT_EQ(11u, info.enhance_max_level());
             EXPECT_EQ(level + 1, info.enhance_next().next_level());
             EXPECT_EQ(10000u, info.enhance_next().success_rate());
+            EXPECT_EQ(0u, info.enhance_next().pity_limit());
             EXPECT_EQ(0u, info.enhance_next().cost_gold());
             EXPECT_EQ(kV1Stone, info.enhance_next().material_config_id());
             EXPECT_EQ(kV1Costs[level], info.enhance_next().material_count());
@@ -399,18 +400,104 @@ TEST_F(PlayerEquipV1Test, InvalidV1RuleSuppressesPreviewAndRejectsWithoutChargin
 
 TEST_F(PlayerEquipV1Test, MaximumLevelHasNoNextPreviewAndCostsNothing)
 {
-    const auto item = V1Instance(kEquipmentGuid, kV1Weapon, 10);
+    const auto item = V1Instance(kEquipmentGuid, kV1Weapon, 11);
     ASSERT_EQ(kSuccess, Inventory().PutInstance(item));
     ASSERT_NO_FATAL_FAILURE(StockStones(75));
     const auto info = Display(item);
-    EXPECT_EQ(10u, info.enhance_level());
-    EXPECT_EQ(10u, info.enhance_max_level());
-    EXPECT_EQ(2000u, info.enhance_bonus_permyriad());
+    EXPECT_EQ(11u, info.enhance_level());
+    EXPECT_EQ(11u, info.enhance_max_level());
+    EXPECT_EQ(2400u, info.enhance_bonus_permyriad());
     EXPECT_FALSE(info.has_enhance_next());
     const auto before = BagBytes();
     PlayerEquipSystem::EnhanceOutcome result;
-    EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 10, result));
+    EXPECT_EQ(kEquipEnhanceMaxLevel, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 11, result));
     EXPECT_EQ(before, BagBytes());
+}
+
+TEST_F(PlayerEquipV1Test, TopLevelElevenUsesProbabilityWithHardPityNoDowngradeAndPersistsProgress)
+{
+    ASSERT_EQ(kSuccess, Inventory().PutInstance(V1Instance(kEquipmentGuid, kV1Weapon, 10)));
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kEquipmentGuid, 3u));
+    // 20 次 × 30 强化石 = 600 强化石，足够覆盖完整保底周期。
+    ASSERT_NO_FATAL_FAILURE(StockStones(600));
+    // 让随机源总是返回 9999（10% 概率不中）。
+    PlayerEquipSystem::SetRandomSourceForTest([](uint64_t bound) { return bound - 1; });
+
+    for (uint32_t attempt = 0; attempt < 19; ++attempt)
+    {
+        SCOPED_TRACE(attempt);
+        const auto* current = Equipment().GetItemCompByGuid(kEquipmentGuid);
+        ASSERT_NE(nullptr, current);
+        const auto info = Display(*current);
+        ASSERT_TRUE(info.has_enhance_next());
+        EXPECT_EQ(11u, info.enhance_next().next_level());
+        EXPECT_EQ(1000u, info.enhance_next().success_rate());
+        EXPECT_EQ(2400u, info.enhance_next().bonus_permyriad());
+        EXPECT_EQ(30u, info.enhance_next().material_count());
+        EXPECT_EQ(20u, info.enhance_next().pity_limit());
+        EXPECT_EQ(attempt, info.enhance_next().current_pity_count());
+        EXPECT_FALSE(info.enhance_next().pity_guaranteed_next());
+
+        // 传入过期 expected_pity_count 必须被拒绝且不扣强化石。
+        if (attempt > 0)
+        {
+            const auto stonesBefore = Inventory().GetTotalItemCount(kV1Stone);
+            PlayerEquipSystem::EnhanceOutcome stale;
+            EXPECT_EQ(kEquipEnhanceLevelChanged,
+                PlayerEquipSystem::Enhance(player, kEquipmentGuid, 10, stale, attempt - 1));
+            EXPECT_EQ(stonesBefore, Inventory().GetTotalItemCount(kV1Stone));
+        }
+
+        PlayerEquipSystem::EnhanceOutcome outcome;
+        ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 10, outcome, attempt));
+        EXPECT_FALSE(outcome.success);
+        EXPECT_FALSE(outcome.triggeredByPity);
+        EXPECT_EQ(10u, outcome.level); // 失败不掉级
+        EXPECT_EQ(attempt + 1, outcome.pityCount);
+        EXPECT_EQ(20u, outcome.pityLimit);
+    }
+
+    // 存盘往返后，19/20 的保底进度必须原样保留。
+    BagAllData saved;
+    bag_marshal::Marshal(player, saved);
+    BagAllData cold;
+    ASSERT_TRUE(cold.ParseFromString(saved.SerializeAsString()));
+    bag_marshal::Unmarshal(player, cold);
+    const auto* restored = Equipment().GetItemCompByGuid(kEquipmentGuid);
+    ASSERT_NE(nullptr, restored);
+    const auto prePityInfo = Display(*restored);
+    ASSERT_TRUE(prePityInfo.has_enhance_next());
+    EXPECT_EQ(19u, prePityInfo.enhance_pity_count());
+    EXPECT_EQ(19u, prePityInfo.enhance_next().current_pity_count());
+    EXPECT_TRUE(prePityInfo.enhance_next().pity_guaranteed_next());
+
+    // 第 20 次即使随机源继续返回最大值也必成，保底清零，武器基础伤害放大 +24%（1620 * 1.24 = 2008）。
+    PlayerEquipSystem::EnhanceOutcome finalOutcome;
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 10, finalOutcome, 19u));
+    EXPECT_TRUE(finalOutcome.success);
+    EXPECT_TRUE(finalOutcome.triggeredByPity);
+    EXPECT_EQ(11u, finalOutcome.level);
+    EXPECT_EQ(0u, finalOutcome.pityCount);
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kV1Stone));
+    EXPECT_EQ(2008u, Bonus(equiprules::DerivedStat::kPhysicalAttack));
+    EXPECT_EQ(2008u, Bonus(equiprules::DerivedStat::kMagicAttack));
+}
+
+TEST_F(PlayerEquipV1Test, TopLevelElevenCanSucceedEarlyAndResetPity)
+{
+    auto item = V1Instance(kEquipmentGuid, kV1Weapon, 10);
+    item.mutable_equip()->set_enhance_pity_count(5);
+    ASSERT_EQ(kSuccess, Inventory().PutInstance(item));
+    ASSERT_NO_FATAL_FAILURE(StockStones(30));
+    // 随机源返回 0 (< 1000)，10% 直接提前成功。
+    PlayerEquipSystem::SetRandomSourceForTest([](uint64_t) { return uint64_t{0}; });
+    PlayerEquipSystem::EnhanceOutcome outcome;
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 10, outcome, 5u));
+    EXPECT_TRUE(outcome.success);
+    EXPECT_FALSE(outcome.triggeredByPity);
+    EXPECT_EQ(11u, outcome.level);
+    EXPECT_EQ(0u, outcome.pityCount);
+    EXPECT_EQ(0u, Inventory().GetTotalItemCount(kV1Stone));
 }
 
 TEST_F(PlayerEquipV1Test, ReplayingThePreviousLevelCannotConsumeAnotherUpgrade)
@@ -429,8 +516,10 @@ TEST_F(PlayerEquipV1Test, ShoesKeepSpeedAtEveryLevelAndPreviewMatchesAppliedDefe
 {
     ASSERT_EQ(kSuccess, Inventory().PutInstance(V1Instance(kEquipmentGuid, kV1Shoes)));
     ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kEquipmentGuid, 6u));
-    ASSERT_NO_FATAL_FAILURE(StockStones(75));
-    for (uint32_t level = 0; level <= 10; ++level)
+    ASSERT_NO_FATAL_FAILURE(StockStones(105));
+    // 让 +11 一发命中，验证满级鞋防御放大 +24% 而速度恒为 328。
+    PlayerEquipSystem::SetRandomSourceForTest([](uint64_t) { return uint64_t{0}; });
+    for (uint32_t level = 0; level <= 11; ++level)
     {
         SCOPED_TRACE(level);
         const auto* item = Equipment().GetItemCompByGuid(kEquipmentGuid);
@@ -440,22 +529,24 @@ TEST_F(PlayerEquipV1Test, ShoesKeepSpeedAtEveryLevelAndPreviewMatchesAppliedDefe
         const auto* defense = BaseLine(info, kAttrDefense);
         ASSERT_NE(nullptr, speed);
         ASSERT_NE(nullptr, defense);
-        const auto expectedDefense = 486u * (10000u + 200u * level) / 10000u;
+        const uint32_t bonusBps = level <= 10 ? 200u * level : 2400u;
+        const auto expectedDefense = 486u * (10000u + bonusBps) / 10000u;
         EXPECT_EQ(328u, speed->value());
         EXPECT_EQ(0u, speed->enhance_bonus());
         EXPECT_EQ(expectedDefense, defense->value());
         EXPECT_EQ(expectedDefense - 486u, defense->enhance_bonus());
         EXPECT_EQ(328u, Bonus(equiprules::DerivedStat::kSpeed));
         EXPECT_EQ(expectedDefense, Bonus(equiprules::DerivedStat::kDefense));
-        if (level == 10)
+        if (level == 11)
         {
             EXPECT_FALSE(info.has_enhance_next());
-            EXPECT_EQ(583u, defense->value());
+            EXPECT_EQ(602u, defense->value());
             continue;
         }
         ASSERT_TRUE(info.has_enhance_next());
         EXPECT_EQ(328u, speed->enhance_next_value());
-        const auto expectedNext = 486u * (10000u + 200u * (level + 1u)) / 10000u;
+        const uint32_t nextBonusBps = (level + 1u) <= 10 ? 200u * (level + 1u) : 2400u;
+        const auto expectedNext = 486u * (10000u + nextBonusBps) / 10000u;
         EXPECT_EQ(expectedNext, defense->enhance_next_value());
         PlayerEquipSystem::EnhanceOutcome result;
         ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kEquipmentGuid, level, result));

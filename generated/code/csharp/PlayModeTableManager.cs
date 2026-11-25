@@ -67,6 +67,7 @@ namespace MmorpgClient.Table
             public readonly PlayModeTableData Container;
             public readonly RepeatedField<PlayModeTable> Rows;
             public readonly Dictionary<uint, PlayModeTable> KvData;
+            public readonly Dictionary<uint, IReadOnlyList<PlayModeTable>> IdxAllowedTeamSizes;
             public readonly Dictionary<uint, IReadOnlyList<PlayModeTable>> IdxBattleConfigId;
 
             public Snapshot(PlayModeTableData container, int capacity)
@@ -74,6 +75,7 @@ namespace MmorpgClient.Table
                 Container = container;
                 Rows = container.Data;
                 KvData = new Dictionary<uint, PlayModeTable>(capacity);
+                IdxAllowedTeamSizes = new Dictionary<uint, IReadOnlyList<PlayModeTable>>();
                 IdxBattleConfigId = new Dictionary<uint, IReadOnlyList<PlayModeTable>>();
             }
         }
@@ -121,10 +123,16 @@ namespace MmorpgClient.Table
             {
                 PlayModeTable row = rows[i];
                 snap.KvData[row.Id] = row;
+                RepeatedField<uint> allowedTeamSizesElems = row.AllowedTeamSizes;
+                for (int j = 0; j < allowedTeamSizesElems.Count; j++)
+                {
+                    Index(snap.IdxAllowedTeamSizes, allowedTeamSizesElems[j], row);
+                }
                 Index(snap.IdxBattleConfigId, row.BattleConfigId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
+            Freeze(snap.IdxAllowedTeamSizes);
             Freeze(snap.IdxBattleConfigId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
@@ -168,6 +176,13 @@ namespace MmorpgClient.Table
             get { return _snapshot.KvData; }
         }
 
+        /// <summary>Rows whose repeated field allowed_team_sizes contains <paramref name="key"/>.</summary>
+        public IReadOnlyList<PlayModeTable> FindByAllowedTeamSizesIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxAllowedTeamSizes, key);
+        }
+
         /// <summary>Secondary index lookup on battle_config_id; 未命中返回空集合。</summary>
         public IReadOnlyList<PlayModeTable> GetByBattleConfigId(uint key)
         {
@@ -191,6 +206,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return snap.Rows.Count;
+        }
+
+        public int CountByAllowedTeamSizesIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxAllowedTeamSizes, key).Count;
         }
 
         public int CountByBattleConfigIdIndex(uint key)

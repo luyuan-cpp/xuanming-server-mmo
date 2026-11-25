@@ -355,6 +355,16 @@ message BattleSettlementData {
   bool participated = 24;
   // 五行试炼志 V2 权威战法事实与轻量阵容快照(由 battle 引擎在终局前按真实事件冻结,非试炼志关联局留空)。
   BattleTrialJournalFacts trial_facts = 25;
+  // 本局玩家成功提交本人或本人宝宝手动有效指令的独立回合数（用于 PVP 负/平局防挂机门槛判定）。
+  uint32 manual_action_rounds = 26;
+  // 本人或本人宝宝整场是否产生非零有效战斗贡献（有效伤害/治疗/护盾吸收/有效控制或驱散任一项 > 0）。
+  bool effective_combat_contribution = 27;
+  // 开局从 DungeonTable 冻结的试炼难度档（0=常规，1=普通，2=困难；用于困难胜局额外 +5 绑定材料）。
+  uint32 battle_difficulty = 28;
+  // 开局从 DungeonTable 冻结的首领/轮换玩法类型（0=常规，1..6 见 dungeon_table.proto）。
+  uint32 boss_trial_kind = 29;
+  // true = 本局由免费 3×3 预设驱动（仅限轮换娱乐场：护卫救援 / 物法易势 5V5），战后严格不回写场外资产。
+  bool use_free_preset = 30;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -421,7 +431,10 @@ message RankedMatchContext {
   uint32 rule_version = 4;            // RankedRule.rule_version
   uint32 team_size = 5;               // 每侧玩家人数(1..5)
   string config_fingerprint = 6;      // 竞技规则与预设依赖表指纹
-  repeated RankedMemberLoadout members = 7; // 本局全员冻结预设(PrepareBattle 可只含本人,CreateBattle 含全员)
+  repeated RankedMemberLoadout members = 7; // 本局全员冻结预设(仅 use_free_preset=true 生效;PrepareBattle 可只含本人,CreateBattle 含全员)
+  // true = 本局使用 6 套免费人宠预设(仅限轮换娱乐场：护卫救援 / 物法易势 5V5);
+  // false = 正式自养人宠会武(PVP_TEAM),携带本人真实装备、词条、法宝、技能与出战宝宝。
+  bool use_free_preset = 8;
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。

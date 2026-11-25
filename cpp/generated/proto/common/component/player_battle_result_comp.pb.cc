@@ -348,11 +348,11 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_._has_bits_),
       0, // no _extensions_
-      24, 248,  // max_field_number, fast_idx_mask
+      26, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4278190080,  // skipmap
+      4227858432,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      24,  // num_field_entries
+      26,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -459,8 +459,14 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {::_pbi::TcParser::FastV8S2,
        {448, 23, 0,
         PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.trial_new_coop_best_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 material_tradable_units_added = 25;
+      {::_pbi::TcParser::FastV32S2,
+       {456, 25, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_tradable_units_added_)}},
+      // bool material_pvp_loss_ineligible = 26;
+      {::_pbi::TcParser::FastV8S2,
+       {464, 24, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_pvp_loss_ineligible_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -517,6 +523,10 @@ constexpr PlayerBattleResult::ParseTableT_ PlayerBattleResult::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.trial_new_solo_best_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool trial_new_coop_best = 24;
       {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.trial_new_coop_best_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 material_tradable_units_added = 25;
+      {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_tradable_units_added_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool material_pvp_loss_ineligible = 26;
+      {PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_pvp_loss_ineligible_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -585,7 +595,9 @@ inline constexpr PlayerBattleResult::Impl_::Impl_(
         trial_journal_entry_id_{0u},
         items_mailed_{false},
         trial_new_solo_best_{false},
-        trial_new_coop_best_{false} {}
+        trial_new_coop_best_{false},
+        material_pvp_loss_ineligible_{false},
+        material_tradable_units_added_{0u} {}
 
 template <typename>
 constexpr PlayerBattleResult::PlayerBattleResult(::_pbi::ConstantInitialized,
@@ -860,7 +872,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_._has_bits_),
-        27, // hasbit index offset
+        29, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.result_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.outcome_),
@@ -885,6 +897,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.trial_newly_lit_seal_ids_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.trial_new_solo_best_),
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.trial_new_coop_best_),
+        PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.material_tradable_units_added_),
+        PROTOBUF_FIELD_OFFSET(::PlayerBattleResult, _impl_.material_pvp_loss_ineligible_),
         4,
         5,
         6,
@@ -909,6 +923,8 @@ const ::uint32_t
         3,
         22,
         23,
+        25,
+        24,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerBattleResultComp, _impl_._has_bits_),
         5, // hasbit index offset
@@ -923,7 +939,7 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::PlayerBattleResultCurrency)},
         {7, sizeof(::PlayerBattleResultItem)},
         {14, sizeof(::PlayerBattleResult)},
-        {65, sizeof(::PlayerBattleResultComp)},
+        {69, sizeof(::PlayerBattleResultComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -938,7 +954,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "esult_comp.proto\"C\n\032PlayerBattleResultCu"
     "rrency\022\025\n\rcurrency_type\030\001 \001(\r\022\016\n\006amount\030"
     "\002 \001(\004\">\n\026PlayerBattleResultItem\022\025\n\ritem_"
-    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\206\005\n\022Player"
+    "table_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\323\005\n\022Player"
     "BattleResult\022\022\n\nresult_seq\030\001 \001(\004\022\021\n\tbatt"
     "le_id\030\002 \001(\004\022\017\n\007outcome\030\003 \001(\r\022\022\n\nteam_ind"
     "ex\030\004 \001(\r\022\017\n\007is_dead\030\005 \001(\010\022\014\n\004fled\030\006 \001(\010\022"
@@ -954,16 +970,18 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattl
     "its_added\030\023 \001(\r\022\021\n\tseason_id\030\024 \001(\r\022\036\n\026tr"
     "ial_journal_entry_id\030\025 \001(\r\022 \n\030trial_newl"
     "y_lit_seal_ids\030\026 \003(\r\022\033\n\023trial_new_solo_b"
-    "est\030\027 \001(\010\022\033\n\023trial_new_coop_best\030\030 \001(\010\"W"
-    "\n\026PlayerBattleResultComp\022\027\n\017last_result_"
-    "seq\030\001 \001(\004\022$\n\007entries\030\002 \003(\0132\023.PlayerBattl"
-    "eResultB\022Z\020common/componentb\006proto3"
+    "est\030\027 \001(\010\022\033\n\023trial_new_coop_best\030\030 \001(\010\022%"
+    "\n\035material_tradable_units_added\030\031 \001(\r\022$\n"
+    "\034material_pvp_loss_ineligible\030\032 \001(\010\"W\n\026P"
+    "layerBattleResultComp\022\027\n\017last_result_seq"
+    "\030\001 \001(\004\022$\n\007entries\030\002 \003(\0132\023.PlayerBattleRe"
+    "sultB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto = {
     false,
     false,
-    955,
+    1032,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto,
     "proto/common/component/player_battle_result_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fbattle_5fresult_5fcomp_2eproto_once,
@@ -1497,9 +1515,9 @@ PlayerBattleResult::PlayerBattleResult(
                offsetof(Impl_, result_seq_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, result_seq_),
-           offsetof(Impl_, trial_new_coop_best_) -
+           offsetof(Impl_, material_tradable_units_added_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::trial_new_coop_best_));
+               sizeof(Impl_::material_tradable_units_added_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerBattleResult)
 }
@@ -1534,9 +1552,9 @@ inline void PlayerBattleResult::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, result_seq_),
            0,
-           offsetof(Impl_, trial_new_coop_best_) -
+           offsetof(Impl_, material_tradable_units_added_) -
                offsetof(Impl_, result_seq_) +
-               sizeof(Impl_::trial_new_coop_best_));
+               sizeof(Impl_::material_tradable_units_added_));
 }
 PlayerBattleResult::~PlayerBattleResult() {
   // @@protoc_insertion_point(destructor:PlayerBattleResult)
@@ -1614,6 +1632,11 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
     ::memset(&_impl_.battle_config_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.trial_new_coop_best_) -
         reinterpret_cast<char*>(&_impl_.battle_config_id_)) + sizeof(_impl_.trial_new_coop_best_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    ::memset(&_impl_.material_pvp_loss_ineligible_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.material_tradable_units_added_) -
+        reinterpret_cast<char*>(&_impl_.material_pvp_loss_ineligible_)) + sizeof(_impl_.material_tradable_units_added_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1868,6 +1891,24 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
     }
   }
 
+  // uint32 material_tradable_units_added = 25;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_material_tradable_units_added() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_material_tradable_units_added(), target);
+    }
+  }
+
+  // bool material_pvp_loss_ineligible = 26;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_material_pvp_loss_ineligible() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          26, this_._internal_material_pvp_loss_ineligible(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2060,6 +2101,21 @@ PROTOBUF_NOINLINE void PlayerBattleResult::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    // bool material_pvp_loss_ineligible = 26;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_material_pvp_loss_ineligible() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 material_tradable_units_added = 25;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_material_tradable_units_added() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_material_tradable_units_added());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -2202,6 +2258,18 @@ void PlayerBattleResult::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x03000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_material_pvp_loss_ineligible() != 0) {
+        _this->_impl_.material_pvp_loss_ineligible_ = from._impl_.material_pvp_loss_ineligible_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_material_tradable_units_added() != 0) {
+        _this->_impl_.material_tradable_units_added_ = from._impl_.material_tradable_units_added_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -2224,8 +2292,8 @@ void PlayerBattleResult::InternalSwap(PlayerBattleResult* PROTOBUF_RESTRICT PROT
   _impl_.items_consumed_.InternalSwap(&other->_impl_.items_consumed_);
   _impl_.trial_newly_lit_seal_ids_.InternalSwap(&other->_impl_.trial_newly_lit_seal_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.trial_new_coop_best_)
-      + sizeof(PlayerBattleResult::_impl_.trial_new_coop_best_)
+      PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.material_tradable_units_added_)
+      + sizeof(PlayerBattleResult::_impl_.material_tradable_units_added_)
       - PROTOBUF_FIELD_OFFSET(PlayerBattleResult, _impl_.result_seq_)>(
           reinterpret_cast<char*>(&_impl_.result_seq_),
           reinterpret_cast<char*>(&other->_impl_.result_seq_));

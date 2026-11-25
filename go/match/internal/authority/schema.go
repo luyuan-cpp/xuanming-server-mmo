@@ -34,6 +34,8 @@ func Tables() []proto.Message {
 		&pb.MatchManualResolutionRecord{},                                  // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
 		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
+		&pb.MatchRankedSeasonRecord{}, &pb.MatchRankedPlayerPrefsRecord{}, &pb.MatchRankedPlayerSeasonRecord{}, &pb.MatchRankedRewardRecord{}, &pb.MatchRankedBattleRecord{}, // 论剑排位(ranked.go)
+		&pb.MatchTournamentSeasonRecord{}, &pb.MatchTournamentSquadRecord{}, &pb.MatchTournamentMemberRecord{}, &pb.MatchTournamentInviteRecord{}, &pb.MatchTournamentMatchRecord{}, &pb.MatchTournamentCheerRecord{}, &pb.MatchTournamentRewardRecord{}, // 全服赛季战队锦标赛(tournament.go)
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
 		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},

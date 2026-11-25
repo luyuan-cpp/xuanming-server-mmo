@@ -95,10 +95,1679 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchRankedBattleRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentSeasonRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentSquadRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentMemberRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentInviteRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentMatchRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentCheerRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchTournamentRewardRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
 namespace match {
+class MatchTournamentSquadRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentSquadRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentSquadRecord::ParseTableT_ MatchTournamentSquadRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      17, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294836224,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      17,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentSquadRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 squad_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSquadRecord, _impl_.squad_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.squad_id_)}},
+      // uint32 season_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.season_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.season_id_)}},
+      // string name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.name_)}},
+      // string name_norm = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.name_norm_)}},
+      // uint64 captain_player_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSquadRecord, _impl_.captain_player_id_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.captain_player_id_)}},
+      // uint32 state = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.state_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.state_)}},
+      // uint32 member_count = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.member_count_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.member_count_)}},
+      // uint32 qualifier_points = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.qualifier_points_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_points_)}},
+      // uint32 qualifier_played = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.qualifier_played_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_played_)}},
+      // uint32 qualifier_wins = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.qualifier_wins_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_wins_)}},
+      // uint32 qualifier_losses = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.qualifier_losses_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_losses_)}},
+      // uint32 qualifier_draws = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.qualifier_draws_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_draws_)}},
+      // uint32 seed_rank = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.seed_rank_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.seed_rank_)}},
+      // uint32 final_rank = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.final_rank_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.final_rank_)}},
+      // uint32 cheer_count = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSquadRecord, _impl_.cheer_count_), 16>(),
+       {120, 16, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.cheer_count_)}},
+      // uint64 registered_ms = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 14, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.registered_ms_)}},
+      // uint64 updated_ms = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 15, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.updated_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 squad_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.squad_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 season_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string name_norm = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.name_norm_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 captain_player_id = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.captain_player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 state = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.state_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 member_count = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.member_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 qualifier_points = 8;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_points_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 qualifier_played = 9;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_played_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 qualifier_wins = 10;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_wins_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 qualifier_losses = 11;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_losses_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 qualifier_draws = 12;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.qualifier_draws_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 seed_rank = 13;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.seed_rank_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 final_rank = 14;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.final_rank_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 cheer_count = 15;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.cheer_count_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 registered_ms = 16;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.registered_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 17;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\40\0\0\4\11\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "match.MatchTournamentSquadRecord"
+      "name"
+      "name_norm"
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentSquadRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        name_norm_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        squad_id_{::uint64_t{0u}},
+        season_id_{0u},
+        state_{0u},
+        captain_player_id_{::uint64_t{0u}},
+        member_count_{0u},
+        qualifier_points_{0u},
+        qualifier_played_{0u},
+        qualifier_wins_{0u},
+        qualifier_losses_{0u},
+        qualifier_draws_{0u},
+        seed_rank_{0u},
+        final_rank_{0u},
+        registered_ms_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}},
+        cheer_count_{0u} {}
+
+template <typename>
+constexpr MatchTournamentSquadRecord::MatchTournamentSquadRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentSquadRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentSquadRecord(arena);
+}
+constexpr auto MatchTournamentSquadRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTournamentSquadRecord), alignof(MatchTournamentSquadRecord));
+}
+constexpr auto MatchTournamentSquadRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentSquadRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentSquadRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentSquadRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentSquadRecord>(), &MatchTournamentSquadRecord::ByteSizeLong,
+              &MatchTournamentSquadRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[34],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentSquadRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentSquadRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentSquadRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentSquadRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentSquadRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentSquadRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentSquadRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentSquadRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentSquadRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentSquadRecordGlobalsTypeInternal MatchTournamentSquadRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentSquadRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentSquadRecord_globals_.GetClassData();
+#else
+  return MatchTournamentSquadRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentSeasonRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentSeasonRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentSeasonRecord::ParseTableT_ MatchTournamentSeasonRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      18, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294705152,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      18,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentSeasonRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.season_id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_id_)}},
+      // string season_key = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_key_)}},
+      // string season_name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_name_)}},
+      // uint32 rule_version = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.rule_version_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.rule_version_)}},
+      // uint32 stage = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.stage_), 9>(),
+       {40, 9, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.stage_)}},
+      // uint64 registration_start_ms = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.registration_start_ms_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.registration_start_ms_)}},
+      // uint64 qualifier_start_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.qualifier_start_ms_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.qualifier_start_ms_)}},
+      // uint64 knockout_start_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.knockout_start_ms_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.knockout_start_ms_)}},
+      // uint64 settle_start_ms = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.settle_start_ms_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.settle_start_ms_)}},
+      // uint64 end_ms = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.end_ms_), 12>(),
+       {80, 12, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.end_ms_)}},
+      // uint32 battle_team_size = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.battle_team_size_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.battle_team_size_)}},
+      // uint32 roster_max_size = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.roster_max_size_), 13>(),
+       {96, 13, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.roster_max_size_)}},
+      // uint32 knockout_team_count = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentSeasonRecord, _impl_.knockout_team_count_), 14>(),
+       {104, 14, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.knockout_team_count_)}},
+      // uint64 champion_squad_id = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentSeasonRecord, _impl_.champion_squad_id_), 15>(),
+       {112, 15, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_squad_id_)}},
+      // string champion_squad_name = 15;
+      {::_pbi::TcParser::FastUS1,
+       {122, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_squad_name_)}},
+      // string champion_member_summary = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_member_summary_)}},
+      // uint64 settled_ms = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.settled_ms_)}},
+      // uint64 updated_ms = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.updated_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string season_key = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string season_name = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 rule_version = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.rule_version_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 stage = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.stage_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 registration_start_ms = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.registration_start_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 qualifier_start_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.qualifier_start_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 knockout_start_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.knockout_start_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 settle_start_ms = 9;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.settle_start_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 end_ms = 10;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.end_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 battle_team_size = 11;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.battle_team_size_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 roster_max_size = 12;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.roster_max_size_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 knockout_team_count = 13;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.knockout_team_count_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 champion_squad_id = 14;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_squad_id_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string champion_squad_name = 15;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_squad_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string champion_member_summary = 16;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.champion_member_summary_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 settled_ms = 17;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.settled_ms_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 18;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\41\0\12\13\0\0\0\0\0\0\0\0\0\0\0\23\27\0\0\0\0\0\0\0"
+      "match.MatchTournamentSeasonRecord"
+      "season_key"
+      "season_name"
+      "champion_squad_name"
+      "champion_member_summary"
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentSeasonRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        season_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        season_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        champion_squad_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        champion_member_summary_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        season_id_{0u},
+        rule_version_{0u},
+        registration_start_ms_{::uint64_t{0u}},
+        qualifier_start_ms_{::uint64_t{0u}},
+        knockout_start_ms_{::uint64_t{0u}},
+        stage_{0u},
+        battle_team_size_{0u},
+        settle_start_ms_{::uint64_t{0u}},
+        end_ms_{::uint64_t{0u}},
+        roster_max_size_{0u},
+        knockout_team_count_{0u},
+        champion_squad_id_{::uint64_t{0u}},
+        settled_ms_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr MatchTournamentSeasonRecord::MatchTournamentSeasonRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentSeasonRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentSeasonRecord(arena);
+}
+constexpr auto MatchTournamentSeasonRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTournamentSeasonRecord), alignof(MatchTournamentSeasonRecord));
+}
+constexpr auto MatchTournamentSeasonRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentSeasonRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentSeasonRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentSeasonRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentSeasonRecord>(), &MatchTournamentSeasonRecord::ByteSizeLong,
+              &MatchTournamentSeasonRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[33],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentSeasonRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentSeasonRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentSeasonRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentSeasonRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentSeasonRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentSeasonRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentSeasonRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentSeasonRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentSeasonRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentSeasonRecordGlobalsTypeInternal MatchTournamentSeasonRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentSeasonRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentSeasonRecord_globals_.GetClassData();
+#else
+  return MatchTournamentSeasonRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentRewardRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentRewardRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentRewardRecord::ParseTableT_ MatchTournamentRewardRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      15, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294934528,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      15,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentRewardRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentRewardRecord, _impl_.season_id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.season_id_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.player_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.player_id_)}},
+      // uint32 tier_kind = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentRewardRecord, _impl_.tier_kind_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.tier_kind_)}},
+      // uint64 reward_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.reward_id_), 6>(),
+       {32, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.reward_id_)}},
+      // uint64 squad_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.squad_id_), 7>(),
+       {40, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.squad_id_)}},
+      // uint32 final_rank = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentRewardRecord, _impl_.final_rank_), 8>(),
+       {48, 8, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.final_rank_)}},
+      // uint32 tier_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentRewardRecord, _impl_.tier_id_), 9>(),
+       {56, 9, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.tier_id_)}},
+      // uint64 gold_amount = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.gold_amount_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.gold_amount_)}},
+      // bytes attachments = 9;
+      {::_pbi::TcParser::FastBS1,
+       {74, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.attachments_)}},
+      // string title_code = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.title_code_)}},
+      // string badge_code = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.badge_code_)}},
+      // uint32 delivery_state = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentRewardRecord, _impl_.delivery_state_), 14>(),
+       {96, 14, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.delivery_state_)}},
+      // uint64 mail_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.mail_id_), 11>(),
+       {104, 11, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.mail_id_)}},
+      // uint64 claimed_ms = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.claimed_ms_), 12>(),
+       {112, 12, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.claimed_ms_)}},
+      // uint64 updated_ms = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentRewardRecord, _impl_.updated_ms_), 13>(),
+       {120, 13, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.updated_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 tier_kind = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.tier_kind_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 reward_id = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.reward_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 squad_id = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.squad_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 final_rank = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.final_rank_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tier_id = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.tier_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 gold_amount = 8;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.gold_amount_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bytes attachments = 9;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.attachments_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // string title_code = 10;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.title_code_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string badge_code = 11;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.badge_code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 delivery_state = 12;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.delivery_state_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 mail_id = 13;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.mail_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 claimed_ms = 14;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.claimed_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 15;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\41\0\0\0\0\0\0\0\0\0\12\12\0\0\0\0"
+      "match.MatchTournamentRewardRecord"
+      "title_code"
+      "badge_code"
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentRewardRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        attachments_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        title_code_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        badge_code_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        season_id_{0u},
+        tier_kind_{0u},
+        reward_id_{::uint64_t{0u}},
+        squad_id_{::uint64_t{0u}},
+        final_rank_{0u},
+        tier_id_{0u},
+        gold_amount_{::uint64_t{0u}},
+        mail_id_{::uint64_t{0u}},
+        claimed_ms_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}},
+        delivery_state_{0u} {}
+
+template <typename>
+constexpr MatchTournamentRewardRecord::MatchTournamentRewardRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentRewardRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentRewardRecord(arena);
+}
+constexpr auto MatchTournamentRewardRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTournamentRewardRecord), alignof(MatchTournamentRewardRecord));
+}
+constexpr auto MatchTournamentRewardRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentRewardRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentRewardRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentRewardRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentRewardRecord>(), &MatchTournamentRewardRecord::ByteSizeLong,
+              &MatchTournamentRewardRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[39],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentRewardRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentRewardRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentRewardRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentRewardRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentRewardRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentRewardRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentRewardRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentRewardRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentRewardRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentRewardRecordGlobalsTypeInternal MatchTournamentRewardRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentRewardRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentRewardRecord_globals_.GetClassData();
+#else
+  return MatchTournamentRewardRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentMemberRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentMemberRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentMemberRecord::ParseTableT_ MatchTournamentMemberRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      8, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967040,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      8,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentMemberRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 joined_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMemberRecord, _impl_.joined_ms_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.joined_ms_)}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMemberRecord, _impl_.season_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.season_id_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMemberRecord, _impl_.player_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.player_id_)}},
+      // uint64 squad_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMemberRecord, _impl_.squad_id_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.squad_id_)}},
+      // uint32 role = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMemberRecord, _impl_.role_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.role_)}},
+      // uint32 starter_slot = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMemberRecord, _impl_.starter_slot_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.starter_slot_)}},
+      // string player_name = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.player_name_)}},
+      // uint32 zone_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMemberRecord, _impl_.zone_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.zone_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 squad_id = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.squad_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 role = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.role_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 starter_slot = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.starter_slot_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string player_name = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.player_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 zone_id = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.zone_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 joined_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.joined_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\41\0\0\0\0\0\13\0\0\0\0\0\0\0\0\0"
+      "match.MatchTournamentMemberRecord"
+      "player_name"
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentMemberRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        season_id_{0u},
+        role_{0u},
+        squad_id_{::uint64_t{0u}},
+        starter_slot_{0u},
+        zone_id_{0u},
+        joined_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr MatchTournamentMemberRecord::MatchTournamentMemberRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentMemberRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentMemberRecord(arena);
+}
+constexpr auto MatchTournamentMemberRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTournamentMemberRecord), alignof(MatchTournamentMemberRecord));
+}
+constexpr auto MatchTournamentMemberRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentMemberRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentMemberRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentMemberRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentMemberRecord>(), &MatchTournamentMemberRecord::ByteSizeLong,
+              &MatchTournamentMemberRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[35],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentMemberRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentMemberRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentMemberRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentMemberRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentMemberRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentMemberRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentMemberRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentMemberRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentMemberRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentMemberRecordGlobalsTypeInternal MatchTournamentMemberRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentMemberRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentMemberRecord_globals_.GetClassData();
+#else
+  return MatchTournamentMemberRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentMatchRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentMatchRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentMatchRecord::ParseTableT_ MatchTournamentMatchRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      20, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4293918720,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      20,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentMatchRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 match_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMatchRecord, _impl_.match_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.match_id_)}},
+      // uint32 season_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.season_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.season_id_)}},
+      // uint32 phase = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.phase_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.phase_)}},
+      // uint32 round_index = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.round_index_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.round_index_)}},
+      // uint32 slot_index = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.slot_index_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.slot_index_)}},
+      // uint64 squad_a_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMatchRecord, _impl_.squad_a_id_), 7>(),
+       {48, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.squad_a_id_)}},
+      // uint64 squad_b_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMatchRecord, _impl_.squad_b_id_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.squad_b_id_)}},
+      // bytes lineup_a = 8;
+      {::_pbi::TcParser::FastBS1,
+       {66, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.lineup_a_)}},
+      // bytes lineup_b = 9;
+      {::_pbi::TcParser::FastBS1,
+       {74, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.lineup_b_)}},
+      // bool ready_a = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(MatchTournamentMatchRecord, _impl_.ready_a_), 10>(),
+       {80, 10, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.ready_a_)}},
+      // bool ready_b = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(MatchTournamentMatchRecord, _impl_.ready_b_), 11>(),
+       {88, 11, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.ready_b_)}},
+      // uint32 state = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.state_), 9>(),
+       {96, 9, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.state_)}},
+      // uint64 battle_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMatchRecord, _impl_.battle_id_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.battle_id_)}},
+      // uint64 winner_squad_id = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentMatchRecord, _impl_.winner_squad_id_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.winner_squad_id_)}},
+      // uint32 outcome = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentMatchRecord, _impl_.outcome_), 19>(),
+       {120, 19, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.outcome_)}},
+      // bool featured_spectate = 16;
+      {::_pbi::TcParser::FastV8S2,
+       {384, 12, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.featured_spectate_)}},
+      // uint64 scheduled_start_ms = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 15, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.scheduled_start_ms_)}},
+      // uint64 deadline_ms = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 16, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.deadline_ms_)}},
+      // uint64 finished_ms = 19;
+      {::_pbi::TcParser::FastV64S2,
+       {408, 17, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.finished_ms_)}},
+      // uint64 updated_ms = 20;
+      {::_pbi::TcParser::FastV64S2,
+       {416, 18, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.updated_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 match_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.match_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 season_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 phase = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.phase_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 round_index = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.round_index_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 slot_index = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.slot_index_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 squad_a_id = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.squad_a_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 squad_b_id = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.squad_b_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bytes lineup_a = 8;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.lineup_a_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bytes lineup_b = 9;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.lineup_b_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bool ready_a = 10;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.ready_a_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool ready_b = 11;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.ready_b_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 state = 12;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.state_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 battle_id = 13;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.battle_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 winner_squad_id = 14;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.winner_squad_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 outcome = 15;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.outcome_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool featured_spectate = 16;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.featured_spectate_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 scheduled_start_ms = 17;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.scheduled_start_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 deadline_ms = 18;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 finished_ms = 19;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.finished_ms_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 20;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentMatchRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        lineup_a_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        lineup_b_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        match_id_{::uint64_t{0u}},
+        season_id_{0u},
+        phase_{0u},
+        round_index_{0u},
+        slot_index_{0u},
+        squad_a_id_{::uint64_t{0u}},
+        squad_b_id_{::uint64_t{0u}},
+        state_{0u},
+        ready_a_{false},
+        ready_b_{false},
+        featured_spectate_{false},
+        battle_id_{::uint64_t{0u}},
+        winner_squad_id_{::uint64_t{0u}},
+        scheduled_start_ms_{::uint64_t{0u}},
+        deadline_ms_{::uint64_t{0u}},
+        finished_ms_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}},
+        outcome_{0u} {}
+
+template <typename>
+constexpr MatchTournamentMatchRecord::MatchTournamentMatchRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentMatchRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentMatchRecord(arena);
+}
+constexpr auto MatchTournamentMatchRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(MatchTournamentMatchRecord), alignof(MatchTournamentMatchRecord));
+}
+constexpr auto MatchTournamentMatchRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentMatchRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentMatchRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentMatchRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentMatchRecord>(), &MatchTournamentMatchRecord::ByteSizeLong,
+              &MatchTournamentMatchRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[37],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentMatchRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentMatchRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentMatchRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentMatchRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentMatchRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentMatchRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentMatchRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentMatchRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentMatchRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentMatchRecordGlobalsTypeInternal MatchTournamentMatchRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentMatchRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentMatchRecord_globals_.GetClassData();
+#else
+  return MatchTournamentMatchRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentInviteRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentInviteRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentInviteRecord::ParseTableT_ MatchTournamentInviteRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentInviteRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 squad_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentInviteRecord, _impl_.squad_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.squad_id_)}},
+      // uint64 invitee_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentInviteRecord, _impl_.invitee_player_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.invitee_player_id_)}},
+      // uint32 season_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentInviteRecord, _impl_.season_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.season_id_)}},
+      // uint64 inviter_player_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentInviteRecord, _impl_.inviter_player_id_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.inviter_player_id_)}},
+      // uint32 state = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentInviteRecord, _impl_.state_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.state_)}},
+      // uint64 created_ms = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentInviteRecord, _impl_.created_ms_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.created_ms_)}},
+      // uint64 expires_ms = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentInviteRecord, _impl_.expires_ms_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.expires_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 squad_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.squad_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 invitee_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.invitee_player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 season_id = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 inviter_player_id = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.inviter_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 state = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.state_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 created_ms = 6;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expires_ms = 7;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.expires_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentInviteRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        squad_id_{::uint64_t{0u}},
+        invitee_player_id_{::uint64_t{0u}},
+        inviter_player_id_{::uint64_t{0u}},
+        season_id_{0u},
+        state_{0u},
+        created_ms_{::uint64_t{0u}},
+        expires_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr MatchTournamentInviteRecord::MatchTournamentInviteRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentInviteRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentInviteRecord(arena);
+}
+constexpr auto MatchTournamentInviteRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MatchTournamentInviteRecord), alignof(MatchTournamentInviteRecord));
+}
+constexpr auto MatchTournamentInviteRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentInviteRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentInviteRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentInviteRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentInviteRecord>(), &MatchTournamentInviteRecord::ByteSizeLong,
+              &MatchTournamentInviteRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[36],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentInviteRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentInviteRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentInviteRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentInviteRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentInviteRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentInviteRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentInviteRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentInviteRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentInviteRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentInviteRecordGlobalsTypeInternal MatchTournamentInviteRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentInviteRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentInviteRecord_globals_.GetClassData();
+#else
+  return MatchTournamentInviteRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchTournamentCheerRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchTournamentCheerRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_._has_bits_);
+};
+
+constexpr MatchTournamentCheerRecord::ParseTableT_ MatchTournamentCheerRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchTournamentCheerRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 season_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchTournamentCheerRecord, _impl_.season_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.season_id_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentCheerRecord, _impl_.player_id_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.player_id_)}},
+      // uint64 squad_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentCheerRecord, _impl_.squad_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.squad_id_)}},
+      // bool rewarded = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(MatchTournamentCheerRecord, _impl_.rewarded_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.rewarded_)}},
+      // uint64 created_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchTournamentCheerRecord, _impl_.created_ms_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.created_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 season_id = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.season_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 squad_id = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.squad_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool rewarded = 4;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.rewarded_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 created_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MatchTournamentCheerRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}},
+        season_id_{0u},
+        rewarded_{false},
+        squad_id_{::uint64_t{0u}},
+        created_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr MatchTournamentCheerRecord::MatchTournamentCheerRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchTournamentCheerRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchTournamentCheerRecord(arena);
+}
+constexpr auto MatchTournamentCheerRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MatchTournamentCheerRecord), alignof(MatchTournamentCheerRecord));
+}
+constexpr auto MatchTournamentCheerRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchTournamentCheerRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchTournamentCheerRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchTournamentCheerRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchTournamentCheerRecord>(), &MatchTournamentCheerRecord::ByteSizeLong,
+              &MatchTournamentCheerRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[38],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchTournamentCheerRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchTournamentCheerRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchTournamentCheerRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchTournamentCheerRecord::InternalGenerateClassData_(
+            _default, &MatchTournamentCheerRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentCheerRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchTournamentCheerRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchTournamentCheerRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchTournamentCheerRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchTournamentCheerRecordGlobalsTypeInternal MatchTournamentCheerRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchTournamentCheerRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchTournamentCheerRecord_globals_.GetClassData();
+#else
+  return MatchTournamentCheerRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class MatchSpectatorRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<MatchSpectatorRecord>()._impl_._has_bits_);
@@ -7514,6 +9183,207 @@ const ::uint32_t
         4,
         3,
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_._has_bits_),
+        21, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.season_key_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.season_name_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.rule_version_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.stage_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.registration_start_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.qualifier_start_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.knockout_start_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.settle_start_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.end_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.battle_team_size_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.roster_max_size_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.knockout_team_count_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.champion_squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.champion_squad_name_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.champion_member_summary_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.settled_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_.updated_ms_),
+        4,
+        0,
+        1,
+        5,
+        9,
+        6,
+        7,
+        8,
+        11,
+        12,
+        10,
+        13,
+        14,
+        15,
+        2,
+        3,
+        16,
+        17,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_._has_bits_),
+        20, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.name_norm_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.captain_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.member_count_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.qualifier_points_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.qualifier_played_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.qualifier_wins_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.qualifier_losses_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.qualifier_draws_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.seed_rank_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.final_rank_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.cheer_count_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.registered_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSquadRecord, _impl_.updated_ms_),
+        2,
+        3,
+        0,
+        1,
+        5,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        16,
+        14,
+        15,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_._has_bits_),
+        11, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.role_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.starter_slot_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.player_name_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.zone_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMemberRecord, _impl_.joined_ms_),
+        2,
+        1,
+        4,
+        3,
+        5,
+        0,
+        6,
+        7,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.invitee_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.inviter_player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.created_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentInviteRecord, _impl_.expires_ms_),
+        0,
+        1,
+        3,
+        2,
+        4,
+        5,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_._has_bits_),
+        23, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.match_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.phase_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.round_index_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.slot_index_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.squad_a_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.squad_b_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.lineup_a_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.lineup_b_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.ready_a_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.ready_b_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.winner_squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.outcome_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.featured_spectate_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.scheduled_start_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.deadline_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.finished_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentMatchRecord, _impl_.updated_ms_),
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        0,
+        1,
+        10,
+        11,
+        9,
+        13,
+        14,
+        19,
+        12,
+        15,
+        16,
+        17,
+        18,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_.squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_.rewarded_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentCheerRecord, _impl_.created_ms_),
+        1,
+        0,
+        3,
+        2,
+        4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_._has_bits_),
+        18, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.season_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.tier_kind_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.reward_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.squad_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.final_rank_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.tier_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.gold_amount_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.attachments_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.title_code_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.badge_code_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.delivery_state_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.mail_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.claimed_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchTournamentRewardRecord, _impl_.updated_ms_),
+        4,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        0,
+        1,
+        2,
+        14,
+        11,
+        12,
+        13,
 };
 
 static const ::_pbi::MigrationSchema
@@ -7551,6 +9421,13 @@ static const ::_pbi::MigrationSchema
         {598, sizeof(::match::MatchRankedPlayerSeasonRecord)},
         {631, sizeof(::match::MatchRankedRewardRecord)},
         {646, sizeof(::match::MatchRankedBattleRecord)},
+        {659, sizeof(::match::MatchTournamentSeasonRecord)},
+        {698, sizeof(::match::MatchTournamentSquadRecord)},
+        {735, sizeof(::match::MatchTournamentMemberRecord)},
+        {754, sizeof(::match::MatchTournamentInviteRecord)},
+        {771, sizeof(::match::MatchTournamentMatchRecord)},
+        {814, sizeof(::match::MatchTournamentCheerRecord)},
+        {827, sizeof(::match::MatchTournamentRewardRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7587,6 +9464,13 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::MatchRankedPlayerSeasonRecord_globals_,
         &::match::MatchRankedRewardRecord_globals_,
         &::match::MatchRankedBattleRecord_globals_,
+        &::match::MatchTournamentSeasonRecord_globals_,
+        &::match::MatchTournamentSquadRecord_globals_,
+        &::match::MatchTournamentMemberRecord_globals_,
+        &::match::MatchTournamentInviteRecord_globals_,
+        &::match::MatchTournamentMatchRecord_globals_,
+        &::match::MatchTournamentCheerRecord_globals_,
+        &::match::MatchTournamentRewardRecord_globals_,
 };
 const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -7835,19 +9719,90 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "\n\rsettled_at_ms\030\004 \001(\004\022\017\n\007summary\030\005 \001(\014:V"
     "\212\222\364\001\023match_ranked_battle\222\222\364\001\023battle_id,p"
     "layer_id\332\222\364\001!player_id,settled_at_ms,bat"
-    "tle_id*\314\003\n\037MatchBattleCompletionSourceKi"
-    "nd\022.\n*MATCH_BATTLE_COMPLETION_SOURCE_UNS"
-    "PECIFIED\020\000\022(\n$MATCH_BATTLE_COMPLETION_SO"
-    "URCE_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPLETION_"
-    "SOURCE_BATTLE_RPC\020\002\0227\n3MATCH_BATTLE_COMP"
-    "LETION_SOURCE_MATCH_DEADLINE_ABORT\020\003\0226\n2"
-    "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_"
-    "ROOM_ABORT\020\004\022/\n+MATCH_BATTLE_COMPLETION_"
-    "SOURCE_MANUAL_ABORT\020\005\022@\n<MATCH_BATTLE_CO"
-    "MPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_"
-    "ABORT\020\006\022<\n8MATCH_BATTLE_COMPLETION_SOURC"
-    "E_MATCH_INSTANCE_GONE_ABORT\020\007B\rZ\013match/m"
-    "atchb\006proto3"
+    "tle_id\"\216\004\n\033MatchTournamentSeasonRecord\022\021"
+    "\n\tseason_id\030\001 \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\023\n"
+    "\013season_name\030\003 \001(\t\022\024\n\014rule_version\030\004 \001(\r"
+    "\022\r\n\005stage\030\005 \001(\r\022\035\n\025registration_start_ms"
+    "\030\006 \001(\004\022\032\n\022qualifier_start_ms\030\007 \001(\004\022\031\n\021kn"
+    "ockout_start_ms\030\010 \001(\004\022\027\n\017settle_start_ms"
+    "\030\t \001(\004\022\016\n\006end_ms\030\n \001(\004\022\030\n\020battle_team_si"
+    "ze\030\013 \001(\r\022\027\n\017roster_max_size\030\014 \001(\r\022\033\n\023kno"
+    "ckout_team_count\030\r \001(\r\022\031\n\021champion_squad"
+    "_id\030\016 \001(\004\022\033\n\023champion_squad_name\030\017 \001(\t\022\037"
+    "\n\027champion_member_summary\030\020 \001(\t\022\022\n\nsettl"
+    "ed_ms\030\021 \001(\004\022\022\n\nupdated_ms\030\022 \001(\004:>\212\222\364\001\027ma"
+    "tch_tournament_season\222\222\364\001\tseason_id\332\222\364\001\017"
+    "stage,season_id\"\227\004\n\032MatchTournamentSquad"
+    "Record\022\020\n\010squad_id\030\001 \001(\004\022\021\n\tseason_id\030\002 "
+    "\001(\r\022\014\n\004name\030\003 \001(\t\022\021\n\tname_norm\030\004 \001(\t\022\031\n\021"
+    "captain_player_id\030\005 \001(\004\022\r\n\005state\030\006 \001(\r\022\024"
+    "\n\014member_count\030\007 \001(\r\022\030\n\020qualifier_points"
+    "\030\010 \001(\r\022\030\n\020qualifier_played\030\t \001(\r\022\026\n\016qual"
+    "ifier_wins\030\n \001(\r\022\030\n\020qualifier_losses\030\013 \001"
+    "(\r\022\027\n\017qualifier_draws\030\014 \001(\r\022\021\n\tseed_rank"
+    "\030\r \001(\r\022\022\n\nfinal_rank\030\016 \001(\r\022\023\n\013cheer_coun"
+    "t\030\017 \001(\r\022\025\n\rregistered_ms\030\020 \001(\004\022\022\n\nupdate"
+    "d_ms\030\021 \001(\004:\214\001\212\222\364\001\026match_tournament_squad"
+    "\222\222\364\001\010squad_id\332\222\364\001Gseason_id,state,qualif"
+    "ier_points,squad_id;season_id,final_rank"
+    ",squad_id\342\222\364\001\023season_id,name_norm\"\377\001\n\033Ma"
+    "tchTournamentMemberRecord\022\021\n\tseason_id\030\001"
+    " \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010squad_id\030\003 \001("
+    "\004\022\014\n\004role\030\004 \001(\r\022\024\n\014starter_slot\030\005 \001(\r\022\023\n"
+    "\013player_name\030\006 \001(\t\022\017\n\007zone_id\030\007 \001(\r\022\021\n\tj"
+    "oined_ms\030\010 \001(\004:K\212\222\364\001\027match_tournament_me"
+    "mber\222\222\364\001\023season_id,player_id\332\222\364\001\022squad_i"
+    "d,player_id\"\234\002\n\033MatchTournamentInviteRec"
+    "ord\022\020\n\010squad_id\030\001 \001(\004\022\031\n\021invitee_player_"
+    "id\030\002 \001(\004\022\021\n\tseason_id\030\003 \001(\r\022\031\n\021inviter_p"
+    "layer_id\030\004 \001(\004\022\r\n\005state\030\005 \001(\r\022\022\n\ncreated"
+    "_ms\030\006 \001(\004\022\022\n\nexpires_ms\030\007 \001(\004:k\212\222\364\001\027matc"
+    "h_tournament_invite\222\222\364\001\032squad_id,invitee"
+    "_player_id\332\222\364\001+invitee_player_id,state,e"
+    "xpires_ms,squad_id\"\246\004\n\032MatchTournamentMa"
+    "tchRecord\022\020\n\010match_id\030\001 \001(\004\022\021\n\tseason_id"
+    "\030\002 \001(\r\022\r\n\005phase\030\003 \001(\r\022\023\n\013round_index\030\004 \001"
+    "(\r\022\022\n\nslot_index\030\005 \001(\r\022\022\n\nsquad_a_id\030\006 \001"
+    "(\004\022\022\n\nsquad_b_id\030\007 \001(\004\022\020\n\010lineup_a\030\010 \001(\014"
+    "\022\020\n\010lineup_b\030\t \001(\014\022\017\n\007ready_a\030\n \001(\010\022\017\n\007r"
+    "eady_b\030\013 \001(\010\022\r\n\005state\030\014 \001(\r\022\021\n\tbattle_id"
+    "\030\r \001(\004\022\027\n\017winner_squad_id\030\016 \001(\004\022\017\n\007outco"
+    "me\030\017 \001(\r\022\031\n\021featured_spectate\030\020 \001(\010\022\032\n\022s"
+    "cheduled_start_ms\030\021 \001(\004\022\023\n\013deadline_ms\030\022"
+    " \001(\004\022\023\n\013finished_ms\030\023 \001(\004\022\022\n\nupdated_ms\030"
+    "\024 \001(\004:|\212\222\364\001\026match_tournament_match\222\222\364\001\010m"
+    "atch_id\332\222\364\001Oseason_id,phase,round_index,"
+    "slot_index;battle_id;season_id,phase,sta"
+    "te,match_id\"\320\001\n\032MatchTournamentCheerReco"
+    "rd\022\021\n\tseason_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004"
+    "\022\020\n\010squad_id\030\003 \001(\004\022\020\n\010rewarded\030\004 \001(\010\022\022\n\n"
+    "created_ms\030\005 \001(\004:T\212\222\364\001\026match_tournament_"
+    "cheer\222\222\364\001\023season_id,player_id\332\222\364\001\034season"
+    "_id,squad_id,player_id\"\312\003\n\033MatchTourname"
+    "ntRewardRecord\022\021\n\tseason_id\030\001 \001(\r\022\021\n\tpla"
+    "yer_id\030\002 \001(\004\022\021\n\ttier_kind\030\003 \001(\r\022\021\n\trewar"
+    "d_id\030\004 \001(\004\022\020\n\010squad_id\030\005 \001(\004\022\022\n\nfinal_ra"
+    "nk\030\006 \001(\r\022\017\n\007tier_id\030\007 \001(\r\022\023\n\013gold_amount"
+    "\030\010 \001(\004\022\023\n\013attachments\030\t \001(\014\022\022\n\ntitle_cod"
+    "e\030\n \001(\t\022\022\n\nbadge_code\030\013 \001(\t\022\026\n\016delivery_"
+    "state\030\014 \001(\r\022\017\n\007mail_id\030\r \001(\004\022\022\n\nclaimed_"
+    "ms\030\016 \001(\004\022\022\n\nupdated_ms\030\017 \001(\004:\204\001\212\222\364\001\027matc"
+    "h_tournament_reward\222\222\364\001\035season_id,player"
+    "_id,tier_kind\332\222\364\001Aplayer_id,season_id,ti"
+    "er_kind;delivery_state,updated_ms,reward"
+    "_id*\314\003\n\037MatchBattleCompletionSourceKind\022"
+    ".\n*MATCH_BATTLE_COMPLETION_SOURCE_UNSPEC"
+    "IFIED\020\000\022(\n$MATCH_BATTLE_COMPLETION_SOURC"
+    "E_KAFKA\020\001\022-\n)MATCH_BATTLE_COMPLETION_SOU"
+    "RCE_BATTLE_RPC\020\002\0227\n3MATCH_BATTLE_COMPLET"
+    "ION_SOURCE_MATCH_DEADLINE_ABORT\020\003\0226\n2MAT"
+    "CH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROO"
+    "M_ABORT\020\004\022/\n+MATCH_BATTLE_COMPLETION_SOU"
+    "RCE_MANUAL_ABORT\020\005\022@\n<MATCH_BATTLE_COMPL"
+    "ETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABO"
+    "RT\020\006\022<\n8MATCH_BATTLE_COMPLETION_SOURCE_M"
+    "ATCH_INSTANCE_GONE_ABORT\020\007B\rZ\013match/matc"
+    "hb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -7859,13 +9814,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    10292,
+    13129,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps,
     3,
-    33,
+    40,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto::offsets,
@@ -21512,6 +23467,3507 @@ void MatchRankedBattleRecord::InternalSwap(MatchRankedBattleRecord* PROTOBUF_RES
 }
 
 ::google::protobuf::Metadata MatchRankedBattleRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentSeasonRecord::MatchTournamentSeasonRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentSeasonRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentSeasonRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentSeasonRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::MatchTournamentSeasonRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        season_key_(arena, from.season_key_),
+        season_name_(arena, from.season_name_),
+        champion_squad_name_(arena, from.champion_squad_name_),
+        champion_member_summary_(arena, from.champion_member_summary_) {}
+
+MatchTournamentSeasonRecord::MatchTournamentSeasonRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const MatchTournamentSeasonRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentSeasonRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  MatchTournamentSeasonRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, season_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, season_id_),
+           offsetof(Impl_, updated_ms_) -
+               offsetof(Impl_, season_id_) +
+               sizeof(Impl_::updated_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:match.MatchTournamentSeasonRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentSeasonRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        season_key_(arena),
+        season_name_(arena),
+        champion_squad_name_(arena),
+        champion_member_summary_(arena) {}
+
+inline void MatchTournamentSeasonRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, season_id_),
+           0,
+           offsetof(Impl_, updated_ms_) -
+               offsetof(Impl_, season_id_) +
+               sizeof(Impl_::updated_ms_));
+}
+MatchTournamentSeasonRecord::~MatchTournamentSeasonRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentSeasonRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentSeasonRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentSeasonRecord& this_ = static_cast<MatchTournamentSeasonRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.season_key_.Destroy();
+  this_._impl_.season_name_.Destroy();
+  this_._impl_.champion_squad_name_.Destroy();
+  this_._impl_.champion_member_summary_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentSeasonRecord_class_data_ =
+        MatchTournamentSeasonRecord::InternalGenerateClassData_(MatchTournamentSeasonRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentSeasonRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentSeasonRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentSeasonRecord_class_data_.tc_table);
+  return MatchTournamentSeasonRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentSeasonRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentSeasonRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentSeasonRecord_globals_));
+  return MatchTournamentSeasonRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentSeasonRecord::ParseTableT_
+    MatchTournamentSeasonRecord::_table_ =
+        MatchTournamentSeasonRecord::InternalGenerateParseTable_(MatchTournamentSeasonRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentSeasonRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentSeasonRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.season_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.season_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.champion_squad_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.champion_member_summary_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+    ::memset(&_impl_.season_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.qualifier_start_ms_) -
+        reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.qualifier_start_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.knockout_start_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.champion_squad_id_) -
+        reinterpret_cast<char*>(&_impl_.knockout_start_ms_)) + sizeof(_impl_.champion_squad_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    ::memset(&_impl_.settled_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.updated_ms_) -
+        reinterpret_cast<char*>(&_impl_.settled_ms_)) + sizeof(_impl_.updated_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentSeasonRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentSeasonRecord& this_ = static_cast<const MatchTournamentSeasonRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentSeasonRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentSeasonRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentSeasonRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // string season_key = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_season_key().empty()) {
+      const ::std::string& _s = this_._internal_season_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSeasonRecord.season_key");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string season_name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_season_name().empty()) {
+      const ::std::string& _s = this_._internal_season_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSeasonRecord.season_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 rule_version = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_rule_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_rule_version(), target);
+    }
+  }
+
+  // uint32 stage = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_stage() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_stage(), target);
+    }
+  }
+
+  // uint64 registration_start_ms = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_registration_start_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_registration_start_ms(), target);
+    }
+  }
+
+  // uint64 qualifier_start_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_qualifier_start_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_qualifier_start_ms(), target);
+    }
+  }
+
+  // uint64 knockout_start_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_knockout_start_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_knockout_start_ms(), target);
+    }
+  }
+
+  // uint64 settle_start_ms = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_settle_start_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_settle_start_ms(), target);
+    }
+  }
+
+  // uint64 end_ms = 10;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_end_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_end_ms(), target);
+    }
+  }
+
+  // uint32 battle_team_size = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_battle_team_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_battle_team_size(), target);
+    }
+  }
+
+  // uint32 roster_max_size = 12;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_roster_max_size() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_roster_max_size(), target);
+    }
+  }
+
+  // uint32 knockout_team_count = 13;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_knockout_team_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_knockout_team_count(), target);
+    }
+  }
+
+  // uint64 champion_squad_id = 14;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_champion_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_champion_squad_id(), target);
+    }
+  }
+
+  // string champion_squad_name = 15;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_champion_squad_name().empty()) {
+      const ::std::string& _s = this_._internal_champion_squad_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSeasonRecord.champion_squad_name");
+      target = stream->WriteStringMaybeAliased(15, _s, target);
+    }
+  }
+
+  // string champion_member_summary = 16;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_champion_member_summary().empty()) {
+      const ::std::string& _s = this_._internal_champion_member_summary();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSeasonRecord.champion_member_summary");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // uint64 settled_ms = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_settled_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_settled_ms(), target);
+    }
+  }
+
+  // uint64 updated_ms = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentSeasonRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentSeasonRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentSeasonRecord& this_ = static_cast<const MatchTournamentSeasonRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentSeasonRecord::ByteSizeLong() const {
+  const MatchTournamentSeasonRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentSeasonRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string season_key = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_season_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_season_key());
+      }
+    }
+    // string season_name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_season_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_season_name());
+      }
+    }
+    // string champion_squad_name = 15;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_champion_squad_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_champion_squad_name());
+      }
+    }
+    // string champion_member_summary = 16;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_champion_member_summary().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_champion_member_summary());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 rule_version = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_rule_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_rule_version());
+      }
+    }
+    // uint64 registration_start_ms = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_registration_start_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_registration_start_ms());
+      }
+    }
+    // uint64 qualifier_start_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_qualifier_start_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_qualifier_start_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint64 knockout_start_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_knockout_start_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_knockout_start_ms());
+      }
+    }
+    // uint32 stage = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_stage() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_stage());
+      }
+    }
+    // uint32 battle_team_size = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_battle_team_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_battle_team_size());
+      }
+    }
+    // uint64 settle_start_ms = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_settle_start_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_settle_start_ms());
+      }
+    }
+    // uint64 end_ms = 10;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_end_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_end_ms());
+      }
+    }
+    // uint32 roster_max_size = 12;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_roster_max_size() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_roster_max_size());
+      }
+    }
+    // uint32 knockout_team_count = 13;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_knockout_team_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_knockout_team_count());
+      }
+    }
+    // uint64 champion_squad_id = 14;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_champion_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_champion_squad_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    // uint64 settled_ms = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_settled_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_settled_ms());
+      }
+    }
+    // uint64 updated_ms = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_updated_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentSeasonRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentSeasonRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentSeasonRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentSeasonRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_season_key().empty()) {
+        _this->_internal_set_season_key(from._internal_season_key());
+      } else {
+        if (_this->_impl_.season_key_.IsDefault()) {
+          _this->_internal_set_season_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_season_name().empty()) {
+        _this->_internal_set_season_name(from._internal_season_name());
+      } else {
+        if (_this->_impl_.season_name_.IsDefault()) {
+          _this->_internal_set_season_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_champion_squad_name().empty()) {
+        _this->_internal_set_champion_squad_name(from._internal_champion_squad_name());
+      } else {
+        if (_this->_impl_.champion_squad_name_.IsDefault()) {
+          _this->_internal_set_champion_squad_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_champion_member_summary().empty()) {
+        _this->_internal_set_champion_member_summary(from._internal_champion_member_summary());
+      } else {
+        if (_this->_impl_.champion_member_summary_.IsDefault()) {
+          _this->_internal_set_champion_member_summary("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_rule_version() != 0) {
+        _this->_impl_.rule_version_ = from._impl_.rule_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_registration_start_ms() != 0) {
+        _this->_impl_.registration_start_ms_ = from._impl_.registration_start_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_qualifier_start_ms() != 0) {
+        _this->_impl_.qualifier_start_ms_ = from._impl_.qualifier_start_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_knockout_start_ms() != 0) {
+        _this->_impl_.knockout_start_ms_ = from._impl_.knockout_start_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_stage() != 0) {
+        _this->_impl_.stage_ = from._impl_.stage_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_battle_team_size() != 0) {
+        _this->_impl_.battle_team_size_ = from._impl_.battle_team_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_settle_start_ms() != 0) {
+        _this->_impl_.settle_start_ms_ = from._impl_.settle_start_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_end_ms() != 0) {
+        _this->_impl_.end_ms_ = from._impl_.end_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_roster_max_size() != 0) {
+        _this->_impl_.roster_max_size_ = from._impl_.roster_max_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_knockout_team_count() != 0) {
+        _this->_impl_.knockout_team_count_ = from._impl_.knockout_team_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_champion_squad_id() != 0) {
+        _this->_impl_.champion_squad_id_ = from._impl_.champion_squad_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_settled_ms() != 0) {
+        _this->_impl_.settled_ms_ = from._impl_.settled_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentSeasonRecord::CopyFrom(const MatchTournamentSeasonRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentSeasonRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentSeasonRecord::InternalSwap(MatchTournamentSeasonRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.season_key_, &other->_impl_.season_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.season_name_, &other->_impl_.season_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.champion_squad_name_, &other->_impl_.champion_squad_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.champion_member_summary_, &other->_impl_.champion_member_summary_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.updated_ms_)
+      + sizeof(MatchTournamentSeasonRecord::_impl_.updated_ms_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentSeasonRecord, _impl_.season_id_)>(
+          reinterpret_cast<char*>(&_impl_.season_id_),
+          reinterpret_cast<char*>(&other->_impl_.season_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentSeasonRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentSquadRecord::MatchTournamentSquadRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentSquadRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentSquadRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentSquadRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::MatchTournamentSquadRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_),
+        name_norm_(arena, from.name_norm_) {}
+
+MatchTournamentSquadRecord::MatchTournamentSquadRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const MatchTournamentSquadRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentSquadRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  MatchTournamentSquadRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, squad_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, squad_id_),
+           offsetof(Impl_, cheer_count_) -
+               offsetof(Impl_, squad_id_) +
+               sizeof(Impl_::cheer_count_));
+
+  // @@protoc_insertion_point(copy_constructor:match.MatchTournamentSquadRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentSquadRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena),
+        name_norm_(arena) {}
+
+inline void MatchTournamentSquadRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, squad_id_),
+           0,
+           offsetof(Impl_, cheer_count_) -
+               offsetof(Impl_, squad_id_) +
+               sizeof(Impl_::cheer_count_));
+}
+MatchTournamentSquadRecord::~MatchTournamentSquadRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentSquadRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentSquadRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentSquadRecord& this_ = static_cast<MatchTournamentSquadRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.name_norm_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentSquadRecord_class_data_ =
+        MatchTournamentSquadRecord::InternalGenerateClassData_(MatchTournamentSquadRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentSquadRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentSquadRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentSquadRecord_class_data_.tc_table);
+  return MatchTournamentSquadRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentSquadRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentSquadRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentSquadRecord_globals_));
+  return MatchTournamentSquadRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentSquadRecord::ParseTableT_
+    MatchTournamentSquadRecord::_table_ =
+        MatchTournamentSquadRecord::InternalGenerateParseTable_(MatchTournamentSquadRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentSquadRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentSquadRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.name_norm_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.squad_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.qualifier_points_) -
+        reinterpret_cast<char*>(&_impl_.squad_id_)) + sizeof(_impl_.qualifier_points_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.qualifier_played_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.updated_ms_) -
+        reinterpret_cast<char*>(&_impl_.qualifier_played_)) + sizeof(_impl_.updated_ms_));
+  }
+  _impl_.cheer_count_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentSquadRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentSquadRecord& this_ = static_cast<const MatchTournamentSquadRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentSquadRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentSquadRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentSquadRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 squad_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_squad_id(), target);
+    }
+  }
+
+  // uint32 season_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_season_id(), target);
+    }
+  }
+
+  // string name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSquadRecord.name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // string name_norm = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_name_norm().empty()) {
+      const ::std::string& _s = this_._internal_name_norm();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentSquadRecord.name_norm");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint64 captain_player_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_captain_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_captain_player_id(), target);
+    }
+  }
+
+  // uint32 state = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_state(), target);
+    }
+  }
+
+  // uint32 member_count = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_member_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_member_count(), target);
+    }
+  }
+
+  // uint32 qualifier_points = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_qualifier_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_qualifier_points(), target);
+    }
+  }
+
+  // uint32 qualifier_played = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_qualifier_played() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_qualifier_played(), target);
+    }
+  }
+
+  // uint32 qualifier_wins = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_qualifier_wins() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_qualifier_wins(), target);
+    }
+  }
+
+  // uint32 qualifier_losses = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_qualifier_losses() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_qualifier_losses(), target);
+    }
+  }
+
+  // uint32 qualifier_draws = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_qualifier_draws() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_qualifier_draws(), target);
+    }
+  }
+
+  // uint32 seed_rank = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_seed_rank() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_seed_rank(), target);
+    }
+  }
+
+  // uint32 final_rank = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_final_rank() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_final_rank(), target);
+    }
+  }
+
+  // uint32 cheer_count = 15;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_cheer_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_cheer_count(), target);
+    }
+  }
+
+  // uint64 registered_ms = 16;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_registered_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          16, this_._internal_registered_ms(), target);
+    }
+  }
+
+  // uint64 updated_ms = 17;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentSquadRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentSquadRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentSquadRecord& this_ = static_cast<const MatchTournamentSquadRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentSquadRecord::ByteSizeLong() const {
+  const MatchTournamentSquadRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentSquadRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // string name_norm = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_name_norm().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name_norm());
+      }
+    }
+    // uint64 squad_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_id());
+      }
+    }
+    // uint32 season_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 state = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_state() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state());
+      }
+    }
+    // uint64 captain_player_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_captain_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_captain_player_id());
+      }
+    }
+    // uint32 member_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_member_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_member_count());
+      }
+    }
+    // uint32 qualifier_points = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_qualifier_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_qualifier_points());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint32 qualifier_played = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_qualifier_played() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_qualifier_played());
+      }
+    }
+    // uint32 qualifier_wins = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_qualifier_wins() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_qualifier_wins());
+      }
+    }
+    // uint32 qualifier_losses = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_qualifier_losses() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_qualifier_losses());
+      }
+    }
+    // uint32 qualifier_draws = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_qualifier_draws() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_qualifier_draws());
+      }
+    }
+    // uint32 seed_rank = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_seed_rank() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_seed_rank());
+      }
+    }
+    // uint32 final_rank = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_final_rank() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_final_rank());
+      }
+    }
+    // uint64 registered_ms = 16;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_registered_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_registered_ms());
+      }
+    }
+    // uint64 updated_ms = 17;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_updated_ms());
+      }
+    }
+  }
+   {
+    // uint32 cheer_count = 15;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_cheer_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_cheer_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentSquadRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentSquadRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentSquadRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentSquadRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_name_norm().empty()) {
+        _this->_internal_set_name_norm(from._internal_name_norm());
+      } else {
+        if (_this->_impl_.name_norm_.IsDefault()) {
+          _this->_internal_set_name_norm("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_squad_id() != 0) {
+        _this->_impl_.squad_id_ = from._impl_.squad_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_captain_player_id() != 0) {
+        _this->_impl_.captain_player_id_ = from._impl_.captain_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_member_count() != 0) {
+        _this->_impl_.member_count_ = from._impl_.member_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_qualifier_points() != 0) {
+        _this->_impl_.qualifier_points_ = from._impl_.qualifier_points_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_qualifier_played() != 0) {
+        _this->_impl_.qualifier_played_ = from._impl_.qualifier_played_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_qualifier_wins() != 0) {
+        _this->_impl_.qualifier_wins_ = from._impl_.qualifier_wins_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_qualifier_losses() != 0) {
+        _this->_impl_.qualifier_losses_ = from._impl_.qualifier_losses_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_qualifier_draws() != 0) {
+        _this->_impl_.qualifier_draws_ = from._impl_.qualifier_draws_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_seed_rank() != 0) {
+        _this->_impl_.seed_rank_ = from._impl_.seed_rank_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_final_rank() != 0) {
+        _this->_impl_.final_rank_ = from._impl_.final_rank_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_registered_ms() != 0) {
+        _this->_impl_.registered_ms_ = from._impl_.registered_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_cheer_count() != 0) {
+      _this->_impl_.cheer_count_ = from._impl_.cheer_count_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentSquadRecord::CopyFrom(const MatchTournamentSquadRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentSquadRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentSquadRecord::InternalSwap(MatchTournamentSquadRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_norm_, &other->_impl_.name_norm_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.cheer_count_)
+      + sizeof(MatchTournamentSquadRecord::_impl_.cheer_count_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentSquadRecord, _impl_.squad_id_)>(
+          reinterpret_cast<char*>(&_impl_.squad_id_),
+          reinterpret_cast<char*>(&other->_impl_.squad_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentSquadRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentMemberRecord::MatchTournamentMemberRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentMemberRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentMemberRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentMemberRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::MatchTournamentMemberRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        player_name_(arena, from.player_name_) {}
+
+MatchTournamentMemberRecord::MatchTournamentMemberRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const MatchTournamentMemberRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentMemberRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  MatchTournamentMemberRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, joined_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::joined_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:match.MatchTournamentMemberRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentMemberRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        player_name_(arena) {}
+
+inline void MatchTournamentMemberRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, joined_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::joined_ms_));
+}
+MatchTournamentMemberRecord::~MatchTournamentMemberRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentMemberRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentMemberRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentMemberRecord& this_ = static_cast<MatchTournamentMemberRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.player_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentMemberRecord_class_data_ =
+        MatchTournamentMemberRecord::InternalGenerateClassData_(MatchTournamentMemberRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentMemberRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentMemberRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentMemberRecord_class_data_.tc_table);
+  return MatchTournamentMemberRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentMemberRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentMemberRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentMemberRecord_globals_));
+  return MatchTournamentMemberRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentMemberRecord::ParseTableT_
+    MatchTournamentMemberRecord::_table_ =
+        MatchTournamentMemberRecord::InternalGenerateParseTable_(MatchTournamentMemberRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentMemberRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentMemberRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.player_name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.joined_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.joined_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentMemberRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentMemberRecord& this_ = static_cast<const MatchTournamentMemberRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentMemberRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentMemberRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentMemberRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 squad_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_squad_id(), target);
+    }
+  }
+
+  // uint32 role = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_role() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_role(), target);
+    }
+  }
+
+  // uint32 starter_slot = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_starter_slot() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_starter_slot(), target);
+    }
+  }
+
+  // string player_name = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_player_name().empty()) {
+      const ::std::string& _s = this_._internal_player_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentMemberRecord.player_name");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint32 zone_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_zone_id(), target);
+    }
+  }
+
+  // uint64 joined_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_joined_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_joined_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentMemberRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentMemberRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentMemberRecord& this_ = static_cast<const MatchTournamentMemberRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentMemberRecord::ByteSizeLong() const {
+  const MatchTournamentMemberRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentMemberRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string player_name = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_player_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_player_name());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 role = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_role() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role());
+      }
+    }
+    // uint64 squad_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_id());
+      }
+    }
+    // uint32 starter_slot = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_starter_slot() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_starter_slot());
+      }
+    }
+    // uint32 zone_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+    // uint64 joined_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_joined_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_joined_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentMemberRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentMemberRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentMemberRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentMemberRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_player_name().empty()) {
+        _this->_internal_set_player_name(from._internal_player_name());
+      } else {
+        if (_this->_impl_.player_name_.IsDefault()) {
+          _this->_internal_set_player_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_role() != 0) {
+        _this->_impl_.role_ = from._impl_.role_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_squad_id() != 0) {
+        _this->_impl_.squad_id_ = from._impl_.squad_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_starter_slot() != 0) {
+        _this->_impl_.starter_slot_ = from._impl_.starter_slot_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_joined_ms() != 0) {
+        _this->_impl_.joined_ms_ = from._impl_.joined_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentMemberRecord::CopyFrom(const MatchTournamentMemberRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentMemberRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentMemberRecord::InternalSwap(MatchTournamentMemberRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.player_name_, &other->_impl_.player_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.joined_ms_)
+      + sizeof(MatchTournamentMemberRecord::_impl_.joined_ms_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentMemberRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentMemberRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentInviteRecord::MatchTournamentInviteRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentInviteRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentInviteRecord)
+}
+MatchTournamentInviteRecord::MatchTournamentInviteRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchTournamentInviteRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentInviteRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentInviteRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void MatchTournamentInviteRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, squad_id_),
+           0,
+           offsetof(Impl_, expires_ms_) -
+               offsetof(Impl_, squad_id_) +
+               sizeof(Impl_::expires_ms_));
+}
+MatchTournamentInviteRecord::~MatchTournamentInviteRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentInviteRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentInviteRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentInviteRecord& this_ = static_cast<MatchTournamentInviteRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentInviteRecord_class_data_ =
+        MatchTournamentInviteRecord::InternalGenerateClassData_(MatchTournamentInviteRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentInviteRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentInviteRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentInviteRecord_class_data_.tc_table);
+  return MatchTournamentInviteRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentInviteRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentInviteRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentInviteRecord_globals_));
+  return MatchTournamentInviteRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentInviteRecord::ParseTableT_
+    MatchTournamentInviteRecord::_table_ =
+        MatchTournamentInviteRecord::InternalGenerateParseTable_(MatchTournamentInviteRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentInviteRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentInviteRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    ::memset(&_impl_.squad_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expires_ms_) -
+        reinterpret_cast<char*>(&_impl_.squad_id_)) + sizeof(_impl_.expires_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentInviteRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentInviteRecord& this_ = static_cast<const MatchTournamentInviteRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentInviteRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentInviteRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentInviteRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 squad_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_squad_id(), target);
+    }
+  }
+
+  // uint64 invitee_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_invitee_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_invitee_player_id(), target);
+    }
+  }
+
+  // uint32 season_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint64 inviter_player_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_inviter_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_inviter_player_id(), target);
+    }
+  }
+
+  // uint32 state = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_state(), target);
+    }
+  }
+
+  // uint64 created_ms = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_created_ms(), target);
+    }
+  }
+
+  // uint64 expires_ms = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_expires_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_expires_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentInviteRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentInviteRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentInviteRecord& this_ = static_cast<const MatchTournamentInviteRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentInviteRecord::ByteSizeLong() const {
+  const MatchTournamentInviteRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentInviteRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // uint64 squad_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_id());
+      }
+    }
+    // uint64 invitee_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_invitee_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_invitee_player_id());
+      }
+    }
+    // uint64 inviter_player_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_inviter_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_inviter_player_id());
+      }
+    }
+    // uint32 season_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 state = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_state() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state());
+      }
+    }
+    // uint64 created_ms = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_ms());
+      }
+    }
+    // uint64 expires_ms = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_expires_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expires_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentInviteRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentInviteRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentInviteRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentInviteRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_squad_id() != 0) {
+        _this->_impl_.squad_id_ = from._impl_.squad_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_invitee_player_id() != 0) {
+        _this->_impl_.invitee_player_id_ = from._impl_.invitee_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_inviter_player_id() != 0) {
+        _this->_impl_.inviter_player_id_ = from._impl_.inviter_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_created_ms() != 0) {
+        _this->_impl_.created_ms_ = from._impl_.created_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_expires_ms() != 0) {
+        _this->_impl_.expires_ms_ = from._impl_.expires_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentInviteRecord::CopyFrom(const MatchTournamentInviteRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentInviteRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentInviteRecord::InternalSwap(MatchTournamentInviteRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.expires_ms_)
+      + sizeof(MatchTournamentInviteRecord::_impl_.expires_ms_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentInviteRecord, _impl_.squad_id_)>(
+          reinterpret_cast<char*>(&_impl_.squad_id_),
+          reinterpret_cast<char*>(&other->_impl_.squad_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentInviteRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentMatchRecord::MatchTournamentMatchRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentMatchRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentMatchRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentMatchRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::MatchTournamentMatchRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        lineup_a_(arena, from.lineup_a_),
+        lineup_b_(arena, from.lineup_b_) {}
+
+MatchTournamentMatchRecord::MatchTournamentMatchRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const MatchTournamentMatchRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentMatchRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  MatchTournamentMatchRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, match_id_),
+           offsetof(Impl_, outcome_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::outcome_));
+
+  // @@protoc_insertion_point(copy_constructor:match.MatchTournamentMatchRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentMatchRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        lineup_a_(arena),
+        lineup_b_(arena) {}
+
+inline void MatchTournamentMatchRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, match_id_),
+           0,
+           offsetof(Impl_, outcome_) -
+               offsetof(Impl_, match_id_) +
+               sizeof(Impl_::outcome_));
+}
+MatchTournamentMatchRecord::~MatchTournamentMatchRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentMatchRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentMatchRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentMatchRecord& this_ = static_cast<MatchTournamentMatchRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.lineup_a_.Destroy();
+  this_._impl_.lineup_b_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentMatchRecord_class_data_ =
+        MatchTournamentMatchRecord::InternalGenerateClassData_(MatchTournamentMatchRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentMatchRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentMatchRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentMatchRecord_class_data_.tc_table);
+  return MatchTournamentMatchRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentMatchRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentMatchRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentMatchRecord_globals_));
+  return MatchTournamentMatchRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentMatchRecord::ParseTableT_
+    MatchTournamentMatchRecord::_table_ =
+        MatchTournamentMatchRecord::InternalGenerateParseTable_(MatchTournamentMatchRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentMatchRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentMatchRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.lineup_a_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.lineup_b_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.match_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.squad_a_id_) -
+        reinterpret_cast<char*>(&_impl_.match_id_)) + sizeof(_impl_.squad_a_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.squad_b_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.scheduled_start_ms_) -
+        reinterpret_cast<char*>(&_impl_.squad_b_id_)) + sizeof(_impl_.scheduled_start_ms_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    ::memset(&_impl_.deadline_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.outcome_) -
+        reinterpret_cast<char*>(&_impl_.deadline_ms_)) + sizeof(_impl_.outcome_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentMatchRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentMatchRecord& this_ = static_cast<const MatchTournamentMatchRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentMatchRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentMatchRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentMatchRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 match_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_match_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_match_id(), target);
+    }
+  }
+
+  // uint32 season_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint32 phase = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_phase() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_phase(), target);
+    }
+  }
+
+  // uint32 round_index = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_round_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_round_index(), target);
+    }
+  }
+
+  // uint32 slot_index = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_slot_index() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_slot_index(), target);
+    }
+  }
+
+  // uint64 squad_a_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_squad_a_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_squad_a_id(), target);
+    }
+  }
+
+  // uint64 squad_b_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_squad_b_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_squad_b_id(), target);
+    }
+  }
+
+  // bytes lineup_a = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_lineup_a().empty()) {
+      const ::std::string& _s = this_._internal_lineup_a();
+      target = stream->WriteBytesMaybeAliased(8, _s, target);
+    }
+  }
+
+  // bytes lineup_b = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_lineup_b().empty()) {
+      const ::std::string& _s = this_._internal_lineup_b();
+      target = stream->WriteBytesMaybeAliased(9, _s, target);
+    }
+  }
+
+  // bool ready_a = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_ready_a() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          10, this_._internal_ready_a(), target);
+    }
+  }
+
+  // bool ready_b = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_ready_b() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          11, this_._internal_ready_b(), target);
+    }
+  }
+
+  // uint32 state = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_state(), target);
+    }
+  }
+
+  // uint64 battle_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 winner_squad_id = 14;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_winner_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_winner_squad_id(), target);
+    }
+  }
+
+  // uint32 outcome = 15;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_outcome() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_outcome(), target);
+    }
+  }
+
+  // bool featured_spectate = 16;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_featured_spectate() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          16, this_._internal_featured_spectate(), target);
+    }
+  }
+
+  // uint64 scheduled_start_ms = 17;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_scheduled_start_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_scheduled_start_ms(), target);
+    }
+  }
+
+  // uint64 deadline_ms = 18;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_deadline_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_deadline_ms(), target);
+    }
+  }
+
+  // uint64 finished_ms = 19;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_finished_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          19, this_._internal_finished_ms(), target);
+    }
+  }
+
+  // uint64 updated_ms = 20;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          20, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentMatchRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentMatchRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentMatchRecord& this_ = static_cast<const MatchTournamentMatchRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentMatchRecord::ByteSizeLong() const {
+  const MatchTournamentMatchRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentMatchRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes lineup_a = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_lineup_a().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_lineup_a());
+      }
+    }
+    // bytes lineup_b = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_lineup_b().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_lineup_b());
+      }
+    }
+    // uint64 match_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_match_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_match_id());
+      }
+    }
+    // uint32 season_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 phase = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_phase() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_phase());
+      }
+    }
+    // uint32 round_index = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_round_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_round_index());
+      }
+    }
+    // uint32 slot_index = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_slot_index() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_slot_index());
+      }
+    }
+    // uint64 squad_a_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_squad_a_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_a_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint64 squad_b_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_squad_b_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_b_id());
+      }
+    }
+    // uint32 state = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_state() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_state());
+      }
+    }
+    // bool ready_a = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_ready_a() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool ready_b = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_ready_b() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool featured_spectate = 16;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_featured_spectate() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint64 battle_id = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint64 winner_squad_id = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_winner_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_winner_squad_id());
+      }
+    }
+    // uint64 scheduled_start_ms = 17;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_scheduled_start_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_scheduled_start_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    // uint64 deadline_ms = 18;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_deadline_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_deadline_ms());
+      }
+    }
+    // uint64 finished_ms = 19;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_finished_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_finished_ms());
+      }
+    }
+    // uint64 updated_ms = 20;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_updated_ms());
+      }
+    }
+    // uint32 outcome = 15;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_outcome() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_outcome());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentMatchRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentMatchRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentMatchRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentMatchRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_lineup_a().empty()) {
+        _this->_internal_set_lineup_a(from._internal_lineup_a());
+      } else {
+        if (_this->_impl_.lineup_a_.IsDefault()) {
+          _this->_internal_set_lineup_a("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_lineup_b().empty()) {
+        _this->_internal_set_lineup_b(from._internal_lineup_b());
+      } else {
+        if (_this->_impl_.lineup_b_.IsDefault()) {
+          _this->_internal_set_lineup_b("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_match_id() != 0) {
+        _this->_impl_.match_id_ = from._impl_.match_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_phase() != 0) {
+        _this->_impl_.phase_ = from._impl_.phase_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_round_index() != 0) {
+        _this->_impl_.round_index_ = from._impl_.round_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_slot_index() != 0) {
+        _this->_impl_.slot_index_ = from._impl_.slot_index_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_squad_a_id() != 0) {
+        _this->_impl_.squad_a_id_ = from._impl_.squad_a_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_squad_b_id() != 0) {
+        _this->_impl_.squad_b_id_ = from._impl_.squad_b_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_ready_a() != 0) {
+        _this->_impl_.ready_a_ = from._impl_.ready_a_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_ready_b() != 0) {
+        _this->_impl_.ready_b_ = from._impl_.ready_b_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_featured_spectate() != 0) {
+        _this->_impl_.featured_spectate_ = from._impl_.featured_spectate_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_winner_squad_id() != 0) {
+        _this->_impl_.winner_squad_id_ = from._impl_.winner_squad_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_scheduled_start_ms() != 0) {
+        _this->_impl_.scheduled_start_ms_ = from._impl_.scheduled_start_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_deadline_ms() != 0) {
+        _this->_impl_.deadline_ms_ = from._impl_.deadline_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_finished_ms() != 0) {
+        _this->_impl_.finished_ms_ = from._impl_.finished_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_outcome() != 0) {
+        _this->_impl_.outcome_ = from._impl_.outcome_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentMatchRecord::CopyFrom(const MatchTournamentMatchRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentMatchRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentMatchRecord::InternalSwap(MatchTournamentMatchRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.lineup_a_, &other->_impl_.lineup_a_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.lineup_b_, &other->_impl_.lineup_b_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.outcome_)
+      + sizeof(MatchTournamentMatchRecord::_impl_.outcome_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentMatchRecord, _impl_.match_id_)>(
+          reinterpret_cast<char*>(&_impl_.match_id_),
+          reinterpret_cast<char*>(&other->_impl_.match_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentMatchRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentCheerRecord::MatchTournamentCheerRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentCheerRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentCheerRecord)
+}
+MatchTournamentCheerRecord::MatchTournamentCheerRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchTournamentCheerRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentCheerRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentCheerRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void MatchTournamentCheerRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, created_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::created_ms_));
+}
+MatchTournamentCheerRecord::~MatchTournamentCheerRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentCheerRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentCheerRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentCheerRecord& this_ = static_cast<MatchTournamentCheerRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentCheerRecord_class_data_ =
+        MatchTournamentCheerRecord::InternalGenerateClassData_(MatchTournamentCheerRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentCheerRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentCheerRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentCheerRecord_class_data_.tc_table);
+  return MatchTournamentCheerRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentCheerRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentCheerRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentCheerRecord_globals_));
+  return MatchTournamentCheerRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentCheerRecord::ParseTableT_
+    MatchTournamentCheerRecord::_table_ =
+        MatchTournamentCheerRecord::InternalGenerateParseTable_(MatchTournamentCheerRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentCheerRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentCheerRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.created_ms_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.created_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentCheerRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentCheerRecord& this_ = static_cast<const MatchTournamentCheerRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentCheerRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentCheerRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentCheerRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 squad_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_squad_id(), target);
+    }
+  }
+
+  // bool rewarded = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_rewarded() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_rewarded(), target);
+    }
+  }
+
+  // uint64 created_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_created_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentCheerRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentCheerRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentCheerRecord& this_ = static_cast<const MatchTournamentCheerRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentCheerRecord::ByteSizeLong() const {
+  const MatchTournamentCheerRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentCheerRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // bool rewarded = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_rewarded() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 squad_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_id());
+      }
+    }
+    // uint64 created_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentCheerRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentCheerRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentCheerRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentCheerRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_rewarded() != 0) {
+        _this->_impl_.rewarded_ = from._impl_.rewarded_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_squad_id() != 0) {
+        _this->_impl_.squad_id_ = from._impl_.squad_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_created_ms() != 0) {
+        _this->_impl_.created_ms_ = from._impl_.created_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentCheerRecord::CopyFrom(const MatchTournamentCheerRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentCheerRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentCheerRecord::InternalSwap(MatchTournamentCheerRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.created_ms_)
+      + sizeof(MatchTournamentCheerRecord::_impl_.created_ms_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentCheerRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentCheerRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchTournamentRewardRecord::MatchTournamentRewardRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentRewardRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchTournamentRewardRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentRewardRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::match::MatchTournamentRewardRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        attachments_(arena, from.attachments_),
+        title_code_(arena, from.title_code_),
+        badge_code_(arena, from.badge_code_) {}
+
+MatchTournamentRewardRecord::MatchTournamentRewardRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const MatchTournamentRewardRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchTournamentRewardRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  MatchTournamentRewardRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, delivery_state_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::delivery_state_));
+
+  // @@protoc_insertion_point(copy_constructor:match.MatchTournamentRewardRecord)
+}
+PROTOBUF_NDEBUG_INLINE MatchTournamentRewardRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        attachments_(arena),
+        title_code_(arena),
+        badge_code_(arena) {}
+
+inline void MatchTournamentRewardRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, delivery_state_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::delivery_state_));
+}
+MatchTournamentRewardRecord::~MatchTournamentRewardRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchTournamentRewardRecord)
+  SharedDtor(*this);
+}
+inline void MatchTournamentRewardRecord::SharedDtor(MessageLite& self) {
+  MatchTournamentRewardRecord& this_ = static_cast<MatchTournamentRewardRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.attachments_.Destroy();
+  this_._impl_.title_code_.Destroy();
+  this_._impl_.badge_code_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchTournamentRewardRecord_class_data_ =
+        MatchTournamentRewardRecord::InternalGenerateClassData_(MatchTournamentRewardRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentRewardRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentRewardRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchTournamentRewardRecord_class_data_.tc_table);
+  return MatchTournamentRewardRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchTournamentRewardRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchTournamentRewardRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchTournamentRewardRecord_globals_));
+  return MatchTournamentRewardRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchTournamentRewardRecord::ParseTableT_
+    MatchTournamentRewardRecord::_table_ =
+        MatchTournamentRewardRecord::InternalGenerateParseTable_(MatchTournamentRewardRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchTournamentRewardRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchTournamentRewardRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.attachments_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.title_code_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.badge_code_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.squad_id_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.squad_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.final_rank_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.delivery_state_) -
+        reinterpret_cast<char*>(&_impl_.final_rank_)) + sizeof(_impl_.delivery_state_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchTournamentRewardRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchTournamentRewardRecord& this_ = static_cast<const MatchTournamentRewardRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchTournamentRewardRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchTournamentRewardRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchTournamentRewardRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 season_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_season_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_season_id(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint32 tier_kind = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_tier_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_tier_kind(), target);
+    }
+  }
+
+  // uint64 reward_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_reward_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_reward_id(), target);
+    }
+  }
+
+  // uint64 squad_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_squad_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_squad_id(), target);
+    }
+  }
+
+  // uint32 final_rank = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_final_rank() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_final_rank(), target);
+    }
+  }
+
+  // uint32 tier_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_tier_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_tier_id(), target);
+    }
+  }
+
+  // uint64 gold_amount = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_gold_amount() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_gold_amount(), target);
+    }
+  }
+
+  // bytes attachments = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_attachments().empty()) {
+      const ::std::string& _s = this_._internal_attachments();
+      target = stream->WriteBytesMaybeAliased(9, _s, target);
+    }
+  }
+
+  // string title_code = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_title_code().empty()) {
+      const ::std::string& _s = this_._internal_title_code();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentRewardRecord.title_code");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string badge_code = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_badge_code().empty()) {
+      const ::std::string& _s = this_._internal_badge_code();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.MatchTournamentRewardRecord.badge_code");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // uint32 delivery_state = 12;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_delivery_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_delivery_state(), target);
+    }
+  }
+
+  // uint64 mail_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_mail_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_mail_id(), target);
+    }
+  }
+
+  // uint64 claimed_ms = 14;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_claimed_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_claimed_ms(), target);
+    }
+  }
+
+  // uint64 updated_ms = 15;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          15, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchTournamentRewardRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchTournamentRewardRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchTournamentRewardRecord& this_ = static_cast<const MatchTournamentRewardRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchTournamentRewardRecord::ByteSizeLong() const {
+  const MatchTournamentRewardRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchTournamentRewardRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes attachments = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_attachments().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_attachments());
+      }
+    }
+    // string title_code = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_title_code().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_title_code());
+      }
+    }
+    // string badge_code = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_badge_code().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_badge_code());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 season_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_season_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_season_id());
+      }
+    }
+    // uint32 tier_kind = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_tier_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier_kind());
+      }
+    }
+    // uint64 reward_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_reward_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_reward_id());
+      }
+    }
+    // uint64 squad_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_squad_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_squad_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    // uint32 final_rank = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_final_rank() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_final_rank());
+      }
+    }
+    // uint32 tier_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_tier_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tier_id());
+      }
+    }
+    // uint64 gold_amount = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_gold_amount() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gold_amount());
+      }
+    }
+    // uint64 mail_id = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_mail_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_mail_id());
+      }
+    }
+    // uint64 claimed_ms = 14;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_claimed_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_claimed_ms());
+      }
+    }
+    // uint64 updated_ms = 15;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_updated_ms());
+      }
+    }
+    // uint32 delivery_state = 12;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_delivery_state() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_delivery_state());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchTournamentRewardRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchTournamentRewardRecord*>(&to_msg);
+  auto& from = static_cast<const MatchTournamentRewardRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchTournamentRewardRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_attachments().empty()) {
+        _this->_internal_set_attachments(from._internal_attachments());
+      } else {
+        if (_this->_impl_.attachments_.IsDefault()) {
+          _this->_internal_set_attachments("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_title_code().empty()) {
+        _this->_internal_set_title_code(from._internal_title_code());
+      } else {
+        if (_this->_impl_.title_code_.IsDefault()) {
+          _this->_internal_set_title_code("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_badge_code().empty()) {
+        _this->_internal_set_badge_code(from._internal_badge_code());
+      } else {
+        if (_this->_impl_.badge_code_.IsDefault()) {
+          _this->_internal_set_badge_code("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_season_id() != 0) {
+        _this->_impl_.season_id_ = from._impl_.season_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_tier_kind() != 0) {
+        _this->_impl_.tier_kind_ = from._impl_.tier_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_reward_id() != 0) {
+        _this->_impl_.reward_id_ = from._impl_.reward_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_squad_id() != 0) {
+        _this->_impl_.squad_id_ = from._impl_.squad_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_final_rank() != 0) {
+        _this->_impl_.final_rank_ = from._impl_.final_rank_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_tier_id() != 0) {
+        _this->_impl_.tier_id_ = from._impl_.tier_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_gold_amount() != 0) {
+        _this->_impl_.gold_amount_ = from._impl_.gold_amount_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_mail_id() != 0) {
+        _this->_impl_.mail_id_ = from._impl_.mail_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_claimed_ms() != 0) {
+        _this->_impl_.claimed_ms_ = from._impl_.claimed_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_delivery_state() != 0) {
+        _this->_impl_.delivery_state_ = from._impl_.delivery_state_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchTournamentRewardRecord::CopyFrom(const MatchTournamentRewardRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchTournamentRewardRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchTournamentRewardRecord::InternalSwap(MatchTournamentRewardRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.attachments_, &other->_impl_.attachments_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_code_, &other->_impl_.title_code_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.badge_code_, &other->_impl_.badge_code_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.delivery_state_)
+      + sizeof(MatchTournamentRewardRecord::_impl_.delivery_state_)
+      - PROTOBUF_FIELD_OFFSET(MatchTournamentRewardRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata MatchTournamentRewardRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

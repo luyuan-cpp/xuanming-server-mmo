@@ -85,6 +85,8 @@ public:
 
     // 某个 config 在本仓库里可按数量计的总数:跨所有堆叠求和,只计 IsCountableByConfig 的实例。
     [[nodiscard]] std::size_t TotalCountOf(uint32_t configId) const;
+    // 同上，仅统计未绑定（可交易）堆叠，用于防染毒交易校验。
+    [[nodiscard]] std::size_t TotalTradableCountOf(uint32_t configId) const;
 
     // 按数量预检的结论。三态而不是 bool:"只有算上带新版本字段的单位才够"是版本错位,
     // 调用方必须当成可重试的暂时状态,不能和"确实不够"一样记成终态拒绝。
@@ -110,7 +112,8 @@ public:
 
     // 对 wanted 里的每个 config,汇总既有堆叠还空着多少(config_id -> 空余单位)。
     // 不在 wanted 里的、以及不可叠加(满于 1)的 config 一律贡献 0。
-    [[nodiscard]] ItemCountMap MeasureFreeRoomPerConfig(const ItemCountMap &wanted) const;
+    // 只计入 bound 状态与目标一致的既有堆,避免绑定与可交易材料互相抵扣空余。
+    [[nodiscard]] ItemCountMap MeasureFreeRoomPerConfig(const ItemCountMap &wanted, bool bound = false) const;
 
     // 规划(不改任何状态)进来的数量如何填进同 config 的既有堆叠。
     // 填充计划写进 outFillPlan,返回还需要**新建实例**才装得下的剩余量。
@@ -142,7 +145,8 @@ public:
     // 回调只读且不重入仓库;每个候选的 rank 在排序前只计算一次。
     using DrainRank = std::function<uint64_t(Guid)>;
     uint32_t DrainStacks(uint32_t configId, uint32_t count, const DrainRank &drainRank,
-                         std::vector<StackDrain> *drainedOut = nullptr);
+                         std::vector<StackDrain> *drainedOut = nullptr,
+                         bool tradableOnly = false, bool *consumedBoundOut = nullptr);
 
     // 存不存在"同一 config 有 >= 2 个非空未满堆"。空堆只回收,不当合并幸存者。
     [[nodiscard]] bool HasMergeablePartials() const;

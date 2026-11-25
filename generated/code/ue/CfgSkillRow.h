@@ -315,6 +315,14 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	int32 season_id = 0;
 
+	/** 永久技能所属制书卷宗编号（SkillScrollCraft.id）：0 = 不参与卷宗制书（旧职业/占位/赛季技）；> 0 = 归属对应主题卷宗，永不稀释旧池。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 scroll_id = 0;
+
+	/** 技能稀有度层级：0 = 常规（90% 池）；1 = 稀世绝学（每批硬锁 <= 10%，支持玩法残卷 + 绑定天工秘墨定向制作）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 rarity_tier = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

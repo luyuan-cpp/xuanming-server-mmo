@@ -63,4 +63,10 @@ public interface EquipEnhanceTableOrBuilder extends
    * @return The level.
    */
   int getLevel();
+
+  /**
+   * <code>uint32 pity_limit = 10;</code>
+   * @return The pityLimit.
+   */
+  int getPityLimit();
 }

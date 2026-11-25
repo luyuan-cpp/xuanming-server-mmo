@@ -662,6 +662,25 @@ protected:
         seasonArchive->add_lit_seal_ids(3011);
         seasonArchive->add_claimed_milestone_ids(301);
 
+        // 装备品相/技能制书/手艺熟练度与代打摊位（equipment-quality-and-skill-crafting-v1.md）：覆盖 PlayerCraftComp / CraftedSkillBookEntry。
+        auto &craft = *db.mutable_craft_component();
+        craft.set_forge_mastery_exp(25);
+        craft.set_scroll_mastery_exp(62);
+        craft.set_scroll_craft_revision(4);
+        craft.set_next_book_seq(3);
+        craft.set_proxy_stall_open(true);
+        craft.set_proxy_forge_fee_gold(60);
+        craft.set_proxy_scroll_fee_gold(80);
+        craft.add_book_unlocked_skill_ids(10001);
+        auto *craftBook = craft.add_skill_books();
+        craftBook->set_book_id(2);
+        craftBook->set_skill_table_id(10041);
+        craftBook->set_scroll_id(2);
+        craftBook->set_rarity_tier(1);
+        craftBook->set_bound(true);
+        craftBook->set_crafter_name("宗师测试");
+        craftBook->set_crafter_player_id(db.player_id());
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

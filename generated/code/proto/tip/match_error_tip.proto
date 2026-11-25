@@ -83,4 +83,34 @@ enum match_error {
 
   kMatchRankedRuleVersionMismatch = 16036;
 
+  kMatchTournamentNotOpen = 16037;
+
+  kMatchTournamentStageClosed = 16038;
+
+  kMatchTournamentSquadNameInvalid = 16039;
+
+  kMatchTournamentAlreadyInSquad = 16040;
+
+  kMatchTournamentSquadNotFound = 16041;
+
+  kMatchTournamentNotCaptain = 16042;
+
+  kMatchTournamentSquadFull = 16043;
+
+  kMatchTournamentSquadLocked = 16044;
+
+  kMatchTournamentInviteNotFound = 16045;
+
+  kMatchTournamentMemberNotEnough = 16046;
+
+  kMatchTournamentLineupInvalid = 16047;
+
+  kMatchTournamentQualifierLimit = 16048;
+
+  kMatchTournamentMatchNotReady = 16049;
+
+  kMatchTournamentAlreadyCheered = 16050;
+
+  kMatchTournamentRewardUnavailable = 16051;
+
 };
