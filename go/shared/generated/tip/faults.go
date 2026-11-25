@@ -65,6 +65,7 @@ var Faults = []Fault{
 	{Code: 14008, Group: "guild_error", Name: "GuildIdGenUnavailable"},
 	{Code: 14041, Group: "guild_error", Name: "GuildTrialServiceBusy"},
 	{Code: 14045, Group: "guild_error", Name: "GuildTextCheckUnavailable"},
+	{Code: 14071, Group: "guild_error", Name: "GuildWarServiceBusy"},
 	{Code: 16004, Group: "match_error", Name: "MatchInternal"},
 	{Code: 18001, Group: "chat_error", Name: "ChatContentCheckUnavailable"},
 	{Code: 20017, Group: "trade_error", Name: "TradeTextCheckUnavailable"},

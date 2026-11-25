@@ -257,7 +257,7 @@ struct PlayerTeamFollowScope::State
 	static cobalt::task<void> FollowLeaderAsync(std::shared_ptr<State> state, entt::entity player, uint64_t playerId, uint64_t leaderId);
 };
 
-thread_local std::weak_ptr<PlayerTeamFollowScope::State> PlayerTeamFollowScope::current_;
+thread_local std::weak_ptr<PlayerTeamFollowScope::State> PlayerTeamFollowScope::current;
 
 PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop)
 	: PlayerTeamFollowScope(loop, &RedisReady, [](std::string_view key, RedisReplyHandler reply) {
@@ -266,22 +266,22 @@ PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop)
 	}) {}
 
 PlayerTeamFollowScope::PlayerTeamFollowScope(EventLoop& loop, std::function<bool()> redisReady, RedisGet get)
-	: state_(std::make_shared<State>(loop, std::move(redisReady), std::move(get)))
+	: state(std::make_shared<State>(loop, std::move(redisReady), std::move(get)))
 {
 	loop.assertInLoopThread();
-	assert(current_.expired());
-	current_ = state_;
+	assert(current.expired());
+	current = state;
 }
 
 PlayerTeamFollowScope::~PlayerTeamFollowScope()
 {
-	state_->loop.assertInLoopThread();
-	current_.reset();
+	state->loop.assertInLoopThread();
+	current.reset();
 }
 
 void PlayerTeamFollowScope::Start(entt::entity player, uint64_t playerId, uint64_t leaderId)
 {
-	const auto state = current_.lock();
+	const auto state = current.lock();
 	if (!state) return;
 	state->loop.assertInLoopThread();
 	(void)SceneTaskScope::TryStart(State::FollowLeaderAsync(state, player, playerId, leaderId), "[PlayerTeam] Follow");

@@ -105,11 +105,11 @@ using HandlerStatePtr = std::shared_ptr<HandlerState>;
 class TestService : public muduo_grpc::Service
 {
 public:
-    TestService(HandlerStatePtr state, muduo::net::EventLoop &loop) : state_(std::move(state)), loop_(loop) {}
+    TestService(HandlerStatePtr state, muduo::net::EventLoop &loop) : state(std::move(state)), loop(loop) {}
 
     void RegisterMethods(muduo_grpc::MethodTable &table) override
     {
-        const HandlerStatePtr state = state_;
+        const HandlerStatePtr state = this->state;
         table.AddUnary(kEchoPath, [state](ServerCall call, std::string_view request)
                        {
             ++state->invocations;
@@ -135,7 +135,7 @@ public:
             call.FinishOk("first");
             call.FinishOk("second");
             call.FinishError(Status(StatusCode::kInternal, "third")); });
-        muduo::net::EventLoop &loop = loop_;
+        muduo::net::EventLoop &loop = this->loop;
         table.AddUnary(kOrderPath, [state, &loop](ServerCall call, std::string_view)
                        {
             ++state->invocations;
@@ -145,8 +145,8 @@ public:
     }
 
 private:
-    HandlerStatePtr state_;
-    muduo::net::EventLoop &loop_;
+    HandlerStatePtr state;
+    muduo::net::EventLoop &loop;
 };
 
 // 同一路径登记两次:RegisterService 必须返回 false。
@@ -172,22 +172,22 @@ public:
     };
 
     RawConnection(muduo::net::EventLoop &loop, uint16_t port, Mode mode, TestH2ClientOptions h2Options = {})
-        : client_(&loop, muduo::net::InetAddress("127.0.0.1", port), "server_test_raw_client"),
-          mode_(mode),
-          h2_(std::move(h2Options))
+        : client(&loop, muduo::net::InetAddress("127.0.0.1", port), "server_test_raw_client"),
+          mode(mode),
+          h2(std::move(h2Options))
     {
     }
 
     ~RawConnection()
     {
         // §11.7:拆除前显式 forceClose,不依赖 ~TcpClient 的 use_count()==1 判断。
-        const auto conn = client_.connection();
+        const auto conn = client.connection();
         if (conn)
         {
             conn->forceClose();
             return;
         }
-        client_.stop();
+        client.stop();
     }
 
     RawConnection(const RawConnection &) = delete;
@@ -197,13 +197,13 @@ public:
     void Connect()
     {
         const std::weak_ptr<RawConnection> weakSelf = weak_from_this();
-        client_.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr &conn)
+        client.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr &conn)
                                       {
             if (const auto self = weakSelf.lock())
             {
                 self->HandleConnection(conn);
             } });
-        client_.setMessageCallback(
+        client.setMessageCallback(
             [weakSelf](const muduo::net::TcpConnectionPtr &, muduo::net::Buffer *buffer, muduo::Timestamp)
             {
                 if (const auto self = weakSelf.lock())
@@ -213,33 +213,33 @@ public:
                 }
                 buffer->retrieveAll();
             });
-        client_.setConnectFailedCallback([weakSelf](int)
+        client.setConnectFailedCallback([weakSelf](int)
                                          {
             if (const auto self = weakSelf.lock())
             {
-                self->connectFailed_ = true;
-                self->client_.stop(); // 不让 Connector 自己重试
+                self->connectFailed = true;
+                self->client.stop(); // 不让 Connector 自己重试
             } });
-        client_.connect();
+        client.connect();
     }
 
-    bool connected() const { return connected_; }
-    bool disconnected() const { return disconnected_; }
-    bool connectFailed() const { return connectFailed_; }
-    size_t bytesReceived() const { return bytesReceived_; }
-    const std::string &rawReceived() const { return raw_; }
-    bool h2Failed() const { return h2Failed_; }
-    TestH2Client &h2() { return h2_; }
+    bool Connected() const { return connected; }
+    bool Disconnected() const { return disconnected; }
+    bool ConnectFailed() const { return connectFailed; }
+    size_t BytesReceived() const { return bytesReceived; }
+    const std::string &rawReceived() const { return raw; }
+    bool H2Failed() const { return h2Failed; }
+    TestH2Client &H2() { return h2; }
 
     // 把 TestH2Client 里待发的帧一次写进 TCP(一次 send:同一批帧在服务端的同一次读里到达)。
     void Flush()
     {
-        SendRaw(h2_.TakeOutput());
+        SendRaw(h2.TakeOutput());
     }
 
     void SendRaw(std::string_view bytes)
     {
-        const auto conn = connection_.lock();
+        const auto conn = connection.lock();
         if (!conn || !conn->connected() || bytes.empty())
         {
             return;
@@ -250,7 +250,7 @@ public:
     // 客户端主动断开(forceClose 排到下一轮;fd 随 TcpConnection 析构关闭,服务端看到 FIN)。
     void Close()
     {
-        if (const auto conn = connection_.lock())
+        if (const auto conn = connection.lock())
         {
             conn->forceClose();
         }
@@ -259,7 +259,7 @@ public:
     // 停止 / 恢复从 socket 读(背压用例:对端不读,服务端写满内核缓冲后输出积在自己的输出缓冲里)。
     void StopReading()
     {
-        if (const auto conn = connection_.lock())
+        if (const auto conn = connection.lock())
         {
             conn->stopRead();
         }
@@ -267,7 +267,7 @@ public:
 
     void StartReading()
     {
-        if (const auto conn = connection_.lock())
+        if (const auto conn = connection.lock())
         {
             conn->startRead();
         }
@@ -275,67 +275,67 @@ public:
 
     // 断连(读到 EOF 或连接被关)那一刻把这些流与连接级 GOAWAY 拍下来:TCP 有序,拍到的就是 FIN 之前到达的全部帧,
     // 用来证明服务端是先把帧写完、再写半关的。
-    void SnapshotAtDisconnect(std::vector<int32_t> streamIds) { snapshotStreamIds_ = std::move(streamIds); }
-    const std::map<int32_t, H2Stream> &streamsAtDisconnect() const { return streamsAtDisconnect_; }
-    const std::vector<muduo_grpc_test::ReceivedGoaway> &goawaysAtDisconnect() const { return goawaysAtDisconnect_; }
+    void SnapshotAtDisconnect(std::vector<int32_t> streamIds) { snapshotStreamIds = std::move(streamIds); }
+    const std::map<int32_t, H2Stream> &StreamsAtDisconnect() const { return streamsAtDisconnect; }
+    const std::vector<muduo_grpc_test::ReceivedGoaway> &GoawaysAtDisconnect() const { return goawaysAtDisconnect; }
 
 private:
     void HandleConnection(const muduo::net::TcpConnectionPtr &conn)
     {
         if (conn->connected())
         {
-            connected_ = true;
-            connection_ = conn;
+            connected = true;
+            connection = conn;
             conn->setTcpNoDelay(true);
-            if (mode_ == Mode::kHttp2)
+            if (mode == Mode::kHttp2)
             {
                 Flush(); // client magic + SETTINGS(TestH2Client 构造时已提交)
             }
             return;
         }
-        for (const int32_t streamId : snapshotStreamIds_)
+        for (const int32_t streamId : snapshotStreamIds)
         {
-            if (const H2Stream *stream = h2_.FindStream(streamId))
+            if (const H2Stream *stream = h2.FindStream(streamId))
             {
-                streamsAtDisconnect_[streamId] = *stream;
+                streamsAtDisconnect[streamId] = *stream;
             }
         }
-        goawaysAtDisconnect_ = h2_.goawaysReceived();
-        disconnected_ = true;
-        connection_.reset();
+        goawaysAtDisconnect = h2.GoawaysReceived();
+        disconnected = true;
+        connection.reset();
     }
 
     void HandleMessage(muduo::net::Buffer &buffer)
     {
         const std::string_view bytes(buffer.peek(), buffer.readableBytes());
-        bytesReceived_ += bytes.size();
-        if (mode_ == Mode::kHttp2)
+        bytesReceived += bytes.size();
+        if (mode == Mode::kHttp2)
         {
-            if (!h2_.Receive(bytes))
+            if (!h2.Receive(bytes))
             {
-                h2Failed_ = true;
+                h2Failed = true;
             }
             buffer.retrieveAll();
             Flush(); // SETTINGS ACK / PING ACK / WINDOW_UPDATE
             return;
         }
-        raw_.append(bytes.data(), bytes.size());
+        raw.append(bytes.data(), bytes.size());
         buffer.retrieveAll();
     }
 
-    muduo::net::TcpClient client_;
-    const Mode mode_;
-    TestH2Client h2_;
-    std::weak_ptr<muduo::net::TcpConnection> connection_; // §11.7:只存 weak,所有权在 TcpClient
-    bool connected_{false};
-    bool disconnected_{false};
-    bool connectFailed_{false};
-    bool h2Failed_{false};
-    size_t bytesReceived_{0};
-    std::string raw_;
-    std::vector<int32_t> snapshotStreamIds_;
-    std::map<int32_t, H2Stream> streamsAtDisconnect_;
-    std::vector<muduo_grpc_test::ReceivedGoaway> goawaysAtDisconnect_;
+    muduo::net::TcpClient client;
+    const Mode mode;
+    TestH2Client h2;
+    std::weak_ptr<muduo::net::TcpConnection> connection; // §11.7:只存 weak,所有权在 TcpClient
+    bool connected{false};
+    bool disconnected{false};
+    bool connectFailed{false};
+    bool h2Failed{false};
+    size_t bytesReceived{0};
+    std::string raw;
+    std::vector<int32_t> snapshotStreamIds;
+    std::map<int32_t, H2Stream> streamsAtDisconnect;
+    std::vector<muduo_grpc_test::ReceivedGoaway> goawaysAtDisconnect;
 };
 
 using RawConnectionPtr = std::shared_ptr<RawConnection>;
@@ -517,16 +517,16 @@ protected:
 
     void SetUp() override
     {
-        port_ = muduo_grpc_test::FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0) << "no free loopback port";
+        port = muduo_grpc_test::FindFreeLoopbackPort();
+        ASSERT_NE(port, 0) << "no free loopback port";
     }
 
     void TearDown() override
     {
         // 保存的句柄先放掉(服务端还在时会回 UNAVAILABLE),再让排队的回调、forceClose、connectDestroyed 跑完。
-        state_->held.clear();
+        state->held.clear();
         RunFor(200ms);
-        server_.reset(); // loop 外析构:server.h「析构前置」允许
+        server.reset(); // loop 外析构:server.h「析构前置」允许
         RunFor(200ms);
     }
 
@@ -539,31 +539,31 @@ protected:
 
     std::shared_ptr<Server> StartServer(ServerOptions options = QuietOptions())
     {
-        server_ = Server::Create(loop_, "127.0.0.1", port_, std::move(options));
-        EXPECT_NE(server_, nullptr);
-        if (!server_)
+        server = Server::Create(loop, "127.0.0.1", port, std::move(options));
+        EXPECT_NE(server, nullptr);
+        if (!server)
         {
             return nullptr;
         }
-        EXPECT_TRUE(server_->RegisterService(service_));
-        server_->Start();
-        return server_;
+        EXPECT_TRUE(server->RegisterService(service));
+        server->Start();
+        return server;
     }
 
     std::shared_ptr<Channel> MakeChannel()
     {
-        auto channel = Channel::Create(loop_, "127.0.0.1", port_);
+        auto channel = Channel::Create(loop, "127.0.0.1", port);
         EXPECT_NE(channel, nullptr);
         return channel;
     }
 
     RawConnectionPtr MakeRaw(RawConnection::Mode mode, bool waitConnected = true, TestH2ClientOptions h2Options = {})
     {
-        auto raw = std::make_shared<RawConnection>(loop_, port_, mode, std::move(h2Options));
+        auto raw = std::make_shared<RawConnection>(loop, port, mode, std::move(h2Options));
         raw->Connect();
         if (waitConnected)
         {
-            EXPECT_TRUE(RunUntil([&] { return raw->connected(); }, 5s)) << "raw client did not connect";
+            EXPECT_TRUE(RunUntil([&] { return raw->Connected(); }, 5s)) << "raw client did not connect";
         }
         return raw;
     }
@@ -572,9 +572,9 @@ protected:
     int32_t SendRawRequest(RawConnection &raw, const std::string &path, std::optional<std::string> grpcTimeout,
                            std::string_view payload = "payload")
     {
-        const int32_t streamId = raw.h2().OpenStream(GrpcRequestHeaders(path, std::move(grpcTimeout)), false);
-        EXPECT_GT(streamId, 0) << raw.h2().lastError();
-        EXPECT_TRUE(raw.h2().SendData(streamId, TestH2Peer::Frame(payload), true)) << raw.h2().lastError();
+        const int32_t streamId = raw.H2().OpenStream(GrpcRequestHeaders(path, std::move(grpcTimeout)), false);
+        EXPECT_GT(streamId, 0) << raw.H2().LastError();
+        EXPECT_TRUE(raw.H2().SendData(streamId, TestH2Peer::Frame(payload), true)) << raw.H2().LastError();
         raw.Flush();
         return streamId;
     }
@@ -609,63 +609,63 @@ protected:
         calls.big = SendRawRequest(*calls.raw, kHoldPath, std::nullopt);
         calls.waiting = SendRawRequest(*calls.raw, kHoldNotStartedPath, std::nullopt);
         calls.started = SendRawRequest(*calls.raw, kHoldPath, std::nullopt);
-        EXPECT_TRUE(RunUntil([&] { return state_->held.size() == 3; }, 5s));
-        if (state_->held.size() != 3)
+        EXPECT_TRUE(RunUntil([&] { return state->held.size() == 3; }, 5s));
+        if (state->held.size() != 3)
         {
             calls.raw.reset();
             return calls;
         }
         calls.raw->StopReading();
         // 派发按请求收完的先后(先进先出):held[0] 是 big。
-        state_->held.front().FinishOk(std::string(kBackpressureResponseBytes, 'x'));
+        state->held.front().FinishOk(std::string(kBackpressureResponseBytes, 'x'));
         RunFor(200ms); // 服务端写满内核缓冲,输出缓冲到阈值后停止从 nghttp2 取帧
         return calls;
     }
 
     bool RunUntil(const std::function<bool()> &done, std::chrono::milliseconds timeout)
     {
-        return muduo_grpc_test::RunLoopUntil(loop_, done, timeout);
+        return muduo_grpc_test::RunLoopUntil(loop, done, timeout);
     }
 
-    void RunFor(std::chrono::milliseconds duration) { muduo_grpc_test::RunLoopFor(loop_, duration); }
+    void RunFor(std::chrono::milliseconds duration) { muduo_grpc_test::RunLoopFor(loop, duration); }
 
-    ServerStatsSnapshot Stats() const { return server_ ? server_->Stats() : ServerStatsSnapshot{}; }
+    ServerStatsSnapshot Stats() const { return server ? server->Stats() : ServerStatsSnapshot{}; }
 
     // 声明顺序 = 析构逆序:EventLoop 最先构造、最后析构;server_ 最后声明、最先析构。
-    muduo::net::EventLoop loop_;
-    uint16_t port_{0};
-    HandlerStatePtr state_ = std::make_shared<HandlerState>();
-    TestService service_{state_, loop_};
-    std::shared_ptr<Server> server_;
+    muduo::net::EventLoop loop;
+    uint16_t port{0};
+    HandlerStatePtr state = std::make_shared<HandlerState>();
+    TestService service{state, loop};
+    std::shared_ptr<Server> server;
 };
 
 // ── 用例 ────────────────────────────────────────────────────────────────
 
 TEST_F(ServerLoopbackTest, CreateRejectsNonCanonicalAddressesAndZeroPort)
 {
-    EXPECT_EQ(Server::Create(loop_, "localhost", port_), nullptr);
-    EXPECT_EQ(Server::Create(loop_, "127.0.0.01", port_), nullptr);
-    EXPECT_EQ(Server::Create(loop_, "::1", port_), nullptr);
-    EXPECT_EQ(Server::Create(loop_, "127.0.0.1", 0), nullptr);
+    EXPECT_EQ(Server::Create(loop, "localhost", port), nullptr);
+    EXPECT_EQ(Server::Create(loop, "127.0.0.01", port), nullptr);
+    EXPECT_EQ(Server::Create(loop, "::1", port), nullptr);
+    EXPECT_EQ(Server::Create(loop, "127.0.0.1", 0), nullptr);
 }
 
 TEST_F(ServerLoopbackTest, RegisterServiceRejectsDuplicatesAndLateRegistration)
 {
     {
-        const auto server = Server::Create(loop_, "127.0.0.1", port_, QuietOptions());
+        const auto server = Server::Create(loop, "127.0.0.1", port, QuietOptions());
         ASSERT_NE(server, nullptr);
         DuplicateService duplicate;
         EXPECT_FALSE(server->RegisterService(duplicate)) << "duplicate path must fail registration";
     }
     ASSERT_NE(StartServer(), nullptr);
-    TestService late(state_, loop_);
-    EXPECT_FALSE(server_->RegisterService(late)) << "registration after Start must fail";
+    TestService late(state, loop);
+    EXPECT_FALSE(this->server->RegisterService(late)) << "registration after Start must fail";
 }
 
 TEST_F(ServerLoopbackTest, EchoRoundTripCarriesMetadataDeadlineAndPeer)
 {
     ASSERT_NE(StartServer(), nullptr);
-    EXPECT_EQ(server_->listenAddress(), "127.0.0.1:" + std::to_string(port_));
+    EXPECT_EQ(server->ListenAddress(), "127.0.0.1:" + std::to_string(port));
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
 
@@ -677,18 +677,18 @@ TEST_F(ServerLoopbackTest, EchoRoundTripCarriesMetadataDeadlineAndPeer)
     ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
     EXPECT_EQ(outcome->result.response, "echo:ping");
 
-    EXPECT_EQ(state_->invocations, 1u);
-    EXPECT_EQ(state_->lastMethod, kEchoPath);
-    EXPECT_FALSE(state_->lastPeer.empty());
-    EXPECT_TRUE(state_->lastHadDeadline) << "grpc-timeout must become a server-side deadline";
-    const std::string *trace = muduo_grpc::FindMetadata(state_->lastMetadata, "x-trace-id");
+    EXPECT_EQ(state->invocations, 1u);
+    EXPECT_EQ(state->lastMethod, kEchoPath);
+    EXPECT_FALSE(state->lastPeer.empty());
+    EXPECT_TRUE(state->lastHadDeadline) << "grpc-timeout must become a server-side deadline";
+    const std::string *trace = muduo_grpc::FindMetadata(state->lastMetadata, "x-trace-id");
     ASSERT_NE(trace, nullptr);
     EXPECT_EQ(*trace, "abc");
-    const std::string *session = muduo_grpc::FindMetadata(state_->lastMetadata, "x-session-detail-bin");
+    const std::string *session = muduo_grpc::FindMetadata(state->lastMetadata, "x-session-detail-bin");
     ASSERT_NE(session, nullptr);
     EXPECT_EQ(*session, kSessionAppValue) << "only the wire layer of -bin is decoded";
-    EXPECT_EQ(muduo_grpc::FindMetadata(state_->lastMetadata, "user-agent"), nullptr);
-    EXPECT_EQ(muduo_grpc::FindMetadata(state_->lastMetadata, "grpc-timeout"), nullptr);
+    EXPECT_EQ(muduo_grpc::FindMetadata(state->lastMetadata, "user-agent"), nullptr);
+    EXPECT_EQ(muduo_grpc::FindMetadata(state->lastMetadata, "grpc-timeout"), nullptr);
 
     const ServerStatsSnapshot stats = Stats();
     EXPECT_EQ(stats.dispatched, 1u);
@@ -709,11 +709,11 @@ TEST_F(ServerLoopbackTest, UnknownServiceAndMethodAreUnimplementedWithGrpcGoMess
     const auto unknownMethod = StartCall(*channel, std::string("/") + kServiceName + "/Nope", "x");
     ASSERT_TRUE(RunUntil([&] { return unknownService->count > 0 && unknownMethod->count > 0; }, 5s));
 
-    EXPECT_EQ(unknownService->result.status.code(), StatusCode::kUnimplemented);
+    EXPECT_EQ(unknownService->result.status.Code(), StatusCode::kUnimplemented);
     EXPECT_EQ(unknownService->result.status.message(), "unknown service nope.Svc");
-    EXPECT_EQ(unknownMethod->result.status.code(), StatusCode::kUnimplemented);
+    EXPECT_EQ(unknownMethod->result.status.Code(), StatusCode::kUnimplemented);
     EXPECT_EQ(unknownMethod->result.status.message(), "unknown method Nope for service test.Echo");
-    EXPECT_EQ(state_->invocations, 0u);
+    EXPECT_EQ(state->invocations, 0u);
     EXPECT_EQ(Stats().unimplemented, 2u);
     EXPECT_EQ(Stats().dispatched, 0u);
 }
@@ -740,9 +740,9 @@ TEST_F(ServerLoopbackTest, ServerAdmissionRejectsBeforeDispatchWithTheGivenStatu
 
     const auto denied = StartCall(*channel, kEchoPath, "ping");
     ASSERT_TRUE(RunUntil([&] { return denied->count > 0; }, 5s));
-    EXPECT_EQ(denied->result.status.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(denied->result.status.Code(), StatusCode::kUnavailable);
     EXPECT_EQ(denied->result.status.message(), std::string("killswitch: method ") + kEchoPath + " is disabled");
-    EXPECT_EQ(state_->invocations, 0u) << "a denied call never reaches the handler";
+    EXPECT_EQ(state->invocations, 0u) << "a denied call never reaches the handler";
     EXPECT_EQ(Stats().dispatched, 0u);
     EXPECT_EQ(Stats().codes.at(14), 1u);
     EXPECT_EQ(Stats().methods.at("Echo").at(14), 1u);
@@ -751,7 +751,7 @@ TEST_F(ServerLoopbackTest, ServerAdmissionRejectsBeforeDispatchWithTheGivenStatu
 
     const auto unknown = StartCall(*channel, std::string("/") + kServiceName + "/Nope", "x");
     ASSERT_TRUE(RunUntil([&] { return unknown->count > 0; }, 5s));
-    EXPECT_EQ(unknown->result.status.code(), StatusCode::kUnimplemented);
+    EXPECT_EQ(unknown->result.status.Code(), StatusCode::kUnimplemented);
     EXPECT_EQ(seen->size(), 1u) << "unregistered methods are not offered to admission";
 
     *deny = false;
@@ -759,7 +759,7 @@ TEST_F(ServerLoopbackTest, ServerAdmissionRejectsBeforeDispatchWithTheGivenStatu
     ASSERT_TRUE(RunUntil([&] { return allowed->count > 0; }, 5s));
     ASSERT_TRUE(allowed->result.status.ok()) << allowed->result.status.ToString();
     EXPECT_EQ(allowed->result.response, "echo:pong");
-    EXPECT_EQ(state_->invocations, 1u);
+    EXPECT_EQ(state->invocations, 1u);
 }
 
 TEST_F(ServerLoopbackTest, ZeroGrpcTimeoutIsRejectedWithoutDispatch)
@@ -769,19 +769,19 @@ TEST_F(ServerLoopbackTest, ZeroGrpcTimeoutIsRejectedWithoutDispatch)
     const int32_t streamId = SendRawRequest(*raw, kEchoPath, std::string("0n"));
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *stream = raw->h2().FindStream(streamId);
+        const H2Stream *stream = raw->H2().FindStream(streamId);
         return stream != nullptr && GrpcStatusOf(*stream).has_value(); }, 5s));
-    const H2Stream *stream = raw->h2().FindStream(streamId);
+    const H2Stream *stream = raw->H2().FindStream(streamId);
     ASSERT_NE(stream, nullptr);
     EXPECT_EQ(GrpcStatusOf(*stream).value_or(""), "4");
     EXPECT_EQ(GrpcMessageOf(*stream), "deadline exceeded before dispatch");
-    EXPECT_EQ(state_->invocations, 0u);
+    EXPECT_EQ(state->invocations, 0u);
     EXPECT_EQ(Stats().dispatched, 0u);
     // 截止在发出前就已到的合法请求:计 deadline_before_start,不算畸形请求(server_session.h OnRequestRejected)。
     EXPECT_EQ(Stats().deadlineBeforeStart, 1u);
     EXPECT_EQ(Stats().rejectedProtocol, 0u);
     EXPECT_EQ(Stats().codes.at(4), 1u);
-    EXPECT_FALSE(raw->h2Failed()) << raw->h2().lastError();
+    EXPECT_FALSE(raw->H2Failed()) << raw->H2().LastError();
 }
 
 TEST_F(ServerLoopbackTest, DeferredCallExpiresAtServerDeadlineAndLateFinishIsDropped)
@@ -793,15 +793,15 @@ TEST_F(ServerLoopbackTest, DeferredCallExpiresAtServerDeadlineAndLateFinishIsDro
     const int32_t started = SendRawRequest(*raw, kHoldPath, std::string("200m"));
     // 业务未开始(在等许可):截止到期回 DEADLINE_EXCEEDED,之后 TryStartBusiness 为假。
     const int32_t waiting = SendRawRequest(*raw, kHoldNotStartedPath, std::string("200m"));
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 2; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 2; }, 5s));
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *a = raw->h2().FindStream(started);
-        const H2Stream *b = raw->h2().FindStream(waiting);
+        const H2Stream *a = raw->H2().FindStream(started);
+        const H2Stream *b = raw->H2().FindStream(waiting);
         return a != nullptr && b != nullptr && GrpcStatusOf(*a).has_value() && GrpcStatusOf(*b).has_value(); }, 5s));
 
-    const H2Stream *startedStream = raw->h2().FindStream(started);
-    const H2Stream *waitingStream = raw->h2().FindStream(waiting);
+    const H2Stream *startedStream = raw->H2().FindStream(started);
+    const H2Stream *waitingStream = raw->H2().FindStream(waiting);
     EXPECT_EQ(GrpcStatusOf(*startedStream).value_or(""), "4");
     EXPECT_EQ(GrpcMessageOf(*startedStream), "deadline exceeded");
     EXPECT_EQ(GrpcStatusOf(*waitingStream).value_or(""), "4");
@@ -811,17 +811,17 @@ TEST_F(ServerLoopbackTest, DeferredCallExpiresAtServerDeadlineAndLateFinishIsDro
     EXPECT_EQ(Stats().inFlight, 0u);
 
     const size_t framesBefore = startedStream->frames.size();
-    for (const ServerCall &call : state_->held)
+    for (const ServerCall &call : state->held)
     {
         EXPECT_FALSE(call.IsActive());
         EXPECT_FALSE(call.TryStartBusiness()) << "a completed call must never start business";
         call.FinishOk("late");
     }
-    state_->held.clear();
+    state->held.clear();
     RunFor(100ms);
     EXPECT_EQ(Stats().lateFinish, 2u);
     EXPECT_EQ(Stats().dropped, 0u) << "completed calls are not dropped when their handles go away";
-    EXPECT_EQ(raw->h2().FindStream(started)->frames.size(), framesBefore) << "nothing is sent after the deadline reply";
+    EXPECT_EQ(raw->H2().FindStream(started)->frames.size(), framesBefore) << "nothing is sent after the deadline reply";
 }
 
 TEST_F(ServerLoopbackTest, ResetBeforeDispatchCancelsSilently)
@@ -832,18 +832,18 @@ TEST_F(ServerLoopbackTest, ResetBeforeDispatchCancelsSilently)
 
     // HEADERS + DATA(END_STREAM) + RST_STREAM 在同一次 send 里:服务端在同一次 Receive 里先登记再撤销,
     // 派发泵随后跳过它。
-    const int32_t streamId = raw->h2().OpenStream(GrpcRequestHeaders(kHoldPath), false);
+    const int32_t streamId = raw->H2().OpenStream(GrpcRequestHeaders(kHoldPath), false);
     ASSERT_GT(streamId, 0);
-    ASSERT_TRUE(raw->h2().SendData(streamId, TestH2Peer::Frame("x"), true));
-    ASSERT_TRUE(raw->h2().SendRstStream(streamId, h2::kCancel));
+    ASSERT_TRUE(raw->H2().SendData(streamId, TestH2Peer::Frame("x"), true));
+    ASSERT_TRUE(raw->H2().SendRstStream(streamId, h2::kCancel));
     raw->Flush();
 
     ASSERT_TRUE(RunUntil([&] { return Stats().cancelledBeforeStart == 1; }, 5s));
     RunFor(100ms);
-    EXPECT_EQ(state_->invocations, 0u) << "a call reset before dispatch must not reach the handler";
+    EXPECT_EQ(state->invocations, 0u) << "a call reset before dispatch must not reach the handler";
     EXPECT_EQ(Stats().dispatched, 0u);
     EXPECT_EQ(Stats().inFlight, 0u);
-    const H2Stream *stream = raw->h2().FindStream(streamId);
+    const H2Stream *stream = raw->H2().FindStream(streamId);
     ASSERT_NE(stream, nullptr);
     EXPECT_TRUE(stream->responseHeaders.empty()) << "no reply for a cancelled call";
 }
@@ -853,20 +853,20 @@ TEST_F(ServerLoopbackTest, ResetAfterBusinessStartedAbortsAndLateFinishIsCounted
     ASSERT_NE(StartServer(), nullptr);
     const auto raw = MakeRaw(RawConnection::Mode::kHttp2);
     const int32_t streamId = SendRawRequest(*raw, kHoldPath, std::nullopt);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 1; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 1; }, 5s));
 
-    ASSERT_TRUE(raw->h2().SendRstStream(streamId, h2::kCancel));
+    ASSERT_TRUE(raw->H2().SendRstStream(streamId, h2::kCancel));
     raw->Flush();
     ASSERT_TRUE(RunUntil([&] { return Stats().abortedAfterStart == 1; }, 5s));
-    EXPECT_FALSE(state_->held.front().IsActive());
+    EXPECT_FALSE(state->held.front().IsActive());
 
-    state_->held.front().FinishOk("too late");
-    state_->held.clear();
+    state->held.front().FinishOk("too late");
+    state->held.clear();
     RunFor(100ms);
     EXPECT_EQ(Stats().lateFinish, 1u);
     EXPECT_EQ(Stats().dropped, 0u);
     EXPECT_EQ(Stats().inFlight, 0u);
-    EXPECT_TRUE(raw->h2().FindStream(streamId)->responseHeaders.empty());
+    EXPECT_TRUE(raw->H2().FindStream(streamId)->responseHeaders.empty());
 }
 
 TEST_F(ServerLoopbackTest, RepeatedFinishOnlyTheFirstOneIsSent)
@@ -893,13 +893,13 @@ TEST_F(ServerLoopbackTest, DroppingAllHandlesRepliesUnavailable)
 
     const auto immediate = StartCall(*channel, kDropPath, "x");
     const auto later = StartCall(*channel, kHoldNotStartedPath, "x");
-    ASSERT_TRUE(RunUntil([&] { return immediate->count > 0 && state_->held.size() == 1; }, 5s));
-    state_->held.clear(); // 最后一个副本在 loop 线程析构
+    ASSERT_TRUE(RunUntil([&] { return immediate->count > 0 && state->held.size() == 1; }, 5s));
+    state->held.clear(); // 最后一个副本在 loop 线程析构
     ASSERT_TRUE(RunUntil([&] { return later->count > 0; }, 5s));
 
     for (const auto &outcome : {immediate, later})
     {
-        EXPECT_EQ(outcome->result.status.code(), StatusCode::kUnavailable);
+        EXPECT_EQ(outcome->result.status.Code(), StatusCode::kUnavailable);
         EXPECT_EQ(outcome->result.status.message(), "server dropped the call without completing it");
         EXPECT_NE(outcome->result.status.message(), kBattleNotAllocatable);
     }
@@ -914,19 +914,19 @@ TEST_F(ServerLoopbackTest, FinishAfterServerDestroyedIsHarmless)
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
     const auto outcome = StartCall(*channel, kHoldPath, "x");
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 1; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 1; }, 5s));
 
-    server_.reset(); // loop 外析构:连接被 forceClose,调用静默收口
-    const ServerCall &call = state_->held.front();
+    server.reset(); // loop 外析构:连接被 forceClose,调用静默收口
+    const ServerCall &call = state->held.front();
     EXPECT_FALSE(call.IsActive());
     EXPECT_TRUE(call.ServerDraining()) << "a destroyed server counts as draining";
     EXPECT_FALSE(call.TryStartBusiness());
     call.FinishOk("after destruction");
     call.FinishError(Status(StatusCode::kInternal, "after destruction"));
-    state_->held.clear();
+    state->held.clear();
 
     ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
-    EXPECT_EQ(outcome->result.status.code(), StatusCode::kUnavailable) << outcome->result.status.ToString();
+    EXPECT_EQ(outcome->result.status.Code(), StatusCode::kUnavailable) << outcome->result.status.ToString();
 }
 
 TEST_F(ServerLoopbackTest, InFlightLimitRejectsWithResourceExhaustedBeforeBusiness)
@@ -949,24 +949,24 @@ TEST_F(ServerLoopbackTest, InFlightLimitRejectsWithResourceExhaustedBeforeBusine
         {
             done += o->count > 0 ? 1 : 0;
         }
-        return done == 2 && state_->held.size() == 4; }, 5s));
+        return done == 2 && state->held.size() == 4; }, 5s));
     for (const auto &outcome : outcomes)
     {
         if (outcome->count == 0)
         {
             continue;
         }
-        EXPECT_EQ(outcome->result.status.code(), StatusCode::kResourceExhausted);
+        EXPECT_EQ(outcome->result.status.Code(), StatusCode::kResourceExhausted);
         EXPECT_EQ(outcome->result.status.message(), "server in-flight call limit (4) reached");
     }
     EXPECT_EQ(Stats().rejectedOverload, 2u);
     EXPECT_EQ(Stats().inFlight, 4u);
 
-    for (const ServerCall &call : state_->held)
+    for (const ServerCall &call : state->held)
     {
         call.FinishOk("released");
     }
-    state_->held.clear();
+    state->held.clear();
     ASSERT_TRUE(RunUntil([&] { return AllDone(outcomes); }, 5s));
     size_t ok = 0;
     for (const auto &outcome : outcomes)
@@ -994,15 +994,15 @@ TEST_F(ServerLoopbackTest, PerConnectionStreamLimitMakesTheClientQueue)
     while (!AllDone(outcomes) && rounds < 10)
     {
         ++rounds;
-        ASSERT_TRUE(RunUntil([&] { return !state_->held.empty() || AllDone(outcomes); }, 5s));
+        ASSERT_TRUE(RunUntil([&] { return !state->held.empty() || AllDone(outcomes); }, 5s));
         RunFor(100ms); // 给客户端机会多发:超过 SETTINGS_MAX_CONCURRENT_STREAMS 的流必须留在客户端排队
-        EXPECT_LE(state_->held.size(), 2u);
+        EXPECT_LE(state->held.size(), 2u);
         EXPECT_LE(Stats().inFlight, 2u);
-        for (const ServerCall &call : state_->held)
+        for (const ServerCall &call : state->held)
         {
             call.FinishOk("ok");
         }
-        state_->held.clear();
+        state->held.clear();
     }
     ASSERT_TRUE(RunUntil([&] { return AllDone(outcomes); }, 5s));
     for (const auto &outcome : outcomes)
@@ -1033,13 +1033,13 @@ TEST_F(ServerLoopbackTest, BurstOf200IsDispatchedFifoAndBoundedPerTurn)
         EXPECT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
     }
 
-    ASSERT_EQ(state_->orderIds.size(), 200u);
+    ASSERT_EQ(state->orderIds.size(), 200u);
     // 调用 id 按「请求收完」的先后分配:派发顺序必须与之一致(全节点一个先进先出队列)。
-    EXPECT_TRUE(std::is_sorted(state_->orderIds.begin(), state_->orderIds.end()));
-    EXPECT_EQ(std::set<uint64_t>(state_->orderIds.begin(), state_->orderIds.end()).size(), 200u);
+    EXPECT_TRUE(std::is_sorted(state->orderIds.begin(), state->orderIds.end()));
+    EXPECT_EQ(std::set<uint64_t>(state->orderIds.begin(), state->orderIds.end()).size(), 200u);
     // 同一轮 loop 内派发的个数不超过上限;剩余的落到后面的轮次(中间让出给定时器与 I/O)。
     std::map<int64_t, size_t> perIteration;
-    for (const int64_t iteration : state_->orderIterations)
+    for (const int64_t iteration : state->orderIterations)
     {
         ++perIteration[iteration];
     }
@@ -1058,7 +1058,7 @@ TEST_F(ServerLoopbackTest, GracefulShutdownDrainsInFlightCallsAndRefusesNewConne
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
     const auto inFlight = StartCall(*channel, kHoldPath, "x", 20000ms);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 1; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 1; }, 5s));
     const uint64_t acceptedBefore = Stats().accepted;
 
     auto drained = std::make_shared<int>(0);
@@ -1067,14 +1067,14 @@ TEST_F(ServerLoopbackTest, GracefulShutdownDrainsInFlightCallsAndRefusesNewConne
     shutdown.drainTimeout = 15000ms; // 给新连接被拒(Windows 回环拒绝要约 2s)留足时间,不让排空先到期
     shutdown.goawayPingTimeout = 500ms;
     shutdown.closeGrace = 300ms;
-    server_->BeginShutdown(shutdown, [drained] { ++*drained; });
+    server->BeginShutdown(shutdown, [drained] { ++*drained; });
     EXPECT_EQ(*drained, 0) << "onDrained must never run inside BeginShutdown";
-    EXPECT_TRUE(server_->draining());
-    server_->BeginShutdown(shutdown, [secondDrained] { ++*secondDrained; }); // 幂等:忽略
+    EXPECT_TRUE(server->draining());
+    server->BeginShutdown(shutdown, [secondDrained] { ++*secondDrained; }); // 幂等:忽略
 
     RunFor(100ms); // Acceptor 在排队任务里销毁;两段 GOAWAY 走完
-    EXPECT_TRUE(state_->held.front().ServerDraining());
-    EXPECT_TRUE(state_->held.front().IsActive()) << "accepted calls keep running while draining";
+    EXPECT_TRUE(state->held.front().ServerDraining());
+    EXPECT_TRUE(state->held.front().IsActive()) << "accepted calls keep running while draining";
 
     const auto newChannel = MakeChannel();
     ASSERT_NE(newChannel, nullptr);
@@ -1084,8 +1084,8 @@ TEST_F(ServerLoopbackTest, GracefulShutdownDrainsInFlightCallsAndRefusesNewConne
     EXPECT_EQ(Stats().accepted, acceptedBefore) << "no connection is accepted after BeginShutdown";
     EXPECT_EQ(*drained, 0) << "an in-flight call keeps the server from draining";
 
-    state_->held.front().FinishOk("finished while draining");
-    state_->held.clear();
+    state->held.front().FinishOk("finished while draining");
+    state->held.clear();
     ASSERT_TRUE(RunUntil([&] { return inFlight->count > 0; }, 5s));
     ASSERT_TRUE(inFlight->result.status.ok()) << inFlight->result.status.ToString();
     EXPECT_EQ(inFlight->result.response, "finished while draining");
@@ -1094,7 +1094,7 @@ TEST_F(ServerLoopbackTest, GracefulShutdownDrainsInFlightCallsAndRefusesNewConne
     RunFor(200ms);
     EXPECT_EQ(*drained, 1) << "onDrained exactly once";
     EXPECT_EQ(*secondDrained, 0);
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     EXPECT_EQ(Stats().refusedOnShutdown, 0u);
     EXPECT_EQ(Stats().unavailableOnShutdown, 0u);
     EXPECT_EQ(Stats().dropped, 0u);
@@ -1105,33 +1105,33 @@ TEST_F(ServerLoopbackTest, GoawayIsTwoPhaseOnTheWire)
     ASSERT_NE(StartServer(), nullptr);
     const auto raw = MakeRaw(RawConnection::Mode::kHttp2);
     const int32_t streamId = SendRawRequest(*raw, kHoldPath, std::nullopt);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 1; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 1; }, 5s));
 
     auto drained = std::make_shared<int>(0);
     ServerShutdownOptions shutdown;
     shutdown.drainTimeout = 5000ms;
     shutdown.goawayPingTimeout = 1000ms;
     shutdown.closeGrace = 300ms;
-    server_->BeginShutdown(shutdown, [drained] { ++*drained; });
+    server->BeginShutdown(shutdown, [drained] { ++*drained; });
     // 客户端自动回 PING ACK:第二段在 ACK 到达后立即发出,不必等满 goawayPingTimeout。
-    ASSERT_TRUE(RunUntil([&] { return raw->h2().goawaysReceived().size() >= 2; }, 900ms));
-    const auto &goaways = raw->h2().goawaysReceived();
+    ASSERT_TRUE(RunUntil([&] { return raw->H2().GoawaysReceived().size() >= 2; }, 900ms));
+    const auto &goaways = raw->H2().GoawaysReceived();
     EXPECT_EQ(goaways[0].lastStreamId, h2::kMaxStreamId);
     EXPECT_EQ(goaways[0].errorCode, h2::kNoError);
     EXPECT_EQ(goaways[1].lastStreamId, streamId);
     EXPECT_EQ(goaways[1].errorCode, h2::kNoError);
-    EXPECT_GE(raw->h2().pingsReceived(), 1u);
+    EXPECT_GE(raw->H2().PingsReceived(), 1u);
 
-    state_->held.front().FinishOk("done");
-    state_->held.clear();
+    state->held.front().FinishOk("done");
+    state->held.clear();
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *stream = raw->h2().FindStream(streamId);
+        const H2Stream *stream = raw->H2().FindStream(streamId);
         return stream != nullptr && GrpcStatusOf(*stream).has_value(); }, 5s));
-    EXPECT_EQ(GrpcStatusOf(*raw->h2().FindStream(streamId)).value_or(""), "0");
-    EXPECT_EQ(raw->h2().FindStream(streamId)->body, TestH2Peer::Frame("done"));
+    EXPECT_EQ(GrpcStatusOf(*raw->H2().FindStream(streamId)).value_or(""), "0");
+    EXPECT_EQ(raw->H2().FindStream(streamId)->body, TestH2Peer::Frame("done"));
     // 没有打开的流、最终 GOAWAY 已写出 → 写半关;客户端随后断开(或宽限到期被 forceClose),连接表清空即排空完成。
-    ASSERT_TRUE(RunUntil([&] { return *drained > 0 && raw->disconnected(); }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return *drained > 0 && raw->Disconnected(); }, 5s));
     EXPECT_EQ(*drained, 1);
 }
 
@@ -1141,7 +1141,7 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUnstartedAndFailsStartedCalls)
     const auto raw = MakeRaw(RawConnection::Mode::kHttp2);
     const int32_t waiting = SendRawRequest(*raw, kHoldNotStartedPath, std::nullopt);
     const int32_t started = SendRawRequest(*raw, kHoldPath, std::nullopt);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 2; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 2; }, 5s));
     raw->SnapshotAtDisconnect({waiting, started});
 
     auto drained = std::make_shared<int>(0);
@@ -1149,16 +1149,16 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUnstartedAndFailsStartedCalls)
     shutdown.drainTimeout = 300ms;
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 200ms;
-    server_->BeginShutdown(shutdown, [drained] { ++*drained; });
+    server->BeginShutdown(shutdown, [drained] { ++*drained; });
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *a = raw->h2().FindStream(waiting);
-        const H2Stream *b = raw->h2().FindStream(started);
+        const H2Stream *a = raw->H2().FindStream(waiting);
+        const H2Stream *b = raw->H2().FindStream(started);
         return a != nullptr && b != nullptr && a->rstReceived && GrpcStatusOf(*b).has_value(); }, 5s));
 
-    EXPECT_EQ(raw->h2().FindStream(waiting)->rstErrorCode, h2::kRefusedStream)
+    EXPECT_EQ(raw->H2().FindStream(waiting)->rstErrorCode, h2::kRefusedStream)
         << "business not started: REFUSED_STREAM lets the client retry safely";
-    const H2Stream *startedStream = raw->h2().FindStream(started);
+    const H2Stream *startedStream = raw->H2().FindStream(started);
     EXPECT_EQ(GrpcStatusOf(*startedStream).value_or(""), "14");
     EXPECT_EQ(GrpcMessageOf(*startedStream), "server shutting down");
     EXPECT_NE(GrpcMessageOf(*startedStream), kBattleNotAllocatable);
@@ -1166,29 +1166,29 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUnstartedAndFailsStartedCalls)
     EXPECT_EQ(Stats().unavailableOnShutdown, 1u);
     EXPECT_EQ(Stats().inFlight, 0u);
 
-    for (const ServerCall &call : state_->held)
+    for (const ServerCall &call : state->held)
     {
         call.FinishOk("late");
     }
-    state_->held.clear();
+    state->held.clear();
     ASSERT_TRUE(RunUntil([&] { return *drained > 0; }, 5s));
     EXPECT_EQ(Stats().lateFinish, 2u);
     EXPECT_EQ(Stats().dropped, 0u);
-    ASSERT_TRUE(RunUntil([&] { return raw->disconnected(); }, 2s));
+    ASSERT_TRUE(RunUntil([&] { return raw->Disconnected(); }, 2s));
     RunFor(100ms);
     EXPECT_EQ(*drained, 1);
 
     // 对端正常读取:REFUSED / UNAVAILABLE / 最终 GOAWAY 都在 EOF 之前到达(服务端先冲出、再写半关)。
-    const auto &atEof = raw->streamsAtDisconnect();
+    const auto &atEof = raw->StreamsAtDisconnect();
     ASSERT_EQ(atEof.count(waiting), 1u);
     ASSERT_EQ(atEof.count(started), 1u);
     EXPECT_TRUE(atEof.at(waiting).rstReceived);
     EXPECT_EQ(atEof.at(waiting).rstErrorCode, h2::kRefusedStream);
     EXPECT_EQ(GrpcStatusOf(atEof.at(started)).value_or(""), "14");
     EXPECT_EQ(GrpcMessageOf(atEof.at(started)), "server shutting down");
-    ASSERT_FALSE(raw->goawaysAtDisconnect().empty());
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().lastStreamId, started) << "the final GOAWAY precedes the EOF";
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().errorCode, h2::kNoError);
+    ASSERT_FALSE(raw->GoawaysAtDisconnect().empty());
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().lastStreamId, started) << "the final GOAWAY precedes the EOF";
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().errorCode, h2::kNoError);
 }
 
 TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureForceClosesAfterCloseGrace)
@@ -1204,7 +1204,7 @@ TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureForceClosesAfterCloseGra
     shutdown.goawayPingTimeout = 100ms; // 对端不读,PING ACK 不会来:满时长后直接提交第二段
     shutdown.closeGrace = 300ms;
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     ASSERT_TRUE(RunUntil([&] { return drained->count > 0; }, 5s));
     RunFor(200ms);
 
@@ -1213,7 +1213,7 @@ TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureForceClosesAfterCloseGra
     // 它是上限,不会因为积压一直写不完而往后拖(上界留足调度余量)。
     EXPECT_GE(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     EXPECT_LT(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace + 2000ms);
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     EXPECT_EQ(Stats().refusedOnShutdown, 1u);
     EXPECT_EQ(Stats().unavailableOnShutdown, 1u);
     EXPECT_EQ(Stats().inFlight, 0u);
@@ -1236,18 +1236,18 @@ TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureFlushesEverythingBeforeT
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 20000ms; // 只作硬上限:全部写完之后才发 FIN,对端读到 EOF 即关,远早于宽限
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     // 排空到期:两个调用已收口,应答已提交;客户端此前一直没读,什么都还没看到,连接照常保持。
     ASSERT_TRUE(RunUntil([&] { return Stats().refusedOnShutdown == 1 && Stats().unavailableOnShutdown == 1; }, 5s));
-    EXPECT_FALSE(calls.raw->h2().FindStream(calls.waiting)->rstReceived);
+    EXPECT_FALSE(calls.raw->H2().FindStream(calls.waiting)->rstReceived);
     EXPECT_EQ(drained->count, 0);
-    EXPECT_EQ(server_->connectionCount(), 1u);
+    EXPECT_EQ(server->connectionCount(), 1u);
 
     calls.raw->StartReading();
-    ASSERT_TRUE(RunUntil([&] { return calls.raw->disconnected(); }, 15s));
-    EXPECT_FALSE(calls.raw->h2Failed()) << calls.raw->h2().lastError();
+    ASSERT_TRUE(RunUntil([&] { return calls.raw->Disconnected(); }, 15s));
+    EXPECT_FALSE(calls.raw->H2Failed()) << calls.raw->H2().LastError();
 
-    const auto &atEof = calls.raw->streamsAtDisconnect();
+    const auto &atEof = calls.raw->StreamsAtDisconnect();
     ASSERT_EQ(atEof.size(), 3u);
     EXPECT_TRUE(atEof.at(calls.waiting).rstReceived) << "REFUSED_STREAM must reach the peer before the EOF";
     EXPECT_EQ(atEof.at(calls.waiting).rstErrorCode, h2::kRefusedStream);
@@ -1257,7 +1257,7 @@ TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureFlushesEverythingBeforeT
     // 业务已完成的应答同样完整送达(DATA + trailers),而不是被 EOF 截断。
     EXPECT_EQ(GrpcStatusOf(atEof.at(calls.big)).value_or(""), "0");
     EXPECT_EQ(atEof.at(calls.big).body.size(), kBackpressureResponseBytes + 5);
-    const auto &goaways = calls.raw->goawaysAtDisconnect();
+    const auto &goaways = calls.raw->GoawaysAtDisconnect();
     ASSERT_GE(goaways.size(), 2u);
     EXPECT_EQ(goaways.front().lastStreamId, h2::kMaxStreamId);
     EXPECT_EQ(goaways.back().lastStreamId, calls.started);
@@ -1268,7 +1268,7 @@ TEST_F(ServerLoopbackTest, DrainTimeoutUnderBackpressureFlushesEverythingBeforeT
     EXPECT_LT(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     RunFor(100ms);
     EXPECT_EQ(drained->count, 1) << "onDrained exactly once";
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     EXPECT_EQ(Stats().dropped, 0u);
 }
 
@@ -1285,14 +1285,14 @@ TEST_F(ServerLoopbackTest, DrainTimeoutKeepsWritingAFlowControlledResponseUntilT
     const int32_t big = SendRawRequest(*raw, kHoldPath, std::nullopt);
     const int32_t waiting = SendRawRequest(*raw, kHoldNotStartedPath, std::nullopt);
     const int32_t started = SendRawRequest(*raw, kHoldPath, std::nullopt);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 3; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 3; }, 5s));
     raw->SnapshotAtDisconnect({big, waiting, started});
 
     // 客户端停止读取:窗口内的 16KiB 发出之后不会再有 WINDOW_UPDATE,剩余 DATA 与 trailers 被流控卡在 nghttp2 里。
     // 派发按请求收完的先后(先进先出):held[0] 是 big。
     raw->StopReading();
     const std::string response(kFlowControlledResponseBytes, 'y');
-    state_->held.front().FinishOk(response);
+    state->held.front().FinishOk(response);
     RunFor(200ms);
 
     const auto drained = std::make_shared<DrainRecord>();
@@ -1301,18 +1301,18 @@ TEST_F(ServerLoopbackTest, DrainTimeoutKeepsWritingAFlowControlledResponseUntilT
     shutdown.goawayPingTimeout = 100ms; // 对端不读,PING ACK 不会来:满时长后直接提交第二段
     shutdown.closeGrace = 20000ms;      // 只作硬上限:应答写完之后才发 FIN,对端读到 EOF 即关,远早于宽限
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     ASSERT_TRUE(RunUntil([&] { return Stats().refusedOnShutdown == 1 && Stats().unavailableOnShutdown == 1; }, 5s));
     RunFor(200ms);
-    EXPECT_EQ(server_->connectionCount(), 1u) << "the connection stays open while a committed response is blocked";
+    EXPECT_EQ(server->connectionCount(), 1u) << "the connection stays open while a committed response is blocked";
     EXPECT_EQ(drained->count, 0);
 
     // 对端恢复读取:读到窗口内的 DATA 后自动回 WINDOW_UPDATE,服务端在同一条连接上把 DATA 与 trailers 写完才写半关。
     raw->StartReading();
-    ASSERT_TRUE(RunUntil([&] { return raw->disconnected(); }, 10s));
-    EXPECT_FALSE(raw->h2Failed()) << raw->h2().lastError();
+    ASSERT_TRUE(RunUntil([&] { return raw->Disconnected(); }, 10s));
+    EXPECT_FALSE(raw->H2Failed()) << raw->H2().LastError();
 
-    const auto &atEof = raw->streamsAtDisconnect();
+    const auto &atEof = raw->StreamsAtDisconnect();
     ASSERT_EQ(atEof.size(), 3u);
     const H2Stream &bigAtEof = atEof.at(big);
     EXPECT_EQ(bigAtEof.body.size(), kFlowControlledResponseBytes + 5) << "every DATA byte must arrive before the EOF";
@@ -1323,16 +1323,16 @@ TEST_F(ServerLoopbackTest, DrainTimeoutKeepsWritingAFlowControlledResponseUntilT
     EXPECT_EQ(atEof.at(waiting).rstErrorCode, h2::kRefusedStream);
     EXPECT_EQ(GrpcStatusOf(atEof.at(started)).value_or(""), "14");
     EXPECT_EQ(GrpcMessageOf(atEof.at(started)), "server shutting down");
-    ASSERT_FALSE(raw->goawaysAtDisconnect().empty());
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().lastStreamId, started);
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().errorCode, h2::kNoError);
+    ASSERT_FALSE(raw->GoawaysAtDisconnect().empty());
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().lastStreamId, started);
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().errorCode, h2::kNoError);
 
     ASSERT_TRUE(RunUntil([&] { return drained->count > 0; }, 5s));
     // 早于宽限到期:连接是对端读到 EOF 后关闭的,不是 forceClose。
     EXPECT_LT(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     RunFor(100ms);
     EXPECT_EQ(drained->count, 1) << "onDrained exactly once";
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     EXPECT_EQ(Stats().inFlight, 0u);
     EXPECT_EQ(Stats().dropped, 0u);
 }
@@ -1350,13 +1350,13 @@ TEST_F(ServerLoopbackTest, DrainTimeoutForceClosesWhenThePeerNeverOpensTheWindow
     const int32_t blocked = SendRawRequest(*raw, kHoldPath, std::nullopt);
     const int32_t waiting = SendRawRequest(*raw, kHoldNotStartedPath, std::nullopt);
     const int32_t started = SendRawRequest(*raw, kHoldPath, std::nullopt);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 3; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 3; }, 5s));
     raw->SnapshotAtDisconnect({blocked, waiting, started});
-    state_->held.front().FinishOk("blocked by flow control");
+    state->held.front().FinishOk("blocked by flow control");
     // 应答头不受流控,照常送达;DATA 与 trailers 卡在服务端。
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *stream = raw->h2().FindStream(blocked);
+        const H2Stream *stream = raw->H2().FindStream(blocked);
         return stream != nullptr && !stream->responseHeaders.empty(); }, 5s));
 
     const auto drained = std::make_shared<DrainRecord>();
@@ -1365,17 +1365,17 @@ TEST_F(ServerLoopbackTest, DrainTimeoutForceClosesWhenThePeerNeverOpensTheWindow
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 1000ms;
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     // 排空到期:REFUSED / UNAVAILABLE / 最终 GOAWAY 都不受流控,对端照常收到。
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *a = raw->h2().FindStream(waiting);
-        const H2Stream *b = raw->h2().FindStream(started);
+        const H2Stream *a = raw->H2().FindStream(waiting);
+        const H2Stream *b = raw->H2().FindStream(started);
         return a != nullptr && b != nullptr && a->rstReceived && GrpcStatusOf(*b).has_value(); }, 5s));
     const auto expiredAt = std::chrono::steady_clock::now();
     RunFor(300ms); // 远小于 closeGrace
-    EXPECT_FALSE(raw->disconnected()) << "no FIN while a committed response is still blocked by flow control";
-    EXPECT_EQ(server_->connectionCount(), 1u);
+    EXPECT_FALSE(raw->Disconnected()) << "no FIN while a committed response is still blocked by flow control";
+    EXPECT_EQ(server->connectionCount(), 1u);
     EXPECT_EQ(drained->count, 0);
 
     ASSERT_TRUE(RunUntil([&] { return drained->count > 0; }, 5s));
@@ -1384,22 +1384,22 @@ TEST_F(ServerLoopbackTest, DrainTimeoutForceClosesWhenThePeerNeverOpensTheWindow
     // 硬上限从排空到期那一刻起算(steady 复核,不会早到),也不会往后拖(上界留足调度余量)。
     EXPECT_GE(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     EXPECT_LT(drained->firstAt - expiredAt, shutdown.closeGrace + 1000ms);
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     EXPECT_EQ(Stats().refusedOnShutdown, 1u);
     EXPECT_EQ(Stats().unavailableOnShutdown, 1u);
     EXPECT_EQ(Stats().inFlight, 0u);
     EXPECT_EQ(Stats().dropped, 0u);
 
-    ASSERT_TRUE(RunUntil([&] { return raw->disconnected(); }, 2s));
-    const auto &atClose = raw->streamsAtDisconnect();
+    ASSERT_TRUE(RunUntil([&] { return raw->Disconnected(); }, 2s));
+    const auto &atClose = raw->StreamsAtDisconnect();
     ASSERT_EQ(atClose.size(), 3u);
     EXPECT_TRUE(atClose.at(blocked).body.empty()) << "the peer never opened the window";
     EXPECT_FALSE(GrpcStatusOf(atClose.at(blocked)).has_value()) << "the blocked response never completed";
     EXPECT_EQ(atClose.at(waiting).rstErrorCode, h2::kRefusedStream);
     EXPECT_EQ(GrpcStatusOf(atClose.at(started)).value_or(""), "14");
-    ASSERT_FALSE(raw->goawaysAtDisconnect().empty());
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().lastStreamId, started);
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().errorCode, h2::kNoError);
+    ASSERT_FALSE(raw->GoawaysAtDisconnect().empty());
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().lastStreamId, started);
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().errorCode, h2::kNoError);
 }
 
 TEST_F(ServerLoopbackTest, DrainTimeoutRefusesStreamsStillUploadingTheRequest)
@@ -1410,10 +1410,10 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesStreamsStillUploadingTheRequest)
     const auto raw = MakeRaw(RawConnection::Mode::kHttp2);
     RunFor(100ms); // 握手完成(服务端 SETTINGS / ACK 往返)
     const std::string frame = TestH2Peer::Frame("half uploaded payload");
-    const int32_t uploading = raw->h2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
-    ASSERT_GT(uploading, 0) << raw->h2().lastError();
-    ASSERT_TRUE(raw->h2().SendData(uploading, std::string_view(frame).substr(0, frame.size() / 2), false))
-        << raw->h2().lastError();
+    const int32_t uploading = raw->H2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
+    ASSERT_GT(uploading, 0) << raw->H2().LastError();
+    ASSERT_TRUE(raw->H2().SendData(uploading, std::string_view(frame).substr(0, frame.size() / 2), false))
+        << raw->H2().LastError();
     raw->Flush();
     RunFor(100ms); // 服务端已收下头部(路由通过)与前一半请求体
     raw->SnapshotAtDisconnect({uploading});
@@ -1424,27 +1424,27 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesStreamsStillUploadingTheRequest)
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 20000ms; // 只作硬上限
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *stream = raw->h2().FindStream(uploading);
+        const H2Stream *stream = raw->H2().FindStream(uploading);
         return stream != nullptr && stream->rstReceived; }, 5s));
-    EXPECT_EQ(raw->h2().FindStream(uploading)->rstErrorCode, h2::kRefusedStream);
-    EXPECT_TRUE(raw->h2().FindStream(uploading)->responseHeaders.empty());
+    EXPECT_EQ(raw->H2().FindStream(uploading)->rstErrorCode, h2::kRefusedStream);
+    EXPECT_TRUE(raw->H2().FindStream(uploading)->responseHeaders.empty());
     EXPECT_EQ(Stats().refusedOnShutdown, 1u);
     EXPECT_EQ(Stats().unavailableOnShutdown, 0u);
 
     // 没有别的流:最终 GOAWAY 已写出,REFUSED 写出后流即关闭,会话既不想读也不想写 → 写半关;对端读到 EOF 即关。
-    ASSERT_TRUE(RunUntil([&] { return drained->count > 0 && raw->disconnected(); }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return drained->count > 0 && raw->Disconnected(); }, 5s));
     EXPECT_LT(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     RunFor(100ms);
     EXPECT_EQ(drained->count, 1) << "onDrained exactly once";
-    EXPECT_EQ(state_->invocations, 0u) << "a request still uploading at drain expiry is never dispatched";
+    EXPECT_EQ(state->invocations, 0u) << "a request still uploading at drain expiry is never dispatched";
     EXPECT_EQ(Stats().dispatched, 0u);
     EXPECT_EQ(Stats().inFlight, 0u);
-    ASSERT_FALSE(raw->goawaysAtDisconnect().empty());
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().lastStreamId, uploading);
-    EXPECT_EQ(raw->goawaysAtDisconnect().back().errorCode, h2::kNoError);
+    ASSERT_FALSE(raw->GoawaysAtDisconnect().empty());
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().lastStreamId, uploading);
+    EXPECT_EQ(raw->GoawaysAtDisconnect().back().errorCode, h2::kNoError);
 }
 
 TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUploadingStreamsEvenAfterHeaderTimesAreTrimmed)
@@ -1460,10 +1460,10 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUploadingStreamsEvenAfterHeaderTim
 
     // 慢上传的流:id 最小,修剪时最先被丢。
     const std::string frame = TestH2Peer::Frame("half uploaded payload");
-    const int32_t uploading = raw->h2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
-    ASSERT_GT(uploading, 0) << raw->h2().lastError();
-    ASSERT_TRUE(raw->h2().SendData(uploading, std::string_view(frame).substr(0, frame.size() / 2), false))
-        << raw->h2().lastError();
+    const int32_t uploading = raw->H2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
+    ASSERT_GT(uploading, 0) << raw->H2().LastError();
+    ASSERT_TRUE(raw->H2().SendData(uploading, std::string_view(frame).substr(0, frame.size() / 2), false))
+        << raw->H2().LastError();
     raw->Flush();
     RunFor(50ms);
 
@@ -1476,15 +1476,15 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUploadingStreamsEvenAfterHeaderTim
         std::vector<int32_t> batch;
         for (int i = 0; i < kBatch; ++i)
         {
-            const int32_t streamId = raw->h2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
-            ASSERT_GT(streamId, 0) << raw->h2().lastError();
+            const int32_t streamId = raw->H2().OpenStream(GrpcRequestHeaders(kEchoPath), false);
+            ASSERT_GT(streamId, 0) << raw->H2().LastError();
             batch.push_back(streamId);
         }
         raw->Flush();
         RunFor(30ms);
         for (const int32_t streamId : batch)
         {
-            ASSERT_TRUE(raw->h2().SendRstStream(streamId, h2::kCancel)) << raw->h2().lastError();
+            ASSERT_TRUE(raw->H2().SendRstStream(streamId, h2::kCancel)) << raw->H2().LastError();
         }
         raw->Flush();
         RunFor(30ms);
@@ -1497,24 +1497,24 @@ TEST_F(ServerLoopbackTest, DrainTimeoutRefusesUploadingStreamsEvenAfterHeaderTim
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 20000ms; // 只作硬上限:修复前漏拒的流要拖到这里才被 forceClose
     const auto shutdownAt = std::chrono::steady_clock::now();
-    server_->BeginShutdown(shutdown, RecordDrain(drained));
+    server->BeginShutdown(shutdown, RecordDrain(drained));
     ASSERT_TRUE(RunUntil([&]
                          {
-        const H2Stream *stream = raw->h2().FindStream(uploading);
+        const H2Stream *stream = raw->H2().FindStream(uploading);
         return stream != nullptr && stream->rstReceived; }, 5s))
         << "a stream still uploading at drain expiry must be refused even if its header time was trimmed";
-    EXPECT_EQ(raw->h2().FindStream(uploading)->rstErrorCode, h2::kRefusedStream);
-    EXPECT_TRUE(raw->h2().FindStream(uploading)->responseHeaders.empty());
+    EXPECT_EQ(raw->H2().FindStream(uploading)->rstErrorCode, h2::kRefusedStream);
+    EXPECT_TRUE(raw->H2().FindStream(uploading)->responseHeaders.empty());
     EXPECT_EQ(Stats().refusedOnShutdown, 1u) << "the reset streams are already closed and are not refused again";
     EXPECT_EQ(Stats().unavailableOnShutdown, 0u);
 
     // 拒掉之后没有打开的流:最终 GOAWAY 已写出、会话既不想读也不想写 → 写半关,对端读到 EOF 即关,远早于硬上限。
-    ASSERT_TRUE(RunUntil([&] { return drained->count > 0 && raw->disconnected(); }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return drained->count > 0 && raw->Disconnected(); }, 5s));
     EXPECT_LT(drained->firstAt - shutdownAt, shutdown.drainTimeout + shutdown.closeGrace);
     RunFor(100ms);
     EXPECT_EQ(drained->count, 1) << "onDrained exactly once";
-    EXPECT_TRUE(raw->streamsAtDisconnect().at(uploading).rstReceived) << "REFUSED_STREAM must reach the peer before the EOF";
-    EXPECT_EQ(state_->invocations, 0u);
+    EXPECT_TRUE(raw->StreamsAtDisconnect().at(uploading).rstReceived) << "REFUSED_STREAM must reach the peer before the EOF";
+    EXPECT_EQ(state->invocations, 0u);
     EXPECT_EQ(Stats().dispatched, 0u);
     EXPECT_EQ(Stats().inFlight, 0u);
 }
@@ -1525,8 +1525,8 @@ TEST_F(ServerLoopbackTest, ChannelSharesTheServerAddressRule)
     // (muduo InetAddress 随后落成 0.0.0.0,Linux 上会连到本机);现在客户端与服务端共用 address.h 的规则。
     for (const char *ip : {"-1.2.3.4", "1.2.3.-0", "+1.2.3.4", "127.0.0.01", "localhost"})
     {
-        EXPECT_EQ(Channel::Create(loop_, ip, port_), nullptr) << ip;
-        EXPECT_EQ(Server::Create(loop_, ip, port_), nullptr) << ip;
+        EXPECT_EQ(Channel::Create(loop, ip, port), nullptr) << ip;
+        EXPECT_EQ(Server::Create(loop, ip, port), nullptr) << ip;
     }
 }
 
@@ -1534,7 +1534,7 @@ TEST_F(ServerLoopbackTest, ShutdownWithoutConnectionsDrainsAsynchronously)
 {
     ASSERT_NE(StartServer(), nullptr);
     auto drained = std::make_shared<int>(0);
-    server_->BeginShutdown(ServerShutdownOptions{}, [drained] { ++*drained; });
+    server->BeginShutdown(ServerShutdownOptions{}, [drained] { ++*drained; });
     EXPECT_EQ(*drained, 0);
     ASSERT_TRUE(RunUntil([&] { return *drained > 0; }, 2s));
     RunFor(100ms);
@@ -1553,12 +1553,12 @@ TEST_F(ServerLoopbackTest, BeginShutdownFromTimerCallbackWhileConnectionsArrive)
         clients.push_back(MakeRaw(RawConnection::Mode::kBytes, false));
     }
     auto drained = std::make_shared<int>(0);
-    const std::weak_ptr<Server> weakServer = server_;
+    const std::weak_ptr<Server> weakServer = this->server;
     ServerShutdownOptions shutdown;
     shutdown.drainTimeout = 500ms;
     shutdown.goawayPingTimeout = 100ms;
     shutdown.closeGrace = 100ms;
-    loop_.runAfter(0.0, [weakServer, drained, shutdown]
+    loop.runAfter(0.0, [weakServer, drained, shutdown]
                    {
         if (const auto server = weakServer.lock())
         {
@@ -1567,7 +1567,7 @@ TEST_F(ServerLoopbackTest, BeginShutdownFromTimerCallbackWhileConnectionsArrive)
     ASSERT_TRUE(RunUntil([&] { return *drained > 0; }, 5s));
     RunFor(200ms);
     EXPECT_EQ(*drained, 1);
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(this->server->connectionCount(), 0u);
     EXPECT_LE(Stats().accepted, 16u);
     EXPECT_EQ(Stats().accepted, Stats().closedBeforePreface) << "none of these clients ever sent a byte";
     clients.clear();
@@ -1580,15 +1580,15 @@ TEST_F(ServerLoopbackTest, DestroyingTheServerWithLiveConnectionsInAQueuedTask)
     ASSERT_NE(channel, nullptr);
     const auto outcome = StartCall(*channel, kHoldPath, "x");
     const auto idle = MakeRaw(RawConnection::Mode::kHttp2);
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 1 && server_->connectionCount() == 2; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 1 && server->connectionCount() == 2; }, 5s));
 
     // 在 queueInLoop 任务里析构(不在 I/O 事件处理期间):剩余连接 forceClose,close 回调照样排 connectDestroyed。
-    loop_.queueInLoop([this] { server_.reset(); });
-    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0 && idle->disconnected(); }, 5s));
-    EXPECT_EQ(server_, nullptr);
-    EXPECT_EQ(outcome->result.status.code(), StatusCode::kUnavailable) << outcome->result.status.ToString();
-    state_->held.front().FinishOk("after destruction");
-    state_->held.clear();
+    loop.queueInLoop([this] { server.reset(); });
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0 && idle->Disconnected(); }, 5s));
+    EXPECT_EQ(server, nullptr);
+    EXPECT_EQ(outcome->result.status.Code(), StatusCode::kUnavailable) << outcome->result.status.ToString();
+    state->held.front().FinishOk("after destruction");
+    state->held.clear();
     RunFor(200ms);
 }
 
@@ -1602,7 +1602,7 @@ TEST_F(ServerLoopbackTest, ProbeConnectionsAreSilent)
         {
             const auto probe = MakeRaw(RawConnection::Mode::kBytes);
             RunFor(50ms); // 本端 SETTINGS 推迟到收到对端首字节:这段时间里服务端一个字节都不能写
-            EXPECT_EQ(probe->bytesReceived(), 0u) << "probe #" << i;
+            EXPECT_EQ(probe->BytesReceived(), 0u) << "probe #" << i;
             probe->Close();
             ASSERT_TRUE(RunUntil([&] { return Stats().closedBeforePreface == static_cast<uint64_t>(i + 1); }, 5s));
         }
@@ -1610,7 +1610,7 @@ TEST_F(ServerLoopbackTest, ProbeConnectionsAreSilent)
     }
     EXPECT_EQ(Stats().protocolErrors, 0u);
     EXPECT_EQ(Stats().accepted, static_cast<uint64_t>(kProbes));
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
     const std::string serverLog = WithoutPlatformHangupNoise(CapturedLog());
     EXPECT_TRUE(serverLog.empty()) << "probes must not log at WARN or above:\n" << serverLog;
 }
@@ -1622,16 +1622,16 @@ TEST_F(ServerLoopbackTest, HandshakeTimeoutClosesSilentAndMagicOnlyConnections)
     ASSERT_NE(StartServer(options), nullptr);
 
     const auto silent = MakeRaw(RawConnection::Mode::kBytes);
-    ASSERT_TRUE(RunUntil([&] { return silent->disconnected(); }, 3s));
-    EXPECT_EQ(silent->bytesReceived(), 0u);
+    ASSERT_TRUE(RunUntil([&] { return silent->Disconnected(); }, 3s));
+    EXPECT_EQ(silent->BytesReceived(), 0u);
     EXPECT_EQ(Stats().handshakeTimeout, 1u);
     EXPECT_EQ(Stats().closedBeforePreface, 1u);
 
     // 只发 client magic、不发 SETTINGS:服务端写出自己的 SETTINGS,但握手不算完成,照样超时。
     const auto magicOnly = MakeRaw(RawConnection::Mode::kBytes);
     magicOnly->SendRaw("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
-    ASSERT_TRUE(RunUntil([&] { return magicOnly->disconnected(); }, 3s));
-    EXPECT_GT(magicOnly->bytesReceived(), 0u) << "server SETTINGS follow the first client byte";
+    ASSERT_TRUE(RunUntil([&] { return magicOnly->Disconnected(); }, 3s));
+    EXPECT_GT(magicOnly->BytesReceived(), 0u) << "server SETTINGS follow the first client byte";
     EXPECT_EQ(Stats().handshakeTimeout, 2u);
     EXPECT_EQ(Stats().closedBeforePreface, 1u);
     EXPECT_EQ(Stats().protocolErrors, 0u);
@@ -1642,8 +1642,8 @@ TEST_F(ServerLoopbackTest, Http11RequestIsAProtocolErrorAndGetsNoBytes)
     ASSERT_NE(StartServer(), nullptr);
     const auto client = MakeRaw(RawConnection::Mode::kBytes);
     client->SendRaw("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-    ASSERT_TRUE(RunUntil([&] { return client->disconnected(); }, 3s));
-    EXPECT_EQ(client->bytesReceived(), 0u) << client->rawReceived();
+    ASSERT_TRUE(RunUntil([&] { return client->Disconnected(); }, 3s));
+    EXPECT_EQ(client->BytesReceived(), 0u) << client->rawReceived();
     EXPECT_EQ(Stats().protocolErrors, 1u);
     EXPECT_EQ(Stats().closedBeforePreface, 0u);
 }
@@ -1660,14 +1660,14 @@ TEST_F(ServerLoopbackTest, NoThreadIsCreatedByTheServer)
         ASSERT_TRUE(warmup->result.status.ok()) << warmup->result.status.ToString();
     }
     RunFor(200ms);
-    server_.reset();
+    server.reset();
     RunFor(300ms);
 
     const std::set<uint64_t> before = muduo_grpc_test::SnapshotThreadIds();
     ASSERT_FALSE(before.empty());
 
-    port_ = muduo_grpc_test::FindFreeLoopbackPort();
-    ASSERT_NE(port_, 0);
+    port = muduo_grpc_test::FindFreeLoopbackPort();
+    ASSERT_NE(port, 0);
     ASSERT_NE(StartServer(), nullptr);
     auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
@@ -1676,20 +1676,20 @@ TEST_F(ServerLoopbackTest, NoThreadIsCreatedByTheServer)
     {
         outcomes.push_back(StartCall(*channel, kHoldPath, "call-" + std::to_string(i), 10000ms));
     }
-    ASSERT_TRUE(RunUntil([&] { return state_->held.size() == 50; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return state->held.size() == 50; }, 5s));
     const std::set<uint64_t> during = muduo_grpc_test::SnapshotThreadIds();
-    for (const ServerCall &call : state_->held)
+    for (const ServerCall &call : state->held)
     {
         call.FinishOk("ok");
     }
-    state_->held.clear();
+    state->held.clear();
     ASSERT_TRUE(RunUntil([&] { return AllDone(outcomes); }, 5s));
 
     auto drained = std::make_shared<int>(0);
-    server_->BeginShutdown(ServerShutdownOptions{}, [drained] { ++*drained; });
+    server->BeginShutdown(ServerShutdownOptions{}, [drained] { ++*drained; });
     channel.reset();
     ASSERT_TRUE(RunUntil([&] { return *drained > 0; }, 5s));
-    server_.reset();
+    server.reset();
     RunFor(300ms);
     const std::set<uint64_t> after = muduo_grpc_test::SnapshotThreadIds();
 
@@ -1766,7 +1766,7 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAppendsMetadataAndWrapsTheCompletion)
             done(std::move(result));
         };
     };
-    const auto channel = Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
+    const auto channel = Channel::Create(loop, "127.0.0.1", port, std::move(channelOptions));
     ASSERT_NE(channel, nullptr);
 
     const auto outcome = std::make_shared<CallOutcome>();
@@ -1786,7 +1786,7 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAppendsMetadataAndWrapsTheCompletion)
     ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
     EXPECT_EQ(*order, (std::vector<std::string>{"wrapper", "done"}));
     EXPECT_EQ(*seenMethod, kEchoPath);
-    const std::string *hook = muduo_grpc::FindMetadata(state_->lastMetadata, "x-hook");
+    const std::string *hook = muduo_grpc::FindMetadata(state->lastMetadata, "x-hook");
     ASSERT_NE(hook, nullptr);
     EXPECT_EQ(*hook, "on");
 }
@@ -1805,13 +1805,13 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAlsoWrapsLocalRejections)
             done(std::move(result));
         };
     };
-    const auto channel = Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
+    const auto channel = Channel::Create(loop, "127.0.0.1", port, std::move(channelOptions));
     ASSERT_NE(channel, nullptr);
 
     const auto outcome = StartCall(*channel, kEchoPath, "ping", -1ms); // 截止已过:本地拒绝,不发出
     ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
     EXPECT_EQ(outcome->count, 1);
-    EXPECT_EQ(outcome->result.status.code(), StatusCode::kDeadlineExceeded) << outcome->result.status.ToString();
+    EXPECT_EQ(outcome->result.status.Code(), StatusCode::kDeadlineExceeded) << outcome->result.status.ToString();
     EXPECT_EQ(*wrapped, 1);
 }
 
@@ -1843,7 +1843,7 @@ TEST_F(ServerLoopbackTest, DispatchInterceptorRunsOncePerCallAndExtraInvokesAreI
     EXPECT_EQ(*hookCalls, 1);
     EXPECT_TRUE(*sawMetadata);
     EXPECT_EQ(*seenPath, kEchoPath);
-    EXPECT_EQ(state_->invocations, 1u);
+    EXPECT_EQ(state->invocations, 1u);
 }
 
 // 派发钩子一次都没调 invoke:服务端补调一次(打 ERROR),调用照常完成。
@@ -1861,7 +1861,7 @@ TEST_F(ServerLoopbackTest, DispatchInterceptorThatNeverInvokesStillDispatchesOnc
     ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
     EXPECT_EQ(outcome->result.response, "echo:ping");
     EXPECT_EQ(outcome->count, 1);
-    EXPECT_EQ(state_->invocations, 1u);
+    EXPECT_EQ(state->invocations, 1u);
 }
 
 } // namespace

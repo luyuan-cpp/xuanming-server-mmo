@@ -125,7 +125,7 @@ public:
     // 判定(纯函数,不计数)。返回命中的关停规则;nullopt = 放行。
     std::optional<Rule> Check(const MethodName &method, Coverage coverage = Coverage::kAllRules) const;
     // 快照里有适用于本进程的规则(常态为假)。派发入口用它先行短路:为假时不必取方法名。只读一个原子量。
-    bool HasApplicableRules() const noexcept { return hasRules_.load(std::memory_order_acquire); }
+    bool HasApplicableRules() const noexcept { return hasRules.load(std::memory_order_acquire); }
 
     // 本进程适用的有效规则条数(含 deny=false 的豁免规则)。快照作废时为 0。
     size_t ApplicableRuleCount() const;
@@ -155,18 +155,18 @@ private:
     // 用 raw_ 与 identity_ 重建快照,并打变更日志。调用方持锁。
     void RebuildLocked();
 
-    const std::chrono::seconds staleAfter_;
-    const Clock clock_;
+    const std::chrono::seconds staleAfter;
+    const Clock clock;
 
-    mutable std::mutex mutex_;
-    Identity identity_;
-    std::map<std::string, std::string> raw_;  // 前缀下的全部键(含不适用本进程的),相对键 → 原样值
-    std::set<std::string> badKeys_;           // 值写坏的键:只在集合变化时打日志
-    std::shared_ptr<const Snapshot> snapshot_;
-    std::chrono::steady_clock::time_point syncedAt_{};  // 零值 = 从没同步过
-    std::map<std::string, uint64_t> blocked_;
+    mutable std::mutex mutex;
+    Identity identity;
+    std::map<std::string, std::string> raw;  // 前缀下的全部键(含不适用本进程的),相对键 → 原样值
+    std::set<std::string> badKeys;           // 值写坏的键:只在集合变化时打日志
+    std::shared_ptr<const Snapshot> snapshot;
+    std::chrono::steady_clock::time_point syncedAt{};  // 零值 = 从没同步过
+    std::map<std::string, uint64_t> blocked;
     // 快照里有适用规则:读路径的快速判断(假 = 直接放行,不加锁)。
-    std::atomic<bool> hasRules_{false};
+    std::atomic<bool> hasRules{false};
 };
 
 // ── 节点内各派发入口用(进程级实例 KillSwitch::Process()) ──

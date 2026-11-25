@@ -328,7 +328,7 @@ protected:
 	{
 		tlsSessionManager.sessions().clear();
 		ResetForTesting();
-		baselineUnauthenticated_ = UnauthenticatedConnections();
+		baselineUnauthenticated = UnauthenticatedConnections();
 	}
 	void TearDown() override
 	{
@@ -337,7 +337,7 @@ protected:
 	}
 
 	// 本用例新增的未验签连接数(别的用例不会留下占位,基线正常是 0;取差值只为不依赖这一点)。
-	uint64_t Unauthenticated() const { return UnauthenticatedConnections() - baselineUnauthenticated_; }
+	uint64_t Unauthenticated() const { return UnauthenticatedConnections() - baselineUnauthenticated; }
 
 	static SessionInfo &AddSession(const SessionId id) { return tlsSessionManager.sessions()[id]; }
 
@@ -363,48 +363,48 @@ protected:
 	}
 
 	// 准入回调只把对端地址写进采样日志,取值与判定无关。
-	const muduo::net::InetAddress peer_{static_cast<uint16_t>(40000)};
+	const muduo::net::InetAddress peer{static_cast<uint16_t>(40000)};
 
 private:
-	uint64_t baselineUnauthenticated_{0};
+	uint64_t baselineUnauthenticated{0};
 };
 
 TEST_F(ConnectionAdmission, AdmitsBelowTheCapAndRejectsAtIt)
 {
 	Configure(2, RateLimit{1000, 1000});
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
 	AddSession(1);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
 	AddSession(2);
 
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	EXPECT_EQ(Rejected(RejectReason::kCapacity), 2u);
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 0u);
 
 	// 走掉一条连接,位置立刻腾出来。
 	tlsSessionManager.sessions().erase(1);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
 }
 
 // dev / test 把上限配成 0:准入闸按 session id 空间放行,不会把 0 当成「一条都不接」。
 TEST_F(ConnectionAdmission, ZeroConfiguredLimitStillAdmits)
 {
 	Configure(0, DefaultRateLimit(EffectiveMaxConnections(0)));
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
 	EXPECT_EQ(Rejected(RejectReason::kCapacity), 0u);
 }
 
 TEST_F(ConnectionAdmission, RejectsAboveTheAcceptRateAndRecoversWithTime)
 {
 	Configure(1000, RateLimit{1, 2});
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 1u);
 	EXPECT_EQ(Rejected(RejectReason::kCapacity), 0u);
 
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + seconds(1)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(1)));
 	EXPECT_EQ(CurrentRateLimit(), (RateLimit{1, 2}));
 }
 
@@ -415,20 +415,20 @@ TEST_F(ConnectionAdmission, CapacityRejectionsDoNotBurnRateTokens)
 	AddSession(1);
 	for (int i = 0; i < 100; ++i)
 	{
-		EXPECT_FALSE(AdmitConnection(peer_, kT0));
+		EXPECT_FALSE(AdmitConnection(peer, kT0));
 	}
 	EXPECT_EQ(Rejected(RejectReason::kCapacity), 100u);
 	tlsSessionManager.sessions().erase(1);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0)) << "唯一的名额没有被满员期间的拒绝用掉";
+	EXPECT_TRUE(AdmitConnection(peer, kT0)) << "唯一的名额没有被满员期间的拒绝用掉";
 }
 
 TEST_F(ConnectionAdmission, ClosedSourceRejectsEverything)
 {
 	Configure(1000, RateLimit{1000, 1000});
-	EXPECT_TRUE(AdmitConnection(peer_, kT0));
+	EXPECT_TRUE(AdmitConnection(peer, kT0));
 	CloseSource();
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0 + seconds(60)));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(60)));
 	EXPECT_EQ(Rejected(RejectReason::kShuttingDown), 2u);
 }
 
@@ -534,19 +534,19 @@ TEST_F(ConnectionAdmission, UnderPressureTheOldestUnverifiedConnectionMakesRoom)
 
 	// 最老的一条还差 1ms 满 3 秒:不淘汰;池恰好在起点,早拒概率 0,放行。
 	MarkLoopHealthy(kT0 + kMinEvictableAge - milliseconds(1));
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + kMinEvictableAge - milliseconds(1)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge - milliseconds(1)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 0u);
 	ASSERT_TRUE(oldest.preAuthSlot);
 
 	MarkLoopHealthy(kT0 + kMinEvictableAge);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + kMinEvictableAge));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 	EXPECT_FALSE(oldest.preAuthSlot) << "被淘汰的连接这一刻起不再占未验签池";
 	EXPECT_EQ(Unauthenticated(), budget.earlyDropStart - 1);
 	EXPECT_TRUE(tlsSessionManager.sessions().contains(1)) << "不在准入回调里删会话,留给断开回调";
 
 	// 池回到起点以下:不再淘汰,下一条最老的(晚 1 秒建连)原样留着。
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + seconds(5)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(5)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 	EXPECT_TRUE(tlsSessionManager.sessions().at(2).preAuthSlot);
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthBudget) + Rejected(RejectReason::kPreAuthEarlyDrop), 0u);
@@ -570,7 +570,7 @@ TEST_F(ConnectionAdmission, EvictionPassesOverVerifiedAndReplacedSessions)
 	ASSERT_EQ(Unauthenticated(), budget.earlyDropStart);
 
 	MarkLoopHealthy(kT0 + seconds(4));
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + seconds(4)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(4)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 	EXPECT_FALSE(oldestUnverified.preAuthSlot) << "被淘汰的是仍未验签里最老的那一条";
 	EXPECT_TRUE(verifiedLater.verified);
@@ -585,16 +585,16 @@ TEST_F(ConnectionAdmission, AFullPoolOfYoungConnectionsIsRejectedWithoutBurningR
 	OpenUnverifiedRange(1, budget.full, kT0);
 	for (int i = 0; i < 100; ++i)
 	{
-		EXPECT_FALSE(AdmitConnection(peer_, kT0 + seconds(1)));
+		EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(1)));
 	}
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthBudget), 100u);
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 0u);
 
 	MarkLoopHealthy(kT0 + kMinEvictableAge);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + kMinEvictableAge)) << "唯一的名额没有被预算拒绝用掉";
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge)) << "唯一的名额没有被预算拒绝用掉";
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 	// 名额用完:还有够老的,但速率闸不放行,也就不淘汰。
-	EXPECT_FALSE(AdmitConnection(peer_, kT0 + kMinEvictableAge));
+	EXPECT_FALSE(AdmitConnection(peer, kT0 + kMinEvictableAge));
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 1u);
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 	EXPECT_EQ(Unauthenticated(), budget.full - 1);
@@ -607,10 +607,10 @@ TEST_F(ConnectionAdmission, EarlyDropUsesTheInjectedRandomSource)
 	OpenUnverifiedRange(1, 750, kT0);
 	SetEarlyDropRandomForTesting(&FixedDraw);
 	gDraw = 249;
-	EXPECT_FALSE(AdmitConnection(peer_, kT0 + seconds(1)));
+	EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(1)));
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthEarlyDrop), 1u);
 	gDraw = 250;
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + seconds(1)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(1)));
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthEarlyDrop), 1u);
 	EXPECT_EQ(GetCounters().preAuthEvicted, 0u) << "早拒带里没有够老的,不淘汰";
 
@@ -618,7 +618,7 @@ TEST_F(ConnectionAdmission, EarlyDropUsesTheInjectedRandomSource)
 	ResetForTesting();
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
 	gDrawCalls = 0;
-	(void)AdmitConnection(peer_, kT0 + seconds(1));
+	(void)AdmitConnection(peer, kT0 + seconds(1));
 	EXPECT_EQ(gDrawCalls, 0u);
 }
 
@@ -631,18 +631,18 @@ TEST_F(ConnectionAdmission, NoEvictionRightAfterTheLoopStalled)
 
 	// 上一拍在 kT0 + 1s,之后 loop 卡了 4 秒:存活扫描的节拍还没轮到,准入回调先跑。
 	MarkLoopHealthy(kT0 + seconds(1));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0 + seconds(5)));
+	EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(5)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 0u);
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthBudget), 1u);
 
 	// 卡顿之后的第一拍本身迟到:这一拍之后仍不淘汰,积压的验签请求可能还没读完。
 	gate_client_heartbeat::SweepLiveness(kT0 + seconds(5));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0 + seconds(5)));
+	EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(5)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 0u);
 
 	// 再过一拍、准时:恢复淘汰。
 	gate_client_heartbeat::SweepLiveness(kT0 + seconds(6));
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + seconds(6)));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(6)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
 }
 
@@ -716,21 +716,21 @@ TEST_F(ConnectionAdmission, CountersAreExportedAsPrometheusMetrics)
 	Configure(3, RateLimit{50, 60});
 
 	// 三条接纳:一条 40ms 验签,一条 2.5s 验签,一条还没验签。
-	ASSERT_TRUE(AdmitConnection(peer_, kT0));
+	ASSERT_TRUE(AdmitConnection(peer, kT0));
 	SessionInfo &fast = AddSession(1);
 	OnSessionOpened(1, fast, kT0);
-	ASSERT_TRUE(AdmitConnection(peer_, kT0));
+	ASSERT_TRUE(AdmitConnection(peer, kT0));
 	SessionInfo &slow = AddSession(2);
 	OnSessionOpened(2, slow, kT0);
-	ASSERT_TRUE(AdmitConnection(peer_, kT0));
+	ASSERT_TRUE(AdmitConnection(peer, kT0));
 	OnSessionOpened(3, AddSession(3), kT0);
 	OnSessionVerified(fast, kT0 + milliseconds(40));
 	OnSessionVerified(slow, kT0 + milliseconds(2500));
 	// 满员之后两条被拒;关源之后再一条。
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	CloseSource();
-	EXPECT_FALSE(AdmitConnection(peer_, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0));
 
 	prometheus_text::Writer writer;
 	CollectMetrics(writer);
@@ -790,44 +790,44 @@ protected:
 	void SetUp() override
 	{
 		ConnectionAdmission::SetUp();
-		loop_ = std::make_unique<muduo::net::EventLoop>();
+		loop = std::make_unique<muduo::net::EventLoop>();
 	}
 	void TearDown() override
 	{
 		tlsSessionManager.sessions().clear();
-		victim_.reset(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-		bystander_.reset();
-		loop_.reset();
+		victim.reset(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+		bystander.reset();
+		loop.reset();
 		ConnectionAdmission::TearDown();
 	}
 
-	std::unique_ptr<muduo::net::EventLoop> loop_;
-	std::unique_ptr<gate_test::LoopbackConnection> victim_;
-	std::unique_ptr<gate_test::LoopbackConnection> bystander_;
+	std::unique_ptr<muduo::net::EventLoop> loop;
+	std::unique_ptr<gate_test::LoopbackConnection> victim;
+	std::unique_ptr<gate_test::LoopbackConnection> bystander;
 };
 
 TEST_F(ConnectionAdmissionEviction, EvictionClosesTheVictimsConnectionAndLeavesItsSessionToTheDisconnectCallback)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
-	victim_ = std::make_unique<gate_test::LoopbackConnection>(*loop_);
-	ASSERT_TRUE(victim_->Open("preauth_victim"));
-	bystander_ = std::make_unique<gate_test::LoopbackConnection>(*loop_);
-	ASSERT_TRUE(bystander_->Open("preauth_bystander"));
+	victim = std::make_unique<gate_test::LoopbackConnection>(*loop);
+	ASSERT_TRUE(victim->Open("preauth_victim"));
+	bystander = std::make_unique<gate_test::LoopbackConnection>(*loop);
+	ASSERT_TRUE(bystander->Open("preauth_bystander"));
 
 	// 最老的未验签连接是 victim;bystander 晚 1 秒建连、同样未验签;其余凑到起点的会话不带连接。
-	OpenUnverified(1, kT0, victim_->ServerSide());
-	OpenUnverified(2, kT0 + seconds(1), bystander_->ServerSide());
+	OpenUnverified(1, kT0, victim->ServerSide());
+	OpenUnverified(2, kT0 + seconds(1), bystander->ServerSide());
 	OpenUnverifiedRange(3, CurrentPreAuthBudget().earlyDropStart, kT0 + seconds(1));
 
 	MarkLoopHealthy(kT0 + kMinEvictableAge);
-	EXPECT_TRUE(AdmitConnection(peer_, kT0 + kMinEvictableAge));
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
-	EXPECT_FALSE(victim_->ServerSideConnected()) << "forceClose 已把连接置成关闭中";
+	EXPECT_FALSE(victim->ServerSideConnected()) << "forceClose 已把连接置成关闭中";
 	EXPECT_TRUE(tlsSessionManager.sessions().contains(1)) << "准入回调里不删会话";
-	EXPECT_TRUE(bystander_->ServerSideConnected());
+	EXPECT_TRUE(bystander->ServerSideConnected());
 
-	ASSERT_TRUE(gate_test::DriveLoopUntil(*loop_, [this] { return victim_->BothSidesDown(); }));
-	EXPECT_TRUE(bystander_->ServerSideConnected()) << "只关最老的那一条";
+	ASSERT_TRUE(gate_test::DriveLoopUntil(*loop, [this] { return victim->BothSidesDown(); }));
+	EXPECT_TRUE(bystander->ServerSideConnected()) << "只关最老的那一条";
 }
 
 } // namespace

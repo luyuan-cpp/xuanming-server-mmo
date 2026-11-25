@@ -139,11 +139,11 @@ public:
     // 若交给上层,业务可能已经执行而应答随流被丢弃,重试就会执行两次。
     void SubmitFinalGoaway();
 
-    bool receivedAnyBytes() const { return receivedAnyBytes_; }
-    bool handshakeComplete() const { return handshakeComplete_; }
-    bool finalGoawaySubmitted() const { return finalGoawaySubmitted_; }
+    bool ReceivedAnyBytes() const { return receivedAnyBytes; }
+    bool HandshakeComplete() const { return handshakeComplete; }
+    bool FinalGoawaySubmitted() const { return finalGoawaySubmitted; }
     // nghttp2 还没关闭的流(含请求没收完的、已派发等应答的)。
-    size_t OpenStreamCount() const { return streams_.size(); }
+    size_t OpenStreamCount() const { return streams.size(); }
     // 头部已被接受(OnRequestHeaders 返回 kAccept)、请求还没收完因而未派发(OnRequestComplete 没返回 kAccept)、
     // 本端也还没应答的流,即请求体还在上传的流;按 id 升序。业务必然没开始:上层排空到期时据此立即 RefuseStream(§15.10),
     // 不依赖自己的旁路记录(那份记录有上限、会被修剪)。头部还没收完的流不在其中,收完头部时由 Observer 判定。
@@ -209,24 +209,24 @@ private:
         void operator()(nghttp2_session *session) const;
     };
 
-    ServerSessionOptions options_;
-    Observer &observer_;
-    std::unique_ptr<nghttp2_session, SessionDeleter> session_;
-    std::unordered_map<int32_t, std::unique_ptr<StreamState>> streams_;
-    std::vector<int32_t> pendingNoErrorResets_;
-    size_t bufferedRequestBytes_{0};
-    bool receivedAnyBytes_{false};
-    bool handshakeComplete_{false};
-    bool shutdownNoticeSubmitted_{false};
-    bool shutdownPingPending_{false};     // notice 已写出、PING 待提交
-    bool shutdownPingSubmitted_{false};
-    bool shutdownPingAcked_{false};
-    bool finalGoawaySubmitted_{false};
+    ServerSessionOptions options;
+    Observer &observer;
+    std::unique_ptr<nghttp2_session, SessionDeleter> session;
+    std::unordered_map<int32_t, std::unique_ptr<StreamState>> streams;
+    std::vector<int32_t> pendingNoErrorResets;
+    size_t bufferedRequestBytes{0};
+    bool receivedAnyBytes{false};
+    bool handshakeComplete{false};
+    bool shutdownNoticeSubmitted{false};
+    bool shutdownPingPending{false};     // notice 已写出、PING 待提交
+    bool shutdownPingSubmitted{false};
+    bool shutdownPingAcked{false};
+    bool finalGoawaySubmitted{false};
     // 最终 GOAWAY 成功提交时的 last_stream_id;id 大于它的新流不交给 Observer(见 SubmitFinalGoaway)。
     // 默认 2^31-1 = 不限制(流 id 不会超过它)。
-    int32_t finalGoawayLastStreamId_{0x7fffffff};
-    std::optional<Status> fatalError_;         // Receive / mem_send 的致命错误(粘滞):之后不再调 nghttp2 读写
-    std::optional<Status> connectionError_;     // nghttp2 发出了带错误码的 GOAWAY(由写出它的那次 DrainOutput 报告)
+    int32_t finalGoawayLastStreamId{0x7fffffff};
+    std::optional<Status> fatalError;         // Receive / mem_send 的致命错误(粘滞):之后不再调 nghttp2 读写
+    std::optional<Status> connectionError;     // nghttp2 发出了带错误码的 GOAWAY(由写出它的那次 DrainOutput 报告)
 };
 
 } // namespace muduo_grpc

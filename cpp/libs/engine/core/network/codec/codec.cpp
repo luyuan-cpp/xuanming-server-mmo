@@ -165,14 +165,14 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
 
   // WebSocket 连接(小游戏):先去掉帧头,剩下的仍是同一套客户端帧;原始 TCP 原样返回 buf。
   // 单个 WebSocket 帧的载荷上限 = 一个最大的客户端帧(长度前缀 + maxMessageLen_)。
-  buf = websocket::Unwrap(conn, buf, static_cast<size_t>(maxMessageLen_) + kHeaderLen);
+  buf = websocket::Unwrap(conn, buf, static_cast<size_t>(maxMessageLen) + kHeaderLen);
 
   while (buf != nullptr && buf->readableBytes() >= kMinMessageLen + kHeaderLen)
   {
     const int32_t len = buf->peekInt32();
-    if (len > maxMessageLen_ || len < kMinMessageLen)
+    if (len > maxMessageLen || len < kMinMessageLen)
     {
-      errorCallback_(conn, buf, receiveTime, kInvalidLength);
+      errorCallback(conn, buf, receiveTime, kInvalidLength);
       break;
     }
     else if (buf->readableBytes() >= implicit_cast<size_t>(len + kHeaderLen))
@@ -181,7 +181,7 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
       MessagePtr message = parse(buf->peek()+kHeaderLen, len, &errorCode);
       if (errorCode == kNoError && message)
       {
-        messageCallback_(conn, message, receiveTime);
+        messageCallback(conn, message, receiveTime);
         buf->retrieve(kHeaderLen+len);
         if (!conn->connected())
         {
@@ -192,7 +192,7 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
       }
       else
       {
-        errorCallback_(conn, buf, receiveTime, errorCode);
+        errorCallback(conn, buf, receiveTime, errorCode);
         break;
       }
     }

@@ -40,7 +40,7 @@ public:
 	// Agones 形态:每秒看一眼 lifecycle 是否读到了排空标签,读到就进计划排空。SetAfterStart 里 lifecycle 启动之后调用。
 	void WatchAgonesDrainLabel(Node &node);
 	// 本次计划排空是否由 Agones 排空标签触发(停机时据此请 Agones 删掉本 GameServer)。
-	bool TriggeredByAgonesLabel() const { return triggeredByAgonesLabel_; }
+	bool TriggeredByAgonesLabel() const { return triggeredByAgonesLabel; }
 
 private:
 	void Tick(Node &node);
@@ -48,16 +48,16 @@ private:
 	void LogProgress(Node &node);
 	bool HasOpenEvacuationTarget(Node &node) const;
 
-	TimerTaskComp tickTimer_;
-	TimerTaskComp agonesLabelTimer_;
-	node_admission::AdvertisePolicy advertisePolicy_;
-	bool started_{false};
-	bool triggeredByAgonesLabel_{false};
-	bool selfEvacuationStarted_{false};
-	bool noTargetLogged_{false};
-	std::chrono::steady_clock::time_point selfEvacuateAt_{};
-	std::chrono::steady_clock::time_point lastSecondTick_{};
-	std::optional<std::chrono::steady_clock::time_point> noTargetSince_;
-	std::size_t lastLoggedPlayers_{static_cast<std::size_t>(-1)};
-	std::size_t lastLoggedQueued_{static_cast<std::size_t>(-1)};
+	TimerTaskComp tickTimer;
+	TimerTaskComp agonesLabelTimer;
+	node_admission::AdvertisePolicy advertisePolicy;
+	bool started{false};
+	bool triggeredByAgonesLabel{false};
+	bool selfEvacuationStarted{false};
+	bool noTargetLogged{false};
+	std::chrono::steady_clock::time_point selfEvacuateAt{};
+	std::chrono::steady_clock::time_point lastSecondTick{};
+	std::optional<std::chrono::steady_clock::time_point> noTargetSince;
+	std::size_t lastLoggedPlayers{static_cast<std::size_t>(-1)};
+	std::size_t lastLoggedQueued{static_cast<std::size_t>(-1)};
 };

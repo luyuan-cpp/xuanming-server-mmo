@@ -195,13 +195,13 @@ protected:
         tlsEcs.Clear();
         TestLocalNodeInfo().set_zone_id(kZoneId);
         TestLocalNodeInfo().set_node_id(kSceneNodeId);
-        scene_ = tlsEcs.sceneRegistry.create();
-        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene_).set_scene_id(kCurrentSceneId);
-        player_ = MakePlayer(kPlayerId, 0.0);
+        scene = tlsEcs.sceneRegistry.create();
+        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene).set_scene_id(kCurrentSceneId);
+        player = MakePlayer(kPlayerId, 0.0);
         MakePlayer(kLeaderId, kLeaderX);
-        BindSession(player_, kPlayerId, SessionOnGate(kOriginalGateId));
-        scope_.emplace(loop_, [&redis = redis_] { return redis.ready; },
-            [&redis = redis_](std::string_view key, RedisReplyHandler callback)
+        BindSession(player, kPlayerId, SessionOnGate(kOriginalGateId));
+        scope.emplace(loop, [&redis = this->redis] { return redis.ready; },
+            [&redis = this->redis](std::string_view key, RedisReplyHandler callback)
             {
                 return redis.Get(key, std::move(callback));
             });
@@ -209,15 +209,15 @@ protected:
 
     void TearDown() override
     {
-        tasks_.reset();
-        scope_.reset();
+        tasks.reset();
+        scope.reset();
         tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService).clear();
         tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).clear();
-        server_.reset();
+        server.reset();
         // 通道与服务端已在 I/O 派发栈外释放。处理它们排队的连接拆除以及任务完成通知。
-        loop_.queueInLoop([&loop = loop_] { loop.queueInLoop([&loop] { loop.quit(); }); });
-        loop_.wakeup();
-        loop_.loop();
+        this->loop.queueInLoop([&loop = this->loop] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        this->loop.wakeup();
+        this->loop.loop();
         tlsEcs.Clear();
     }
 
@@ -226,7 +226,7 @@ protected:
         auto& registry = tlsEcs.actorRegistry;
         const auto player = registry.create();
         registry.emplace<PlayerGuidComp>(player, id);
-        registry.emplace<SceneEntityComp>(player, scene_);
+        registry.emplace<SceneEntityComp>(player, scene);
         auto& transform = registry.emplace<Transform>(player);
         transform.mutable_location()->set_x(x);
         transform.mutable_rotation()->set_y(x);
@@ -244,16 +244,16 @@ protected:
 
     void Check()
     {
-        PlayerTeamFollowTestAccess::Check(player_, kLeaderId);
+        PlayerTeamFollowTestAccess::Check(player, kLeaderId);
     }
 
     void OpenLocationRead()
     {
         Check();
-        ASSERT_EQ(redis_.pending.size(), 1u);
-        redis_.Reply(REDIS_REPLY_NIL);
-        ASSERT_EQ(redis_.pending.size(), 1u);
-        ASSERT_EQ(redis_.keys.size(), 2u);
+        ASSERT_EQ(redis.pending.size(), 1u);
+        redis.Reply(REDIS_REPLY_NIL);
+        ASSERT_EQ(redis.pending.size(), 1u);
+        ASSERT_EQ(redis.keys.size(), 2u);
     }
 
     static void ExpectNoRegroup(entt::entity player)
@@ -271,14 +271,14 @@ protected:
         ASSERT_NE(port, 0);
         muduo_grpc::ServerOptions serverOptions;
         serverOptions.statsLogInterval = 0s;
-        server_ = muduo_grpc::Server::Create(loop_, "127.0.0.1", port, std::move(serverOptions));
-        ASSERT_NE(server_, nullptr);
-        ASSERT_TRUE(server_->RegisterService(sceneManager_));
-        server_->Start();
+        server = muduo_grpc::Server::Create(loop, "127.0.0.1", port, std::move(serverOptions));
+        ASSERT_NE(server, nullptr);
+        ASSERT_TRUE(server->RegisterService(sceneManager));
+        server->Start();
 
         muduo_grpc::ChannelOptions channelOptions;
         channelOptions.maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
-        auto channel = muduo_grpc::Channel::Create(loop_, "127.0.0.1", port, std::move(channelOptions));
+        auto channel = muduo_grpc::Channel::Create(loop, "127.0.0.1", port, std::move(channelOptions));
         ASSERT_NE(channel, nullptr);
         auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
         const auto entity = registry.create();
@@ -286,14 +286,14 @@ protected:
         registry.emplace<MuduoGrpcChannelPtr>(entity, std::move(channel));
     }
 
-    muduo::net::EventLoop loop_;
-    FakeRedis redis_;
-    std::optional<PlayerTeamFollowScope> scope_;
-    std::optional<SceneTaskScope> tasks_{std::in_place, loop_};
-    RecordingSceneManager sceneManager_;
-    std::shared_ptr<muduo_grpc::Server> server_;
-    SceneEntity scene_{entt::null};
-    entt::entity player_{entt::null};
+    muduo::net::EventLoop loop;
+    FakeRedis redis;
+    std::optional<PlayerTeamFollowScope> scope;
+    std::optional<SceneTaskScope> tasks{std::in_place, loop};
+    RecordingSceneManager sceneManager;
+    std::shared_ptr<muduo_grpc::Server> server;
+    SceneEntity scene{entt::null};
+    entt::entity player{entt::null};
 };
 
 TEST_F(PlayerTeamFollowTest, FirstGetRequiresExplicitNil)
@@ -301,23 +301,23 @@ TEST_F(PlayerTeamFollowTest, FirstGetRequiresExplicitNil)
     for (const auto type : {REDIS_REPLY_STRING, REDIS_REPLY_ERROR, REDIS_REPLY_INTEGER})
     {
         SCOPED_TRACE(type);
-        const auto count = redis_.keys.size();
+        const auto count = redis.keys.size();
         Check();
-        redis_.Reply(type); // STRING 的长度为零，依然是已有键。
-        EXPECT_EQ(redis_.keys.size(), count + 1);
-        EXPECT_TRUE(redis_.pending.empty());
-        ExpectNoRegroup(player_);
+        redis.Reply(type); // STRING 的长度为零，依然是已有键。
+        EXPECT_EQ(redis.keys.size(), count + 1);
+        EXPECT_TRUE(redis.pending.empty());
+        ExpectNoRegroup(player);
     }
 
-    const auto count = redis_.keys.size();
+    const auto count = redis.keys.size();
     Check();
-    redis_.Disconnect();
-    EXPECT_EQ(redis_.keys.size(), count + 1);
-    redis_.rejectNext = true;
+    redis.Disconnect();
+    EXPECT_EQ(redis.keys.size(), count + 1);
+    redis.rejectNext = true;
     Check();
-    EXPECT_EQ(redis_.keys.size(), count + 2);
-    EXPECT_TRUE(redis_.pending.empty());
-    ExpectNoRegroup(player_);
+    EXPECT_EQ(redis.keys.size(), count + 2);
+    EXPECT_TRUE(redis.pending.empty());
+    ExpectNoRegroup(player);
 }
 
 TEST(PlayerTeamFollowDiscoveryTest, TeamAuthorityUsesTheGlobalServiceRegistry)
@@ -330,17 +330,17 @@ TEST(PlayerTeamFollowDiscoveryTest, TeamAuthorityUsesTheGlobalServiceRegistry)
 TEST_F(PlayerTeamFollowTest, RedisNotReadyBeforeSecondGetDoesNotSubmitIt)
 {
     Check();
-    redis_.ready = false;
-    redis_.Reply(REDIS_REPLY_NIL);
-    EXPECT_EQ(redis_.keys.size(), 1u);
-    ExpectNoRegroup(player_);
+    redis.ready = false;
+    redis.Reply(REDIS_REPLY_NIL);
+    EXPECT_EQ(redis.keys.size(), 1u);
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, HeldRepliesLeaveLoopFreeAndRegroupOnOwningThread)
 {
     const auto owner = std::this_thread::get_id();
     const auto finished = std::make_shared<bool>(false);
-    loop_.queueInLoop([&loop = loop_, &redis = redis_, player = player_, owner, finished]
+    this->loop.queueInLoop([&loop = this->loop, &redis = this->redis, player = this->player, owner, finished]
     {
         PlayerTeamFollowTestAccess::Check(player, kLeaderId);
         ASSERT_EQ(redis.keys, (std::vector<std::string>{"battle:lock:{950200001}"}));
@@ -370,8 +370,8 @@ TEST_F(PlayerTeamFollowTest, HeldRepliesLeaveLoopFreeAndRegroupOnOwningThread)
             });
         });
     });
-    loop_.wakeup();
-    EXPECT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [finished] { return *finished; }, 5s));
+    this->loop.wakeup();
+    EXPECT_TRUE(muduo_grpc_test::RunLoopUntil(this->loop, [finished] { return *finished; }, 5s));
 }
 
 TEST_F(PlayerTeamFollowTest, MissingMalformedOrRemoteLeaderLocationDoesNotMovePlayer)
@@ -387,34 +387,34 @@ TEST_F(PlayerTeamFollowTest, MissingMalformedOrRemoteLeaderLocationDoesNotMovePl
     for (const auto& [type, bytes] : replies)
     {
         Check();
-        redis_.Reply(REDIS_REPLY_NIL);
-        redis_.Reply(type, bytes);
-        ExpectNoRegroup(player_);
+        redis.Reply(REDIS_REPLY_NIL);
+        redis.Reply(type, bytes);
+        ExpectNoRegroup(player);
     }
     Check();
-    redis_.Reply(REDIS_REPLY_NIL);
-    redis_.Disconnect();
-    ExpectNoRegroup(player_);
+    redis.Reply(REDIS_REPLY_NIL);
+    redis.Disconnect();
+    ExpectNoRegroup(player);
 
     Check();
-    redis_.rejectNext = true;
-    redis_.Reply(REDIS_REPLY_NIL);
-    EXPECT_TRUE(redis_.pending.empty());
-    ExpectNoRegroup(player_);
+    redis.rejectNext = true;
+    redis.Reply(REDIS_REPLY_NIL);
+    EXPECT_TRUE(redis.pending.empty());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, ReusedEntitySlotDoesNotContinueAfterFirstGet)
 {
     Check();
-    const auto original = player_;
+    const auto original = player;
     tlsEcs.actorRegistry.destroy(original);
     tlsEcs.playerList.erase(kPlayerId);
     const auto replacement = MakePlayer(kPlayerId + 10, 0.0);
     BindSession(replacement, kPlayerId + 10, SessionOnGate(kOriginalGateId));
     ASSERT_EQ(entt::to_entity(original), entt::to_entity(replacement));
     ASSERT_NE(original, replacement);
-    redis_.Reply(REDIS_REPLY_NIL);
-    EXPECT_EQ(redis_.keys.size(), 1u);
+    redis.Reply(REDIS_REPLY_NIL);
+    EXPECT_EQ(redis.keys.size(), 1u);
     ExpectNoRegroup(replacement);
 }
 
@@ -422,45 +422,45 @@ TEST_F(PlayerTeamFollowTest, ChangedPlayerIdDoesNotContinueAfterSecondGet)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     // 保留原会话索引，确保本例由第二跳的实体身份复核挡住。
-    tlsEcs.actorRegistry.get<PlayerGuidComp>(player_).value = kPlayerId + 10;
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    ExpectNoRegroup(player_);
+    tlsEcs.actorRegistry.get<PlayerGuidComp>(player).value = kPlayerId + 10;
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, BattleStartedWhileLocationPendingPreventsFollow)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
-    tlsEcs.actorRegistry.emplace<InBattleComp>(player_);
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    ExpectNoRegroup(player_);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, DisconnectedWhileLocationPendingPreventsFollow)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     SessionMap().erase(SessionOnGate(kOriginalGateId));
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    ExpectNoRegroup(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, OwnershipHandoffWhileLocationPendingPreventsFollow)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
-    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
-    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player_);
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    ExpectNoRegroup(player_);
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, SceneChangeWhileLocationPendingPreventsFollow)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
-    auto& pending = tlsEcs.actorRegistry.emplace<PlayerSceneChangeInFlightComp>(player_);
+    auto& pending = tlsEcs.actorRegistry.emplace<PlayerSceneChangeInFlightComp>(player);
     pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
     pending.correlationId = 33;
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeleportSettleComp>(player_));
-    const auto* unchanged = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeleportSettleComp>(player));
+    const auto* unchanged = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
     ASSERT_NE(unchanged, nullptr);
     EXPECT_EQ(unchanged->correlationId, 33u);
 }
@@ -471,9 +471,9 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneSendsCorrelatedRequestForCurrentGateS
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
 
     const auto session = SessionOnGate(kCurrentGateId);
-    BindSession(player_, kPlayerId, session);
-    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player_, session, 29u);
-    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+    BindSession(this->player, kPlayerId, session);
+    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(this->player, session, 29u);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(this->player, 29u, 7u);
     auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
     auto& gate = gateRegistry.emplace<NodeInfo>(gateRegistry.create());
     gate.set_zone_id(kZoneId);
@@ -481,21 +481,21 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneSendsCorrelatedRequestForCurrentGateS
     gate.set_node_uuid("gate-after-rebind");
 
     constexpr uint64_t kDestination = kCurrentSceneId + 1;
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination));
-    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(this->player);
     ASSERT_NE(pending, nullptr);
     EXPECT_FALSE(pending->playerRequested);
     EXPECT_EQ(pending->sceneId, kDestination);
     const auto correlationId = pending->correlationId;
     EXPECT_NE(correlationId, 0u);
 
-    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [requests = sceneManager.requests, player = this->player]
     {
         return !requests->empty() &&
                !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
     }, 5s));
-    ASSERT_EQ(sceneManager_.requests->size(), 1u);
-    const auto& request = sceneManager_.requests->front();
+    ASSERT_EQ(sceneManager.requests->size(), 1u);
+    const auto& request = sceneManager.requests->front();
     EXPECT_EQ(request.player_id(), kPlayerId);
     EXPECT_EQ(request.scene_id(), kDestination);
     EXPECT_EQ(request.session_id(), session);
@@ -507,7 +507,7 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneSendsCorrelatedRequestForCurrentGateS
     EXPECT_EQ(request.owner_revision(), 7u);
     EXPECT_EQ(request.correlation_id(), correlationId);
     EXPECT_TRUE(request.request_id().empty());
-    ExpectNoRegroup(player_);
+    ExpectNoRegroup(this->player);
 }
 
 TEST_F(PlayerTeamFollowTest, DifferentSceneRequestNamesTheGateProcessThatHoldsTheSession)
@@ -518,7 +518,7 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneRequestNamesTheGateProcessThatHoldsTh
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
 
     const auto session = SessionOnGate(kCurrentGateId);
-    BindSession(player_, kPlayerId, session);
+    BindSession(this->player, kPlayerId, session);
     auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
     for (const char* instance : {"gate-old-process", "gate-new-process"})
     {
@@ -532,17 +532,17 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneRequestNamesTheGateProcessThatHoldsTh
     ASSERT_TRUE(byNodeId.has_value());
     const std::string boundInstance =
         gateRegistry.get<NodeInfo>(*byNodeId).node_uuid() == "gate-old-process" ? "gate-new-process" : "gate-old-process";
-    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player_, session, 29u, boundInstance);
-    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(this->player, session, 29u, boundInstance);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(this->player, 29u, 7u);
 
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
-    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [requests = sceneManager.requests, player = this->player]
     {
         return !requests->empty() &&
                !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
     }, 5s));
-    ASSERT_EQ(sceneManager_.requests->size(), 1u);
-    const auto& request = sceneManager_.requests->front();
+    ASSERT_EQ(sceneManager.requests->size(), 1u);
+    const auto& request = sceneManager.requests->front();
     EXPECT_EQ(request.session_id(), session);
     EXPECT_EQ(request.gate_id(), std::to_string(kCurrentGateId));
     EXPECT_EQ(request.gate_instance_id(), boundInstance) << "变异红:带的是会话所在的进程,不是按 node_id 先找到的那个";
@@ -551,27 +551,27 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneRequestNamesTheGateProcessThatHoldsTh
 TEST_F(PlayerTeamFollowTest, StoppingRejectsNewChecksAndLateReplyAfterScopeDestruction)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
-    auto late = redis_.TakeReply();
-    tasks_->Stop();
+    auto late = redis.TakeReply();
+    tasks->Stop();
     Check();
-    ASSERT_EQ(redis_.keys.size(), 2u);
-    tasks_.reset();
+    ASSERT_EQ(redis.keys.size(), 2u);
+    tasks.reset();
     Deliver(std::move(late), REDIS_REPLY_STRING, LeaderLocation());
-    ExpectNoRegroup(player_);
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, CompletedRegroupSurvivesLaterStop)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    tasks_->Stop();
-    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
-    EXPECT_EQ(redis_.keys.size(), 2u);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    tasks->Stop();
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player).location().x(), kLeaderX);
+    EXPECT_EQ(redis.keys.size(), 2u);
 }
 
 TEST_F(PlayerTeamFollowTest, InlineRepliesCompleteBothGetsOnce)
 {
-    redis_.onSubmit = [&redis = redis_](RedisReplyHandler callback)
+    this->redis.onSubmit = [&redis = this->redis](RedisReplyHandler callback)
     {
         redis.onSubmit = [](RedisReplyHandler location)
         {
@@ -580,35 +580,35 @@ TEST_F(PlayerTeamFollowTest, InlineRepliesCompleteBothGetsOnce)
         Deliver(std::move(callback), REDIS_REPLY_NIL);
     };
     Check();
-    EXPECT_EQ(redis_.keys.size(), 2u);
-    EXPECT_TRUE(redis_.pending.empty());
-    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
+    EXPECT_EQ(this->redis.keys.size(), 2u);
+    EXPECT_TRUE(this->redis.pending.empty());
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player).location().x(), kLeaderX);
 }
 
 TEST_F(PlayerTeamFollowTest, StopReenteredAfterInlineReplyPreventsSecondGet)
 {
-    redis_.onSubmit = [&scope = *tasks_](RedisReplyHandler callback)
+    redis.onSubmit = [&scope = *tasks](RedisReplyHandler callback)
     {
         Deliver(std::move(callback), REDIS_REPLY_NIL);
         scope.Stop();
     };
     Check();
-    EXPECT_EQ(redis_.keys.size(), 1u);
-    EXPECT_TRUE(redis_.pending.empty());
-    ExpectNoRegroup(player_);
+    EXPECT_EQ(redis.keys.size(), 1u);
+    EXPECT_TRUE(redis.pending.empty());
+    ExpectNoRegroup(player);
 }
 
 TEST_F(PlayerTeamFollowTest, StopReenteredBeforeInlineReplyPreventsSecondGet)
 {
-    redis_.onSubmit = [&scope = *tasks_](RedisReplyHandler callback)
+    redis.onSubmit = [&scope = *tasks](RedisReplyHandler callback)
     {
         scope.Stop();
         Deliver(std::move(callback), REDIS_REPLY_NIL);
     };
     Check();
-    EXPECT_EQ(redis_.keys.size(), 1u);
-    EXPECT_TRUE(redis_.pending.empty());
-    ExpectNoRegroup(player_);
+    EXPECT_EQ(redis.keys.size(), 1u);
+    EXPECT_TRUE(redis.pending.empty());
+    ExpectNoRegroup(player);
 }
 
 // ---- 服务器驱动跟随:离线的队员也跟(docs/design/team-follow-server-trail.md §3.6) ----
@@ -622,29 +622,29 @@ void JoinTeam(entt::entity player)
 
 TEST_F(PlayerTeamFollowTest, OfflineMemberWhoDeclaredFollowIsAttachedInTheSameScene)
 {
-    JoinTeam(player_);
+    JoinTeam(player);
     JoinTeam(tlsEcs.GetPlayer(kLeaderId));
-    TeamFollowSystem::SetFollowIntent(player_, true);
+    TeamFollowSystem::SetFollowIntent(player, true);
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     SessionMap().erase(SessionOnGate(kOriginalGateId)); // 断线:同场景里的服务器驱动跟随不看会话
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(player_)) << "离线也要接到队长身后";
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation());
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(player)) << "离线也要接到队长身后";
     // 离队长 30,超过归队阈值,直接放进槽位;轨迹刚建、只有队长一个点,槽位就在队长脚下。
-    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
+    EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player).location().x(), kLeaderX);
 }
 
 TEST_F(PlayerTeamFollowTest, OfflineMemberDoesNotAskSceneManagerToChangeScene)
 {
     ASSERT_NO_FATAL_FAILURE(StartSceneManager());
-    JoinTeam(player_);
-    TeamFollowSystem::SetFollowIntent(player_, true);
+    JoinTeam(player);
+    TeamFollowSystem::SetFollowIntent(player, true);
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     SessionMap().erase(SessionOnGate(kOriginalGateId));
     // 队长在别的场景:换场景要经 SceneManager 改 gate 路由,离线的人没有活会话,不发。
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player_));
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(player_));
-    ExpectNoRegroup(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(player));
+    ExpectNoRegroup(player);
 }
 
 // ---- 跨节点跟随与离线托管的托管落点(docs/design/team-follow-server-trail.md §3.7) ----
@@ -670,47 +670,47 @@ TEST_F(PlayerTeamFollowTest, LeaderOnAnotherNodeOfTheZoneIsFollowedBySceneChange
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     constexpr uint64_t kDestination = kCurrentSceneId + 1;
     // 队长在本 zone 的另一个节点:照样发换场景(在线,带 gate);scene_manager 回 18 之后起服务器发起的交接。
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
-    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(this->player);
     ASSERT_NE(pending, nullptr) << "不再因为队长在别的节点就跳过";
     EXPECT_FALSE(pending->playerRequested);
     EXPECT_EQ(pending->sceneId, kDestination);
 
     // 夹具的 scene_manager 回普通拒绝(5):跟随的应答只记日志、摘掉在途记录。
-    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [requests = sceneManager.requests, player = this->player]
     {
         return !requests->empty() && !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
     }, 5s));
-    const auto& request = sceneManager_.requests->front();
+    const auto& request = sceneManager.requests->front();
     EXPECT_EQ(request.scene_id(), kDestination);
     EXPECT_EQ(request.session_id(), SessionOnGate(kOriginalGateId));
     EXPECT_EQ(request.gate_id(), std::to_string(kOriginalGateId));
     EXPECT_FALSE(request.hosted_placement()) << "在线的队员走 gate 路由";
     EXPECT_EQ(request.zone_id(), kZoneId);
-    ExpectNoRegroup(player_);
+    ExpectNoRegroup(this->player);
 }
 
 TEST_F(PlayerTeamFollowTest, HostedOfflineMemberFollowsWithAHostedPlacement)
 {
     ASSERT_NO_FATAL_FAILURE(StartSceneManager());
-    JoinTeam(player_);
-    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+    JoinTeam(this->player);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(this->player, 29u, 7u);
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     constexpr uint64_t kLostGeneration = 41;
     const auto lostSession = SessionOnGate(kOriginalGateId);
     // 位置读在途时玩家掉线、确认开通了挂机(客户端已关):队长在另一个节点的场景,照样跟过去。
-    HoldAsHostedOffline(player_, lostSession, kLostGeneration);
+    HoldAsHostedOffline(this->player, lostSession, kLostGeneration);
     constexpr uint64_t kDestination = kCurrentSceneId + 1;
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
-    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kDestination, kZoneId, kSceneNodeId + 1));
+    const auto* pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(this->player);
     ASSERT_NE(pending, nullptr);
     EXPECT_FALSE(pending->playerRequested);
 
-    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [requests = sceneManager.requests, player = this->player]
     {
         return !requests->empty() && !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
     }, 5s));
-    const auto& request = sceneManager_.requests->front();
+    const auto& request = sceneManager.requests->front();
     EXPECT_TRUE(request.hosted_placement()) << "没有客户端:托管落点";
     EXPECT_TRUE(request.gate_id().empty()) << "不带 gate:没有可推路由的会话";
     EXPECT_TRUE(request.gate_instance_id().empty());
@@ -721,7 +721,7 @@ TEST_F(PlayerTeamFollowTest, HostedOfflineMemberFollowsWithAHostedPlacement)
     EXPECT_EQ(request.gate_zone_id(), kZoneId);
     EXPECT_EQ(request.owner_revision(), 7u);
     EXPECT_NE(request.correlation_id(), 0u);
-    ExpectNoRegroup(player_);
+    ExpectNoRegroup(this->player);
 }
 
 TEST_F(PlayerTeamFollowTest, OfflineMemberWithoutConfirmedHostingDoesNotChangeScene)
@@ -729,13 +729,13 @@ TEST_F(PlayerTeamFollowTest, OfflineMemberWithoutConfirmedHostingDoesNotChangeSc
     ASSERT_NO_FATAL_FAILURE(StartSceneManager());
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
     // 普通断线保留(还不知道有没有月卡):25 秒窗口建立在 login 断线租约之上,不搬到别处去。
-    HoldAsHostedOffline(player_, SessionOnGate(kOriginalGateId), 41);
-    auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player_);
+    HoldAsHostedOffline(player, SessionOnGate(kOriginalGateId), 41);
+    auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player);
     held.hostingStarted = false;
     held.afkPass = connection_lost_hold::AfkPass::kUnknown;
-    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1, kZoneId, kSceneNodeId + 1));
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player_));
-    ExpectNoRegroup(player_);
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1, kZoneId, kSceneNodeId + 1));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player));
+    ExpectNoRegroup(player);
 }
 
 // ECS 层:直接驱动 TeamFollowSystem::Update,不经 Redis / RPC。
@@ -745,12 +745,12 @@ protected:
     void SetUp() override
     {
         tlsEcs.Clear();
-        scene_ = tlsEcs.sceneRegistry.create();
-        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene_).set_scene_id(kCurrentSceneId);
-        leader_ = MakeMember(kLeaderId, 0.0, 1);
-        follower_ = MakeMember(kPlayerId, -1.0, 2);
-        TeamFollowSystem::SetFollowIntent(follower_, true);
-        ASSERT_TRUE(TeamFollowSystem::TryAttach(follower_, leader_, /*walkAllowed=*/true));
+        scene = tlsEcs.sceneRegistry.create();
+        tlsEcs.sceneRegistry.emplace<SceneInfoComp>(scene).set_scene_id(kCurrentSceneId);
+        leader = MakeMember(kLeaderId, 0.0, 1);
+        follower = MakeMember(kPlayerId, -1.0, 2);
+        TeamFollowSystem::SetFollowIntent(follower, true);
+        ASSERT_TRUE(TeamFollowSystem::TryAttach(follower, leader, /*walkAllowed=*/true));
     }
 
     void TearDown() override
@@ -763,7 +763,7 @@ protected:
         auto& registry = tlsEcs.actorRegistry;
         const auto player = registry.create();
         registry.emplace<PlayerGuidComp>(player, id);
-        registry.emplace<SceneEntityComp>(player, scene_);
+        registry.emplace<SceneEntityComp>(player, scene);
         registry.emplace<Transform>(player).mutable_location()->set_x(x);
         JoinTeam(player);
         TeamFollowSystem::RememberJoinSeq(player, joinSeq);
@@ -774,7 +774,7 @@ protected:
     // 队长沿 +x 以每 tick 0.45(9 米/秒)走到 toX,每步跑一次跟随系统。
     void WalkLeader(double toX)
     {
-        auto& location = *tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location();
+        auto& location = *tlsEcs.actorRegistry.get<Transform>(leader).mutable_location();
         while (location.x() < toX - 1e-9)
         {
             location.set_x(std::min(toX, location.x() + 0.45));
@@ -795,30 +795,30 @@ protected:
         return tlsEcs.actorRegistry.get<Transform>(player).location().x();
     }
 
-    SceneEntity scene_{entt::null};
-    entt::entity leader_{entt::null};
-    entt::entity follower_{entt::null};
+    SceneEntity scene{entt::null};
+    entt::entity leader{entt::null};
+    entt::entity follower{entt::null};
 };
 
 TEST_F(TeamFollowDriveTest, OfflineFollowerKeepsWalkingBehindTheLeader)
 {
-    tlsEcs.actorRegistry.emplace<PlayerConnectionLostComp>(follower_); // 下线进断线保留:不影响服务器驱动
+    tlsEcs.actorRegistry.emplace<PlayerConnectionLostComp>(follower); // 下线进断线保留:不影响服务器驱动
     WalkLeader(9.0);
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_));
-    EXPECT_NEAR(X(follower_), 9.0 - kTeamFollowSpacing, 1e-6) << "离线的队员照样跟在队长身后一个间距";
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower));
+    EXPECT_NEAR(X(follower), 9.0 - kTeamFollowSpacing, 1e-6) << "离线的队员照样跟在队长身后一个间距";
 }
 
 // 朝向口径(spatial/system/facing.h):被驱动的队员面朝行进方向,Rotation.z 是偏航角(度),x、y 恒 0。
 TEST_F(TeamFollowDriveTest, DrivenFollowerFacesItsWalkingDirectionInDegrees)
 {
     WalkLeader(4.5);
-    auto& leaderLocation = *tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location();
+    auto& leaderLocation = *tlsEcs.actorRegistry.get<Transform>(leader).mutable_location();
     for (int tick = 0; tick < 20; ++tick) // 在 x = 4.5 拐向 +y,走 9 米
     {
         leaderLocation.set_y(leaderLocation.y() + 0.45);
         TeamFollowSystem::Update(0.05);
     }
-    const auto& follower = tlsEcs.actorRegistry.get<Transform>(follower_);
+    const auto& follower = tlsEcs.actorRegistry.get<Transform>(this->follower);
     EXPECT_NEAR(follower.location().x(), 4.5, 1e-6) << "已经过了拐角,沿 +y 走";
     EXPECT_NEAR(follower.rotation().z(), 90.0, 1e-6) << "偏航 90 度,不是弧度 π/2";
     EXPECT_EQ(follower.rotation().x(), 0.0);
@@ -829,70 +829,70 @@ TEST_F(TeamFollowDriveTest, FollowerInBattleWaitsAndCatchesUpAfterwards)
 {
     // 停在 WalkLeader 的整步上，避免最后一步落在轨迹采样阈值。
     constexpr double kLeaderStopX = 4.5;
-    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower);
     WalkLeader(kLeaderStopX);
-    EXPECT_DOUBLE_EQ(X(follower_), -1.0) << "战斗中原地不动";
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "名次照留,不摘驱动";
+    EXPECT_DOUBLE_EQ(X(follower), -1.0) << "战斗中原地不动";
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower)) << "名次照留,不摘驱动";
 
-    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower);
     Stand(30);
-    EXPECT_NEAR(X(follower_), kLeaderStopX - kTeamFollowSpacing, 1e-6) << "战斗结束后沿路赶回自己的槽位";
+    EXPECT_NEAR(X(follower), kLeaderStopX - kTeamFollowSpacing, 1e-6) << "战斗结束后沿路赶回自己的槽位";
 }
 
 TEST_F(TeamFollowDriveTest, LeavingFollowStopsDrivingAtOnce)
 {
     // 多走一个间距:队员在 -1,槽位要越过他才开始被带着走,暂离时他得正在走。
     WalkLeader(kTeamFollowSpacing + 3.0);
-    TeamFollowSystem::SetFollowIntent(follower_, false);
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
-    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    TeamFollowSystem::SetFollowIntent(follower, false);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower);
     ASSERT_NE(velocity, nullptr);
     EXPECT_DOUBLE_EQ(velocity->x(), 0.0) << "停止驱动时清零速度,MovementSystem 不会按队形最后写的速度继续积分";
 
-    const double stoppedAt = X(follower_);
+    const double stoppedAt = X(follower);
     WalkLeader(kTeamFollowSpacing + 6.0);
-    EXPECT_DOUBLE_EQ(X(follower_), stoppedAt) << "暂离之后不再被带着走";
+    EXPECT_DOUBLE_EQ(X(follower), stoppedAt) << "暂离之后不再被带着走";
 }
 
 TEST_F(TeamFollowDriveTest, LeaderLeavingTheTeamReleasesTheFollowerOnTheNextTick)
 {
     WalkLeader(2.0);
-    tlsEcs.actorRegistry.get<TeamId>(leader_).set_team_id(0);
+    tlsEcs.actorRegistry.get<TeamId>(leader).set_team_id(0);
     TeamFollowSystem::Update(0.05);
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_));
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader));
 }
 
 TEST_F(TeamFollowDriveTest, ResendAfterEntryLeavesTheFormationUntouched)
 {
     WalkLeader(3.0);
-    const double before = X(follower_);
+    const double before = X(follower);
     // 接回会话后补推一次状态(测试里没有可投递的网关会话,不发),不能顺带改动队形或驱动。
-    TeamFollowSystem::ResendStateAfterEntry(follower_);
-    TeamFollowSystem::ResendStateAfterEntry(leader_); // 队长不是任何人的随从:什么都不做
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_));
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(leader_));
-    EXPECT_DOUBLE_EQ(X(follower_), before);
+    TeamFollowSystem::ResendStateAfterEntry(follower);
+    TeamFollowSystem::ResendStateAfterEntry(leader); // 队长不是任何人的随从:什么都不做
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower));
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(leader));
+    EXPECT_DOUBLE_EQ(X(follower), before);
 
     WalkLeader(6.0);
-    EXPECT_NEAR(X(follower_), 6.0 - kTeamFollowSpacing, 1e-6) << "补推之后照常被带着走";
+    EXPECT_NEAR(X(follower), 6.0 - kTeamFollowSpacing, 1e-6) << "补推之后照常被带着走";
 }
 
 // 入场后补推的判据(ResendStateAfterEntry 只在 DrivenSlot 有值时发 driven=true,名次就是它)。
 TEST_F(TeamFollowDriveTest, DrivenSlotIsWhatTheResendAfterEntryReports)
 {
-    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower_).value_or(0u), 1u) << "唯一的队员排第一";
-    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(leader_).has_value()) << "队长不被驱动";
+    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower).value_or(0u), 1u) << "唯一的队员排第一";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(leader).has_value()) << "队长不被驱动";
 
     // 队员已进了别的场景实例、还没轮到下一 tick 按换场景停止驱动:队形记的是旧场景,补推不能说他还在跟。
     const auto otherScene = tlsEcs.sceneRegistry.create();
-    tlsEcs.actorRegistry.get<SceneEntityComp>(follower_).sceneEntity = otherScene;
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "前置条件:驱动还没摘";
-    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower_).has_value());
+    tlsEcs.actorRegistry.get<SceneEntityComp>(follower).sceneEntity = otherScene;
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower)) << "前置条件:驱动还没摘";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower).has_value());
 
     TeamFollowSystem::Update(0.05);
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_)) << "下一 tick 按换场景停止驱动";
-    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower_).has_value());
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower)) << "下一 tick 按换场景停止驱动";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower).has_value());
 }
 
 // ---- 队长离开本节点:原随从等队长的去留,有了结论再跟一次(team-follow-server-trail.md §3.7) ----
@@ -907,66 +907,66 @@ void StartLeaderHandoff(entt::entity leader)
 TEST_F(TeamFollowDriveTest, LeaderLeavingTheNodeIsAwaitedAndRecheckedOnceItIsGone)
 {
     WalkLeader(2.0);
-    StartLeaderHandoff(leader_);
+    StartLeaderHandoff(leader);
     TeamFollowSystem::Update(0.05);
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_)) << "记下在等队长的去留";
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower)) << "记下在等队长的去留";
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty())
         << "队长还在交接中:location 还指着本节点的旧场景,现在检查只会跟回原地";
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
 
     // 交接放行:队长实体在本节点销毁,location 已指向新落点。
     tlsEcs.playerList.erase(kLeaderId);
-    tlsEcs.actorRegistry.destroy(leader_);
+    tlsEcs.actorRegistry.destroy(leader);
     const auto& settled = TeamFollowSystem::TakeFollowersWithSettledLeader();
     ASSERT_EQ(settled.size(), 1u);
-    EXPECT_EQ(settled.front(), follower_) << "交给跟随检查,队长去了别的节点就跟过去";
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    EXPECT_EQ(settled.front(), follower) << "交给跟随检查,队长去了别的节点就跟过去";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty()) << "只交出一次";
 }
 
 TEST_F(TeamFollowDriveTest, AbortedLeaderHandoffSettlesTheWaitingFollower)
 {
     WalkLeader(2.0);
-    StartLeaderHandoff(leader_);
+    StartLeaderHandoff(leader);
     TeamFollowSystem::Update(0.05);
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
 
     // 交接作废、原地解冻:队长还在本节点,不再处于离开中 —— 重新检查,接回原来的队长身后。
-    tlsEcs.actorRegistry.remove<PlayerFrozenComp, PlayerTravelHandoffComp>(leader_);
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp, PlayerTravelHandoffComp>(leader);
     const auto& settled = TeamFollowSystem::TakeFollowersWithSettledLeader();
     ASSERT_EQ(settled.size(), 1u);
-    EXPECT_EQ(settled.front(), follower_);
+    EXPECT_EQ(settled.front(), follower);
 }
 
 TEST_F(TeamFollowDriveTest, WaitingFollowerWhoLeftFollowIsNotRechecked)
 {
     WalkLeader(2.0);
-    StartLeaderHandoff(leader_);
+    StartLeaderHandoff(leader);
     TeamFollowSystem::Update(0.05);
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
 
-    TeamFollowSystem::SetFollowIntent(follower_, false); // 等的时候点了暂离
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    TeamFollowSystem::SetFollowIntent(follower, false); // 等的时候点了暂离
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
     tlsEcs.playerList.erase(kLeaderId);
-    tlsEcs.actorRegistry.destroy(leader_);
+    tlsEcs.actorRegistry.destroy(leader);
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty()) << "暂离中的不再替他跟";
 }
 
 TEST_F(TeamFollowDriveTest, WaitingForTheLeaderGivesUpAfterTheTimeout)
 {
     WalkLeader(2.0);
-    StartLeaderHandoff(leader_);
+    StartLeaderHandoff(leader);
     TeamFollowSystem::Update(0.05);
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
 
     auto& frameTime = tlsFrameTimeManager.frameTime;
     const auto savedFrame = frameTime.current_frame();
     frameTime.set_current_frame(savedFrame + kTeamFollowAwaitLeaderFrames);
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty());
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower_)) << "等满放弃,交给别的信号";
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower)) << "等满放弃,交给别的信号";
     tlsEcs.playerList.erase(kLeaderId);
-    tlsEcs.actorRegistry.destroy(leader_);
+    tlsEcs.actorRegistry.destroy(leader);
     EXPECT_TRUE(TeamFollowSystem::TakeFollowersWithSettledLeader().empty());
     frameTime.set_current_frame(savedFrame);
 }
@@ -974,69 +974,69 @@ TEST_F(TeamFollowDriveTest, WaitingForTheLeaderGivesUpAfterTheTimeout)
 // 托管中的兜底重试(§3.7,2026-11-11):只替"在队伍里、想跟却没接在队长身后"的人再走一遍跟随检查。
 TEST_F(TeamFollowDriveTest, OnlyADetachedMemberWhoWantsToFollowNeedsARecheck)
 {
-    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "已接在队长身后:照常被带着走,不发读";
-    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader_)) << "队长没有跟随意图";
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower)) << "已接在队长身后:照常被带着走,不发读";
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader)) << "队长没有跟随意图";
 
-    TeamFollowSystem::Detach(follower_, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW); // 例如严格导航拒了一步:意图还在
-    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "想跟却没接上:兜底重试替他再走一遍跟随检查";
+    TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW); // 例如严格导航拒了一步:意图还在
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower)) << "想跟却没接上:兜底重试替他再走一遍跟随检查";
 
-    tlsEcs.actorRegistry.get<TeamId>(follower_).set_team_id(0);
-    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "不在队伍里:没有可跟的人";
-    tlsEcs.actorRegistry.get<TeamId>(follower_).set_team_id(kTeamId);
+    tlsEcs.actorRegistry.get<TeamId>(follower).set_team_id(0);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower)) << "不在队伍里:没有可跟的人";
+    tlsEcs.actorRegistry.get<TeamId>(follower).set_team_id(kTeamId);
 
-    TeamFollowSystem::SetFollowIntent(follower_, false);
-    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "暂离:不替他跟";
+    TeamFollowSystem::SetFollowIntent(follower, false);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower)) << "暂离:不替他跟";
 }
 
 TEST_F(TeamFollowDriveTest, HostedLeaderAndUnknownTeamRecheckRules)
 {
     // 已确认是队长:即使托管开始挂了跟随意图(防惰性转让后漏跟),周期心跳也不应对队长发冗余读。
-    TeamFollowSystem::SetFollowIntent(leader_, true);
-    PlayerTeamFollowTestAccess::SetLeadership(leader_, true);
-    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader_)) << "已确认队长不触发 15s 兜底重查";
+    TeamFollowSystem::SetFollowIntent(leader, true);
+    PlayerTeamFollowTestAccess::SetLeadership(leader, true);
+    EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(leader)) << "已确认队长不触发 15s 兜底重查";
 
     // 队长职务转走后(isLeader=false):立刻允许补查跟随新队长。
-    PlayerTeamFollowTestAccess::SetLeadership(leader_, false);
-    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(leader_));
+    PlayerTeamFollowTestAccess::SetLeadership(leader, false);
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(leader));
 
     // 跨节点新实体尚未同步 TeamId:挂了意图但缺 TeamId 时仍应补查。
-    TeamFollowSystem::Detach(follower_, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
-    tlsEcs.actorRegistry.remove<TeamId>(follower_);
-    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "缺 TeamId = 尚未同步到组队权威,仍需补查";
+    TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
+    tlsEcs.actorRegistry.remove<TeamId>(follower);
+    EXPECT_TRUE(PlayerTeamSystem::NeedsFollowRecheck(follower)) << "缺 TeamId = 尚未同步到组队权威,仍需补查";
 }
 
 TEST_F(TeamFollowDriveTest, EmptyFormationIsReclaimedOnNextUpdate)
 {
-    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_));
-    TeamFollowSystem::SetFollowIntent(follower_, false);
-    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader));
+    TeamFollowSystem::SetFollowIntent(follower, false);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
 
     TeamFollowSystem::Update(0.05);
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader_))
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowFormationComp>(leader))
         << "最后一名随从离开后,空队形组件在下一拍回收,不再以 20Hz 空转轨迹与导航射线";
 }
 
 TEST_F(TeamFollowDriveTest, LeaderJumpDoesNotTeleportFollowerInBattle)
 {
     WalkLeader(kTeamFollowSpacing + 3.0); // 队员正在走,速度非零且已广播行走
-    const double battleX = X(follower_);
-    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+    const double battleX = X(follower);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower);
 
     // 队长瞬移到远方(> kTeamFollowMaxLeaderJump 且超过步行距离):触发 RestartFormation。
-    tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location()->set_x(100.0);
+    tlsEcs.actorRegistry.get<Transform>(leader).mutable_location()->set_x(100.0);
     TeamFollowSystem::Update(0.05);
 
-    EXPECT_DOUBLE_EQ(X(follower_), battleX) << "战斗中绝不瞬移";
-    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "名次照留,不摘驱动";
-    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower_).value_or(0u), 1u);
-    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    EXPECT_DOUBLE_EQ(X(follower), battleX) << "战斗中绝不瞬移";
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower)) << "名次照留,不摘驱动";
+    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower).value_or(0u), 1u);
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower);
     ASSERT_NE(velocity, nullptr);
     EXPECT_DOUBLE_EQ(velocity->x(), 0.0) << "重建队形时已替进战队员停步";
-    EXPECT_FALSE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving);
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower).broadcastMoving);
 
-    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower);
     TeamFollowSystem::Update(0.05);
-    EXPECT_NEAR(X(follower_), 100.0, 1e-6) << "战斗结束后按 needsPlacement 放进队长的新槽位";
+    EXPECT_NEAR(X(follower), 100.0, 1e-6) << "战斗结束后按 needsPlacement 放进队长的新槽位";
 }
 
 TEST_F(TeamFollowDriveTest, LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFollowerStops)
@@ -1045,30 +1045,30 @@ TEST_F(TeamFollowDriveTest, LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFol
     const auto savedFrame = frameTime.current_frame();
 
     // 先拉出 > kTeamFollowMaxLeaderJump(4m) 的差距但未超追赶上限:战斗中停在 -1,队长走到 9。
-    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower);
     WalkLeader(9.0);
-    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower);
 
     // 追赶一 tick:队员正在走(速度非零、broadcastMoving=true),此时仍离队长 > 4m。
     frameTime.set_current_frame(savedFrame + 1);
     TeamFollowSystem::Update(0.05);
-    ASSERT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving);
+    ASSERT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower).broadcastMoving);
 
     // 队长跳回队员脚下(> 4m):触发 RestartFormation,PlaceMember 走 snap(不瞬移),必须保留 broadcastMoving。
-    const double followerX = X(follower_);
-    tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location()->set_x(followerX);
+    const double followerX = X(follower);
+    tlsEcs.actorRegistry.get<Transform>(leader).mutable_location()->set_x(followerX);
     frameTime.set_current_frame(savedFrame + 2);
     TeamFollowSystem::Update(0.05);
-    EXPECT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving)
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower).broadcastMoving)
         << "不瞬移的重建不能把已广播的行走状态抹掉,否则下一 tick 停步不会发停步广播";
 
     // 下一 tick 已在槽位上(moved==0):StopMotion 清速度并补发停步广播(更新 broadcastFrame、清 broadcastMoving)。
     frameTime.set_current_frame(savedFrame + 3);
     TeamFollowSystem::Update(0.05);
-    const auto& driven = tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_);
+    const auto& driven = tlsEcs.actorRegistry.get<TeamFollowerComp>(follower);
     EXPECT_FALSE(driven.broadcastMoving);
     EXPECT_EQ(driven.broadcastFrame, savedFrame + 3);
-    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower);
     ASSERT_NE(velocity, nullptr);
     EXPECT_DOUBLE_EQ(velocity->x(), 0.0);
 

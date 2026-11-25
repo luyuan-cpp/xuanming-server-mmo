@@ -150,28 +150,28 @@ public:
     void Push(std::string event)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            events_.push_back(std::move(event));
+            std::lock_guard<std::mutex> lock(mutex);
+            events.push_back(std::move(event));
         }
-        cv_.notify_all();
+        cv.notify_all();
     }
 
     std::vector<std::string> Events() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return events_;
+        std::lock_guard<std::mutex> lock(mutex);
+        return events;
     }
 
     std::size_t CountWithPrefix(const std::string& prefix) const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return CountIn(events_, prefix);
+        std::lock_guard<std::mutex> lock(mutex);
+        return CountIn(events, prefix);
     }
 
     bool WaitForCountWithPrefix(const std::string& prefix, std::size_t count) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return CountIn(events_, prefix) >= count; });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return CountIn(events, prefix) >= count; });
     }
 
 private:
@@ -181,9 +181,9 @@ private:
                                                       [&](const std::string& e) { return e.starts_with(prefix); }));
     }
 
-    mutable std::mutex mutex_;
-    mutable std::condition_variable cv_;
-    std::vector<std::string> events_;
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
+    std::vector<std::string> events;
 };
 
 std::string EventOf(const char* node, const RpcStatus& status)
@@ -216,7 +216,7 @@ enum class MiddleMode
 class MiddleSceneService final : public ::Scene
 {
 public:
-    explicit MiddleSceneService(std::shared_ptr<EventLog> log) : log_(std::move(log)) {}
+    explicit MiddleSceneService(std::shared_ptr<EventLog> log) : log(std::move(log)) {}
 
     std::weak_ptr<RpcClient> downstream;   // B→C;只存 weak,handler 里按次 lock
     MiddleMode mode{MiddleMode::kRunAfterDownstream};
@@ -231,7 +231,7 @@ public:
                                     ::ProcessClientPlayerMessageResponse* response,
                                     ::google::protobuf::Closure* done) override
     {
-        inbound.push_back(::RpcController::From(controller).conn());
+        inbound.push_back(::RpcController::From(controller).Conn());
         const auto client = downstream.lock();
         if (!client)
         {
@@ -248,7 +248,7 @@ public:
         // 回调只捕获值与 reply(内部只持 weak channel),不捕获 this / controller / request 指针(契约 b)。
         client->CallMethod<ChainPrepareRpc>(
             downstreamRequest,
-            [reply, log = log_, mode = mode, sessionId = request->session_id()](
+            [reply, log = this->log, mode = mode, sessionId = request->session_id()](
                 const RpcStatus& status, const std::shared_ptr<::PrepareBattleResponse>& fromLeaf)
             {
                 log->Push(EventOf("B.cont", status));
@@ -278,7 +278,7 @@ public:
     void CreateScene(::google::protobuf::RpcController* controller, const ::CreateSceneRequest*,
                      ::CreateSceneResponse*, ::google::protobuf::Closure*) override
     {
-        inbound.push_back(::RpcController::From(controller).conn());
+        inbound.push_back(::RpcController::From(controller).Conn());
     }
 
     // 同步方法(Empty 响应):微基准的往返。不记 inbound,免得 1e5 次往返在热路径上堆记录。
@@ -288,7 +288,7 @@ public:
     }
 
 private:
-    std::shared_ptr<EventLog> log_;
+    std::shared_ptr<EventLog> log;
 };
 
 // C 暂存的一次回复;battleId 即 A 请求里的 message_content.id(B 原样转下来),测试据此挑选要完成的那一次。
@@ -302,7 +302,7 @@ struct ParkedReply
 class LeafSceneService final : public ::Scene
 {
 public:
-    explicit LeafSceneService(std::shared_ptr<EventLog> log) : log_(std::move(log)) {}
+    explicit LeafSceneService(std::shared_ptr<EventLog> log) : log(std::move(log)) {}
 
     std::vector<ParkedReply> parked;
     std::vector<std::weak_ptr<muduo::net::TcpConnection>> inbound;
@@ -310,20 +310,20 @@ public:
     void PrepareBattle(::google::protobuf::RpcController* controller, const ::PrepareBattleRequest* request,
                        ::PrepareBattleResponse*, ::google::protobuf::Closure* done) override
     {
-        inbound.push_back(::RpcController::From(controller).conn());
+        inbound.push_back(::RpcController::From(controller).Conn());
         parked.push_back(ParkedReply{request->battle_id(), RpcDoneCallback::Adopt(done)});
-        log_->Push("C.handler");
+        log->Push("C.handler");
     }
 
     // 同步方法:拆除前的 ping。
     void CreateScene(::google::protobuf::RpcController* controller, const ::CreateSceneRequest*,
                      ::CreateSceneResponse*, ::google::protobuf::Closure*) override
     {
-        inbound.push_back(::RpcController::From(controller).conn());
+        inbound.push_back(::RpcController::From(controller).Conn());
     }
 
 private:
-    std::shared_ptr<EventLog> log_;
+    std::shared_ptr<EventLog> log;
 };
 
 // ---------------------------------------------------------------------------
@@ -335,7 +335,7 @@ class RpcChain : public ::testing::Test
 protected:
     void SetUp() override
     {
-        loop_.emplace(*loopThread_.startLoop());
+        loop.emplace(*loopThread.startLoop());
         ASSERT_TRUE(IsDispatchableMessageId(kProcessId) && IsDispatchableMessageId(kPrepareId) &&
                     IsDispatchableMessageId(kCreateId) && IsDispatchableMessageId(kDestroyId))
             << "gRpcMethodRegistry is empty: the global RpcRegistryEnvironment (rpc_channel_loopback_test.cpp) did not run";
@@ -347,66 +347,66 @@ protected:
         const uint16_t portC = ports[1];
 
         RunInLoopAndWait([this, portB, portC] {
-            serverC_ = std::make_unique<muduo::net::RpcServer>(&Loop(), muduo::net::InetAddress(portC, /*loopbackOnly=*/true));
-            serverC_->registerService(&leaf_);
-            serverC_->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
-            serverB_ = std::make_unique<muduo::net::RpcServer>(&Loop(), muduo::net::InetAddress(portB, /*loopbackOnly=*/true));
-            serverB_->registerService(&middle_);
-            serverB_->start();
+            serverC = std::make_unique<muduo::net::RpcServer>(&Loop(), muduo::net::InetAddress(portC, /*loopbackOnly=*/true));
+            serverC->registerService(&leaf);
+            serverC->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
+            serverB = std::make_unique<muduo::net::RpcServer>(&Loop(), muduo::net::InetAddress(portB, /*loopbackOnly=*/true));
+            serverB->registerService(&middle);
+            serverB->start();
 
-            bToC_ = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", portC));
-            bToC_->connect();
-            aToB_ = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", portB));
-            aToB_->connect();
-            middle_.downstream = bToC_;
+            bToC = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", portC));
+            bToC->connect();
+            aToB = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", portB));
+            aToB->connect();
+            middle.downstream = bToC;
         });
-        ASSERT_TRUE(WaitUntil([this] { return aToB_->connected() && bToC_->connected(); }))
+        ASSERT_TRUE(WaitUntil([this] { return aToB->connected() && bToC->connected(); }))
             << "chain links never connected";
     }
 
     void TearDown() override
     {
-        if (!loop_)
+        if (!loop)
         {
             return;
         }
         // 1. 仍连着的链路各 ping 一次:让服务端把当前这条入站连接记进 inbound,下面才能等到它析构。
-        PingIfConnected(aToB_);
-        PingIfConnected(bToC_);
+        PingIfConnected(aToB);
+        PingIfConnected(bToC);
 
         // 2. 先拆两个 RpcClient(各自连接的唯一持有者 → forceClose → 对端 DOWN)。
         std::vector<std::weak_ptr<muduo::net::TcpConnection>> clientConnections;
         RunInLoopAndWait([&] {
-            if (aToB_)
+            if (aToB)
             {
-                clientConnections.push_back(aToB_->GetConnection());
+                clientConnections.push_back(aToB->GetConnection());
             }
-            if (bToC_)
+            if (bToC)
             {
-                clientConnections.push_back(bToC_->GetConnection());
+                clientConnections.push_back(bToC->GetConnection());
             }
-            middle_.downstream.reset();
-            aToB_.reset();
-            bToC_.reset();
+            middle.downstream.reset();
+            aToB.reset();
+            bToC.reset();
         });
         PumpLoop(3);
 
         // 3. 等两端 DOWN:客户端侧与服务端侧的连接对象都已析构(connectDestroyed 跑完、没有人再持有它们)。
         EXPECT_TRUE(WaitUntil([&] {
-            return AllExpired(clientConnections) && AllExpired(middle_.inbound) && AllExpired(leaf_.inbound);
+            return AllExpired(clientConnections) && AllExpired(middle.inbound) && AllExpired(leaf.inbound);
         })) << "a chain connection did not finish DOWN";
 
         // 4. 暂存的回复在 loop 线程上释放(连接已断:只计 reply_channel_gone,不发帧),再在 loop 线程销毁两个 RpcServer。
         RunInLoopAndWait([this] {
-            leaf_.parked.clear();
-            serverB_.reset();
-            serverC_.reset();
+            leaf.parked.clear();
+            serverB.reset();
+            serverC.reset();
         });
         PumpLoop(2);
         // loopThread_ 析构 = quit + join。
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& fn)
@@ -480,9 +480,9 @@ protected:
             request.set_session_id(sessionId);
             request.set_player_id(sessionId);
             request.mutable_message_content()->set_id(sessionId);   // B 转成 C 的 battle_id
-            aToB_->CallMethod<ChainProcessRpc>(
+            aToB->CallMethod<ChainProcessRpc>(
                 request,
-                [result, log = log_, contextToken, contextLabel](
+                [result, log = this->log, contextToken, contextLabel](
                     const RpcStatus& status, const std::shared_ptr<::ProcessClientPlayerMessageResponse>& response)
                 {
                     result->status = status;
@@ -503,31 +503,31 @@ protected:
     // loop 线程:取出 C 为 battleId 暂存的回复,写载荷后 Run。找不到返回 false。
     bool CompleteLeafReply(uint64_t battleId, const std::string& payload)
     {
-        const auto it = std::find_if(leaf_.parked.begin(), leaf_.parked.end(),
+        const auto it = std::find_if(leaf.parked.begin(), leaf.parked.end(),
                                      [battleId](const ParkedReply& p) { return p.battleId == battleId; });
-        if (it == leaf_.parked.end())
+        if (it == leaf.parked.end())
         {
             return false;
         }
         const RpcDoneCallback reply = it->reply;
-        leaf_.parked.erase(it);
+        leaf.parked.erase(it);
         reply.response<::PrepareBattleResponse>().set_table_fingerprint(payload);
         reply.Run();
         return true;
     }
 
     // loopThread_ 排第一:最后析构,保证其余成员析构时 loop 仍在。
-    muduo::net::EventLoopThread loopThread_;
+    muduo::net::EventLoopThread loopThread;
     // 引用而非裸指针成员(裸指针成员门禁覆盖测试工程);SetUp 里绑定。
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    std::shared_ptr<EventLog> log_ = std::make_shared<EventLog>();
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    std::shared_ptr<EventLog> log = std::make_shared<EventLog>();
     // 服务声明在服务器之前:每条入站连接的 channel 拷贝的服务表借用它们,它们必须后析构。
-    LeafSceneService leaf_{log_};
-    MiddleSceneService middle_{log_};
-    std::unique_ptr<muduo::net::RpcServer> serverC_;
-    std::unique_ptr<muduo::net::RpcServer> serverB_;
-    RpcClientPtr bToC_;
-    RpcClientPtr aToB_;
+    LeafSceneService leaf{log};
+    MiddleSceneService middle{log};
+    std::unique_ptr<muduo::net::RpcServer> serverC;
+    std::unique_ptr<muduo::net::RpcServer> serverB;
+    RpcClientPtr bToC;
+    RpcClientPtr aToB;
 };
 
 // 微基准共用同一套拓扑,只用 A→B 的同步方法。
@@ -581,7 +581,7 @@ TEST_F(RpcChain, MiddleNodeCompletesAfterItsDownstreamWithoutBlockingTheLoop)
 {
     auto result = std::make_shared<AResult>();
     IssueFromA(result, /*sessionId=*/7, /*contextToken=*/0xA11CE, "ctx-A");
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("C.handler", 1)) << "C was never called";
+    ASSERT_TRUE(log->WaitForCountWithPrefix("C.handler", 1)) << "C was never called";
 
     // loop 没被 B 阻塞:另一个 functor 能跑完;B 的 handler 早已返回,A / B 的回调都还没执行。
     std::size_t middleContinuations = 99;
@@ -589,10 +589,10 @@ TEST_F(RpcChain, MiddleNodeCompletesAfterItsDownstreamWithoutBlockingTheLoop)
     int middleHandlerReturns = -1;
     std::size_t parked = 0;
     RunInLoopAndWait([&] {
-        middleContinuations = log_->CountWithPrefix("B.cont");
-        callerCompletions = log_->CountWithPrefix("A.done");
-        middleHandlerReturns = middle_.handlerReturns;
-        parked = leaf_.parked.size();
+        middleContinuations = log->CountWithPrefix("B.cont");
+        callerCompletions = log->CountWithPrefix("A.done");
+        middleHandlerReturns = middle.handlerReturns;
+        parked = leaf.parked.size();
     });
     EXPECT_EQ(middleContinuations, 0u);
     EXPECT_EQ(callerCompletions, 0u);
@@ -602,9 +602,9 @@ TEST_F(RpcChain, MiddleNodeCompletesAfterItsDownstreamWithoutBlockingTheLoop)
     bool completed = false;
     RunInLoopAndWait([&] { completed = CompleteLeafReply(7, kLeafPayload); });
     ASSERT_TRUE(completed);
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 1)) << "A never completed";
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 1)) << "A never completed";
 
-    EXPECT_EQ(log_->Events(), (std::vector<std::string>{"C.handler", "B.cont(ok)", "A.done(ok)"}));
+    EXPECT_EQ(log->Events(), (std::vector<std::string>{"C.handler", "B.cont(ok)", "A.done(ok)"}));
     ASSERT_TRUE(result->completed);
     ASSERT_TRUE(result->status.ok()) << result->status.name();
     ASSERT_TRUE(result->hasResponse);
@@ -623,12 +623,12 @@ TEST_F(RpcChain, InterleavedChainsKeepTheirOwnContext)
     auto second = std::make_shared<AResult>();
     IssueFromA(first, 21, 0x21, "ctx-21");
     IssueFromA(second, 22, 0x22, "ctx-22");
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("C.handler", 2));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("C.handler", 2));
 
     bool completedSecond = false;
     RunInLoopAndWait([&] { completedSecond = CompleteLeafReply(22, "C-22"); });
     ASSERT_TRUE(completedSecond);
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 1));
     bool firstStillPending = false;
     RunInLoopAndWait([&] { firstStillPending = !first->completed; });
     EXPECT_TRUE(firstStillPending) << "completing C's reply for call 22 completed call 21";
@@ -637,7 +637,7 @@ TEST_F(RpcChain, InterleavedChainsKeepTheirOwnContext)
     bool completedFirst = false;
     RunInLoopAndWait([&] { completedFirst = CompleteLeafReply(21, "C-21"); });
     ASSERT_TRUE(completedFirst);
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 2));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 2));
 
     struct Expected
     {
@@ -656,7 +656,7 @@ TEST_F(RpcChain, InterleavedChainsKeepTheirOwnContext)
         EXPECT_EQ(e.result.response.session_id(), e.session) << e.label;
         EXPECT_EQ(e.result.response.message_content().serialized_message(), e.payload) << e.label << " got another call's payload";
     }
-    EXPECT_EQ(log_->CountWithPrefix("B.cont(ok)"), 2u);
+    EXPECT_EQ(log->CountWithPrefix("B.cont(ok)"), 2u);
 }
 
 // ---------------------------------------------------------------------------
@@ -668,24 +668,24 @@ TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamTimesOut)
     const auto lateBefore = Load(GetRpcChannelStats().lateReply);
     auto result = std::make_shared<AResult>();
     IssueFromA(result, /*sessionId=*/8, /*contextToken=*/0xBEEF, "ctx-timeout");
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("C.handler", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("C.handler", 1));
 
     std::size_t callerCompletionsDuringSweep = 99;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = bToC_ ? bToC_->channel() : RpcChannelPtr{};
-        if (!channel || !middle_.downstreamIssuedAfter)
+        const RpcChannelPtr channel = bToC ? bToC->Channel() : RpcChannelPtr{};
+        if (!channel || !middle.downstreamIssuedAfter)
         {
             ADD_FAILURE() << "B->C channel or its issue time is missing";
             return;
         }
         // B→C 调用的真实截止时刻 ≤ 发起之后取的时刻 + 超时:按它扫描必过期,不依赖墙钟。
-        channel->SweepTimeouts(*middle_.downstreamIssuedAfter + kLongTimeout);
-        callerCompletionsDuringSweep = log_->CountWithPrefix("A.done");
+        channel->SweepTimeouts(*middle.downstreamIssuedAfter + kLongTimeout);
+        callerCompletionsDuringSweep = log->CountWithPrefix("A.done");
     });
     EXPECT_EQ(callerCompletionsDuringSweep, 0u) << "B's reply to A must travel over the wire, not complete A inline";
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 1));
 
-    EXPECT_EQ(log_->Events(), (std::vector<std::string>{"C.handler", "B.cont(timeout)", "A.done(ok)"}));
+    EXPECT_EQ(log->Events(), (std::vector<std::string>{"C.handler", "B.cont(timeout)", "A.done(ok)"}));
     ASSERT_TRUE(result->status.ok()) << result->status.name();
     ASSERT_TRUE(result->hasResponse);
     EXPECT_EQ(result->response.message_content().error_message().id(), static_cast<uint32_t>(kServiceUnavailable))
@@ -703,17 +703,17 @@ TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamTimesOut)
     EXPECT_TRUE(WaitUntil([&] { return Load(GetRpcChannelStats().lateReply) - lateBefore >= 1; }))
         << "C's late reply never reached B";
     EXPECT_EQ(Load(GetRpcChannelStats().lateReply) - lateBefore, 1u);
-    EXPECT_EQ(log_->CountWithPrefix("B.cont"), 1u) << "the late reply from C completed B's call a second time";
+    EXPECT_EQ(log->CountWithPrefix("B.cont"), 1u) << "the late reply from C completed B's call a second time";
 }
 
 TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamDisconnects)
 {
     auto result = std::make_shared<AResult>();
     IssueFromA(result, /*sessionId=*/9, /*contextToken=*/0xD15C, "ctx-disconnect");
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("C.handler", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("C.handler", 1));
 
     RunInLoopAndWait([&] {
-        const muduo::net::TcpConnectionPtr conn = bToC_ ? bToC_->GetConnection() : muduo::net::TcpConnectionPtr{};
+        const muduo::net::TcpConnectionPtr conn = bToC ? bToC->GetConnection() : muduo::net::TcpConnectionPtr{};
         if (!conn)
         {
             ADD_FAILURE() << "B->C link has no connection";
@@ -721,9 +721,9 @@ TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamDisconnects)
         }
         conn->forceClose();   // B→C 断开:B 的在途调用以 kDisconnected 失败(排队投递,不在 DOWN 栈上)
     });
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 1));
 
-    EXPECT_EQ(log_->Events(), (std::vector<std::string>{"C.handler", "B.cont(disconnected)", "A.done(ok)"}));
+    EXPECT_EQ(log->Events(), (std::vector<std::string>{"C.handler", "B.cont(disconnected)", "A.done(ok)"}));
     ASSERT_TRUE(result->status.ok()) << result->status.name();
     ASSERT_TRUE(result->hasResponse);
     EXPECT_EQ(result->response.message_content().error_message().id(), static_cast<uint32_t>(kServiceUnavailable));
@@ -733,16 +733,16 @@ TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamDisconnects)
     EXPECT_EQ(result->contextLabel, "ctx-disconnect");
 
     // C 那一侧的入站 channel 随连接 DOWN 析构:此时再完成 C 的回复只计 reply_channel_gone,不崩、不出帧。
-    ASSERT_TRUE(WaitUntil([this] { return AllExpired(leaf_.inbound); })) << "C never saw the B->C link go DOWN";
+    ASSERT_TRUE(WaitUntil([this] { return AllExpired(leaf.inbound); })) << "C never saw the B->C link go DOWN";
     const auto goneBefore = Load(GetRpcChannelStats().replyChannelGone);
     bool completed = false;
     RunInLoopAndWait([&] { completed = CompleteLeafReply(9, kLeafPayload); });
     ASSERT_TRUE(completed);
     EXPECT_EQ(Load(GetRpcChannelStats().replyChannelGone) - goneBefore, 1u);
-    EXPECT_EQ(log_->CountWithPrefix("B.cont"), 1u);
+    EXPECT_EQ(log->CountWithPrefix("B.cont"), 1u);
 
     // B→C 会自动重连(enableRetry):等它连上再拆,让 TearDown 的 ping 覆盖新连接。
-    EXPECT_TRUE(WaitUntil([this] { return bToC_ && bToC_->connected(); })) << "B->C link did not reconnect";
+    EXPECT_TRUE(WaitUntil([this] { return bToC && bToC->connected(); })) << "B->C link did not reconnect";
 }
 
 // ---------------------------------------------------------------------------
@@ -753,19 +753,19 @@ TEST_F(RpcChain, MiddleNodeStillCompletesWhenItsDownstreamDisconnects)
 TEST_F(RpcChain, MiddleNodeThatForgetsToRunFailsTheCallerImmediately)
 {
     const auto abandonedBefore = Load(GetRpcChannelStats().replyAbandoned);
-    RunInLoopAndWait([this] { middle_.mode = MiddleMode::kForgetRun; });
+    RunInLoopAndWait([this] { middle.mode = MiddleMode::kForgetRun; });
     auto result = std::make_shared<AResult>();
     IssueFromA(result, /*sessionId=*/10, /*contextToken=*/0xF0F0, "ctx-forgot");
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("C.handler", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("C.handler", 1));
 
     bool completed = false;
     RunInLoopAndWait([&] { completed = CompleteLeafReply(10, kLeafPayload); });
     ASSERT_TRUE(completed);
-    ASSERT_TRUE(log_->WaitForCountWithPrefix("A.done", 1));
+    ASSERT_TRUE(log->WaitForCountWithPrefix("A.done", 1));
 
-    EXPECT_EQ(log_->Events(), (std::vector<std::string>{"C.handler", "B.cont(ok)", "A.done(reply_dropped)"}));
-    EXPECT_EQ(result->status.code(), RpcStatusCode::kReplyDropped) << result->status.name();
-    EXPECT_EQ(result->status.remoteError(), REPLY_DROPPED);
+    EXPECT_EQ(log->Events(), (std::vector<std::string>{"C.handler", "B.cont(ok)", "A.done(reply_dropped)"}));
+    EXPECT_EQ(result->status.Code(), RpcStatusCode::kReplyDropped) << result->status.name();
+    EXPECT_EQ(result->status.RemoteError(), REPLY_DROPPED);
     EXPECT_TRUE(result->status.OutcomeUnknown());
     EXPECT_FALSE(result->hasResponse);
     EXPECT_EQ(result->contextToken, 0xF0F0u);
@@ -784,7 +784,7 @@ TEST_F(RpcChannelBench, DISABLED_LoopbackRoundTripNsPerOp)
 {
     constexpr int kRoundTrips = 100'000;
     auto state = std::make_shared<BenchState>();
-    state->client = aToB_;
+    state->client = aToB;
     state->remaining = kRoundTrips;
     auto finished = state->finished.get_future();
 

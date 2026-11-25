@@ -29,16 +29,16 @@ public:
 	// 取一个推送名额。取不到返回 false:这一条对本机全部会话一起不推。
 	bool TryTake(std::chrono::steady_clock::time_point now)
 	{
-		const std::chrono::steady_clock::time_point tat = std::max(tat_, now);
+		const std::chrono::steady_clock::time_point tat = std::max(this->tat, now);
 		if (tat - now > kInterval * (kBurst - 1))
 		{
 			return false;
 		}
-		tat_ = tat + kInterval;
+		this->tat = tat + kInterval;
 		return true;
 	}
 
 private:
 	// 理论到达时刻。起步是时钟零点,第一条一定放行,并且立刻有一个完整的突发可用。
-	std::chrono::steady_clock::time_point tat_{};
+	std::chrono::steady_clock::time_point tat{};
 };

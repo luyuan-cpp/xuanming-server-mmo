@@ -409,31 +409,31 @@ void BattleRoomManager::RegisterTableProvider(
     ReapRetiredProviders(now);
 
     // 换新现役 provider 之前,把旧现役放进保留表 10 分钟,覆盖切换窗口里尚未切换的 scene。
-    if (makeActive && dataProvider_ && !activeTableFingerprint_.empty() &&
-        activeTableFingerprint_ != fingerprint)
+    if (makeActive && dataProvider && !activeTableFingerprint.empty() &&
+        activeTableFingerprint != fingerprint)
     {
-        providersByFingerprint_[activeTableFingerprint_] =
-            RetainedProvider{dataProvider_, now + std::chrono::minutes(10)};
+        providersByFingerprint[activeTableFingerprint] =
+            RetainedProvider{dataProvider, now + std::chrono::minutes(10)};
     }
     if (!fingerprint.empty())
     {
-        providersByFingerprint_[fingerprint] =
+        providersByFingerprint[fingerprint] =
             RetainedProvider{provider, now + std::chrono::minutes(10)};
     }
     if (makeActive)
     {
-        dataProvider_ = std::move(provider);
-        activeTableFingerprint_ = fingerprint;
+        dataProvider = std::move(provider);
+        activeTableFingerprint = fingerprint;
     }
 }
 
 void BattleRoomManager::ReapRetiredProviders(const std::chrono::steady_clock::time_point now)
 {
-    for (auto it = providersByFingerprint_.begin(); it != providersByFingerprint_.end();)
+    for (auto it = providersByFingerprint.begin(); it != providersByFingerprint.end();)
     {
-        if (it->first != activeTableFingerprint_ && now >= it->second.retainUntil)
+        if (it->first != activeTableFingerprint && now >= it->second.retainUntil)
         {
-            it = providersByFingerprint_.erase(it);
+            it = providersByFingerprint.erase(it);
         }
         else
         {
@@ -462,36 +462,36 @@ std::shared_ptr<turnbattle::BattleDataProvider> BattleRoomManager::ResolveProvid
         }
     }
 
-    const std::string &activeFp = activeTableFingerprint_.empty()
+    const std::string &activeFp = activeTableFingerprint.empty()
                                       ? turnbattle::BattleTableFingerprint::Current()
-                                      : activeTableFingerprint_;
+                                      : activeTableFingerprint;
     if (requested.empty() || requested == activeFp)
     {
         matchedFingerprint = activeFp;
-        return dataProvider_;
+        return dataProvider;
     }
 
-    if (const auto it = providersByFingerprint_.find(requested);
-        it != providersByFingerprint_.end() && it->second.provider)
+    if (const auto it = providersByFingerprint.find(requested);
+        it != providersByFingerprint.end() && it->second.provider)
     {
         matchedFingerprint = it->first;
         return it->second.provider;
     }
 
     matchedFingerprint = activeFp;
-    return dataProvider_;
+    return dataProvider;
 }
 
 BattleRoomManager::BattleRoom *BattleRoomManager::FindRoom(const uint64_t battleId)
 {
-    return rooms_.Find(battleId);
+    return rooms.Find(battleId);
 }
 
 BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<BattleRoom> room)
 {
     const auto battleId = room->battleId;
     // 先插表后回调(房间表保证):回调方(Agones 单元计数)看到的是"确实已创建"的房间
-    auto *inserted = rooms_.Emplace(battleId, std::move(room));
+    auto *inserted = rooms.Emplace(battleId, std::move(room));
     if (inserted == nullptr)
     {
         // 表里那间保持原样;按值接管的新房间随形参销毁(插表前没有任何副作用)
@@ -503,16 +503,16 @@ BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<Ba
 void BattleRoomManager::EraseRoom(const uint64_t battleId)
 {
     // 房间没了就不再替它出心跳(删房不经 END 的路径,如 SQL 终局长期拿不到决定的本地放弃,由 gate 按空闲超时收尾)
-    spectateChannelFrameAt_.erase(battleId);
+    spectateChannelFrameAt.erase(battleId);
     // 先移除后回调(房间表保证):最后一个房间移除后 Agones 才能回 Ready,顺序反了会在房间还在时放出容量
-    rooms_.Erase(battleId);
+    rooms.Erase(battleId);
 }
 
 bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
 {
     if (token_security::TrimAscii(secret).size() >= 32) return true;
-    if (!outcomeKeyUnavailableLogged_) {
-        outcomeKeyUnavailableLogged_ = true;
+    if (!outcomeKeyUnavailableLogged) {
+        outcomeKeyUnavailableLogged = true;
         LOG_ERROR << "metric=battle_sql_outcome_key_unavailable protocol_version=1 disabled=1";
     }
     return false;
@@ -520,7 +520,7 @@ bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
 
 uint64_t BattleRoomManager::CreationNowMs() const
 {
-    return creationClock_ ? creationClock_() : TimeSystem::NowMillisecondsUTC();
+    return creationClock ? creationClock() : TimeSystem::NowMillisecondsUTC();
 }
 
 void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
@@ -539,12 +539,12 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
      output.SetSerializationDeterministic(true);if(!request.SerializeToCodedStream(&output)){response.mutable_error_message()->set_id(kInvalidParameter);return;}}
     const auto currentMs=CreationNowMs();
     // 墓碑保留覆盖所有合法迟到请求；过窗请求仍受admit_before硬拒绝。
-    std::erase_if(creationOperations_,[currentMs,&rooms=rooms_](const auto& entry){return turnbattle::CreationReceiptExpired(entry.second.expiresMs,currentMs,rooms.Find(entry.first)!=nullptr);});
+    std::erase_if(creationOperations,[currentMs,&rooms=this->rooms](const auto& entry){return turnbattle::CreationReceiptExpired(entry.second.expiresMs,currentMs,rooms.Find(entry.first)!=nullptr);});
     if(!gNode||request.required_physical_region()==0||request.required_physical_region()!=network_probe::PhysicalRegion()||
        request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())
     {response.mutable_error_message()->set_id(kInvalidParameter);return;}
-    const auto old=creationOperations_.find(battleId);
-    if(old!=creationOperations_.end())
+    const auto old=creationOperations.find(battleId);
+    if(old!=creationOperations.end())
     {
         const auto* originalRoom = FindRoom(battleId);
         if(old->second.aborted||old->second.operationId!=request.placement_operation_id()||
@@ -692,14 +692,25 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         return;
     }
     // canonical 已在任何插表/通知副作用之前成功序列化，失败路径不会留下房间。
-    creationOperations_[battleId]={request.placement_operation_id(),std::move(canonical),request.deadline_ms()+60000,false};
+    creationOperations[battleId]={request.placement_operation_id(),std::move(canonical),request.deadline_ms()+60000,false};
 
+    roomPtr->recordReplay = request.record_replay();
+    roomPtr->createdAtMs = request.created_at_ms();
     roomPtr->battleTimer.RunAfter(static_cast<double>(deadlineMs - nowMs) / 1000.0,
                                   [this, battleId]
                                   { OnBattleDeadline(battleId); });
 
-    // 第一回合行动收集窗口
-    ArmRoundTimer(*roomPtr);
+    const bool inPrepPhase = roomPtr->engine.IsInPrepPhase();
+    if (inPrepPhase)
+    {
+        // 论剑 V3 战前 15 秒明牌变阵期：延迟录制回放起点与第 1 回合计时至亮牌开打后。
+        ArmPrepTimer(*roomPtr);
+    }
+    else
+    {
+        // 第一回合行动收集窗口
+        ArmRoundTimer(*roomPtr);
+    }
 
     ::BattleStartS2C start;
     start.set_battle_id(battleId);
@@ -708,8 +719,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 引擎无时钟,行动截止由节点按房间 timer 回填
     start.mutable_state()->set_action_deadline_ms(roomPtr->actionDeadlineMs);
 
-    // 战报回放(battle-report-replay.md BR-8):原件让录才录;开战状态用观众版,与观众收到的逐字段相同。
-    if (request.record_replay())
+    // 战报回放(battle-report-replay.md BR-8):原件让录才录;变阵期延后到 FinalizeBattlePrep 亮牌后再录起点。
+    if (roomPtr->recordReplay && !inPrepPhase)
     {
         ::BattleStateS2C spectatorStart = start.state();
         RedactStateForViewer(spectatorStart, 0);
@@ -770,9 +781,9 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
     if(!request.placement_operation_id().empty())
     {
         if(!gNode||request.target_instance_id()!=gNode->GetNodeInfo().node_uuid())return;
-        const auto old=creationOperations_.find(battleId);
-        if(old!=creationOperations_.end()&&old->second.operationId!=request.placement_operation_id())return;
-        auto& operation=creationOperations_[battleId];operation.operationId=request.placement_operation_id();operation.aborted=true;
+        const auto old=creationOperations.find(battleId);
+        if(old!=creationOperations.end()&&old->second.operationId!=request.placement_operation_id())return;
+        auto& operation=creationOperations[battleId];operation.operationId=request.placement_operation_id();operation.aborted=true;
         operation.expiresMs=std::max(operation.expiresMs,CreationNowMs()+360000);
     }
     // 幂等:已销毁/从未建成都视为成功
@@ -786,8 +797,8 @@ void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationReq
     response.set_target_instance_id(gNode->GetNodeInfo().node_uuid());
     const char* secret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
     response.set_supported_outcome_protocol_version(OutcomeSigningKeyReady(secret ? secret : "") ? turnbattle::kOutcomeProtocolVersion : 0);
-    const auto found=creationOperations_.find(request.battle_id());
-    if(found==creationOperations_.end()){response.set_state(BATTLE_CREATION_ABSENT);return;}
+    const auto found=creationOperations.find(request.battle_id());
+    if(found==creationOperations.end()){response.set_state(BATTLE_CREATION_ABSENT);return;}
     if(found->second.operationId!=request.placement_operation_id())return;
     const auto* room = FindRoom(request.battle_id());
     if (room != nullptr) response.set_adopted_outcome_protocol_version(room->outcomeProtocol);
@@ -796,10 +807,10 @@ void BattleRoomManager::HandleQueryBattleCreation(const ::QueryBattleCreationReq
 
 bool BattleRoomManager::AcceptsPlacementOperation(uint64_t id,const std::string& operation,const std::string& instance) const
 {
-    if(operation.empty())return instance.empty()&&!creationOperations_.contains(id);
+    if(operation.empty())return instance.empty()&&!creationOperations.contains(id);
     if(!gNode||instance!=gNode->GetNodeInfo().node_uuid())return false;
-    const auto old=creationOperations_.find(id);
-    return old==creationOperations_.end()||old->second.operationId==operation;
+    const auto old=creationOperations.find(id);
+    return old==creationOperations.end()||old->second.operationId==operation;
 }
 
 void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &sessionDetails,
@@ -913,18 +924,22 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
     {
         FillSelfItems(*room, response, playerId);
     }
+    else
+    {
+        room->engine.FillPrepStateForViewer(response, 0, room->prepDeadlineMs);
+    }
 }
 
 void BattleRoomManager::PruneSpectatorOperations(uint64_t now)
 {
     // 每次准入/取消最多处理128个过期项，不能每次遍历全部活动观战。
-    for (size_t count = 0; count < 128 && !spectatorDeadlines_.empty(); ++count) {
-        const auto deadline = spectatorDeadlines_.begin();
+    for (size_t count = 0; count < 128 && !spectatorDeadlines.empty(); ++count) {
+        const auto deadline = spectatorDeadlines.begin();
         if (deadline->first > now) break;
-        const auto operation = spectatorOperations_.find(deadline->second);
-        if (operation != spectatorOperations_.end() && operation->second.cancelled)
-            spectatorOperations_.erase(operation);
-        spectatorDeadlines_.erase(deadline);
+        const auto operation = spectatorOperations.find(deadline->second);
+        if (operation != spectatorOperations.end() && operation->second.cancelled)
+            spectatorOperations.erase(operation);
+        spectatorDeadlines.erase(deadline);
     }
 }
 void BattleRoomManager::HandleQueryObserver(const ::QueryObserverRequest &request, ::QueryObserverResponse &response)
@@ -959,8 +974,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     PruneSpectatorOperations(now);
     const auto key = std::make_tuple(battleId, observerId, request.spectator_operation_id());
     const auto canonical = request.SerializeAsString();
-    auto operation = spectatorOperations_.find(key);
-    if (operation != spectatorOperations_.end()) {
+    auto operation = spectatorOperations.find(key);
+    if (operation != spectatorOperations.end()) {
         if (operation->second.admitBeforeMs != request.admit_before_ms()
             || operation->second.canonicalRequest != canonical) {
             response.mutable_error_message()->set_id(kInvalidParameter);
@@ -974,14 +989,14 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
             return;
         }
     } else {
-        if (spectatorOperations_.size() >= kMaxSpectatorOperations) {
+        if (spectatorOperations.size() >= kMaxSpectatorOperations) {
             // 操作墓碑表满是节点级过载保护(表按原准入截止过期回收,稍后重试即可),不是观众席满员,
             // 不能回 kMatchSpectateFull 让客户端误以为这场人满。
             response.mutable_error_message()->set_id(kRateLimitExceeded);
             return;
         }
-        operation = spectatorOperations_.emplace(key, SpectatorOperation{request.admit_before_ms(), canonical, true}).first;
-        spectatorDeadlines_.emplace(request.admit_before_ms(), key);
+        operation = spectatorOperations.emplace(key, SpectatorOperation{request.admit_before_ms(), canonical, true}).first;
+        spectatorDeadlines.emplace(request.admit_before_ms(), key);
     }
     // 所有失败都封闭原意图；只在完成准入/精确重放的成功分支恢复为active。
     operation->second.cancelled = true;
@@ -999,7 +1014,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
                 recorded->second.rejectTip = response.error_message().id();
             }
         }
-    } recordFirstReject{spectatorOperations_, key, response};
+    } recordFirstReject{spectatorOperations, key, response};
     auto *room = FindRoom(battleId);
     if (room == nullptr)
     {
@@ -1098,7 +1113,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     // 停机排空之后不再接纳新观众(BeginRoomShutdown 置位):房间定时器已停、直连面不再接新连接,接进来的观众永远等不到下一帧,
     // match 还会为它开一份要等实例消失才关得掉的原件。回 kServiceUnavailable(与签不出票同码:match 落 16018、不剔索引);
     // 墓碑沿用上面已封闭的状态,首次拒绝码照常记下。已登记观众的幂等重放在上面照常放行(观战第二轮评审 R2-BATTLE 一般-2)。
-    if (spectateAdmissionClosed_)
+    if (spectateAdmissionClosed)
     {
         LOG_INFO << "AddObserver rejected: node is shutting down, battle_id=" << battleId << " observer=" << observerId;
         response.mutable_error_message()->set_id(kServiceUnavailable);
@@ -1128,11 +1143,11 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     }
     // 节点级观众席配额(口径同上按名单人数,跨全部房间求和):观众与参战者共用直连面的连接上限,
     // 全节点观众席封顶在注入的配额。与单房间满员同码,对 match 都是「直连席已满」。
-    if (const auto nodeSeats = RegisteredObserverSeats(); nodeSeats >= observerSeatQuota_)
+    if (const auto nodeSeats = RegisteredObserverSeats(); nodeSeats >= observerSeatQuota)
     {
         LOG_INFO << "AddObserver node spectator quota reached: battle_id=" << battleId
                  << " observer=" << observerId << " node_observers=" << nodeSeats
-                 << " quota=" << observerSeatQuota_;
+                 << " quota=" << observerSeatQuota;
         response.mutable_error_message()->set_id(kMatchSpectateFull);
         return;
     }
@@ -1177,17 +1192,17 @@ void BattleRoomManager::HandleRemoveObserver(const ::RemoveObserverRequest &requ
         || battleId == 0 || observerId == 0) return;
     PruneSpectatorOperations(now);
     const auto key = std::make_tuple(battleId, observerId, request.spectator_operation_id());
-    auto operation = spectatorOperations_.find(key);
-    if (operation != spectatorOperations_.end() && operation->second.admitBeforeMs != request.admit_before_ms()) return;
+    auto operation = spectatorOperations.find(key);
+    if (operation != spectatorOperations.end() && operation->second.admitBeforeMs != request.admit_before_ms()) return;
     if (request.admit_before_ms() > now) {
-        if (operation == spectatorOperations_.end()) {
-            if (spectatorOperations_.size() >= kMaxSpectatorOperations) return;
-            operation = spectatorOperations_.emplace(key, SpectatorOperation{request.admit_before_ms(), {}, true}).first;
-            spectatorDeadlines_.emplace(request.admit_before_ms(), key);
+        if (operation == spectatorOperations.end()) {
+            if (spectatorOperations.size() >= kMaxSpectatorOperations) return;
+            operation = spectatorOperations.emplace(key, SpectatorOperation{request.admit_before_ms(), {}, true}).first;
+            spectatorDeadlines.emplace(request.admit_before_ms(), key);
         }
         operation->second.cancelled = true;
     }
-    else if (operation != spectatorOperations_.end()) spectatorOperations_.erase(operation);
+    else if (operation != spectatorOperations.end()) spectatorOperations.erase(operation);
     response.set_cancelled(true);
     response.set_spectator_operation_id(request.spectator_operation_id());
     response.set_target_instance_id(request.target_instance_id());
@@ -1389,6 +1404,153 @@ void BattleRoomManager::HandleSurrenderBattle(const ::SessionDetails &sessionDet
     }
 }
 
+void BattleRoomManager::HandleUpdateBattlePrep(const ::SessionDetails &sessionDetails,
+                                               const ::UpdateBattlePrepRequest &request,
+                                               ::UpdateBattlePrepResponse &response)
+{
+    const auto playerId = sessionDetails.player_id();
+    if (playerId == 0)
+    {
+        LOG_WARN << "UpdateBattlePrep session has no player identity: session_id=" << sessionDetails.session_id();
+        response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
+        return;
+    }
+
+    auto *room = FindRoom(request.battle_id());
+    if (room == nullptr)
+    {
+        LOG_DEBUG << "UpdateBattlePrep room does not exist: battle_id=" << request.battle_id()
+                  << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (room->routingByPlayer.find(playerId) == room->routingByPlayer.end())
+    {
+        LOG_WARN << "UpdateBattlePrep player is not in this battle: battle_id=" << request.battle_id()
+                 << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (TerminalPending(*room))
+    {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+
+    room->engine.MarkPlayerEntered(playerId);
+
+    ::BattlePrepState selfPrep;
+    const uint32_t err = room->engine.UpdateBattlePrep(
+        playerId, request.selected_seal_id(), request.selected_pet_id(), request.ready(), &selfPrep);
+    if (err != 0)
+    {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+
+    selfPrep.set_deadline_ms(room->prepDeadlineMs);
+    *response.mutable_prep_state() = selfPrep;
+
+    if (room->engine.AllPrepPlayersReady())
+    {
+        FinalizeBattlePrep(room->battleId);
+        return;
+    }
+
+    // 仅向同队成员推送变阵同步（各自保留本人可选列表 + 共享本队选择），绝不向对手或观众泄密。
+    const auto actorTeam = room->engine.TeamIndexOfPlayer(playerId);
+    if (!actorTeam.has_value())
+    {
+        return;
+    }
+    for (const auto &[memberId, routing] : room->routingByPlayer)
+    {
+        (void)routing;
+        const auto memberTeam = room->engine.TeamIndexOfPlayer(memberId);
+        if (!memberTeam.has_value() || *memberTeam != *actorTeam)
+        {
+            continue;
+        }
+        ::BattleStateS2C tempState;
+        room->engine.FillPrepStateForViewer(tempState, memberId, room->prepDeadlineMs);
+        ::BattlePrepUpdateS2C notify;
+        notify.set_battle_id(room->battleId);
+        *notify.mutable_prep_state() = tempState.prep_state();
+        PushBattleFrame(*room, memberId, BattleClientPlayerNotifyBattlePrepUpdateMessageId, notify);
+    }
+}
+
+void BattleRoomManager::ArmPrepTimer(BattleRoom &room)
+{
+    room.actionDeadlineMs = 0;
+    room.prepDeadlineMs = TimeSystem::NowMillisecondsUTC() + turnbattle::kTacticalPrepTimeoutMs;
+    const auto battleId = room.battleId;
+    room.prepTimer.RunAfter(static_cast<double>(turnbattle::kTacticalPrepTimeoutMs) / 1000.0,
+                            [this, battleId]
+                            { FinalizeBattlePrep(battleId); });
+}
+
+void BattleRoomManager::FinalizeBattlePrep(const uint64_t battleId)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr || TerminalPending(*room) || !room->engine.IsInPrepPhase())
+    {
+        return;
+    }
+
+    room->prepTimer.Cancel();
+    room->prepDeadlineMs = 0;
+    if (!room->engine.FinalizePrepPhase())
+    {
+        return;
+    }
+
+    ArmRoundTimer(*room);
+
+    ::BattleStartS2C start;
+    start.set_battle_id(battleId);
+    *start.mutable_state() = room->engine.BuildStateSnapshot();
+    start.mutable_state()->set_battle_id(battleId);
+    start.mutable_state()->set_action_deadline_ms(room->actionDeadlineMs);
+
+    if (room->recordReplay && !room->replay)
+    {
+        ::BattleStateS2C spectatorStart = start.state();
+        RedactStateForViewer(spectatorStart, 0);
+        room->replay.emplace(
+            turnbattle::BattleReplayHeader{battleId, room->matchMode, room->battleConfigId, room->createdAtMs,
+                                           turnbattle::BattleTableFingerprint::Current()},
+            spectatorStart);
+    }
+
+    for (const auto &[playerId, routing] : room->routingByPlayer)
+    {
+        ::BattleStartS2C personalStart = start;
+        RedactStateForViewer(*personalStart.mutable_state(), playerId);
+        FillSelfItems(*room, *personalStart.mutable_state(), playerId);
+        PushLobbyAnnouncement(*room, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId,
+                              personalStart);
+    }
+
+    if (room->HasSpectateAudience())
+    {
+        for (const auto &[observerId, routing] : room->routingByObserver)
+        {
+            (void)routing;
+            PushSpectateState(*room, observerId);
+        }
+        if (!room->relayGates.empty() || room->spectateBroadcast)
+        {
+            PublishToAllSpectateChannels(*room, BuildSpectateStateFrame(*room), std::chrono::steady_clock::now());
+        }
+    }
+
+    LOG_INFO << "Battle tactical prep finalized: battle_id=" << battleId
+             << " action_deadline_ms=" << room->actionDeadlineMs;
+}
+
 void BattleRoomManager::ArmRoundTimer(BattleRoom &room)
 {
     // 手动行动收集窗口为 25 秒,不影响技能/buff 的时间→回合换算。
@@ -1480,6 +1642,8 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
     LOG_WARN << "Battle duration limit reached;forcing completion: battle_id=" << battleId
              << " outcome=" << ::eBattleOutcome_Name(outcome);
 
+    room->prepTimer.Cancel();
+    room->prepDeadlineMs = 0;
     room->roundTimer.Cancel();
     // 战报回放:强制判平没有最后一回合帧,记下这一刻的状态(观众版)与结束原因。
     if (room->replay)
@@ -1591,6 +1755,7 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
     const ::eSpectateEndReason reason, std::optional<::TurnResultS2C> finalTurn, ::BattleStateS2C visibleBefore)
 {
     if (TerminalPending(room)) return;
+    room.prepTimer.Cancel(); room.prepDeadlineMs = 0;
     room.roundTimer.Cancel(); room.battleTimer.Cancel(); room.confirmResendTimer.Cancel();
     room.actionDeadlineMs = 0;
     visibleBefore.set_battle_id(room.battleId); visibleBefore.set_action_deadline_ms(0);
@@ -1622,8 +1787,8 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
     room.outcomeRequestDigest = service_call_auth::Digest(original);
     if (room.outcomeRequestDigest.empty()) { room.outcomeExhausted = true; EnsureStuckRoomReporter(); return; }
     room.frozenOutcomeRequest = std::move(original);
-    sqlOutcomeRooms_.insert(room.battleId);
-    if (!sqlOutcomeTimer_.IsActive()) sqlOutcomeTimer_.RunEvery(1.0, [weak = WeakSelf()] {
+    sqlOutcomeRooms.insert(room.battleId);
+    if (!sqlOutcomeTimer.IsActive()) sqlOutcomeTimer.RunEvery(1.0, [weak = WeakSelf()] {
         if (const auto self = weak.lock()) self->PumpSqlOutcomes();
     });
     PumpSqlOutcomes();
@@ -1631,16 +1796,16 @@ void BattleRoomManager::BeginResultCommit(BattleRoom& room, const ::eBattleOutco
 
 void BattleRoomManager::PumpSqlOutcomes()
 {
-    if (outcomeStopping_) return;
+    if (outcomeStopping) return;
     const auto now = std::chrono::steady_clock::now();
     // 第一遍:按冻结时长推进每局的重放阶段,收集这一拍到期(不在途、已到下次尝试时刻)的房间。放弃 / 越界只看时长,
     // 与此刻能不能发无关,所以每拍都要走完这一遍:要是没有 READY 通道就整轮跳过,match 长期不可达时房间永远走不到放弃
     // 那一步(2026-11-05 第二轮评审)。按 (下次尝试时刻, battle_id) 记下,第二遍超出每拍上限时最早到期的先发。
     std::vector<std::pair<std::chrono::steady_clock::time_point, uint64_t>> due;
-    const std::vector<uint64_t> ids(sqlOutcomeRooms_.begin(), sqlOutcomeRooms_.end());
+    const std::vector<uint64_t> ids(sqlOutcomeRooms.begin(), sqlOutcomeRooms.end());
     for (const auto battleId : ids) {
         auto* room = FindRoom(battleId);
-        if (!room || !room->outcomePending) { sqlOutcomeRooms_.erase(battleId); continue; }
+        if (!room || !room->outcomePending) { sqlOutcomeRooms.erase(battleId); continue; }
         // 三段节奏见 result_commit.h 的 SqlOutcomeRetryInterval 说明(2026-10-30):快速重放 → 越界后慢速重放 → 上限后本地删房。
         const auto sinceFrozen = now - room->outcomeSince;
         if (turnbattle::SqlOutcomeReplayAbandoned(sinceFrozen)) {
@@ -1649,7 +1814,7 @@ void BattleRoomManager::PumpSqlOutcomes()
             LOG_ERROR << "metric=battle_sql_outcome_abandoned battle_id=" << battleId << " attempts=" << room->outcomeAttempt
                       << ",no SQL decision long after the replay span;room erased locally, match decides from its persisted original";
             CloseDirectConnections(*room, "sql_outcome_abandoned");
-            sqlOutcomeRooms_.erase(battleId);
+            sqlOutcomeRooms.erase(battleId);
             EraseRoom(battleId);
             continue;
         }
@@ -1664,7 +1829,7 @@ void BattleRoomManager::PumpSqlOutcomes()
         if (room->outcomeInFlight || now < room->nextOutcomeAttempt) continue;
         due.emplace_back(room->nextOutcomeAttempt, battleId);
     }
-    if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
+    if (sqlOutcomeRooms.empty()) sqlOutcomeTimer.Cancel();
     if (due.empty()) return;
 
     // 第二遍:发。缺密钥、此刻没有 READY 的 match 通道都不算一次尝试、不推后,下一拍(1s)再试;只有真正发出才推后
@@ -1680,8 +1845,8 @@ void BattleRoomManager::PumpSqlOutcomes()
     // (第二轮评审补)。不设上限时,match 全部不可达期间积下的终局会在恢复后第一拍一起发出,多个 battle 副本同时打向
     // 刚恢复的 match;发出的局各按发送时刻推后,之后的重放也就错开在不同的拍上。
     // 停机排空窗口内不设上限:预算内拿不到决定的局会在截止后整局作废,突发只来自正在停机的副本。
-    if (!outcomeShutdownFlush_ && due.size() > sqlOutcomeSendsPerPump_) {
-        const auto keep = due.begin() + static_cast<std::ptrdiff_t>(sqlOutcomeSendsPerPump_);
+    if (!outcomeShutdownFlush && due.size() > sqlOutcomeSendsPerPump) {
+        const auto keep = due.begin() + static_cast<std::ptrdiff_t>(sqlOutcomeSendsPerPump);
         std::partial_sort(due.begin(), keep, due.end());
         due.erase(keep, due.end());
     }
@@ -1711,7 +1876,7 @@ void BattleRoomManager::SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &s
     // 停机排空窗口内要补提交的局不推后(2026-11-05 第二轮评审补):在途闸挡住重复发送,这次没拿到决定(失败或 UNKNOWN)
     // 就在下一拍换一个 READY 副本重发,每局每秒至多一次,有界于 Node 的排空预算。match 副本滚动重启时回 GOAWAY /
     // UNAVAILABLE 很快,按 5s 推后会在 15s 预算里白等。窗口外按 SqlOutcomeRetryInterval 推后。
-    const bool shutdownFlush = outcomeShutdownFlush_ &&
+    const bool shutdownFlush = outcomeShutdownFlush &&
         turnbattle::NeedsShutdownOutcomeFlush(room.outcomePending, room.outcomeComplete, room.outcomeExhausted);
     room.nextOutcomeAttempt = shutdownFlush ? now : now + turnbattle::SqlOutcomeRetryInterval(room.outcomeExhausted);
     sendOutcome(request,
@@ -1719,7 +1884,7 @@ void BattleRoomManager::SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &s
             const match::CommitBattleOutcomeResponse* reply) {
             const auto self = weak.lock();
             if (!self) return;
-            if (self->outcomeStopping_) {
+            if (self->outcomeStopping) {
                 LOG_INFO << "event=battle_outcome_reply_after_stop battle_id=" << battleId
                          << " attempt=" << attempt << " code=" << outcome.code
                          << " reply_present=" << (reply != nullptr)
@@ -1745,7 +1910,7 @@ void BattleRoomManager::SendSqlOutcome(BattleRoom &room, const SqlOutcomeSend &s
 
 BattleRoomManager::SqlOutcomeSend BattleRoomManager::PickSqlOutcomeSend()
 {
-    if (sqlOutcomeRoute_) return sqlOutcomeRoute_();
+    if (sqlOutcomeRoute) return sqlOutcomeRoute();
     auto& registry = tlsNodeContextManager.GetRegistry(common::base::MatchNodeService);
     std::vector<entt::entity> ready;
     // GetState(true) 顺带让 IDLE 通道开始连接:这一拍没有 READY 的,下一拍通常就有了。
@@ -1779,14 +1944,16 @@ void BattleRoomManager::OnSqlOutcomeAbort(BattleRoom &room)
 
 void BattleRoomManager::RetireSqlOutcomeRoom(const uint64_t battleId)
 {
-    sqlOutcomeRooms_.erase(battleId);
+    sqlOutcomeRooms.erase(battleId);
     EraseRoom(battleId);
-    if (sqlOutcomeRooms_.empty()) sqlOutcomeTimer_.Cancel();
+    if (sqlOutcomeRooms.empty()) sqlOutcomeTimer.Cancel();
 }
 
 bool BattleRoomManager::FinishBattle(BattleRoom &room)
 {
     if (!room.outcomeComplete) return false;
+    room.prepTimer.Cancel();
+    room.prepDeadlineMs = 0;
     room.roundTimer.Cancel();
     room.battleTimer.Cancel();
     room.confirmResendTimer.Cancel();
@@ -1856,6 +2023,7 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
     // 不依赖"BuildStateSnapshot 恰好不填 self_items"这一外部事实 —— 那是别处的实现细节。
     state.clear_self_items();
     state.clear_surrender_vote();
+    state.clear_prep_state();
     // 战斗类属性(装备带来的必杀 / 连击 / 反击 / 反震 / 抗性概率)只供引擎判定:不分视角全员清掉,
     // 自己的看属性面板(equipment-attributes.md §4.5)。所有出站状态(开战包 / 回合结果 / 补拉 /
     // 观战首帧)都经过本函数,新增下发路径必须同样先过这里。
@@ -1880,6 +2048,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
 {
     state.clear_self_items();
     state.clear_surrender_vote();
+    state.clear_prep_state();
     if (viewerPlayerId == 0)
     {
         return;
@@ -1889,6 +2058,7 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
         *state.add_self_items() = item;
     }
     room.engine.FillSurrenderVoteForViewer(state, viewerPlayerId);
+    room.engine.FillPrepStateForViewer(state, viewerPlayerId, room.prepDeadlineMs);
 }
 
 ::SpectateStateS2C BattleRoomManager::BuildSpectatorState(const BattleRoom &room, const uint32_t observerCount) const
@@ -1900,6 +2070,10 @@ void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &
     state.mutable_state()->set_action_deadline_ms(room.actionDeadlineMs);
     // 观众视角:全员冷却剔除,不带任何人的道具余量(G7)
     RedactStateForViewer(*state.mutable_state(), 0);
+    if (!room.pendingVisibleState)
+    {
+        room.engine.FillPrepStateForViewer(*state.mutable_state(), 0, room.prepDeadlineMs);
+    }
     state.set_observer_count(observerCount);
     return state;
 }
@@ -1927,9 +2101,9 @@ uint32_t BattleRoomManager::LiveObserverCount(const BattleRoom &room) const
 size_t BattleRoomManager::RegisteredObserverSeats() const
 {
     size_t seats = 0;
-    for (const auto battleId : rooms_.Ids())
+    for (const auto battleId : rooms.Ids())
     {
-        if (const auto *room = rooms_.Find(battleId); room != nullptr)
+        if (const auto *room = rooms.Find(battleId); room != nullptr)
         {
             seats += room->routingByObserver.size();
         }
@@ -1992,12 +2166,12 @@ void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observer
     {
         // 封墓碑:原准入截止已过 → 迟到的同 op Add 会被 HandleAddObserver 的时间校验挡住,墓碑可删;
         // 未过 → 置 cancelled,同 op 迟到的 Add 不能翻成准入。墓碑不存在(已被删)时无事可做。
-        const auto operation = spectatorOperations_.find(std::make_tuple(room.battleId, observerId, active->second));
-        if (operation != spectatorOperations_.end())
+        const auto operation = spectatorOperations.find(std::make_tuple(room.battleId, observerId, active->second));
+        if (operation != spectatorOperations.end())
         {
             if (operation->second.admitBeforeMs <= TimeSystem::NowMillisecondsUTC())
             {
-                spectatorOperations_.erase(operation);
+                spectatorOperations.erase(operation);
             }
             else
             {
@@ -2104,14 +2278,14 @@ std::size_t BattleRoomManager::ResolveSqlOutcomeSendsPerPump(const std::string_v
 
 void BattleRoomManager::SetSqlOutcomeSendsPerPump(const std::size_t sends)
 {
-    sqlOutcomeSendsPerPump_ = std::clamp(sends, kMinSqlOutcomeSendsPerPump, kMaxSqlOutcomeSendsPerPump);
-    LOG_INFO << "battle sql outcome sends per pump configured: sends_per_pump=" << sqlOutcomeSendsPerPump_;
+    sqlOutcomeSendsPerPump = std::clamp(sends, kMinSqlOutcomeSendsPerPump, kMaxSqlOutcomeSendsPerPump);
+    LOG_INFO << "battle sql outcome sends per pump configured: sends_per_pump=" << sqlOutcomeSendsPerPump;
 }
 
 void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
 {
     // 观战准入先关:下面冻结的房间此后不会再出帧,排空期间到达的 AddObserver / Attach / Promote 一律回 kServiceUnavailable
-    spectateAdmissionClosed_ = true;
+    spectateAdmissionClosed = true;
     // 终局在这里不停(2026-10-23 修复,审计 r2-battle#2):已经算出、还没拿到 SQL 决定的终局,在停机排空窗口内立即再提交,
     // main.cpp 的 SetShutdownDrainComplete(CanFinishShutdownOutcomeFlush)等它们拿到 COMPLETE / ABORT,有界于 Node 的排空预算;
     // 停止闸到拆除前钩子(StopSqlOutcomes)才装。原来这里直接装停止闸、清空待提交集合:除了恰好在途的那一次,
@@ -2120,9 +2294,9 @@ void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
     // (SendSqlOutcome)。不打断在途的那一次,但它的下次尝试时刻也清零(2026-11-05 第二轮评审补):它是窗口之前按 5s
     // 推后发出的,若很快失败(match 副本滚动重启回 GOAWAY / UNAVAILABLE),原来要等满 5s,现在回调清掉在途之后下一拍就换
     // 一个 READY 副本重发;在途闸照旧挡住重复发送。
-    outcomeShutdownFlush_ = true;
+    outcomeShutdownFlush = true;
     std::size_t flushing = 0;
-    for (const auto battleId : sqlOutcomeRooms_)
+    for (const auto battleId : sqlOutcomeRooms)
     {
         auto *room = FindRoom(battleId);
         if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
@@ -2133,19 +2307,21 @@ void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
     }
     LOG_INFO << "event=battle_outcome_shutdown_flush pending=" << flushing << " reason=" << reason;
     if (flushing != 0) PumpSqlOutcomes();
-    if (rooms_.Empty())
+    if (rooms.Empty())
     {
         return;
     }
 
-    LOG_INFO << "Closing all battle rooms: rooms=" << rooms_.Size() << " reason=" << reason;
-    for (const auto battleId : rooms_.Ids())
+    LOG_INFO << "Closing all battle rooms: rooms=" << rooms.Size() << " reason=" << reason;
+    for (const auto battleId : rooms.Ids())
     {
         auto *room = FindRoom(battleId);
         if (room == nullptr)
         {
             continue;
         }
+        room->prepTimer.Cancel();
+        room->prepDeadlineMs = 0;
         room->roundTimer.Cancel();
         room->battleTimer.Cancel();
         room->confirmResendTimer.Cancel();
@@ -2166,9 +2342,9 @@ void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
 
 bool BattleRoomManager::CanFinishShutdownOutcomeFlush() const
 {
-    for (const auto battleId : sqlOutcomeRooms_)
+    for (const auto battleId : sqlOutcomeRooms)
     {
-        const auto *room = rooms_.Find(battleId);
+        const auto *room = rooms.Find(battleId);
         if (room != nullptr && turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
                                                                      room->outcomeExhausted))
             return false;
@@ -2178,14 +2354,14 @@ bool BattleRoomManager::CanFinishShutdownOutcomeFlush() const
 
 void BattleRoomManager::StopSqlOutcomes()
 {
-    outcomeStopping_ = true;
-    LOG_INFO << "event=battle_outcome_stop_installed pending=" << sqlOutcomeRooms_.size();
+    outcomeStopping = true;
+    LOG_INFO << "event=battle_outcome_stop_installed pending=" << sqlOutcomeRooms.size();
     // 排空预算用完仍没拿到 SQL 决定的终局逐局留痕:battle 这边再没有机会提交,match 在权威截止后原子判 ABORT,
     // 全员作废(除非某次在途提交其实已在 match 落库,那时是 COMPLETE,由 match 发件箱照常补发)。
     // 对账按 battle_id 查 match_battle_completion;battle_id 只进正文,不作 label。
-    for (const auto battleId : sqlOutcomeRooms_)
+    for (const auto battleId : sqlOutcomeRooms)
     {
-        const auto *room = rooms_.Find(battleId);
+        const auto *room = rooms.Find(battleId);
         if (room == nullptr || !turnbattle::NeedsShutdownOutcomeFlush(room->outcomePending, room->outcomeComplete,
                                                                       room->outcomeExhausted))
             continue;
@@ -2194,11 +2370,11 @@ void BattleRoomManager::StopSqlOutcomes()
                   << ",terminal not confirmed before exit;match decides after the authority deadline"
                   << "(ABORT for every member unless an in-flight commit already landed)";
     }
-    sqlOutcomeTimer_.Cancel();
-    sqlOutcomeRooms_.clear();
+    sqlOutcomeTimer.Cancel();
+    sqlOutcomeRooms.clear();
     // 之后再也拿不到决定,不能再替这些房间续命:心跳一停,gate 按空闲超时收尾(合成 166 SOURCE_LOST)
-    spectateKeepaliveTimer_.Cancel();
-    spectateChannelFrameAt_.clear();
+    spectateKeepaliveTimer.Cancel();
+    spectateChannelFrameAt.clear();
 }
 
 // ---- 客户端直连(设计文档 §18,D23-D28;下行出口 turn-based §22 D68) ----
@@ -2207,21 +2383,21 @@ void BattleRoomManager::SetClientEdge(BattleClientEdge *edge)
 {
     if (edge == nullptr)
     {
-        edge_.reset();
+        this->edge.reset();
         return;
     }
-    edge_ = std::ref(*edge);
+    this->edge = std::ref(*edge);
     // 观众配额是直连面连接预算的一部分,随借用直连面注入一次(调用时机见头文件)。
     const size_t effectiveMax = edge->EffectiveMaxConnections();
     SetObserverSeatQuota(ObserverSeatQuotaFor(effectiveMax));
-    LOG_INFO << "battle observer seat quota set: quota=" << observerSeatQuota_
+    LOG_INFO << "battle observer seat quota set: quota=" << observerSeatQuota
              << " effective_max_connections=" << effectiveMax;
 }
 
 muduo::net::TcpConnectionPtr BattleRoomManager::LiveDirectConnOf(const BattleRoom &room,
                                                                  const uint64_t playerId) const
 {
-    if (!edge_)
+    if (!edge)
     {
         return nullptr;
     }
@@ -2273,7 +2449,7 @@ void BattleRoomManager::PushBattleFrame(const BattleRoom &room, const uint64_t p
 {
     if (const auto conn = BattleFrameConnOf(room, playerId, messageId))
     {
-        SendOverDirect(edge_->get(), conn, messageId, message);
+        SendOverDirect(edge->get(), conn, messageId, message);
     }
 }
 
@@ -2289,7 +2465,7 @@ void BattleRoomManager::PushSpectatorFrame(const BattleRoom &room, const ::Messa
     {
         if (const auto conn = BattleFrameConnOf(room, observerId, envelope.message_id()))
         {
-            edge_->get().SendEncoded(conn, frame);
+            edge->get().SendEncoded(conn, frame);
         }
     }
 }
@@ -2303,7 +2479,7 @@ void BattleRoomManager::PushLobbyAnnouncement(const BattleRoom &room, const uint
                                        conn != nullptr))
     {
     case battle_push_policy::PushRoute::kDirect:
-        SendOverDirect(edge_->get(), conn, messageId, message);
+        SendOverDirect(edge->get(), conn, messageId, message);
         return;
     case battle_push_policy::PushRoute::kViaGate:
         PushMessageViaGate(routing, playerId, messageId, message);
@@ -2586,12 +2762,12 @@ void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *rea
 
 void BattleRoomManager::EnsureStuckRoomReporter()
 {
-    if (stuckRoomReportTimer_.IsActive())
+    if (stuckRoomReportTimer.IsActive())
     {
         return;
     }
     // 只绑 weak_ptr<自己>(AGENTS.md §11.7)。
-    stuckRoomReportTimer_.RunEvery(kStuckRoomReportIntervalSec,
+    stuckRoomReportTimer.RunEvery(kStuckRoomReportIntervalSec,
                                    [weakSelf = WeakSelf()]
                                    {
                                        if (const auto self = weakSelf.lock())
@@ -2609,7 +2785,7 @@ void BattleRoomManager::ReportStuckOutcomeRooms()
     // 房间数受节点容量约束,一行列全即可。metric 名沿用已登记的值班查询。
     std::size_t stuckTotal = 0;
     std::string stuckBattles;
-    for (const auto battleId : rooms_.Ids())
+    for (const auto battleId : rooms.Ids())
     {
         const auto *room = FindRoom(battleId);
         if (room == nullptr || !room->outcomePending || !room->outcomeExhausted)
@@ -2628,7 +2804,7 @@ void BattleRoomManager::ReportStuckOutcomeRooms()
         return;
     }
     LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed=" << stuckTotal
-              << " stuck_total=" << stuckTotal << " node_rooms=" << rooms_.Size()
+              << " stuck_total=" << stuckTotal << " node_rooms=" << rooms.Size()
               << ";no SQL decision yet,this node cannot drain until these rooms are cleared;stuck battles: " << stuckBattles;
 }
 
@@ -2711,7 +2887,7 @@ BattleRoomManager::BattleRoom *BattleRoomManager::FindSpectateChannelRoom(const 
     }
     // 停机排空之后房间已冻结,不再出帧:新挂的 gate 只会拿到一帧冻结画面再等空闲超时,升档还会白占一份全服配额。
     // 房间其实还在,不能回 kEntityIsNull(与 AddObserver 同口径,R2-BATTLE 一般-2)
-    if (spectateAdmissionClosed_)
+    if (spectateAdmissionClosed)
     {
         LOG_INFO << "spectate channel request rejected: node is shutting down, battle_id=" << battleId;
         rejectTip = kServiceUnavailable;
@@ -2764,7 +2940,7 @@ void BattleRoomManager::HandleAttachRelayGate(const ::AttachRelayGateRequest &re
     attachedInstanceId = gateInstanceId;
     // 只给这台 gate 补发关键帧:它从这一刻才开始读本场,其它 gate 已有缓存
     auto frame = BuildSpectateStateFrame(*room);
-    spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+    spectateFramePublisher.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
     // 首台 gate 挂上时它就是全部通道,刚补的 STATE 算一次全通道发帧;之后的挂接不刷新心跳时刻(别的 gate 没收到这一帧)
     TrackSpectateChannels(*room, std::chrono::steady_clock::now());
     LOG_INFO << "AttachRelayGate succeeded: battle_id=" << battleId << " gate_node_id=" << gateNodeId
@@ -2847,14 +3023,14 @@ void BattleRoomManager::PublishSpectateEnd(const BattleRoom &room, const ::Messa
                                                   room.engine.BuildStateSnapshot().round_index(), envelope),
                                  std::chrono::steady_clock::now());
     // END 之后 gate 已收尾,不再替本场出心跳
-    spectateChannelFrameAt_.erase(room.battleId);
+    spectateChannelFrameAt.erase(room.battleId);
 }
 
 void BattleRoomManager::PublishToAllSpectateChannels(const BattleRoom &room,
                                                      ::contracts::kafka::SpectateFrameEvent frame,
                                                      const std::chrono::steady_clock::time_point at)
 {
-    if (const auto tracked = spectateChannelFrameAt_.find(room.battleId); tracked != spectateChannelFrameAt_.end())
+    if (const auto tracked = spectateChannelFrameAt.find(room.battleId); tracked != spectateChannelFrameAt.end())
     {
         tracked->second = at;
     }
@@ -2862,24 +3038,24 @@ void BattleRoomManager::PublishToAllSpectateChannels(const BattleRoom &room,
     // 也只有这样 TURN 与 END 才同分区保序,中继 END 不会越过广播上的最后一回合 TURN。
     if (room.spectateBroadcast)
     {
-        spectateFramePublisher_.PublishToBroadcast(frame);
+        spectateFramePublisher.PublishToBroadcast(frame);
         return;
     }
     for (const auto &[gateNodeId, gateInstanceId] : room.relayGates)
     {
-        spectateFramePublisher_.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
+        spectateFramePublisher.PublishToRelayGate(frame, gateNodeId, gateInstanceId);
     }
 }
 
 void BattleRoomManager::TrackSpectateChannels(const BattleRoom &room, const std::chrono::steady_clock::time_point lastFrameAt)
 {
-    spectateChannelFrameAt_.try_emplace(room.battleId, lastFrameAt);
-    if (spectateKeepaliveTimer_.IsActive())
+    spectateChannelFrameAt.try_emplace(room.battleId, lastFrameAt);
+    if (spectateKeepaliveTimer.IsActive())
     {
         return;
     }
     // 每秒一拍,心跳的实际间隔在 [kSpectateChannelKeepalive, +1s) 之间,离 gate 的失联超时还远(node_command_topic.h 的静态断言)
-    spectateKeepaliveTimer_.RunEvery(1.0, [weak = WeakSelf()] {
+    spectateKeepaliveTimer.RunEvery(1.0, [weak = WeakSelf()] {
         if (const auto self = weak.lock())
         {
             self->PumpSpectateKeepalive(std::chrono::steady_clock::now(), TimeSystem::NowMillisecondsUTC());
@@ -2891,13 +3067,13 @@ void BattleRoomManager::PumpSpectateKeepalive(const std::chrono::steady_clock::t
 {
     // 先挑出到点的房间再发:发帧会刷新名单上的时刻,边遍历边改容易看错
     std::vector<uint64_t> due;
-    for (auto it = spectateChannelFrameAt_.begin(); it != spectateChannelFrameAt_.end();)
+    for (auto it = spectateChannelFrameAt.begin(); it != spectateChannelFrameAt.end();)
     {
         const auto *room = FindRoom(it->first);
         // 过了期限宽限,gate 已按 deadline_ms 收尾,再发只会在 gate 上建没人订阅的条目
         if (room == nullptr || (room->deadlineMs != 0 && nowMs >= room->deadlineMs + node::kafka::kSpectateDeadlineGraceMs))
         {
-            it = spectateChannelFrameAt_.erase(it);
+            it = spectateChannelFrameAt.erase(it);
             continue;
         }
         if (now - it->second >= node::kafka::kSpectateChannelKeepalive)
@@ -2915,8 +3091,8 @@ void BattleRoomManager::PumpSpectateKeepalive(const std::chrono::steady_clock::t
             PublishToAllSpectateChannels(*room, BuildSpectateStateFrame(*room), now);
         }
     }
-    if (spectateChannelFrameAt_.empty())
+    if (spectateChannelFrameAt.empty())
     {
-        spectateKeepaliveTimer_.Cancel();
+        spectateKeepaliveTimer.Cancel();
     }
 }

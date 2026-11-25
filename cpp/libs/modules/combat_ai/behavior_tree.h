@@ -43,14 +43,14 @@ public:
     template <typename T>
     void Set(uint32_t key, T value)
     {
-        entries_[key] = Value{value};
+        entries[key] = Value{value};
     }
 
     template <typename T>
     [[nodiscard]] std::optional<T> Get(uint32_t key) const
     {
-        const auto it = entries_.find(key);
-        if (it == entries_.end())
+        const auto it = entries.find(key);
+        if (it == entries.end())
         {
             return std::nullopt;
         }
@@ -69,21 +69,21 @@ public:
 
     [[nodiscard]] bool Has(uint32_t key) const
     {
-        return entries_.find(key) != entries_.end();
+        return entries.find(key) != entries.end();
     }
 
     void Erase(uint32_t key)
     {
-        entries_.erase(key);
+        entries.erase(key);
     }
 
     void Clear()
     {
-        entries_.clear();
+        entries.clear();
     }
 
 private:
-    std::unordered_map<uint32_t, Value> entries_;
+    std::unordered_map<uint32_t, Value> entries;
 };
 
 // 每只怪 / 每个实体独享的运行态快照。
@@ -139,13 +139,13 @@ public:
 
     [[nodiscard]] bool Valid() const noexcept
     {
-        return root_ != kInvalidBtNode && root_ < nodes_.size();
+        return root != kInvalidBtNode && root < nodes.size();
     }
 
     [[nodiscard]] BehaviorTreeState CreateState() const
     {
         BehaviorTreeState state;
-        state.memory.resize(nodes_.size());
+        state.memory.resize(nodes.size());
         return state;
     }
 
@@ -156,22 +156,22 @@ public:
         {
             return BtStatus::kFailure;
         }
-        if (state.memory.size() != nodes_.size())
+        if (state.memory.size() != nodes.size())
         {
-            state.memory.assign(nodes_.size(), BehaviorTreeState::NodeMemory{});
+            state.memory.assign(nodes.size(), BehaviorTreeState::NodeMemory{});
         }
         ++state.tickCount;
-        return TickNode(root_, ctx, state);
+        return TickNode(root, ctx, state);
     }
 
     // 外部强制中止整棵树(如怪物死亡 / 脱战重置 / 被强控)。
     void HaltAll(Context& ctx, BehaviorTreeState& state) const
     {
-        if (!Valid() || state.memory.size() != nodes_.size())
+        if (!Valid() || state.memory.size() != nodes.size())
         {
             return;
         }
-        HaltNode(root_, ctx, state);
+        HaltNode(root, ctx, state);
     }
 
 private:
@@ -196,10 +196,10 @@ private:
         {
             return;
         }
-        const auto& node = nodes_[nodeId];
+        const auto& node = nodes[nodeId];
         for (uint32_t i = 0; i < node.childCount; ++i)
         {
-            HaltNode(childIndices_[node.childBegin + i], ctx, state);
+            HaltNode(childIndices[node.childBegin + i], ctx, state);
         }
         if (node.kind == BtNodeKind::kAction && node.onHalt)
         {
@@ -212,7 +212,7 @@ private:
 
     BtStatus TickNode(BtNodeId nodeId, Context& ctx, BehaviorTreeState& state) const
     {
-        const auto& node = nodes_[nodeId];
+        const auto& node = nodes[nodeId];
         auto& mem = state.memory[nodeId];
         BtStatus result = BtStatus::kFailure;
 
@@ -233,7 +233,7 @@ private:
             result = BtStatus::kSuccess;
             for (uint32_t i = start; i < node.childCount; ++i)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin + i], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin + i], ctx, state);
                 if (childStatus == BtStatus::kRunning)
                 {
                     mem.runningChild = i;
@@ -259,7 +259,7 @@ private:
             result = BtStatus::kFailure;
             for (uint32_t i = start; i < node.childCount; ++i)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin + i], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin + i], ctx, state);
                 if (childStatus == BtStatus::kRunning)
                 {
                     mem.runningChild = i;
@@ -284,13 +284,13 @@ private:
             result = BtStatus::kSuccess;
             for (uint32_t i = 0; i < node.childCount; ++i)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin + i], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin + i], ctx, state);
                 if (childStatus != BtStatus::kSuccess)
                 {
                     // 截断后续分支:上一帧还在跑的后续子节点必须全部 Halt。
                     for (uint32_t j = i + 1; j < node.childCount; ++j)
                     {
-                        HaltNode(childIndices_[node.childBegin + j], ctx, state);
+                        HaltNode(childIndices[node.childBegin + j], ctx, state);
                     }
                     result = childStatus;
                     break;
@@ -303,13 +303,13 @@ private:
             result = BtStatus::kFailure;
             for (uint32_t i = 0; i < node.childCount; ++i)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin + i], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin + i], ctx, state);
                 if (childStatus != BtStatus::kFailure)
                 {
                     // 高优先级分支接管:低优先级正在运行的分支立刻 Halt。
                     for (uint32_t j = i + 1; j < node.childCount; ++j)
                     {
-                        HaltNode(childIndices_[node.childBegin + j], ctx, state);
+                        HaltNode(childIndices[node.childBegin + j], ctx, state);
                     }
                     result = childStatus;
                     break;
@@ -325,7 +325,7 @@ private:
             const uint32_t failureNeed = node.paramB == 0 ? 1u : node.paramB;
             for (uint32_t i = 0; i < node.childCount; ++i)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin + i], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin + i], ctx, state);
                 if (childStatus == BtStatus::kSuccess)
                 {
                     ++successCount;
@@ -351,7 +351,7 @@ private:
             {
                 for (uint32_t i = 0; i < node.childCount; ++i)
                 {
-                    HaltNode(childIndices_[node.childBegin + i], ctx, state);
+                    HaltNode(childIndices[node.childBegin + i], ctx, state);
                 }
             }
             break;
@@ -360,7 +360,7 @@ private:
         case BtNodeKind::kInverter: {
             if (node.childCount == 1)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin], ctx, state);
                 result = (childStatus == BtStatus::kRunning)
                              ? BtStatus::kRunning
                              : (childStatus == BtStatus::kSuccess ? BtStatus::kFailure : BtStatus::kSuccess);
@@ -371,7 +371,7 @@ private:
         case BtNodeKind::kForceSuccess: {
             if (node.childCount == 1)
             {
-                const BtStatus childStatus = TickNode(childIndices_[node.childBegin], ctx, state);
+                const BtStatus childStatus = TickNode(childIndices[node.childBegin], ctx, state);
                 result = (childStatus == BtStatus::kRunning) ? BtStatus::kRunning : BtStatus::kSuccess;
             }
             break;
@@ -382,7 +382,7 @@ private:
             {
                 break;
             }
-            const BtNodeId child = childIndices_[node.childBegin];
+            const BtNodeId child = childIndices[node.childBegin];
             result = BtStatus::kSuccess;
             while (node.paramA == 0 || mem.repeatCount < node.paramA)
             {
@@ -423,7 +423,7 @@ private:
                 result = BtStatus::kFailure;
                 break;
             }
-            result = TickNode(childIndices_[node.childBegin], ctx, state);
+            result = TickNode(childIndices[node.childBegin], ctx, state);
             if (result == BtStatus::kSuccess)
             {
                 mem.cooldownReadyTick = state.tickCount + node.paramA;
@@ -436,9 +436,9 @@ private:
         return result;
     }
 
-    BtNodeId root_{kInvalidBtNode};
-    std::vector<NodeDef> nodes_{};
-    std::vector<BtNodeId> childIndices_{};
+    BtNodeId root{kInvalidBtNode};
+    std::vector<NodeDef> nodes{};
+    std::vector<BtNodeId> childIndices{};
 };
 
 // 构树器:Build() 阶段一次性扁平化子节点表并做环路检测,保证运行期零指针、无死循环。
@@ -475,8 +475,8 @@ public:
                       std::initializer_list<BtNodeId> children)
     {
         const BtNodeId id = AddComposite(BtNodeKind::kParallel, children);
-        drafts_[id].paramA = successThreshold;
-        drafts_[id].paramB = failureThreshold;
+        drafts[id].paramA = successThreshold;
+        drafts[id].paramB = failureThreshold;
         return id;
     }
 
@@ -520,33 +520,33 @@ public:
     // 编译为不可变扁平树;若根节点非法或图中有环,返回 std::nullopt(fail-closed)。
     [[nodiscard]] std::optional<Def> Build(BtNodeId root)
     {
-        if (root >= drafts_.size())
+        if (root >= drafts.size())
         {
             return std::nullopt;
         }
         // 三色 DFS 检环与悬空子节点编号。
-        std::vector<uint8_t> color(drafts_.size(), 0);
+        std::vector<uint8_t> color(drafts.size(), 0);
         if (!ValidateAcyclic(root, color))
         {
             return std::nullopt;
         }
 
         Def def;
-        def.root_ = root;
-        def.nodes_.reserve(drafts_.size());
-        for (auto& draft : drafts_)
+        def.root = root;
+        def.nodes.reserve(drafts.size());
+        for (auto& draft : drafts)
         {
             typename Def::NodeDef out;
             out.kind = draft.kind;
-            out.childBegin = static_cast<uint32_t>(def.childIndices_.size());
+            out.childBegin = static_cast<uint32_t>(def.childIndices.size());
             out.childCount = static_cast<uint32_t>(draft.children.size());
             out.paramA = draft.paramA;
             out.paramB = draft.paramB;
             out.condition = std::move(draft.condition);
             out.action = std::move(draft.action);
             out.onHalt = std::move(draft.onHalt);
-            def.childIndices_.insert(def.childIndices_.end(), draft.children.begin(), draft.children.end());
-            def.nodes_.push_back(std::move(out));
+            def.childIndices.insert(def.childIndices.end(), draft.children.begin(), draft.children.end());
+            def.nodes.push_back(std::move(out));
         }
         return def;
     }
@@ -565,8 +565,8 @@ private:
 
     BtNodeId PushDraft(DraftNode node)
     {
-        const auto id = static_cast<BtNodeId>(drafts_.size());
-        drafts_.push_back(std::move(node));
+        const auto id = static_cast<BtNodeId>(drafts.size());
+        drafts.push_back(std::move(node));
         return id;
     }
 
@@ -589,7 +589,7 @@ private:
 
     bool ValidateAcyclic(BtNodeId id, std::vector<uint8_t>& color) const
     {
-        if (id >= drafts_.size())
+        if (id >= drafts.size())
         {
             return false;
         }
@@ -602,7 +602,7 @@ private:
             return true;
         }
         color[id] = 1;
-        for (const BtNodeId child : drafts_[id].children)
+        for (const BtNodeId child : drafts[id].children)
         {
             if (!ValidateAcyclic(child, color))
             {
@@ -613,7 +613,7 @@ private:
         return true;
     }
 
-    std::vector<DraftNode> drafts_{};
+    std::vector<DraftNode> drafts{};
 };
 
 } // namespace combat_ai

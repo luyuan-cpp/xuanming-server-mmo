@@ -69,6 +69,7 @@ message BattleStateS2C {
   uint32 escalation_start_round = 23;           // 「战意渐盛」起算回合号（0=本模式不启用）
   uint32 surrender_unlock_round = 24;           // PVP 投降解锁回合号（0=不可投降，PVP 为 5）
   BattleSurrenderVoteState surrender_vote = 25; // 本队当前投降投票或冷却状态（对手与观众视角由节点清空）
+  BattlePrepState prep_state = 26;              // 论剑 V3 战前 15 秒明牌变阵状态（非变阵期留空；对手与观众按视角脱敏）
 }
 
 message BattleStartS2C {
@@ -201,6 +202,25 @@ message SurrenderVoteS2C {
   BattleSurrenderVoteState vote_state = 2;
 }
 
+// 论剑 V3 战前 15 秒明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
+message UpdateBattlePrepRequest {
+  uint64 battle_id = 1;
+  uint32 selected_seal_id = 2; // 0 = 保持当前赛季印不变
+  uint64 selected_pet_id = 3;  // 0 = 保持当前首发灵宠不变
+  bool ready = 4;              // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
+}
+
+message UpdateBattlePrepResponse {
+  TipInfoMessage error_message = 1;
+  BattlePrepState prep_state = 2; // 成功时回填收信本人视角最新变阵状态
+}
+
+// 论剑 V3 同队变阵同步推送（仅向变动者所属同队成员单播，对手与观众绝不接收）。
+message BattlePrepUpdateS2C {
+  uint64 battle_id = 1;
+  BattlePrepState prep_state = 2;
+}
+
 // ==== 客户端直连 battle 节点(设计文档 turn-based-battle-server.md §18,D23-D28)====
 //
 // 大厅一条连接(gate),战斗另一条连接(直连 battle 节点 TCP 端口,票据入场)。
@@ -300,6 +320,10 @@ service BattleClientPlayer {
   // ---- PVP 延迟投降(docs/design/ranked-play-v2-overhaul.md):第 5 回合解锁,1V1 秒认输/多人同队投票 ----
   rpc SurrenderBattle (SurrenderBattleRequest) returns (SurrenderBattleResponse);
   rpc NotifySurrenderVote (SurrenderVoteS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
+  rpc UpdateBattlePrep (UpdateBattlePrepRequest) returns (UpdateBattlePrepResponse);
+  rpc NotifyBattlePrepUpdate (BattlePrepUpdateS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }
 
 // ==== 战报回放(docs/design/battle-report-replay.md)====

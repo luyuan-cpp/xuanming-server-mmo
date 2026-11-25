@@ -231,6 +231,38 @@ extern const ::google::protobuf::internal::ClassDataFull BattlePlayerSnapshot_Sk
 #else
 extern const BattlePlayerSnapshot_SkillRanksEntry_DoNotUseGlobalsTypeInternal BattlePlayerSnapshot_SkillRanksEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattlePrepPetOption;
+struct BattlePrepPetOptionGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattlePrepPetOptionGlobalsTypeInternal BattlePrepPetOption_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattlePrepPetOption_class_data_;
+#else
+extern const BattlePrepPetOptionGlobalsTypeInternal BattlePrepPetOption_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattlePrepPlayerState;
+struct BattlePrepPlayerStateGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattlePrepPlayerStateGlobalsTypeInternal BattlePrepPlayerState_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattlePrepPlayerState_class_data_;
+#else
+extern const BattlePrepPlayerStateGlobalsTypeInternal BattlePrepPlayerState_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattlePrepSealOption;
+struct BattlePrepSealOptionGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattlePrepSealOptionGlobalsTypeInternal BattlePrepSealOption_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattlePrepSealOption_class_data_;
+#else
+extern const BattlePrepSealOptionGlobalsTypeInternal BattlePrepSealOption_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattlePrepState;
+struct BattlePrepStateGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattlePrepStateGlobalsTypeInternal BattlePrepState_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattlePrepState_class_data_;
+#else
+extern const BattlePrepStateGlobalsTypeInternal BattlePrepState_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattleRandomItemReward;
 struct BattleRandomItemRewardGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -294,6 +326,14 @@ extern FestivalBeastBattleContextGlobalsTypeInternal FestivalBeastBattleContext_
 extern const ::google::protobuf::internal::ClassDataFull FestivalBeastBattleContext_class_data_;
 #else
 extern const FestivalBeastBattleContextGlobalsTypeInternal FestivalBeastBattleContext_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildWarBattleContext;
+struct GuildWarBattleContextGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildWarBattleContextGlobalsTypeInternal GuildWarBattleContext_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildWarBattleContext_class_data_;
+#else
+extern const GuildWarBattleContextGlobalsTypeInternal GuildWarBattleContext_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class RankedMatchContext;
 struct RankedMatchContextGlobalsTypeInternal;
@@ -596,6 +636,7 @@ enum eBattleActivityKind : int {
   BATTLE_ACTIVITY_KIND_NONE = 0,
   BATTLE_ACTIVITY_KIND_GUILD_TRIAL = 1,
   BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST = 2,
+  BATTLE_ACTIVITY_KIND_GUILD_WAR = 3,
   eBattleActivityKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eBattleActivityKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -606,11 +647,11 @@ extern const uint32_t eBattleActivityKind_internal_data_[];
 inline constexpr eBattleActivityKind eBattleActivityKind_MIN =
     static_cast<eBattleActivityKind>(0);
 inline constexpr eBattleActivityKind eBattleActivityKind_MAX =
-    static_cast<eBattleActivityKind>(2);
+    static_cast<eBattleActivityKind>(3);
 [[nodiscard]] inline bool eBattleActivityKind_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int eBattleActivityKind_ARRAYSIZE = 2 + 1;
+inline constexpr int eBattleActivityKind_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eBattleActivityKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eBattleActivityKind) {
@@ -625,7 +666,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eBattleActivityKind_Name(eBattleActivityKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eBattleActivityKind_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eBattleActivityKind_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eBattleActivityKind_Parse(
@@ -779,7 +820,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialBattleContext final : public :
   [[nodiscard]] static const TrialBattleContext& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TrialBattleContext>(&TrialBattleContext_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(TrialBattleContext& a, TrialBattleContext& b) { a.Swap(&b); }
   inline void Swap(TrialBattleContext* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1028,7 +1069,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedPresetSelection final : publi
   [[nodiscard]] static const RankedPresetSelection& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedPresetSelection>(&RankedPresetSelection_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(RankedPresetSelection& a, RankedPresetSelection& b) { a.Swap(&b); }
   inline void Swap(RankedPresetSelection* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1185,6 +1226,361 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedPresetSelection final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarBattleContext final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GuildWarBattleContext) */ {
+ public:
+  inline GuildWarBattleContext() : GuildWarBattleContext(nullptr) {}
+  ~GuildWarBattleContext() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildWarBattleContext* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildWarBattleContext));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildWarBattleContext(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildWarBattleContext(const GuildWarBattleContext& from) : GuildWarBattleContext(nullptr, from) {}
+  inline GuildWarBattleContext(GuildWarBattleContext&& from) noexcept : GuildWarBattleContext(nullptr, ::std::move(from)) {}
+  inline GuildWarBattleContext& operator=(const GuildWarBattleContext& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildWarBattleContext& operator=(GuildWarBattleContext&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildWarBattleContext& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildWarBattleContext>(&GuildWarBattleContext_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(GuildWarBattleContext& a, GuildWarBattleContext& b) { a.Swap(&b); }
+  inline void Swap(GuildWarBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildWarBattleContext* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildWarBattleContext* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildWarBattleContext>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildWarBattleContext& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildWarBattleContext& from) { GuildWarBattleContext::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildWarBattleContext* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GuildWarBattleContext"; }
+
+  explicit GuildWarBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildWarBattleContext(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildWarBattleContext& from);
+  GuildWarBattleContext(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildWarBattleContext&& from) noexcept
+      : GuildWarBattleContext(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAttackerPlayerIdsFieldNumber = 8,
+    kDefenderPlayerIdsFieldNumber = 9,
+    kAttackerGuildIdFieldNumber = 2,
+    kZoneIdFieldNumber = 1,
+    kLeylineIdFieldNumber = 4,
+    kDefenderGuildIdFieldNumber = 3,
+    kBountyIdFieldNumber = 6,
+    kWarBattleKindFieldNumber = 5,
+    kWeekKeyFieldNumber = 7,
+    kStartedAtMsFieldNumber = 12,
+    kGoldLeylineBonusFieldNumber = 10,
+    kRivalryBonusFieldNumber = 11,
+  };
+  // repeated uint64 attacker_player_ids = 8;
+  [[nodiscard]] int attacker_player_ids_size()
+      const;
+  private:
+  int _internal_attacker_player_ids_size() const;
+
+  public:
+  void clear_attacker_player_ids() ;
+  [[nodiscard]] ::uint64_t attacker_player_ids(int index) const;
+  void set_attacker_player_ids(int index, ::uint64_t value);
+  void add_attacker_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& attacker_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_attacker_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_attacker_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_attacker_player_ids();
+
+  public:
+  // repeated uint64 defender_player_ids = 9;
+  [[nodiscard]] int defender_player_ids_size()
+      const;
+  private:
+  int _internal_defender_player_ids_size() const;
+
+  public:
+  void clear_defender_player_ids() ;
+  [[nodiscard]] ::uint64_t defender_player_ids(int index) const;
+  void set_defender_player_ids(int index, ::uint64_t value);
+  void add_defender_player_ids(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& defender_player_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_defender_player_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_defender_player_ids() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_defender_player_ids();
+
+  public:
+  // uint64 attacker_guild_id = 2;
+  void clear_attacker_guild_id() ;
+  [[nodiscard]] ::uint64_t attacker_guild_id() const;
+  void set_attacker_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_attacker_guild_id() const;
+  void _internal_set_attacker_guild_id(::uint64_t value);
+
+  public:
+  // uint32 zone_id = 1;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 leyline_id = 4;
+  void clear_leyline_id() ;
+  [[nodiscard]] ::uint32_t leyline_id() const;
+  void set_leyline_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_leyline_id() const;
+  void _internal_set_leyline_id(::uint32_t value);
+
+  public:
+  // uint64 defender_guild_id = 3;
+  void clear_defender_guild_id() ;
+  [[nodiscard]] ::uint64_t defender_guild_id() const;
+  void set_defender_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_defender_guild_id() const;
+  void _internal_set_defender_guild_id(::uint64_t value);
+
+  public:
+  // uint64 bounty_id = 6;
+  void clear_bounty_id() ;
+  [[nodiscard]] ::uint64_t bounty_id() const;
+  void set_bounty_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_bounty_id() const;
+  void _internal_set_bounty_id(::uint64_t value);
+
+  public:
+  // uint32 war_battle_kind = 5;
+  void clear_war_battle_kind() ;
+  [[nodiscard]] ::uint32_t war_battle_kind() const;
+  void set_war_battle_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_war_battle_kind() const;
+  void _internal_set_war_battle_kind(::uint32_t value);
+
+  public:
+  // uint32 week_key = 7;
+  void clear_week_key() ;
+  [[nodiscard]] ::uint32_t week_key() const;
+  void set_week_key(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_week_key() const;
+  void _internal_set_week_key(::uint32_t value);
+
+  public:
+  // uint64 started_at_ms = 12;
+  void clear_started_at_ms() ;
+  [[nodiscard]] ::uint64_t started_at_ms() const;
+  void set_started_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_started_at_ms() const;
+  void _internal_set_started_at_ms(::uint64_t value);
+
+  public:
+  // bool gold_leyline_bonus = 10;
+  void clear_gold_leyline_bonus() ;
+  [[nodiscard]] bool gold_leyline_bonus() const;
+  void set_gold_leyline_bonus(bool value);
+
+  private:
+  bool _internal_gold_leyline_bonus() const;
+  void _internal_set_gold_leyline_bonus(bool value);
+
+  public:
+  // bool rivalry_bonus = 11;
+  void clear_rivalry_bonus() ;
+  [[nodiscard]] bool rivalry_bonus() const;
+  void set_rivalry_bonus(bool value);
+
+  private:
+  bool _internal_rivalry_bonus() const;
+  void _internal_set_rivalry_bonus(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:GuildWarBattleContext)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildWarBattleContext& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> attacker_player_ids_;
+    ::google::protobuf::internal::CachedSize _attacker_player_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> defender_player_ids_;
+    ::google::protobuf::internal::CachedSize _defender_player_ids_cached_byte_size_;
+    ::uint64_t attacker_guild_id_;
+    ::uint32_t zone_id_;
+    ::uint32_t leyline_id_;
+    ::uint64_t defender_guild_id_;
+    ::uint64_t bounty_id_;
+    ::uint32_t war_battle_kind_;
+    ::uint32_t week_key_;
+    ::uint64_t started_at_ms_;
+    bool gold_leyline_bonus_;
+    bool rivalry_bonus_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FestivalBeastBattleContext final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:FestivalBeastBattleContext) */ {
  public:
@@ -1241,7 +1637,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FestivalBeastBattleContext final : 
   [[nodiscard]] static const FestivalBeastBattleContext& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FestivalBeastBattleContext>(&FestivalBeastBattleContext_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(FestivalBeastBattleContext& a, FestivalBeastBattleContext& b) { a.Swap(&b); }
   inline void Swap(FestivalBeastBattleContext* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1721,7 +2117,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleTrialJournalFacts final : pub
   [[nodiscard]] static const BattleTrialJournalFacts& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleTrialJournalFacts>(&BattleTrialJournalFacts_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(BattleTrialJournalFacts& a, BattleTrialJournalFacts& b) { a.Swap(&b); }
   inline void Swap(BattleTrialJournalFacts* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2817,7 +3213,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRandomItemReward final : publ
   [[nodiscard]] static const BattleRandomItemReward& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleRandomItemReward>(&BattleRandomItemReward_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(BattleRandomItemReward& a, BattleRandomItemReward& b) { a.Swap(&b); }
   inline void Swap(BattleRandomItemReward* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2986,6 +3382,839 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRandomItemReward final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePrepSealOption final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattlePrepSealOption) */ {
+ public:
+  inline BattlePrepSealOption() : BattlePrepSealOption(nullptr) {}
+  ~BattlePrepSealOption() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePrepSealOption* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePrepSealOption));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePrepSealOption(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePrepSealOption(const BattlePrepSealOption& from) : BattlePrepSealOption(nullptr, from) {}
+  inline BattlePrepSealOption(BattlePrepSealOption&& from) noexcept : BattlePrepSealOption(nullptr, ::std::move(from)) {}
+  inline BattlePrepSealOption& operator=(const BattlePrepSealOption& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePrepSealOption& operator=(BattlePrepSealOption&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePrepSealOption& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePrepSealOption>(&BattlePrepSealOption_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(BattlePrepSealOption& a, BattlePrepSealOption& b) { a.Swap(&b); }
+  inline void Swap(BattlePrepSealOption* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePrepSealOption* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePrepSealOption* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePrepSealOption>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePrepSealOption& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePrepSealOption& from) { BattlePrepSealOption::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePrepSealOption* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattlePrepSealOption"; }
+
+  explicit BattlePrepSealOption(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePrepSealOption(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePrepSealOption& from);
+  BattlePrepSealOption(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePrepSealOption&& from) noexcept
+      : BattlePrepSealOption(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 3,
+    kSealIdFieldNumber = 1,
+    kEffectIdFieldNumber = 2,
+  };
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint32 seal_id = 1;
+  void clear_seal_id() ;
+  [[nodiscard]] ::uint32_t seal_id() const;
+  void set_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_seal_id() const;
+  void _internal_set_seal_id(::uint32_t value);
+
+  public:
+  // uint32 effect_id = 2;
+  void clear_effect_id() ;
+  [[nodiscard]] ::uint32_t effect_id() const;
+  void set_effect_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_id() const;
+  void _internal_set_effect_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattlePrepSealOption)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 33,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePrepSealOption& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t seal_id_;
+    ::uint32_t effect_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePrepPlayerState final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattlePrepPlayerState) */ {
+ public:
+  inline BattlePrepPlayerState() : BattlePrepPlayerState(nullptr) {}
+  ~BattlePrepPlayerState() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePrepPlayerState* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePrepPlayerState));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePrepPlayerState(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePrepPlayerState(const BattlePrepPlayerState& from) : BattlePrepPlayerState(nullptr, from) {}
+  inline BattlePrepPlayerState(BattlePrepPlayerState&& from) noexcept : BattlePrepPlayerState(nullptr, ::std::move(from)) {}
+  inline BattlePrepPlayerState& operator=(const BattlePrepPlayerState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePrepPlayerState& operator=(BattlePrepPlayerState&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePrepPlayerState& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePrepPlayerState>(&BattlePrepPlayerState_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(BattlePrepPlayerState& a, BattlePrepPlayerState& b) { a.Swap(&b); }
+  inline void Swap(BattlePrepPlayerState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePrepPlayerState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePrepPlayerState* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePrepPlayerState>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePrepPlayerState& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePrepPlayerState& from) { BattlePrepPlayerState::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePrepPlayerState* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattlePrepPlayerState"; }
+
+  explicit BattlePrepPlayerState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePrepPlayerState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePrepPlayerState& from);
+  BattlePrepPlayerState(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePrepPlayerState&& from) noexcept
+      : BattlePrepPlayerState(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSelectedPetNameFieldNumber = 6,
+    kPlayerIdFieldNumber = 1,
+    kTeamIndexFieldNumber = 2,
+    kSelectedSealIdFieldNumber = 3,
+    kSelectedPetIdFieldNumber = 4,
+    kSelectedPetTableIdFieldNumber = 5,
+    kReadyFieldNumber = 7,
+  };
+  // string selected_pet_name = 6;
+  void clear_selected_pet_name() ;
+  [[nodiscard]] const ::std::string& selected_pet_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_selected_pet_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_selected_pet_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_selected_pet_name();
+  void set_allocated_selected_pet_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_selected_pet_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_selected_pet_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_selected_pet_name();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 team_index = 2;
+  void clear_team_index() ;
+  [[nodiscard]] ::uint32_t team_index() const;
+  void set_team_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_team_index() const;
+  void _internal_set_team_index(::uint32_t value);
+
+  public:
+  // uint32 selected_seal_id = 3;
+  void clear_selected_seal_id() ;
+  [[nodiscard]] ::uint32_t selected_seal_id() const;
+  void set_selected_seal_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_selected_seal_id() const;
+  void _internal_set_selected_seal_id(::uint32_t value);
+
+  public:
+  // uint64 selected_pet_id = 4;
+  void clear_selected_pet_id() ;
+  [[nodiscard]] ::uint64_t selected_pet_id() const;
+  void set_selected_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_selected_pet_id() const;
+  void _internal_set_selected_pet_id(::uint64_t value);
+
+  public:
+  // uint32 selected_pet_table_id = 5;
+  void clear_selected_pet_table_id() ;
+  [[nodiscard]] ::uint32_t selected_pet_table_id() const;
+  void set_selected_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_selected_pet_table_id() const;
+  void _internal_set_selected_pet_table_id(::uint32_t value);
+
+  public:
+  // bool ready = 7;
+  void clear_ready() ;
+  [[nodiscard]] bool ready() const;
+  void set_ready(bool value);
+
+  private:
+  bool _internal_ready() const;
+  void _internal_set_ready(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattlePrepPlayerState)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 47,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePrepPlayerState& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr selected_pet_name_;
+    ::uint64_t player_id_;
+    ::uint32_t team_index_;
+    ::uint32_t selected_seal_id_;
+    ::uint64_t selected_pet_id_;
+    ::uint32_t selected_pet_table_id_;
+    bool ready_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePrepPetOption final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattlePrepPetOption) */ {
+ public:
+  inline BattlePrepPetOption() : BattlePrepPetOption(nullptr) {}
+  ~BattlePrepPetOption() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePrepPetOption* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePrepPetOption));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePrepPetOption(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePrepPetOption(const BattlePrepPetOption& from) : BattlePrepPetOption(nullptr, from) {}
+  inline BattlePrepPetOption(BattlePrepPetOption&& from) noexcept : BattlePrepPetOption(nullptr, ::std::move(from)) {}
+  inline BattlePrepPetOption& operator=(const BattlePrepPetOption& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePrepPetOption& operator=(BattlePrepPetOption&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePrepPetOption& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePrepPetOption>(&BattlePrepPetOption_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(BattlePrepPetOption& a, BattlePrepPetOption& b) { a.Swap(&b); }
+  inline void Swap(BattlePrepPetOption* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePrepPetOption* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePrepPetOption* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePrepPetOption>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePrepPetOption& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePrepPetOption& from) { BattlePrepPetOption::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePrepPetOption* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattlePrepPetOption"; }
+
+  explicit BattlePrepPetOption(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePrepPetOption(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePrepPetOption& from);
+  BattlePrepPetOption(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePrepPetOption&& from) noexcept
+      : BattlePrepPetOption(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSkillTableIdsFieldNumber = 10,
+    kPetNameFieldNumber = 3,
+    kPetIdFieldNumber = 1,
+    kPetTableIdFieldNumber = 2,
+    kLevelFieldNumber = 4,
+    kMaxHealthFieldNumber = 5,
+    kSpeedFieldNumber = 6,
+    kPhysicalAttackFieldNumber = 7,
+    kMagicAttackFieldNumber = 8,
+    kDefenseFieldNumber = 9,
+  };
+  // repeated uint32 skill_table_ids = 10;
+  [[nodiscard]] int skill_table_ids_size()
+      const;
+  private:
+  int _internal_skill_table_ids_size() const;
+
+  public:
+  void clear_skill_table_ids() ;
+  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
+  void set_skill_table_ids(int index, ::uint32_t value);
+  void add_skill_table_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
+
+  public:
+  // string pet_name = 3;
+  void clear_pet_name() ;
+  [[nodiscard]] const ::std::string& pet_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_pet_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_pet_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pet_name();
+  void set_allocated_pet_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_pet_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_pet_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_pet_name();
+
+  public:
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint32 pet_table_id = 2;
+  void clear_pet_table_id() ;
+  [[nodiscard]] ::uint32_t pet_table_id() const;
+  void set_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_table_id() const;
+  void _internal_set_pet_table_id(::uint32_t value);
+
+  public:
+  // uint32 level = 4;
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
+  // uint64 max_health = 5;
+  void clear_max_health() ;
+  [[nodiscard]] ::uint64_t max_health() const;
+  void set_max_health(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_max_health() const;
+  void _internal_set_max_health(::uint64_t value);
+
+  public:
+  // uint64 speed = 6;
+  void clear_speed() ;
+  [[nodiscard]] ::uint64_t speed() const;
+  void set_speed(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_speed() const;
+  void _internal_set_speed(::uint64_t value);
+
+  public:
+  // uint64 physical_attack = 7;
+  void clear_physical_attack() ;
+  [[nodiscard]] ::uint64_t physical_attack() const;
+  void set_physical_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_physical_attack() const;
+  void _internal_set_physical_attack(::uint64_t value);
+
+  public:
+  // uint64 magic_attack = 8;
+  void clear_magic_attack() ;
+  [[nodiscard]] ::uint64_t magic_attack() const;
+  void set_magic_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_magic_attack() const;
+  void _internal_set_magic_attack(::uint64_t value);
+
+  public:
+  // uint64 defense = 9;
+  void clear_defense() ;
+  [[nodiscard]] ::uint64_t defense() const;
+  void set_defense(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_defense() const;
+  void _internal_set_defense(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattlePrepPetOption)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 44,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePrepPetOption& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
+    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr pet_name_;
+    ::uint64_t pet_id_;
+    ::uint32_t pet_table_id_;
+    ::uint32_t level_;
+    ::uint64_t max_health_;
+    ::uint64_t speed_;
+    ::uint64_t physical_attack_;
+    ::uint64_t magic_attack_;
+    ::uint64_t defense_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
 class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot_SkillRanksEntry_DoNotUse final
     : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
                              ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
@@ -3140,7 +4369,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSettlementData final : pub
   [[nodiscard]] static const BattlePetSettlementData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePetSettlementData>(&BattlePetSettlementData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(BattlePetSettlementData& a, BattlePetSettlementData& b) { a.Swap(&b); }
   inline void Swap(BattlePetSettlementData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3377,7 +4606,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleParticipationFact final : pub
   [[nodiscard]] static const BattleParticipationFact& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleParticipationFact>(&BattleParticipationFact_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(BattleParticipationFact& a, BattleParticipationFact& b) { a.Swap(&b); }
   inline void Swap(BattleParticipationFact* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3626,7 +4855,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleMonsterDefeat final : public 
   [[nodiscard]] static const BattleMonsterDefeat& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleMonsterDefeat>(&BattleMonsterDefeat_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(BattleMonsterDefeat& a, BattleMonsterDefeat& b) { a.Swap(&b); }
   inline void Swap(BattleMonsterDefeat* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4567,7 +5796,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleCurrencyGain final : public :
   [[nodiscard]] static const BattleCurrencyGain& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleCurrencyGain>(&BattleCurrencyGain_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(BattleCurrencyGain& a, BattleCurrencyGain& b) { a.Swap(&b); }
   inline void Swap(BattleCurrencyGain* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5905,7 +7134,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMemberLoadout final : public 
   [[nodiscard]] static const RankedMemberLoadout& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedMemberLoadout>(&RankedMemberLoadout_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(RankedMemberLoadout& a, RankedMemberLoadout& b) { a.Swap(&b); }
   inline void Swap(RankedMemberLoadout* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6124,7 +7353,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   [[nodiscard]] static const BattleSettlementData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSettlementData>(&BattleSettlementData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(BattleSettlementData& a, BattleSettlementData& b) { a.Swap(&b); }
   inline void Swap(BattleSettlementData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6775,7 +8004,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardProfile final : public 
   [[nodiscard]] static const BattleRewardProfile& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleRewardProfile>(&BattleRewardProfile_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(BattleRewardProfile& a, BattleRewardProfile& b) { a.Swap(&b); }
   inline void Swap(BattleRewardProfile* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7007,6 +8236,300 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardProfile final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePrepState final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattlePrepState) */ {
+ public:
+  inline BattlePrepState() : BattlePrepState(nullptr) {}
+  ~BattlePrepState() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePrepState* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePrepState));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePrepState(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePrepState(const BattlePrepState& from) : BattlePrepState(nullptr, from) {}
+  inline BattlePrepState(BattlePrepState&& from) noexcept : BattlePrepState(nullptr, ::std::move(from)) {}
+  inline BattlePrepState& operator=(const BattlePrepState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePrepState& operator=(BattlePrepState&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePrepState& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePrepState>(&BattlePrepState_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(BattlePrepState& a, BattlePrepState& b) { a.Swap(&b); }
+  inline void Swap(BattlePrepState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePrepState* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePrepState* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePrepState>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePrepState& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePrepState& from) { BattlePrepState::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePrepState* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattlePrepState"; }
+
+  explicit BattlePrepState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePrepState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePrepState& from);
+  BattlePrepState(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePrepState&& from) noexcept
+      : BattlePrepState(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSelfAvailableSealsFieldNumber = 4,
+    kSelfAvailablePetsFieldNumber = 5,
+    kTeamStatesFieldNumber = 6,
+    kDeadlineMsFieldNumber = 2,
+    kActiveFieldNumber = 1,
+    kDurationSecondsFieldNumber = 3,
+  };
+  // repeated .BattlePrepSealOption self_available_seals = 4;
+  [[nodiscard]] int self_available_seals_size()
+      const;
+  private:
+  int _internal_self_available_seals_size() const;
+
+  public:
+  void clear_self_available_seals() ;
+  [[nodiscard]] const ::BattlePrepSealOption& self_available_seals(int index) const;
+  [[nodiscard]] ::BattlePrepSealOption* PROTOBUF_NONNULL mutable_self_available_seals(int index);
+  ::BattlePrepSealOption* PROTOBUF_NONNULL add_self_available_seals();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>&
+  self_available_seals() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>* PROTOBUF_NONNULL
+  mutable_self_available_seals();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>& _internal_self_available_seals() const;
+  ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>* PROTOBUF_NONNULL _internal_mutable_self_available_seals();
+
+  public:
+  // repeated .BattlePrepPetOption self_available_pets = 5;
+  [[nodiscard]] int self_available_pets_size()
+      const;
+  private:
+  int _internal_self_available_pets_size() const;
+
+  public:
+  void clear_self_available_pets() ;
+  [[nodiscard]] const ::BattlePrepPetOption& self_available_pets(int index) const;
+  [[nodiscard]] ::BattlePrepPetOption* PROTOBUF_NONNULL mutable_self_available_pets(int index);
+  ::BattlePrepPetOption* PROTOBUF_NONNULL add_self_available_pets();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>&
+  self_available_pets() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>* PROTOBUF_NONNULL
+  mutable_self_available_pets();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>& _internal_self_available_pets() const;
+  ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>* PROTOBUF_NONNULL _internal_mutable_self_available_pets();
+
+  public:
+  // repeated .BattlePrepPlayerState team_states = 6;
+  [[nodiscard]] int team_states_size()
+      const;
+  private:
+  int _internal_team_states_size() const;
+
+  public:
+  void clear_team_states() ;
+  [[nodiscard]] const ::BattlePrepPlayerState& team_states(int index) const;
+  [[nodiscard]] ::BattlePrepPlayerState* PROTOBUF_NONNULL mutable_team_states(int index);
+  ::BattlePrepPlayerState* PROTOBUF_NONNULL add_team_states();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>&
+  team_states() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>* PROTOBUF_NONNULL
+  mutable_team_states();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>& _internal_team_states() const;
+  ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>* PROTOBUF_NONNULL _internal_mutable_team_states();
+
+  public:
+  // uint64 deadline_ms = 2;
+  void clear_deadline_ms() ;
+  [[nodiscard]] ::uint64_t deadline_ms() const;
+  void set_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deadline_ms() const;
+  void _internal_set_deadline_ms(::uint64_t value);
+
+  public:
+  // bool active = 1;
+  void clear_active() ;
+  [[nodiscard]] bool active() const;
+  void set_active(bool value);
+
+  private:
+  bool _internal_active() const;
+  void _internal_set_active(bool value);
+
+  public:
+  // uint32 duration_seconds = 3;
+  void clear_duration_seconds() ;
+  [[nodiscard]] ::uint32_t duration_seconds() const;
+  void set_duration_seconds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_duration_seconds() const;
+  void _internal_set_duration_seconds(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattlePrepState)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePrepState& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::BattlePrepSealOption > self_available_seals_;
+    ::google::protobuf::RepeatedPtrField< ::BattlePrepPetOption > self_available_pets_;
+    ::google::protobuf::RepeatedPtrField< ::BattlePrepPlayerState > team_states_;
+    ::uint64_t deadline_ms_;
+    bool active_;
+    ::uint32_t duration_seconds_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:BattleActivityContext) */ {
  public:
@@ -7063,7 +8586,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : publi
   [[nodiscard]] static const BattleActivityContext& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleActivityContext>(&BattleActivityContext_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(BattleActivityContext& a, BattleActivityContext& b) { a.Swap(&b); }
   inline void Swap(BattleActivityContext* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7156,6 +8679,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : publi
   // accessors -------------------------------------------------------
   enum : int {
     kFestivalBeastFieldNumber = 8,
+    kGuildWarFieldNumber = 9,
     kGuildIdFieldNumber = 2,
     kKindFieldNumber = 1,
     kActivityIdFieldNumber = 3,
@@ -7178,6 +8702,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : publi
   private:
   const ::FestivalBeastBattleContext& _internal_festival_beast() const;
   ::FestivalBeastBattleContext* PROTOBUF_NONNULL _internal_mutable_festival_beast();
+
+  public:
+  // .GuildWarBattleContext guild_war = 9;
+  [[nodiscard]] bool has_guild_war()
+      const;
+  void clear_guild_war() ;
+  [[nodiscard]] const ::GuildWarBattleContext& guild_war() const;
+  [[nodiscard]] ::GuildWarBattleContext* PROTOBUF_NULLABLE release_guild_war();
+  ::GuildWarBattleContext* PROTOBUF_NONNULL mutable_guild_war();
+  void set_allocated_guild_war(::GuildWarBattleContext* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild_war(::GuildWarBattleContext* PROTOBUF_NULLABLE value);
+  ::GuildWarBattleContext* PROTOBUF_NULLABLE unsafe_arena_release_guild_war();
+
+  private:
+  const ::GuildWarBattleContext& _internal_guild_war() const;
+  ::GuildWarBattleContext* PROTOBUF_NONNULL _internal_mutable_guild_war();
 
   public:
   // uint64 guild_id = 2;
@@ -7254,8 +8794,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7284,6 +8824,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActivityContext final : publi
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::FestivalBeastBattleContext* PROTOBUF_NULLABLE festival_beast_;
+    ::GuildWarBattleContext* PROTOBUF_NULLABLE guild_war_;
     ::uint64_t guild_id_;
     int kind_;
     ::uint32_t activity_id_;
@@ -7354,7 +8895,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedMatchContext final : public :
   [[nodiscard]] static const RankedMatchContext& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RankedMatchContext>(&RankedMatchContext_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(RankedMatchContext& a, RankedMatchContext& b) { a.Swap(&b); }
   inline void Swap(RankedMatchContext* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7660,7 +9201,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardConfig final : public :
   [[nodiscard]] static const BattleRewardConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleRewardConfig>(&BattleRewardConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(BattleRewardConfig& a, BattleRewardConfig& b) { a.Swap(&b); }
   inline void Swap(BattleRewardConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8383,6 +9924,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kBuffsFieldNumber = 8,
     kItemsFieldNumber = 9,
     kPetsFieldNumber = 16,
+    kStandbyPetsFieldNumber = 26,
+    kAvailableSeasonSealsFieldNumber = 27,
     kPlayerNameFieldNumber = 2,
     kTableFingerprintFieldNumber = 12,
     kAppearanceIdFieldNumber = 17,
@@ -8402,6 +9945,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kGenderFieldNumber = 19,
     kPetCaptureSlotsFieldNumber = 22,
     kActiveSeasonIdFieldNumber = 24,
+    kAiControlledFieldNumber = 25,
     kSkillRanksFieldNumber = 21,
   };
   // repeated uint32 skill_table_ids = 7;
@@ -8485,6 +10029,48 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   private:
   const ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>& _internal_pets() const;
   ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>* PROTOBUF_NONNULL _internal_mutable_pets();
+
+  public:
+  // repeated .BattlePetSnapshot standby_pets = 26;
+  [[nodiscard]] int standby_pets_size()
+      const;
+  private:
+  int _internal_standby_pets_size() const;
+
+  public:
+  void clear_standby_pets() ;
+  [[nodiscard]] const ::BattlePetSnapshot& standby_pets(int index) const;
+  [[nodiscard]] ::BattlePetSnapshot* PROTOBUF_NONNULL mutable_standby_pets(int index);
+  ::BattlePetSnapshot* PROTOBUF_NONNULL add_standby_pets();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>&
+  standby_pets() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>* PROTOBUF_NONNULL
+  mutable_standby_pets();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>& _internal_standby_pets() const;
+  ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>* PROTOBUF_NONNULL _internal_mutable_standby_pets();
+
+  public:
+  // repeated .SeasonSealEffect available_season_seals = 27;
+  [[nodiscard]] int available_season_seals_size()
+      const;
+  private:
+  int _internal_available_season_seals_size() const;
+
+  public:
+  void clear_available_season_seals() ;
+  [[nodiscard]] const ::SeasonSealEffect& available_season_seals(int index) const;
+  [[nodiscard]] ::SeasonSealEffect* PROTOBUF_NONNULL mutable_available_season_seals(int index);
+  ::SeasonSealEffect* PROTOBUF_NONNULL add_available_season_seals();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>&
+  available_season_seals() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>* PROTOBUF_NONNULL
+  mutable_available_season_seals();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>& _internal_available_season_seals() const;
+  ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>* PROTOBUF_NONNULL _internal_mutable_available_season_seals();
 
   public:
   // string player_name = 2;
@@ -8716,6 +10302,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_active_season_id(::uint32_t value);
 
   public:
+  // bool ai_controlled = 25;
+  void clear_ai_controlled() ;
+  [[nodiscard]] bool ai_controlled() const;
+  void set_ai_controlled(bool value);
+
+  private:
+  bool _internal_ai_controlled() const;
+  void _internal_set_ai_controlled(bool value);
+
+  public:
   // map<uint32, uint32> skill_ranks = 21;
   [[nodiscard]] int skill_ranks_size()
       const;
@@ -8736,8 +10332,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
-                          8, 94,
+      ::google::protobuf::internal::TcParseTable<5, 27,
+                          10, 94,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -8770,6 +10366,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::google::protobuf::RepeatedPtrField< ::BattleBuffEntry > buffs_;
     ::google::protobuf::RepeatedPtrField< ::BattleItemEntry > items_;
     ::google::protobuf::RepeatedPtrField< ::BattlePetSnapshot > pets_;
+    ::google::protobuf::RepeatedPtrField< ::BattlePetSnapshot > standby_pets_;
+    ::google::protobuf::RepeatedPtrField< ::SeasonSealEffect > available_season_seals_;
     ::google::protobuf::internal::ArenaStringPtr player_name_;
     ::google::protobuf::internal::ArenaStringPtr table_fingerprint_;
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
@@ -8789,6 +10387,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::uint32_t gender_;
     ::uint32_t pet_capture_slots_;
     ::uint32_t active_season_id_;
+    bool ai_controlled_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -8989,6 +10588,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kWithdrawUntilRoundFieldNumber = 34,
     kCompetitiveTemporaryFieldNumber = 42,
     kIsBossFieldNumber = 43,
+    kChargingSkillIdFieldNumber = 45,
   };
   // repeated .BattleBuffEntry buffs = 12;
   [[nodiscard]] int buffs_size()
@@ -9542,11 +11142,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_is_boss(bool value);
 
   public:
+  // uint32 charging_skill_id = 45;
+  void clear_charging_skill_id() ;
+  [[nodiscard]] ::uint32_t charging_skill_id() const;
+  void set_charging_skill_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_charging_skill_id() const;
+  void _internal_set_charging_skill_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleActorState)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 44,
+      ::google::protobuf::internal::TcParseTable<5, 45,
                           12, 82,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -9621,6 +11231,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     ::uint32_t withdraw_until_round_;
     bool competitive_temporary_;
     bool is_boss_;
+    ::uint32_t charging_skill_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10417,7 +12028,7 @@ inline void BattleItemEntry::_internal_set_count(::uint64_t value) {
 inline void BattlePlayerSnapshot::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::player_id() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.player_id)
@@ -10425,7 +12036,7 @@ inline ::uint64_t BattlePlayerSnapshot::player_id() const {
 }
 inline void BattlePlayerSnapshot::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.player_id)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_player_id() const {
@@ -10441,7 +12052,7 @@ inline void BattlePlayerSnapshot::_internal_set_player_id(::uint64_t value) {
 inline void BattlePlayerSnapshot::clear_player_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::std::string& BattlePlayerSnapshot::player_name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -10451,13 +12062,13 @@ inline const ::std::string& BattlePlayerSnapshot::player_name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattlePlayerSnapshot::set_player_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   _impl_.player_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.player_name)
 }
 inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_player_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::std::string* _s = _internal_mutable_player_name();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.player_name)
   return _s;
@@ -10477,10 +12088,10 @@ inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_mutable_p
 inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_player_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.player_name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   auto* released = _impl_.player_name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.player_name_.Set("", GetArena());
@@ -10490,9 +12101,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_player_nam
 inline void BattlePlayerSnapshot::set_allocated_player_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   _impl_.player_name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.player_name_.IsDefault()) {
@@ -10505,7 +12116,7 @@ inline void BattlePlayerSnapshot::set_allocated_player_name(::std::string* PROTO
 inline void BattlePlayerSnapshot::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::level() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.level)
@@ -10513,7 +12124,7 @@ inline ::uint32_t BattlePlayerSnapshot::level() const {
 }
 inline void BattlePlayerSnapshot::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.level)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_level() const {
@@ -10527,7 +12138,7 @@ inline void BattlePlayerSnapshot::_internal_set_level(::uint32_t value) {
 
 // .BaseAttributesComp base_attributes = 4;
 inline bool BattlePlayerSnapshot::has_base_attributes() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
   PROTOBUF_ASSUME(!value || _impl_.base_attributes_ != nullptr);
   return value;
 }
@@ -10548,16 +12159,16 @@ inline void BattlePlayerSnapshot::unsafe_arena_set_allocated_base_attributes(
   }
   _impl_.base_attributes_ = reinterpret_cast<::BaseAttributesComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattlePlayerSnapshot.base_attributes)
 }
 inline ::BaseAttributesComp* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_base_attributes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::BaseAttributesComp* released = _impl_.base_attributes_;
   _impl_.base_attributes_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -10577,7 +12188,7 @@ inline ::BaseAttributesComp* PROTOBUF_NULLABLE BattlePlayerSnapshot::unsafe_aren
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.base_attributes)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::BaseAttributesComp* temp = _impl_.base_attributes_;
   _impl_.base_attributes_ = nullptr;
   return temp;
@@ -10592,7 +12203,7 @@ inline ::BaseAttributesComp* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_mu
 }
 inline ::BaseAttributesComp* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_base_attributes()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::BaseAttributesComp* _msg = _internal_mutable_base_attributes();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.base_attributes)
   return _msg;
@@ -10609,9 +12220,9 @@ inline void BattlePlayerSnapshot::set_allocated_base_attributes(::BaseAttributes
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
 
   _impl_.base_attributes_ = reinterpret_cast<::BaseAttributesComp*>(value);
@@ -10622,7 +12233,7 @@ inline void BattlePlayerSnapshot::set_allocated_base_attributes(::BaseAttributes
 inline void BattlePlayerSnapshot::clear_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::max_health() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.max_health)
@@ -10630,7 +12241,7 @@ inline ::uint64_t BattlePlayerSnapshot::max_health() const {
 }
 inline void BattlePlayerSnapshot::set_max_health(::uint64_t value) {
   _internal_set_max_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.max_health)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_max_health() const {
@@ -10646,7 +12257,7 @@ inline void BattlePlayerSnapshot::_internal_set_max_health(::uint64_t value) {
 inline void BattlePlayerSnapshot::clear_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::max_mana() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.max_mana)
@@ -10654,7 +12265,7 @@ inline ::uint64_t BattlePlayerSnapshot::max_mana() const {
 }
 inline void BattlePlayerSnapshot::set_max_mana(::uint64_t value) {
   _internal_set_max_mana(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.max_mana)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_max_mana() const {
@@ -10829,14 +12440,14 @@ BattlePlayerSnapshot::_internal_mutable_items() {
 
 // .BattleRouting routing = 10;
 inline bool BattlePlayerSnapshot::has_routing() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
   PROTOBUF_ASSUME(!value || _impl_.routing_ != nullptr);
   return value;
 }
 inline void BattlePlayerSnapshot::clear_routing() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.routing_ != nullptr) _impl_.routing_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline const ::BattleRouting& BattlePlayerSnapshot::_internal_routing() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -10855,16 +12466,16 @@ inline void BattlePlayerSnapshot::unsafe_arena_set_allocated_routing(
   }
   _impl_.routing_ = reinterpret_cast<::BattleRouting*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattlePlayerSnapshot.routing)
 }
 inline ::BattleRouting* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_routing() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::BattleRouting* released = _impl_.routing_;
   _impl_.routing_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -10884,7 +12495,7 @@ inline ::BattleRouting* PROTOBUF_NULLABLE BattlePlayerSnapshot::unsafe_arena_rel
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.routing)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::BattleRouting* temp = _impl_.routing_;
   _impl_.routing_ = nullptr;
   return temp;
@@ -10899,7 +12510,7 @@ inline ::BattleRouting* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_mutable
 }
 inline ::BattleRouting* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_routing()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::BattleRouting* _msg = _internal_mutable_routing();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.routing)
   return _msg;
@@ -10916,9 +12527,9 @@ inline void BattlePlayerSnapshot::set_allocated_routing(::BattleRouting* PROTOBU
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
 
   _impl_.routing_ = reinterpret_cast<::BattleRouting*>(value);
@@ -10929,7 +12540,7 @@ inline void BattlePlayerSnapshot::set_allocated_routing(::BattleRouting* PROTOBU
 inline void BattlePlayerSnapshot::clear_team_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::team_index() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.team_index)
@@ -10937,7 +12548,7 @@ inline ::uint32_t BattlePlayerSnapshot::team_index() const {
 }
 inline void BattlePlayerSnapshot::set_team_index(::uint32_t value) {
   _internal_set_team_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.team_index)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_team_index() const {
@@ -10953,7 +12564,7 @@ inline void BattlePlayerSnapshot::_internal_set_team_index(::uint32_t value) {
 inline void BattlePlayerSnapshot::clear_table_fingerprint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.table_fingerprint_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline const ::std::string& BattlePlayerSnapshot::table_fingerprint() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -10963,13 +12574,13 @@ inline const ::std::string& BattlePlayerSnapshot::table_fingerprint() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattlePlayerSnapshot::set_table_fingerprint(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   _impl_.table_fingerprint_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.table_fingerprint)
 }
 inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_table_fingerprint()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::std::string* _s = _internal_mutable_table_fingerprint();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.table_fingerprint)
   return _s;
@@ -10989,10 +12600,10 @@ inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_mutable_t
 inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_table_fingerprint() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.table_fingerprint)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   auto* released = _impl_.table_fingerprint_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.table_fingerprint_.Set("", GetArena());
@@ -11002,9 +12613,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_table_fing
 inline void BattlePlayerSnapshot::set_allocated_table_fingerprint(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   _impl_.table_fingerprint_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.table_fingerprint_.IsDefault()) {
@@ -11017,7 +12628,7 @@ inline void BattlePlayerSnapshot::set_allocated_table_fingerprint(::std::string*
 inline void BattlePlayerSnapshot::clear_physical_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::physical_attack() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.physical_attack)
@@ -11025,7 +12636,7 @@ inline ::uint64_t BattlePlayerSnapshot::physical_attack() const {
 }
 inline void BattlePlayerSnapshot::set_physical_attack(::uint64_t value) {
   _internal_set_physical_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.physical_attack)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_physical_attack() const {
@@ -11041,7 +12652,7 @@ inline void BattlePlayerSnapshot::_internal_set_physical_attack(::uint64_t value
 inline void BattlePlayerSnapshot::clear_magic_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::magic_attack() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.magic_attack)
@@ -11049,7 +12660,7 @@ inline ::uint64_t BattlePlayerSnapshot::magic_attack() const {
 }
 inline void BattlePlayerSnapshot::set_magic_attack(::uint64_t value) {
   _internal_set_magic_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.magic_attack)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_magic_attack() const {
@@ -11065,7 +12676,7 @@ inline void BattlePlayerSnapshot::_internal_set_magic_attack(::uint64_t value) {
 inline void BattlePlayerSnapshot::clear_defense() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.defense_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::defense() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.defense)
@@ -11073,7 +12684,7 @@ inline ::uint64_t BattlePlayerSnapshot::defense() const {
 }
 inline void BattlePlayerSnapshot::set_defense(::uint64_t value) {
   _internal_set_defense(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.defense)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_defense() const {
@@ -11144,7 +12755,7 @@ BattlePlayerSnapshot::_internal_mutable_pets() {
 inline void BattlePlayerSnapshot::clear_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.appearance_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline const ::std::string& BattlePlayerSnapshot::appearance_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -11154,13 +12765,13 @@ inline const ::std::string& BattlePlayerSnapshot::appearance_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BattlePlayerSnapshot::set_appearance_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   _impl_.appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.appearance_id)
 }
 inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_appearance_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::std::string* _s = _internal_mutable_appearance_id();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.appearance_id)
   return _s;
@@ -11180,10 +12791,10 @@ inline ::std::string* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_mutable_a
 inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_appearance_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.appearance_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   auto* released = _impl_.appearance_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.appearance_id_.Set("", GetArena());
@@ -11193,9 +12804,9 @@ inline ::std::string* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_appearance
 inline void BattlePlayerSnapshot::set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   _impl_.appearance_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_id_.IsDefault()) {
@@ -11208,7 +12819,7 @@ inline void BattlePlayerSnapshot::set_allocated_appearance_id(::std::string* PRO
 inline void BattlePlayerSnapshot::clear_class_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.class_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::class_id() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.class_id)
@@ -11216,7 +12827,7 @@ inline ::uint32_t BattlePlayerSnapshot::class_id() const {
 }
 inline void BattlePlayerSnapshot::set_class_id(::uint32_t value) {
   _internal_set_class_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.class_id)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_class_id() const {
@@ -11232,7 +12843,7 @@ inline void BattlePlayerSnapshot::_internal_set_class_id(::uint32_t value) {
 inline void BattlePlayerSnapshot::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::gender() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.gender)
@@ -11240,7 +12851,7 @@ inline ::uint32_t BattlePlayerSnapshot::gender() const {
 }
 inline void BattlePlayerSnapshot::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.gender)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_gender() const {
@@ -11254,7 +12865,7 @@ inline void BattlePlayerSnapshot::_internal_set_gender(::uint32_t value) {
 
 // .CombatAttributes combat = 20;
 inline bool BattlePlayerSnapshot::has_combat() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
   PROTOBUF_ASSUME(!value || _impl_.combat_ != nullptr);
   return value;
 }
@@ -11275,16 +12886,16 @@ inline void BattlePlayerSnapshot::unsafe_arena_set_allocated_combat(
   }
   _impl_.combat_ = reinterpret_cast<::CombatAttributes*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattlePlayerSnapshot.combat)
 }
 inline ::CombatAttributes* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_combat() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::CombatAttributes* released = _impl_.combat_;
   _impl_.combat_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11304,7 +12915,7 @@ inline ::CombatAttributes* PROTOBUF_NULLABLE BattlePlayerSnapshot::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.combat)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::CombatAttributes* temp = _impl_.combat_;
   _impl_.combat_ = nullptr;
   return temp;
@@ -11319,7 +12930,7 @@ inline ::CombatAttributes* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_muta
 }
 inline ::CombatAttributes* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_combat()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::CombatAttributes* _msg = _internal_mutable_combat();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.combat)
   return _msg;
@@ -11336,9 +12947,9 @@ inline void BattlePlayerSnapshot::set_allocated_combat(::CombatAttributes* PROTO
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
 
   _impl_.combat_ = reinterpret_cast<::CombatAttributes*>(value);
@@ -11355,7 +12966,7 @@ inline int BattlePlayerSnapshot::skill_ranks_size() const {
 inline void BattlePlayerSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11371,7 +12982,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -11380,7 +12991,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 inline void BattlePlayerSnapshot::clear_pet_capture_slots() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_capture_slots_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::pet_capture_slots() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.pet_capture_slots)
@@ -11388,7 +12999,7 @@ inline ::uint32_t BattlePlayerSnapshot::pet_capture_slots() const {
 }
 inline void BattlePlayerSnapshot::set_pet_capture_slots(::uint32_t value) {
   _internal_set_pet_capture_slots(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.pet_capture_slots)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_pet_capture_slots() const {
@@ -11402,7 +13013,7 @@ inline void BattlePlayerSnapshot::_internal_set_pet_capture_slots(::uint32_t val
 
 // .EquipmentEffects equipment_effects = 23;
 inline bool BattlePlayerSnapshot::has_equipment_effects() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
   PROTOBUF_ASSUME(!value || _impl_.equipment_effects_ != nullptr);
   return value;
 }
@@ -11423,16 +13034,16 @@ inline void BattlePlayerSnapshot::unsafe_arena_set_allocated_equipment_effects(
   }
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattlePlayerSnapshot.equipment_effects)
 }
 inline ::EquipmentEffects* PROTOBUF_NULLABLE BattlePlayerSnapshot::release_equipment_effects() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::EquipmentEffects* released = _impl_.equipment_effects_;
   _impl_.equipment_effects_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11452,7 +13063,7 @@ inline ::EquipmentEffects* PROTOBUF_NULLABLE BattlePlayerSnapshot::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BattlePlayerSnapshot.equipment_effects)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::EquipmentEffects* temp = _impl_.equipment_effects_;
   _impl_.equipment_effects_ = nullptr;
   return temp;
@@ -11467,7 +13078,7 @@ inline ::EquipmentEffects* PROTOBUF_NONNULL BattlePlayerSnapshot::_internal_muta
 }
 inline ::EquipmentEffects* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_equipment_effects()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::EquipmentEffects* _msg = _internal_mutable_equipment_effects();
   // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.equipment_effects)
   return _msg;
@@ -11484,9 +13095,9 @@ inline void BattlePlayerSnapshot::set_allocated_equipment_effects(::EquipmentEff
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
 
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
@@ -11497,7 +13108,7 @@ inline void BattlePlayerSnapshot::set_allocated_equipment_effects(::EquipmentEff
 inline void BattlePlayerSnapshot::clear_active_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::active_season_id() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.active_season_id)
@@ -11505,7 +13116,7 @@ inline ::uint32_t BattlePlayerSnapshot::active_season_id() const {
 }
 inline void BattlePlayerSnapshot::set_active_season_id(::uint32_t value) {
   _internal_set_active_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.active_season_id)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_active_season_id() const {
@@ -11515,6 +13126,135 @@ inline ::uint32_t BattlePlayerSnapshot::_internal_active_season_id() const {
 inline void BattlePlayerSnapshot::_internal_set_active_season_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_season_id_ = value;
+}
+
+// bool ai_controlled = 25;
+inline void BattlePlayerSnapshot::clear_ai_controlled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ai_controlled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline bool BattlePlayerSnapshot::ai_controlled() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.ai_controlled)
+  return _internal_ai_controlled();
+}
+inline void BattlePlayerSnapshot::set_ai_controlled(bool value) {
+  _internal_set_ai_controlled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.ai_controlled)
+}
+inline bool BattlePlayerSnapshot::_internal_ai_controlled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ai_controlled_;
+}
+inline void BattlePlayerSnapshot::_internal_set_ai_controlled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ai_controlled_ = value;
+}
+
+// repeated .BattlePetSnapshot standby_pets = 26;
+inline int BattlePlayerSnapshot::_internal_standby_pets_size() const {
+  return _internal_standby_pets().size();
+}
+inline int BattlePlayerSnapshot::standby_pets_size() const {
+  return _internal_standby_pets_size();
+}
+inline void BattlePlayerSnapshot::clear_standby_pets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.standby_pets_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::BattlePetSnapshot& BattlePlayerSnapshot::standby_pets(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.standby_pets)
+  return _internal_standby_pets().Get(index);
+}
+inline ::BattlePetSnapshot* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_standby_pets(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.standby_pets)
+  return _internal_mutable_standby_pets()->Mutable(index);
+}
+inline ::BattlePetSnapshot* PROTOBUF_NONNULL BattlePlayerSnapshot::add_standby_pets()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattlePetSnapshot* _add =
+      _internal_mutable_standby_pets()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_add:BattlePlayerSnapshot.standby_pets)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>& BattlePlayerSnapshot::standby_pets() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePlayerSnapshot.standby_pets)
+  return _internal_standby_pets();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>* PROTOBUF_NONNULL
+BattlePlayerSnapshot::mutable_standby_pets() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePlayerSnapshot.standby_pets)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_standby_pets();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>&
+BattlePlayerSnapshot::_internal_standby_pets() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.standby_pets_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePetSnapshot>* PROTOBUF_NONNULL
+BattlePlayerSnapshot::_internal_mutable_standby_pets() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.standby_pets_;
+}
+
+// repeated .SeasonSealEffect available_season_seals = 27;
+inline int BattlePlayerSnapshot::_internal_available_season_seals_size() const {
+  return _internal_available_season_seals().size();
+}
+inline int BattlePlayerSnapshot::available_season_seals_size() const {
+  return _internal_available_season_seals_size();
+}
+inline const ::SeasonSealEffect& BattlePlayerSnapshot::available_season_seals(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.available_season_seals)
+  return _internal_available_season_seals().Get(index);
+}
+inline ::SeasonSealEffect* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_available_season_seals(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattlePlayerSnapshot.available_season_seals)
+  return _internal_mutable_available_season_seals()->Mutable(index);
+}
+inline ::SeasonSealEffect* PROTOBUF_NONNULL BattlePlayerSnapshot::add_available_season_seals()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SeasonSealEffect* _add =
+      _internal_mutable_available_season_seals()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_add:BattlePlayerSnapshot.available_season_seals)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>& BattlePlayerSnapshot::available_season_seals() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePlayerSnapshot.available_season_seals)
+  return _internal_available_season_seals();
+}
+inline ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>* PROTOBUF_NONNULL
+BattlePlayerSnapshot::mutable_available_season_seals() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePlayerSnapshot.available_season_seals)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_available_season_seals();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>&
+BattlePlayerSnapshot::_internal_available_season_seals() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_season_seals_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SeasonSealEffect>* PROTOBUF_NONNULL
+BattlePlayerSnapshot::_internal_mutable_available_season_seals() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.available_season_seals_;
 }
 
 // -------------------------------------------------------------------
@@ -13830,6 +15570,30 @@ inline void BattleActorState::set_allocated_season_seal_state(::BattleArtifactSt
   // @@protoc_insertion_point(field_set_allocated:BattleActorState.season_seal_state)
 }
 
+// uint32 charging_skill_id = 45;
+inline void BattleActorState::clear_charging_skill_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.charging_skill_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
+}
+inline ::uint32_t BattleActorState::charging_skill_id() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.charging_skill_id)
+  return _internal_charging_skill_id();
+}
+inline void BattleActorState::set_charging_skill_id(::uint32_t value) {
+  _internal_set_charging_skill_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
+  // @@protoc_insertion_point(field_set:BattleActorState.charging_skill_id)
+}
+inline ::uint32_t BattleActorState::_internal_charging_skill_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.charging_skill_id_;
+}
+inline void BattleActorState::_internal_set_charging_skill_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.charging_skill_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BattleArtifactState
@@ -14979,6 +16743,886 @@ inline bool BattleSurrenderVoteState::_internal_passed() const {
 inline void BattleSurrenderVoteState::_internal_set_passed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.passed_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattlePrepSealOption
+
+// uint32 seal_id = 1;
+inline void BattlePrepSealOption::clear_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t BattlePrepSealOption::seal_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepSealOption.seal_id)
+  return _internal_seal_id();
+}
+inline void BattlePrepSealOption::set_seal_id(::uint32_t value) {
+  _internal_set_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BattlePrepSealOption.seal_id)
+}
+inline ::uint32_t BattlePrepSealOption::_internal_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seal_id_;
+}
+inline void BattlePrepSealOption::_internal_set_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seal_id_ = value;
+}
+
+// uint32 effect_id = 2;
+inline void BattlePrepSealOption::clear_effect_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t BattlePrepSealOption::effect_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepSealOption.effect_id)
+  return _internal_effect_id();
+}
+inline void BattlePrepSealOption::set_effect_id(::uint32_t value) {
+  _internal_set_effect_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattlePrepSealOption.effect_id)
+}
+inline ::uint32_t BattlePrepSealOption::_internal_effect_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_id_;
+}
+inline void BattlePrepSealOption::_internal_set_effect_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_id_ = value;
+}
+
+// string name = 3;
+inline void BattlePrepSealOption::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BattlePrepSealOption::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepSealOption.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattlePrepSealOption::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BattlePrepSealOption.name)
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepSealOption::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:BattlePrepSealOption.name)
+  return _s;
+}
+inline const ::std::string& BattlePrepSealOption::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void BattlePrepSealOption::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepSealOption::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattlePrepSealOption::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattlePrepSealOption.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattlePrepSealOption::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BattlePrepSealOption.name)
+}
+
+// -------------------------------------------------------------------
+
+// BattlePrepPetOption
+
+// uint64 pet_id = 1;
+inline void BattlePrepPetOption::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t BattlePrepPetOption::pet_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.pet_id)
+  return _internal_pet_id();
+}
+inline void BattlePrepPetOption::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.pet_id)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void BattlePrepPetOption::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// uint32 pet_table_id = 2;
+inline void BattlePrepPetOption::clear_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t BattlePrepPetOption::pet_table_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.pet_table_id)
+  return _internal_pet_table_id();
+}
+inline void BattlePrepPetOption::set_pet_table_id(::uint32_t value) {
+  _internal_set_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.pet_table_id)
+}
+inline ::uint32_t BattlePrepPetOption::_internal_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_table_id_;
+}
+inline void BattlePrepPetOption::_internal_set_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_table_id_ = value;
+}
+
+// string pet_name = 3;
+inline void BattlePrepPetOption::clear_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BattlePrepPetOption::pet_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.pet_name)
+  return _internal_pet_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattlePrepPetOption::set_pet_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.pet_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.pet_name)
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepPetOption::mutable_pet_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_pet_name();
+  // @@protoc_insertion_point(field_mutable:BattlePrepPetOption.pet_name)
+  return _s;
+}
+inline const ::std::string& BattlePrepPetOption::_internal_pet_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_name_.Get();
+}
+inline void BattlePrepPetOption::_internal_set_pet_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepPetOption::_internal_mutable_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.pet_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattlePrepPetOption::release_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattlePrepPetOption.pet_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.pet_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.pet_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattlePrepPetOption::set_allocated_pet_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.pet_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.pet_name_.IsDefault()) {
+    _impl_.pet_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BattlePrepPetOption.pet_name)
+}
+
+// uint32 level = 4;
+inline void BattlePrepPetOption::clear_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t BattlePrepPetOption::level() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.level)
+  return _internal_level();
+}
+inline void BattlePrepPetOption::set_level(::uint32_t value) {
+  _internal_set_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.level)
+}
+inline ::uint32_t BattlePrepPetOption::_internal_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_;
+}
+inline void BattlePrepPetOption::_internal_set_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = value;
+}
+
+// uint64 max_health = 5;
+inline void BattlePrepPetOption::clear_max_health() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_health_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t BattlePrepPetOption::max_health() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.max_health)
+  return _internal_max_health();
+}
+inline void BattlePrepPetOption::set_max_health(::uint64_t value) {
+  _internal_set_max_health(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.max_health)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_max_health() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_health_;
+}
+inline void BattlePrepPetOption::_internal_set_max_health(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_health_ = value;
+}
+
+// uint64 speed = 6;
+inline void BattlePrepPetOption::clear_speed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t BattlePrepPetOption::speed() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.speed)
+  return _internal_speed();
+}
+inline void BattlePrepPetOption::set_speed(::uint64_t value) {
+  _internal_set_speed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.speed)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_speed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.speed_;
+}
+inline void BattlePrepPetOption::_internal_set_speed(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = value;
+}
+
+// uint64 physical_attack = 7;
+inline void BattlePrepPetOption::clear_physical_attack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.physical_attack_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t BattlePrepPetOption::physical_attack() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.physical_attack)
+  return _internal_physical_attack();
+}
+inline void BattlePrepPetOption::set_physical_attack(::uint64_t value) {
+  _internal_set_physical_attack(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.physical_attack)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_physical_attack() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.physical_attack_;
+}
+inline void BattlePrepPetOption::_internal_set_physical_attack(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.physical_attack_ = value;
+}
+
+// uint64 magic_attack = 8;
+inline void BattlePrepPetOption::clear_magic_attack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.magic_attack_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t BattlePrepPetOption::magic_attack() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.magic_attack)
+  return _internal_magic_attack();
+}
+inline void BattlePrepPetOption::set_magic_attack(::uint64_t value) {
+  _internal_set_magic_attack(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.magic_attack)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_magic_attack() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.magic_attack_;
+}
+inline void BattlePrepPetOption::_internal_set_magic_attack(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.magic_attack_ = value;
+}
+
+// uint64 defense = 9;
+inline void BattlePrepPetOption::clear_defense() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defense_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t BattlePrepPetOption::defense() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.defense)
+  return _internal_defense();
+}
+inline void BattlePrepPetOption::set_defense(::uint64_t value) {
+  _internal_set_defense(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.defense)
+}
+inline ::uint64_t BattlePrepPetOption::_internal_defense() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.defense_;
+}
+inline void BattlePrepPetOption::_internal_set_defense(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defense_ = value;
+}
+
+// repeated uint32 skill_table_ids = 10;
+inline int BattlePrepPetOption::_internal_skill_table_ids_size() const {
+  return _internal_skill_table_ids().size();
+}
+inline int BattlePrepPetOption::skill_table_ids_size() const {
+  return _internal_skill_table_ids_size();
+}
+inline void BattlePrepPetOption::clear_skill_table_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t BattlePrepPetOption::skill_table_ids(int index) const {
+  // @@protoc_insertion_point(field_get:BattlePrepPetOption.skill_table_ids)
+  return _internal_skill_table_ids().Get(index);
+}
+inline void BattlePrepPetOption::set_skill_table_ids(int index, ::uint32_t value) {
+  _internal_mutable_skill_table_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BattlePrepPetOption.skill_table_ids)
+}
+inline void BattlePrepPetOption::add_skill_table_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_skill_table_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:BattlePrepPetOption.skill_table_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& BattlePrepPetOption::skill_table_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePrepPetOption.skill_table_ids)
+  return _internal_skill_table_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL BattlePrepPetOption::mutable_skill_table_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePrepPetOption.skill_table_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_skill_table_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+BattlePrepPetOption::_internal_skill_table_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+BattlePrepPetOption::_internal_mutable_skill_table_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.skill_table_ids_;
+}
+
+// -------------------------------------------------------------------
+
+// BattlePrepPlayerState
+
+// uint64 player_id = 1;
+inline void BattlePrepPlayerState::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BattlePrepPlayerState::player_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.player_id)
+  return _internal_player_id();
+}
+inline void BattlePrepPlayerState::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.player_id)
+}
+inline ::uint64_t BattlePrepPlayerState::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void BattlePrepPlayerState::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 team_index = 2;
+inline void BattlePrepPlayerState::clear_team_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t BattlePrepPlayerState::team_index() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.team_index)
+  return _internal_team_index();
+}
+inline void BattlePrepPlayerState::set_team_index(::uint32_t value) {
+  _internal_set_team_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.team_index)
+}
+inline ::uint32_t BattlePrepPlayerState::_internal_team_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_index_;
+}
+inline void BattlePrepPlayerState::_internal_set_team_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_index_ = value;
+}
+
+// uint32 selected_seal_id = 3;
+inline void BattlePrepPlayerState::clear_selected_seal_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_seal_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t BattlePrepPlayerState::selected_seal_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.selected_seal_id)
+  return _internal_selected_seal_id();
+}
+inline void BattlePrepPlayerState::set_selected_seal_id(::uint32_t value) {
+  _internal_set_selected_seal_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.selected_seal_id)
+}
+inline ::uint32_t BattlePrepPlayerState::_internal_selected_seal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_seal_id_;
+}
+inline void BattlePrepPlayerState::_internal_set_selected_seal_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_seal_id_ = value;
+}
+
+// uint64 selected_pet_id = 4;
+inline void BattlePrepPlayerState::clear_selected_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BattlePrepPlayerState::selected_pet_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.selected_pet_id)
+  return _internal_selected_pet_id();
+}
+inline void BattlePrepPlayerState::set_selected_pet_id(::uint64_t value) {
+  _internal_set_selected_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.selected_pet_id)
+}
+inline ::uint64_t BattlePrepPlayerState::_internal_selected_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_pet_id_;
+}
+inline void BattlePrepPlayerState::_internal_set_selected_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_id_ = value;
+}
+
+// uint32 selected_pet_table_id = 5;
+inline void BattlePrepPlayerState::clear_selected_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t BattlePrepPlayerState::selected_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.selected_pet_table_id)
+  return _internal_selected_pet_table_id();
+}
+inline void BattlePrepPlayerState::set_selected_pet_table_id(::uint32_t value) {
+  _internal_set_selected_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.selected_pet_table_id)
+}
+inline ::uint32_t BattlePrepPlayerState::_internal_selected_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_pet_table_id_;
+}
+inline void BattlePrepPlayerState::_internal_set_selected_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_table_id_ = value;
+}
+
+// string selected_pet_name = 6;
+inline void BattlePrepPlayerState::clear_selected_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BattlePrepPlayerState::selected_pet_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.selected_pet_name)
+  return _internal_selected_pet_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattlePrepPlayerState::set_selected_pet_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.selected_pet_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.selected_pet_name)
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepPlayerState::mutable_selected_pet_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_selected_pet_name();
+  // @@protoc_insertion_point(field_mutable:BattlePrepPlayerState.selected_pet_name)
+  return _s;
+}
+inline const ::std::string& BattlePrepPlayerState::_internal_selected_pet_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.selected_pet_name_.Get();
+}
+inline void BattlePrepPlayerState::_internal_set_selected_pet_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.selected_pet_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattlePrepPlayerState::_internal_mutable_selected_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.selected_pet_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattlePrepPlayerState::release_selected_pet_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattlePrepPlayerState.selected_pet_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.selected_pet_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.selected_pet_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattlePrepPlayerState::set_allocated_selected_pet_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.selected_pet_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.selected_pet_name_.IsDefault()) {
+    _impl_.selected_pet_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BattlePrepPlayerState.selected_pet_name)
+}
+
+// bool ready = 7;
+inline void BattlePrepPlayerState::clear_ready() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool BattlePrepPlayerState::ready() const {
+  // @@protoc_insertion_point(field_get:BattlePrepPlayerState.ready)
+  return _internal_ready();
+}
+inline void BattlePrepPlayerState::set_ready(bool value) {
+  _internal_set_ready(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:BattlePrepPlayerState.ready)
+}
+inline bool BattlePrepPlayerState::_internal_ready() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ready_;
+}
+inline void BattlePrepPlayerState::_internal_set_ready(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ready_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BattlePrepState
+
+// bool active = 1;
+inline void BattlePrepState::clear_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool BattlePrepState::active() const {
+  // @@protoc_insertion_point(field_get:BattlePrepState.active)
+  return _internal_active();
+}
+inline void BattlePrepState::set_active(bool value) {
+  _internal_set_active(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattlePrepState.active)
+}
+inline bool BattlePrepState::_internal_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_;
+}
+inline void BattlePrepState::_internal_set_active(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_ = value;
+}
+
+// uint64 deadline_ms = 2;
+inline void BattlePrepState::clear_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BattlePrepState::deadline_ms() const {
+  // @@protoc_insertion_point(field_get:BattlePrepState.deadline_ms)
+  return _internal_deadline_ms();
+}
+inline void BattlePrepState::set_deadline_ms(::uint64_t value) {
+  _internal_set_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattlePrepState.deadline_ms)
+}
+inline ::uint64_t BattlePrepState::_internal_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deadline_ms_;
+}
+inline void BattlePrepState::_internal_set_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deadline_ms_ = value;
+}
+
+// uint32 duration_seconds = 3;
+inline void BattlePrepState::clear_duration_seconds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duration_seconds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t BattlePrepState::duration_seconds() const {
+  // @@protoc_insertion_point(field_get:BattlePrepState.duration_seconds)
+  return _internal_duration_seconds();
+}
+inline void BattlePrepState::set_duration_seconds(::uint32_t value) {
+  _internal_set_duration_seconds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:BattlePrepState.duration_seconds)
+}
+inline ::uint32_t BattlePrepState::_internal_duration_seconds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.duration_seconds_;
+}
+inline void BattlePrepState::_internal_set_duration_seconds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duration_seconds_ = value;
+}
+
+// repeated .BattlePrepSealOption self_available_seals = 4;
+inline int BattlePrepState::_internal_self_available_seals_size() const {
+  return _internal_self_available_seals().size();
+}
+inline int BattlePrepState::self_available_seals_size() const {
+  return _internal_self_available_seals_size();
+}
+inline void BattlePrepState::clear_self_available_seals() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_available_seals_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::BattlePrepSealOption& BattlePrepState::self_available_seals(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepState.self_available_seals)
+  return _internal_self_available_seals().Get(index);
+}
+inline ::BattlePrepSealOption* PROTOBUF_NONNULL BattlePrepState::mutable_self_available_seals(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattlePrepState.self_available_seals)
+  return _internal_mutable_self_available_seals()->Mutable(index);
+}
+inline ::BattlePrepSealOption* PROTOBUF_NONNULL BattlePrepState::add_self_available_seals()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattlePrepSealOption* _add =
+      _internal_mutable_self_available_seals()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:BattlePrepState.self_available_seals)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>& BattlePrepState::self_available_seals() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePrepState.self_available_seals)
+  return _internal_self_available_seals();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>* PROTOBUF_NONNULL
+BattlePrepState::mutable_self_available_seals() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePrepState.self_available_seals)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_self_available_seals();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>&
+BattlePrepState::_internal_self_available_seals() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_available_seals_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepSealOption>* PROTOBUF_NONNULL
+BattlePrepState::_internal_mutable_self_available_seals() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.self_available_seals_;
+}
+
+// repeated .BattlePrepPetOption self_available_pets = 5;
+inline int BattlePrepState::_internal_self_available_pets_size() const {
+  return _internal_self_available_pets().size();
+}
+inline int BattlePrepState::self_available_pets_size() const {
+  return _internal_self_available_pets_size();
+}
+inline void BattlePrepState::clear_self_available_pets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_available_pets_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::BattlePrepPetOption& BattlePrepState::self_available_pets(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepState.self_available_pets)
+  return _internal_self_available_pets().Get(index);
+}
+inline ::BattlePrepPetOption* PROTOBUF_NONNULL BattlePrepState::mutable_self_available_pets(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattlePrepState.self_available_pets)
+  return _internal_mutable_self_available_pets()->Mutable(index);
+}
+inline ::BattlePrepPetOption* PROTOBUF_NONNULL BattlePrepState::add_self_available_pets()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattlePrepPetOption* _add =
+      _internal_mutable_self_available_pets()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:BattlePrepState.self_available_pets)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>& BattlePrepState::self_available_pets() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePrepState.self_available_pets)
+  return _internal_self_available_pets();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>* PROTOBUF_NONNULL
+BattlePrepState::mutable_self_available_pets() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePrepState.self_available_pets)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_self_available_pets();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>&
+BattlePrepState::_internal_self_available_pets() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_available_pets_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepPetOption>* PROTOBUF_NONNULL
+BattlePrepState::_internal_mutable_self_available_pets() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.self_available_pets_;
+}
+
+// repeated .BattlePrepPlayerState team_states = 6;
+inline int BattlePrepState::_internal_team_states_size() const {
+  return _internal_team_states().size();
+}
+inline int BattlePrepState::team_states_size() const {
+  return _internal_team_states_size();
+}
+inline void BattlePrepState::clear_team_states() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.team_states_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::BattlePrepPlayerState& BattlePrepState::team_states(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePrepState.team_states)
+  return _internal_team_states().Get(index);
+}
+inline ::BattlePrepPlayerState* PROTOBUF_NONNULL BattlePrepState::mutable_team_states(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattlePrepState.team_states)
+  return _internal_mutable_team_states()->Mutable(index);
+}
+inline ::BattlePrepPlayerState* PROTOBUF_NONNULL BattlePrepState::add_team_states()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattlePrepPlayerState* _add =
+      _internal_mutable_team_states()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:BattlePrepState.team_states)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>& BattlePrepState::team_states() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattlePrepState.team_states)
+  return _internal_team_states();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>* PROTOBUF_NONNULL
+BattlePrepState::mutable_team_states() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:BattlePrepState.team_states)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_team_states();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>&
+BattlePrepState::_internal_team_states() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.team_states_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattlePrepPlayerState>* PROTOBUF_NONNULL
+BattlePrepState::_internal_mutable_team_states() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.team_states_;
 }
 
 // -------------------------------------------------------------------
@@ -16674,6 +19318,352 @@ inline void BattlePetSettlementData::_internal_set_is_dead(bool value) {
 
 // -------------------------------------------------------------------
 
+// GuildWarBattleContext
+
+// uint32 zone_id = 1;
+inline void GuildWarBattleContext::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t GuildWarBattleContext::zone_id() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.zone_id)
+  return _internal_zone_id();
+}
+inline void GuildWarBattleContext::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.zone_id)
+}
+inline ::uint32_t GuildWarBattleContext::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void GuildWarBattleContext::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// uint64 attacker_guild_id = 2;
+inline void GuildWarBattleContext::clear_attacker_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attacker_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t GuildWarBattleContext::attacker_guild_id() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.attacker_guild_id)
+  return _internal_attacker_guild_id();
+}
+inline void GuildWarBattleContext::set_attacker_guild_id(::uint64_t value) {
+  _internal_set_attacker_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.attacker_guild_id)
+}
+inline ::uint64_t GuildWarBattleContext::_internal_attacker_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attacker_guild_id_;
+}
+inline void GuildWarBattleContext::_internal_set_attacker_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attacker_guild_id_ = value;
+}
+
+// uint64 defender_guild_id = 3;
+inline void GuildWarBattleContext::clear_defender_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defender_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GuildWarBattleContext::defender_guild_id() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.defender_guild_id)
+  return _internal_defender_guild_id();
+}
+inline void GuildWarBattleContext::set_defender_guild_id(::uint64_t value) {
+  _internal_set_defender_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.defender_guild_id)
+}
+inline ::uint64_t GuildWarBattleContext::_internal_defender_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.defender_guild_id_;
+}
+inline void GuildWarBattleContext::_internal_set_defender_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defender_guild_id_ = value;
+}
+
+// uint32 leyline_id = 4;
+inline void GuildWarBattleContext::clear_leyline_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t GuildWarBattleContext::leyline_id() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.leyline_id)
+  return _internal_leyline_id();
+}
+inline void GuildWarBattleContext::set_leyline_id(::uint32_t value) {
+  _internal_set_leyline_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.leyline_id)
+}
+inline ::uint32_t GuildWarBattleContext::_internal_leyline_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.leyline_id_;
+}
+inline void GuildWarBattleContext::_internal_set_leyline_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_id_ = value;
+}
+
+// uint32 war_battle_kind = 5;
+inline void GuildWarBattleContext::clear_war_battle_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.war_battle_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GuildWarBattleContext::war_battle_kind() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.war_battle_kind)
+  return _internal_war_battle_kind();
+}
+inline void GuildWarBattleContext::set_war_battle_kind(::uint32_t value) {
+  _internal_set_war_battle_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.war_battle_kind)
+}
+inline ::uint32_t GuildWarBattleContext::_internal_war_battle_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.war_battle_kind_;
+}
+inline void GuildWarBattleContext::_internal_set_war_battle_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.war_battle_kind_ = value;
+}
+
+// uint64 bounty_id = 6;
+inline void GuildWarBattleContext::clear_bounty_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bounty_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GuildWarBattleContext::bounty_id() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.bounty_id)
+  return _internal_bounty_id();
+}
+inline void GuildWarBattleContext::set_bounty_id(::uint64_t value) {
+  _internal_set_bounty_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.bounty_id)
+}
+inline ::uint64_t GuildWarBattleContext::_internal_bounty_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bounty_id_;
+}
+inline void GuildWarBattleContext::_internal_set_bounty_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bounty_id_ = value;
+}
+
+// uint32 week_key = 7;
+inline void GuildWarBattleContext::clear_week_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_key_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GuildWarBattleContext::week_key() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.week_key)
+  return _internal_week_key();
+}
+inline void GuildWarBattleContext::set_week_key(::uint32_t value) {
+  _internal_set_week_key(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.week_key)
+}
+inline ::uint32_t GuildWarBattleContext::_internal_week_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_key_;
+}
+inline void GuildWarBattleContext::_internal_set_week_key(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_key_ = value;
+}
+
+// repeated uint64 attacker_player_ids = 8;
+inline int GuildWarBattleContext::_internal_attacker_player_ids_size() const {
+  return _internal_attacker_player_ids().size();
+}
+inline int GuildWarBattleContext::attacker_player_ids_size() const {
+  return _internal_attacker_player_ids_size();
+}
+inline void GuildWarBattleContext::clear_attacker_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attacker_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GuildWarBattleContext::attacker_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.attacker_player_ids)
+  return _internal_attacker_player_ids().Get(index);
+}
+inline void GuildWarBattleContext::set_attacker_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_attacker_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.attacker_player_ids)
+}
+inline void GuildWarBattleContext::add_attacker_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_attacker_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:GuildWarBattleContext.attacker_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& GuildWarBattleContext::attacker_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:GuildWarBattleContext.attacker_player_ids)
+  return _internal_attacker_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL GuildWarBattleContext::mutable_attacker_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:GuildWarBattleContext.attacker_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_attacker_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+GuildWarBattleContext::_internal_attacker_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attacker_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+GuildWarBattleContext::_internal_mutable_attacker_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.attacker_player_ids_;
+}
+
+// repeated uint64 defender_player_ids = 9;
+inline int GuildWarBattleContext::_internal_defender_player_ids_size() const {
+  return _internal_defender_player_ids().size();
+}
+inline int GuildWarBattleContext::defender_player_ids_size() const {
+  return _internal_defender_player_ids_size();
+}
+inline void GuildWarBattleContext::clear_defender_player_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defender_player_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t GuildWarBattleContext::defender_player_ids(int index) const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.defender_player_ids)
+  return _internal_defender_player_ids().Get(index);
+}
+inline void GuildWarBattleContext::set_defender_player_ids(int index, ::uint64_t value) {
+  _internal_mutable_defender_player_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.defender_player_ids)
+}
+inline void GuildWarBattleContext::add_defender_player_ids(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_defender_player_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:GuildWarBattleContext.defender_player_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& GuildWarBattleContext::defender_player_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:GuildWarBattleContext.defender_player_ids)
+  return _internal_defender_player_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL GuildWarBattleContext::mutable_defender_player_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:GuildWarBattleContext.defender_player_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_defender_player_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+GuildWarBattleContext::_internal_defender_player_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.defender_player_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+GuildWarBattleContext::_internal_mutable_defender_player_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.defender_player_ids_;
+}
+
+// bool gold_leyline_bonus = 10;
+inline void GuildWarBattleContext::clear_gold_leyline_bonus() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_leyline_bonus_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool GuildWarBattleContext::gold_leyline_bonus() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.gold_leyline_bonus)
+  return _internal_gold_leyline_bonus();
+}
+inline void GuildWarBattleContext::set_gold_leyline_bonus(bool value) {
+  _internal_set_gold_leyline_bonus(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.gold_leyline_bonus)
+}
+inline bool GuildWarBattleContext::_internal_gold_leyline_bonus() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gold_leyline_bonus_;
+}
+inline void GuildWarBattleContext::_internal_set_gold_leyline_bonus(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gold_leyline_bonus_ = value;
+}
+
+// bool rivalry_bonus = 11;
+inline void GuildWarBattleContext::clear_rivalry_bonus() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rivalry_bonus_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline bool GuildWarBattleContext::rivalry_bonus() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.rivalry_bonus)
+  return _internal_rivalry_bonus();
+}
+inline void GuildWarBattleContext::set_rivalry_bonus(bool value) {
+  _internal_set_rivalry_bonus(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.rivalry_bonus)
+}
+inline bool GuildWarBattleContext::_internal_rivalry_bonus() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rivalry_bonus_;
+}
+inline void GuildWarBattleContext::_internal_set_rivalry_bonus(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rivalry_bonus_ = value;
+}
+
+// uint64 started_at_ms = 12;
+inline void GuildWarBattleContext::clear_started_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t GuildWarBattleContext::started_at_ms() const {
+  // @@protoc_insertion_point(field_get:GuildWarBattleContext.started_at_ms)
+  return _internal_started_at_ms();
+}
+inline void GuildWarBattleContext::set_started_at_ms(::uint64_t value) {
+  _internal_set_started_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:GuildWarBattleContext.started_at_ms)
+}
+inline ::uint64_t GuildWarBattleContext::_internal_started_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.started_at_ms_;
+}
+inline void GuildWarBattleContext::_internal_set_started_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // FestivalBeastBattleContext
 
 // uint32 activity_instance_id = 1;
@@ -17356,7 +20346,7 @@ inline void FestivalBeastBattleContext::set_allocated_client_request_id(::std::s
 inline void BattleActivityContext::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::eBattleActivityKind BattleActivityContext::kind() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.kind)
@@ -17364,7 +20354,7 @@ inline ::eBattleActivityKind BattleActivityContext::kind() const {
 }
 inline void BattleActivityContext::set_kind(::eBattleActivityKind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.kind)
 }
 inline ::eBattleActivityKind BattleActivityContext::_internal_kind() const {
@@ -17380,7 +20370,7 @@ inline void BattleActivityContext::_internal_set_kind(::eBattleActivityKind valu
 inline void BattleActivityContext::clear_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t BattleActivityContext::guild_id() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.guild_id)
@@ -17388,7 +20378,7 @@ inline ::uint64_t BattleActivityContext::guild_id() const {
 }
 inline void BattleActivityContext::set_guild_id(::uint64_t value) {
   _internal_set_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.guild_id)
 }
 inline ::uint64_t BattleActivityContext::_internal_guild_id() const {
@@ -17404,7 +20394,7 @@ inline void BattleActivityContext::_internal_set_guild_id(::uint64_t value) {
 inline void BattleActivityContext::clear_activity_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.activity_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BattleActivityContext::activity_id() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.activity_id)
@@ -17412,7 +20402,7 @@ inline ::uint32_t BattleActivityContext::activity_id() const {
 }
 inline void BattleActivityContext::set_activity_id(::uint32_t value) {
   _internal_set_activity_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.activity_id)
 }
 inline ::uint32_t BattleActivityContext::_internal_activity_id() const {
@@ -17428,7 +20418,7 @@ inline void BattleActivityContext::_internal_set_activity_id(::uint32_t value) {
 inline void BattleActivityContext::clear_period_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.period_key_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t BattleActivityContext::period_key() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.period_key)
@@ -17436,7 +20426,7 @@ inline ::uint32_t BattleActivityContext::period_key() const {
 }
 inline void BattleActivityContext::set_period_key(::uint32_t value) {
   _internal_set_period_key(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.period_key)
 }
 inline ::uint32_t BattleActivityContext::_internal_period_key() const {
@@ -17452,7 +20442,7 @@ inline void BattleActivityContext::_internal_set_period_key(::uint32_t value) {
 inline void BattleActivityContext::clear_initiator_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.initiator_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t BattleActivityContext::initiator_player_id() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.initiator_player_id)
@@ -17460,7 +20450,7 @@ inline ::uint64_t BattleActivityContext::initiator_player_id() const {
 }
 inline void BattleActivityContext::set_initiator_player_id(::uint64_t value) {
   _internal_set_initiator_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.initiator_player_id)
 }
 inline ::uint64_t BattleActivityContext::_internal_initiator_player_id() const {
@@ -17476,7 +20466,7 @@ inline void BattleActivityContext::_internal_set_initiator_player_id(::uint64_t 
 inline void BattleActivityContext::clear_guild_period_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_period_key_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t BattleActivityContext::guild_period_key() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.guild_period_key)
@@ -17484,7 +20474,7 @@ inline ::uint32_t BattleActivityContext::guild_period_key() const {
 }
 inline void BattleActivityContext::set_guild_period_key(::uint32_t value) {
   _internal_set_guild_period_key(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.guild_period_key)
 }
 inline ::uint32_t BattleActivityContext::_internal_guild_period_key() const {
@@ -17500,7 +20490,7 @@ inline void BattleActivityContext::_internal_set_guild_period_key(::uint32_t val
 inline void BattleActivityContext::clear_launch_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.launch_request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t BattleActivityContext::launch_request_id() const {
   // @@protoc_insertion_point(field_get:BattleActivityContext.launch_request_id)
@@ -17508,7 +20498,7 @@ inline ::uint64_t BattleActivityContext::launch_request_id() const {
 }
 inline void BattleActivityContext::set_launch_request_id(::uint64_t value) {
   _internal_set_launch_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleActivityContext.launch_request_id)
 }
 inline ::uint64_t BattleActivityContext::_internal_launch_request_id() const {
@@ -17616,6 +20606,104 @@ inline void BattleActivityContext::set_allocated_festival_beast(::FestivalBeastB
 
   _impl_.festival_beast_ = reinterpret_cast<::FestivalBeastBattleContext*>(value);
   // @@protoc_insertion_point(field_set_allocated:BattleActivityContext.festival_beast)
+}
+
+// .GuildWarBattleContext guild_war = 9;
+inline bool BattleActivityContext::has_guild_war() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_war_ != nullptr);
+  return value;
+}
+inline void BattleActivityContext::clear_guild_war() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_war_ != nullptr) _impl_.guild_war_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::GuildWarBattleContext& BattleActivityContext::_internal_guild_war() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::GuildWarBattleContext* p = _impl_.guild_war_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::GuildWarBattleContext>(&::GuildWarBattleContext_globals_);
+}
+inline const ::GuildWarBattleContext& BattleActivityContext::guild_war() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleActivityContext.guild_war)
+  return _internal_guild_war();
+}
+inline void BattleActivityContext::unsafe_arena_set_allocated_guild_war(
+    ::GuildWarBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_war_);
+  }
+  _impl_.guild_war_ = reinterpret_cast<::GuildWarBattleContext*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActivityContext.guild_war)
+}
+inline ::GuildWarBattleContext* PROTOBUF_NULLABLE BattleActivityContext::release_guild_war() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::GuildWarBattleContext* released = _impl_.guild_war_;
+  _impl_.guild_war_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::GuildWarBattleContext* PROTOBUF_NULLABLE BattleActivityContext::unsafe_arena_release_guild_war() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleActivityContext.guild_war)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::GuildWarBattleContext* temp = _impl_.guild_war_;
+  _impl_.guild_war_ = nullptr;
+  return temp;
+}
+inline ::GuildWarBattleContext* PROTOBUF_NONNULL BattleActivityContext::_internal_mutable_guild_war() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_war_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::GuildWarBattleContext>(GetArena());
+    _impl_.guild_war_ = reinterpret_cast<::GuildWarBattleContext*>(p);
+  }
+  return _impl_.guild_war_;
+}
+inline ::GuildWarBattleContext* PROTOBUF_NONNULL BattleActivityContext::mutable_guild_war()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::GuildWarBattleContext* _msg = _internal_mutable_guild_war();
+  // @@protoc_insertion_point(field_mutable:BattleActivityContext.guild_war)
+  return _msg;
+}
+inline void BattleActivityContext::set_allocated_guild_war(::GuildWarBattleContext* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_war_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.guild_war_ = reinterpret_cast<::GuildWarBattleContext*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleActivityContext.guild_war)
 }
 
 // -------------------------------------------------------------------

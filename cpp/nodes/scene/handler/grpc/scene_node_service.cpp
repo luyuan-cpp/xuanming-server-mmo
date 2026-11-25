@@ -49,7 +49,7 @@ boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
             return true;
         }, nullptr);
     // 三种拒绝都回 UNAVAILABLE,SceneManager 收到任何错误都回滚改派;日志按原因分开记,与改造前的回调一致。
-    const auto sceneId = call->request().scene_id();
+    const auto sceneId = call->Request().scene_id();
     if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
     {
         // CloseCreationAdmission 停掉了等许可的任务:维护 P1、普通停机、身份冲突或计划排空已开始。
@@ -76,7 +76,7 @@ boost::cobalt::task<void> CreateSceneWithPermit(muduo::net::EventLoop& loop,
 ///<<< END WRITING YOUR CODE
 
 SceneNodeGrpcImpl::SceneNodeGrpcImpl(muduo::net::EventLoop& loop)
-    : loop_(loop)
+    : loop(loop)
 {
 }
 
@@ -357,7 +357,7 @@ void SceneNodeGrpcImpl::HandleGmExecutePlayerCommand(const ::scene_node::GmExecu
 
 void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call)
 {
-    [[maybe_unused]] const ::CreateSceneRequest* request = &call->request();
+    [[maybe_unused]] const ::CreateSceneRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.CreateScene.guard
     // 停机已开始(Node 在 beforeShutdown 之后进入 gRPC 排空):不再建新场景 —— 建出的场景会随进程退出丢失,
     // SceneManager 却以为它在。回 UNAVAILABLE 让 SceneManager 回滚(它对任何错误都回滚,不匹配文案)。
@@ -384,7 +384,7 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
     // 在途创建才能阻止提前回到 Ready。任务由服务对象持有，传输回调不捕获 this(AGENTS §11.7)。
     //
     // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
-    if (!creationTasks_.Start(CreateSceneWithPermit(loop_, call), "SceneCreationPermit"))
+    if (!creationTasks.Start(CreateSceneWithPermit(loop, call), "SceneCreationPermit"))
     {
         LOG_WARN << "[gRPC] CreateScene rejected: creation admission closed (node draining), scene_id=" << request->scene_id();
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, kSceneNodeShuttingDownMessage));
@@ -396,7 +396,7 @@ void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call
 
 void SceneNodeGrpcImpl::DestroyScene(const std::shared_ptr<DestroySceneCall>& call)
 {
-    [[maybe_unused]] const ::DestroySceneRequest* request = &call->request();
+    [[maybe_unused]] const ::DestroySceneRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.DestroyScene.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -404,7 +404,7 @@ void SceneNodeGrpcImpl::DestroyScene(const std::shared_ptr<DestroySceneCall>& ca
 
 void SceneNodeGrpcImpl::ReleasePlayer(const std::shared_ptr<ReleasePlayerCall>& call)
 {
-    [[maybe_unused]] const ::scene_node::ReleasePlayerRequest* request = &call->request();
+    [[maybe_unused]] const ::scene_node::ReleasePlayerRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.ReleasePlayer.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -412,7 +412,7 @@ void SceneNodeGrpcImpl::ReleasePlayer(const std::shared_ptr<ReleasePlayerCall>& 
 
 void SceneNodeGrpcImpl::PrepareBattle(const std::shared_ptr<PrepareBattleCall>& call)
 {
-    [[maybe_unused]] const ::PrepareBattleRequest* request = &call->request();
+    [[maybe_unused]] const ::PrepareBattleRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.PrepareBattle.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -420,7 +420,7 @@ void SceneNodeGrpcImpl::PrepareBattle(const std::shared_ptr<PrepareBattleCall>& 
 
 void SceneNodeGrpcImpl::CancelBattlePrepare(const std::shared_ptr<CancelBattlePrepareCall>& call)
 {
-    [[maybe_unused]] const ::CancelBattlePrepareRequest* request = &call->request();
+    [[maybe_unused]] const ::CancelBattlePrepareRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.CancelBattlePrepare.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -428,7 +428,7 @@ void SceneNodeGrpcImpl::CancelBattlePrepare(const std::shared_ptr<CancelBattlePr
 
 void SceneNodeGrpcImpl::SealAccountRoleTrade(const std::shared_ptr<SealAccountRoleTradeCall>& call)
 {
-    [[maybe_unused]] const ::SealAccountRoleTradeRequest* request = &call->request();
+    [[maybe_unused]] const ::SealAccountRoleTradeRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.SealAccountRoleTrade.guard
     if (!RoleAdmissionSystem::AcceptSeal(*request)) {
         call->Reject(muduo_grpc::Status(muduo_grpc::StatusCode::kPermissionDenied, "角色封存原件或内部证明无效"));
@@ -440,7 +440,7 @@ void SceneNodeGrpcImpl::SealAccountRoleTrade(const std::shared_ptr<SealAccountRo
 
 void SceneNodeGrpcImpl::AssetDebit(const std::shared_ptr<AssetDebitCall>& call)
 {
-    [[maybe_unused]] const ::AssetOpRequest* request = &call->request();
+    [[maybe_unused]] const ::AssetOpRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AssetDebit.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -448,7 +448,7 @@ void SceneNodeGrpcImpl::AssetDebit(const std::shared_ptr<AssetDebitCall>& call)
 
 void SceneNodeGrpcImpl::AssetAbortDebit(const std::shared_ptr<AssetAbortDebitCall>& call)
 {
-    [[maybe_unused]] const ::AssetOpRequest* request = &call->request();
+    [[maybe_unused]] const ::AssetOpRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AssetAbortDebit.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -456,7 +456,7 @@ void SceneNodeGrpcImpl::AssetAbortDebit(const std::shared_ptr<AssetAbortDebitCal
 
 void SceneNodeGrpcImpl::AssetCredit(const std::shared_ptr<AssetCreditCall>& call)
 {
-    [[maybe_unused]] const ::AssetOpRequest* request = &call->request();
+    [[maybe_unused]] const ::AssetOpRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AssetCredit.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -464,7 +464,7 @@ void SceneNodeGrpcImpl::AssetCredit(const std::shared_ptr<AssetCreditCall>& call
 
 void SceneNodeGrpcImpl::AssetAckReceipt(const std::shared_ptr<AssetAckReceiptCall>& call)
 {
-    [[maybe_unused]] const ::AssetOpRequest* request = &call->request();
+    [[maybe_unused]] const ::AssetOpRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AssetAckReceipt.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -472,7 +472,7 @@ void SceneNodeGrpcImpl::AssetAckReceipt(const std::shared_ptr<AssetAckReceiptCal
 
 void SceneNodeGrpcImpl::GmExecutePlayerCommand(const std::shared_ptr<GmExecutePlayerCommandCall>& call)
 {
-    [[maybe_unused]] const ::scene_node::GmExecutePlayerCommandRequest* request = &call->request();
+    [[maybe_unused]] const ::scene_node::GmExecutePlayerCommandRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.GmExecutePlayerCommand.guard
     if (call->ServerDraining() || gNode->PlannedDrainStarted() ||
         !gNode->GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh()) {

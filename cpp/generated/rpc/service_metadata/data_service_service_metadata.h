@@ -198,3 +198,7 @@ constexpr uint32_t DataServiceGetPlayerItemGainBlockIndex = 47;
 constexpr uint32_t DataServiceUpdateRoleAppearanceMessageId = 441;
 constexpr uint32_t DataServiceUpdateRoleAppearanceIndex = 48;
 #define DataServiceUpdateRoleAppearanceMethod  ::DataService_Stub::descriptor()->method(48)
+
+constexpr uint32_t DataServiceSyncAccountStage1TradableMessageId = 498;
+constexpr uint32_t DataServiceSyncAccountStage1TradableIndex = 49;
+#define DataServiceSyncAccountStage1TradableMethod  ::DataService_Stub::descriptor()->method(49)

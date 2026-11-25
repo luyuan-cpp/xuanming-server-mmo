@@ -66,4 +66,24 @@ struct FCfgPetTierRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
 	FString desc;
+
+	/** 升至下一灵阶所需道具表 ID（最高阶 5 圣兽填 0）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
+	int32 ascend_cost_item_id = 0;
+
+	/** 升至下一灵阶所需道具数量（最高阶填 0）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
+	int32 ascend_cost_item_count = 0;
+
+	/** 升至下一灵阶所需银两（最高阶填 0）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
+	int64 ascend_cost_gold = 0;
+
+	/** 升至下一灵阶所需宝宝生效等级门槛（最高阶填 0）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
+	int32 ascend_min_pet_level = 0;
+
+	/** 该灵阶赋予的额外独立条目点预算（1阶=0，2..5阶递增 +2/+4/+6/+8，单项上限不变）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetTier")
+	int32 bonus_entry_points = 0;
 };

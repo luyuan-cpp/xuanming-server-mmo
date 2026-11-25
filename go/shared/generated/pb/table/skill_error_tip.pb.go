@@ -48,6 +48,11 @@ const (
 	SkillError_kSkillAlreadyBookUnlocked            SkillError = 7020
 	SkillError_kSkillProxyStallRequiresMaster       SkillError = 7021
 	SkillError_kSkillProxyFeeInvalid                SkillError = 7022
+	SkillError_kSkillLoadoutSlotLimitReached        SkillError = 7023
+	SkillError_kSkillLoadoutConflict                SkillError = 7024
+	SkillError_kSkillLoadoutNotLearned              SkillError = 7025
+	SkillError_kSkillLoadoutSchemeInvalid           SkillError = 7026
+	SkillError_kSkillLoadoutVersionChanged          SkillError = 7027
 )
 
 // Enum value maps for SkillError.
@@ -77,6 +82,11 @@ var (
 		7020: "kSkillAlreadyBookUnlocked",
 		7021: "kSkillProxyStallRequiresMaster",
 		7022: "kSkillProxyFeeInvalid",
+		7023: "kSkillLoadoutSlotLimitReached",
+		7024: "kSkillLoadoutConflict",
+		7025: "kSkillLoadoutNotLearned",
+		7026: "kSkillLoadoutSchemeInvalid",
+		7027: "kSkillLoadoutVersionChanged",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -103,6 +113,11 @@ var (
 		"kSkillAlreadyBookUnlocked":            7020,
 		"kSkillProxyStallRequiresMaster":       7021,
 		"kSkillProxyFeeInvalid":                7022,
+		"kSkillLoadoutSlotLimitReached":        7023,
+		"kSkillLoadoutConflict":                7024,
+		"kSkillLoadoutNotLearned":              7025,
+		"kSkillLoadoutSchemeInvalid":           7026,
+		"kSkillLoadoutVersionChanged":          7027,
 	}
 )
 
@@ -137,7 +152,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\xd7\x05\n" +
+	"\x15skill_error_tip.proto*\xf8\x06\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -162,7 +177,12 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x17kSkillCraftBookRequired\x10\xeb6\x12\x1e\n" +
 	"\x19kSkillAlreadyBookUnlocked\x10\xec6\x12#\n" +
 	"\x1ekSkillProxyStallRequiresMaster\x10\xed6\x12\x1a\n" +
-	"\x15kSkillProxyFeeInvalid\x10\xee6B$\n" +
+	"\x15kSkillProxyFeeInvalid\x10\xee6\x12\"\n" +
+	"\x1dkSkillLoadoutSlotLimitReached\x10\xef6\x12\x1a\n" +
+	"\x15kSkillLoadoutConflict\x10\xf06\x12\x1c\n" +
+	"\x17kSkillLoadoutNotLearned\x10\xf16\x12\x1f\n" +
+	"\x1akSkillLoadoutSchemeInvalid\x10\xf26\x12 \n" +
+	"\x1bkSkillLoadoutVersionChanged\x10\xf36B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

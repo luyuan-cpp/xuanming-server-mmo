@@ -87,7 +87,7 @@ struct TestH2ClientCallbacks
     static int OnFrameRecv(nghttp2_session *, const nghttp2_frame *frame, void *userData)
     {
         auto &self = Self(userData);
-        self.frameTypes_.push_back(frame->hd.type);
+        self.frameTypes.push_back(frame->hd.type);
         switch (frame->hd.type)
         {
         case NGHTTP2_HEADERS:
@@ -103,8 +103,8 @@ struct TestH2ClientCallbacks
         }
         case NGHTTP2_RST_STREAM:
         {
-            const auto it = self.streams_.find(frame->hd.stream_id);
-            if (it != self.streams_.end())
+            const auto it = self.streams.find(frame->hd.stream_id);
+            if (it != self.streams.end())
             {
                 it->second.frames.push_back(ClientFrame{frame->hd.type, frame->hd.flags, frame->rst_stream.error_code});
                 it->second.rstReceived = true;
@@ -115,11 +115,11 @@ struct TestH2ClientCallbacks
         case NGHTTP2_SETTINGS:
             if ((frame->hd.flags & NGHTTP2_FLAG_ACK) == 0)
             {
-                ++self.settingsFramesReceived_;
-                self.lastPeerSettings_.clear();
+                ++self.settingsFramesReceived;
+                self.lastPeerSettings.clear();
                 for (size_t i = 0; i < frame->settings.niv; ++i)
                 {
-                    self.lastPeerSettings_.push_back(
+                    self.lastPeerSettings.push_back(
                         SettingEntry{frame->settings.iv[i].settings_id, frame->settings.iv[i].value});
                 }
             }
@@ -127,15 +127,15 @@ struct TestH2ClientCallbacks
         case NGHTTP2_PING:
             if ((frame->hd.flags & NGHTTP2_FLAG_ACK) != 0)
             {
-                ++self.pingAcksReceived_;
+                ++self.pingAcksReceived;
             }
             else
             {
-                ++self.pingsReceived_; // ACK 由 nghttp2 自动回
+                ++self.pingsReceived; // ACK 由 nghttp2 自动回
             }
             break;
         case NGHTTP2_GOAWAY:
-            self.goawaysReceived_.push_back(ReceivedGoaway{
+            self.goawaysReceived.push_back(ReceivedGoaway{
                 frame->goaway.last_stream_id, frame->goaway.error_code,
                 BytesToString(frame->goaway.opaque_data, frame->goaway.opaque_data_len)});
             break;
@@ -155,13 +155,13 @@ struct TestH2ClientCallbacks
     static int OnStreamClose(nghttp2_session *, int32_t streamId, uint32_t errorCode, void *userData)
     {
         auto &self = Self(userData);
-        const auto it = self.streams_.find(streamId);
-        if (it != self.streams_.end())
+        const auto it = self.streams.find(streamId);
+        if (it != self.streams.end())
         {
             it->second.closed = true;
             it->second.closeErrorCode = errorCode;
         }
-        self.pendingData_.erase(streamId);
+        self.pendingData.erase(streamId);
         return 0;
     }
 
@@ -169,8 +169,8 @@ struct TestH2ClientCallbacks
                                   uint32_t *dataFlags, nghttp2_data_source *, void *userData)
     {
         auto &self = Self(userData);
-        const auto it = self.pendingData_.find(streamId);
-        if (it == self.pendingData_.end())
+        const auto it = self.pendingData.find(streamId);
+        if (it == self.pendingData.end())
         {
             *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
             return 0;
@@ -185,7 +185,7 @@ struct TestH2ClientCallbacks
         if (pending.offset == pending.bytes.size())
         {
             *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
-            self.pendingData_.erase(it);
+            self.pendingData.erase(it);
         }
         return static_cast<nghttp2_ssize>(chunk);
     }
@@ -236,14 +236,14 @@ TestH2Client::TestH2Client(TestH2ClientOptions options)
         Fail(LibError("nghttp2_session_client_new2", created));
         return;
     }
-    session_.reset(rawSession);
+    session.reset(rawSession);
     if (!SendSettings(options.initialSettings))
     {
         return;
     }
     if (options.localConnectionWindowBytes > 0)
     {
-        const int rv = nghttp2_session_set_local_window_size(session_.get(), NGHTTP2_FLAG_NONE, 0,
+        const int rv = nghttp2_session_set_local_window_size(session.get(), NGHTTP2_FLAG_NONE, 0,
                                                              options.localConnectionWindowBytes);
         if (rv != 0)
         {
@@ -258,12 +258,12 @@ TestH2Client::~TestH2Client() = default;
 
 bool TestH2Client::Receive(std::string_view bytes)
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
     const nghttp2_ssize consumed = nghttp2_session_mem_recv2(
-        session_.get(), reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size());
+        session.get(), reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size());
     if (consumed < 0)
     {
         return Fail(LibError("nghttp2_session_mem_recv2", static_cast<int>(consumed)));
@@ -280,7 +280,7 @@ std::string TestH2Client::TakeOutput()
 {
     Flush();
     std::string out;
-    out.swap(output_);
+    out.swap(output);
     return out;
 }
 
@@ -293,7 +293,7 @@ bool TestH2Client::Pump(muduo_grpc::ServerSession &server, int maxRounds)
             return false;
         }
         std::string toServer;
-        toServer.swap(output_);
+        toServer.swap(output);
         if (!toServer.empty())
         {
             const muduo_grpc::Status received =
@@ -330,13 +330,13 @@ bool TestH2Client::Pump(muduo_grpc::ServerSession &server, int maxRounds)
 
 const ClientStream *TestH2Client::FindStream(int32_t streamId) const
 {
-    const auto it = streams_.find(streamId);
-    return it == streams_.end() ? nullptr : &it->second;
+    const auto it = streams.find(streamId);
+    return it == streams.end() ? nullptr : &it->second;
 }
 
 int32_t TestH2Client::RemoteConnectionWindow() const
 {
-    return session_ ? nghttp2_session_get_remote_window_size(session_.get()) : 0;
+    return session ? nghttp2_session_get_remote_window_size(session.get()) : 0;
 }
 
 int32_t TestH2Client::OpenStream(const HeaderList &headers, bool endStream)
@@ -349,19 +349,19 @@ int32_t TestH2Client::OpenStreamWithUnnormalizedNames(const HeaderList &headers,
     // 只改变名称的提交方式;同一会话的 HPACK 动态表、流编号与响应观察完全沿用普通入口。
     auto retained = std::make_unique<HeaderList>(headers);
     const HeaderList &stableHeaders = *retained;
-    retainedHeaderNames_.push_back(std::move(retained));
+    retainedHeaderNames.push_back(std::move(retained));
     return OpenStreamWithNameFlags(stableHeaders, endStream, NGHTTP2_NV_FLAG_NO_COPY_NAME);
 }
 
 int32_t TestH2Client::OpenStreamWithNameFlags(const HeaderList &headers, bool endStream, uint8_t nameFlags)
 {
-    if (!session_)
+    if (!session)
     {
         Fail("client session not created");
         return -1;
     }
     const std::vector<nghttp2_nv> nva = MakeNva(headers, nameFlags);
-    const int32_t streamId = nghttp2_submit_headers(session_.get(),
+    const int32_t streamId = nghttp2_submit_headers(session.get(),
                                                     endStream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE, -1,
                                                     nullptr, nva.data(), nva.size(), nullptr);
     if (streamId < 0)
@@ -379,34 +379,34 @@ int32_t TestH2Client::OpenStreamWithNameFlags(const HeaderList &headers, bool en
 
 bool TestH2Client::SendData(int32_t streamId, std::string_view bytes, bool endStream)
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
-    if (pendingData_.count(streamId) != 0)
+    if (pendingData.count(streamId) != 0)
     {
         return Fail("previous DATA on stream " + std::to_string(streamId) + " is still queued");
     }
-    pendingData_[streamId] = PendingData{std::string(bytes), 0};
+    pendingData[streamId] = PendingData{std::string(bytes), 0};
 
     nghttp2_data_provider2 provider;
     provider.source.ptr = nullptr;
     provider.read_callback = &TestH2ClientCallbacks::ReadData;
-    const int rv = nghttp2_submit_data2(session_.get(), endStream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE,
+    const int rv = nghttp2_submit_data2(session.get(), endStream ? NGHTTP2_FLAG_END_STREAM : NGHTTP2_FLAG_NONE,
                                         streamId, &provider);
     if (rv != 0)
     {
-        pendingData_.erase(streamId);
+        pendingData.erase(streamId);
         return Fail(LibError("nghttp2_submit_data2", rv));
     }
     if (!Flush())
     {
         return false;
     }
-    if (pendingData_.count(streamId) != 0)
+    if (pendingData.count(streamId) != 0)
     {
         // 流控窗口不够,DATA 被推迟:脚本顺序就保证不了了,让用例显式失败而不是悄悄乱序。
-        pendingData_.erase(streamId);
+        pendingData.erase(streamId);
         return Fail("DATA on stream " + std::to_string(streamId) + " was deferred by flow control");
     }
     return true;
@@ -414,11 +414,11 @@ bool TestH2Client::SendData(int32_t streamId, std::string_view bytes, bool endSt
 
 bool TestH2Client::SendRstStream(int32_t streamId, uint32_t errorCode)
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
-    const int rv = nghttp2_submit_rst_stream(session_.get(), NGHTTP2_FLAG_NONE, streamId, errorCode);
+    const int rv = nghttp2_submit_rst_stream(session.get(), NGHTTP2_FLAG_NONE, streamId, errorCode);
     if (rv != 0)
     {
         return Fail(LibError("nghttp2_submit_rst_stream", rv));
@@ -428,7 +428,7 @@ bool TestH2Client::SendRstStream(int32_t streamId, uint32_t errorCode)
 
 bool TestH2Client::SendSettings(const std::vector<SettingEntry> &entries)
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
@@ -438,7 +438,7 @@ bool TestH2Client::SendSettings(const std::vector<SettingEntry> &entries)
     {
         iv.push_back(nghttp2_settings_entry{entry.id, entry.value});
     }
-    const int rv = nghttp2_submit_settings(session_.get(), NGHTTP2_FLAG_NONE, iv.data(), iv.size());
+    const int rv = nghttp2_submit_settings(session.get(), NGHTTP2_FLAG_NONE, iv.data(), iv.size());
     if (rv != 0)
     {
         return Fail(LibError("nghttp2_submit_settings", rv));
@@ -448,11 +448,11 @@ bool TestH2Client::SendSettings(const std::vector<SettingEntry> &entries)
 
 bool TestH2Client::SendPing()
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
-    const int rv = nghttp2_submit_ping(session_.get(), NGHTTP2_FLAG_NONE, nullptr);
+    const int rv = nghttp2_submit_ping(session.get(), NGHTTP2_FLAG_NONE, nullptr);
     if (rv != 0)
     {
         return Fail(LibError("nghttp2_submit_ping", rv));
@@ -462,14 +462,14 @@ bool TestH2Client::SendPing()
 
 bool TestH2Client::Flush()
 {
-    if (!session_)
+    if (!session)
     {
         return Fail("client session not created");
     }
     for (;;)
     {
         const uint8_t *data = nullptr;
-        const nghttp2_ssize produced = nghttp2_session_mem_send2(session_.get(), &data);
+        const nghttp2_ssize produced = nghttp2_session_mem_send2(session.get(), &data);
         if (produced < 0)
         {
             return Fail(LibError("nghttp2_session_mem_send2", static_cast<int>(produced)));
@@ -478,19 +478,19 @@ bool TestH2Client::Flush()
         {
             return true;
         }
-        output_.append(reinterpret_cast<const char *>(data), static_cast<size_t>(produced));
+        output.append(reinterpret_cast<const char *>(data), static_cast<size_t>(produced));
     }
 }
 
 bool TestH2Client::Fail(std::string message)
 {
-    lastError_ = std::move(message);
+    lastError = std::move(message);
     return false;
 }
 
 ClientStream &TestH2Client::StreamFor(int32_t streamId)
 {
-    const auto [it, inserted] = streams_.try_emplace(streamId);
+    const auto [it, inserted] = streams.try_emplace(streamId);
     if (inserted)
     {
         it->second.streamId = streamId;

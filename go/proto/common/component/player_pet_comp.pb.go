@@ -21,6 +21,67 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 宝宝条目预设方案（布局层：槽位 1..3 + 枚举用途标签，避免自由文本 UGC 风险）
+type PetEntryPreset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotId        uint32                 `protobuf:"varint,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`                                                                    // 1..3 显式方案槽位号
+	Tag           uint32                 `protobuf:"varint,2,opt,name=tag,proto3" json:"tag,omitempty"`                                                                                        // 0默认 / 1输出 / 2控场 / 3辅助
+	Allocated     map[uint32]uint32      `protobuf:"bytes,3,rep,name=allocated,proto3" json:"allocated,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // entry_id -> 已分配点
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetEntryPreset) Reset() {
+	*x = PetEntryPreset{}
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetEntryPreset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetEntryPreset) ProtoMessage() {}
+
+func (x *PetEntryPreset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetEntryPreset.ProtoReflect.Descriptor instead.
+func (*PetEntryPreset) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PetEntryPreset) GetSlotId() uint32 {
+	if x != nil {
+		return x.SlotId
+	}
+	return 0
+}
+
+func (x *PetEntryPreset) GetTag() uint32 {
+	if x != nil {
+		return x.Tag
+	}
+	return 0
+}
+
+func (x *PetEntryPreset) GetAllocated() map[uint32]uint32 {
+	if x != nil {
+		return x.Allocated
+	}
+	return nil
+}
+
 // 一只宝宝
 type PetInstance struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
@@ -44,14 +105,21 @@ type PetInstance struct {
 	EntryLastBaseVersion   uint64            `protobuf:"varint,15,opt,name=entry_last_base_version,json=entryLastBaseVersion,proto3" json:"entry_last_base_version,omitempty"`
 	EntryLastConfigVersion uint32            `protobuf:"varint,16,opt,name=entry_last_config_version,json=entryLastConfigVersion,proto3" json:"entry_last_config_version,omitempty"`
 	EntryLastTarget        map[uint32]uint32 `protobuf:"bytes,17,rep,name=entry_last_target,json=entryLastTarget,proto3" json:"entry_last_target,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	CultivationTier        uint32            `protobuf:"varint,18,opt,name=cultivation_tier,json=cultivationTier,proto3" json:"cultivation_tier,omitempty"` // 独立五阶身份，非 quality/acquisition_tier。
+	CultivationTier        uint32            `protobuf:"varint,18,opt,name=cultivation_tier,json=cultivationTier,proto3" json:"cultivation_tier,omitempty"`                       // 独立五阶身份，非 quality/acquisition_tier。
+	ActiveEntryPresetSlot  uint32            `protobuf:"varint,19,opt,name=active_entry_preset_slot,json=activeEntryPresetSlot,proto3" json:"active_entry_preset_slot,omitempty"` // 当前启用的条目方案槽位（0 兼容按 1 处理；有效范围 1..3）。
+	EntryPresets           []*PetEntryPreset `protobuf:"bytes,20,rep,name=entry_presets,json=entryPresets,proto3" json:"entry_presets,omitempty"`                                 // 3 套条目预设方案；当前生效槽位与 entry_allocated 原子同步。
+	TierLastRequestId      uint64            `protobuf:"varint,21,opt,name=tier_last_request_id,json=tierLastRequestId,proto3" json:"tier_last_request_id,omitempty"`             // 最近一次成功的灵阶突破幂等键（0 表示未突破过）。
+	TierLastExpectedTier   uint32            `protobuf:"varint,22,opt,name=tier_last_expected_tier,json=tierLastExpectedTier,proto3" json:"tier_last_expected_tier,omitempty"`    // 最近一次灵阶突破请求的期望前阶（防复用不同参数重放）。
+	TierLastResultTier     uint32            `protobuf:"varint,23,opt,name=tier_last_result_tier,json=tierLastResultTier,proto3" json:"tier_last_result_tier,omitempty"`          // 最近一次灵阶突破后的结果阶位。
+	EntryLastPresetSlot    uint32            `protobuf:"varint,24,opt,name=entry_last_preset_slot,json=entryLastPresetSlot,proto3" json:"entry_last_preset_slot,omitempty"`       // 最近一次条目方案切换的目标槽位（0 表示最近请求是 SaveEntries）。
+	EntryLastPresetTag     uint32            `protobuf:"varint,25,opt,name=entry_last_preset_tag,json=entryLastPresetTag,proto3" json:"entry_last_preset_tag,omitempty"`          // 最近一次条目方案切换的目标用途标签。
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PetInstance) Reset() {
 	*x = PetInstance{}
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -63,7 +131,7 @@ func (x *PetInstance) String() string {
 func (*PetInstance) ProtoMessage() {}
 
 func (x *PetInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -76,7 +144,7 @@ func (x *PetInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetInstance.ProtoReflect.Descriptor instead.
 func (*PetInstance) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{0}
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PetInstance) GetPetId() uint64 {
@@ -205,6 +273,55 @@ func (x *PetInstance) GetCultivationTier() uint32 {
 	return 0
 }
 
+func (x *PetInstance) GetActiveEntryPresetSlot() uint32 {
+	if x != nil {
+		return x.ActiveEntryPresetSlot
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryPresets() []*PetEntryPreset {
+	if x != nil {
+		return x.EntryPresets
+	}
+	return nil
+}
+
+func (x *PetInstance) GetTierLastRequestId() uint64 {
+	if x != nil {
+		return x.TierLastRequestId
+	}
+	return 0
+}
+
+func (x *PetInstance) GetTierLastExpectedTier() uint32 {
+	if x != nil {
+		return x.TierLastExpectedTier
+	}
+	return 0
+}
+
+func (x *PetInstance) GetTierLastResultTier() uint32 {
+	if x != nil {
+		return x.TierLastResultTier
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastPresetSlot() uint32 {
+	if x != nil {
+		return x.EntryLastPresetSlot
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastPresetTag() uint32 {
+	if x != nil {
+		return x.EntryLastPresetTag
+	}
+	return 0
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -223,7 +340,7 @@ type PlayerPetComp struct {
 
 func (x *PlayerPetComp) Reset() {
 	*x = PlayerPetComp{}
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -235,7 +352,7 @@ func (x *PlayerPetComp) String() string {
 func (*PlayerPetComp) ProtoMessage() {}
 
 func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -248,7 +365,7 @@ func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerPetComp.ProtoReflect.Descriptor instead.
 func (*PlayerPetComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlayerPetComp) GetPets() []*PetInstance {
@@ -304,7 +421,14 @@ var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescripto
 
 const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
-	",proto/common/component/player_pet_comp.proto\"\xf0\b\n" +
+	",proto/common/component/player_pet_comp.proto\"\xb7\x01\n" +
+	"\x0ePetEntryPreset\x12\x17\n" +
+	"\aslot_id\x18\x01 \x01(\rR\x06slotId\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\rR\x03tag\x12<\n" +
+	"\tallocated\x18\x03 \x03(\v2\x1e.PetEntryPreset.AllocatedEntryR\tallocated\x1a<\n" +
+	"\x0eAllocatedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe2\v\n" +
 	"\vPetInstance\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -327,7 +451,14 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x17entry_last_base_version\x18\x0f \x01(\x04R\x14entryLastBaseVersion\x129\n" +
 	"\x19entry_last_config_version\x18\x10 \x01(\rR\x16entryLastConfigVersion\x12M\n" +
 	"\x11entry_last_target\x18\x11 \x03(\v2!.PetInstance.EntryLastTargetEntryR\x0fentryLastTarget\x12)\n" +
-	"\x10cultivation_tier\x18\x12 \x01(\rR\x0fcultivationTier\x1a<\n" +
+	"\x10cultivation_tier\x18\x12 \x01(\rR\x0fcultivationTier\x127\n" +
+	"\x18active_entry_preset_slot\x18\x13 \x01(\rR\x15activeEntryPresetSlot\x124\n" +
+	"\rentry_presets\x18\x14 \x03(\v2\x0f.PetEntryPresetR\fentryPresets\x12/\n" +
+	"\x14tier_last_request_id\x18\x15 \x01(\x04R\x11tierLastRequestId\x125\n" +
+	"\x17tier_last_expected_tier\x18\x16 \x01(\rR\x14tierLastExpectedTier\x121\n" +
+	"\x15tier_last_result_tier\x18\x17 \x01(\rR\x12tierLastResultTier\x123\n" +
+	"\x16entry_last_preset_slot\x18\x18 \x01(\rR\x13entryLastPresetSlot\x121\n" +
+	"\x15entry_last_preset_tag\x18\x19 \x01(\rR\x12entryLastPresetTag\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a;\n" +
@@ -364,28 +495,32 @@ func file_proto_common_component_player_pet_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_pet_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_component_player_pet_comp_proto_goTypes = []any{
-	(*PetInstance)(nil),   // 0: PetInstance
-	(*PlayerPetComp)(nil), // 1: PlayerPetComp
-	nil,                   // 2: PetInstance.AllocatedEntry
-	nil,                   // 3: PetInstance.AptitudeEntry
-	nil,                   // 4: PetInstance.SkillRanksEntry
-	nil,                   // 5: PetInstance.EntryAllocatedEntry
-	nil,                   // 6: PetInstance.EntryLastTargetEntry
+	(*PetEntryPreset)(nil), // 0: PetEntryPreset
+	(*PetInstance)(nil),    // 1: PetInstance
+	(*PlayerPetComp)(nil),  // 2: PlayerPetComp
+	nil,                    // 3: PetEntryPreset.AllocatedEntry
+	nil,                    // 4: PetInstance.AllocatedEntry
+	nil,                    // 5: PetInstance.AptitudeEntry
+	nil,                    // 6: PetInstance.SkillRanksEntry
+	nil,                    // 7: PetInstance.EntryAllocatedEntry
+	nil,                    // 8: PetInstance.EntryLastTargetEntry
 }
 var file_proto_common_component_player_pet_comp_proto_depIdxs = []int32{
-	2, // 0: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
-	3, // 1: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
-	4, // 2: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
-	5, // 3: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
-	6, // 4: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
-	0, // 5: PlayerPetComp.pets:type_name -> PetInstance
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	3, // 0: PetEntryPreset.allocated:type_name -> PetEntryPreset.AllocatedEntry
+	4, // 1: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
+	5, // 2: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
+	6, // 3: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
+	7, // 4: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
+	8, // 5: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
+	0, // 6: PetInstance.entry_presets:type_name -> PetEntryPreset
+	1, // 7: PlayerPetComp.pets:type_name -> PetInstance
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_pet_comp_proto_init() }
@@ -399,7 +534,7 @@ func file_proto_common_component_player_pet_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_pet_comp_proto_rawDesc), len(file_proto_common_component_player_pet_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

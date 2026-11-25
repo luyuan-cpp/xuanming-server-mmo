@@ -13,6 +13,11 @@ message PetTierTable {
 	string name = 2;
 	string art_key = 3;
 	string desc = 4;
+	uint32 ascend_cost_item_id = 5;
+	uint32 ascend_cost_item_count = 6;
+	uint64 ascend_cost_gold = 7;
+	uint32 ascend_min_pet_level = 8;
+	uint32 bonus_entry_points = 9;
 }
 
 message PetTierTableData {

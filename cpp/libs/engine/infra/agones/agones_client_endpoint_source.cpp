@@ -39,11 +39,11 @@ namespace agones
 	AgonesClientEndpointSource::AgonesClientEndpointSource(std::unique_ptr<HttpTransport> transport,
 		std::string baseUrl,
 		ClientEndpointSourceOptions options)
-		: transport_(std::move(transport)), options_(options)
+		: transport(std::move(transport)), options(options)
 	{
-		if (transport_ != nullptr)
+		if (this->transport != nullptr)
 		{
-			client_ = std::make_unique<AgonesRestClient>(std::move(baseUrl), *transport_, options_.timeouts);
+			client = std::make_unique<AgonesRestClient>(std::move(baseUrl), *this->transport, this->options.timeouts);
 		}
 	}
 
@@ -51,7 +51,7 @@ namespace agones
 
 	bool AgonesClientEndpointSource::Fetch(client_endpoint::Advertised& out, std::string& error)
 	{
-		if (client_ == nullptr)
+		if (client == nullptr)
 		{
 			error = "agones client endpoint source has no HTTP transport";
 			return false;
@@ -59,12 +59,12 @@ namespace agones
 
 		// 次数上限与时间预算同时生效,先到者为准。预算用单调时钟截止时间表达(AGENTS §11.3),
 		// 不用"次数 × sleep"代替:sidecar 可连却不响应时,每次 GET 都会吃满自己的超时。
-		const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + options_.totalBudget;
-		auto backoff = options_.initialBackoff;
+		const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + options.totalBudget;
+		auto backoff = options.initialBackoff;
 		std::string lastError = "no attempt was made";
 		int attempts = 0;
 		bool budgetExhausted = false;
-		while (attempts < options_.maxAttempts)
+		while (attempts < options.maxAttempts)
 		{
 			const std::chrono::milliseconds remaining = RemainingUntil(deadline);
 			if (remaining < kMinAttemptBudget)
@@ -75,7 +75,7 @@ namespace agones
 
 			++attempts;
 			client_endpoint::Advertised candidate;
-			if (FetchOnce(ClampToBudget(options_.timeouts, remaining), candidate, lastError))
+			if (FetchOnce(ClampToBudget(options.timeouts, remaining), candidate, lastError))
 			{
 				LOG_INFO << "[Agones] client endpoint from GameServer status: host=" << candidate.host
 						 << " port=" << candidate.port << " after " << attempts << " attempt(s)";
@@ -83,21 +83,21 @@ namespace agones
 				return true;
 			}
 
-			LOG_WARN << "[Agones] client endpoint attempt " << attempts << "/" << options_.maxAttempts
+			LOG_WARN << "[Agones] client endpoint attempt " << attempts << "/" << options.maxAttempts
 					 << " failed: " << lastError;
-			if (attempts < options_.maxAttempts)
+			if (attempts < options.maxAttempts)
 			{
 				// 只在 Node 构造阶段调用,阻塞的是启动线程,不是运行中的 EventLoop(见头文件)。
 				// 睡眠截到剩余预算;睡完预算耗尽由循环顶部的检查收口。
 				std::this_thread::sleep_for(std::min(backoff, RemainingUntil(deadline)));
-				backoff = std::min(backoff * 2, options_.maxBackoff);
+				backoff = std::min(backoff * 2, options.maxBackoff);
 			}
 		}
 
 		if (budgetExhausted)
 		{
 			error = "agones client endpoint unavailable: time budget of "
-				+ std::to_string(options_.totalBudget.count()) + "ms exhausted after "
+				+ std::to_string(options.totalBudget.count()) + "ms exhausted after "
 				+ std::to_string(attempts) + " attempt(s): " + lastError;
 		}
 		else
@@ -112,7 +112,7 @@ namespace agones
 		client_endpoint::Advertised& out,
 		std::string& error)
 	{
-		const HttpResponse response = client_->GameServer(timeouts);
+		const HttpResponse response = client->GameServer(timeouts);
 		if (!response.Ok())
 		{
 			error = "GET /gameserver failed (status=" + std::to_string(response.statusCode)

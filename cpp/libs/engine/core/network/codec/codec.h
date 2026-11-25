@@ -65,17 +65,17 @@ class ProtobufCodec : muduo::noncopyable
 
   explicit ProtobufCodec(const ProtobufMessageCallback& messageCb,
                          int maxMessageLen = kDefaultMaxMessageLen)
-    : messageCallback_(messageCb),
-      errorCallback_(defaultErrorCallback),
-      maxMessageLen_(maxMessageLen)
+    : messageCallback(messageCb),
+      errorCallback(defaultErrorCallback),
+      maxMessageLen(maxMessageLen)
   {
   }
 
   ProtobufCodec(const ProtobufMessageCallback& messageCb, const ErrorCallback& errorCb,
                 int maxMessageLen = kDefaultMaxMessageLen)
-    : messageCallback_(messageCb),
-      errorCallback_(errorCb),
-      maxMessageLen_(maxMessageLen)
+    : messageCallback(messageCb),
+      errorCallback(errorCb),
+      maxMessageLen(maxMessageLen)
   {
   }
 
@@ -100,9 +100,9 @@ class ProtobufCodec : muduo::noncopyable
                                    muduo::Timestamp,
                                    ErrorCode);
 
-  ProtobufMessageCallback messageCallback_;
-  ErrorCallback errorCallback_;
-  int maxMessageLen_{kDefaultMaxMessageLen};
+  ProtobufMessageCallback messageCallback;
+  ErrorCallback errorCallback;
+  int maxMessageLen{kDefaultMaxMessageLen};
 
   const static int kHeaderLen = sizeof(int32_t);
   const static int kMinMessageLen = 2*kHeaderLen + 2; // nameLen + typeName + checkSum

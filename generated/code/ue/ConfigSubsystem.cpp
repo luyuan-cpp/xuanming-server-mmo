@@ -72,6 +72,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	GuildLevelTable = NewObject<UGuildLevelTable>(this);
 	GuildRuleTable = NewObject<UGuildRuleTable>(this);
 	GuildShopTable = NewObject<UGuildShopTable>(this);
+	GuildWarMilestoneTable = NewObject<UGuildWarMilestoneTable>(this);
+	GuildWarRuleTable = NewObject<UGuildWarRuleTable>(this);
 	ItemTable = NewObject<UItemTable>(this);
 	MessageLimiterTable = NewObject<UMessageLimiterTable>(this);
 	MirrorTable = NewObject<UMirrorTable>(this);
@@ -146,6 +148,8 @@ void UConfigSubsystem::Deinitialize()
 	GuildLevelTable = nullptr;
 	GuildRuleTable = nullptr;
 	GuildShopTable = nullptr;
+	GuildWarMilestoneTable = nullptr;
+	GuildWarRuleTable = nullptr;
 	ItemTable = nullptr;
 	MessageLimiterTable = nullptr;
 	MirrorTable = nullptr;
@@ -225,6 +229,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UGuildLevelTable::FileName(),
 		UGuildRuleTable::FileName(),
 		UGuildShopTable::FileName(),
+		UGuildWarMilestoneTable::FileName(),
+		UGuildWarRuleTable::FileName(),
 		UItemTable::FileName(),
 		UMessageLimiterTable::FileName(),
 		UMirrorTable::FileName(),
@@ -805,6 +811,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!GuildShopTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (GuildWarMilestoneTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarMilestone] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildWarMilestoneTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (GuildWarRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildWarRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2052,6 +2086,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!GuildShopTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (GuildWarMilestoneTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarMilestone] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildWarMilestoneTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarMilestone] 取不到 %s"), UGuildWarMilestoneTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildWarMilestoneTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (GuildWarRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildWarRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildWarRule] 取不到 %s"), UGuildWarRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildWarRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

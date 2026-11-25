@@ -50,11 +50,11 @@ constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLed
     {
       PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -105,7 +105,10 @@ constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLed
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_), 9>(),
        {80, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 stage1_tradable_confirmed = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.stage1_tradable_confirmed_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.stage1_tradable_confirmed_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -133,6 +136,8 @@ constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLed
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_this_week_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool migrated_to_v2 = 10;
       {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 stage1_tradable_confirmed = 11;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.stage1_tradable_confirmed_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -154,7 +159,8 @@ inline constexpr EquipmentMaterialRewardLedger::Impl_::Impl_(
         tradable_earned_total_{0u},
         earned_this_week_{0u},
         week_starts_at_ms_{::uint64_t{0u}},
-        migrated_to_v2_{false} {}
+        migrated_to_v2_{false},
+        stage1_tradable_confirmed_{0u} {}
 
 template <typename>
 constexpr EquipmentMaterialRewardLedger::EquipmentMaterialRewardLedger(::_pbi::ConstantInitialized,
@@ -837,7 +843,7 @@ const ::uint32_t
         28,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
-        13, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.earned_today_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.available_units_),
@@ -848,6 +854,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.week_starts_at_ms_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.earned_this_week_),
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.stage1_tradable_confirmed_),
         0,
         2,
         1,
@@ -858,6 +865,7 @@ const ::uint32_t
         8,
         7,
         9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
         7, // hasbit index offset
@@ -875,7 +883,7 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
         {61, sizeof(::EquipmentMaterialRewardLedger)},
-        {84, sizeof(::ClientRequestLedgerComp)},
+        {86, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -908,25 +916,26 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "ty\030\031 \001(\010\022\035\n\025crafted_skill_book_id\030\032 \001(\004\022"
     "\036\n\026crafted_skill_table_id\030\033 \001(\r\022\035\n\025scrol"
     "l_craft_revision\030\034 \001(\004\022\036\n\026scroll_bonus_f"
-    "ragments\030\035 \001(\r\"\241\002\n\035EquipmentMaterialRewa"
+    "ragments\030\035 \001(\r\"\304\002\n\035EquipmentMaterialRewa"
     "rdLedger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014ea"
     "rned_today\030\002 \001(\r\022\027\n\017available_units\030\003 \001("
     "\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005"
     " \001(\r\022\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030a"
     "vailable_tradable_units\030\007 \001(\004\022\031\n\021week_st"
     "arts_at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001"
-    "(\r\022\026\n\016migrated_to_v2\030\n \001(\010\"\243\001\n\027ClientReq"
-    "uestLedgerComp\022%\n\007records\030\001 \003(\0132\024.Client"
-    "RequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge"
-    "_revision\030\003 \001(\004\0227\n\017material_reward\030\004 \001(\013"
-    "2\036.EquipmentMaterialRewardLedgerB\022Z\020comm"
-    "on/componentb\006proto3"
+    "(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tra"
+    "dable_confirmed\030\013 \001(\r\"\243\001\n\027ClientRequestL"
+    "edgerComp\022%\n\007records\030\001 \003(\0132\024.ClientReque"
+    "stRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revi"
+    "sion\030\003 \001(\004\0227\n\017material_reward\030\004 \001(\0132\036.Eq"
+    "uipmentMaterialRewardLedgerB\022Z\020common/co"
+    "mponentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    1420,
+    1455,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -1823,9 +1832,9 @@ inline void EquipmentMaterialRewardLedger::SharedCtor(::_pb::Arena* PROTOBUF_NUL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, day_starts_at_ms_),
            0,
-           offsetof(Impl_, migrated_to_v2_) -
+           offsetof(Impl_, stage1_tradable_confirmed_) -
                offsetof(Impl_, day_starts_at_ms_) +
-               sizeof(Impl_::migrated_to_v2_));
+               sizeof(Impl_::stage1_tradable_confirmed_));
 }
 EquipmentMaterialRewardLedger::~EquipmentMaterialRewardLedger() {
   // @@protoc_insertion_point(destructor:EquipmentMaterialRewardLedger)
@@ -1880,10 +1889,10 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
         reinterpret_cast<char*>(&_impl_.earned_this_week_) -
         reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.earned_this_week_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     ::memset(&_impl_.week_starts_at_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.migrated_to_v2_) -
-        reinterpret_cast<char*>(&_impl_.week_starts_at_ms_)) + sizeof(_impl_.migrated_to_v2_));
+        reinterpret_cast<char*>(&_impl_.stage1_tradable_confirmed_) -
+        reinterpret_cast<char*>(&_impl_.week_starts_at_ms_)) + sizeof(_impl_.stage1_tradable_confirmed_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1998,6 +2007,15 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
     }
   }
 
+  // uint32 stage1_tradable_confirmed = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_stage1_tradable_confirmed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_stage1_tradable_confirmed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2081,7 +2099,7 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint64 week_starts_at_ms = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_week_starts_at_ms() != 0) {
@@ -2093,6 +2111,13 @@ PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_migrated_to_v2() != 0) {
         total_size += 2;
+      }
+    }
+    // uint32 stage1_tradable_confirmed = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_stage1_tradable_confirmed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_stage1_tradable_confirmed());
       }
     }
   }
@@ -2155,7 +2180,7 @@ void EquipmentMaterialRewardLedger::MergeImpl(::google::protobuf::MessageLite& t
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_week_starts_at_ms() != 0) {
         _this->_impl_.week_starts_at_ms_ = from._impl_.week_starts_at_ms_;
@@ -2164,6 +2189,11 @@ void EquipmentMaterialRewardLedger::MergeImpl(::google::protobuf::MessageLite& t
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_migrated_to_v2() != 0) {
         _this->_impl_.migrated_to_v2_ = from._impl_.migrated_to_v2_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_stage1_tradable_confirmed() != 0) {
+        _this->_impl_.stage1_tradable_confirmed_ = from._impl_.stage1_tradable_confirmed_;
       }
     }
   }
@@ -2185,8 +2215,8 @@ void EquipmentMaterialRewardLedger::InternalSwap(EquipmentMaterialRewardLedger* 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.migrated_to_v2_)
-      + sizeof(EquipmentMaterialRewardLedger::_impl_.migrated_to_v2_)
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.stage1_tradable_confirmed_)
+      + sizeof(EquipmentMaterialRewardLedger::_impl_.stage1_tradable_confirmed_)
       - PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_)>(
           reinterpret_cast<char*>(&_impl_.day_starts_at_ms_),
           reinterpret_cast<char*>(&other->_impl_.day_starts_at_ms_));

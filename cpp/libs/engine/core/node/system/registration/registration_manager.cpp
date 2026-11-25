@@ -61,7 +61,7 @@ bool IsHandshakeNodeType(uint32_t nodeType)
 
 bool IsCurrentConnection(const RpcClientPtr& client, const TcpConnectionPtr& conn)
 {
-    return client && conn && client->connected() && client->channel()->IsBoundTo(conn);
+    return client && conn && client->connected() && client->Channel()->IsBoundTo(conn);
 }
 
 // 失败日志里的实例身份:四项都参与比对,日志也四项都打,否则只差 node_id / zone 的不符看不出原因。
@@ -128,7 +128,7 @@ void NodeHandshakeManager::BeginHandshake(const RpcClientPtr& client, const Node
     request.set_expected_peer_uuid(expectedPeer.node_uuid());
     VisitHandshakeRpc(expectedPeer.node_type(), [&]<typename Method>(Method) {
         // 握手经通信 channel 发起；业务走 RpcClient 的 Ready 门禁，不能抢在身份确认之前发送。
-        client->channel()->CallMethod<Method>(request,
+        client->Channel()->CallMethod<Method>(request,
             [expectedPeer, weakClient = std::weak_ptr<RpcClient>(client),
              weakConn = std::weak_ptr<muduo::net::TcpConnection>(conn)](
                 const RpcStatus& status, const std::shared_ptr<NodeHandshakeResponse>& response) {
@@ -170,7 +170,7 @@ void NodeHandshakeManager::OnNodeHandshake(
 	NodeHandshakeResponse& response
 ) const {
 	// 连接随 ctx 显式传入(Go 的 ctx 语义),不再从 thread_local 取。
-	const TcpConnectionPtr& rpcConn = ctx.conn();
+	const TcpConnectionPtr& rpcConn = ctx.Conn();
 	if (!rpcConn)
 	{
 		response.mutable_error_message()->set_id(kFailedToRegisterTheNode);

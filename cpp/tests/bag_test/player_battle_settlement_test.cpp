@@ -201,15 +201,15 @@ bool RejectLockRetry(uint64_t, std::function<void()>) { return false; }
 class ScopedLockScriptRecorder {
 public:
     ScopedLockScriptRecorder() {
-        if (!muduo::net::EventLoop::getEventLoopOfCurrentThread()) loop_ = std::make_unique<muduo::net::EventLoop>();
-        if (!SceneTaskScope::IsAccepting()) tasks_ = std::make_unique<SceneTaskScope>(*muduo::net::EventLoop::getEventLoopOfCurrentThread());
+        if (!muduo::net::EventLoop::getEventLoopOfCurrentThread()) loop = std::make_unique<muduo::net::EventLoop>();
+        if (!SceneTaskScope::IsAccepting()) tasks = std::make_unique<SceneTaskScope>(*muduo::net::EventLoop::getEventLoopOfCurrentThread());
         PlayerBattleSystem::SetLockRetrySchedulerForTest(&RejectLockRetry);
         gLockScriptCalls.clear();
         PlayerBattleSystem::SetLockScriptObserverForTest(&RecordLockScriptCall);
     }
     ~ScopedLockScriptRecorder() {
-        tasks_.reset();
-        if (loop_) { loop_->queueInLoop([loop = loop_.get()] { loop->quit(); }); loop_->loop(); }
+        tasks.reset();
+        if (this->loop) { this->loop->queueInLoop([loop = this->loop.get()] { loop->quit(); }); this->loop->loop(); }
         PlayerBattleSystem::SetLockScriptSenderForTest(nullptr);
         PlayerBattleSystem::SetLockRetrySchedulerForTest(nullptr);
         PlayerBattleSystem::SetLockScriptObserverForTest(nullptr);
@@ -218,12 +218,12 @@ public:
     ScopedLockScriptRecorder(const ScopedLockScriptRecorder&) = delete;
     ScopedLockScriptRecorder& operator=(const ScopedLockScriptRecorder&) = delete;
     // 瞬态组停止:维护 P1、普通停机、身份冲突的第一步。战斗锁的写入链归持久组,不随它停。
-    void Stop() { if (tasks_) tasks_->Stop(); }
+    void Stop() { if (tasks) tasks->Stop(); }
     // 拆除前的 StopAll:持久组也结束本地等待。
-    void StopAll() { if (tasks_) tasks_->StopAll(); }
+    void StopAll() { if (tasks) tasks->StopAll(); }
 private:
-    std::unique_ptr<muduo::net::EventLoop> loop_;
-    std::unique_ptr<SceneTaskScope> tasks_;
+    std::unique_ptr<muduo::net::EventLoop> loop;
+    std::unique_ptr<SceneTaskScope> tasks;
 
 };
 
@@ -1193,17 +1193,17 @@ protected:
 class ScopedPreparedExchangeSegments {
 public:
     bool Install() {
-        itemEnabled_ = tlsGuidSegmentRegistry.Get(GuidKind::kItem).IsEnabled();
-        txEnabled_ = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).IsEnabled();
-        installed_ = true;
+        itemEnabled = tlsGuidSegmentRegistry.Get(GuidKind::kItem).IsEnabled();
+        txEnabled = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).IsEnabled();
+        installed = true;
         return Arm(GuidKind::kItem, "item", 9100000, 9200000) && Arm(GuidKind::kTxLog, "txlog", 19100000, 19200000);
     }
     ~ScopedPreparedExchangeSegments() {
-        if (!installed_) return;
+        if (!installed) return;
         tlsGuidSegmentRegistry.Get(GuidKind::kItem).Reset();
         tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Reset();
-        if (itemEnabled_) EXPECT_TRUE(Arm(GuidKind::kItem, "item", 1, uint64_t{1} << 54));
-        if (txEnabled_) EXPECT_TRUE(Arm(GuidKind::kTxLog, "txlog", 1, uint64_t{1} << 54));
+        if (itemEnabled) EXPECT_TRUE(Arm(GuidKind::kItem, "item", 1, uint64_t{1} << 54));
+        if (txEnabled) EXPECT_TRUE(Arm(GuidKind::kTxLog, "txlog", 1, uint64_t{1} << 54));
     }
 private:
     static bool Arm(GuidKind kind, const std::string& name, uint64_t low, uint64_t high) {
@@ -1215,7 +1215,7 @@ private:
         client.Warm(); client.OnResponse(0, low, high);
         return client.IsReady();
     }
-    bool installed_{false}, itemEnabled_{false}, txEnabled_{false};
+    bool installed{false}, itemEnabled{false}, txEnabled{false};
 };
 
 // 复用正式Inbox状态机/执行器，依赖仅替换时钟、传输与存盘回执；不自行实现去重。

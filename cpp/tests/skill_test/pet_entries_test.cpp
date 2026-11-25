@@ -1,15 +1,23 @@
 #include "gtest/gtest.h"
 #include "core/utils/proto/proto_field_checker.h"
+#include "engine/core/type_define/player_guid_comp.h"
+#include "modules/bag/bag_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
+#include "modules/currency/comp/player_currency_comp.h"
+#include "modules/currency/constants/currency.h"
+#include "modules/currency/system/currency_system.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "network/network_constants.h"
 #include "player/system/player_pet.h"
 #include "player/system/pet_entry_rules.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/scene/player_pet.pb.h"
+#include "table/code/item_table.h"
 #include "table/code/petentry_table.h"
 #include "table/code/pettier_table.h"
 #include "table/code/petrule_table.h"
@@ -162,5 +170,113 @@ TEST_F(PetEntriesTest, StarterPetGrantedOnceForEmptyPlayerAndNeverDuplicated) {
  EXPECT_FALSE(PetSystem::EnsureStarterPetGranted(rookie));
  EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerPetComp>(rookie).pets_size(), 0);
  tlsEcs.actorRegistry.destroy(rookie);
+}
+
+TEST_F(PetEntriesTest, EntryPresetsSwitchAtomicallyPreserveEachSlotAndReplayIdempotently) {
+ // 在方案 1 保存 503=6 点。
+ auto save1 = Request(6);
+ const auto saved1 = Save(save1);
+ ASSERT_FALSE(saved1.has_error_message());
+ EXPECT_EQ(saved1.entries().active_preset_slot(), 1u);
+ EXPECT_EQ(saved1.entries().presets_size(), 3);
+
+ // 切换至方案 2 并标记为「控场(2)」。
+ SwitchPetEntryPresetRequest sw2;
+ sw2.set_pet_id(id);
+ sw2.set_slot_id(2);
+ sw2.set_tag(2);
+ sw2.set_state_version(saved1.entries().state_version());
+ sw2.set_config_version(saved1.entries().config_version());
+ sw2.set_request_id("preset-switch-slot2-0001");
+ SwitchPetEntryPresetResponse sw2Resp;
+ PetSystem::SwitchEntryPreset(player, sw2, sw2Resp);
+ ASSERT_FALSE(sw2Resp.has_error_message());
+ EXPECT_EQ(sw2Resp.entries().active_preset_slot(), 2u);
+ EXPECT_EQ(sw2Resp.entries().remaining_points(), 20u);
+
+ // 同 request_id 重放必须幂等且不递增版本。
+ SwitchPetEntryPresetResponse sw2Replay;
+ PetSystem::SwitchEntryPreset(player, sw2, sw2Replay);
+ ASSERT_FALSE(sw2Replay.has_error_message());
+ EXPECT_TRUE(sw2Replay.replayed());
+ EXPECT_EQ(sw2Replay.entries().state_version(), sw2Resp.entries().state_version());
+
+ // 在方案 2 保存 501=4 点，再切回方案 1 确认 503=6 完整保留。
+ SavePetEntriesRequest save2;
+ save2.set_pet_id(id);
+ save2.set_state_version(sw2Resp.entries().state_version());
+ save2.set_config_version(sw2Resp.entries().config_version());
+ save2.set_request_id("entry-request-slot2-0001");
+ (*save2.mutable_target())[501] = 4;
+ const auto saved2 = Save(save2);
+ ASSERT_FALSE(saved2.has_error_message());
+
+ SwitchPetEntryPresetRequest sw1;
+ sw1.set_pet_id(id);
+ sw1.set_slot_id(1);
+ sw1.set_tag(petentries::kKeepPresetTag);
+ sw1.set_state_version(saved2.entries().state_version());
+ sw1.set_config_version(saved2.entries().config_version());
+ sw1.set_request_id("preset-switch-slot1-0001");
+ SwitchPetEntryPresetResponse sw1Resp;
+ PetSystem::SwitchEntryPreset(player, sw1, sw1Resp);
+ ASSERT_FALSE(sw1Resp.has_error_message());
+ EXPECT_EQ(sw1Resp.entries().active_preset_slot(), 1u);
+ EXPECT_EQ(sw1Resp.entries().remaining_points(), 14u);
+ EXPECT_EQ(Pet().entry_allocated().at(503), 6u);
+}
+
+TEST_F(PetEntriesTest, AscendTierConsumesMaterialAndGoldAtomicallyAndExpandsEntryBudget) {
+ ItemTableManager::Instance().Load();
+ auto& seg = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+ seg.Reset();
+ GuidSegmentClient::Options opt;
+ opt.mixIds = false; opt.kindName = "item"; opt.initialStep = 1000;
+ ASSERT_TRUE(seg.Enable(opt, [](const std::string&, uint32_t) { return true; },
+  [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; }));
+ seg.Warm(); seg.OnResponse(0, 600001, 600099);
+
+ tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, 9001u);
+ auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+ for (auto& bag : bags.bags) bag.SetPlayerGuid(9001u);
+ auto& cur = tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
+ for (uint32_t k = 0; k < kCurrencyMax; ++k) cur.add_values(0);
+ cur.set_values(kCurrencyGold, 1000);
+ tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+
+ // 缺材料时拒绝且不扣银两。
+ AscendPetTierRequest req;
+ req.set_pet_id(id);
+ req.set_expected_tier(1);
+ req.set_client_request_id(88001);
+ AscendPetTierResponse resp;
+ PetSystem::AscendTier(player, req, resp);
+ EXPECT_EQ(resp.error_message().id(), kPetTierMaterialNotEnough);
+ EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 1000u);
+
+ // 补足 10 份 3406 悟道残页后突破至 2 阶（变异），条目点预算 20 -> 22。
+ InitItemParam mat;
+ mat.itemPBComp.set_item_id(kInvalidGuid);
+ mat.itemPBComp.set_config_id(3406);
+ mat.itemPBComp.set_size(10);
+ ASSERT_EQ(BagService::AddItem(player, bags.bags[kInventory], mat), kSuccess);
+
+ PetSystem::AscendTier(player, req, resp);
+ ASSERT_FALSE(resp.has_error_message());
+ EXPECT_EQ(resp.new_tier(), 2u);
+ EXPECT_EQ(Pet().cultivation_tier(), 2u);
+ EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 500u);
+ EXPECT_EQ(bags.bags[kInventory].GetTotalItemCount(3406), 0u);
+ PetEntriesInfo entries;
+ ASSERT_EQ(PetSystem::BuildEntries(player, id, entries), kSuccess);
+ EXPECT_EQ(entries.total_points(), 22u);
+
+ // 幂等重放不重复扣费且返回 replayed=true。
+ AscendPetTierResponse replay;
+ PetSystem::AscendTier(player, req, replay);
+ ASSERT_FALSE(replay.has_error_message());
+ EXPECT_TRUE(replay.replayed());
+ EXPECT_EQ(replay.new_tier(), 2u);
+ EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 500u);
 }
 }

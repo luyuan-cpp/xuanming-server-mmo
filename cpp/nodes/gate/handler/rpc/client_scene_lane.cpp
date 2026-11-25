@@ -419,7 +419,7 @@ void OnSceneCallDone(SessionId sessionId, uint64_t incarnation, CallSeq callSeq,
 			if ((tlsCounters.failed++ & 0x3FF) == 0)
 			{
 				LOG_WARN << "[scene_lane] Scene call failed (sampled): status=" << status.name()
-						 << ", remote_error=" << status.remoteError() << ", message_id=" << item->messageId
+						 << ", remote_error=" << status.RemoteError() << ", message_id=" << item->messageId
 						 << ", failed_total=" << tlsCounters.failed;
 			}
 		}

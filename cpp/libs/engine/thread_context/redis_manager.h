@@ -66,7 +66,7 @@ public:
 	// REDIS_ERR、不调回调,所以调用点既有的 `redis && redis->connected()` 判断与 REDIS_ERR 分支照常生效,不需要改。
 	HiredisPtr &GetConnection()
 	{
-		return connection_;
+		return connection;
 	}
 
 	// 建立本实例的 Redis 连接并在断线后自动重连。必须在 loop 线程上调用;可重复调用(先拆掉已有连接)。
@@ -117,10 +117,10 @@ public:
 	// 配了口令时此刻 AUTH 已经成功,回调里发的命令排在 AUTH 之后。
 	// 回调运行在被移交连接自己的 hiredis 回调栈内。Channel tie 保住整次分发，回调局部副本保住执行中的函数；
 	// 因此回调内同步 Connect / Shutdown 或释放连接时，旧连接在分发结束后的 pending 阶段才真正销毁。
-	void SetReconnectCallback(const ReconnectCallback &cb) { reconnectCb_ = cb; }
+	void SetReconnectCallback(const ReconnectCallback &cb) { reconnectCb = cb; }
 
 	// 本次 Connect 周期实际使用的重连周期(秒):基础间隔加抽出的抖动。Connect 之前是默认基础间隔。
-	double ReconnectPeriodSec() const { return reconnectPeriodSec_; }
+	double ReconnectPeriodSec() const { return reconnectPeriodSec; }
 
 	// 重连周期 = 基础间隔 + jitterSec × unitRandom。unitRandom 是调用方给的 [0, 1) 随机数,超出范围(含 NaN)按 0 算;
 	// jitterSec 不是正数时不加抖动。纯函数,随机数由调用方给,方便单测。
@@ -167,36 +167,36 @@ private:
 	// 重连与存活摘下均经 lifetimeToken_ 守护的 queueInLoop 在 pending 阶段执行，此时本轮 I/O 已全部分发完。
 	// 重连任务还复核 reconnectGeneration_：同批 AUTH 成功、建连后重新安排 AUTH 截止或显式取消都会使旧任务失效。
 	// Hiredis 自己的事件回调由 tie 保活；最后一个共享引用若在 I/O 分发中释放，工厂删除器把整个对象延迟销毁。
-	HiredisPtr connection_;      // 对业务可见:已完成握手的连接、已断开的旧连接或占位对象
-	HiredisPtr handshakeRedis_; // 正在建连或等 AUTH 应答的连接;没有握手在进行时为空
+	HiredisPtr connection;      // 对业务可见:已完成握手的连接、已断开的旧连接或占位对象
+	HiredisPtr handshakeRedis; // 正在建连或等 AUTH 应答的连接;没有握手在进行时为空
 	// 不拥有 EventLoop。用 reference_wrapper 而非裸 EventLoop*,满足 no-raw-pointer-member 检查
 	// (与 RedisSystem / KafkaManager 同一写法);未 Connect 或已 Shutdown 时为空。
-	std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-	muduo::net::InetAddress redisAddr_;
-	RedisConnectOptions options_;
+	std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+	muduo::net::InetAddress redisAddr;
+	RedisConnectOptions options;
 	// 本次 Connect 周期的重连周期(秒),Connect 里定下后不变;重连定时器与 AUTH 握手截止都用它。
-	double reconnectPeriodSec_ = RedisConnectOptions::kDefaultReconnectIntervalSec;
-	muduo::net::TimerId reconnectTimerId_;
-	bool reconnectTimerActive_ = false;
+	double reconnectPeriodSec = RedisConnectOptions::kDefaultReconnectIntervalSec;
+	muduo::net::TimerId reconnectTimerId;
+	bool reconnectTimerActive = false;
 	// 只在 loop 线程访问；每次安排与取消都换代，使已投递的旧重建任务失效。
-	std::uint64_t reconnectGeneration_ = 0;
+	std::uint64_t reconnectGeneration = 0;
 	// AUTH 已在当前握手连接上发出、还没有任何非空应答。SendAuth 成功时置位;收到非空应答、DoReconnect 报超时、
 	// ResetConnections 时清零。DoReconnect 看到它仍为真,就说明截止前没有应答,要按 AUTH 超时打 ERROR。
-	bool authAwaitingReply_ = false;
+	bool authAwaitingReply = false;
 	// 业务可见的连接此刻是否记在连接指标的「可用」里(PromoteHandshake 置位,CountConnectionDown 清掉):
 	// 保证每次 OnUp 恰好配一次 OnDown,停机、换 Connect 周期、存活摘下与断线哪条路先到都只减一次。
-	bool connectionCounted_ = false;
-	ReconnectCallback reconnectCb_;
+	bool connectionCounted = false;
+	ReconnectCallback reconnectCb;
 
 	// 存活探测。定时器从 Connect 跑到 Shutdown,每一跳自己判断当前有没有可探测的连接。
-	muduo::net::TimerId livenessTimerId_;
-	bool livenessTimerActive_ = false;
+	muduo::net::TimerId livenessTimerId;
+	bool livenessTimerActive = false;
 	// 探测代号:每次有连接移交给业务、被探测摘下或被显式拆除都加一。PING 回调与摘下任务捕获发出时的代号,
 	// 对不上就说明它属于已被替换的连接,直接忽略。
-	std::uint64_t livenessGeneration_ = 0;
-	bool livenessPingOutstanding_ = false;                    // 当前连接上有一条探测 PING 还没有应答
-	std::chrono::steady_clock::time_point livenessPingSentAt_; // 那条 PING 发出的时刻(单调时钟)
-	std::shared_ptr<LifetimeToken> lifetimeToken_;           // 见 LifetimeToken;未 Connect 或已 Shutdown 时为空
+	std::uint64_t livenessGeneration = 0;
+	bool livenessPingOutstanding = false;                    // 当前连接上有一条探测 PING 还没有应答
+	std::chrono::steady_clock::time_point livenessPingSentAt; // 那条 PING 发出的时刻(单调时钟)
+	std::shared_ptr<LifetimeToken> lifetimeToken;           // 见 LifetimeToken;未 Connect 或已 Shutdown 时为空
 };
 
 // 本类只是一条连接(带 AUTH、存活探测与重连)。业务不直接持有它:scene 的两个 Redis 句柄 tlsPlayerRedis(玩家域)与

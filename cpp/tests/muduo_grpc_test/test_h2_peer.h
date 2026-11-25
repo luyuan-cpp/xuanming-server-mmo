@@ -114,7 +114,7 @@ public:
     TestH2Peer &operator=(const TestH2Peer &) = delete;
 
     // ---- 字节进出 ----
-    // 喂入客户端发来的字节;false = nghttp2 致命错误(lastError() 说明原因)。
+    // 喂入客户端发来的字节;false = nghttp2 致命错误(LastError() 说明原因)。
     bool Receive(std::string_view bytes);
     // 取走所有待发给客户端的字节(先把 nghttp2 队列里的帧序列化出来)。
     std::string TakeOutput();
@@ -125,19 +125,19 @@ public:
     // ---- 观察 ----
     const ReceivedStream *FindStream(int32_t streamId) const;
     // 按首次出现的先后排列的流 id。
-    const std::vector<int32_t> &StreamIds() const { return arrivalOrder_; }
+    const std::vector<int32_t> &StreamIds() const { return arrivalOrder; }
     // 自上次调用以来请求已收完(END_STREAM)的流 id,按收完的先后。
     std::vector<int32_t> TakeCompletedRequests();
-    size_t pingsReceived() const { return pingsReceived_; }
-    size_t settingsFramesReceived() const { return settingsFramesReceived_; }
+    size_t PingsReceived() const { return pingsReceived; }
+    size_t SettingsFramesReceived() const { return settingsFramesReceived; }
     // 最近一个非 ACK SETTINGS 帧的全部项,顺序与线上一致。
-    const std::vector<SettingEntry> &lastPeerSettings() const { return lastPeerSettings_; }
-    const std::vector<ReceivedGoaway> &goawaysReceived() const { return goawaysReceived_; }
+    const std::vector<SettingEntry> &LastPeerSettings() const { return lastPeerSettings; }
+    const std::vector<ReceivedGoaway> &GoawaysReceived() const { return goawaysReceived; }
     // 服务端视角下客户端的连接级接收窗口(验证客户端放大了连接窗口)。
     int32_t RemoteConnectionWindow() const;
-    const std::string &lastError() const { return lastError_; }
+    const std::string &LastError() const { return lastError; }
 
-    // ---- 脚本:每个调用立即序列化成帧;false = nghttp2 拒绝(lastError() 说明原因) ----
+    // ---- 脚本:每个调用立即序列化成帧;false = nghttp2 拒绝(LastError() 说明原因) ----
     bool SendSettings(const std::vector<SettingEntry> &entries);
     bool SendHeaders(int32_t streamId, const HeaderList &headers, bool endStream);
     // 一次调用 = 一个 DATA 帧(超过 16KiB 时由 nghttp2 拆成多帧)。必须能在当前流控窗口内发完。
@@ -181,17 +181,17 @@ private:
         void operator()(nghttp2_session *session) const;
     };
 
-    std::unique_ptr<nghttp2_session, SessionDeleter> session_;
-    std::map<int32_t, ReceivedStream> streams_;
-    std::vector<int32_t> arrivalOrder_;
-    std::vector<int32_t> completedRequests_;
-    std::map<int32_t, PendingData> pendingData_;
-    std::string output_;
-    size_t pingsReceived_{0};
-    size_t settingsFramesReceived_{0};
-    std::vector<SettingEntry> lastPeerSettings_;
-    std::vector<ReceivedGoaway> goawaysReceived_;
-    std::string lastError_;
+    std::unique_ptr<nghttp2_session, SessionDeleter> session;
+    std::map<int32_t, ReceivedStream> streams;
+    std::vector<int32_t> arrivalOrder;
+    std::vector<int32_t> completedRequests;
+    std::map<int32_t, PendingData> pendingData;
+    std::string output;
+    size_t pingsReceived{0};
+    size_t settingsFramesReceived{0};
+    std::vector<SettingEntry> lastPeerSettings;
+    std::vector<ReceivedGoaway> goawaysReceived;
+    std::string lastError;
 };
 
 } // namespace muduo_grpc_test

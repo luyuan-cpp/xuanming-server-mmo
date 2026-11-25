@@ -1243,7 +1243,7 @@ uint32_t PlayerEquipSystem::GmGrantItem(entt::entity player, uint32_t configId, 
 // ---------------------------------------------------------------------------
 
 uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome,
-									std::optional<uint32_t> expectedPityCount) {
+									std::optional<uint32_t> expectedPityCount, bool allowBoundMaterials) {
 	outcome = EnhanceOutcome{};
 	// 1. 统一前置
 	if (const auto err = CheckWritable(player); err != kSuccess) {
@@ -1307,6 +1307,8 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	const uint32_t materialId = enhanceRow->material_id();
 	const uint32_t materialCount = enhanceRow->material_count();
 	const bool needsMaterial = materialId != 0 && materialCount > 0;
+	const bool equipCurrentlyBound = located.item->get().bound();
+	bool tradableOnly = false;
 	if (needsMaterial) {
 		// 6. 材料必须是一种真实存在的、不是装备的物品。按 config 扣数量不看 has_equip():材料被配成装备的话,
 		//    扣的就是玩家的装备实例(甚至是正在强化的这一件)。表校验只打日志,这里 fail-closed。
@@ -1337,6 +1339,17 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		case BagService::RemovalVerdict::kInsufficient:
 		case BagService::RemovalVerdict::kCount:
 			return kEquipEnhanceMaterialNotEnough;
+		}
+		// 7a. 可交易装备强化 T/B 隔离：可交易石充足时始终严格仅扣可交易石（即使包里另有绑定石或透传 allow_bound_materials=true，
+		//     也不误耗绑定石染毒纯 T 装备，与快照预览 will_bind_on_enhance 口径一致）；
+		//     可交易石不足时默认拒回 kEquipBindConfirmRequired，须玩家确认传 allow_bound_materials=true 后放行并按实际扣除绑定堆传染。
+		if (!equipCurrentlyBound) {
+			const uint64_t tradableAvail = BagService::RemovableTradableCount(player, inventory, materialId);
+			if (tradableAvail >= materialCount) {
+				tradableOnly = true;
+			} else if (!allowBoundMaterials) {
+				return kEquipBindConfirmRequired;
+			}
 		}
 	}
 	// 8. 金币。cost == 0 不问(CanAfford 对 <= 0 打 ERROR);超过 int64 上限的表值转过去是负数,直接按付不起拒。
@@ -1372,11 +1385,12 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	}
 	// 11. 扣材料。走到失败分支时金币已经扣了,而仓库里没有货币退款原语(AddCurrency 会被欠款抵扣与
 	//     封禁闸改写,不能当回滚用):只留一条带固定标签的 ERROR 供人工对账。
+	bool consumedBound = false;
 	if (needsMaterial) {
 		ItemCountMap materials;
 		materials[materialId] = materialCount;
 		if (const auto err =
-				BagService::RemoveItemsExact(player, inventory, materials, TX_EQUIP_ENHANCE, itemId, extra);
+				BagService::RemoveItemsExact(player, inventory, materials, TX_EQUIP_ENHANCE, itemId, extra, tradableOnly, &consumedBound);
 			err != kSuccess) {
 			LOG_ERROR << "[PlayerEquip][ENHANCE_PARTIAL] Enhance material deduction failed, deducted gold (gold_deducted) is not refunded, materials and level unchanged, manual reconciliation required: player_id="
 					  << tlsEcs.GetPlayerId(player) << " guid=" << itemId << " config=" << configId
@@ -1399,6 +1413,10 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		success ? targetLevel : equiprules::LevelAfterFailure(currentLevel, failLevelLoss);
 	instance->mutable_equip()->set_enhance_level(newLevel);
 	instance->mutable_equip()->set_enhance_pity_count(roll.nextPityCount);
+	// 严格按实际扣除是否触及绑定堆传染（无论本手成败，只要耗了绑定石进入保底/尝试就转绑定，绝不洗白也不误绑）。
+	if (!equipCurrentlyBound && consumedBound) {
+		instance->set_bound(true);
+	}
 	// 14. 穿着的那件等级变了 → 加成变了(失败且不掉级时等级没变,不必重算)
 	if (worn && newLevel != currentLevel) {
 		OnEquipmentChanged(player);

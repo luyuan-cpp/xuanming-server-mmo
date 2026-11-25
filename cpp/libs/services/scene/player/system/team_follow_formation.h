@@ -83,12 +83,12 @@ public:
 	// 轨迹只剩 head 一个点,里程从 0 重新开始。
 	void Reset(const FollowPoint& head);
 
-	[[nodiscard]] bool Empty() const { return nodes_.empty(); }
-	[[nodiscard]] std::size_t PointCount() const { return nodes_.size(); }
-	[[nodiscard]] const FollowPoint& Head() const { return nodes_.back().point; }
-	[[nodiscard]] const FollowPoint& Tail() const { return nodes_.front().point; }
-	[[nodiscard]] double HeadOdo() const { return nodes_.back().odo; }
-	[[nodiscard]] double TailOdo() const { return nodes_.front().odo; }
+	[[nodiscard]] bool Empty() const { return nodes.empty(); }
+	[[nodiscard]] std::size_t PointCount() const { return nodes.size(); }
+	[[nodiscard]] const FollowPoint& Head() const { return nodes.back().point; }
+	[[nodiscard]] const FollowPoint& Tail() const { return nodes.front().point; }
+	[[nodiscard]] double HeadOdo() const { return nodes.back().odo; }
+	[[nodiscard]] double TailOdo() const { return nodes.front().odo; }
 	[[nodiscard]] double Length() const { return HeadOdo() - TailOdo(); }
 
 	// 记录队长的新位置。protectOdo:回收不得越过的里程(最前面那名队员的游标;没有队员时取极小值)。
@@ -120,7 +120,7 @@ private:
 
 	void Append(const FollowPoint& point);
 
-	std::deque<Node> nodes_;
+	std::deque<Node> nodes;
 };
 
 // 队形里的一名队员(纯数据)。
@@ -149,12 +149,12 @@ class TeamFollowFormation
 public:
 	explicit TeamFollowFormation(const FollowPoint& leader, double spacing = kTeamFollowSpacing);
 
-	[[nodiscard]] TeamFollowTrail& Trail() { return trail_; }
-	[[nodiscard]] const TeamFollowTrail& Trail() const { return trail_; }
-	[[nodiscard]] double Spacing() const { return spacing_; }
+	[[nodiscard]] TeamFollowTrail& Trail() { return trail; }
+	[[nodiscard]] const TeamFollowTrail& Trail() const { return trail; }
+	[[nodiscard]] double Spacing() const { return spacing; }
 
 	// 按 (joinSeq, playerId) 升序;下标就是名次,0 紧跟队长。
-	[[nodiscard]] const std::vector<TeamFollowMember>& Members() const { return members_; }
+	[[nodiscard]] const std::vector<TeamFollowMember>& Members() const { return members; }
 	[[nodiscard]] TeamFollowMember* Find(uint64_t playerId);
 	[[nodiscard]] const TeamFollowMember* Find(uint64_t playerId) const;
 	[[nodiscard]] std::optional<std::size_t> RankOf(uint64_t playerId) const;
@@ -184,9 +184,9 @@ public:
 			  std::vector<TeamFollowStep>& out);
 
 private:
-	TeamFollowTrail trail_;
-	std::vector<TeamFollowMember> members_;
-	double spacing_;
+	TeamFollowTrail trail;
+	std::vector<TeamFollowMember> members;
+	double spacing;
 };
 
 // ---- 被驱动队员的移动广播节流(纯函数) ----

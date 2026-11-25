@@ -97,21 +97,21 @@ class ScopedGlobalItemBlock
 {
 public:
 	explicit ScopedGlobalItemBlock(uint32_t configId)
-		: configId_(configId), wasBlocked_(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId))
+		: configId(configId), wasBlocked(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId))
 	{
-		GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId_);
+		GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, this->configId);
 	}
 	~ScopedGlobalItemBlock()
 	{
-		if (wasBlocked_) GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId_);
-		else GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId_);
+		if (wasBlocked) GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId);
+		else GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId);
 	}
-	void Unblock() { GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId_); }
+	void Unblock() { GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId); }
 	ScopedGlobalItemBlock(const ScopedGlobalItemBlock&) = delete;
 	ScopedGlobalItemBlock& operator=(const ScopedGlobalItemBlock&) = delete;
 private:
-	uint32_t configId_;
-	bool wasBlocked_;
+	uint32_t configId;
+	bool wasBlocked;
 };
 
 
@@ -577,27 +577,27 @@ void ExpectNoEmptyStacks(const Bag &bag)
 class ScriptedDice
 {
 public:
-	explicit ScriptedDice(std::vector<uint64_t> script) : script_(std::move(script)) {}
+	explicit ScriptedDice(std::vector<uint64_t> script) : script(std::move(script)) {}
 
 	uint64_t Roll(uint64_t range)
 	{
-		requested_.push_back(range);
-		if (next_ >= script_.size())
+		requested.push_back(range);
+		if (next >= script.size())
 		{
-			ADD_FAILURE() << "unexpected roll #" << requested_.size() << " (out of " << range
-						  << "): the script only has " << script_.size() << " value(s)";
+			ADD_FAILURE() << "unexpected roll #" << requested.size() << " (out of " << range
+						  << "): the script only has " << script.size() << " value(s)";
 			return 0;
 		}
-		return script_[next_++];
+		return script[next++];
 	}
 
 	// 每次被要的区间,按先后。
-	const std::vector<uint64_t> &Requested() const { return requested_; }
+	const std::vector<uint64_t> &Requested() const { return requested; }
 
 private:
-	std::vector<uint64_t> script_;
-	std::size_t next_{0};
-	std::vector<uint64_t> requested_;
+	std::vector<uint64_t> script;
+	std::size_t next{0};
+	std::vector<uint64_t> requested;
 };
 
 // 强化 / 镶嵌 / 取下的拒绝路径要钉三样东西都没动:金币、人物背包、装备栏。

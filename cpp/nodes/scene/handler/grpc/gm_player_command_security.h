@@ -87,7 +87,7 @@ class CommandCache
 {
 public:
     enum class Admission : uint8_t { kNew, kReplay, kConflict, kFull };
-    explicit CommandCache(size_t capacity = 10000) : capacity_(capacity) {}
+    explicit CommandCache(size_t capacity = 10000) : capacity(capacity) {}
 
     Admission Begin(const scene_node::GmExecutePlayerCommandRequest& request,
         scene_node::GmExecutePlayerCommandResponse& response,
@@ -97,28 +97,28 @@ public:
         PruneExpired(nowUnix);
         const auto key = Key(request);
         const auto digest = Digest(request);
-        if (const auto it = entries_.find(key); it != entries_.end()) {
+        if (const auto it = entries.find(key); it != entries.end()) {
             if (it->second.digest != digest) return Admission::kConflict;
             response = it->second.response;
             return Admission::kReplay;
         }
-        if (entries_.size() >= capacity_) return Admission::kFull;
+        if (entries.size() >= capacity) return Admission::kFull;
         response.set_command_id(request.command_id());
         const int64_t expiresAt = ExpiresAtUnix(request.issued_at_ms(), skewSeconds);
-        entries_.emplace(key, Entry{digest, response, expiresAt});
-        expiryQueue_.emplace(expiresAt, key);
+        entries.emplace(key, Entry{digest, response, expiresAt});
+        expiryQueue.emplace(expiresAt, key);
         return Admission::kNew;
     }
 
     void Complete(const scene_node::GmExecutePlayerCommandRequest& request,
         const scene_node::GmExecutePlayerCommandResponse& response)
     {
-        if (const auto it = entries_.find(Key(request)); it != entries_.end()) {
+        if (const auto it = entries.find(Key(request)); it != entries.end()) {
             it->second.response = response;
         }
     }
 
-    size_t Size() const { return entries_.size(); }
+    size_t Size() const { return entries.size(); }
 
 private:
     struct Entry
@@ -144,12 +144,12 @@ private:
     void PruneExpired(int64_t nowUnix)
     {
         if (nowUnix < 0) return;
-        while (!expiryQueue_.empty() && expiryQueue_.top().first < nowUnix) {
-            const auto expiresAt = expiryQueue_.top().first;
-            const auto key = expiryQueue_.top().second;
-            expiryQueue_.pop();
-            if (const auto it = entries_.find(key); it != entries_.end() && it->second.expiresAtUnix <= expiresAt) {
-                entries_.erase(it);
+        while (!expiryQueue.empty() && expiryQueue.top().first < nowUnix) {
+            const auto expiresAt = expiryQueue.top().first;
+            const auto key = expiryQueue.top().second;
+            expiryQueue.pop();
+            if (const auto it = entries.find(key); it != entries.end() && it->second.expiresAtUnix <= expiresAt) {
+                entries.erase(it);
             }
         }
     }
@@ -157,9 +157,9 @@ private:
     static std::string Key(const scene_node::GmExecutePlayerCommandRequest& request)
     { return request.operator_() + "\n" + std::to_string(request.command_id()); }
 
-    size_t capacity_;
-    std::unordered_map<std::string, Entry> entries_;
-    std::priority_queue<ExpiryItem, std::vector<ExpiryItem>, std::greater<ExpiryItem>> expiryQueue_;
+    size_t capacity;
+    std::unordered_map<std::string, Entry> entries;
+    std::priority_queue<ExpiryItem, std::vector<ExpiryItem>, std::greater<ExpiryItem>> expiryQueue;
 };
 
 inline std::string AuditText(std::string value)

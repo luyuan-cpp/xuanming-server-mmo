@@ -23,7 +23,7 @@ std::string RangeEndOf(const std::string &prefix)
 
 KillSwitchEtcdSync::KillSwitchEtcdSync(kill_switch::KillSwitch &target, std::string prefix,
                                        std::chrono::seconds recheckInterval)
-    : target_(target), prefix_(std::move(prefix)), recheckInterval_(recheckInterval)
+    : target(target), prefix(std::move(prefix)), recheckInterval(recheckInterval)
 {
 }
 
@@ -39,67 +39,67 @@ void KillSwitchEtcdSync::Start(muduo::net::EventLoop &loop, const std::string &e
 
 void KillSwitchEtcdSync::StartWithTransport(std::unique_ptr<EtcdTransport> transport)
 {
-    if (transport_ || shutdown_)
+    if (this->transport || shutdown)
     {
         LOG_ERROR << "[KillSwitch] etcd sync started twice or after shutdown; ignored";
         return;
     }
-    transport_ = std::move(transport);
-    if (!transport_)
+    this->transport = std::move(transport);
+    if (!this->transport)
     {
         LOG_ERROR << "[KillSwitch] No etcd transport; kill switch inactive (all requests allowed)";
         return;
     }
-    LOG_INFO << "[KillSwitch] Watching prefix " << prefix_ << " over a dedicated etcd connection (transport="
-             << transport_->Name() << ", recheck every ~" << recheckInterval_.count() << "s)";
+    LOG_INFO << "[KillSwitch] Watching prefix " << prefix << " over a dedicated etcd connection (transport="
+             << this->transport->Name() << ", recheck every ~" << recheckInterval.count() << "s)";
     RequestFullRange();
     ScheduleRecheck();
 }
 
 void KillSwitchEtcdSync::Shutdown()
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
-    shutdown_ = true;
-    recheckTimer_.Cancel();
-    cancelRetryTimer_.Cancel();
-    if (transport_)
+    shutdown = true;
+    recheckTimer.Cancel();
+    cancelRetryTimer.Cancel();
+    if (transport)
     {
-        transport_->Shutdown();
-        transport_.reset();
+        transport->Shutdown();
+        transport.reset();
     }
     ResetWatchState();
 }
 
 void KillSwitchEtcdSync::RequestFullRange()
 {
-    if (shutdown_ || !transport_)
+    if (shutdown || !transport)
     {
         return;
     }
     etcdserverpb::RangeRequest request;
-    request.set_key(prefix_);
-    request.set_range_end(RangeEndOf(prefix_));
+    request.set_key(prefix);
+    request.set_range_end(RangeEndOf(prefix));
     // 线性一致读:etcd 失去多数派时读失败,快照随之按 StaleAfter 作废(读不到健康的 etcd 就退回全放行)。
-    transport_->Range(request);
+    transport->Range(request);
 }
 
 void KillSwitchEtcdSync::ScheduleRecheck()
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
     double delaySeconds = static_cast<double>(kInitialRetryInterval.count());
-    if (everSynced_)
+    if (everSynced)
     {
         std::uniform_real_distribution<double> spread(1.0 - kRecheckJitterRatio, 1.0 + kRecheckJitterRatio);
-        delaySeconds = static_cast<double>(recheckInterval_.count()) * spread(jitter_);
+        delaySeconds = static_cast<double>(recheckInterval.count()) * spread(jitter);
     }
     // 单测线程上没有 EventLoop 时 RunAfter 返回 false:定时器不武装,由测试直接驱动回调。
-    recheckTimer_.RunAfter(delaySeconds, [this]
+    recheckTimer.RunAfter(delaySeconds, [this]
     {
         RequestFullRange();
         ScheduleRecheck();
@@ -108,36 +108,36 @@ void KillSwitchEtcdSync::ScheduleRecheck()
 
 void KillSwitchEtcdSync::ScheduleCancelRetry()
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
-    cancelRetryBackoffSeconds_ = discovery_resync::NextCancelRetrySeconds(cancelRetryBackoffSeconds_);
-    cancelRetryTimer_.RunAfter(cancelRetryBackoffSeconds_, [this] { RequestFullRange(); });
+    cancelRetryBackoffSeconds = discovery_resync::NextCancelRetrySeconds(cancelRetryBackoffSeconds);
+    cancelRetryTimer.RunAfter(cancelRetryBackoffSeconds, [this] { RequestFullRange(); });
 }
 
 void KillSwitchEtcdSync::OnRange(const etcdserverpb::RangeRequest *request, const etcdserverpb::RangeResponse &reply)
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
-    if (request != nullptr && request->key() != prefix_)
+    if (request != nullptr && request->key() != prefix)
     {
         LOG_WARN << "[KillSwitch] Unexpected etcd range reply for key " << request->key() << "; ignored";
         return;
     }
     const int64_t revision = reply.header().revision();
-    const bool firstSync = !everSynced_;
-    everSynced_ = true;
+    const bool firstSync = !everSynced;
+    everSynced = true;
     if (reply.more())
     {
         // 没有设 limit,正常不会截断;真截断了按已返回的部分应用:少了规则只会多放行(fail-open)。
-        LOG_WARN << "[KillSwitch] etcd range for " << prefix_ << " is truncated (more=true, count=" << reply.count()
+        LOG_WARN << "[KillSwitch] etcd range for " << prefix << " is truncated (more=true, count=" << reply.count()
                  << "); applying the returned keys only";
     }
 
-    if (revision >= appliedThrough_)
+    if (revision >= appliedThrough)
     {
         std::map<std::string, std::string> rawRules;
         for (const auto &kv : reply.kvs())
@@ -149,12 +149,12 @@ void KillSwitchEtcdSync::OnRange(const etcdserverpb::RangeRequest *request, cons
             }
         }
         const size_t keyCount = rawRules.size();
-        target_.ReplaceAll(std::move(rawRules));
-        appliedThrough_ = revision;
+        target.ReplaceAll(std::move(rawRules));
+        appliedThrough = revision;
         if (firstSync)
         {
             LOG_INFO << "[KillSwitch] Initial synchronization complete: " << keyCount << " keys, revision=" << revision
-                     << ", rules applying to this process=" << target_.ApplicableRuleCount();
+                     << ", rules applying to this process=" << target.ApplicableRuleCount();
         }
         else
         {
@@ -165,12 +165,12 @@ void KillSwitchEtcdSync::OnRange(const etcdserverpb::RangeRequest *request, cons
     {
         // Range 与 watch 走不同的流:这份快照比 watch 已经应用到的状态旧。不替换(否则会把更新的变更回退掉),
         // 只说明 etcd 还读得到。
-        target_.MarkSynced();
+        target.MarkSynced();
         LOG_DEBUG << "[KillSwitch] Range snapshot at revision " << revision << " is older than the applied state ("
-                  << appliedThrough_ << "); freshness renewed only";
+                  << appliedThrough << "); freshness renewed only";
     }
 
-    if (!watchCreateSent_)
+    if (!watchCreateSent)
     {
         CreateWatch();
     }
@@ -178,29 +178,29 @@ void KillSwitchEtcdSync::OnRange(const etcdserverpb::RangeRequest *request, cons
 
 void KillSwitchEtcdSync::CreateWatch()
 {
-    if (shutdown_ || !transport_)
+    if (shutdown || !transport)
     {
         return;
     }
     etcdserverpb::WatchRequest request;
     auto &create = *request.mutable_create_request();
-    create.set_key(prefix_);
-    create.set_range_end(RangeEndOf(prefix_));
+    create.set_key(prefix);
+    create.set_range_end(RangeEndOf(prefix));
     // 从已应用状态之后的第一个 revision 起:快照与 watch 之间不漏事件,也不回放更旧的。
-    create.set_start_revision(appliedThrough_ + 1);
-    watchCreateSent_ = true;
-    transport_->WatchWrite(request);
+    create.set_start_revision(appliedThrough + 1);
+    watchCreateSent = true;
+    transport->WatchWrite(request);
 }
 
 void KillSwitchEtcdSync::ResetWatchState()
 {
-    watchCreateSent_ = false;
-    watchId_ = -1;
+    watchCreateSent = false;
+    watchId = -1;
 }
 
 void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
@@ -208,13 +208,13 @@ void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
     {
         if (!response.canceled())
         {
-            watchId_ = response.watch_id();
-            cancelRetryBackoffSeconds_ = 0;
-            LOG_INFO << "[KillSwitch] etcd watch created: watch_id=" << watchId_ << ", from revision "
-                     << appliedThrough_ + 1;
+            watchId = response.watch_id();
+            cancelRetryBackoffSeconds = 0;
+            LOG_INFO << "[KillSwitch] etcd watch created: watch_id=" << watchId << ", from revision "
+                     << appliedThrough + 1;
         }
     }
-    else if (watchId_ < 0 || response.watch_id() != watchId_)
+    else if (watchId < 0 || response.watch_id() != watchId)
     {
         // 专用连接上只有这一个 watch;对不上的是旧流或已取消 watch 的残留。
         LOG_DEBUG << "[KillSwitch] etcd watch reply for unknown watch_id=" << response.watch_id() << "; ignored";
@@ -226,11 +226,11 @@ void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
         const auto &kv = event.kv();
         // 删除事件的 kv.mod_revision 就是删除发生的 revision;缺省时退回应答头的 revision(同 EtcdService)。
         const int64_t revision = kv.mod_revision() != 0 ? kv.mod_revision() : response.header().revision();
-        if (revision <= appliedThrough_)
+        if (revision <= appliedThrough)
         {
             continue; // 已经被更新的全量快照覆盖
         }
-        appliedThrough_ = revision;
+        appliedThrough = revision;
         const std::string relative = RelativeKey(kv.key());
         if (relative.empty())
         {
@@ -238,11 +238,11 @@ void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
         }
         if (event.type() == mvccpb::Event_EventType::Event_EventType_PUT)
         {
-            target_.Put(relative, kv.value());
+            target.Put(relative, kv.value());
         }
         else if (event.type() == mvccpb::Event_EventType::Event_EventType_DELETE)
         {
-            target_.Erase(relative);
+            target.Erase(relative);
         }
     }
 
@@ -257,7 +257,7 @@ void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
     if (compactRevision != 0)
     {
         // 起点已被压缩:立刻全量重拉,从新快照之后建 watch(新起点必然在压缩点之后)。
-        cancelRetryTimer_.Cancel();
+        cancelRetryTimer.Cancel();
         RequestFullRange();
         return;
     }
@@ -267,22 +267,22 @@ void KillSwitchEtcdSync::OnWatch(const etcdserverpb::WatchResponse &response)
 
 void KillSwitchEtcdSync::OnWatchStreamRestarted()
 {
-    if (shutdown_)
+    if (shutdown)
     {
         return;
     }
     // 新流上一个 watch 都没有:重新全量 Range,应答到了再从已应用状态之后建 watch。
     LOG_WARN << "[KillSwitch] etcd watch stream rebuilt; re-ranging before re-creating the watch";
     ResetWatchState();
-    cancelRetryTimer_.Cancel();
+    cancelRetryTimer.Cancel();
     RequestFullRange();
 }
 
 std::string KillSwitchEtcdSync::RelativeKey(const std::string &key) const
 {
-    if (key.size() <= prefix_.size() || key.compare(0, prefix_.size(), prefix_) != 0)
+    if (key.size() <= prefix.size() || key.compare(0, prefix.size(), prefix) != 0)
     {
         return {};
     }
-    return key.substr(prefix_.size());
+    return key.substr(prefix.size());
 }

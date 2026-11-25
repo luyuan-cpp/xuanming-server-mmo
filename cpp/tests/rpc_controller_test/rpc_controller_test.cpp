@@ -84,33 +84,33 @@ class LoopbackFixture : public ::testing::Test
 protected:
     void SetUp() override
     {
-        loop_.emplace(*loopThread_.startLoop());
+        loop.emplace(*loopThread.startLoop());
         const uint16_t port = FindFreeLoopbackPort();
         ASSERT_NE(port, 0);
 
-        auto connectedFuture = connected_.get_future();
+        auto connectedFuture = connected.get_future();
         RunInLoopAndWait([this, port] {
-            server_ = std::make_unique<muduo::net::TcpServer>(
+            server = std::make_unique<muduo::net::TcpServer>(
                 &Loop(), muduo::net::InetAddress(port, /*loopbackOnly=*/true), "rpc_controller_test_server");
-            server_->setConnectionCallback([this](const TcpConnectionPtr& conn) {
+            server->setConnectionCallback([this](const TcpConnectionPtr& conn) {
                 if (conn->connected())
                 {
-                    if (!connectedSignalled_.exchange(true)) connected_.set_value(conn);
+                    if (!connectedSignalled.exchange(true)) connected.set_value(conn);
                 }
                 else
                 {
-                    if (!downSignalled_.exchange(true)) serverDown_.set_value();
+                    if (!downSignalled.exchange(true)) serverDown.set_value();
                 }
             });
-            server_->start();
-            client_ = std::make_unique<muduo::net::TcpClient>(
+            server->start();
+            client = std::make_unique<muduo::net::TcpClient>(
                 &Loop(), muduo::net::InetAddress("127.0.0.1", port), "rpc_controller_test_client");
-            client_->connect();
+            client->connect();
         });
 
         ASSERT_EQ(connectedFuture.wait_for(5s), std::future_status::ready) << "loopback connect timed out";
-        serverConn_ = connectedFuture.get();
-        ASSERT_TRUE(serverConn_ && serverConn_->connected());
+        serverConn = connectedFuture.get();
+        ASSERT_TRUE(serverConn && serverConn->connected());
     }
 
     void TearDown() override
@@ -120,20 +120,20 @@ protected:
         //  2. 等 server 侧回调报 DOWN(此时 TcpServer 已排队 connectDestroyed)
         //  3. 在 loop 线程销毁 TcpServer(它的析构函数断言 in-loop)
         //  4. 最后放掉我们持有的 serverConn_ —— 此刻它已是 kDisconnected,析构合法
-        auto downFuture = serverDown_.get_future();
-        RunInLoopAndWait([this] { client_.reset(); });
-        if (serverConn_)
+        auto downFuture = serverDown.get_future();
+        RunInLoopAndWait([this] { client.reset(); });
+        if (serverConn)
         {
             EXPECT_EQ(downFuture.wait_for(5s), std::future_status::ready) << "server side never saw DOWN";
         }
         RunInLoopAndWait([this] {
-            server_.reset();
-            serverConn_.reset();
+            server.reset();
+            serverConn.reset();
         });
         // loopThread_ 析构 = quit + join;上面排队的 connectDestroyed 早已在 DOWN 之后跑完。
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& fn)
@@ -152,25 +152,25 @@ protected:
         RunInLoopAndWait([&] {
             muduo::net::Buffer buf;
             EncodeRpcMessage(msg, &buf);
-            counts.first = serverConn_.use_count();
-            channel.OnMessage(serverConn_, &buf, muduo::Timestamp::now());
-            counts.second = serverConn_.use_count();
+            counts.first = serverConn.use_count();
+            channel.OnMessage(serverConn, &buf, muduo::Timestamp::now());
+            counts.second = serverConn.use_count();
         });
         return counts;
     }
 
     // loopThread_ 排第一:最后析构,保证其余成员析构时 loop 仍在。
-    muduo::net::EventLoopThread loopThread_;
+    muduo::net::EventLoopThread loopThread;
     // 引用而非裸指针成员(裸指针成员门禁覆盖测试工程);SetUp 里绑定。
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    std::unique_ptr<muduo::net::TcpServer> server_;
-    std::unique_ptr<muduo::net::TcpClient> client_;
-    TcpConnectionPtr serverConn_;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    std::unique_ptr<muduo::net::TcpServer> server;
+    std::unique_ptr<muduo::net::TcpClient> client;
+    TcpConnectionPtr serverConn;
 
-    std::promise<TcpConnectionPtr> connected_;
-    std::promise<void> serverDown_;
-    std::atomic<bool> connectedSignalled_{ false };
-    std::atomic<bool> downSignalled_{ false };
+    std::promise<TcpConnectionPtr> connected;
+    std::promise<void> serverDown;
+    std::atomic<bool> connectedSignalled{ false };
+    std::atomic<bool> downSignalled{ false };
 };
 
 } // namespace
@@ -184,7 +184,7 @@ protected:
 TEST_F(LoopbackFixture, DispatchLeavesNoStrongRefBehind_UnknownType)
 {
     // RpcChannel 只能经 Create 构造(由 shared_ptr 持有);它只存 weak 连接,构造本身不改变计数。
-    const RpcChannelPtr channel = RpcChannel::Create(Loop(), serverConn_, RpcServiceMap{});
+    const RpcChannelPtr channel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{});
 
     GameRpcMessage msg;
     msg.set_type(static_cast<GameMessageType>(42));
@@ -204,7 +204,7 @@ TEST_F(LoopbackFixture, DispatchLeavesNoStrongRefBehind_UnknownType)
 // 的拒绝在 rpc_channel_loopback_test.cpp 的 ServerRejectionsEchoTheCallId 里覆盖。
 TEST_F(LoopbackFixture, DispatchLeavesNoStrongRefBehind_RequestWithInvalidMessageId)
 {
-    const RpcChannelPtr channel = RpcChannel::Create(Loop(), serverConn_, RpcServiceMap{});
+    const RpcChannelPtr channel = RpcChannel::Create(Loop(), serverConn, RpcServiceMap{});
 
     GameRpcMessage msg;
     msg.set_type(GameMessageType::REQUEST);
@@ -223,9 +223,9 @@ TEST_F(LoopbackFixture, HarnessDetectsThreadLocalRetention)
     long before = 0;
     long after = 0;
     RunInLoopAndWait([&] {
-        before = serverConn_.use_count();
-        simulatedLegacyStash = serverConn_;   // 旧 HandleRpcMessage:314 干的事
-        after = serverConn_.use_count();
+        before = serverConn.use_count();
+        simulatedLegacyStash = serverConn;   // 旧 HandleRpcMessage:314 干的事
+        after = serverConn.use_count();
     });
     EXPECT_EQ(before + 1, after);
     RunInLoopAndWait([&] { simulatedLegacyStash.reset(); });   // 别把它真的泄漏到 TearDown
@@ -240,7 +240,7 @@ TEST(RpcControllerFrom, ReturnsTheVeryObjectPassedToCallMethod)
     ::RpcController ctx{ TcpConnectionPtr{} };
     ::google::protobuf::RpcController* asBase = &ctx;   // 生成代码转发的就是这个基类指针
     EXPECT_EQ(&::RpcController::From(asBase), &ctx);
-    EXPECT_FALSE(::RpcController::From(asBase).conn());
+    EXPECT_FALSE(::RpcController::From(asBase).Conn());
 }
 
 #if GTEST_HAS_DEATH_TEST

@@ -430,10 +430,10 @@ namespace
 	class ScopedLogCapture
 	{
 	public:
-		ScopedLogCapture() : previousLevel_(muduo::Logger::logLevel())
+		ScopedLogCapture() : previousLevel(muduo::Logger::logLevel())
 		{
 			g_capturedLogLines.clear();
-			if (previousLevel_ > muduo::Logger::INFO)
+			if (previousLevel > muduo::Logger::INFO)
 			{
 				muduo::Logger::setLogLevel(muduo::Logger::INFO);
 			}
@@ -442,13 +442,13 @@ namespace
 		~ScopedLogCapture()
 		{
 			muduo::Logger::setOutput(&WriteLogToStdout);
-			muduo::Logger::setLogLevel(previousLevel_);
+			muduo::Logger::setLogLevel(previousLevel);
 		}
 		ScopedLogCapture(const ScopedLogCapture &) = delete;
 		ScopedLogCapture &operator=(const ScopedLogCapture &) = delete;
 
 	private:
-		muduo::Logger::LogLevel previousLevel_;
+		muduo::Logger::LogLevel previousLevel;
 	};
 
 	// 抓到的行里同时含有全部片段的条数。
@@ -537,17 +537,17 @@ namespace
 			TestNodeInfo().set_node_id(kSceneNodeId);
 			InstallLocalNodeInfo(&TestNodeInfo());
 
-			player_ = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
+			player = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
 		}
 
 		void TearDown() override
 		{
-			for (const auto player : created_)
+			for (const auto player : created)
 			{
 				DestroyPlayer(player);
 			}
-			created_.clear();
-			admission_.reset();
+			created.clear();
+			admission.reset();
 			tlsEcs.playerList.erase(kTestPlayerId);
 			SessionMap().erase(kExitSession); // BindSession 的映射;退出收尾正常时已被 RemovePlayerSession 擦掉
 
@@ -566,17 +566,17 @@ namespace
 		entt::entity CreateLoadedPlayer(uint64_t epoch, const PlayerInboxLedgerComp &ledger)
 		{
 			// 重登必须由新的已确认入场原件建立，旧作用域回包不能借用新实体。
-			admission_.reset();
+			admission.reset();
 			RoleAdmissionSystem::Dependencies dependencies;
 			dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(g_nowMs)); };
 			dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"inbox-sql-test-scene", "4242", 1}; };
 			dependencies.freeze = [](Guid) {}; // 本fixture只验撤资格，不驱动真实存盘。
 			dependencies.hasPendingLoad = [](Guid) { return false; };
 			common::base::RoleAdmissionIdentity identity;
-			identity.set_player_id(kTestPlayerId); identity.set_generation(++admissionGeneration_); identity.set_owner_revision(1);
+			identity.set_player_id(kTestPlayerId); identity.set_generation(++admissionGeneration); identity.set_owner_revision(1);
 			identity.set_owner_epoch(epoch); identity.set_scene_instance_id("inbox-sql-test-scene");
 			dependencies.confirmedAdmissions.push_back(identity);
-			admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
+			admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
 			const entt::entity player = tlsEcs.actorRegistry.create();
 			tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kTestPlayerId);
 			tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
@@ -588,9 +588,9 @@ namespace
 			tlsEcs.actorRegistry.emplace<PlayerBattleResultComp>(player);
 			// 收件箱只在存盘带归属围栏的实体上消费(player_mutability::HasFencedOwnership)。
 			tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = epoch;
-			tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, admissionGeneration_, std::uint64_t{1});
+			tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, admissionGeneration, std::uint64_t{1});
 			tlsEcs.playerList[kTestPlayerId] = player;
-			created_.push_back(player);
+			created.push_back(player);
 			return player;
 		}
 
@@ -630,7 +630,7 @@ namespace
 		// 落地前预置账本(模拟从存档加载出来的状态),并校验它本身合法。
 		void SeedLedger(uint64_t decidedThrough, const std::vector<PlayerInboxDecision> &recent)
 		{
-			auto &ledger = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_);
+			auto &ledger = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player);
 			auto *cursor = ledger.add_cursors();
 			cursor->set_domain(kGmDomain);
 			cursor->set_decided_through_seq(decidedThrough);
@@ -661,10 +661,10 @@ namespace
 			ack = g_sentAcks.back();
 		}
 
-		std::vector<entt::entity> created_;
-		std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
-		uint64_t admissionGeneration_{0};
-		entt::entity player_{entt::null};
+		std::vector<entt::entity> created;
+		std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
+		uint64_t admissionGeneration{0};
+		entt::entity player{entt::null};
 	};
 } // namespace
 
@@ -672,34 +672,34 @@ namespace
 
 TEST_F(PlayerInboxSystemTest, SnapshotCommitCheckRejectsMismatchedRows)
 {
-	CompleteFakeSave(player_);
-	PlayerAllData wrong = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	CompleteFakeSave(player);
+	PlayerAllData wrong = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot;
 	wrong.mutable_player_database_data()->set_player_id(wrong.player_database_data().player_id() + 1);
-	tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).Replace(wrong);
-	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player_,
-		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot));
+	tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).Replace(wrong);
+	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player,
+		*tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot));
 }
 
 // 快照只在提交之后才替换,不需要再读证据;对不上的快照照样拒绝。
 TEST_F(PlayerInboxSystemTest, SnapshotCommitCheckNeedsTheStoredSnapshot)
 {
-	CompleteFakeSave(player_);
-	const auto &snap = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
-	EXPECT_TRUE(RoleAdmissionSystem::IsSnapshotCommitted(player_, snap));
+	CompleteFakeSave(player);
+	const auto &snap = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot;
+	EXPECT_TRUE(RoleAdmissionSystem::IsSnapshotCommitted(player, snap));
 
 	PlayerAllData other = snap;
-	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player_, other)) << "不是组件里那一份快照";
+	EXPECT_FALSE(RoleAdmissionSystem::IsSnapshotCommitted(player, other)) << "不是组件里那一份快照";
 }
 
 TEST_F(PlayerInboxSystemTest, CommitProofRequiresOriginalHookBeforeSamePayloadSavedCallback)
 {
-	CompleteFakeSave(player_);
-	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	CompleteFakeSave(player);
+	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot;
 	fresh.set_last_save_seq(++g_snapshotSeq);
 	const auto source = std::make_shared<const PlayerAllData>(fresh);
-	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player_, source, kEpoch, g_snapshotSeq);
+	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, kEpoch, g_snapshotSeq);
 	ASSERT_TRUE(static_cast<bool>(hook));
-	auto &snap = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+	auto &snap = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player);
 	snap.Replace(*source); // 未成功的提交不调用hook：有字节也没有提交资格。
 	EXPECT_EQ(0u, snap.committed_owner_epoch);
 	hook();
@@ -715,21 +715,21 @@ TEST_F(PlayerInboxSystemTest, CommitProofRequiresOriginalHookBeforeSamePayloadSa
 
 TEST_F(PlayerInboxSystemTest, OldCommitHookCannotAuthorizeNewAdmissionOrRecreatedEntity)
 {
-	CompleteFakeSave(player_);
-	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+	CompleteFakeSave(player);
+	PlayerAllData fresh = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot;
 	fresh.set_last_save_seq(++g_snapshotSeq);
 	const auto source = std::make_shared<const PlayerAllData>(fresh);
-	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player_, source, kEpoch, g_snapshotSeq);
+	const auto hook = RoleAdmissionSystem::CaptureSnapshotCommit(player, source, kEpoch, g_snapshotSeq);
 	ASSERT_TRUE(static_cast<bool>(hook));
-	tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player_).generation = 2;
+	tlsEcs.actorRegistry.get<PlayerRoleAdmissionComp>(player).generation = 2;
 	hook();
-	auto &old = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+	auto &old = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player);
 	old.Replace(*source);
 	EXPECT_EQ(0u, old.committed_save_seq);
-	DestroyPlayer(player_);
-	player_ = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
+	DestroyPlayer(player);
+	player = CreateLoadedPlayer(kEpoch, PlayerInboxLedgerComp{});
 	hook();
-	auto &current = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player_);
+	auto &current = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player);
 	current.Replace(*source);
 	EXPECT_EQ(0u, current.committed_save_seq);
 }
@@ -737,18 +737,18 @@ TEST_F(PlayerInboxSystemTest, OldCommitHookCannotAuthorizeNewAdmissionOrRecreate
 TEST_F(PlayerInboxSystemTest, SameBusinessBytesAfterOwnerAdvanceRequireFreshCommit)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(fetch.player_id(), fetch.domain(), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	CompleteFakeSave(player_);
-	const auto oldBytes = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot->SerializeAsString();
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = kEpoch + 2; // B5保留原N与identity。
+	CompleteFakeSave(player);
+	const auto oldBytes = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot->SerializeAsString();
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kEpoch + 2; // B5保留原N与identity。
 	Advance(rules::kResaveIntervalMs);
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(2, g_persistCalls) << "不能仅凭旧E的同业务字节跳过新提交";
 	EXPECT_TRUE(g_sentAcks.empty());
-	CompleteFakeSave(player_); // 真正的新E/q提交。
-	EXPECT_EQ(oldBytes, tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot->SerializeAsString());
+	CompleteFakeSave(player); // 真正的新E/q提交。
+	EXPECT_EQ(oldBytes, tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot->SerializeAsString());
 	PlayerInboxSystem::Tick();
 	ASSERT_EQ(1u, g_sentAcks.size());
 	EXPECT_EQ(kEpoch + 2, g_sentAcks.back().owner_epoch());
@@ -759,15 +759,15 @@ TEST_F(PlayerInboxSystemTest, SameBusinessBytesAfterOwnerAdvanceRequireFreshComm
 TEST_F(PlayerInboxSystemTest, AckWaitsUntilTheLastPersistedSnapshotHoldsTheOutcome)
 {
 	// 落地前已有一份旧快照(账本还是空的):"有快照"不等于"本批结局已落盘"。
-	CompleteFakeSave(player_);
+	CompleteFakeSave(player);
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	EXPECT_TRUE(GoldBlocked(player_)) << "效果与记账同一帧写入";
-	EXPECT_EQ(10u, DecidedThrough(player_));
+	EXPECT_TRUE(GoldBlocked(player)) << "效果与记账同一帧写入";
+	EXPECT_EQ(10u, DecidedThrough(player));
 	EXPECT_EQ(1, g_persistCalls) << "本批有新记账:请求一次存盘";
 	EXPECT_TRUE(g_sentAcks.empty()) << "persistFn 回报压了写,但快照没更新:不能确认";
 
@@ -781,14 +781,14 @@ TEST_F(PlayerInboxSystemTest, AckWaitsUntilTheLastPersistedSnapshotHoldsTheOutco
 	EXPECT_EQ(2, g_persistCalls) << "等落盘期间每 5 秒补请求一次存盘(设计 §7.7)";
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
 
 	PlayerInboxSystem::OnAckReply(
 		ack.player_id(), static_cast<uint32_t>(ack.domain()), ack.correlation_id(),
 		AckReplyFor(ack));
-	const auto *state = GmState(player_);
+	const auto *state = GmState(player);
 	ASSERT_NE(nullptr, state);
 	EXPECT_EQ(PlayerInboxPhase::kIdle, state->phase);
 	EXPECT_TRUE(state->ackQueue.empty());
@@ -804,7 +804,7 @@ TEST_F(PlayerInboxSystemTest, AckWaitsUntilTheLastPersistedSnapshotHoldsTheOutco
 TEST_F(PlayerInboxSystemTest, FetchAndAckRequestsCarryOwnerEpochAndSceneNodeId)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	EXPECT_EQ(kTestPlayerId, fetch.player_id());
 	EXPECT_EQ(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION, fetch.domain());
 	EXPECT_EQ(kEpoch, fetch.owner_epoch());
@@ -819,7 +819,7 @@ TEST_F(PlayerInboxSystemTest, FetchAndAckRequestsCarryOwnerEpochAndSceneNodeId)
 		FetchReplyFor(fetch, {MakeItem(10, kDebtType, 1001, kTruncatedPayload)}));
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	EXPECT_EQ(kTestPlayerId, ack.player_id());
 	EXPECT_EQ(player_inbox::PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION, ack.domain());
 	EXPECT_EQ(kEpoch, ack.owner_epoch());
@@ -841,32 +841,32 @@ TEST_F(PlayerInboxSystemTest, ItemGainBansApplyInSeqOrderAndAckOnlyAfterTheSave)
 	constexpr uint32_t kItemA = 10;
 	constexpr uint32_t kItemB = 11;
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {ItemGainItem(10, kBlockItemType, 2001, kItemA), ItemGainItem(11, kBlockItemType, 2002, kItemB),
 							  ItemGainItem(12, kUnblockItemType, 2003, kItemA), ItemGainItem(13, kBlockItemType, 2004, kItemB)}));
-	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kItemA)) << "seq 10 封、seq 12 解:按 seq 执行,结果是解开";
-	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player_, kItemB));
-	const auto &banned = tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player_).item_config_ids();
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player, kItemA)) << "seq 10 封、seq 12 解:按 seq 执行,结果是解开";
+	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player, kItemB));
+	const auto &banned = tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player).item_config_ids();
 	EXPECT_EQ((std::vector<uint32_t>{kItemB}), std::vector<uint32_t>(banned.begin(), banned.end()))
 		<< "seq 13 重复封同一配置:天然幂等,不重复登记";
-	EXPECT_FALSE(GoldBlocked(player_)) << "物品封禁不碰货币";
-	EXPECT_EQ(13u, DecidedThrough(player_)) << "效果与记账同一帧";
+	EXPECT_FALSE(GoldBlocked(player)) << "物品封禁不碰货币";
+	EXPECT_EQ(13u, DecidedThrough(player)) << "效果与记账同一帧";
 	EXPECT_EQ(1, g_persistCalls) << "本批有新记账:请求一次存盘";
 	EXPECT_TRUE(g_sentAcks.empty()) << "落盘之前不确认";
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(4, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2001);
 	ExpectDecision(ack.decisions(1), 11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2002);
 	ExpectDecision(ack.decisions(2), 12, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2003);
 	ExpectDecision(ack.decisions(3), 13, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2004);
 	PlayerInboxSystem::OnAckReply(ack.player_id(), static_cast<uint32_t>(ack.domain()), ack.correlation_id(), AckReplyFor(ack));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
 }
 
 // 存档里的账本已记了「seq 10 封 A、seq 11 解 A」,封禁表(与账本同一次落盘)里也就没有 A。重登 / 换节点后
@@ -878,21 +878,21 @@ TEST_F(PlayerInboxSystemTest, RedeliveredItemBanReplaysFromTheLedgerWithoutReexe
 	ASSERT_NO_FATAL_FAILURE(SeedLedger(
 		11, {MakeDecision(10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 2001, kBlockItemType),
 			 MakeDecision(11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 2002, kUnblockItemType)}));
-	CompleteFakeSave(player_); // 这份账本就是从存档加载的:已落盘
+	CompleteFakeSave(player); // 这份账本就是从存档加载的:已落盘
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	EXPECT_EQ(11u, fetch.consumer_decided_through());
 
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {ItemGainItem(10, kBlockItemType, 2001, kItemA), ItemGainItem(12, kBlockItemType, 2003, 0)}));
-	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kItemA)) << "seq ≤ 水位的重投按账本回放,不再执行";
-	EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player_).item_config_ids_size())
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player, kItemA)) << "seq ≤ 水位的重投按账本回放,不再执行";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player).item_config_ids_size())
 		<< "配置号为 0 的条目被拒,不写封禁表";
-	EXPECT_EQ(12u, DecidedThrough(player_)) << "坏条目记终态,不卡住流";
+	EXPECT_EQ(12u, DecidedThrough(player)) << "坏条目记终态,不卡住流";
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(2, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 2001);
 	ExpectDecision(ack.decisions(1), 12, player_inbox::PLAYER_INBOX_OUTCOME_REJECTED,
@@ -904,21 +904,21 @@ TEST_F(PlayerInboxSystemTest, RedeliveredItemBanReplaysFromTheLedgerWithoutReexe
 TEST_F(PlayerInboxSystemTest, TriggersDuringAnInflightRoundOnlyRequestARecheck)
 {
 	player_inbox::FetchPlayerInboxRequest first;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, first));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, first));
 
 	// Fetch 在途:提醒、归属变化后的落地都只置 recheck。
 	PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, kGmDomain);
 	PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, kGmDomain);
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = kEpoch + 1;
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kEpoch + 1;
+	PlayerInboxSystem::OnPlayerLanded(player);
 	for (int tick = 1; tick <= 5; ++tick) // 5 秒远小于在途期限
 	{
 		Advance(1000);
 		PlayerInboxSystem::Tick();
 	}
 	EXPECT_EQ(1u, g_sentFetches.size()) << "同一 (玩家, 域) 同一时刻至多一个在途请求";
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->recheckRequested);
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->recheckRequested);
 
 	// 这一轮结束后补拉恰好一次(触发不累加)。
 	PlayerInboxSystem::OnFetchReply(
@@ -934,7 +934,7 @@ TEST_F(PlayerInboxSystemTest, TriggersDuringAnInflightRoundOnlyRequestARecheck)
 		second.player_id(), static_cast<uint32_t>(second.domain()), second.correlation_id(),
 		FetchReplyFor(second, {BlockGold(10, 1001)}));
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, kGmDomain);
 	Advance(1000);
 	PlayerInboxSystem::Tick();
@@ -958,13 +958,13 @@ TEST_F(PlayerInboxSystemTest, TriggersDuringAnInflightRoundOnlyRequestARecheck)
 TEST_F(PlayerInboxSystemTest, FetchWithNoReachableNodeBacksOffAndRetries)
 {
 	g_fetchSendOk = false;
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	PlayerInboxSystem::OnPlayerLanded(player);
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1, g_fetchAttempts);
 	EXPECT_TRUE(g_sentFetches.empty());
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase) << "没发出去就不算在途";
-	EXPECT_EQ(PlayerInboxDeferReason::kNoNode, GmState(player_)->deferReason);
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase) << "没发出去就不算在途";
+	EXPECT_EQ(PlayerInboxDeferReason::kNoNode, GmState(player)->deferReason);
 
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1, g_fetchAttempts) << "退避未到不重试";
@@ -974,28 +974,28 @@ TEST_F(PlayerInboxSystemTest, FetchWithNoReachableNodeBacksOffAndRetries)
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(2, g_fetchAttempts);
 	ASSERT_EQ(1u, g_sentFetches.size());
-	EXPECT_EQ(PlayerInboxPhase::kFetching, GmState(player_)->phase);
+	EXPECT_EQ(PlayerInboxPhase::kFetching, GmState(player)->phase);
 }
 
 TEST_F(PlayerInboxSystemTest, LateFetchReplyAfterTimeoutIsDiscardedByCorrelation)
 {
 	player_inbox::FetchPlayerInboxRequest timedOut;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, timedOut));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, timedOut));
 
 	// 完成通知迟迟不来:按传输失败收场、退避。
 	Advance(PastInflightTimeout());
 	PlayerInboxSystem::Tick();
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
-	EXPECT_EQ(0u, GmState(player_)->correlationId);
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
+	EXPECT_EQ(0u, GmState(player)->correlationId);
 
 	// 迟到的回包:已经不在途 → 丢弃,不执行、不记账。
 	PlayerInboxSystem::OnFetchReply(
 		timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(),
 		FetchReplyFor(timedOut, {BlockGold(10, 1001)}));
-	EXPECT_FALSE(GoldBlocked(player_));
-	EXPECT_EQ(nullptr, GmCursor(player_));
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty());
+	EXPECT_FALSE(GoldBlocked(player));
+	EXPECT_EQ(nullptr, GmCursor(player));
+	EXPECT_TRUE(GmState(player)->pendingItems.empty());
 
 	Advance(PastBackoff(1));
 	PlayerInboxSystem::Tick();
@@ -1008,37 +1008,37 @@ TEST_F(PlayerInboxSystemTest, LateFetchReplyAfterTimeoutIsDiscardedByCorrelation
 		timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(),
 		FetchReplyFor(timedOut, {BlockGold(10, 1001)}));
 	PlayerInboxSystem::OnFetchFailed(timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(), kGrpcStatusUnavailable, "late failure");
-	EXPECT_FALSE(GoldBlocked(player_));
-	EXPECT_EQ(PlayerInboxPhase::kFetching, GmState(player_)->phase);
-	EXPECT_EQ(retry.correlation_id(), GmState(player_)->correlationId);
+	EXPECT_FALSE(GoldBlocked(player));
+	EXPECT_EQ(PlayerInboxPhase::kFetching, GmState(player)->phase);
+	EXPECT_EQ(retry.correlation_id(), GmState(player)->correlationId);
 
 	PlayerInboxSystem::OnFetchReply(
 		retry.player_id(), static_cast<uint32_t>(retry.domain()), retry.correlation_id(),
 		FetchReplyFor(retry, {BlockGold(10, 1001)}));
-	EXPECT_TRUE(GoldBlocked(player_));
-	EXPECT_EQ(10u, DecidedThrough(player_));
+	EXPECT_TRUE(GoldBlocked(player));
+	EXPECT_EQ(10u, DecidedThrough(player));
 }
 
 TEST_F(PlayerInboxSystemTest, LateAckReplyAfterTimeoutIsDiscardedAndTheSameDecisionsAreResent)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
 	player_inbox::AckPlayerInboxRequest timedOut;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, timedOut));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, timedOut));
 
 	Advance(PastInflightTimeout());
 	PlayerInboxSystem::Tick();
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player_)->phase) << "Ack 超时:保留 ackQueue,退避重发";
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size());
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player)->phase) << "Ack 超时:保留 ackQueue,退避重发";
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size());
 
 	PlayerInboxSystem::OnAckReply(
 		timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(),
 		AckReplyFor(timedOut));
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size()) << "不在途时迟到的回包不能清队列";
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size()) << "不在途时迟到的回包不能清队列";
 
 	Advance(PastBackoff(1));
 	PlayerInboxSystem::Tick();
@@ -1053,34 +1053,34 @@ TEST_F(PlayerInboxSystemTest, LateAckReplyAfterTimeoutIsDiscardedAndTheSameDecis
 		timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(),
 		AckReplyFor(timedOut));
 	PlayerInboxSystem::OnAckFailed(timedOut.player_id(), static_cast<uint32_t>(timedOut.domain()), timedOut.correlation_id(), kGrpcStatusUnavailable, "late failure");
-	EXPECT_EQ(PlayerInboxPhase::kAcking, GmState(player_)->phase);
-	EXPECT_EQ(resent.correlation_id(), GmState(player_)->correlationId);
+	EXPECT_EQ(PlayerInboxPhase::kAcking, GmState(player)->phase);
+	EXPECT_EQ(resent.correlation_id(), GmState(player)->correlationId);
 
 	PlayerInboxSystem::OnAckReply(
 		resent.player_id(), static_cast<uint32_t>(resent.domain()), resent.correlation_id(),
 		AckReplyFor(resent));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
-	EXPECT_TRUE(GmState(player_)->ackQueue.empty());
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
+	EXPECT_TRUE(GmState(player)->ackQueue.empty());
 }
 
 // 围栏判 STALE:新 owner 已推进围栏,它加载的存档里已有这些结局,会自己补确认(设计 §7.7、§7.10)。
 TEST_F(PlayerInboxSystemTest, StaleAckClearsTheQueueAndBacksOffBeforeRefetching)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 
 	PlayerInboxSystem::OnAckReply(
 		ack.player_id(), static_cast<uint32_t>(ack.domain()), ack.correlation_id(),
 		StaleAckReplyFor(ack));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->ackQueue.empty()) << "STALE:清队列,不重发";
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "账本不动:结局已落盘,由新 owner 补确认";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->ackQueue.empty()) << "STALE:清队列,不重发";
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
+	EXPECT_EQ(10u, DecidedThrough(player)) << "账本不动:结局已落盘,由新 owner 补确认";
 
 	// 固定退避 60 秒(kStaleOwnerBackoffMs,不加抖动):到点之前什么都不发。
 	Advance(rules::kStaleOwnerBackoffMs - 1);
@@ -1100,15 +1100,15 @@ TEST_F(PlayerInboxSystemTest, StaleAckClearsTheQueueAndBacksOffBeforeRefetching)
 TEST_F(PlayerInboxSystemTest, VoidedNewEntryIsSkippedWithoutRunningTheExecutor)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// 故意带上合法载荷:若误调执行器,金币会被封锁。
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {MakeItem(10, kBlockType, 1001, GainPayload(kGold), player_inbox::PLAYER_INBOX_DIRECTIVE_VOID, kCancelled)}));
-	EXPECT_FALSE(GoldBlocked(player_)) << "作废的新条目不查执行器、不解码载荷(设计 §7.9)";
+	EXPECT_FALSE(GoldBlocked(player)) << "作废的新条目不查执行器、不解码载荷(设计 §7.9)";
 
-	const auto *cursor = GmCursor(player_);
+	const auto *cursor = GmCursor(player);
 	ASSERT_NE(nullptr, cursor);
 	EXPECT_EQ(10u, cursor->decided_through_seq());
 	ASSERT_EQ(1, cursor->recent_size());
@@ -1117,7 +1117,7 @@ TEST_F(PlayerInboxSystemTest, VoidedNewEntryIsSkippedWithoutRunningTheExecutor)
 	EXPECT_EQ(1, g_persistCalls) << "SKIPPED 照常记账、存盘";
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
 }
@@ -1126,18 +1126,18 @@ TEST_F(PlayerInboxSystemTest, VoidedNewEntryIsSkippedWithoutRunningTheExecutor)
 TEST_F(PlayerInboxSystemTest, VoidedEntryOfAnUnknownTypeIsSkippedAndTheBatchContinues)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {Voided(10, kUnknownType, 1001, kQuarantined), BlockGold(11, 1101)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_FALSE(GmState(player_)->halted) << "作废指令能解开未知类型的停用";
-	EXPECT_TRUE(GoldBlocked(player_)) << "后面的条目照常执行";
-	EXPECT_EQ(11u, DecidedThrough(player_));
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_FALSE(GmState(player)->halted) << "作废指令能解开未知类型的停用";
+	EXPECT_TRUE(GoldBlocked(player)) << "后面的条目照常执行";
+	EXPECT_EQ(11u, DecidedThrough(player));
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(2, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kQuarantined, 1001);
 	ExpectDecision(ack.decisions(1), 11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1101);
@@ -1146,23 +1146,23 @@ TEST_F(PlayerInboxSystemTest, VoidedEntryOfAnUnknownTypeIsSkippedAndTheBatchCont
 TEST_F(PlayerInboxSystemTest, UnknownTypeWithoutVoidHaltsAfterConfirmingTheDecidedPrefix)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// 第 12 条是解封:若越过停用点继续执行,金币会被解封。
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnknownType, 1101, "opaque"),
 				MakeItem(12, kUnblockType, 1201, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->halted);
-	EXPECT_EQ(PlayerInboxHaltReason::kUnknownType, GmState(player_)->haltReason);
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "停在未知类型这一条:不记账,绝不当成 REJECTED";
-	EXPECT_TRUE(GoldBlocked(player_)) << "停用点之后的条目不执行";
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty());
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kUnknownType, GmState(player)->haltReason);
+	EXPECT_EQ(10u, DecidedThrough(player)) << "停在未知类型这一条:不记账,绝不当成 REJECTED";
+	EXPECT_TRUE(GoldBlocked(player)) << "停用点之后的条目不执行";
+	EXPECT_TRUE(GmState(player)->pendingItems.empty());
 
 	// 已定的前缀照常落盘后确认(设计 §7.6);停用只停拉取与应用,不停确认。
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
 	PlayerInboxSystem::OnAckReply(
@@ -1171,8 +1171,8 @@ TEST_F(PlayerInboxSystemTest, UnknownTypeWithoutVoidHaltsAfterConfirmingTheDecid
 
 	// 本实体不再为这个域拉取:提醒、到期、甚至归属变化后的落地都不行,直到实体下次在本节点新建。
 	PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, kGmDomain);
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = kEpoch + 1;
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kEpoch + 1;
+	PlayerInboxSystem::OnPlayerLanded(player);
 	Advance(kBeyondAnyBackoffMs);
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1u, g_sentFetches.size());
@@ -1184,25 +1184,25 @@ TEST_F(PlayerInboxSystemTest, UnknownTypeWithoutVoidHaltsAfterConfirmingTheDecid
 TEST_F(PlayerInboxSystemTest, StaleAckOnAHaltedDomainSchedulesNoRetry)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnknownType, 1101, "opaque")}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_TRUE(GmState(player_)->halted);
-	const auto deferBefore = GmState(player_)->deferReason;
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_TRUE(GmState(player)->halted);
+	const auto deferBefore = GmState(player)->deferReason;
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 
 	ScopedLogCapture capture;
 	PlayerInboxSystem::OnAckReply(
 		ack.player_id(), static_cast<uint32_t>(ack.domain()), ack.correlation_id(),
 		StaleAckReplyFor(ack));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->ackQueue.empty());
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
-	EXPECT_EQ(0u, GmState(player_)->nextCheckMs) << "停用的域没有下一次检查";
-	EXPECT_EQ(deferBefore, GmState(player_)->deferReason) << "延后原因不改写成 stale_owner";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->ackQueue.empty());
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
+	EXPECT_EQ(0u, GmState(player)->nextCheckMs) << "停用的域没有下一次检查";
+	EXPECT_EQ(deferBefore, GmState(player)->deferReason) << "延后原因不改写成 stale_owner";
 	EXPECT_EQ(0u, CapturedLinesWith({"metric=inbox_deferred", "reason=stale_owner"}));
 
 	Advance(kBeyondAnyBackoffMs);
@@ -1219,9 +1219,9 @@ TEST_F(PlayerInboxSystemTest, ReplayAndUnknownNeedNoExecutorEvenForUnknownTypesO
 		11, {MakeDecision(10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 1001, kBlockType),
 			 MakeDecision(11, player_inbox::PLAYER_INBOX_OUTCOME_REJECTED, 1101, kUnknownType,
 						  static_cast<uint32_t>(kPlayerInboxPayloadInvalid))}));
-	CompleteFakeSave(player_); // 这份账本就是从存档加载的:已落盘
+	CompleteFakeSave(player); // 这份账本就是从存档加载的:已落盘
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	EXPECT_EQ(11u, fetch.consumer_decided_through());
 
 	// 重复投递:5 已出环(UNKNOWN),10 被补挂了 VOID(必须回放 APPLIED,不能报 SKIPPED),11 是未知类型(回放)。
@@ -1229,12 +1229,12 @@ TEST_F(PlayerInboxSystemTest, ReplayAndUnknownNeedNoExecutorEvenForUnknownTypesO
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {MakeItem(5, kUnknownType, 501, "opaque"), Voided(10, kBlockType, 1001, kCancelled),
 				MakeItem(11, kUnknownType, 1101, "opaque")}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_FALSE(GmState(player_)->halted) << "未知类型的重复投递只回放,不停用";
-	EXPECT_FALSE(GoldBlocked(player_)) << "回放不重做效果";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_FALSE(GmState(player)->halted) << "未知类型的重复投递只回放,不停用";
+	EXPECT_FALSE(GoldBlocked(player)) << "回放不重做效果";
 	EXPECT_EQ(0, g_persistCalls) << "没有新记账就不请求存盘";
-	EXPECT_EQ(11u, DecidedThrough(player_));
-	EXPECT_EQ(2, GmCursor(player_)->recent_size()) << "UNKNOWN 不入环";
+	EXPECT_EQ(11u, DecidedThrough(player));
+	EXPECT_EQ(2, GmCursor(player)->recent_size()) << "UNKNOWN 不入环";
 
 	// 全部已在存档里:当场确认,不等 tick。
 	ASSERT_EQ(1u, g_sentAcks.size());
@@ -1251,21 +1251,21 @@ TEST_F(PlayerInboxSystemTest, MismatchConfirmsNothingEvenWhenTheEntryIsVoided)
 {
 	ASSERT_NO_FATAL_FAILURE(SeedLedger(10, {MakeDecision(9, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 901, kBlockType),
 											MakeDecision(10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 1001, kBlockType)}));
-	CompleteFakeSave(player_);
+	CompleteFakeSave(player);
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// 9 与账本一致(可回放),10 的 request_id 与账本里的同一 seq 不同(IB-9)。
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(9, 901), Voided(10, kBlockType, 2002, kCancelled)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->halted);
-	EXPECT_EQ(PlayerInboxHaltReason::kReplayMismatch, GmState(player_)->haltReason);
-	EXPECT_TRUE(GmState(player_)->ackQueue.empty());
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kReplayMismatch, GmState(player)->haltReason);
+	EXPECT_TRUE(GmState(player)->ackQueue.empty());
 	EXPECT_TRUE(g_sentAcks.empty()) << "MISMATCH:一条都不确认,连已回放的 9 也不确认";
 
-	const auto *cursor = GmCursor(player_);
+	const auto *cursor = GmCursor(player);
 	ASSERT_NE(nullptr, cursor);
 	EXPECT_EQ(10u, cursor->decided_through_seq()) << "账本不改写";
 	ASSERT_EQ(2, cursor->recent_size());
@@ -1287,18 +1287,18 @@ TEST_F(PlayerInboxSystemTest, MismatchConfirmsNothingEvenWhenTheEntryIsVoided)
 TEST_F(PlayerInboxSystemTest, ApplyGateClosedOnReplyDropsTheBatchAndTheRefetchSeesTheVoid)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// Fetch 在途时玩家进入归属交接冻结;回包到达时应用前的那一次闸判不过。
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase) << "丢掉本地副本、回 Idle";
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty());
-	EXPECT_FALSE(GoldBlocked(player_));
-	EXPECT_EQ(nullptr, GmCursor(player_)) << "不记账";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase) << "丢掉本地副本、回 Idle";
+	EXPECT_TRUE(GmState(player)->pendingItems.empty());
+	EXPECT_FALSE(GoldBlocked(player));
+	EXPECT_EQ(nullptr, GmCursor(player)) << "不记账";
 	EXPECT_EQ(0, g_persistCalls);
 
 	// 冻结期间拉取前的闸也不过:不拉。
@@ -1307,7 +1307,7 @@ TEST_F(PlayerInboxSystemTest, ApplyGateClosedOnReplyDropsTheBatchAndTheRefetchSe
 	EXPECT_EQ(1u, g_sentFetches.size());
 
 	// 解冻后重拉;这期间服务端给这一行挂上了 VOID。
-	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 	Advance(kBeyondAnyBackoffMs);
 	PlayerInboxSystem::Tick();
 	ASSERT_EQ(2u, g_sentFetches.size()) << "下次检查重新拉取(只多 +1 次 delivery_count)";
@@ -1317,10 +1317,10 @@ TEST_F(PlayerInboxSystemTest, ApplyGateClosedOnReplyDropsTheBatchAndTheRefetchSe
 	PlayerInboxSystem::OnFetchReply(
 		refetch.player_id(), static_cast<uint32_t>(refetch.domain()), refetch.correlation_id(),
 		FetchReplyFor(refetch, {Voided(10, kBlockType, 1001, kCancelled)}));
-	EXPECT_FALSE(GoldBlocked(player_)) << "已作废的处置不能按旧副本执行";
+	EXPECT_FALSE(GoldBlocked(player)) << "已作废的处置不能按旧副本执行";
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
 }
@@ -1329,31 +1329,31 @@ TEST_F(PlayerInboxSystemTest, ApplyGateClosedOnReplyDropsTheBatchAndTheRefetchSe
 TEST_F(PlayerInboxSystemTest, ExecutorDeferResumesLocallyWithoutRefetching)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// 持久货币组件缺失(加载不变量被破坏)是 v1 执行器唯一的 DEFER 来源;作废条目不经执行器,照常记 SKIPPED。
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {Voided(10, kBlockType, 1001, kCancelled), BlockGold(11, 1101)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kApplying, GmState(player_)->phase);
-	ASSERT_EQ(1u, GmState(player_)->pendingItems.size()) << "已处理的前缀从本地缓存摘掉";
-	EXPECT_EQ(11u, GmState(player_)->pendingItems.front().seq());
-	EXPECT_EQ(10u, DecidedThrough(player_));
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kApplying, GmState(player)->phase);
+	ASSERT_EQ(1u, GmState(player)->pendingItems.size()) << "已处理的前缀从本地缓存摘掉";
+	EXPECT_EQ(11u, GmState(player)->pendingItems.front().seq());
+	EXPECT_EQ(10u, DecidedThrough(player));
 	EXPECT_EQ(1, g_persistCalls) << "前缀已记账:请求存盘";
 	EXPECT_TRUE(g_sentAcks.empty()) << "整批做完才确认";
 
 	// 测试专用:把组件按加载路径补回来,模拟不变量恢复(生产里组件只由加载创建)。
-	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
 	Advance(PastBackoff(1));
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1u, g_sentFetches.size()) << "DEFER 本地续做,不重新 Fetch";
-	EXPECT_TRUE(GoldBlocked(player_));
-	EXPECT_EQ(11u, DecidedThrough(player_));
+	EXPECT_TRUE(GoldBlocked(player));
+	EXPECT_EQ(11u, DecidedThrough(player));
 
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(2, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
 	ExpectDecision(ack.decisions(1), 11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1101);
@@ -1365,7 +1365,7 @@ TEST_F(PlayerInboxSystemTest, ExecutorDeferResumesLocallyWithoutRefetching)
 TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAndNeverResumesLocally)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	// 新版本 scene 写下的金币欠款:带本版本不认识的字段。
 	CurrencyComp persisted;
@@ -1373,7 +1373,7 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 	entry->set_currency_type(kGold);
 	entry->set_owed(500);
 	entry->mutable_unknown_fields()->AddVarint(9999, 1);
-	auto &currency = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_);
+	auto &currency = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player);
 	currency.LoadFromProto(persisted);
 
 	player_inbox::GmCurrencyDebtPayload debt;
@@ -1383,17 +1383,17 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kDebtType, 1101, debt.SerializeAsString()),
 				MakeItem(12, kUnblockType, 1201, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->halted);
-	EXPECT_EQ(PlayerInboxHaltReason::kVersionSkew, GmState(player_)->haltReason);
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "停在版本错位这一条:不记账,绝不当成 REJECTED";
-	EXPECT_TRUE(GoldBlocked(player_)) << "停用点之后的条目不执行";
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "不留本地副本";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kVersionSkew, GmState(player)->haltReason);
+	EXPECT_EQ(10u, DecidedThrough(player)) << "停在版本错位这一条:不记账,绝不当成 REJECTED";
+	EXPECT_TRUE(GoldBlocked(player)) << "停用点之后的条目不执行";
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "不留本地副本";
 	EXPECT_EQ(500u, currency.debts.at(kGold).owed) << "没有并进带新字段的欠款";
 
 	// 已定的前缀照常落盘后确认;版本错位这一条不在确认里。
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
 	PlayerInboxSystem::OnAckReply(
@@ -1405,7 +1405,7 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 	Advance(kBeyondAnyBackoffMs);
 	PlayerInboxSystem::Tick();
 	EXPECT_TRUE(currency.debts.find(kGold) == currency.debts.end()) << "不得按本地旧副本把(可能已作废的)欠款挂上";
-	EXPECT_EQ(10u, DecidedThrough(player_));
+	EXPECT_EQ(10u, DecidedThrough(player));
 	EXPECT_EQ(1u, g_sentFetches.size()) << "停用对当前实体一直有效,实体重建后才重拉";
 	EXPECT_EQ(1u, g_sentAcks.size());
 }
@@ -1416,7 +1416,7 @@ TEST_F(PlayerInboxSystemTest, ExecutorVersionSkewHaltsAfterConfirmingThePrefixAn
 TEST_F(PlayerInboxSystemTest, PayloadCarryingFieldsFromNewerVersionHaltsWithoutExecuting)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 
 	player_inbox::GmCurrencyGainPayload newer;
 	newer.set_currency_type(kGold);
@@ -1425,16 +1425,16 @@ TEST_F(PlayerInboxSystemTest, PayloadCarryingFieldsFromNewerVersionHaltsWithoutE
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnblockType, 1101, newer.SerializeAsString()),
 				MakeItem(12, kUnblockType, 1201, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->halted);
-	EXPECT_EQ(PlayerInboxHaltReason::kVersionSkew, GmState(player_)->haltReason);
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "停在带新字段的这一条:不记账,绝不当成 APPLIED";
-	EXPECT_TRUE(GoldBlocked(player_)) << "带新字段的解封没有执行,停用点之后的条目也不执行";
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "不留本地副本";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kVersionSkew, GmState(player)->haltReason);
+	EXPECT_EQ(10u, DecidedThrough(player)) << "停在带新字段的这一条:不记账,绝不当成 APPLIED";
+	EXPECT_TRUE(GoldBlocked(player)) << "带新字段的解封没有执行,停用点之后的条目也不执行";
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "不留本地副本";
 
 	// 已定的前缀照常落盘后确认;带新字段的这一条不在确认里。
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 	ASSERT_EQ(1, ack.decisions_size());
 	ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
 }
@@ -1445,13 +1445,13 @@ TEST_F(PlayerInboxSystemTest, PayloadCarryingFieldsFromNewerVersionHaltsWithoutE
 TEST_F(PlayerInboxSystemTest, HaltedDomainRelogsOnTheIntervalWhileTheEntityLives)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	ScopedLogCapture capture;
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {MakeItem(10, kUnknownType, 1001, "opaque")}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_TRUE(GmState(player_)->halted);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_TRUE(GmState(player)->halted);
 	const auto haltedLines = [] { return CapturedLinesWith({"[PlayerInbox]", "metric=inbox_halted", "reason=unknown_type"}); };
 	const auto relogLines = [] { return CapturedLinesWith({"WARN  ", "[PlayerInbox]", "metric=inbox_halted", "relog=1"}); };
 	EXPECT_EQ(1u, haltedLines()) << "停用那一刻打一条";
@@ -1475,7 +1475,7 @@ TEST_F(PlayerInboxSystemTest, HaltedDomainRelogsOnTheIntervalWhileTheEntityLives
 		PlayerInboxSystem::Tick();
 	} while (elapsedMs < rules::kHaltedDomainRelogIntervalMs);
 	EXPECT_EQ(2u, relogLines());
-	EXPECT_TRUE(GmState(player_)->halted) << "补打只打日志,不解除停用";
+	EXPECT_TRUE(GmState(player)->halted) << "补打只打日志,不解除停用";
 	EXPECT_EQ(1u, g_sentFetches.size()) << "停用期间不重拉";
 }
 
@@ -1483,24 +1483,24 @@ TEST_F(PlayerInboxSystemTest, HaltedDomainRelogsOnTheIntervalWhileTheEntityLives
 TEST_F(PlayerInboxSystemTest, GateClosingDuringDeferResumeAcksThePrefixThenRefetches)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {Voided(10, kBlockType, 1001, kCancelled), BlockGold(11, 1101)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player_)->phase);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player)->phase);
 
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	Advance(PastBackoff(1));
 	PlayerInboxSystem::Tick();
-	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player_)->phase);
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "未处理的 11 不在本地等闸";
+	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player)->phase);
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "未处理的 11 不在本地等闸";
 	EXPECT_EQ(1u, g_sentFetches.size());
 
 	// 确认不受前置闸限制:冻结中照样确认已落盘的前缀。
 	player_inbox::AckPlayerInboxRequest prefixAck;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, prefixAck));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, prefixAck));
 	ASSERT_EQ(1, prefixAck.decisions_size());
 	ExpectDecision(prefixAck.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
 	PlayerInboxSystem::OnAckReply(
@@ -1511,8 +1511,8 @@ TEST_F(PlayerInboxSystemTest, GateClosingDuringDeferResumeAcksThePrefixThenRefet
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1u, g_sentFetches.size());
 
-	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player_);
-	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_); // 测试专用:模拟加载不变量恢复
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player); // 测试专用:模拟加载不变量恢复
 	Advance(kBeyondAnyBackoffMs);
 	PlayerInboxSystem::Tick();
 	ASSERT_EQ(2u, g_sentFetches.size());
@@ -1521,9 +1521,9 @@ TEST_F(PlayerInboxSystemTest, GateClosingDuringDeferResumeAcksThePrefixThenRefet
 	PlayerInboxSystem::OnFetchReply(
 		g_sentFetches.back().player_id(), static_cast<uint32_t>(g_sentFetches.back().domain()), g_sentFetches.back().correlation_id(),
 		FetchReplyFor(g_sentFetches.back(), {BlockGold(11, 1101)}));
-	EXPECT_TRUE(GoldBlocked(player_));
+	EXPECT_TRUE(GoldBlocked(player));
 	player_inbox::AckPlayerInboxRequest restAck;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, restAck));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, restAck));
 	EXPECT_EQ((std::vector<uint64_t>{10, 11}), AllAckedSeqs()) << "每个 seq 恰好确认一次,严格递增";
 }
 
@@ -1534,22 +1534,22 @@ TEST_F(PlayerInboxSystemTest, GateClosingDuringDeferResumeAcksThePrefixThenRefet
 TEST_F(PlayerInboxSystemTest, NewLandingDuringDeferAcksThePrefixBeforeRefetching)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {Voided(10, kBlockType, 1001, kCancelled), BlockGold(11, 1101)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player_)->phase);
-	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_); // 测试专用:模拟加载不变量恢复
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player)->phase);
+	tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player); // 测试专用:模拟加载不变量恢复
 
 	// 归属变了 = 新落地。落地钩子只切状态:不当场发 Ack、不压存盘、不拉。
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = kEpoch + 1;
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = kEpoch + 1;
 	const int persistBeforeLanding = g_persistCalls;
-	PlayerInboxSystem::OnPlayerLanded(player_);
-	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player_)->phase);
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "旧归属下拉到的本地条目丢掉重拉";
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size());
+	PlayerInboxSystem::OnPlayerLanded(player);
+	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player)->phase);
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "旧归属下拉到的本地条目丢掉重拉";
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size());
 	EXPECT_EQ(persistBeforeLanding, g_persistCalls);
 	EXPECT_EQ(0, g_ackAttempts);
 
@@ -1557,7 +1557,7 @@ TEST_F(PlayerInboxSystemTest, NewLandingDuringDeferAcksThePrefixBeforeRefetching
 	EXPECT_EQ(1u, g_sentFetches.size()) << "上一批全部确认之前不拉下一批";
 
 	player_inbox::AckPlayerInboxRequest prefixAck;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, prefixAck));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, prefixAck));
 	EXPECT_EQ(kEpoch + 1, prefixAck.owner_epoch());
 	ASSERT_EQ(1, prefixAck.decisions_size());
 	ExpectDecision(prefixAck.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
@@ -1576,9 +1576,9 @@ TEST_F(PlayerInboxSystemTest, NewLandingDuringDeferAcksThePrefixBeforeRefetching
 	PlayerInboxSystem::OnFetchReply(
 		g_sentFetches.back().player_id(), static_cast<uint32_t>(g_sentFetches.back().domain()), g_sentFetches.back().correlation_id(),
 		FetchReplyFor(g_sentFetches.back(), {BlockGold(11, 1101)}));
-	EXPECT_TRUE(GoldBlocked(player_));
+	EXPECT_TRUE(GoldBlocked(player));
 	player_inbox::AckPlayerInboxRequest restAck;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, restAck));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, restAck));
 	EXPECT_EQ((std::vector<uint64_t>{10, 11}), AllAckedSeqs()) << "seq 严格递增、无重复";
 }
 
@@ -1586,19 +1586,19 @@ TEST_F(PlayerInboxSystemTest, NewLandingDuringDeferAcksThePrefixBeforeRefetching
 TEST_F(PlayerInboxSystemTest, AckInvalidParameterHaltsWhileServerFaultsAreResent)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
 	player_inbox::AckPlayerInboxRequest first;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, first));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, first));
 
 	// 服务端故障:保留 ackQueue,退避后原样重发。
 	PlayerInboxSystem::OnAckReply(
 		first.player_id(), static_cast<uint32_t>(first.domain()), first.correlation_id(),
 		TipAckReplyFor(first, static_cast<uint32_t>(kPlayerInboxStoreUnavailable)));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_FALSE(GmState(player_)->halted);
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_FALSE(GmState(player)->halted);
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(1u, g_sentAcks.size()) << "退避未到不重发";
 	Advance(PastBackoff(1));
@@ -1610,10 +1610,10 @@ TEST_F(PlayerInboxSystemTest, AckInvalidParameterHaltsWhileServerFaultsAreResent
 	PlayerInboxSystem::OnAckReply(
 		g_sentAcks.back().player_id(), static_cast<uint32_t>(g_sentAcks.back().domain()), g_sentAcks.back().correlation_id(),
 		TipAckReplyFor(g_sentAcks.back(), static_cast<uint32_t>(kInvalidParameter)));
-	EXPECT_TRUE(GmState(player_)->halted);
-	EXPECT_EQ(PlayerInboxHaltReason::kAckAnomaly, GmState(player_)->haltReason);
-	EXPECT_TRUE(GmState(player_)->ackQueue.empty());
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "结局已落盘;实体下次新建时按账本回放、重新确认";
+	EXPECT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(PlayerInboxHaltReason::kAckAnomaly, GmState(player)->haltReason);
+	EXPECT_TRUE(GmState(player)->ackQueue.empty());
+	EXPECT_EQ(10u, DecidedThrough(player)) << "结局已落盘;实体下次新建时按账本回放、重新确认";
 
 	for (int round = 0; round < 3; ++round)
 	{
@@ -1632,12 +1632,12 @@ TEST_F(PlayerInboxSystemTest, AckInvalidParameterHaltsWhileServerFaultsAreResent
 // (封顶后约 8 分钟一条,落在 [10m] 日志告警窗口之内,节拍的推导由 player_inbox_rules_test 钉住)。只影响日志。
 TEST_F(PlayerInboxSystemTest, CorruptLedgerWarnsAgainEveryFixedNumberOfDeferrals)
 {
-	tlsEcs.actorRegistry.emplace<PlayerInboxLedgerInvalidComp>(player_); // 加载校验判损坏时挂的标签
+	tlsEcs.actorRegistry.emplace<PlayerInboxLedgerInvalidComp>(player); // 加载校验判损坏时挂的标签
 	ScopedLogCapture capture;
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	PlayerInboxSystem::OnPlayerLanded(player);
 	PlayerInboxSystem::Tick();
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxDeferReason::kLedgerInvalid, GmState(player_)->deferReason);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxDeferReason::kLedgerInvalid, GmState(player)->deferReason);
 	const std::vector<std::string> stuckWarn{"metric=inbox_ledger_invalid", "source=apply_gate"};
 	const auto& domains = player_inbox_registry::ConsumerDomains();
 	ASSERT_FALSE(domains.empty());
@@ -1653,7 +1653,7 @@ TEST_F(PlayerInboxSystemTest, CorruptLedgerWarnsAgainEveryFixedNumberOfDeferrals
 		Advance(PastBackoff(streak));
 		PlayerInboxSystem::Tick();
 	}
-	EXPECT_EQ(rules::kStuckWarnEveryFailures, GmState(player_)->failStreak);
+	EXPECT_EQ(rules::kStuckWarnEveryFailures, GmState(player)->failStreak);
 	EXPECT_EQ(domains.size() * 2, CapturedLinesWith(stuckWarn)) << "各域到固定连续延后次数再打一次";
 	for (const auto domain : domains)
 	{
@@ -1679,7 +1679,7 @@ TEST_F(PlayerInboxSystemTest, ConsumerDisabledWarnsAtStartupThenOnTheNodeRelogIn
 	EXPECT_EQ(1u, ConsumerDisabledWarnLines()) << "启动那一行就是 WARN,带 metric=";
 
 	// 关着时落地不建运行时组件、不拉(行为不变)。
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	PlayerInboxSystem::OnPlayerLanded(player);
 	PlayerInboxSystem::Tick();
 	EXPECT_EQ(0u, RuntimeCompCount());
 	EXPECT_EQ(0, g_fetchAttempts);
@@ -1752,7 +1752,7 @@ TEST_F(PlayerInboxSystemTest, ConsumerEnabledNeverLogsTheDisabledWarn)
 		<< "开着:启动那行仍是 INFO 的生效配置";
 
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		EmptyFetchReplyFor(fetch));
@@ -1769,11 +1769,11 @@ TEST_F(PlayerInboxSystemTest, ConsumerEnabledNeverLogsTheDisabledWarn)
 TEST_F(PlayerInboxSystemTest, LeavingSendsOneAckIgnoringBackoffAndLateRepliesAreHarmless)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	CompleteFakeSave(player_);
+	CompleteFakeSave(player);
 
 	// 先让常规的那次 Ack 发不出去,Ack 进入退避。
 	g_ackSendOk = false;
@@ -1783,7 +1783,7 @@ TEST_F(PlayerInboxSystemTest, LeavingSendsOneAckIgnoringBackoffAndLateRepliesAre
 	g_ackSendOk = true;
 
 	// 离开是最后一次机会:不看退避,补发一次。
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	ASSERT_EQ(1u, g_sentAcks.size());
 	const auto leaveAck = g_sentAcks.back();
 	EXPECT_EQ(kEpoch, leaveAck.owner_epoch()) << "此刻仍是本节点的当前 epoch";
@@ -1793,7 +1793,7 @@ TEST_F(PlayerInboxSystemTest, LeavingSendsOneAckIgnoringBackoffAndLateRepliesAre
 	EXPECT_EQ(1, g_persistCalls) << "离开路径不压存盘(退出存盘就是最后一次)";
 
 	// 实体销毁之后回包 / 失败通知才到:按 player_id 找不到实体就丢弃,不崩、不建组件。
-	const entt::entity leaving = player_;
+	const entt::entity leaving = player;
 	DestroyPlayer(leaving);
 	ASSERT_FALSE(tlsEcs.actorRegistry.valid(leaving));
 	PlayerInboxSystem::OnAckReply(
@@ -1811,53 +1811,53 @@ TEST_F(PlayerInboxSystemTest, LeavingSendsOneAckIgnoringBackoffAndLateRepliesAre
 TEST_F(PlayerInboxSystemTest, LeavingDoesNotAckBeforeTheOutcomeIsPersisted)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	CompleteFakeSave(player_); // 上一份快照:账本里还没有 seq 10
-	ASSERT_TRUE(tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).HasSnapshot());
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	CompleteFakeSave(player); // 上一份快照:账本里还没有 seq 10
+	ASSERT_TRUE(tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).HasSnapshot());
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
 	const int persistBeforeLeaving = g_persistCalls;
 
 	ScopedLogCapture capture;
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(0, g_ackAttempts) << "快照在,但不含本批结局:绝不在落盘之前确认(IB-3)";
 	EXPECT_EQ(persistBeforeLeaving, g_persistCalls) << "也不为此压存盘";
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size()) << "留到下次落地补确认";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size()) << "留到下次落地补确认";
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=not_durable"}));
 }
 
 TEST_F(PlayerInboxSystemTest, LeavingWithoutAnyPersistedSnapshotDoesNotAck)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	ASSERT_EQ(nullptr, tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player_))
+	ASSERT_EQ(nullptr, tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player))
 		<< "前置:这个实体从没落过盘";
 	const int persistBeforeLeaving = g_persistCalls;
 
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(0, g_ackAttempts) << "绝不在落盘之前确认(IB-3)";
 	EXPECT_EQ(persistBeforeLeaving, g_persistCalls);
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size());
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size());
 }
 
 TEST_F(PlayerInboxSystemTest, LeavingDoesNotResendWhileAnAckIsInFlight)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
 	player_inbox::AckPlayerInboxRequest ack;
-	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, ack));
+	ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, ack));
 
 	ScopedLogCapture capture;
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(1u, g_sentAcks.size()) << "在途的 Ack 服务端照样处理,不依赖实体还在";
 	EXPECT_EQ(1, g_ackAttempts);
 	// 评审 LC-3:它若在实体销毁后失败,失败回调只打 DEBUG;这里留一行带 corr 的对账线索。
@@ -1868,26 +1868,26 @@ TEST_F(PlayerInboxSystemTest, LeavingDoesNotResendWhileAnAckIsInFlight)
 TEST_F(PlayerInboxSystemTest, LeavingWithNoReachableInboxNodeIsHarmless)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	CompleteFakeSave(player_);
+	CompleteFakeSave(player);
 
 	g_ackSendOk = false;
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(1, g_ackAttempts);
 	EXPECT_TRUE(g_sentAcks.empty());
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player_)->phase);
-	EXPECT_EQ(1u, GmState(player_)->ackQueue.size());
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player)->phase);
+	EXPECT_EQ(1u, GmState(player)->ackQueue.size());
 }
 
 TEST_F(PlayerInboxSystemTest, LeavingWithoutRuntimeOrWithInvalidEntityDoesNothing)
 {
 	// 没在本节点落地过(或消费关闭):没有待确认的结局;离开路径不创建组件。
-	PlayerInboxSystem::OnPlayerLeaving(player_);
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerInboxRuntimeComp>(player_));
+	PlayerInboxSystem::OnPlayerLeaving(player);
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerInboxRuntimeComp>(player));
 	PlayerInboxSystem::OnPlayerLeaving(entt::null);
 	EXPECT_EQ(0, g_ackAttempts);
 	EXPECT_EQ(0, g_fetchAttempts);
@@ -1897,22 +1897,22 @@ TEST_F(PlayerInboxSystemTest, LeavingWithoutRuntimeOrWithInvalidEntityDoesNothin
 TEST_F(PlayerInboxSystemTest, LeavingConfirmsOnlyTheDeferPrefixAndDropsTheRest)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {Voided(10, kBlockType, 1001, kCancelled), BlockGold(11, 1101)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player_)->phase);
-	CompleteFakeSave(player_); // 退出存盘带上了已记账的前缀
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player)->phase);
+	CompleteFakeSave(player); // 退出存盘带上了已记账的前缀
 
 	ScopedLogCapture capture;
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	ASSERT_EQ(1u, g_sentAcks.size());
 	ASSERT_EQ(1, g_sentAcks.back().decisions_size());
 	ExpectDecision(g_sentAcks.back().decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_SKIPPED, kCancelled, 1001);
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "未处理的 11 在服务端仍是 PENDING,下次落地重拉";
-	EXPECT_EQ(10u, DecidedThrough(player_));
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "未处理的 11 在服务端仍是 PENDING,下次落地重拉";
+	EXPECT_EQ(10u, DecidedThrough(player));
 	// 11 已投递、没有结局:补发的 Ack 管不到它,只留一行对账线索(评审 M4 的缺口)。
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=delivered_undecided", "source=leaving",
 									 "items=1", "first_seq=11", "last_seq=11"}));
@@ -1922,19 +1922,19 @@ TEST_F(PlayerInboxSystemTest, LeavingConfirmsOnlyTheDeferPrefixAndDropsTheRest)
 TEST_F(PlayerInboxSystemTest, LeavingDuringADeferOfTheFirstItemLeavesATraceAndSendsNothing)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_); // v1 执行器唯一的 DEFER 来源
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player); // v1 执行器唯一的 DEFER 来源
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnblockType, 1101, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player_)->phase);
-	ASSERT_TRUE(GmState(player_)->ackQueue.empty()) << "前置:停在第一条,没有已定前缀";
-	MarkExiting(player_);
-	CompleteFakeSave(player_);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxPhase::kApplying, GmState(player)->phase);
+	ASSERT_TRUE(GmState(player)->ackQueue.empty()) << "前置:停在第一条,没有已定前缀";
+	MarkExiting(player);
+	CompleteFakeSave(player);
 
 	ScopedLogCapture capture;
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(0, g_ackAttempts) << "没有结局可确认";
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=delivered_undecided", "source=leaving",
 									 "items=2", "first_seq=10", "last_seq=11"}));
@@ -1945,25 +1945,25 @@ TEST_F(PlayerInboxSystemTest, LeavingDuringADeferOfTheFirstItemLeavesATraceAndSe
 TEST_F(PlayerInboxSystemTest, ReplyDroppedByTheExitGateLeavesADeliveredUndecidedTrace)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	MarkExiting(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	MarkExiting(player);
 
 	ScopedLogCapture capture;
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnblockType, 1101, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player_)->phase);
-	EXPECT_EQ(PlayerInboxDeferReason::kExiting, GmState(player_)->deferReason);
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty());
-	EXPECT_FALSE(GoldBlocked(player_)) << "退出期不执行";
-	EXPECT_EQ(nullptr, GmCursor(player_)) << "不记账";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxPhase::kIdle, GmState(player)->phase);
+	EXPECT_EQ(PlayerInboxDeferReason::kExiting, GmState(player)->deferReason);
+	EXPECT_TRUE(GmState(player)->pendingItems.empty());
+	EXPECT_FALSE(GoldBlocked(player)) << "退出期不执行";
+	EXPECT_EQ(nullptr, GmCursor(player)) << "不记账";
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=delivered_undecided", "source=apply_gate_exiting",
 									 "items=2", "first_seq=10", "last_seq=11"}));
 
 	// 退出存盘落地后收尾:没有结局可确认,什么都不发。
-	CompleteFakeSave(player_);
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	CompleteFakeSave(player);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	EXPECT_EQ(0, g_ackAttempts);
 }
 
@@ -1972,18 +1972,18 @@ TEST_F(PlayerInboxSystemTest, ReplyDroppedByTheExitGateLeavesADeliveredUndecided
 TEST_F(PlayerInboxSystemTest, ExitGateAcknowledgesTheReplayablePrefixAndDropsOnlyNewEntries)
 {
 	ASSERT_NO_FATAL_FAILURE(SeedLedger(10, {MakeDecision(10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 1001, kBlockType)}));
-	CompleteFakeSave(player_); // 这份账本就是从存档加载的:已落盘
+	CompleteFakeSave(player); // 这份账本就是从存档加载的:已落盘
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	MarkExiting(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	MarkExiting(player);
 
 	ScopedLogCapture capture;
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnblockType, 1101, GainPayload(kGold))}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_TRUE(GmState(player_)->pendingItems.empty()) << "需要执行的 11 照旧丢掉,下次落地重拉";
-	EXPECT_EQ(10u, DecidedThrough(player_)) << "退出期不执行、不记账";
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_TRUE(GmState(player)->pendingItems.empty()) << "需要执行的 11 照旧丢掉,下次落地重拉";
+	EXPECT_EQ(10u, DecidedThrough(player)) << "退出期不执行、不记账";
 	EXPECT_EQ(0, g_persistCalls) << "没有新记账就不请求存盘";
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=decided_prefix_queued", "source=apply_gate_exiting",
 									 "items=1", "first_seq=10", "last_seq=10"}));
@@ -2001,17 +2001,17 @@ TEST_F(PlayerInboxSystemTest, ExitGateAcknowledgesTheReplayablePrefixAndDropsOnl
 TEST_F(PlayerInboxSystemTest, FrozenExitingPlayerStillLeavesADeliveredUndecidedTrace)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
-	MarkExiting(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+	MarkExiting(player);
 
 	ScopedLogCapture capture;
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	EXPECT_EQ(PlayerInboxDeferReason::kFrozen, GmState(player_)->deferReason) << "闸按判定顺序先报冻结";
-	EXPECT_FALSE(GoldBlocked(player_));
+	ASSERT_NE(nullptr, GmState(player));
+	EXPECT_EQ(PlayerInboxDeferReason::kFrozen, GmState(player)->deferReason) << "闸按判定顺序先报冻结";
+	EXPECT_FALSE(GoldBlocked(player));
 	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=delivered_undecided", "source=apply_gate_exiting",
 									 "items=1", "first_seq=10", "last_seq=10"}));
 }
@@ -2020,18 +2020,18 @@ TEST_F(PlayerInboxSystemTest, FrozenExitingPlayerStillLeavesADeliveredUndecidedT
 TEST_F(PlayerInboxSystemTest, LeavingWithAFetchInFlightLeavesATraceAndTheLateReplyIsDropped)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
-	MarkExiting(player_);
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	MarkExiting(player);
 
 	{
 		ScopedLogCapture capture;
-		PlayerInboxSystem::OnPlayerLeaving(player_);
+		PlayerInboxSystem::OnPlayerLeaving(player);
 		EXPECT_EQ(0, g_ackAttempts);
 		EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_leave_ack", "result=fetch_inflight",
 										 "corr=" + std::to_string(fetch.correlation_id()) + ";"}));
 	}
 
-	DestroyPlayer(player_);
+	DestroyPlayer(player);
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
@@ -2042,16 +2042,16 @@ TEST_F(PlayerInboxSystemTest, LeavingWithAFetchInFlightLeavesATraceAndTheLateRep
 TEST_F(PlayerInboxSystemTest, LeavingStillAcksTheDecidedPrefixOfAHaltedDomain)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001), MakeItem(11, kUnknownType, 1101, "opaque")}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_TRUE(GmState(player_)->halted);
-	CompleteFakeSave(player_);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_TRUE(GmState(player)->halted);
+	CompleteFakeSave(player);
 
 	// 停用只停拉取与应用;已落盘的结局照样补确认。
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	ASSERT_EQ(1u, g_sentAcks.size());
 	ASSERT_EQ(1, g_sentAcks.back().decisions_size());
 	ExpectDecision(g_sentAcks.back().decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 1001);
@@ -2061,20 +2061,20 @@ TEST_F(PlayerInboxSystemTest, LeavingStillAcksTheDecidedPrefixOfAHaltedDomain)
 TEST_F(PlayerInboxSystemTest, LateAckFromAPreviousEntityIsDiscardedAfterRelanding)
 {
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	CompleteFakeSave(player_);
-	PlayerInboxSystem::OnPlayerLeaving(player_);
+	CompleteFakeSave(player);
+	PlayerInboxSystem::OnPlayerLeaving(player);
 	ASSERT_EQ(1u, g_sentAcks.size());
 	const auto leaveAck = g_sentAcks.back();
 
 	// 新实体从存档加载:账本就是上一个实体最后一次落盘的那份;新登录铸了新 epoch。
-	const PlayerInboxLedgerComp persistedLedger = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_)
+	const PlayerInboxLedgerComp persistedLedger = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player)
 													  .snapshot->player_database_data()
 													  .inbox_ledger();
-	DestroyPlayer(player_);
+	DestroyPlayer(player);
 	const entt::entity relanded = CreateLoadedPlayer(kEpoch + 1, persistedLedger);
 	player_inbox::FetchPlayerInboxRequest relandFetch;
 	ASSERT_NO_FATAL_FAILURE(LandAndFetch(relanded, relandFetch));
@@ -2118,18 +2118,18 @@ TEST_F(PlayerInboxSystemTest, LateAckFromAPreviousEntityIsDiscardedAfterRelandin
 // → FinishExitAfterPersist,实体带着生产里此刻一定在的退出标记;把那一行挪到销毁之后或合并时弄丢,这个用例就会红。
 TEST_F(PlayerInboxSystemTest, ExitFinishAcksBeforeDestroy)
 {
-	BindSession(player_);
+	BindSession(player);
 	player_inbox::FetchPlayerInboxRequest fetch;
-	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
 	PlayerInboxSystem::OnFetchReply(
 		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
 		FetchReplyFor(fetch, {BlockGold(10, 1001)}));
-	ASSERT_NE(nullptr, GmState(player_));
-	ASSERT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player_)->phase);
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_EQ(PlayerInboxPhase::kAwaitDurable, GmState(player)->phase);
 
 	// GM 处置之后紧接着踢线:HandleExitGameNode 挂上退出标记,随后退出存盘落地,快照带上了 seq 10 的结局。
-	MarkExiting(player_);
-	CompleteFakeSave(player_);
+	MarkExiting(player);
+	CompleteFakeSave(player);
 	ASSERT_EQ(0, g_ackAttempts) << "前置:常规路径还没来得及确认(没有 tick)";
 
 	PlayerInboxSystem::SetTransportForTest(&FakeSendFetch, &ProbingSendAck);
@@ -2145,7 +2145,7 @@ TEST_F(PlayerInboxSystemTest, ExitFinishAcksBeforeDestroy)
 	EXPECT_TRUE(g_ackMoment.exitMarkersPresent) << "补发发生在退出收尾里,不是别的路径";
 	EXPECT_EQ(kEpoch, g_ackMoment.epochOnEntity) << "PlayerOwnerEpochComp 此刻还在";
 
-	EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_)) << "收尾之后实体已销毁";
+	EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "收尾之后实体已销毁";
 	EXPECT_EQ(entt::entity{entt::null}, tlsEcs.GetPlayer(kTestPlayerId));
 }
 
@@ -2153,10 +2153,10 @@ TEST_F(PlayerInboxSystemTest, ExitFinishAcksBeforeDestroy)
 TEST_F(PlayerInboxSystemTest, ExitFinishThenRelandingAcksWithoutPayingAgain)
 {
     g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
-    BindSession(player_);
-    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    BindSession(player);
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
     attributes.set_health(100); attributes.set_mana(50);
-    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player);
     derived.set_max_health(100); derived.set_max_mana(50);
     BattleSettlementData settlement;
     settlement.set_battle_id(792); settlement.set_player_id(kTestPlayerId);
@@ -2165,36 +2165,36 @@ TEST_F(PlayerInboxSystemTest, ExitFinishThenRelandingAcksWithoutPayingAgain)
     const auto item = MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 272,
         settlement.SerializeAsString());
     player_inbox::FetchPlayerInboxRequest fetch;
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
-    ASSERT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
-    MarkExiting(player_);
-    CompleteFakeSave(player_);
-    const PlayerAllData persisted = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_).snapshot;
+    ASSERT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    MarkExiting(player);
+    CompleteFakeSave(player);
+    const PlayerAllData persisted = *tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player).snapshot;
     PlayerStoreDirectTestAccess::FinishExit(kTestPlayerId);
-    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player_));
+    EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
     ASSERT_EQ(1u, g_sentAcks.size()) << "快照已提交:销毁之前补发一次";
 
-    player_ = CreateLoadedPlayer(kEpoch + 1, persisted.player_database_data().inbox_ledger());
-    tlsEcs.actorRegistry.get<CurrencyComp>(player_).CopyFrom(persisted.player_database_data().currency());
-    auto& reloaded = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    player = CreateLoadedPlayer(kEpoch + 1, persisted.player_database_data().inbox_ledger());
+    tlsEcs.actorRegistry.get<CurrencyComp>(player).CopyFrom(persisted.player_database_data().currency());
+    auto& reloaded = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
     reloaded.set_health(80); reloaded.set_mana(30);
-    auto& reloadedDerived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    auto& reloadedDerived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player);
     reloadedDerived.set_max_health(100); reloadedDerived.set_max_mana(50);
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "永久水位回放不得重发金币";
-    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health());
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "永久水位回放不得重发金币";
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
     PlayerInboxSystem::Tick();
     EXPECT_EQ(1u, g_sentAcks.size()) << "原E的提交不能证明新E提交";
-    CompleteFakeSave(player_);
+    CompleteFakeSave(player);
     PlayerInboxSystem::Tick();
     ASSERT_EQ(2u, g_sentAcks.size());
     const auto ack = g_sentAcks.back();
     EXPECT_EQ(kEpoch + 1, ack.owner_epoch());
     ASSERT_EQ(1, ack.decisions_size());
     ExpectDecision(ack.decisions(0), 10, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, 272);
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
     PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, ack.correlation_id(), AckReplyFor(ack));
 }
 
@@ -2202,11 +2202,11 @@ TEST_F(PlayerInboxSystemTest, ExitFinishThenRelandingAcksWithoutPayingAgain)
 TEST_F(PlayerInboxSystemTest, BattleDomainPaysOnceAcrossRedeliveryAndWaitsForCommit)
 {
     g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
-    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
     attributes.set_health(100); attributes.set_mana(50);
-    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player);
     derived.set_max_health(100); derived.set_max_mana(50);
-    tlsEcs.actorRegistry.emplace<InBattleComp>(player_).set_battle_id(791);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(791);
     BattleSettlementData settlement;
     settlement.set_battle_id(791); settlement.set_player_id(kTestPlayerId);
     settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN); settlement.set_health(80); settlement.set_mana(30);
@@ -2214,31 +2214,31 @@ TEST_F(PlayerInboxSystemTest, BattleDomainPaysOnceAcrossRedeliveryAndWaitsForCom
     const auto item = MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271,
         settlement.SerializeAsString());
     player_inbox::FetchPlayerInboxRequest fetch;
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
-    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health());
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_)) << "提交前不能先解冻";
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(80u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player)) << "提交前不能先解冻";
     PlayerInboxSystem::Tick();
     EXPECT_TRUE(g_sentAcks.empty());
-    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_));
-    CompleteFakeSave(player_);
+    EXPECT_TRUE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    CompleteFakeSave(player);
     PlayerInboxSystem::Tick();
     ASSERT_EQ(1u, g_sentAcks.size());
-    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player_));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
     const auto ack = g_sentAcks.back();
     ASSERT_EQ(1, ack.decisions_size());
     EXPECT_EQ(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, ack.decisions(0).outcome());
     PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, ack.correlation_id(), AckReplyFor(ack));
-    tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).set_health(90);
+    tlsEcs.actorRegistry.get<BaseAttributesComp>(player).set_health(90);
     Advance(rules::kMinCheckGapMs + 1);
     PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, g_transportDomain);
     PlayerInboxSystem::Tick();
     ASSERT_EQ(2u, g_sentFetches.size());
     fetch = g_sentFetches.back();
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(), FetchReplyFor(fetch, {item}));
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "永久域游标拦重复发奖";
-    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health()) << "重复载荷不回写旧HP";
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "永久域游标拦重复发奖";
+    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health()) << "重复载荷不回写旧HP";
     ASSERT_EQ(2u, g_sentAcks.size());
 }
 
@@ -2249,9 +2249,9 @@ TEST_F(PlayerInboxSystemTest, BattleDomainPaysOnceAcrossRedeliveryAndWaitsForCom
 TEST_F(PlayerInboxSystemTest, BattleDomainSameBattleUnderNewSeqRecordsAppliedWithoutPayingAgain)
 {
     g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
-    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player_);
+    auto& attributes = tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
     attributes.set_health(100); attributes.set_mana(50);
-    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player_);
+    auto& derived = tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player);
     derived.set_max_health(100); derived.set_max_mana(50);
     constexpr uint64_t kBattleId = 793; // Match 入箱时 request_id 即 battle_id
     BattleSettlementData settlement;
@@ -2260,16 +2260,16 @@ TEST_F(PlayerInboxSystemTest, BattleDomainSameBattleUnderNewSeqRecordsAppliedWit
     settlement.set_gold_gain(5);
     const auto payload = settlement.SerializeAsString();
     player_inbox::FetchPlayerInboxRequest fetch;
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(),
         FetchReplyFor(fetch, {MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, kBattleId, payload)}));
-    ASSERT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    ASSERT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
     player_inbox::AckPlayerInboxRequest firstAck;
-    ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, firstAck));
+    ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, firstAck));
     PlayerInboxSystem::OnAckReply(kTestPlayerId, g_transportDomain, firstAck.correlation_id(), AckReplyFor(firstAck));
 
     // 收件箱库回档,同一局以新 seq 11 重投。HP 在两次之间被别的玩法改过:重放旧终值会把它写回 80。
-    tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).set_health(90);
+    tlsEcs.actorRegistry.get<BaseAttributesComp>(player).set_health(90);
     const int persistBefore = g_persistCalls;
     Advance(rules::kMinCheckGapMs + 1);
     PlayerInboxSystem::OnNotifyEvent(kTestPlayerId, g_transportDomain);
@@ -2283,9 +2283,9 @@ TEST_F(PlayerInboxSystemTest, BattleDomainSameBattleUnderNewSeqRecordsAppliedWit
         EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_battle_duplicate_request", "seq=11",
                                           "request_id=" + std::to_string(kBattleId)}));
     }
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "同一局换新 seq 不得再发奖";
-    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player_).health()) << "不调执行器:不重放旧终值";
-    const auto* cursor = rules::FindCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_), g_transportDomain);
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "同一局换新 seq 不得再发奖";
+    EXPECT_EQ(90u, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health()) << "不调执行器:不重放旧终值";
+    const auto* cursor = rules::FindCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player), g_transportDomain);
     ASSERT_NE(nullptr, cursor);
     EXPECT_EQ(11u, cursor->decided_through_seq()) << "新 seq 照常记账,水位推进";
     ASSERT_EQ(2, cursor->recent_size());
@@ -2295,22 +2295,22 @@ TEST_F(PlayerInboxSystemTest, BattleDomainSameBattleUnderNewSeqRecordsAppliedWit
     EXPECT_EQ(persistBefore + 1, g_persistCalls) << "新记账照常请求存盘";
 
     player_inbox::AckPlayerInboxRequest secondAck;
-    ASSERT_NO_FATAL_FAILURE(SaveAndAck(player_, secondAck));
+    ASSERT_NO_FATAL_FAILURE(SaveAndAck(player, secondAck));
     ASSERT_EQ(1, secondAck.decisions_size());
     ExpectDecision(secondAck.decisions(0), 11, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, 0, kBattleId);
-    EXPECT_EQ(5u, CurrencySystem::GetBalance(player_, kCurrencyGold));
+    EXPECT_EQ(5u, CurrencySystem::GetBalance(player, kCurrencyGold));
 }
 
 TEST_F(PlayerInboxSystemTest, BattleDomainNeverTurnsVoidIntoTerminalSkipped)
 {
     g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
     player_inbox::FetchPlayerInboxRequest fetch;
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(),
         FetchReplyFor(fetch, {Voided(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271, kCancelled)}));
     EXPECT_TRUE(g_sentAcks.empty());
-    EXPECT_EQ(nullptr, rules::FindCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_), g_transportDomain));
-    const auto& domains = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player_).domains;
+    EXPECT_EQ(nullptr, rules::FindCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player), g_transportDomain));
+    const auto& domains = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player).domains;
     const auto state = std::find_if(domains.begin(), domains.end(), [](const auto& row) { return row.domain == g_transportDomain; });
     ASSERT_NE(domains.end(), state); EXPECT_TRUE(state->halted);
 }
@@ -2318,13 +2318,13 @@ TEST_F(PlayerInboxSystemTest, BattleDomainNeverTurnsVoidIntoTerminalSkipped)
 TEST_F(PlayerInboxSystemTest, BattleDomainBelowWatermarkWithoutReceiptNeverClaimsAppliedOrUnknown)
 {
     g_transportDomain = player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT;
-    auto& cursor = rules::MutableCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_), g_transportDomain);
+    auto& cursor = rules::MutableCursor(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player), g_transportDomain);
     cursor.set_decided_through_seq(100);
-    const auto before = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_).SerializeAsString();
+    const auto before = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player).SerializeAsString();
     player_inbox::FetchPlayerInboxRequest fetch;
-    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player_, fetch));
+    ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
     PlayerInboxSystem::OnFetchReply(kTestPlayerId, g_transportDomain, fetch.correlation_id(),
         FetchReplyFor(fetch, {MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271, "unread")}));
     EXPECT_TRUE(g_sentAcks.empty());
-    EXPECT_EQ(before, tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_).SerializeAsString());
+    EXPECT_EQ(before, tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player).SerializeAsString());
 }

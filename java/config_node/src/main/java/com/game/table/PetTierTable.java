@@ -179,6 +179,61 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int ASCEND_COST_ITEM_ID_FIELD_NUMBER = 5;
+  private int ascendCostItemId_ = 0;
+  /**
+   * <code>uint32 ascend_cost_item_id = 5;</code>
+   * @return The ascendCostItemId.
+   */
+  @java.lang.Override
+  public int getAscendCostItemId() {
+    return ascendCostItemId_;
+  }
+
+  public static final int ASCEND_COST_ITEM_COUNT_FIELD_NUMBER = 6;
+  private int ascendCostItemCount_ = 0;
+  /**
+   * <code>uint32 ascend_cost_item_count = 6;</code>
+   * @return The ascendCostItemCount.
+   */
+  @java.lang.Override
+  public int getAscendCostItemCount() {
+    return ascendCostItemCount_;
+  }
+
+  public static final int ASCEND_COST_GOLD_FIELD_NUMBER = 7;
+  private long ascendCostGold_ = 0L;
+  /**
+   * <code>uint64 ascend_cost_gold = 7;</code>
+   * @return The ascendCostGold.
+   */
+  @java.lang.Override
+  public long getAscendCostGold() {
+    return ascendCostGold_;
+  }
+
+  public static final int ASCEND_MIN_PET_LEVEL_FIELD_NUMBER = 8;
+  private int ascendMinPetLevel_ = 0;
+  /**
+   * <code>uint32 ascend_min_pet_level = 8;</code>
+   * @return The ascendMinPetLevel.
+   */
+  @java.lang.Override
+  public int getAscendMinPetLevel() {
+    return ascendMinPetLevel_;
+  }
+
+  public static final int BONUS_ENTRY_POINTS_FIELD_NUMBER = 9;
+  private int bonusEntryPoints_ = 0;
+  /**
+   * <code>uint32 bonus_entry_points = 9;</code>
+   * @return The bonusEntryPoints.
+   */
+  @java.lang.Override
+  public int getBonusEntryPoints() {
+    return bonusEntryPoints_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -205,6 +260,21 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 4, desc_);
     }
+    if (ascendCostItemId_ != 0) {
+      output.writeUInt32(5, ascendCostItemId_);
+    }
+    if (ascendCostItemCount_ != 0) {
+      output.writeUInt32(6, ascendCostItemCount_);
+    }
+    if (ascendCostGold_ != 0L) {
+      output.writeUInt64(7, ascendCostGold_);
+    }
+    if (ascendMinPetLevel_ != 0) {
+      output.writeUInt32(8, ascendMinPetLevel_);
+    }
+    if (bonusEntryPoints_ != 0) {
+      output.writeUInt32(9, bonusEntryPoints_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -221,6 +291,26 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(4, desc_);
+    }
+    if (ascendCostItemId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(5, ascendCostItemId_);
+    }
+    if (ascendCostItemCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(6, ascendCostItemCount_);
+    }
+    if (ascendCostGold_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(7, ascendCostGold_);
+    }
+    if (ascendMinPetLevel_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, ascendMinPetLevel_);
+    }
+    if (bonusEntryPoints_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, bonusEntryPoints_);
     }
     return size;
   }
@@ -254,6 +344,16 @@ private static final long serialVersionUID = 0L;
         .equals(other.getArtKey())) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getAscendCostItemId()
+        != other.getAscendCostItemId()) return false;
+    if (getAscendCostItemCount()
+        != other.getAscendCostItemCount()) return false;
+    if (getAscendCostGold()
+        != other.getAscendCostGold()) return false;
+    if (getAscendMinPetLevel()
+        != other.getAscendMinPetLevel()) return false;
+    if (getBonusEntryPoints()
+        != other.getBonusEntryPoints()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -273,6 +373,17 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getArtKey().hashCode();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + ASCEND_COST_ITEM_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getAscendCostItemId();
+    hash = (37 * hash) + ASCEND_COST_ITEM_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getAscendCostItemCount();
+    hash = (37 * hash) + ASCEND_COST_GOLD_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getAscendCostGold());
+    hash = (37 * hash) + ASCEND_MIN_PET_LEVEL_FIELD_NUMBER;
+    hash = (53 * hash) + getAscendMinPetLevel();
+    hash = (37 * hash) + BONUS_ENTRY_POINTS_FIELD_NUMBER;
+    hash = (53 * hash) + getBonusEntryPoints();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -408,6 +519,11 @@ private static final long serialVersionUID = 0L;
       name_ = "";
       artKey_ = "";
       desc_ = "";
+      ascendCostItemId_ = 0;
+      ascendCostItemCount_ = 0;
+      ascendCostGold_ = 0L;
+      ascendMinPetLevel_ = 0;
+      bonusEntryPoints_ = 0;
       return this;
     }
 
@@ -453,6 +569,21 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000008) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.ascendCostItemId_ = ascendCostItemId_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.ascendCostItemCount_ = ascendCostItemCount_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.ascendCostGold_ = ascendCostGold_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.ascendMinPetLevel_ = ascendMinPetLevel_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.bonusEntryPoints_ = bonusEntryPoints_;
+      }
     }
 
     @java.lang.Override
@@ -484,6 +615,21 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00000008;
         onChanged();
+      }
+      if (other.getAscendCostItemId() != 0) {
+        setAscendCostItemId(other.getAscendCostItemId());
+      }
+      if (other.getAscendCostItemCount() != 0) {
+        setAscendCostItemCount(other.getAscendCostItemCount());
+      }
+      if (other.getAscendCostGold() != 0L) {
+        setAscendCostGold(other.getAscendCostGold());
+      }
+      if (other.getAscendMinPetLevel() != 0) {
+        setAscendMinPetLevel(other.getAscendMinPetLevel());
+      }
+      if (other.getBonusEntryPoints() != 0) {
+        setBonusEntryPoints(other.getBonusEntryPoints());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -531,6 +677,31 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 34
+            case 40: {
+              ascendCostItemId_ = input.readUInt32();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 40
+            case 48: {
+              ascendCostItemCount_ = input.readUInt32();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
+            case 56: {
+              ascendCostGold_ = input.readUInt64();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              ascendMinPetLevel_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              bonusEntryPoints_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -792,6 +963,166 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+
+    private int ascendCostItemId_ ;
+    /**
+     * <code>uint32 ascend_cost_item_id = 5;</code>
+     * @return The ascendCostItemId.
+     */
+    @java.lang.Override
+    public int getAscendCostItemId() {
+      return ascendCostItemId_;
+    }
+    /**
+     * <code>uint32 ascend_cost_item_id = 5;</code>
+     * @param value The ascendCostItemId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAscendCostItemId(int value) {
+
+      ascendCostItemId_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 ascend_cost_item_id = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAscendCostItemId() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      ascendCostItemId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int ascendCostItemCount_ ;
+    /**
+     * <code>uint32 ascend_cost_item_count = 6;</code>
+     * @return The ascendCostItemCount.
+     */
+    @java.lang.Override
+    public int getAscendCostItemCount() {
+      return ascendCostItemCount_;
+    }
+    /**
+     * <code>uint32 ascend_cost_item_count = 6;</code>
+     * @param value The ascendCostItemCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAscendCostItemCount(int value) {
+
+      ascendCostItemCount_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 ascend_cost_item_count = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAscendCostItemCount() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      ascendCostItemCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long ascendCostGold_ ;
+    /**
+     * <code>uint64 ascend_cost_gold = 7;</code>
+     * @return The ascendCostGold.
+     */
+    @java.lang.Override
+    public long getAscendCostGold() {
+      return ascendCostGold_;
+    }
+    /**
+     * <code>uint64 ascend_cost_gold = 7;</code>
+     * @param value The ascendCostGold to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAscendCostGold(long value) {
+
+      ascendCostGold_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 ascend_cost_gold = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAscendCostGold() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      ascendCostGold_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private int ascendMinPetLevel_ ;
+    /**
+     * <code>uint32 ascend_min_pet_level = 8;</code>
+     * @return The ascendMinPetLevel.
+     */
+    @java.lang.Override
+    public int getAscendMinPetLevel() {
+      return ascendMinPetLevel_;
+    }
+    /**
+     * <code>uint32 ascend_min_pet_level = 8;</code>
+     * @param value The ascendMinPetLevel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAscendMinPetLevel(int value) {
+
+      ascendMinPetLevel_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 ascend_min_pet_level = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAscendMinPetLevel() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      ascendMinPetLevel_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int bonusEntryPoints_ ;
+    /**
+     * <code>uint32 bonus_entry_points = 9;</code>
+     * @return The bonusEntryPoints.
+     */
+    @java.lang.Override
+    public int getBonusEntryPoints() {
+      return bonusEntryPoints_;
+    }
+    /**
+     * <code>uint32 bonus_entry_points = 9;</code>
+     * @param value The bonusEntryPoints to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBonusEntryPoints(int value) {
+
+      bonusEntryPoints_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 bonus_entry_points = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBonusEntryPoints() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      bonusEntryPoints_ = 0;
       onChanged();
       return this;
     }

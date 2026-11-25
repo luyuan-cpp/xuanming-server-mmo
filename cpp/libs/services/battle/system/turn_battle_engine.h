@@ -119,6 +119,13 @@ public:
     uint32_t SubmitSurrenderVote(uint64_t playerId, bool agree, BattleSurrenderVoteState* outVoteState = nullptr);
     // 仅向同队参战者回填本队投降投票或冷却态（对手与观众视角由节点清空，绝不泄密）。
     void FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
+    // 论剑 V3 战前 15 秒明牌变阵（换赛季印 / 换首发宠 / 锁定出战）。
+    bool IsInPrepPhase() const { return prepActive; }
+    bool AllPrepPlayersReady() const;
+    uint32_t UpdateBattlePrep(uint64_t playerId, uint32_t selectedSealId, uint64_t selectedPetId,
+                              bool ready, BattlePrepState* outPrepState = nullptr);
+    bool FinalizePrepPhase();
+    void FillPrepStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
     // 查询指定参战者的阵营（0/1），不存在返回 std::nullopt。
     std::optional<uint32_t> TeamIndexOfPlayer(uint64_t playerId) const;
     void MarkPlayerEntered(uint64_t playerId);
@@ -242,6 +249,17 @@ private:
     bool ExecuteConfiguredControl(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     std::optional<BattleAction> SelectAutoConfiguredSkill(const BattleActorState& actor) const;
     void RemoveConfiguredBuff(BattleActorState& actor, uint64_t buffId, TurnResultS2C& result);
+    uint64_t EffectiveMagicAttack(const BattleActorState& actor) const;
+    double EffectiveMitigationScore(const BattleActorState& actor, bool isMagic) const;
+    bool IsPhysicalForbidden(const BattleActorState& actor) const;
+    bool IsMagicForbidden(const BattleActorState& actor) const;
+    bool TryConsumeControlImmunity(BattleActorState& caster, BattleActorState& target,
+                                   const BuffTable& row, TurnResultS2C& result);
+    void IncrementHitVulnerability(BattleActorState& target);
+    double HitVulnerabilityBonus(const BattleActorState& target) const;
+    bool ExecutePreparedCastIfReady(BattleActorState& actor, TurnResultS2C& result);
+    void SyncChargingSkillId(BattleActorState& actor) const;
+    void ConsumeOneShotAttackModifiers(BattleActorState& source, uint32_t damageType, TurnResultS2C& result);
 
     // 装备静态来源来自 scene，次数只由本局状态拥有；按 item_id 排序使双同名预算分配稳定。
     bool InitializeEquipment(BattleActorState& actor, const EquipmentEffects& effects);
@@ -661,6 +679,25 @@ private:
     std::map<uint64_t, uint32_t> consecutiveIdleRoundsByPlayer;
     void ExpireSurrenderVotesForRoundAdvance();
 
+    // 论剑 V3 战前 15 秒明牌变阵（确定性纯状态，无时钟依赖；定时器由 BattleRoomManager 持有）
+    struct PrepPlayerOptions {
+        uint32_t teamIndex = 0;
+        uint32_t activeSeasonId = 0;
+        bool aiControlled = false;
+        uint32_t selectedSealId = 0;
+        uint64_t selectedPetId = 0;
+        bool ready = false;
+        std::vector<SeasonSealEffect> availableSeals;
+        std::vector<BattlePetSnapshot> availablePets;
+    };
+    bool prepActive = false;
+    uint64_t nextPetActorIndex = 0;
+    std::map<uint64_t, PrepPlayerOptions> prepOptionsByPlayer;
+    bool InitTacticalPrep(const CreateBattleRequest& request);
+    bool BuildPetActor(const BattlePlayerSnapshot& ownerSnapshot, const BattlePetSnapshot& pet,
+                       uint64_t actorId, uint32_t formationSlot, BattleActorState& outActor) const;
+    void PopulatePrepStateForViewer(BattlePrepState& out, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
+
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始
     uint32_t maxRounds = kDefaultMaxRounds;
@@ -670,6 +707,7 @@ private:
 
     // ---- 表现层附加数据(不参与判定) ----
     std::vector<uint64_t> lastActionOrder;  // 最近一回合出手序(D3)
+    std::map<uint64_t, uint64_t> roundStartSpeeds;  // 本回合排速冻结值（供低速定向策略读取，不随回合内加减速漂移）
     uint32_t currentGroupId = 0;            // 当前事件组 id,每回合结算开始归 0(D2)
     uint32_t currentHitIndex = 0;           // 当前事件组内的段序/目标序(D2)
 };

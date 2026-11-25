@@ -27,52 +27,52 @@ public:
 
     // ── Query ────────────────────────────────────────────────────────────
 
-    [[nodiscard]] std::size_t MissionSize() const { return missionList_.missions().size(); }
-    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions_.count(); }
-    [[nodiscard]] std::size_t TypeSetSize() const { return typeFilter_.size(); }
+    [[nodiscard]] std::size_t MissionSize() const { return missionList.missions().size(); }
+    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions.count(); }
+    [[nodiscard]] std::size_t TypeSetSize() const { return typeFilter.size(); }
     [[nodiscard]] std::size_t CanGetRewardSize() const;
-    MissionsBits& GetCompleteMissions() { return completedMissions_; }
-    MissionsBits& GetClaimableRewards() { return claimableRewards_; }
+    MissionsBits& GetCompleteMissions() { return completedMissions; }
+    MissionsBits& GetClaimableRewards() { return claimableRewards; }
 
     [[nodiscard]] bool IsClaimable(const uint32_t missionId) const
     {
-        return TestBit(MissionBitMap, claimableRewards_, missionId) || unmappedClaimableIds_.contains(missionId);
+        return TestBit(MissionBitMap, claimableRewards, missionId) || unmappedClaimableIds.contains(missionId);
     }
 
     [[nodiscard]] bool IsAccepted(uint32_t missionId) const
     {
-        return missionList_.missions().count(missionId) > 0;
+        return missionList.missions().count(missionId) > 0;
     }
 
     // 每个任务都有位序(任务表 id 列带位序标记,删掉的任务也保留原位),没有位序的 ID 不是任何版本的任务。
-    [[nodiscard]] bool IsComplete(uint32_t missionId) const { return TestBit(MissionBitMap, completedMissions_, missionId); }
+    [[nodiscard]] bool IsComplete(uint32_t missionId) const { return TestBit(MissionBitMap, completedMissions, missionId); }
 
-    [[nodiscard]] bool IsMissionTypeNotRepeated() const { return missionTypeNotRepeated_; }
+    [[nodiscard]] bool IsMissionTypeNotRepeated() const { return missionTypeNotRepeated; }
 
     [[nodiscard]] uint32_t ValidateNotAccepted(uint32_t missionId) const;
     [[nodiscard]] uint32_t ValidateNotCompleted(uint32_t missionId) const;
 
     // ── Accessors ────────────────────────────────────────────────────────
 
-    [[nodiscard]] const MissionListComp& GetMissionList() const { return missionList_; }
-    [[nodiscard]] MissionListComp& GetMutableMissionList() { return missionList_; }
+    [[nodiscard]] const MissionListComp& GetMissionList() const { return missionList; }
+    [[nodiscard]] MissionListComp& GetMutableMissionList() { return missionList; }
 
-    [[nodiscard]] const EventMissionClassifyMap& GetEventMissionsClassify() const { return eventMissionsClassify_; }
-    [[nodiscard]] EventMissionClassifyMap& GetMutableEventMissionsClassify() { return eventMissionsClassify_; }
+    [[nodiscard]] const EventMissionClassifyMap& GetEventMissionsClassify() const { return eventMissionsClassify; }
+    [[nodiscard]] EventMissionClassifyMap& GetMutableEventMissionsClassify() { return eventMissionsClassify; }
 
-    [[nodiscard]] const UInt32PairSet& GetTypeFilter() const { return typeFilter_; }
-    [[nodiscard]] UInt32PairSet& GetMutableTypeFilter() { return typeFilter_; }
+    [[nodiscard]] const UInt32PairSet& GetTypeFilter() const { return typeFilter; }
+    [[nodiscard]] UInt32PairSet& GetMutableTypeFilter() { return typeFilter; }
 
-    [[nodiscard]] const MissionsBits& GetCompletedMissions() const { return completedMissions_; }
-    [[nodiscard]] MissionsBits& GetMutableCompletedMissions() { return completedMissions_; }
+    [[nodiscard]] const MissionsBits& GetCompletedMissions() const { return completedMissions; }
+    [[nodiscard]] MissionsBits& GetMutableCompletedMissions() { return completedMissions; }
 
     // ── Test-only ────────────────────────────────────────────────────────
 
-    [[nodiscard]] const auto& GetEventMissionsClassifyForUnitTest() const { return eventMissionsClassify_; }
+    [[nodiscard]] const auto& GetEventMissionsClassifyForUnitTest() const { return eventMissionsClassify; }
 
     // ── Mutators ─────────────────────────────────────────────────────────
 
-    void SetMissionTypeNotRepeated(bool value) { missionTypeNotRepeated_ = value; }
+    void SetMissionTypeNotRepeated(bool value) { missionTypeNotRepeated = value; }
     void AbandonMission(uint32_t missionId);
     void RestoreCompleted(uint32_t missionId);
     // 存档里的完成位图(MissionListComp.complete_missions):第 i 位就是位序 i,每字节低位在前,末尾全 0 的字节不写。
@@ -82,19 +82,19 @@ public:
     void RestoreClaimable(uint32_t missionId);
     void ClearClaimable(uint32_t missionId);
     void RebuildIndexes(const IMissionConfig& config);
-    [[nodiscard]] const UInt32Set& GetUnmappedClaimableIds() const { return unmappedClaimableIds_; }
+    [[nodiscard]] const UInt32Set& GetUnmappedClaimableIds() const { return unmappedClaimableIds; }
 
 private:
-    MissionListComp missionList_;
-    EventMissionClassifyMap eventMissionsClassify_;
-    UInt32PairSet typeFilter_;
-    bool missionTypeNotRepeated_{ true };
-    MissionsBits completedMissions_;
-    MissionsBits claimableRewards_;
+    MissionListComp missionList;
+    EventMissionClassifyMap eventMissionsClassify;
+    UInt32PairSet typeFilter;
+    bool missionTypeNotRepeated{ true };
+    MissionsBits completedMissions;
+    MissionsBits claimableRewards;
     // 待领取按任务 ID 存档:本二进制不认识的 ID(更新版本的表才有)原样保留,避免下一次保存静默丢弃。
-    UInt32Set unmappedClaimableIds_;
+    UInt32Set unmappedClaimableIds;
     // 存档位图里本二进制放不下的位(位序 >= kMissionBitmapCapacity,更新版本的表才有),存盘时原样带回。
-    std::string unknownCompletedBits_;
+    std::string unknownCompletedBits;
 };
 
 using PlayerMissionList = std::array<MissionsComp, MissionListComp::kPlayerMissionSize>;

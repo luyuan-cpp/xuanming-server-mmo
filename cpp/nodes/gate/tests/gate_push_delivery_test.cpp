@@ -163,7 +163,7 @@ namespace
 	class LoopbackConnection
 	{
 	public:
-		explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop_(loop) {}
+		explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop(loop) {}
 		~LoopbackConnection() { Close(); }
 		LoopbackConnection(const LoopbackConnection &) = delete;
 		LoopbackConnection &operator=(const LoopbackConnection &) = delete;
@@ -176,9 +176,9 @@ namespace
 			{
 				return false;
 			}
-			server_ = std::make_unique<muduo::net::TcpServer>(
-				&loop_, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
-			server_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+			server = std::make_unique<muduo::net::TcpServer>(
+				&loop, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
+			server->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 				const auto probe = weak.lock();
 				if (!probe)
 				{
@@ -194,10 +194,10 @@ namespace
 					probe->serverDown = true;
 				}
 			});
-			server_->start();
-			client_ = std::make_unique<muduo::net::TcpClient>(
-				&loop_, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
-			client_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+			server->start();
+			client = std::make_unique<muduo::net::TcpClient>(
+				&loop, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
+			client->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 				const auto probe = weak.lock();
 				if (!probe)
 				{
@@ -213,7 +213,7 @@ namespace
 				}
 			});
 			// 客户端侧按到达顺序收下全部字节,供用例比对服务端写出的帧。
-			client_->setMessageCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &,
+			client->setMessageCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &,
 																			  muduo::net::Buffer *buffer, muduo::Timestamp) {
 				const auto probe = weak.lock();
 				if (!probe)
@@ -223,13 +223,13 @@ namespace
 				}
 				probe->clientReceived.append(buffer->retrieveAllAsString());
 			});
-			client_->connect();
-			return DriveLoopUntil(loop_, [probe = probe_] { return probe->serverUp && probe->clientUp; });
+			client->connect();
+			return DriveLoopUntil(loop, [probe = this->probe] { return probe->serverUp && probe->clientUp; });
 		}
 
-		muduo::net::TcpConnectionPtr ServerSide() const { return probe_->serverSide.lock(); }
+		muduo::net::TcpConnectionPtr ServerSide() const { return probe->serverSide.lock(); }
 		// 客户端侧至今收到的全部字节。只在测试线程(即 loop_ 线程)读。
-		const std::string &ClientReceived() const { return probe_->clientReceived; }
+		const std::string &ClientReceived() const { return probe->clientReceived; }
 
 	private:
 		struct Probe
@@ -244,15 +244,15 @@ namespace
 
 		void Close()
 		{
-			if (!client_ && !server_)
+			if (!client && !server)
 			{
 				return;
 			}
-			if (client_)
+			if (client)
 			{
-				client_->disconnect();
+				client->disconnect();
 			}
-			const bool closed = DriveLoopUntil(loop_, [probe = probe_] {
+			const bool closed = DriveLoopUntil(loop, [probe = this->probe] {
 				return (!probe->serverUp || probe->serverDown) && (!probe->clientUp || probe->clientDown);
 			});
 			if (!closed)
@@ -260,20 +260,20 @@ namespace
 				// 活性上限内没关完:此时析构会让连接带着非 kDisconnected 状态析构(TcpConnection.cc:71),
 				// 或让连接的 close 回调打到已析构的 TcpServer / TcpClient。宁可泄漏这对测试端点并报失败。
 				ADD_FAILURE() << "loopback connection did not close within liveness bound";
-				(void)client_.release();
-				(void)server_.release();
+				(void)client.release();
+				(void)server.release();
 				return;
 			}
-			client_.reset();
-			server_.reset();
+			client.reset();
+			server.reset();
 			// 再转一圈:TcpClient 析构排队的 Connector 收尾等 functor 在本用例内跑完。
-			(void)DriveLoopUntil(loop_, [] { return true; });
+			(void)DriveLoopUntil(loop, [] { return true; });
 		}
 
-		muduo::net::EventLoop &loop_;
-		const std::shared_ptr<Probe> probe_ = std::make_shared<Probe>();
-		std::unique_ptr<muduo::net::TcpServer> server_;
-		std::unique_ptr<muduo::net::TcpClient> client_;
+		muduo::net::EventLoop &loop;
+		const std::shared_ptr<Probe> probe = std::make_shared<Probe>();
+		std::unique_ptr<muduo::net::TcpServer> server;
+		std::unique_ptr<muduo::net::TcpClient> client;
 	};
 
 	// 单播经 GetGateCodec() 发送。这里的回调不会被调用:用例只写不解码。进程内只留一份,不会留下悬空的全局指针。
@@ -288,31 +288,31 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
+			loop = std::make_unique<muduo::net::EventLoop>();
 			InitGateCodec(SharedCodec());
 			tlsSessionManager.sessions().clear();
-			baseline_[Index(Path::kRpc)] = gate_push::Counters(Path::kRpc);
-			baseline_[Index(Path::kKafka)] = gate_push::Counters(Path::kKafka);
+			baseline[Index(Path::kRpc)] = gate_push::Counters(Path::kRpc);
+			baseline[Index(Path::kKafka)] = gate_push::Counters(Path::kKafka);
 		}
 
 		void TearDown() override
 		{
 			tlsSessionManager.sessions().clear();
-			connections_.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-			loop_.reset();
+			connections.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+			loop.reset();
 		}
 
 		// 建一条回环连接并放进会话表。连不上时这里报失败,之后的 ExpectReceived 也会失败,不会误过。
 		LoopbackConnection &AddSession(const SessionId sessionId, const Guid playerId, const uint64_t sceneId = 0)
 		{
-			auto connection = std::make_unique<LoopbackConnection>(*loop_);
+			auto connection = std::make_unique<LoopbackConnection>(*loop);
 			EXPECT_TRUE(connection->Open("gate_push_" + std::to_string(sessionId)));
 			SessionInfo &session = tlsSessionManager.sessions()[sessionId];
 			session.playerId = playerId;
 			session.sceneId = sceneId;
 			session.conn = connection->ServerSide();
-			connections_.push_back(std::move(connection));
-			return *connections_.back();
+			connections.push_back(std::move(connection));
+			return *connections.back();
 		}
 
 		// 这条连接至今写出的字节必须恰好是 expected。每条连接只核对一次:核对本身会写一帧哨兵。
@@ -324,7 +324,7 @@ namespace
 			sentinel.set_message_id(kSentinelMessageId);
 			const std::string all = expected + Bytes(sentinel);
 			gate_push::EncodedFrame(sentinel).SendTo(serverSide);
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
+			ASSERT_TRUE(DriveLoopUntil(*loop, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
 			EXPECT_EQ(connection.ClientReceived(), all);
 		}
 
@@ -332,7 +332,7 @@ namespace
 		void ExpectCounted(const Path path, const DeliveryCounters &expected) const
 		{
 			const DeliveryCounters &now = gate_push::Counters(path);
-			const DeliveryCounters &base = baseline_[Index(path)];
+			const DeliveryCounters &base = baseline[Index(path)];
 			EXPECT_EQ(now.delivered - base.delivered, expected.delivered);
 			EXPECT_EQ(now.deliveredUnfenced - base.deliveredUnfenced, expected.deliveredUnfenced);
 			EXPECT_EQ(now.droppedFence - base.droppedFence, expected.droppedFence);
@@ -345,9 +345,9 @@ namespace
 	private:
 		static std::size_t Index(const Path path) { return static_cast<std::size_t>(path); }
 
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::vector<std::unique_ptr<LoopbackConnection>> connections_;
-		std::array<DeliveryCounters, static_cast<std::size_t>(Path::kCount)> baseline_{};
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::vector<std::unique_ptr<LoopbackConnection>> connections;
+		std::array<DeliveryCounters, static_cast<std::size_t>(Path::kCount)> baseline{};
 	};
 } // namespace
 

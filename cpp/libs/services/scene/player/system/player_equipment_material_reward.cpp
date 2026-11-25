@@ -2,35 +2,190 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <limits>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include <google/protobuf/message.h>
+#include "muduo/base/Logging.h"
+#include "muduo_grpc/channel.h"
+#include "core/security/service_call_auth.h"
 #include "core/type_define/player_guid_comp.h"
+#include "grpc_client/data_service/data_service_grpc_client.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "node/system/node/muduo_grpc_channel_slot.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "player/system/afk_pass.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/player_feature_snapshot.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/role_admission_system.h"
 #include "battle/system/player_battle.h"
+#include "proto/common/base/node.pb.h"
+#include "proto/data_service/data_service.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
+#include "thread_context/node_context_manager.h"
 
 namespace {
 using System = PlayerEquipmentMaterialRewardSystem;
 System::PersistFn persistFn = &PlayerLifecycleSystem::SavePlayerForAssetCommit;
 struct MaterialRewardPersistRequestComp { std::chrono::steady_clock::time_point requested{}; };
+constexpr const char* kDirectorySecretEnv = "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE";
 constexpr uint64_t kDayMs = 86400000;
 constexpr uint64_t kWeekMs = 7ULL * kDayMs;
 constexpr uint64_t kShiftMs = 10800000; // UTC+8 减 05:00，即 UTC 加三小时后的自然日。
 // 1970-01-04 21:00:00 UTC = 1970-01-05 05:00:00 UTC+8（首个完整周一 05:00 切点）。
 constexpr uint64_t kFirstMonday05Utc8Ms = 3ULL * kDayMs + 21ULL * 3600000ULL;
+
+struct AccountQuotaRuntime {
+    bool loaded{false};
+    bool rpcInFlight{false};
+    uint32_t accountUsed{0};
+    uint32_t inFlightDesired{0};
+    uint32_t retryAttempts{0};
+    uint64_t nextRetryAtMs{0};
+};
+
+thread_local std::unordered_map<Guid, AccountQuotaRuntime> tlsAccountQuotas;
+thread_local System::AccountQuotaSyncTransport tlsAccountQuotaTransport;
+
+uint64_t QuotaRetryDelayMs(uint32_t attempts) {
+    const uint32_t shift = attempts > 0 ? std::min<uint32_t>(attempts - 1, 4u) : 0u;
+    return std::min<uint64_t>(30000ULL, 2000ULL << shift);
+}
+
+entt::entity PickReadyDataServiceNode() {
+    auto& registry = tlsNodeContextManager.GetRegistry(common::base::DataServiceNodeService);
+    for (auto entity : registry.view<NodeInfo, MuduoGrpcChannelPtr>()) {
+        const auto& channel = registry.get<MuduoGrpcChannelPtr>(entity);
+        if (channel && channel->GetState(/*tryToConnect=*/true) == muduo_grpc::ConnectivityState::kReady) {
+            return entity;
+        }
+    }
+    return entt::null;
+}
+
+bool SendSyncAccountStage1TradableRpc(data_service::SyncAccountStage1TradableRequest& request, uint64_t nowMs,
+                                      System::AccountQuotaSyncDone done) {
+    if (tlsAccountQuotaTransport) {
+        return tlsAccountQuotaTransport(request, std::move(done));
+    }
+    const char* secret = std::getenv(kDirectorySecretEnv);
+    if (secret == nullptr || !service_call_auth::Sign(
+            data_service::kDataServiceSyncAccountStage1TradableGrpcPath,
+            request, *request.mutable_auth(), "scene", secret, nowMs)) {
+        LOG_ERROR << "[EquipmentMaterialReward] failed to sign SyncAccountStage1Tradable: missing or invalid "
+                  << kDirectorySecretEnv;
+        return false;
+    }
+    const entt::entity node = PickReadyDataServiceNode();
+    if (node == entt::null) {
+        LOG_WARN << "[EquipmentMaterialReward] no ready data_service node for SyncAccountStage1Tradable: player_id="
+                 << request.player_id();
+        return false;
+    }
+    data_service::SendDataServiceSyncAccountStage1Tradable(
+        tlsNodeContextManager.GetRegistry(common::base::DataServiceNodeService),
+        node, request,
+        [done = std::move(done)](const GrpcCallOutcome& outcome,
+                                 const data_service::SyncAccountStage1TradableResponse* reply) {
+            done(outcome.ok(), reply);
+        });
+    return true;
+}
+
+void RequestPersist(entt::entity player, bool force);
+void DispatchAccountQuotaSync(Guid playerId, uint32_t desiredCharTotal, uint64_t nowMs);
+
+void HandleAccountQuotaSyncReply(Guid playerId, uint32_t desiredCharTotal, bool callOk,
+                                 const data_service::SyncAccountStage1TradableResponse* reply, uint64_t nowMs) {
+    auto it = tlsAccountQuotas.find(playerId);
+    if (it == tlsAccountQuotas.end()) return;
+    auto& rt = it->second;
+    rt.rpcInFlight = false;
+    rt.inFlightDesired = 0;
+    if (!callOk || reply == nullptr) {
+        ++rt.retryAttempts;
+        rt.nextRetryAtMs = nowMs + QuotaRetryDelayMs(rt.retryAttempts);
+        LOG_WARN << "[EquipmentMaterialReward] transient SyncAccountStage1Tradable failure, will retry: player_id="
+                 << playerId << " desired=" << desiredCharTotal << " attempts=" << rt.retryAttempts;
+        return;
+    }
+    rt.retryAttempts = 0;
+    rt.nextRetryAtMs = 0;
+    rt.loaded = true;
+    if (!reply->found()) return;
+
+    const uint32_t used = std::min<uint32_t>(System::kTradableLifetimeLimit, reply->account_used_total());
+    rt.accountUsed = std::max(rt.accountUsed, used);
+
+    const entt::entity player = tlsEcs.GetPlayer(playerId);
+    if (player == entt::null || !tlsEcs.actorRegistry.valid(player) ||
+        tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) {
+        return;
+    }
+    auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+    if (ledger == nullptr) return;
+    auto* state = ledger->mutable_material_reward();
+    if (!state->migrated_to_v2()) return;
+
+    const uint32_t confirmedByDir = std::min<uint32_t>(reply->confirmed_char_total(), System::kTradableLifetimeLimit);
+    bool ledgerChanged = false;
+    // 若账号级 60 上限已被同账号其他角色（或已删角色）抢先占满，将本角色超额未确认可交易额平滑降级为绑定自用（总份数不变）。
+    if (state->tradable_earned_total() > confirmedByDir &&
+        (confirmedByDir < desiredCharTotal || rt.accountUsed >= System::kTradableLifetimeLimit)) {
+        const uint32_t revoked = state->tradable_earned_total() - confirmedByDir;
+        state->set_tradable_earned_total(confirmedByDir);
+        const uint64_t availTrad = state->available_tradable_units();
+        state->set_available_tradable_units(availTrad > revoked ? availTrad - revoked : 0u);
+        ledgerChanged = true;
+    }
+    const uint32_t nextConfirmed = std::min(state->tradable_earned_total(),
+                                            std::max(state->stage1_tradable_confirmed(), confirmedByDir));
+    if (nextConfirmed != state->stage1_tradable_confirmed()) {
+        state->set_stage1_tradable_confirmed(nextConfirmed);
+        ledgerChanged = true;
+    }
+    if (ledgerChanged) {
+        RequestPersist(player, false);
+    }
+    if (state->tradable_earned_total() > state->stage1_tradable_confirmed() &&
+        rt.accountUsed < System::kTradableLifetimeLimit) {
+        DispatchAccountQuotaSync(playerId, state->tradable_earned_total(), nowMs);
+    }
+}
+
+void DispatchAccountQuotaSync(Guid playerId, uint32_t desiredCharTotal, uint64_t nowMs) {
+    if (playerId == 0) return;
+    auto& rt = tlsAccountQuotas[playerId];
+    if (rt.rpcInFlight) return;
+    desiredCharTotal = std::min<uint32_t>(desiredCharTotal, System::kTradableLifetimeLimit);
+    rt.rpcInFlight = true;
+    rt.inFlightDesired = desiredCharTotal;
+    data_service::SyncAccountStage1TradableRequest req;
+    req.set_player_id(playerId);
+    req.set_desired_char_total(desiredCharTotal);
+    const bool sent = SendSyncAccountStage1TradableRpc(
+        req, nowMs,
+        [playerId, desiredCharTotal, nowMs](bool callOk, const data_service::SyncAccountStage1TradableResponse* reply) {
+            HandleAccountQuotaSyncReply(playerId, desiredCharTotal, callOk, reply, nowMs);
+        });
+    if (!sent) {
+        rt.rpcInFlight = false;
+        rt.inFlightDesired = 0;
+        ++rt.retryAttempts;
+        rt.nextRetryAtMs = nowMs + QuotaRetryDelayMs(rt.retryAttempts);
+    }
+}
 
 struct BattleEvaluation {
     bool eligible{false};
@@ -124,13 +279,14 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewa
     if (material == nullptr || stone == nullptr) return kInvalidTableData;
     const auto& state = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).material_reward();
     const uint32_t lifetimeEarned = state.migrated_to_v2() ? state.lifetime_earned() : 0u;
-    const uint32_t tradableEarnedTotal = state.migrated_to_v2() ? state.tradable_earned_total() : 0u;
+    const uint32_t tradableEarnedTotal = System::KnownAccountStage1TradableUsed(player);
     const uint64_t availableUnits = state.available_units();
     const uint64_t availableTradable = state.migrated_to_v2()
         ? std::min<uint64_t>(state.available_tradable_units(), availableUnits) : 0u;
     const uint32_t batchUnits = static_cast<uint32_t>(std::min<uint64_t>(System::kMaxClaimBatchUnits, availableUnits));
     const uint32_t batchTradable = static_cast<uint32_t>(std::min<uint64_t>(batchUnits, availableTradable));
     const bool weeklyPhase = lifetimeEarned >= System::kLifetimeLimit;
+    const bool lightCardActive = AfkPassSystem::ExpiresAt(player) > (nowMs / 1000ULL);
     const uint32_t earnedThisWeek = (weeklyPhase && state.week_starts_at_ms() == weekStart) ? state.earned_this_week() : 0u;
 
     out.set_available(true);
@@ -165,7 +321,9 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewa
         state.revision() != std::numeric_limits<uint64_t>::max());
     if (out.batch_units() == 0) {
         out.set_unavailable_reason(weeklyPhase
-            ? "完成主要战斗可获得本周材料自选份数（每周上限100份，全绑定）。"
+            ? (lightCardActive
+                ? "完成主要战斗可获得本周材料自选份数（每周上限150份，仙途轻享卡生效中：胜局含1份可交易）。"
+                : "完成主要战斗可获得本周材料自选份数（每周上限150份，全绑定；开通仙途轻享卡可解锁胜局可交易产出）。")
             : "完成主要战斗可获得首套材料自选份数（首套总池660份，无每日限制）。");
     } else if (writable == kEquipInBattle) {
         out.set_unavailable_reason("战斗中暂不能领取，请在结算完成后重试。");
@@ -228,9 +386,24 @@ bool System::ResolveWeek(uint64_t nowMs, uint64_t& startMs, uint64_t& nextMs) {
 bool System::IsEligibleBattle(const BattleSettlementData& settlement) {
     return EvaluateBattle(settlement).eligible;
 }
+uint32_t System::KnownAccountStage1TradableUsed(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player)) return 0u;
+    uint32_t used = 0u;
+    if (const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        ledger != nullptr && ledger->material_reward().migrated_to_v2()) {
+        used = ledger->material_reward().tradable_earned_total();
+    }
+    if (const auto* identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player); identity != nullptr) {
+        if (const auto it = tlsAccountQuotas.find(identity->value); it != tlsAccountQuotas.end()) {
+            used = std::max(used, it->second.accountUsed);
+        }
+    }
+    return std::min<uint32_t>(used, kTradableLifetimeLimit);
+}
+
 uint32_t System::PrepareBattleCredit(const ClientRequestLedgerComp& current,
     const BattleSettlementData& settlement, uint64_t nowMs, ClientRequestLedgerComp& candidate,
-    BattleCreditDelta* deltaOut) {
+    BattleCreditDelta* deltaOut, bool lightCardActive, uint32_t accountStage1TradableUsed) {
     if (deltaOut != nullptr) *deltaOut = BattleCreditDelta{};
     if (!client_request_ledger::Validate(current).empty()) return kServiceUnavailable;
     candidate = current;
@@ -255,10 +428,12 @@ uint32_t System::PrepareBattleCredit(const ClientRequestLedgerComp& current,
     auto* state = candidate.mutable_material_reward();
 
     if (prevLifetime < kLifetimeLimit) {
-        // 第一阶段：首套永久 660 份，无每日/每周重置。
+        // 第一阶段：首套永久 660 份，无每日/每周重置；阶段一可交易按账号跨角色终身 60 份硬上限控制。
         const uint32_t stage1Remain = kLifetimeLimit - prevLifetime;
         addTotal = std::min(grossUnits, stage1Remain);
-        if (eval.isWin && addTotal >= kBattleUnits && prevTradableTotal < kTradableLifetimeLimit) {
+        const uint32_t effectiveAccountUsed =
+            std::max(prevTradableTotal, std::min<uint32_t>(accountStage1TradableUsed, kTradableLifetimeLimit));
+        if (eval.isWin && addTotal >= kBattleUnits && effectiveAccountUsed < kTradableLifetimeLimit) {
             addTradable = 1u;
         }
         if (previous.available_units() > std::numeric_limits<uint64_t>::max() - addTotal) return kFeatureUnavailable;
@@ -268,17 +443,21 @@ uint32_t System::PrepareBattleCredit(const ClientRequestLedgerComp& current,
         state->set_available_units(previous.available_units() + addTotal);
         state->set_available_tradable_units(prevAvailableTradable + addTradable);
     } else {
-        // 第二阶段：每周平滑 100 份全绑定（UTC+8 周一 05:00 重置，防时钟回拨）。
+        // 第二阶段：每周平滑 150 份池（UTC+8 周一 05:00 重置，防时钟回拨）。
+        // 零氪同样 100% 拿满绑定自用推进毕业；持有「仙途轻享卡」时每场有效胜局将其中 1 份解锁为市场可交易产出（不增加总额度/战力）。
         if (weekStart < previous.week_starts_at_ms()) return kSuccess;
         const uint32_t earnedWeek = (weekStart > previous.week_starts_at_ms()) ? 0u : previous.earned_this_week();
         if (earnedWeek >= kWeeklyLimit) return kSuccess;
         addTotal = std::min(grossUnits, kWeeklyLimit - earnedWeek);
-        addTradable = 0u;
+        addTradable = (lightCardActive && eval.isWin && addTotal >= kBattleUnits) ? 1u : 0u;
         if (previous.available_units() > std::numeric_limits<uint64_t>::max() - addTotal) return kFeatureUnavailable;
         state->set_migrated_to_v2(true);
         state->set_week_starts_at_ms(weekStart);
         state->set_earned_this_week(earnedWeek + addTotal);
         state->set_available_units(previous.available_units() + addTotal);
+        if (addTradable > 0u) {
+            state->set_available_tradable_units(prevAvailableTradable + addTradable);
+        }
     }
 
     if (deltaOut != nullptr) {
@@ -323,10 +502,22 @@ void System::Claim(entt::entity player, uint64_t nowMs, const ClaimEquipmentMate
         ledger.next_seq() == std::numeric_limits<uint64_t>::max()) { reject(kFeatureUnavailable); return; }
 
     // 按本批可交易份数拆分：可交易优先分配给打造材料（3001），余量给强化石（3002）；其余全绑定，分堆发放永不混堆。
-    const uint64_t availTradable = ledger.material_reward().migrated_to_v2()
-        ? std::min<uint64_t>(ledger.material_reward().available_tradable_units(), ledger.material_reward().available_units())
+    const auto& curReward = ledger.material_reward();
+    const uint64_t availTradable = curReward.migrated_to_v2()
+        ? std::min<uint64_t>(curReward.available_tradable_units(), curReward.available_units())
         : 0u;
     const uint32_t batchTradable = static_cast<uint32_t>(std::min<uint64_t>(total, availTradable));
+    // 账号级阶段一 60 份硬防线（fail-closed）：正式入场玩家（或测试显式挂载同步通道）在存在未由账号目录确认的
+    // 阶段一可交易份数时，禁止先铸造可交易材料，先触发异步同步并回 kServiceUnavailable，杜绝删角/双角竞态超发。
+    const Guid playerId = tlsEcs.GetPlayerId(player);
+    const bool enforceAccountQuota = tlsAccountQuotaTransport != nullptr ||
+        RoleAdmissionSystem::ConfirmedIdentity(playerId).has_value();
+    if (enforceAccountQuota && batchTradable > 0 && curReward.migrated_to_v2() &&
+        curReward.tradable_earned_total() > curReward.stage1_tradable_confirmed()) {
+        DispatchAccountQuotaSync(playerId, curReward.tradable_earned_total(), nowMs);
+        reject(kServiceUnavailable, false);
+        return;
+    }
     const uint32_t craftingTradable = std::min(request.crafting_material_count(), batchTradable);
     const uint32_t craftingBound = request.crafting_material_count() - craftingTradable;
     const uint32_t stoneTradable = std::min(request.enhancement_stone_count(), batchTradable - craftingTradable);
@@ -375,6 +566,71 @@ void System::Claim(entt::entity player, uint64_t nowMs, const ClaimEquipmentMate
     if (error != kSuccess) { reject(error); return; }
     FillApplied(player, nowMs, applied, false, response);
 }
+
+void System::OnPlayerLoaded(entt::entity player, uint64_t nowMs) {
+    if (!tlsEcs.actorRegistry.valid(player)) return;
+    const Guid playerId = tlsEcs.GetPlayerId(player);
+    if (playerId == 0) return;
+    const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+    const uint32_t desired = (ledger != nullptr && ledger->material_reward().migrated_to_v2())
+        ? std::min<uint32_t>(ledger->material_reward().tradable_earned_total(), kTradableLifetimeLimit)
+        : 0u;
+    auto& rt = tlsAccountQuotas[playerId];
+    rt.accountUsed = std::max(rt.accountUsed, desired);
+    if (tlsAccountQuotaTransport != nullptr || RoleAdmissionSystem::ConfirmedIdentity(playerId).has_value()) {
+        DispatchAccountQuotaSync(playerId, desired, nowMs);
+    }
+}
+
+void System::OnStage1TradableCredited(entt::entity player, uint64_t nowMs) {
+    if (!tlsEcs.actorRegistry.valid(player)) return;
+    const Guid playerId = tlsEcs.GetPlayerId(player);
+    const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+    if (playerId == 0 || ledger == nullptr || !ledger->material_reward().migrated_to_v2()) return;
+    const auto& state = ledger->material_reward();
+    if (state.tradable_earned_total() <= state.stage1_tradable_confirmed()) return;
+    auto& rt = tlsAccountQuotas[playerId];
+    rt.accountUsed = std::min<uint32_t>(kTradableLifetimeLimit, std::max(rt.accountUsed + 1u, state.tradable_earned_total()));
+    if (tlsAccountQuotaTransport != nullptr || RoleAdmissionSystem::ConfirmedIdentity(playerId).has_value()) {
+        DispatchAccountQuotaSync(playerId, state.tradable_earned_total(), nowMs);
+    }
+}
+
+void System::OnPlayerDestroyed(Guid playerId) {
+    tlsAccountQuotas.erase(playerId);
+}
+
+void System::Tick(uint64_t nowMs) {
+    if (tlsAccountQuotas.empty()) return;
+    std::vector<std::pair<Guid, uint32_t>> due;
+    for (const auto& [playerId, rt] : tlsAccountQuotas) {
+        if (rt.rpcInFlight) continue;
+        if (rt.nextRetryAtMs != 0 && nowMs < rt.nextRetryAtMs) continue;
+        const entt::entity player = tlsEcs.GetPlayer(playerId);
+        if (player == entt::null || !tlsEcs.actorRegistry.valid(player)) continue;
+        const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        const uint32_t desired = (ledger != nullptr && ledger->material_reward().migrated_to_v2())
+            ? std::min<uint32_t>(ledger->material_reward().tradable_earned_total(), kTradableLifetimeLimit)
+            : 0u;
+        const uint32_t confirmed = (ledger != nullptr && ledger->material_reward().migrated_to_v2())
+            ? ledger->material_reward().stage1_tradable_confirmed()
+            : 0u;
+        if (!rt.loaded || desired > confirmed) {
+            due.emplace_back(playerId, desired);
+        }
+    }
+    for (const auto& [playerId, desired] : due) {
+        DispatchAccountQuotaSync(playerId, desired, nowMs);
+    }
+}
+
 void System::SetPersistForTest(PersistFn fn) {
     persistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
+}
+
+void System::SetAccountQuotaSyncTransportForTest(AccountQuotaSyncTransport transport) {
+    tlsAccountQuotaTransport = std::move(transport);
+    if (!tlsAccountQuotaTransport) {
+        tlsAccountQuotas.clear();
+    }
 }

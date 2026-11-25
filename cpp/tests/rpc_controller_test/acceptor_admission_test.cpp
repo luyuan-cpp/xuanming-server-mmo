@@ -190,11 +190,11 @@ class AcceptorAdmission : public ::testing::Test
 protected:
     void SetUp() override
     {
-        port_ = FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0);
-        server_ = std::make_unique<muduo::net::TcpServer>(
-            &loop_, muduo::net::InetAddress(port_, /*loopbackOnly=*/true), "acceptor_admission_test");
-        server_->setConnectionCallback([weak = std::weak_ptr<Observed>(observed_)](const muduo::net::TcpConnectionPtr &conn)
+        port = FindFreeLoopbackPort();
+        ASSERT_NE(port, 0);
+        server = std::make_unique<muduo::net::TcpServer>(
+            &loop, muduo::net::InetAddress(port, /*loopbackOnly=*/true), "acceptor_admission_test");
+        server->setConnectionCallback([weak = std::weak_ptr<Observed>(this->observed)](const muduo::net::TcpConnectionPtr &conn)
         {
             const auto observed = weak.lock();
             if (!observed)
@@ -216,21 +216,21 @@ protected:
     void TearDown() override
     {
         // 先关客户端,等服务端建出来的连接都读到 EOF、走完 DOWN,再析构 TcpServer:它把裸 this 绑进连接的 close 回调。
-        for (const RawSocket s : clients_)
+        for (const RawSocket s : clients)
         {
             CloseRawSocket(s);
         }
-        clients_.clear();
-        EXPECT_TRUE(RunLoopUntil([this] { return observed_->down == observed_->up; }));
-        server_.reset();
+        clients.clear();
+        EXPECT_TRUE(RunLoopUntil([this] { return observed->down == observed->up; }));
+        server.reset();
         (void)RunLoopUntil([] { return true; });
     }
 
     // 装一个按 verdict() 判定的准入回调,并记下被问的次数与对端端口。
     void InstallAdmission(std::function<bool()> verdict)
     {
-        server_->setAdmissionCallback(
-            [weak = std::weak_ptr<Observed>(observed_), verdict = std::move(verdict)](const muduo::net::InetAddress &peer)
+        server->setAdmissionCallback(
+            [weak = std::weak_ptr<Observed>(this->observed), verdict = std::move(verdict)](const muduo::net::InetAddress &peer)
             {
                 if (const auto observed = weak.lock())
                 {
@@ -244,10 +244,10 @@ protected:
 
     RawSocket Connect()
     {
-        const RawSocket s = ConnectLoopback(port_);
+        const RawSocket s = ConnectLoopback(port);
         if (s != kNoSocket)
         {
-            clients_.push_back(s);
+            clients.push_back(s);
         }
         return s;
     }
@@ -263,8 +263,8 @@ protected:
         };
         const auto state = std::make_shared<DriveState>();
         state->done = std::move(done);
-        muduo::net::EventLoop *const loop = &loop_;
-        const muduo::net::TimerId check = loop_.runEvery(0.005, [loop, weak = std::weak_ptr<DriveState>(state)]
+        muduo::net::EventLoop *const loop = &this->loop;
+        const muduo::net::TimerId check = this->loop.runEvery(0.005, [loop, weak = std::weak_ptr<DriveState>(state)]
         {
             const auto current = weak.lock();
             if (!current || current->quitting || !current->done())
@@ -284,33 +284,33 @@ protected:
             });
         });
         const double livenessSeconds = std::chrono::duration<double>(kLiveness).count();
-        const muduo::net::TimerId liveness = loop_.runAfter(livenessSeconds, [loop] { loop->quit(); });
-        loop_.loop();
-        loop_.cancel(check);
-        loop_.cancel(liveness);
+        const muduo::net::TimerId liveness = this->loop.runAfter(livenessSeconds, [loop] { loop->quit(); });
+        this->loop.loop();
+        this->loop.cancel(check);
+        this->loop.cancel(liveness);
         return state->done();
     }
 
     // EventLoop 归创建它的线程:夹具在测试线程上构造,下面的驱动也都在测试线程上。
-    muduo::net::EventLoop loop_;
-    uint16_t port_ = 0;
-    const std::shared_ptr<Observed> observed_ = std::make_shared<Observed>();
-    std::unique_ptr<muduo::net::TcpServer> server_;
-    std::vector<RawSocket> clients_;
+    muduo::net::EventLoop loop;
+    uint16_t port = 0;
+    const std::shared_ptr<Observed> observed = std::make_shared<Observed>();
+    std::unique_ptr<muduo::net::TcpServer> server;
+    std::vector<RawSocket> clients;
 };
 
 // 被拒的连接:不建 TcpConnection,对端读到 RST。
 TEST_F(AcceptorAdmission, RejectedConnectionIsResetAndNeverBecomesATcpConnection)
 {
     InstallAdmission([] { return false; });
-    server_->start();
+    server->start();
 
     const RawSocket client = Connect();
     ASSERT_NE(client, kNoSocket);
-    ASSERT_TRUE(RunLoopUntil([this] { return observed_->asked == 1; }));
+    ASSERT_TRUE(RunLoopUntil([this] { return observed->asked == 1; }));
 
-    EXPECT_EQ(observed_->up, 0) << "connection callback must not see a refused connection";
-    EXPECT_EQ(observed_->lastPeerPort, LocalPortOf(client)) << "admission callback is given the peer address";
+    EXPECT_EQ(observed->up, 0) << "connection callback must not see a refused connection";
+    EXPECT_EQ(observed->lastPeerPort, LocalPortOf(client)) << "admission callback is given the peer address";
     EXPECT_EQ(ReadPeerClose(client), PeerClose::kReset) << "a refused connection is closed with RST, not FIN";
 }
 
@@ -318,27 +318,27 @@ TEST_F(AcceptorAdmission, RejectedConnectionIsResetAndNeverBecomesATcpConnection
 TEST_F(AcceptorAdmission, AdmittedConnectionIsEstablishedAfterTheAdmissionCheck)
 {
     InstallAdmission([] { return true; });
-    server_->start();
+    server->start();
 
     const RawSocket client = Connect();
     ASSERT_NE(client, kNoSocket);
-    ASSERT_TRUE(RunLoopUntil([this] { return observed_->up == 1; }));
+    ASSERT_TRUE(RunLoopUntil([this] { return observed->up == 1; }));
 
-    EXPECT_EQ(observed_->asked, 1) << "asked exactly once per accepted connection";
-    EXPECT_TRUE(observed_->askedBeforeUp);
-    EXPECT_EQ(observed_->lastPeerPort, LocalPortOf(client));
-    EXPECT_EQ(observed_->down, 0);
+    EXPECT_EQ(observed->asked, 1) << "asked exactly once per accepted connection";
+    EXPECT_TRUE(observed->askedBeforeUp);
+    EXPECT_EQ(observed->lastPeerPort, LocalPortOf(client));
+    EXPECT_EQ(observed->down, 0);
 }
 
 // 没设准入回调:行为与上游一致,全部放行。
 TEST_F(AcceptorAdmission, WithoutACallbackEveryConnectionIsAdmitted)
 {
-    server_->start();
+    server->start();
 
     ASSERT_NE(Connect(), kNoSocket);
     ASSERT_NE(Connect(), kNoSocket);
-    ASSERT_TRUE(RunLoopUntil([this] { return observed_->up == 2; }));
-    EXPECT_EQ(observed_->asked, 0);
+    ASSERT_TRUE(RunLoopUntil([this] { return observed->up == 2; }));
+    EXPECT_EQ(observed->asked, 0);
 }
 
 // 判定逐条生效:同一个监听上先拒两条再放一条,被拒的不留任何连接对象,放行的那条不受影响。
@@ -346,23 +346,23 @@ TEST_F(AcceptorAdmission, VerdictIsPerConnection)
 {
     const auto admit = std::make_shared<bool>(false);
     InstallAdmission([admit] { return *admit; });
-    server_->start();
+    server->start();
 
     const RawSocket first = Connect();
     const RawSocket second = Connect();
     ASSERT_NE(first, kNoSocket);
     ASSERT_NE(second, kNoSocket);
-    ASSERT_TRUE(RunLoopUntil([this] { return observed_->asked == 2; }));
-    EXPECT_EQ(observed_->up, 0);
+    ASSERT_TRUE(RunLoopUntil([this] { return observed->asked == 2; }));
+    EXPECT_EQ(observed->up, 0);
     EXPECT_EQ(ReadPeerClose(first), PeerClose::kReset);
     EXPECT_EQ(ReadPeerClose(second), PeerClose::kReset);
 
     *admit = true;
     const RawSocket third = Connect();
     ASSERT_NE(third, kNoSocket);
-    ASSERT_TRUE(RunLoopUntil([this] { return observed_->up == 1; }));
-    EXPECT_EQ(observed_->asked, 3);
-    EXPECT_TRUE(observed_->askedBeforeUp);
+    ASSERT_TRUE(RunLoopUntil([this] { return observed->up == 1; }));
+    EXPECT_EQ(observed->asked, 3);
+    EXPECT_TRUE(observed->askedBeforeUp);
 }
 
 } // namespace

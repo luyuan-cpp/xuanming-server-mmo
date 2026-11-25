@@ -238,3 +238,49 @@ func (sceneSkillClientPlayerRpc) decodeListCraftProxyStalls(reply *base.MessageC
 	}
 	return resp, nil
 }
+
+// SaveSkillLoadout 异步调用 SceneSkillClientPlayer.SaveSkillLoadout(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) SaveSkillLoadout(c *pkg.GameClient, req *scene.SaveSkillLoadoutRequest, timeout time.Duration, done func(*scene.SaveSkillLoadoutResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerSaveSkillLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSaveSkillLoadout(reply, err))
+	})
+}
+
+// SaveSkillLoadoutSync 同步调用 SceneSkillClientPlayer.SaveSkillLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) SaveSkillLoadoutSync(ctx context.Context, c *pkg.GameClient, req *scene.SaveSkillLoadoutRequest, timeout time.Duration) (*scene.SaveSkillLoadoutResponse, error) {
+	return r.decodeSaveSkillLoadout(c.CallSync(ctx, game.SceneSkillClientPlayerSaveSkillLoadoutMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeSaveSkillLoadout(reply *base.MessageContent, err error) (*scene.SaveSkillLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SaveSkillLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.SaveSkillLoadout reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SwitchSkillLoadout 异步调用 SceneSkillClientPlayer.SwitchSkillLoadout(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) SwitchSkillLoadout(c *pkg.GameClient, req *scene.SwitchSkillLoadoutRequest, timeout time.Duration, done func(*scene.SwitchSkillLoadoutResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerSwitchSkillLoadoutMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSwitchSkillLoadout(reply, err))
+	})
+}
+
+// SwitchSkillLoadoutSync 同步调用 SceneSkillClientPlayer.SwitchSkillLoadout(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) SwitchSkillLoadoutSync(ctx context.Context, c *pkg.GameClient, req *scene.SwitchSkillLoadoutRequest, timeout time.Duration) (*scene.SwitchSkillLoadoutResponse, error) {
+	return r.decodeSwitchSkillLoadout(c.CallSync(ctx, game.SceneSkillClientPlayerSwitchSkillLoadoutMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeSwitchSkillLoadout(reply *base.MessageContent, err error) (*scene.SwitchSkillLoadoutResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SwitchSkillLoadoutResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.SwitchSkillLoadout reply: %w", err)
+	}
+	return resp, nil
+}

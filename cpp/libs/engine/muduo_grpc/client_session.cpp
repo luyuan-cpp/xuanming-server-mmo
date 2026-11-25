@@ -126,13 +126,13 @@ struct ClientSessionCallbacks
         }
 
         stream->blockBytes += nameLen + valueLen + kHeaderEntryOverheadBytes;
-        if (stream->blockBytes > self.options_.maxHeaderListBytes)
+        if (stream->blockBytes > self.options.maxHeaderListBytes)
         {
             if (!stream->localStatus)
             {
                 stream->localStatus = Status(StatusCode::kResourceExhausted,
                                              "received header list larger than max " +
-                                                 std::to_string(self.options_.maxHeaderListBytes) + " bytes");
+                                                 std::to_string(self.options.maxHeaderListBytes) + " bytes");
             }
             // nghttp2 以 RST_STREAM(INTERNAL_ERROR) 关流;本块剩余头部不再回调。
             return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
@@ -235,14 +235,14 @@ struct ClientSessionCallbacks
     static int HandleFrameRecv(const nghttp2_frame *frame, void *userData)
     {
         auto &self = Self(userData);
-        self.observer_.OnFrameReceived(frame->hd.type);
+        self.observer.OnFrameReceived(frame->hd.type);
         switch (frame->hd.type)
         {
         case NGHTTP2_SETTINGS:
-            if ((frame->hd.flags & NGHTTP2_FLAG_ACK) == 0 && !self.readySignaled_)
+            if ((frame->hd.flags & NGHTTP2_FLAG_ACK) == 0 && !self.readySignaled)
             {
-                self.readySignaled_ = true;
-                self.observer_.OnSessionReady();
+                self.readySignaled = true;
+                self.observer.OnSessionReady();
             }
             break;
         case NGHTTP2_HEADERS:
@@ -263,7 +263,7 @@ struct ClientSessionCallbacks
                     if (stream->streaming && !stream->localStatus && stream->httpStatus == 200 &&
                         stream->contentTypeIsGrpc)
                     {
-                        self.observer_.OnStreamHeaders(frame->hd.stream_id, stream->initialMetadata);
+                        self.observer.OnStreamHeaders(frame->hd.stream_id, stream->initialMetadata);
                     }
                 }
                 break;
@@ -287,12 +287,12 @@ struct ClientSessionCallbacks
         case NGHTTP2_PING:
             if ((frame->hd.flags & NGHTTP2_FLAG_ACK) != 0)
             {
-                self.observer_.OnPingAck();
+                self.observer.OnPingAck();
             }
             break;
         case NGHTTP2_GOAWAY:
-            self.goawayReceived_ = true;
-            self.observer_.OnGoawayReceived(frame->goaway.last_stream_id, frame->goaway.error_code,
+            self.goawayReceived = true;
+            self.observer.OnGoawayReceived(frame->goaway.last_stream_id, frame->goaway.error_code,
                                             AsView(frame->goaway.opaque_data, frame->goaway.opaque_data_len));
             break;
         default:
@@ -335,7 +335,7 @@ struct ClientSessionCallbacks
             // 违约之前已经完整的消息,再按本地错误结束流。
             for (auto &message : stream->messages)
             {
-                self.observer_.OnStreamMessage(streamId, std::move(message));
+                self.observer.OnStreamMessage(streamId, std::move(message));
             }
             stream->messages.clear();
             if (!status.ok())
@@ -362,15 +362,15 @@ struct ClientSessionCallbacks
     static int OnStreamClose(nghttp2_session *, int32_t streamId, uint32_t errorCode, void *userData)
     {
         auto &self = Self(userData);
-        auto it = self.streams_.find(streamId);
-        if (it == self.streams_.end())
+        auto it = self.streams.find(streamId);
+        if (it == self.streams.end())
         {
             return 0;
         }
         std::unique_ptr<ClientSession::StreamState> stream = std::move(it->second);
-        self.streams_.erase(it);
+        self.streams.erase(it);
         StreamOutcome outcome = self.BuildOutcome(*stream, errorCode);
-        self.observer_.OnStreamClosed(streamId, std::move(outcome));
+        self.observer.OnStreamClosed(streamId, std::move(outcome));
         return 0;
     }
 
@@ -447,7 +447,7 @@ void ClientSession::SessionDeleter::operator()(nghttp2_session *session) const
 }
 
 ClientSession::ClientSession(ClientSessionOptions options, Observer &observer)
-    : options_(std::move(options)), observer_(observer)
+    : options(std::move(options)), observer(observer)
 {
 }
 
@@ -489,21 +489,21 @@ Status ClientSession::Start()
         return Status(StatusCode::kResourceExhausted,
                       std::string("nghttp2_session_client_new2 failed: ") + nghttp2_strerror(created));
     }
-    session_.reset(rawSession);
+    session.reset(rawSession);
 
     const nghttp2_settings_entry settings[] = {
         {NGHTTP2_SETTINGS_ENABLE_PUSH, 0},
-        {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, options_.initialStreamWindowBytes},
-        {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, options_.maxHeaderListBytes},
+        {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, options.initialStreamWindowBytes},
+        {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, options.maxHeaderListBytes},
     };
-    int rv = nghttp2_submit_settings(session_.get(), NGHTTP2_FLAG_NONE, settings, std::size(settings));
+    int rv = nghttp2_submit_settings(session.get(), NGHTTP2_FLAG_NONE, settings, std::size(settings));
     if (rv != 0)
     {
         return Status(StatusCode::kInternal, std::string("nghttp2_submit_settings failed: ") + nghttp2_strerror(rv));
     }
     // 连接级接收窗口默认 65535,放大以免多个并发响应互相卡流控。
-    rv = nghttp2_session_set_local_window_size(session_.get(), NGHTTP2_FLAG_NONE, 0,
-                                               static_cast<int32_t>(options_.connectionWindowBytes));
+    rv = nghttp2_session_set_local_window_size(session.get(), NGHTTP2_FLAG_NONE, 0,
+                                               static_cast<int32_t>(options.connectionWindowBytes));
     if (rv != 0)
     {
         return Status(StatusCode::kInternal,
@@ -520,14 +520,14 @@ ClientSession::SubmitResult ClientSession::SubmitUnary(const UnaryRequestSpec &s
         result.error = Status(StatusCode::kInternal, "request message missing");
         return result;
     }
-    auto stream = std::make_unique<StreamState>(options_.maxReceiveMessageBytes);
+    auto stream = std::make_unique<StreamState>(options.maxReceiveMessageBytes);
     stream->framedRequest = spec.framedMessage;
     return SubmitRequest(spec.path, spec.metadata, spec.grpcTimeout, std::move(stream));
 }
 
 ClientSession::SubmitResult ClientSession::SubmitStream(const std::string &path, const Metadata &metadata)
 {
-    auto stream = std::make_unique<StreamState>(options_.maxReceiveMessageBytes);
+    auto stream = std::make_unique<StreamState>(options.maxReceiveMessageBytes);
     stream->streaming = true;
     return SubmitRequest(path, metadata, std::string(), std::move(stream));
 }
@@ -537,12 +537,12 @@ ClientSession::SubmitResult ClientSession::SubmitRequest(const std::string &path
                                                          std::unique_ptr<StreamState> stream)
 {
     SubmitResult result;
-    if (!session_)
+    if (!session)
     {
         result.error = Status(StatusCode::kInternal, "http2 session not started");
         return result;
     }
-    if (goawayReceived_ || nghttp2_session_check_request_allowed(session_.get()) == 0)
+    if (goawayReceived || nghttp2_session_check_request_allowed(session.get()) == 0)
     {
         // 收到 GOAWAY,或会话已被本端终止(GOAWAY 还没刷出去):新请求在这条连接上必被 REFUSED,直接换连接。
         result.error = Status(StatusCode::kUnavailable, "connection is draining or closing");
@@ -556,14 +556,14 @@ ClientSession::SubmitResult ClientSession::SubmitRequest(const std::string &path
     headers.emplace_back(":method", "POST");
     headers.emplace_back(":scheme", "http");
     headers.emplace_back(":path", path);
-    headers.emplace_back(":authority", options_.authority);
+    headers.emplace_back(":authority", options.authority);
     headers.emplace_back("te", "trailers");
     if (!grpcTimeout.empty())
     {
         headers.emplace_back("grpc-timeout", grpcTimeout);
     }
     headers.emplace_back("content-type", std::string(kGrpcContentType));
-    headers.emplace_back("user-agent", options_.userAgent);
+    headers.emplace_back("user-agent", options.userAgent);
     for (const auto &[key, value] : metadata)
     {
         if (!IsValidCustomMetadataKey(key))
@@ -598,7 +598,7 @@ ClientSession::SubmitResult ClientSession::SubmitRequest(const std::string &path
     provider.read_callback = &ClientSessionCallbacks::ReadRequestBody;
 
     const int32_t streamId =
-        nghttp2_submit_request2(session_.get(), nullptr, nva.data(), nva.size(), &provider, nullptr);
+        nghttp2_submit_request2(session.get(), nullptr, nva.data(), nva.size(), &provider, nullptr);
     if (streamId < 0)
     {
         if (streamId == NGHTTP2_ERR_STREAM_ID_NOT_AVAILABLE)
@@ -611,7 +611,7 @@ ClientSession::SubmitResult ClientSession::SubmitRequest(const std::string &path
             Status(StatusCode::kInternal, std::string("failed to submit request: ") + nghttp2_strerror(streamId));
         return result;
     }
-    streams_.emplace(streamId, std::move(stream));
+    streams.emplace(streamId, std::move(stream));
     result.streamId = streamId;
     return result;
 }
@@ -620,7 +620,7 @@ bool ClientSession::AppendStreamMessage(int32_t streamId, std::string_view frame
 {
     auto *stream = FindStream(streamId);
     if (stream == nullptr || !stream->streaming || stream->writesDone || stream->localStatus || stream->remoteEnded ||
-        !session_)
+        !session)
     {
         return false;
     }
@@ -632,7 +632,7 @@ bool ClientSession::AppendStreamMessage(int32_t streamId, std::string_view frame
 void ClientSession::HalfCloseStream(int32_t streamId)
 {
     auto *stream = FindStream(streamId);
-    if (stream == nullptr || !stream->streaming || stream->writesDone || !session_)
+    if (stream == nullptr || !stream->streaming || stream->writesDone || !session)
     {
         return;
     }
@@ -647,7 +647,7 @@ void ClientSession::ResumeDeferredData(int32_t streamId, StreamState &stream)
         return;
     }
     stream.dataDeferred = false;
-    const int rv = nghttp2_session_resume_data(session_.get(), streamId);
+    const int rv = nghttp2_session_resume_data(session.get(), streamId);
     if (rv != 0)
     {
         // 理论上只有内存不足或流已从发送队列摘除才会失败;不处理的话这个流会静默停写。
@@ -669,7 +669,7 @@ size_t ClientSession::PendingStreamBytes(int32_t streamId) const
 void ClientSession::ResetStream(int32_t streamId, uint32_t http2ErrorCode, Status status)
 {
     auto *stream = FindStream(streamId);
-    if (stream == nullptr || !session_)
+    if (stream == nullptr || !session)
     {
         return;
     }
@@ -678,11 +678,11 @@ void ClientSession::ResetStream(int32_t streamId, uint32_t http2ErrorCode, Statu
 
 Status ClientSession::Receive(const uint8_t *data, size_t len)
 {
-    if (!session_)
+    if (!session)
     {
         return Status(StatusCode::kInternal, "http2 session not started");
     }
-    const nghttp2_ssize consumed = nghttp2_session_mem_recv2(session_.get(), data, len);
+    const nghttp2_ssize consumed = nghttp2_session_mem_recv2(session.get(), data, len);
     if (consumed < 0)
     {
         return Status(StatusCode::kUnavailable, std::string("http2 receive failed: ") +
@@ -693,14 +693,14 @@ Status ClientSession::Receive(const uint8_t *data, size_t len)
 
 Status ClientSession::DrainOutput(const std::function<bool(std::string_view chunk)> &write)
 {
-    if (!session_)
+    if (!session)
     {
         return Status(StatusCode::kInternal, "http2 session not started");
     }
     for (;;)
     {
         const uint8_t *data = nullptr;
-        const nghttp2_ssize produced = nghttp2_session_mem_send2(session_.get(), &data);
+        const nghttp2_ssize produced = nghttp2_session_mem_send2(session.get(), &data);
         if (produced < 0)
         {
             return Status(StatusCode::kUnavailable,
@@ -719,35 +719,35 @@ Status ClientSession::DrainOutput(const std::function<bool(std::string_view chun
 
 bool ClientSession::ShouldClose() const
 {
-    if (!session_)
+    if (!session)
     {
         return true;
     }
-    return nghttp2_session_want_read(session_.get()) == 0 && nghttp2_session_want_write(session_.get()) == 0;
+    return nghttp2_session_want_read(session.get()) == 0 && nghttp2_session_want_write(session.get()) == 0;
 }
 
 bool ClientSession::SubmitPing()
 {
-    return session_ && nghttp2_submit_ping(session_.get(), NGHTTP2_FLAG_NONE, kProbePingPayload) == 0;
+    return session && nghttp2_submit_ping(session.get(), NGHTTP2_FLAG_NONE, kProbePingPayload) == 0;
 }
 
 void ClientSession::SubmitGoaway(uint32_t http2ErrorCode)
 {
-    if (session_)
+    if (session)
     {
-        nghttp2_session_terminate_session(session_.get(), http2ErrorCode);
+        nghttp2_session_terminate_session(session.get(), http2ErrorCode);
     }
 }
 
 void ClientSession::FailAllStreams(const Status &status)
 {
     // 逐个摘除再回调:回调里看到的 ActiveStreamCount() 就是真实剩余的流数。
-    while (!streams_.empty())
+    while (!streams.empty())
     {
-        const auto it = streams_.begin();
+        const auto it = streams.begin();
         const int32_t streamId = it->first;
         const std::unique_ptr<StreamState> stream = std::move(it->second);
-        streams_.erase(it);
+        streams.erase(it);
         StreamOutcome outcome;
         if (stream->localStatus)
         {
@@ -759,20 +759,20 @@ void ClientSession::FailAllStreams(const Status &status)
             // 请求头都没交给 socket,服务端不可能见过这个请求。
             outcome.unprocessed = !stream->requestHeadersSent;
         }
-        observer_.OnStreamClosed(streamId, std::move(outcome));
+        observer.OnStreamClosed(streamId, std::move(outcome));
     }
 }
 
 ClientSession::StreamState *ClientSession::FindStream(int32_t streamId)
 {
-    const auto it = streams_.find(streamId);
-    return it == streams_.end() ? nullptr : it->second.get();
+    const auto it = streams.find(streamId);
+    return it == streams.end() ? nullptr : it->second.get();
 }
 
 const ClientSession::StreamState *ClientSession::FindStream(int32_t streamId) const
 {
-    const auto it = streams_.find(streamId);
-    return it == streams_.end() ? nullptr : it->second.get();
+    const auto it = streams.find(streamId);
+    return it == streams.end() ? nullptr : it->second.get();
 }
 
 void ClientSession::SetLocalErrorAndReset(int32_t streamId, StreamState &stream, Status status,
@@ -783,7 +783,7 @@ void ClientSession::SetLocalErrorAndReset(int32_t streamId, StreamState &stream,
         stream.localStatus = std::move(status);
     }
     stream.messages.clear();
-    nghttp2_submit_rst_stream(session_.get(), NGHTTP2_FLAG_NONE, streamId, http2ErrorCode);
+    nghttp2_submit_rst_stream(session.get(), NGHTTP2_FLAG_NONE, streamId, http2ErrorCode);
 }
 
 StreamOutcome ClientSession::BuildOutcome(StreamState &stream, uint32_t http2ErrorCode) const

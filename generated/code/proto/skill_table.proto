@@ -81,6 +81,8 @@ message SkillTable {
 	uint32 season_id = 58;
 	uint32 scroll_id = 59;
 	uint32 rarity_tier = 60;
+	uint32 secondary_target_policy = 61;
+	uint32 exclusive_group = 62;
 	repeated Skillrequired_item required_item = 21;
 	repeated Skillrequired_resource required_resource = 22;
 	repeated Skillcost_resource cost_resource = 23;

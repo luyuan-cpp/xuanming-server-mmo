@@ -134,15 +134,15 @@ public:
 	};
 
 	Core(muduo::net::EventLoop &loop, EtcdResponseSink &sink)
-		: loop_(loop), sink_(sink), rng_(std::random_device{}())
+		: loop(loop), sink(sink), rng(std::random_device{}())
 	{
-		watch_.name = "Watch";
-		watch_.method = kWatchMethod;
-		keepAlive_.name = "LeaseKeepAlive";
-		keepAlive_.method = kLeaseKeepAliveMethod;
+		watch.name = "Watch";
+		watch.method = kWatchMethod;
+		keepAlive.name = "LeaseKeepAlive";
+		keepAlive.method = kLeaseKeepAliveMethod;
 	}
 
-	EtcdResponseSink &sink() { return sink_; }
+	EtcdResponseSink &Sink() { return sink; }
 
 	void Start(const std::string &endpoint)
 	{
@@ -167,17 +167,17 @@ public:
 		options.maxReceiveMessageBytes = kMaxReceiveMessageBytes;
 		// 注册与发现、热关停两条 etcd 通道都记在 etcd 这一类依赖上(断线重连 R17)。
 		options.linkObserver = ObserveGrpcLink(dependency_link_metrics::Dependency::kEtcd);
-		channel_ = muduo_grpc::Channel::Create(loop_, ip, parsed.port, options);
-		if (!channel_)
+		channel = muduo_grpc::Channel::Create(loop, ip, parsed.port, options);
+		if (!channel)
 		{
 			LOG_FATAL << "Cannot create the etcd channel to " << ip << ":" << parsed.port;
 		}
-		callDeadline_ = grpc_call_deadline::Get(static_cast<uint32_t>(common::base::EtcdNodeService));
+		callDeadline = grpc_call_deadline::Get(static_cast<uint32_t>(common::base::EtcdNodeService));
 		LOG_INFO << "etcd muduo_h2 transport: endpoint=" << endpoint << " target=" << ip << ":" << parsed.port
-				 << " call_deadline_ms=" << callDeadline_.count() << " keepalive_ms=" << kKeepaliveTime.count() << "/"
+				 << " call_deadline_ms=" << callDeadline.count() << " keepalive_ms=" << kKeepaliveTime.count() << "/"
 				 << kKeepaliveTimeout.count();
 
-		channel_->GetState(true);
+		channel->GetState(true);
 		OpenStream(StreamKind::kWatch);
 		OpenStream(StreamKind::kKeepAlive);
 	}
@@ -187,7 +187,7 @@ public:
 	void Unary(const char *method, const google::protobuf::Message &request, OnReply onReply,
 			   std::function<void()> onFailure = {})
 	{
-		if (shutdown_ || !channel_)
+		if (shutdown || !channel)
 		{
 			if (onFailure) onFailure();
 			return;
@@ -200,15 +200,15 @@ public:
 			if (onFailure) onFailure();
 			return;
 		}
-		call.deadline = std::chrono::steady_clock::now() + callDeadline_;
+		call.deadline = std::chrono::steady_clock::now() + callDeadline;
 		std::weak_ptr<Core> weakSelf = weak_from_this();
-		channel_->StartUnaryCall(std::move(call),
+		channel->StartUnaryCall(std::move(call),
 								 [weakSelf, methodName = std::string(method), onReply = std::move(onReply),
 								  onFailure = std::move(onFailure)](
 									 muduo_grpc::UnaryCallResult &&result)
 								 {
 			const auto self = weakSelf.lock();
-			if (!self || self->shutdown_)
+			if (!self || self->shutdown)
 			{
 				if (onFailure) onFailure();
 				return;
@@ -233,7 +233,7 @@ public:
 	void WriteStream(StreamKind kind, const google::protobuf::Message &request)
 	{
 		StreamSlot &slot = Slot(kind);
-		if (shutdown_)
+		if (shutdown)
 		{
 			return;
 		}
@@ -257,19 +257,19 @@ public:
 
 	void Shutdown()
 	{
-		if (shutdown_)
+		if (shutdown)
 		{
 			return;
 		}
-		shutdown_ = true;
+		shutdown = true;
 		// 正常路径(EtcdService::Shutdown)在 loop 线程上、loop 仍在运行;漏了清理时只能放弃取消定时器
 		// (闭包只绑 weak_ptr,本对象没了它们自动失效)。
-		const bool inLoop = muduo::net::EventLoop::getEventLoopOfCurrentThread() == &loop_;
-		for (StreamSlot *slot : {&watch_, &keepAlive_})
+		const bool inLoop = muduo::net::EventLoop::getEventLoopOfCurrentThread() == &loop;
+		for (StreamSlot *slot : {&watch, &keepAlive})
 		{
 			if (slot->rebuildArmed && inLoop)
 			{
-				loop_.cancel(slot->rebuildTimer);
+				loop.cancel(slot->rebuildTimer);
 			}
 			slot->rebuildArmed = false;
 		}
@@ -277,9 +277,9 @@ public:
 		// weak_ptr<Core> 且看到 shutdown_,不再回调 sink;句柄随后析构只是给流记录置取消标记。
 		// LeaseRevoke 只是「尽量送达」(§13.7):通道 READY 且 muduo 输出缓冲为空时,发出那一刻字节已写进 socket;
 		// 否则还留在用户态缓冲里,随 forceClose 丢弃,lease 等 TTL 到期才被 etcd 回收(与旧实现同样不等应答)。
-		channel_.reset();
-		watch_.stream.reset();
-		keepAlive_.stream.reset();
+		channel.reset();
+		watch.stream.reset();
+		keepAlive.stream.reset();
 	}
 
 private:
@@ -302,12 +302,12 @@ private:
 		bool everLogged{false};
 	};
 
-	StreamSlot &Slot(StreamKind kind) { return kind == StreamKind::kWatch ? watch_ : keepAlive_; }
+	StreamSlot &Slot(StreamKind kind) { return kind == StreamKind::kWatch ? watch : keepAlive; }
 
 	void OpenStream(StreamKind kind)
 	{
 		StreamSlot &slot = Slot(kind);
-		if (shutdown_ || !channel_)
+		if (shutdown || !channel)
 		{
 			return;
 		}
@@ -330,7 +330,7 @@ private:
 			}
 		};
 		// 流在通道 IDLE / CONNECTING 时排队、连上再开;此前写入的消息在本端缓冲,开流后按序发出。
-		slot.stream = channel_->StartStream(slot.method, muduo_grpc::Metadata(), std::move(callbacks));
+		slot.stream = channel->StartStream(slot.method, muduo_grpc::Metadata(), std::move(callbacks));
 		if (generation == 1)
 		{
 			return; // 首条流:注册链从 EtcdService::Init 之后的全量 Range 开始,不需要 Restarted
@@ -338,18 +338,18 @@ private:
 		LOG_INFO << "etcd " << slot.name << " stream reopened (generation " << generation << ")";
 		if (kind == StreamKind::kWatch)
 		{
-			sink_.OnWatchStreamRestarted();
+			sink.OnWatchStreamRestarted();
 		}
 		else
 		{
-			sink_.OnKeepAliveStreamRestarted();
+			sink.OnKeepAliveStreamRestarted();
 		}
 	}
 
 	void OnStreamMessage(StreamKind kind, uint64_t generation, std::string message)
 	{
 		StreamSlot &slot = Slot(kind);
-		if (shutdown_ || generation != slot.generation)
+		if (shutdown || generation != slot.generation)
 		{
 			return;
 		}
@@ -361,7 +361,7 @@ private:
 				AbandonStream(kind, generation, "failed to parse a WatchResponse");
 				return;
 			}
-			sink_.OnWatch(response);
+			sink.OnWatch(response);
 			return;
 		}
 		etcdserverpb::LeaseKeepAliveResponse response;
@@ -370,7 +370,7 @@ private:
 			AbandonStream(kind, generation, "failed to parse a LeaseKeepAliveResponse");
 			return;
 		}
-		sink_.OnKeepAlive(response);
+		sink.OnKeepAlive(response);
 	}
 
 	// 本端放弃一条流(收到无法解析的消息):取消它(之后不再有它的回调),按普通的流结束走退避重建。
@@ -387,7 +387,7 @@ private:
 	void OnStreamClosed(StreamKind kind, uint64_t generation, const muduo_grpc::Status &status)
 	{
 		StreamSlot &slot = Slot(kind);
-		if (shutdown_ || generation != slot.generation)
+		if (shutdown || generation != slot.generation)
 		{
 			return;
 		}
@@ -396,13 +396,13 @@ private:
 		const auto base = slot.backoff.OnStreamEnded(lived);
 		std::uniform_real_distribution<double> spread(-etcd_transport::StreamRebuildBackoff::kJitter,
 													  etcd_transport::StreamRebuildBackoff::kJitter);
-		const double delaySeconds = static_cast<double>(base.count()) / 1000.0 * (1.0 + spread(rng_));
+		const double delaySeconds = static_cast<double>(base.count()) / 1000.0 * (1.0 + spread(rng));
 		LOG_WARN << "etcd " << slot.name << " stream ended after "
 				 << std::chrono::duration_cast<std::chrono::milliseconds>(lived).count() << "ms: " << status.ToString()
 				 << "; reopening in " << delaySeconds << "s";
 		std::weak_ptr<Core> weakSelf = weak_from_this();
 		// 墙钟定时器只当延时用,早晚几毫秒无所谓;没有次数上限(§10.2 第 1 条的有意偏离)。
-		slot.rebuildTimer = loop_.runAfter(delaySeconds, [weakSelf, kind]
+		slot.rebuildTimer = loop.runAfter(delaySeconds, [weakSelf, kind]
 										   {
 			if (const auto self = weakSelf.lock())
 			{
@@ -419,7 +419,7 @@ private:
 
 	void LogCallFailure(const std::string &method, const muduo_grpc::Status &status)
 	{
-		auto &log = failureLogs_[method];
+		auto &log = failureLogs[method];
 		const auto now = std::chrono::steady_clock::now();
 		if (log.everLogged && now - log.lastLoggedAt < kFailureLogInterval)
 		{
@@ -433,55 +433,55 @@ private:
 		log.suppressed = 0;
 	}
 
-	muduo::net::EventLoop &loop_;
-	EtcdResponseSink &sink_;
-	std::shared_ptr<muduo_grpc::Channel> channel_;
-	std::chrono::milliseconds callDeadline_{0};
-	StreamSlot watch_;
-	StreamSlot keepAlive_;
-	bool shutdown_{false};
-	std::mt19937 rng_;
-	std::unordered_map<std::string, FailureLog> failureLogs_;
+	muduo::net::EventLoop &loop;
+	EtcdResponseSink &sink;
+	std::shared_ptr<muduo_grpc::Channel> channel;
+	std::chrono::milliseconds callDeadline{0};
+	StreamSlot watch;
+	StreamSlot keepAlive;
+	bool shutdown{false};
+	std::mt19937 rng;
+	std::unordered_map<std::string, FailureLog> failureLogs;
 };
 
 MuduoEtcdTransport::MuduoEtcdTransport(muduo::net::EventLoop &loop, const std::string &endpoint,
 									   EtcdResponseSink &sink)
-	: core_(std::make_shared<Core>(loop, sink))
+	: core(std::make_shared<Core>(loop, sink))
 {
-	core_->Start(endpoint);
+	core->Start(endpoint);
 }
 
 MuduoEtcdTransport::~MuduoEtcdTransport()
 {
-	core_->Shutdown();
+	core->Shutdown();
 }
 
 void MuduoEtcdTransport::Range(const etcdserverpb::RangeRequest &request)
 {
 	// 带回原请求:EtcdService 按 request.key()(前缀)做对账。
-	core_->Unary<etcdserverpb::RangeResponse>(kRangeMethod, request,
+	this->core->Unary<etcdserverpb::RangeResponse>(kRangeMethod, request,
 											  [request](Core &core, const etcdserverpb::RangeResponse &reply)
-											  { core.sink().OnRange(&request, reply); });
+											  { core.Sink().OnRange(&request, reply); });
 }
 
 void MuduoEtcdTransport::Put(const etcdserverpb::PutRequest &request)
 {
-	core_->Unary<etcdserverpb::PutResponse>(kPutMethod, request,
+	this->core->Unary<etcdserverpb::PutResponse>(kPutMethod, request,
 											[](Core &core, const etcdserverpb::PutResponse &reply)
-											{ core.sink().OnPut(reply); });
+											{ core.Sink().OnPut(reply); });
 }
 
 void MuduoEtcdTransport::DeleteRange(const etcdserverpb::DeleteRangeRequest &request)
 {
-	core_->Unary<etcdserverpb::DeleteRangeResponse>(kDeleteRangeMethod, request,
+	this->core->Unary<etcdserverpb::DeleteRangeResponse>(kDeleteRangeMethod, request,
 													[](Core &core, const etcdserverpb::DeleteRangeResponse &reply)
-													{ core.sink().OnDeleteRange(reply); });
+													{ core.Sink().OnDeleteRange(reply); });
 }
 
 void MuduoEtcdTransport::Txn(const etcdserverpb::TxnRequest &request,
 						    EtcdRegistrationCompletion<etcdserverpb::TxnResponse> done)
 {
-	core_->Unary<etcdserverpb::TxnResponse>(kTxnMethod, request,
+	core->Unary<etcdserverpb::TxnResponse>(kTxnMethod, request,
 		[done](Core &, etcdserverpb::TxnResponse &reply) { done(std::move(reply)); },
 		[done] { done(std::nullopt); });
 }
@@ -489,7 +489,7 @@ void MuduoEtcdTransport::Txn(const etcdserverpb::TxnRequest &request,
 void MuduoEtcdTransport::LeaseGrant(const etcdserverpb::LeaseGrantRequest &request,
 								   EtcdRegistrationCompletion<etcdserverpb::LeaseGrantResponse> done)
 {
-	core_->Unary<etcdserverpb::LeaseGrantResponse>(kLeaseGrantMethod, request,
+	core->Unary<etcdserverpb::LeaseGrantResponse>(kLeaseGrantMethod, request,
 		[done](Core &, etcdserverpb::LeaseGrantResponse &reply) { done(std::move(reply)); },
 		[done] { done(std::nullopt); });
 }
@@ -497,23 +497,23 @@ void MuduoEtcdTransport::LeaseGrant(const etcdserverpb::LeaseGrantRequest &reque
 void MuduoEtcdTransport::LeaseRevoke(const etcdserverpb::LeaseRevokeRequest &request)
 {
 	// 应答没有消费方(旧实现同样不处理);只为失败时留一行日志。
-	core_->Unary<etcdserverpb::LeaseRevokeResponse>(kLeaseRevokeMethod, request,
+	core->Unary<etcdserverpb::LeaseRevokeResponse>(kLeaseRevokeMethod, request,
 													[](Core &, const etcdserverpb::LeaseRevokeResponse &) {});
 }
 
 void MuduoEtcdTransport::WatchWrite(const etcdserverpb::WatchRequest &request)
 {
-	core_->WriteStream(Core::StreamKind::kWatch, request);
+	core->WriteStream(Core::StreamKind::kWatch, request);
 }
 
 void MuduoEtcdTransport::KeepAliveWrite(const etcdserverpb::LeaseKeepAliveRequest &request)
 {
-	core_->WriteStream(Core::StreamKind::kKeepAlive, request);
+	core->WriteStream(Core::StreamKind::kKeepAlive, request);
 }
 
 void MuduoEtcdTransport::Shutdown()
 {
-	core_->Shutdown();
+	core->Shutdown();
 }
 
 namespace etcd_transport

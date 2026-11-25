@@ -50,15 +50,15 @@ namespace redis_cluster
 		void ApplyTopology(const ClusterTopology& topology);
 
 		// 当前表里出现过的全部主节点,去重。
-		const std::vector<NodeEndpoint>& Masters() const { return endpoints_; }
+		const std::vector<NodeEndpoint>& Masters() const { return endpoints; }
 
 		bool IsMaster(const NodeEndpoint& endpoint) const;
 
 	private:
 		uint32_t InternEndpoint(const NodeEndpoint& endpoint);
 
-		std::vector<uint32_t> owners_;       // 下标 = slot,值 = endpoints_ 的下标
-		std::vector<NodeEndpoint> endpoints_;
+		std::vector<uint32_t> owners;       // 下标 = slot,值 = endpoints_ 的下标
+		std::vector<NodeEndpoint> endpoints;
 	};
 
 	// 刷新节拍:Request() 记下「该刷新了」(MOVED、断连、CLUSTERDOWN),周期到了也要刷,但两次开始之间至少隔 minInterval,
@@ -70,7 +70,7 @@ namespace redis_cluster
 	public:
 		TopologyRefreshPolicy(Duration period, Duration minInterval, Duration inFlightTimeout);
 
-		void Request() { requested_ = true; }
+		void Request() { requested = true; }
 
 		bool ShouldStart(TimePoint now) const;
 
@@ -85,12 +85,12 @@ namespace redis_cluster
 		bool ExpireInFlight(TimePoint now);
 
 	private:
-		Duration period_;
-		Duration minInterval_;
-		Duration inFlightTimeout_;
-		std::optional<TimePoint> lastStart_;
-		uint64_t generation_ = 0;
-		bool requested_ = false;
-		bool inFlight_ = false;
+		Duration period;
+		Duration minInterval;
+		Duration inFlightTimeout;
+		std::optional<TimePoint> lastStart;
+		uint64_t generation = 0;
+		bool requested = false;
+		bool inFlight = false;
 	};
 }

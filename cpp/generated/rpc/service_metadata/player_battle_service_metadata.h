@@ -58,3 +58,11 @@ constexpr uint32_t BattleClientPlayerSurrenderBattleIndex = 12;
 constexpr uint32_t BattleClientPlayerNotifySurrenderVoteMessageId = 480;
 constexpr uint32_t BattleClientPlayerNotifySurrenderVoteIndex = 13;
 #define BattleClientPlayerNotifySurrenderVoteMethod  ::BattleClientPlayer_Stub::descriptor()->method(13)
+
+constexpr uint32_t BattleClientPlayerUpdateBattlePrepMessageId = 504;
+constexpr uint32_t BattleClientPlayerUpdateBattlePrepIndex = 14;
+#define BattleClientPlayerUpdateBattlePrepMethod  ::BattleClientPlayer_Stub::descriptor()->method(14)
+
+constexpr uint32_t BattleClientPlayerNotifyBattlePrepUpdateMessageId = 505;
+constexpr uint32_t BattleClientPlayerNotifyBattlePrepUpdateIndex = 15;
+#define BattleClientPlayerNotifyBattlePrepUpdateMethod  ::BattleClientPlayer_Stub::descriptor()->method(15)

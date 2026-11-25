@@ -62,8 +62,8 @@ public:
     void OnWatchStreamRestarted() override;
 
     // 单测观察用。
-    int64_t AppliedThroughRevision() const { return appliedThrough_; }
-    bool WatchEstablished() const { return watchId_ >= 0; }
+    int64_t AppliedThroughRevision() const { return appliedThrough; }
+    bool WatchEstablished() const { return watchId >= 0; }
 
 private:
     void RequestFullRange();
@@ -74,20 +74,20 @@ private:
     // 完整 key → 去掉前缀的相对键;不属于前缀返回空串。
     std::string RelativeKey(const std::string &key) const;
 
-    kill_switch::KillSwitch &target_;
-    const std::string prefix_;
-    const std::chrono::seconds recheckInterval_;
+    kill_switch::KillSwitch &target;
+    const std::string prefix;
+    const std::chrono::seconds recheckInterval;
 
-    std::unique_ptr<EtcdTransport> transport_;
-    TimerTaskComp recheckTimer_;
-    TimerTaskComp cancelRetryTimer_;
-    std::mt19937 jitter_{std::random_device{}()};
+    std::unique_ptr<EtcdTransport> transport;
+    TimerTaskComp recheckTimer;
+    TimerTaskComp cancelRetryTimer;
+    std::mt19937 jitter{std::random_device{}()};
 
     // 本地规则已准确反映到的 etcd revision:全量快照的 revision,或之后应用过的最新 watch 事件的 mod_revision。
-    int64_t appliedThrough_{0};
-    bool everSynced_{false};
-    bool watchCreateSent_{false};
-    int64_t watchId_{-1};
-    double cancelRetryBackoffSeconds_{0};
-    bool shutdown_{false};
+    int64_t appliedThrough{0};
+    bool everSynced{false};
+    bool watchCreateSent{false};
+    int64_t watchId{-1};
+    double cancelRetryBackoffSeconds{0};
+    bool shutdown{false};
 };

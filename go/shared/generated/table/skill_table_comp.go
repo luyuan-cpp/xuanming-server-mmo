@@ -225,6 +225,14 @@ type SkillRarity_tierComp struct {
     Value uint32
 }
 
+type SkillSecondary_target_policyComp struct {
+    Value uint32
+}
+
+type SkillExclusive_groupComp struct {
+    Value uint32
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -456,6 +464,14 @@ func MakeSkillScroll_idComp(row *pb.SkillTable) SkillScroll_idComp {
 
 func MakeSkillRarity_tierComp(row *pb.SkillTable) SkillRarity_tierComp {
     return SkillRarity_tierComp{Value: row.RarityTier}
+}
+
+func MakeSkillSecondary_target_policyComp(row *pb.SkillTable) SkillSecondary_target_policyComp {
+    return SkillSecondary_target_policyComp{Value: row.SecondaryTargetPolicy}
+}
+
+func MakeSkillExclusive_groupComp(row *pb.SkillTable) SkillExclusive_groupComp {
+    return SkillExclusive_groupComp{Value: row.ExclusiveGroup}
 }
 
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {

@@ -81,33 +81,33 @@ namespace gate_push
 	public:
 		explicit EncodedFrame(const MessageContent &content)
 		{
-			ProtobufCodec::fillEmptyBuffer(&bytes_, content);
+			ProtobufCodec::fillEmptyBuffer(&bytes, content);
 		}
 
 		void SendTo(const muduo::net::TcpConnectionPtr &conn) const
 		{
-			const muduo::net::Buffer &bytes = websocket::IsUpgraded(conn) ? WebSocketBytes() : bytes_;
+			const muduo::net::Buffer &bytes = websocket::IsUpgraded(conn) ? WebSocketBytes() : this->bytes;
 			conn->send(bytes.peek(), static_cast<int>(bytes.readableBytes()));
 		}
 
-		const char *data() const { return bytes_.peek(); }
-		std::size_t size() const { return bytes_.readableBytes(); }
+		const char *data() const { return bytes.peek(); }
+		std::size_t size() const { return bytes.readableBytes(); }
 
 	private:
 		// 小游戏连接(WebSocket)收的是同一份帧字节前面加一个帧头(network/codec/websocket.h)。服务端帧不加掩码,
 		// 所有连接收到的字节相同,所以仍然只编码一次;第一次遇到 WebSocket 连接时才拼这一份。
 		const muduo::net::Buffer &WebSocketBytes() const
 		{
-			if (webSocketBytes_.readableBytes() == 0)
+			if (webSocketBytes.readableBytes() == 0)
 			{
-				webSocketBytes_ = bytes_;
-				websocket::Frame(&webSocketBytes_);
+				webSocketBytes = bytes;
+				websocket::Frame(&webSocketBytes);
 			}
-			return webSocketBytes_;
+			return webSocketBytes;
 		}
 
-		muduo::net::Buffer bytes_;
-		mutable muduo::net::Buffer webSocketBytes_{0};
+		muduo::net::Buffer bytes;
+		mutable muduo::net::Buffer webSocketBytes{0};
 	};
 
 	// 取消息里的 message_content,缺失返回空指针。message 字段有存在位,缺失时 message_content() 是默认实例,

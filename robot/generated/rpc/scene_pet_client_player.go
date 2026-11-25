@@ -330,3 +330,49 @@ func (scenePetClientPlayerRpc) decodeSavePetEntries(reply *base.MessageContent, 
 	}
 	return resp, nil
 }
+
+// SwitchPetEntryPreset 异步调用 ScenePetClientPlayer.SwitchPetEntryPreset(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) SwitchPetEntryPreset(c *pkg.GameClient, req *scene.SwitchPetEntryPresetRequest, timeout time.Duration, done func(*scene.SwitchPetEntryPresetResponse, error)) {
+	c.Call(game.ScenePetClientPlayerSwitchPetEntryPresetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSwitchPetEntryPreset(reply, err))
+	})
+}
+
+// SwitchPetEntryPresetSync 同步调用 ScenePetClientPlayer.SwitchPetEntryPreset(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) SwitchPetEntryPresetSync(ctx context.Context, c *pkg.GameClient, req *scene.SwitchPetEntryPresetRequest, timeout time.Duration) (*scene.SwitchPetEntryPresetResponse, error) {
+	return r.decodeSwitchPetEntryPreset(c.CallSync(ctx, game.ScenePetClientPlayerSwitchPetEntryPresetMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeSwitchPetEntryPreset(reply *base.MessageContent, err error) (*scene.SwitchPetEntryPresetResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SwitchPetEntryPresetResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.SwitchPetEntryPreset reply: %w", err)
+	}
+	return resp, nil
+}
+
+// AscendPetTier 异步调用 ScenePetClientPlayer.AscendPetTier(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) AscendPetTier(c *pkg.GameClient, req *scene.AscendPetTierRequest, timeout time.Duration, done func(*scene.AscendPetTierResponse, error)) {
+	c.Call(game.ScenePetClientPlayerAscendPetTierMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeAscendPetTier(reply, err))
+	})
+}
+
+// AscendPetTierSync 同步调用 ScenePetClientPlayer.AscendPetTier(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) AscendPetTierSync(ctx context.Context, c *pkg.GameClient, req *scene.AscendPetTierRequest, timeout time.Duration) (*scene.AscendPetTierResponse, error) {
+	return r.decodeAscendPetTier(c.CallSync(ctx, game.ScenePetClientPlayerAscendPetTierMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeAscendPetTier(reply *base.MessageContent, err error) (*scene.AscendPetTierResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.AscendPetTierResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.AscendPetTier reply: %w", err)
+	}
+	return resp, nil
+}

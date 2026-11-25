@@ -326,7 +326,7 @@ TEST_F(BagJavaParityTest, LegacyZeroSequencesFollowEveryExistingStampInTheirOwnB
     auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
     EXPECT_EQ(71u, bags.bags[kInventory].GetItemCompByGuid(kOldStack)->acquire_seq());
     EXPECT_EQ(72u, bags.bags[kInventory].GetItemCompByGuid(kOldOther + 1)->acquire_seq());
-    EXPECT_EQ(101u, bags.dynamicBags_.at(90).GetItemCompByGuid(kOldStack + 20)->acquire_seq());
+    EXPECT_EQ(101u, bags.dynamicBags.at(90).GetItemCompByGuid(kOldStack + 20)->acquire_seq());
     std::vector<Guid> added;
     ASSERT_EQ(kSuccess, bags.bags[kInventory].AddItem(ParityGrant(3, 1), &added));
     ASSERT_EQ(1u, added.size());
@@ -359,7 +359,7 @@ TEST_F(BagJavaParityTest, MarshalUsesBagThenSlotOrderForFixedAndDynamicBags)
     bags.bags[kInventory].InsertItemForRestore(kOldOther, 10, 1, 0, 2);
     for (const uint64_t id : {90u, 10u})
     {
-        auto &bag = bags.dynamicBags_[id];
+        auto &bag = bags.dynamicBags[id];
         bag.InsertItemForRestore(kOldStack + id, 10, 1, 3, 1);
         bag.InsertItemForRestore(kOldOther + id, 10, 1, 0, 2);
     }

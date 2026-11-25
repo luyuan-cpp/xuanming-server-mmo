@@ -101,9 +101,9 @@ public:
 
     [[nodiscard]] BossPhaseId CurrentPhase() const noexcept;
     [[nodiscard]] bool IsInCombat() const noexcept;
-    [[nodiscard]] uint32_t CombatEnterCount() const noexcept { return phaseCtx_.combatEnterCount; }
-    [[nodiscard]] uint32_t CombatExitCount() const noexcept { return phaseCtx_.combatExitCount; }
-    [[nodiscard]] const DungeonMonsterAiProfile& Profile() const noexcept { return profile_; }
+    [[nodiscard]] uint32_t CombatEnterCount() const noexcept { return phaseCtx.combatEnterCount; }
+    [[nodiscard]] uint32_t CombatExitCount() const noexcept { return phaseCtx.combatExitCount; }
+    [[nodiscard]] const DungeonMonsterAiProfile& Profile() const noexcept { return profile; }
 
 private:
     enum class PhaseEvent : uint32_t
@@ -122,10 +122,10 @@ private:
 
     void InitPhaseHfsm();
 
-    DungeonMonsterAiProfile profile_{};
-    PhaseCtx phaseCtx_{};
-    combat_ai::Hfsm<PhaseCtx, PhaseEvent> phaseHfsm_{};
-    combat_ai::BehaviorTreeState btState_{};
+    DungeonMonsterAiProfile profile{};
+    PhaseCtx phaseCtx{};
+    combat_ai::Hfsm<PhaseCtx, PhaseEvent> phaseHfsm{};
+    combat_ai::BehaviorTreeState btState{};
 };
 
 } // namespace turnbattle

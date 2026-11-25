@@ -227,33 +227,33 @@ public:
 	{
 		PruneExpired(nowUnix);
 		const std::string key(nonce);
-		if (seen_.find(key) != seen_.end())
+		if (seen.find(key) != seen.end())
 		{
 			return false;
 		}
-		if (entries_.size() >= kMaxEntries)
+		if (entries.size() >= kMaxEntries)
 		{
 			return false;
 		}
-		entries_.emplace_back(nowUnix + retainSeconds, key);
-		seen_.insert(key);
+		entries.emplace_back(nowUnix + retainSeconds, key);
+		seen.insert(key);
 		return true;
 	}
 
-	size_t size() const { return entries_.size(); }
+	size_t size() const { return entries.size(); }
 
 private:
 	void PruneExpired(int64_t nowUnix)
 	{
-		while (!entries_.empty() && entries_.front().first <= nowUnix)
+		while (!entries.empty() && entries.front().first <= nowUnix)
 		{
-			seen_.erase(entries_.front().second);
-			entries_.pop_front();
+			seen.erase(entries.front().second);
+			entries.pop_front();
 		}
 	}
 
-	std::deque<std::pair<int64_t, std::string>> entries_;
-	std::unordered_set<std::string> seen_;
+	std::deque<std::pair<int64_t, std::string>> entries;
+	std::unordered_set<std::string> seen;
 };
 
 struct GmAuthOutcome

@@ -32,8 +32,8 @@ class ItemStore
 {
 public:
     // ── 身份与生命期 ──────────────────────────────────────────────────
-    [[nodiscard]] std::size_t Size() const { return items_.size(); }
-    [[nodiscard]] bool Contains(Guid guid) const { return items_.contains(guid); }
+    [[nodiscard]] std::size_t Size() const { return items.size(); }
+    [[nodiscard]] bool Contains(Guid guid) const { return items.contains(guid); }
 
     // 返回仓库内的实例。调用方不得改 item_id / acquire_seq,也不得把指针留到下一次
     // Insert / Erase / Clear / 整理之后;接口不承诺跨写操作保留借用。
@@ -41,7 +41,7 @@ public:
     [[nodiscard]] const ItemComp *Find(Guid guid) const;
 
     // 当前水位(下一个会盖出的序号)。只读,给用例断言用。
-    [[nodiscard]] uint64_t NextAcquireSeq() const { return nextAcquireSeq_; }
+    [[nodiscard]] uint64_t NextAcquireSeq() const { return nextAcquireSeq; }
     // 加载边界先抬到全包最大既有序号之后，零章条目随后由 Insert 按出现顺序补章。
     void RaiseAcquireSeq(uint64_t sequence);
 
@@ -208,9 +208,9 @@ private:
     [[nodiscard]] std::vector<Items::value_type *> InAcquireOrder();
     [[nodiscard]] static bool IsMergeCandidate(const ItemComp &item, uint32_t maxStack);
 
-    Items items_{};
+    Items items{};
 
     // 下一个要盖的入包序号。1 起步,0 是"没盖章"的哨兵。
     // 只由 Insert 推进、只由 Clear 复位 —— 见 Insert 里的注释。
-    uint64_t nextAcquireSeq_{1};
+    uint64_t nextAcquireSeq{1};
 };

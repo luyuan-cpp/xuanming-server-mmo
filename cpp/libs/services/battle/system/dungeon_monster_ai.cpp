@@ -136,17 +136,17 @@ DungeonMonsterAiProfile BuildTrainedDefaultMonsterAiProfile()
 }
 
 DungeonMonsterAiController::DungeonMonsterAiController(DungeonMonsterAiProfile profile)
-    : profile_(std::move(profile))
-    , btState_(SharedDungeonMonsterTree().CreateState())
+    : profile(std::move(profile))
+    , btState(SharedDungeonMonsterTree().CreateState())
 {
-    phaseCtx_.enrageHpPermyriad = profile_.enrageHpPermyriad;
-    phaseCtx_.desperateHpPermyriad = profile_.desperateHpPermyriad;
+    phaseCtx.enrageHpPermyriad = this->profile.enrageHpPermyriad;
+    phaseCtx.desperateHpPermyriad = this->profile.desperateHpPermyriad;
     InitPhaseHfsm();
 }
 
 void DungeonMonsterAiController::InitPhaseHfsm()
 {
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kRoot),
         {
             .parent = combat_ai::kInvalidHfsmState,
@@ -158,7 +158,7 @@ void DungeonMonsterAiController::InitPhaseHfsm()
             },
         });
 
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kCombat),
         {
             .parent = ToId(BossPhaseId::kRoot),
@@ -167,7 +167,7 @@ void DungeonMonsterAiController::InitPhaseHfsm()
             .onExit = [](PhaseCtx& ctx) { ++ctx.combatExitCount; },
         });
 
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kPhaseOpening),
         {
             .parent = ToId(BossPhaseId::kCombat),
@@ -184,7 +184,7 @@ void DungeonMonsterAiController::InitPhaseHfsm()
             },
         });
 
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kPhaseEnrage),
         {
             .parent = ToId(BossPhaseId::kCombat),
@@ -197,19 +197,19 @@ void DungeonMonsterAiController::InitPhaseHfsm()
             },
         });
 
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kPhaseDesperate),
         {
             .parent = ToId(BossPhaseId::kCombat),
         });
 
-    phaseHfsm_.AddState(
+    phaseHfsm.AddState(
         ToId(BossPhaseId::kDead),
         {
             .parent = ToId(BossPhaseId::kRoot),
         });
 
-    phaseHfsm_.Start(ToId(BossPhaseId::kRoot), phaseCtx_);
+    phaseHfsm.Start(ToId(BossPhaseId::kRoot), phaseCtx);
 }
 
 std::optional<BattleAction> DungeonMonsterAiController::DecideAction(const MonsterDecisionInput& input)
@@ -220,11 +220,11 @@ std::optional<BattleAction> DungeonMonsterAiController::DecideAction(const Monst
         return std::nullopt;
     }
 
-    phaseCtx_.selfHpPermyriad = input.selfHpPermyriad;
-    phaseHfsm_.Update(phaseCtx_, 1);
+    phaseCtx.selfHpPermyriad = input.selfHpPermyriad;
+    phaseHfsm.Update(phaseCtx, 1);
 
-    MonsterBtCtx btCtx{std::cref(input), std::cref(profile_), CurrentPhase(), std::nullopt};
-    const combat_ai::BtStatus status = SharedDungeonMonsterTree().Tick(btCtx, btState_);
+    MonsterBtCtx btCtx{std::cref(input), std::cref(profile), CurrentPhase(), std::nullopt};
+    const combat_ai::BtStatus status = SharedDungeonMonsterTree().Tick(btCtx, btState);
     if (status != combat_ai::BtStatus::kSuccess)
     {
         return std::nullopt;
@@ -234,20 +234,20 @@ std::optional<BattleAction> DungeonMonsterAiController::DecideAction(const Monst
 
 void DungeonMonsterAiController::NotifyDead()
 {
-    if (phaseHfsm_.Started() && CurrentPhase() != BossPhaseId::kDead)
+    if (phaseHfsm.Started() && CurrentPhase() != BossPhaseId::kDead)
     {
-        phaseHfsm_.Dispatch(PhaseEvent::kDie, phaseCtx_);
+        phaseHfsm.Dispatch(PhaseEvent::kDie, phaseCtx);
     }
 }
 
 BossPhaseId DungeonMonsterAiController::CurrentPhase() const noexcept
 {
-    return static_cast<BossPhaseId>(phaseHfsm_.CurrentLeaf());
+    return static_cast<BossPhaseId>(phaseHfsm.CurrentLeaf());
 }
 
 bool DungeonMonsterAiController::IsInCombat() const noexcept
 {
-    return phaseHfsm_.IsInState(ToId(BossPhaseId::kCombat));
+    return phaseHfsm.IsInState(ToId(BossPhaseId::kCombat));
 }
 
 } // namespace turnbattle

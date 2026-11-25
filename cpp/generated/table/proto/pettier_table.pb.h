@@ -232,6 +232,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTierTable final : public ::googl
     kArtKeyFieldNumber = 3,
     kDescFieldNumber = 4,
     kIdFieldNumber = 1,
+    kAscendCostItemIdFieldNumber = 5,
+    kAscendCostGoldFieldNumber = 7,
+    kAscendCostItemCountFieldNumber = 6,
+    kAscendMinPetLevelFieldNumber = 8,
+    kBonusEntryPointsFieldNumber = 9,
   };
   // string name = 2;
   void clear_name() ;
@@ -288,12 +293,62 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTierTable final : public ::googl
   void _internal_set_id(::uint32_t value);
 
   public:
+  // uint32 ascend_cost_item_id = 5;
+  void clear_ascend_cost_item_id() ;
+  [[nodiscard]] ::uint32_t ascend_cost_item_id() const;
+  void set_ascend_cost_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ascend_cost_item_id() const;
+  void _internal_set_ascend_cost_item_id(::uint32_t value);
+
+  public:
+  // uint64 ascend_cost_gold = 7;
+  void clear_ascend_cost_gold() ;
+  [[nodiscard]] ::uint64_t ascend_cost_gold() const;
+  void set_ascend_cost_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ascend_cost_gold() const;
+  void _internal_set_ascend_cost_gold(::uint64_t value);
+
+  public:
+  // uint32 ascend_cost_item_count = 6;
+  void clear_ascend_cost_item_count() ;
+  [[nodiscard]] ::uint32_t ascend_cost_item_count() const;
+  void set_ascend_cost_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ascend_cost_item_count() const;
+  void _internal_set_ascend_cost_item_count(::uint32_t value);
+
+  public:
+  // uint32 ascend_min_pet_level = 8;
+  void clear_ascend_min_pet_level() ;
+  [[nodiscard]] ::uint32_t ascend_min_pet_level() const;
+  void set_ascend_min_pet_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ascend_min_pet_level() const;
+  void _internal_set_ascend_min_pet_level(::uint32_t value);
+
+  public:
+  // uint32 bonus_entry_points = 9;
+  void clear_bonus_entry_points() ;
+  [[nodiscard]] ::uint32_t bonus_entry_points() const;
+  void set_bonus_entry_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bonus_entry_points() const;
+  void _internal_set_bonus_entry_points(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetTierTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 36,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -325,6 +380,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTierTable final : public ::googl
     ::google::protobuf::internal::ArenaStringPtr art_key_;
     ::google::protobuf::internal::ArenaStringPtr desc_;
     ::uint32_t id_;
+    ::uint32_t ascend_cost_item_id_;
+    ::uint64_t ascend_cost_gold_;
+    ::uint32_t ascend_cost_item_count_;
+    ::uint32_t ascend_min_pet_level_;
+    ::uint32_t bonus_entry_points_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -773,6 +833,126 @@ inline void PetTierTable::set_allocated_desc(::std::string* PROTOBUF_NULLABLE va
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:PetTierTable.desc)
+}
+
+// uint32 ascend_cost_item_id = 5;
+inline void PetTierTable::clear_ascend_cost_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t PetTierTable::ascend_cost_item_id() const {
+  // @@protoc_insertion_point(field_get:PetTierTable.ascend_cost_item_id)
+  return _internal_ascend_cost_item_id();
+}
+inline void PetTierTable::set_ascend_cost_item_id(::uint32_t value) {
+  _internal_set_ascend_cost_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:PetTierTable.ascend_cost_item_id)
+}
+inline ::uint32_t PetTierTable::_internal_ascend_cost_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ascend_cost_item_id_;
+}
+inline void PetTierTable::_internal_set_ascend_cost_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_item_id_ = value;
+}
+
+// uint32 ascend_cost_item_count = 6;
+inline void PetTierTable::clear_ascend_cost_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PetTierTable::ascend_cost_item_count() const {
+  // @@protoc_insertion_point(field_get:PetTierTable.ascend_cost_item_count)
+  return _internal_ascend_cost_item_count();
+}
+inline void PetTierTable::set_ascend_cost_item_count(::uint32_t value) {
+  _internal_set_ascend_cost_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PetTierTable.ascend_cost_item_count)
+}
+inline ::uint32_t PetTierTable::_internal_ascend_cost_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ascend_cost_item_count_;
+}
+inline void PetTierTable::_internal_set_ascend_cost_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_item_count_ = value;
+}
+
+// uint64 ascend_cost_gold = 7;
+inline void PetTierTable::clear_ascend_cost_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t PetTierTable::ascend_cost_gold() const {
+  // @@protoc_insertion_point(field_get:PetTierTable.ascend_cost_gold)
+  return _internal_ascend_cost_gold();
+}
+inline void PetTierTable::set_ascend_cost_gold(::uint64_t value) {
+  _internal_set_ascend_cost_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PetTierTable.ascend_cost_gold)
+}
+inline ::uint64_t PetTierTable::_internal_ascend_cost_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ascend_cost_gold_;
+}
+inline void PetTierTable::_internal_set_ascend_cost_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_cost_gold_ = value;
+}
+
+// uint32 ascend_min_pet_level = 8;
+inline void PetTierTable::clear_ascend_min_pet_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_min_pet_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PetTierTable::ascend_min_pet_level() const {
+  // @@protoc_insertion_point(field_get:PetTierTable.ascend_min_pet_level)
+  return _internal_ascend_min_pet_level();
+}
+inline void PetTierTable::set_ascend_min_pet_level(::uint32_t value) {
+  _internal_set_ascend_min_pet_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PetTierTable.ascend_min_pet_level)
+}
+inline ::uint32_t PetTierTable::_internal_ascend_min_pet_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ascend_min_pet_level_;
+}
+inline void PetTierTable::_internal_set_ascend_min_pet_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ascend_min_pet_level_ = value;
+}
+
+// uint32 bonus_entry_points = 9;
+inline void PetTierTable::clear_bonus_entry_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_entry_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t PetTierTable::bonus_entry_points() const {
+  // @@protoc_insertion_point(field_get:PetTierTable.bonus_entry_points)
+  return _internal_bonus_entry_points();
+}
+inline void PetTierTable::set_bonus_entry_points(::uint32_t value) {
+  _internal_set_bonus_entry_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PetTierTable.bonus_entry_points)
+}
+inline ::uint32_t PetTierTable::_internal_bonus_entry_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_entry_points_;
+}
+inline void PetTierTable::_internal_set_bonus_entry_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_entry_points_ = value;
 }
 
 // -------------------------------------------------------------------

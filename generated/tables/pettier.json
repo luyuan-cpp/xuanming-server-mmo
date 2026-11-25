@@ -2,31 +2,56 @@
  "data": [
   {
    "art_key": "normal",
-   "desc": "独立身份；同一20点条目预算；首测不额外叠加全局倍率。",
+   "ascend_cost_gold": 500,
+   "ascend_cost_item_count": 10,
+   "ascend_cost_item_id": 3406,
+   "ascend_min_pet_level": 10,
+   "bonus_entry_points": 0,
+   "desc": "基础灵阶，条目点基础预算 20；可经灵阶突破进阶至变异乃至圣兽。",
    "id": 1,
    "name": "普通"
   },
   {
    "art_key": "mutant",
-   "desc": "独立身份；同一20点条目预算；首测不额外叠加全局倍率。",
+   "ascend_cost_gold": 1500,
+   "ascend_cost_item_count": 20,
+   "ascend_cost_item_id": 3406,
+   "ascend_min_pet_level": 25,
+   "bonus_entry_points": 2,
+   "desc": "二阶变异灵宠，额外 +2 条目点预算（总计 22 点）。",
    "id": 2,
    "name": "变异"
   },
   {
    "art_key": "spirit",
-   "desc": "独立身份；同一20点条目预算；首测不额外叠加全局倍率。",
+   "ascend_cost_gold": 3000,
+   "ascend_cost_item_count": 35,
+   "ascend_cost_item_id": 3406,
+   "ascend_min_pet_level": 40,
+   "bonus_entry_points": 4,
+   "desc": "三阶灵兽，额外 +4 条目点预算（总计 24 点）。",
    "id": 3,
    "name": "灵兽"
   },
   {
    "art_key": "divine",
-   "desc": "独立身份；同一20点条目预算；首测不额外叠加全局倍率。",
+   "ascend_cost_gold": 5000,
+   "ascend_cost_item_count": 50,
+   "ascend_cost_item_id": 3406,
+   "ascend_min_pet_level": 55,
+   "bonus_entry_points": 6,
+   "desc": "四阶神兽，额外 +6 条目点预算（总计 26 点）。",
    "id": 4,
    "name": "神兽"
   },
   {
    "art_key": "sacred",
-   "desc": "独立身份；同一20点条目预算；首测不额外叠加全局倍率。",
+   "ascend_cost_gold": 0,
+   "ascend_cost_item_count": 0,
+   "ascend_cost_item_id": 0,
+   "ascend_min_pet_level": 0,
+   "bonus_entry_points": 8,
+   "desc": "五阶巅峰圣兽，额外 +8 条目点预算（总计 28 点），已达最高灵阶。",
    "id": 5,
    "name": "圣兽"
   }

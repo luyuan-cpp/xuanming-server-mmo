@@ -77,10 +77,10 @@ void WriteGuardLogToStdout(const char *msg, int len)
 class ScopedGuardLogCapture
 {
 public:
-	ScopedGuardLogCapture() : previousLevel_(muduo::Logger::logLevel())
+	ScopedGuardLogCapture() : previousLevel(muduo::Logger::logLevel())
 	{
 		g_guardLogLines.clear();
-		if (previousLevel_ > muduo::Logger::WARN)
+		if (previousLevel > muduo::Logger::WARN)
 		{
 			muduo::Logger::setLogLevel(muduo::Logger::WARN);
 		}
@@ -89,13 +89,13 @@ public:
 	~ScopedGuardLogCapture()
 	{
 		muduo::Logger::setOutput(&WriteGuardLogToStdout);
-		muduo::Logger::setLogLevel(previousLevel_);
+		muduo::Logger::setLogLevel(previousLevel);
 	}
 	ScopedGuardLogCapture(const ScopedGuardLogCapture &) = delete;
 	ScopedGuardLogCapture &operator=(const ScopedGuardLogCapture &) = delete;
 
 private:
-	muduo::Logger::LogLevel previousLevel_;
+	muduo::Logger::LogLevel previousLevel;
 };
 
 // 「补缴因版本错位被跳过」的 WARN 行数。级别字段是定宽的 "WARN  "(muduo Logging.cc 的 LogLevelName)。
@@ -126,34 +126,34 @@ protected:
 			AnomalyDetector::SetCurrencyThreshold(static_cast<CurrencyType>(type), AnomalyThreshold{});
 		}
 
-		player_ = tlsEcs.actorRegistry.create();
-		auto &currency = tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
+		player = tlsEcs.actorRegistry.create();
+		auto &currency = tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
 		for (uint32_t type = 0; type < Slot(kCurrencyMax); ++type)
 		{
 			currency.add_values(0);
 		}
-		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
+		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
 	}
 
 	void TearDown() override
 	{
-		if (tlsEcs.actorRegistry.valid(player_))
+		if (tlsEcs.actorRegistry.valid(player))
 		{
-			tlsEcs.actorRegistry.destroy(player_); // 异常窗口组件随实体一起销毁
+			tlsEcs.actorRegistry.destroy(player); // 异常窗口组件随实体一起销毁
 		}
 	}
 
 	void SetBalance(CurrencyType type, uint64_t value)
 	{
-		tlsEcs.actorRegistry.get<CurrencyComp>(player_).set_values(static_cast<int>(Slot(type)), value);
+		tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(static_cast<int>(Slot(type)), value);
 	}
 
 	PlayerCurrencyComp &Debts()
 	{
-		return tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_);
+		return tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player);
 	}
 
-	entt::entity player_{entt::null};
+	entt::entity player{entt::null};
 };
 
 // 余额离上限只差 5、金币欠款还剩 3,入账 10:扣还 3 之后还要入 7,放不下。
@@ -165,26 +165,26 @@ TEST_F(CurrencyAddGuardTest, BalanceOverflowIsRejectedBeforeAnySideEffect)
 	SetBalance(kCurrencyDiamond, kMaxBalance);
 	const uint64_t logsBefore = LogAttempts();
 
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyDiamond, 1)) << "没有欠款时同样按余额判";
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 1)) << "没有欠款时同样按余额判";
 	EXPECT_EQ(kInvalidParameter,
-			  CurrencySystem::AddCurrency(player_, kCurrencyDiamond, std::numeric_limits<int64_t>::max()));
+			  CurrencySystem::AddCurrency(player, kCurrencyDiamond, std::numeric_limits<int64_t>::max()));
 
-	EXPECT_EQ(kMaxBalance - 5, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "余额回绕了";
-	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player_, kCurrencyDiamond)) << "余额回绕了";
+	EXPECT_EQ(kMaxBalance - 5, CurrencySystem::GetBalance(player, kCurrencyGold)) << "余额回绕了";
+	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player, kCurrencyDiamond)) << "余额回绕了";
 	ASSERT_EQ(1u, Debts().debts.count(Slot(kCurrencyGold))) << "拒绝之前就把欠款扣还删掉了";
 	EXPECT_EQ(3u, Debts().debts.at(Slot(kCurrencyGold)).owed);
 	EXPECT_EQ(0u, Debts().debts.at(Slot(kCurrencyGold)).paid) << "拒绝之前就扣还了一部分";
 	EXPECT_FALSE(Debts().dirty) << "拒绝路径不得标脏";
 	EXPECT_EQ(logsBefore, LogAttempts()) << "拒绝路径不得写补缴流水或入账流水";
-	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerAnomalyWindowComp>(player_)) << "拒绝路径不得记异常检测";
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerAnomalyWindowComp>(player)) << "拒绝路径不得记异常检测";
 
 	// 对照:放得下的一笔照常入账、写流水、记异常窗口 —— 上面那几条「没变化」不是因为观测手段失灵。
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyBindDiamond, 1));
-	EXPECT_EQ(1u, CurrencySystem::GetBalance(player_, kCurrencyBindDiamond));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 1));
+	EXPECT_EQ(1u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
 	EXPECT_TRUE(Debts().dirty);
 	EXPECT_EQ(logsBefore + 1, LogAttempts());
-	EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerAnomalyWindowComp>(player_));
+	EXPECT_TRUE(tlsEcs.actorRegistry.any_of<PlayerAnomalyWindowComp>(player));
 }
 
 // 溢出按扣还后的净入账额判,与战斗结算整批预检 CanCreditWholeBattleCurrency 同口径:预检放行的那一笔,
@@ -195,13 +195,13 @@ TEST_F(CurrencyAddGuardTest, OverflowIsJudgedOnTheCreditLeftAfterClawback)
 	Debts().debts[Slot(kCurrencyGold)].owed = 3;
 	const uint64_t logsBefore = LogAttempts();
 
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 8)) << "边界含:恰好装满不算溢出";
-	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 8)) << "边界含:恰好装满不算溢出";
+	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player, kCurrencyGold));
 	EXPECT_EQ(0u, Debts().debts.count(Slot(kCurrencyGold))) << "欠款还清照常删除";
 	EXPECT_EQ(logsBefore + 2, LogAttempts()) << "一条补缴流水 + 一条入账流水";
 
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 1));
-	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "余额回绕了";
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 1));
+	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player, kCurrencyGold)) << "余额回绕了";
 	EXPECT_EQ(logsBefore + 2, LogAttempts()) << "拒绝路径不得写流水";
 }
 
@@ -211,20 +211,20 @@ TEST_F(CurrencyAddGuardTest, CreditOverflowsAgreesWithAddCurrency)
 {
 	SetBalance(kCurrencyGold, kMaxBalance - 5);
 	Debts().debts[Slot(kCurrencyGold)].owed = 3;
-	EXPECT_FALSE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 8)) << "扣还 3 + 入账 5,恰好装满";
-	EXPECT_TRUE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 9));
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 9)) << "预检说溢出,入账就拒";
-	EXPECT_EQ(kMaxBalance - 5, CurrencySystem::GetBalance(player_, kCurrencyGold));
+	EXPECT_FALSE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 8)) << "扣还 3 + 入账 5,恰好装满";
+	EXPECT_TRUE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 9));
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 9)) << "预检说溢出,入账就拒";
+	EXPECT_EQ(kMaxBalance - 5, CurrencySystem::GetBalance(player, kCurrencyGold));
 
 	Debts().debts[Slot(kCurrencyGold)].frozen = true;
-	EXPECT_TRUE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 8)) << "冻结的欠款不扣还,照全额判";
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 8));
+	EXPECT_TRUE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 8)) << "冻结的欠款不扣还,照全额判";
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 8));
 	Debts().debts[Slot(kCurrencyGold)].frozen = false;
 
-	EXPECT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 8)) << "预检放行的那一笔入得进去";
-	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player_, kCurrencyGold));
-	EXPECT_TRUE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 1));
-	EXPECT_FALSE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 0)) << "0 不归溢出预检";
+	EXPECT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 8)) << "预检放行的那一笔入得进去";
+	EXPECT_EQ(kMaxBalance, CurrencySystem::GetBalance(player, kCurrencyGold));
+	EXPECT_TRUE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 1));
+	EXPECT_FALSE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 0)) << "0 不归溢出预检";
 }
 
 // 更新版本写下的欠款(带本版本不认识的字段):收入足以还清剩下的 40。修复前按旧口径扣还 40、扣满整条删除,
@@ -241,14 +241,14 @@ TEST_F(CurrencyAddGuardTest, DebtWithNewerVersionFieldsIsNeitherRepaidNorDeleted
 	Debts().LoadFromProto(persisted);
 	const std::string carriedBefore = Debts().debts.at(Slot(kCurrencyGold)).unknownFields;
 	ASSERT_FALSE(carriedBefore.empty());
-	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold));
+	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold));
 	// 对照:另一币种的普通欠款(不带未知字段)。
-	ASSERT_EQ(kSuccess, CurrencySystem::AttachDebt(player_, kCurrencyDiamond, 40));
+	ASSERT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyDiamond, 40));
 	const uint64_t logsBefore = LogAttempts();
 
 	ScopedGuardLogCapture capture;
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	EXPECT_EQ(100u, CurrencySystem::GetBalance(player_, kCurrencyGold)) << "按冻结处理:全额入账";
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	EXPECT_EQ(100u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "按冻结处理:全额入账";
 	ASSERT_EQ(1u, Debts().debts.count(Slot(kCurrencyGold))) << "带新字段的欠款被扣满删除了";
 	{
 		const auto &kept = Debts().debts.at(Slot(kCurrencyGold));
@@ -256,13 +256,13 @@ TEST_F(CurrencyAddGuardTest, DebtWithNewerVersionFieldsIsNeitherRepaidNorDeleted
 		EXPECT_EQ(10u, kept.paid) << "本版本不得按旧口径扣还";
 		EXPECT_EQ(carriedBefore, kept.unknownFields) << "未知字段必须原样随欠款保留";
 	}
-	EXPECT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold));
+	EXPECT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold));
 	EXPECT_EQ(logsBefore + 1, LogAttempts()) << "只有入账流水,没有补缴流水";
 	EXPECT_EQ(1u, ClawbackVersionSkewWarnLines()) << "跳过补缴要打一条版本错位 WARN(计数口径)";
 
 	// 普通欠款照常扣还、扣满即删,不打版本错位 WARN。
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyDiamond, 100));
-	EXPECT_EQ(60u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 100));
+	EXPECT_EQ(60u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
 	EXPECT_EQ(0u, Debts().debts.count(Slot(kCurrencyDiamond)));
 	EXPECT_EQ(1u, ClawbackVersionSkewWarnLines());
 
@@ -294,17 +294,17 @@ TEST_F(CurrencyAddGuardTest, ClawbackSkippedForVersionSkewIsCountedAndExported)
 	frozen->set_frozen(true);
 	frozen->mutable_unknown_fields()->AddVarint(kFutureDebtField, 7);
 	Debts().LoadFromProto(persisted);
-	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold));
-	ASSERT_EQ(kSuccess, CurrencySystem::AttachDebt(player_, kCurrencyDiamond, 40)); // 普通欠款,对照
+	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold));
+	ASSERT_EQ(kSuccess, CurrencySystem::AttachDebt(player, kCurrencyDiamond, 40)); // 普通欠款,对照
 
 	const uint64_t before = currency_clawback_stats::ReadVersionSkewSkipped();
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
 	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "跳过补缴计一次";
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyDiamond, 10));
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyBindDiamond, 10));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 10));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 10));
 	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "普通欠款照常扣还、冻结的本来就不扣,都不计";
 	SetBalance(kCurrencyGold, kMaxBalance);
-	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
+	EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
 	EXPECT_EQ(before + 1, currency_clawback_stats::ReadVersionSkewSkipped()) << "溢出被拒,什么都没提交,不计";
 
 	// 导出:族名、类型与当前值(启动即以 0 导出,告警的 increase 抓得到第一次)。重复登记被注册表按名字拒绝,只打一行 ERROR。

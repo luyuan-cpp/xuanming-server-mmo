@@ -258,11 +258,11 @@ PlayerSceneSystem::EntryOwnershipGuard::Read(entt::entity player, SessionId requ
 }
 
 PlayerSceneSystem::EntryOwnershipGuard::EntryOwnershipGuard(entt::entity player, SessionId requestSession)
-	: player_(player), requestSession_(requestSession), snapshot_(Read(player, requestSession)) {}
+	: player(player), requestSession(requestSession), snapshot(Read(player, requestSession)) {}
 
 bool PlayerSceneSystem::EntryOwnershipGuard::IsCurrent() const
 {
-	return snapshot_.has_value() && snapshot_ == Read(player_, requestSession_);
+	return snapshot.has_value() && snapshot == Read(player, requestSession);
 }
 
 SceneEntity PlayerSceneSystem::FindSceneById(uint64_t sceneId)

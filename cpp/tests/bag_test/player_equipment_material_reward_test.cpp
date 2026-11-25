@@ -22,6 +22,7 @@
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
+#include "proto/data_service/data_service.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "proto/player_inbox/player_inbox.pb.h"
 #include "table/code/item_table.h"
@@ -83,6 +84,8 @@ protected:
         CreatePlayer();
     }
     void TearDown() override {
+        Reward::SetAccountQuotaSyncTransportForTest(nullptr);
+        Reward::OnPlayerDestroyed(kPlayer);
         Reward::SetPersistForTest(nullptr); BagService::SetItemInstanceInitializer({});
         tlsEcs.playerList.erase(kPlayer);
         if (tlsEcs.actorRegistry.valid(player)) tlsEcs.actorRegistry.destroy(player);
@@ -167,7 +170,7 @@ TEST_F(EquipmentMaterialRewardTest, Utc21DayAndMondayWeekBoundariesAreExplicit) 
     EXPECT_FALSE(Reward::ResolveWeek(0, start, next));
     EXPECT_FALSE(Reward::ResolveWeek(std::numeric_limits<uint64_t>::max(), start, next));
 }
-TEST_F(EquipmentMaterialRewardTest, TwoStageQuotaHasNoDailyCapInStage1AndSwitchesToWeekly100After660) {
+TEST_F(EquipmentMaterialRewardTest, TwoStageQuotaHasNoDailyCapInStage1AndSwitchesToWeekly150After660) {
     // 阶段一：无日限，普通 PVE +10(1可交易)，困难 PVE +15(1可交易)，PVP 胜 +15(1可交易)，同一天连续累计。
     Reward::BattleCreditDelta d1, d2, d3;
     Credit(1, kNow, match::MATCH_MODE_PVE_SOLO, 1, &d1);
@@ -198,26 +201,30 @@ TEST_F(EquipmentMaterialRewardTest, TwoStageQuotaHasNoDailyCapInStage1AndSwitche
     EXPECT_EQ(660u, Ledger().material_reward().lifetime_earned());
     EXPECT_EQ(tradableBeforeTail, Ledger().material_reward().tradable_earned_total());
 
-    // 进入第二阶段：自动切换为每周 100 份全绑定（0 可交易）。
+    // 进入第二阶段：自动切换为每周 150 份全绑定（0 可交易）。
     GetEquipmentMaterialRewardResponse snap;
     ASSERT_EQ(kSuccess, Reward::Get(player, kNow, snap));
     EXPECT_TRUE(snap.snapshot().weekly_phase_active());
     EXPECT_EQ(0u, snap.snapshot().earned_this_week());
-    EXPECT_EQ(100u, snap.snapshot().weekly_limit());
+    EXPECT_EQ(150u, snap.snapshot().weekly_limit());
 
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 9; ++i) {
         Reward::BattleCreditDelta w;
         Credit(++battleId, kNow, match::MATCH_MODE_PVP_TEAM, 1, &w);
         EXPECT_EQ(15u, w.totalUnitsAdded);
         EXPECT_EQ(0u, w.tradableUnitsAdded);
     }
-    EXPECT_EQ(90u, Ledger().material_reward().earned_this_week());
-    // 当周剩余 10 份截断封顶至 100。
+    Reward::BattleCreditDelta wNormal;
+    Credit(++battleId, kNow, match::MATCH_MODE_PVE_SOLO, 1, &wNormal);
+    EXPECT_EQ(10u, wNormal.totalUnitsAdded);
+    EXPECT_EQ(0u, wNormal.tradableUnitsAdded);
+    EXPECT_EQ(145u, Ledger().material_reward().earned_this_week());
+    // 当周剩余 5 份截断封顶至 150。
     Reward::BattleCreditDelta capWeek;
     Credit(++battleId, kNow, match::MATCH_MODE_PVP_TEAM, 1, &capWeek);
-    EXPECT_EQ(10u, capWeek.totalUnitsAdded);
-    EXPECT_EQ(100u, Ledger().material_reward().earned_this_week());
-    // 已满本周上限不再加；时钟回拨到上一周也不重置；跨到下一周重新开放 100。
+    EXPECT_EQ(5u, capWeek.totalUnitsAdded);
+    EXPECT_EQ(150u, Ledger().material_reward().earned_this_week());
+    // 已满本周上限不再加；时钟回拨到上一周也不重置；跨到下一周重新开放 150。
     Reward::BattleCreditDelta fullWeek;
     Credit(++battleId, kNow, match::MATCH_MODE_PVE_SOLO, 1, &fullWeek);
     EXPECT_EQ(0u, fullWeek.totalUnitsAdded);
@@ -430,5 +437,131 @@ TEST_F(EquipmentMaterialRewardTest, InboxWatermarkBlocksReexecutingSourceEvenAft
         player_inbox_rules::ClassifyDelivery(&cursor, 1, 7001, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
     EXPECT_EQ(player_inbox_rules::DeliveryClass::kReplay,
         player_inbox_rules::ClassifyDelivery(&cursor, 40, 7040, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
+}
+TEST_F(EquipmentMaterialRewardTest, StageTwoLightCardUnlocksWeeklyTradableOutputWithoutIncreasingTotalQuota) {
+    auto* state = Ledger().mutable_material_reward();
+    state->set_migrated_to_v2(true);
+    state->set_lifetime_earned(Reward::kLifetimeLimit);
+    state->set_tradable_earned_total(Reward::kTradableLifetimeLimit);
+    state->set_available_units(0);
+    state->set_available_tradable_units(0);
+    ASSERT_TRUE(client_request_ledger::Validate(Ledger()).empty());
+
+    // 无仙途轻享卡：第二阶段每胜局获得 10 份全绑定（0 可交易）。
+    ClientRequestLedgerComp noCardCandidate;
+    Reward::BattleCreditDelta noCardDelta;
+    ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), Battle(501), kNow, noCardCandidate, &noCardDelta, false));
+    EXPECT_EQ(10u, noCardDelta.totalUnitsAdded);
+    EXPECT_EQ(0u, noCardDelta.tradableUnitsAdded);
+    EXPECT_EQ(0u, noCardCandidate.material_reward().available_tradable_units());
+    EXPECT_TRUE(client_request_ledger::Validate(noCardCandidate).empty());
+
+    // 持有仙途轻享卡：总额度仍严格为 10 份（不卖战力/额度），其中 1 份解锁为市场可交易产出。
+    ClientRequestLedgerComp cardCandidate;
+    Reward::BattleCreditDelta cardDelta;
+    ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(Ledger(), Battle(502), kNow, cardCandidate, &cardDelta, true));
+    EXPECT_EQ(10u, cardDelta.totalUnitsAdded);
+    EXPECT_EQ(1u, cardDelta.tradableUnitsAdded);
+    EXPECT_EQ(1u, cardCandidate.material_reward().available_tradable_units());
+    EXPECT_TRUE(client_request_ledger::Validate(cardCandidate).empty());
+}
+TEST_F(EquipmentMaterialRewardTest, AccountLevelSixtyTradableCapSurvivesAltAndFailClosesUnconfirmedClaim) {
+    // 模拟 data_service 的账号级共享配额（同一账号下所有角色共享 60 份，删角不重置）。
+    uint32_t dirAccountUsed = 59u;
+    std::unordered_map<uint64_t, uint32_t> dirCharConfirmed;
+    bool deferReply = true;
+    std::function<void()> flushPendingReply;
+
+    Reward::SetAccountQuotaSyncTransportForTest(
+        [&](const data_service::SyncAccountStage1TradableRequest& req, Reward::AccountQuotaSyncDone done) -> bool {
+            auto deliver = [&, req, done = std::move(done)]() {
+                uint32_t& prev = dirCharConfirmed[req.player_id()];
+                if (req.desired_char_total() > prev && dirAccountUsed < Reward::kTradableLifetimeLimit) {
+                    const uint32_t grant = std::min(req.desired_char_total() - prev,
+                                                    Reward::kTradableLifetimeLimit - dirAccountUsed);
+                    prev += grant;
+                    dirAccountUsed += grant;
+                }
+                data_service::SyncAccountStage1TradableResponse resp;
+                resp.set_found(true);
+                resp.set_confirmed_char_total(prev);
+                resp.set_account_used_total(dirAccountUsed);
+                done(true, &resp);
+            };
+            if (deferReply) {
+                flushPendingReply = std::move(deliver);
+                return true;
+            }
+            deliver();
+            return true;
+        });
+
+    // 1. 角色 1 尚未收到账号目录确认前连胜两场（本地误以为拿到 2 份可交易，但账号实际只剩 1 份额度）。
+    Credit(701);
+    Credit(702);
+    ASSERT_EQ(2u, Ledger().material_reward().tradable_earned_total());
+    ASSERT_EQ(2u, Ledger().material_reward().available_tradable_units());
+    ASSERT_EQ(0u, Ledger().material_reward().stage1_tradable_confirmed());
+
+    // 2. 未获账号目录确认前 Claim 必须 fail-closed（返回 UNKNOWN / kServiceUnavailable），绝不铸造未确认可交易材料！
+    const auto beforeUnconfirmed = Assets();
+    const auto blocked = Claim(Request(10, 10, 8101));
+    EXPECT_EQ(ClaimEquipmentMaterialRewardResponse::UNKNOWN, blocked.outcome());
+    EXPECT_EQ(kServiceUnavailable, blocked.error_message().id());
+    EXPECT_EQ(beforeUnconfirmed, Assets());
+
+    // 3. data_service 回包：账号只剩 1 份额度 -> 确认 1 份，超额 1 份平滑降级为绑定自用（总份数 20 不变）。
+    ASSERT_TRUE(static_cast<bool>(flushPendingReply));
+    flushPendingReply();
+    EXPECT_EQ(60u, dirAccountUsed);
+    EXPECT_EQ(1u, Ledger().material_reward().tradable_earned_total());
+    EXPECT_EQ(1u, Ledger().material_reward().stage1_tradable_confirmed());
+    EXPECT_EQ(1u, Ledger().material_reward().available_tradable_units());
+    EXPECT_EQ(20u, Ledger().material_reward().available_units());
+
+    // 4. 确认后领取成功：精确发 1 份可交易 + 19 份绑定。
+    const auto okClaim = Claim(Request(10, 10, 8102));
+    ASSERT_EQ(ClaimEquipmentMaterialRewardResponse::APPLIED, okClaim.outcome());
+    EXPECT_EQ(1u, CountByBound(3001, false));
+    EXPECT_EQ(9u, CountByBound(3001, true));
+    EXPECT_EQ(0u, CountByBound(3002, false));
+    EXPECT_EQ(10u, CountByBound(3002, true));
+
+    // 5. 模拟删角并建同账号新小号 kPlayer+1：加载后从账号目录同步得到 60/60，新小号首战即 0 可交易（全绑定）。
+    Reward::OnPlayerDestroyed(kPlayer);
+    const Guid altId = kPlayer + 1;
+    const auto alt = tlsEcs.actorRegistry.create();
+    tlsEcs.actorRegistry.emplace<PlayerGuidComp>(alt, altId);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(alt).epoch = 10;
+    auto& altBags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(alt);
+    for (auto& bag : altBags.bags) bag.SetPlayerGuid(altId);
+    tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(alt);
+    tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(alt);
+    tlsEcs.actorRegistry.emplace<LevelComp>(alt).set_level(80);
+    ASSERT_TRUE(tlsEcs.playerList.emplace(altId, alt).second);
+
+    deferReply = false;
+    Reward::OnPlayerLoaded(alt, kNow);
+    EXPECT_EQ(60u, Reward::KnownAccountStage1TradableUsed(alt));
+
+    GetEquipmentMaterialRewardResponse altSnap;
+    ASSERT_EQ(kSuccess, Reward::Get(alt, kNow, altSnap));
+    EXPECT_EQ(60u, altSnap.snapshot().tradable_earned_total());
+    EXPECT_EQ(60u, altSnap.snapshot().tradable_lifetime_limit());
+
+    ClientRequestLedgerComp altCand;
+    Reward::BattleCreditDelta altDelta;
+    auto altBattle = Battle(801);
+    altBattle.set_player_id(altId);
+    ASSERT_EQ(kSuccess, Reward::PrepareBattleCredit(
+        tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(alt), altBattle, kNow, altCand, &altDelta,
+        /*lightCardActive=*/false, Reward::KnownAccountStage1TradableUsed(alt)));
+    EXPECT_EQ(10u, altDelta.totalUnitsAdded);
+    EXPECT_EQ(0u, altDelta.tradableUnitsAdded);
+    EXPECT_EQ(0u, altCand.material_reward().available_tradable_units());
+
+    Reward::OnPlayerDestroyed(altId);
+    tlsEcs.playerList.erase(altId);
+    tlsEcs.actorRegistry.destroy(alt);
 }
 }

@@ -92,7 +92,7 @@ namespace redis_cluster
 	}
 
 	SlotOwnerTable::SlotOwnerTable()
-		: owners_(redis_slot::kSlotCount, kNoOwner)
+		: owners(redis_slot::kSlotCount, kNoOwner)
 	{
 	}
 
@@ -102,14 +102,14 @@ namespace redis_cluster
 		{
 			return nullptr;
 		}
-		const uint32_t index = owners_[slot];
-		return index == kNoOwner ? nullptr : &endpoints_[index];
+		const uint32_t index = owners[slot];
+		return index == kNoOwner ? nullptr : &endpoints[index];
 	}
 
 	void SlotOwnerTable::AssignAll(const NodeEndpoint& endpoint)
 	{
-		endpoints_.assign(1, endpoint);
-		std::fill(owners_.begin(), owners_.end(), uint32_t{0});
+		endpoints.assign(1, endpoint);
+		std::fill(owners.begin(), owners.end(), uint32_t{0});
 	}
 
 	void SlotOwnerTable::ApplyMoved(uint16_t slot, const NodeEndpoint& endpoint)
@@ -118,95 +118,95 @@ namespace redis_cluster
 		{
 			return;
 		}
-		owners_[slot] = InternEndpoint(endpoint);
+		owners[slot] = InternEndpoint(endpoint);
 	}
 
 	void SlotOwnerTable::ApplyTopology(const ClusterTopology& topology)
 	{
-		std::fill(owners_.begin(), owners_.end(), kNoOwner);
-		endpoints_.clear();
+		std::fill(owners.begin(), owners.end(), kNoOwner);
+		endpoints.clear();
 		for (const SlotRange& range : topology.ranges)
 		{
 			const uint32_t index = InternEndpoint(range.master);
 			const uint32_t last = range.last;
 			for (uint32_t slot = range.first; slot <= last; ++slot)
 			{
-				owners_[slot] = index;
+				owners[slot] = index;
 			}
 		}
 	}
 
 	bool SlotOwnerTable::IsMaster(const NodeEndpoint& endpoint) const
 	{
-		return std::find(endpoints_.begin(), endpoints_.end(), endpoint) != endpoints_.end();
+		return std::find(endpoints.begin(), endpoints.end(), endpoint) != endpoints.end();
 	}
 
 	uint32_t SlotOwnerTable::InternEndpoint(const NodeEndpoint& endpoint)
 	{
-		const auto found = std::find(endpoints_.begin(), endpoints_.end(), endpoint);
-		if (found != endpoints_.end())
+		const auto found = std::find(endpoints.begin(), endpoints.end(), endpoint);
+		if (found != endpoints.end())
 		{
-			return static_cast<uint32_t>(found - endpoints_.begin());
+			return static_cast<uint32_t>(found - endpoints.begin());
 		}
-		endpoints_.push_back(endpoint);
-		return static_cast<uint32_t>(endpoints_.size() - 1);
+		endpoints.push_back(endpoint);
+		return static_cast<uint32_t>(endpoints.size() - 1);
 	}
 
 	TopologyRefreshPolicy::TopologyRefreshPolicy(Duration period, Duration minInterval, Duration inFlightTimeout)
-		: period_(period)
-		, minInterval_(minInterval)
-		, inFlightTimeout_(inFlightTimeout)
+		: period(period)
+		, minInterval(minInterval)
+		, inFlightTimeout(inFlightTimeout)
 	{
 	}
 
 	bool TopologyRefreshPolicy::ShouldStart(TimePoint now) const
 	{
-		if (inFlight_)
+		if (inFlight)
 		{
 			return false;
 		}
-		if (!lastStart_)
+		if (!lastStart)
 		{
-			return requested_;
+			return requested;
 		}
-		const Duration sinceLast = now - *lastStart_;
-		if (sinceLast < minInterval_)
+		const Duration sinceLast = now - *lastStart;
+		if (sinceLast < minInterval)
 		{
 			return false;
 		}
-		return requested_ || sinceLast >= period_;
+		return requested || sinceLast >= period;
 	}
 
 	uint64_t TopologyRefreshPolicy::OnStarted(TimePoint now)
 	{
-		inFlight_ = true;
-		requested_ = false;
-		lastStart_ = now;
-		return ++generation_;
+		inFlight = true;
+		requested = false;
+		lastStart = now;
+		return ++generation;
 	}
 
 	bool TopologyRefreshPolicy::OnFinished(uint64_t generation, bool success)
 	{
-		if (!inFlight_ || generation != generation_)
+		if (!inFlight || generation != this->generation)
 		{
 			return false;
 		}
-		inFlight_ = false;
+		inFlight = false;
 		if (!success)
 		{
-			requested_ = true;
+			requested = true;
 		}
 		return true;
 	}
 
 	bool TopologyRefreshPolicy::ExpireInFlight(TimePoint now)
 	{
-		if (!inFlight_ || !lastStart_ || now - *lastStart_ < inFlightTimeout_)
+		if (!inFlight || !lastStart || now - *lastStart < inFlightTimeout)
 		{
 			return false;
 		}
-		inFlight_ = false;
-		requested_ = true;
+		inFlight = false;
+		requested = true;
 		return true;
 	}
 }

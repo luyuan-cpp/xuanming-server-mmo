@@ -34,6 +34,8 @@ const (
 	BattleClientPlayer_NotifyBattleAssigned_FullMethodName     = "/BattleClientPlayer/NotifyBattleAssigned"
 	BattleClientPlayer_SurrenderBattle_FullMethodName          = "/BattleClientPlayer/SurrenderBattle"
 	BattleClientPlayer_NotifySurrenderVote_FullMethodName      = "/BattleClientPlayer/NotifySurrenderVote"
+	BattleClientPlayer_UpdateBattlePrep_FullMethodName         = "/BattleClientPlayer/UpdateBattlePrep"
+	BattleClientPlayer_NotifyBattlePrepUpdate_FullMethodName   = "/BattleClientPlayer/NotifyBattlePrepUpdate"
 )
 
 // BattleClientPlayerClient is the client API for BattleClientPlayer service.
@@ -57,6 +59,9 @@ type BattleClientPlayerClient interface {
 	// ---- PVP 延迟投降(docs/design/ranked-play-v2-overhaul.md):第 5 回合解锁,1V1 秒认输/多人同队投票 ----
 	SurrenderBattle(ctx context.Context, in *SurrenderBattleRequest, opts ...grpc.CallOption) (*SurrenderBattleResponse, error)
 	NotifySurrenderVote(ctx context.Context, in *SurrenderVoteS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
+	UpdateBattlePrep(ctx context.Context, in *UpdateBattlePrepRequest, opts ...grpc.CallOption) (*UpdateBattlePrepResponse, error)
+	NotifyBattlePrepUpdate(ctx context.Context, in *BattlePrepUpdateS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type battleClientPlayerClient struct {
@@ -207,6 +212,26 @@ func (c *battleClientPlayerClient) NotifySurrenderVote(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *battleClientPlayerClient) UpdateBattlePrep(ctx context.Context, in *UpdateBattlePrepRequest, opts ...grpc.CallOption) (*UpdateBattlePrepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateBattlePrepResponse)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_UpdateBattlePrep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) NotifyBattlePrepUpdate(ctx context.Context, in *BattlePrepUpdateS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifyBattlePrepUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleClientPlayerServer is the server API for BattleClientPlayer service.
 // All implementations must embed UnimplementedBattleClientPlayerServer
 // for forward compatibility.
@@ -228,6 +253,9 @@ type BattleClientPlayerServer interface {
 	// ---- PVP 延迟投降(docs/design/ranked-play-v2-overhaul.md):第 5 回合解锁,1V1 秒认输/多人同队投票 ----
 	SurrenderBattle(context.Context, *SurrenderBattleRequest) (*SurrenderBattleResponse, error)
 	NotifySurrenderVote(context.Context, *SurrenderVoteS2C) (*base.Empty, error)
+	// ---- 论剑 V3 战前 15 秒明牌变阵(docs/design/ranked-play-v3-tactical-prep.md):换赛季印/换首发宠与锁定 ----
+	UpdateBattlePrep(context.Context, *UpdateBattlePrepRequest) (*UpdateBattlePrepResponse, error)
+	NotifyBattlePrepUpdate(context.Context, *BattlePrepUpdateS2C) (*base.Empty, error)
 	mustEmbedUnimplementedBattleClientPlayerServer()
 }
 
@@ -279,6 +307,12 @@ func (UnimplementedBattleClientPlayerServer) SurrenderBattle(context.Context, *S
 }
 func (UnimplementedBattleClientPlayerServer) NotifySurrenderVote(context.Context, *SurrenderVoteS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifySurrenderVote not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) UpdateBattlePrep(context.Context, *UpdateBattlePrepRequest) (*UpdateBattlePrepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateBattlePrep not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifyBattlePrepUpdate(context.Context, *BattlePrepUpdateS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyBattlePrepUpdate not implemented")
 }
 func (UnimplementedBattleClientPlayerServer) mustEmbedUnimplementedBattleClientPlayerServer() {}
 func (UnimplementedBattleClientPlayerServer) testEmbeddedByValue()                            {}
@@ -553,6 +587,42 @@ func _BattleClientPlayer_NotifySurrenderVote_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleClientPlayer_UpdateBattlePrep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBattlePrepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).UpdateBattlePrep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_UpdateBattlePrep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).UpdateBattlePrep(ctx, req.(*UpdateBattlePrepRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_NotifyBattlePrepUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BattlePrepUpdateS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifyBattlePrepUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifyBattlePrepUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifyBattlePrepUpdate(ctx, req.(*BattlePrepUpdateS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleClientPlayer_ServiceDesc is the grpc.ServiceDesc for BattleClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -615,6 +685,14 @@ var BattleClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifySurrenderVote",
 			Handler:    _BattleClientPlayer_NotifySurrenderVote_Handler,
+		},
+		{
+			MethodName: "UpdateBattlePrep",
+			Handler:    _BattleClientPlayer_UpdateBattlePrep_Handler,
+		},
+		{
+			MethodName: "NotifyBattlePrepUpdate",
+			Handler:    _BattleClientPlayer_NotifyBattlePrepUpdate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

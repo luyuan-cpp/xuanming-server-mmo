@@ -17,7 +17,7 @@
 3. **不肝、免费同战力上限与卖强化材料的兼容**：
    - 首套 600 份（300 打造 + 300 百炼石，`+1～+10` 必成）沿用并行总纲的**无每日打卡、永久 660 份总池**（含至多 60 份起步可交易额），让零氪与上班族随时能停、随时能续，不因漏登掉队；
    - 为了给中氪玩家留出长线精进空间、给免费玩家与聚宝斋提供持续材料买方，同时避免被骂“又肝又氪/概率骗氪”，**只把唯一最后 1 级（`+11` 顶格突破）**做成「**10% 概率提前一发入魂 + 失败不掉级且保底 +1 + 满 20 次必成（永不清零）**」，且只加极克制的基础攻防（`+20% → +24%`，绝不加速度与控制命中），装备升档 **100% 继承强化等级与保底进度**；
-   - 角色拿满阶段一 660 份首套池后，自动切入**阶段二（`+11` 顶格周平滑精进期）**：每周共享上限 **100 份绑定自选材料**（UTC+8 周一 05:00 重置，每周玩 1～1.5 小时拿满，约 2.5～3 个月免费叠满四件 `+11`，持续搬砖产可交易资格另走 [equipment-economy-charter.md](equipment-economy-charter.md) 月卡门槛）。
+   - 角色拿满阶段一 660 份首套池后，自动切入**阶段二（`+11` 顶格周平滑精进期）**：每周共享上限 **150 份绑定自选材料**（UTC+8 周一 05:00 重置，每周玩 1.5～2 小时拿满，约 1.5 个月免费出首件 `+11`、约 5.5 个月免费叠满四件 `+11`，持续搬砖产可交易资格另走 [equipment-economy-charter.md](equipment-economy-charter.md) 月卡门槛）。
 4. **废止历史口径分叉**：正式「人宠会武」（`PVP_TEAM`）拍死为**本人真实养成**；旧稿 [ranked-play-season-ui-candidate.md](ranked-play-season-ui-candidate.md) 的“正式排位全员免费预设”条款正式作废，已入表的 6 套 `RankedPreset` 仅保留给**轮换娱乐场（护卫救援 PVE / 物法易势 5V5 公平团战）**复用。
 
 ---
@@ -29,8 +29,8 @@
 | 项目 | 正式规格（`EquipEnhance` `profile_id = 1`） |
 |---|---|
 | **`+1～+10`（沿用）** | 四件基础装（武/帽/衣/鞋）100% 必成，`fail_level_loss = 0`，`cost_gold = 0`，`pity_limit = 0`；单件累计 75 百炼石（四件 300），每级原始基础攻/防 +2%（+10 共 +20%），鞋速度/词条/法宝不强化。 |
-| **`+11`（新增唯一顶格）** | 仅 `profile_id = 1` 基础装，新增行 `id = 1011, level = 11`：`bonus_permyriad = 2400`（总加成 +24%，相对 +10 仅多 +4% 原始基础攻/防，折算总面板约 +2%～3%）、`success_rate = 1000`（单次 10%）、`fail_level_loss = 0`（永不掉级）、`cost_gold = 0`、`material_id = 3002`（百炼石）、`material_count = 30`、`pity_limit = 20`（前 19 次各 10%，第 20 次即 `pity_count >= 19` 时 100% 必成）。 |
-| **期望与保底周期** | 单件期望 `E[X] = (1 - 0.9^20)/0.10 ≈ 8.78` 次（约 264 颗百炼石，保底上限 600 颗）；四件总期望约 1,054 颗（每周 100 份约 2.5～3 个月，全非酋上限 6 个月）。 |
+| **`+11`（新增唯一顶格）** | 仅 `profile_id = 1` 基础装，新增行 `id = 1011, level = 11`：`bonus_permyriad = 2400`（总加成 +24%，相对 +10 仅多 +4% 原始基础攻/防，折算总面板约 +2%～3%）、`success_rate = 1000`（单次 10%）、`fail_level_loss = 0`（永不掉级）、`cost_gold = 0`、`material_id = 3002`（百炼石）、`material_count = 100`（2026-11-25 开服定稿由 30 调至 100，合 ¥10/手）、`pity_limit = 20`（前 19 次各 10%，第 20 次即 `pity_count >= 19` 时 100% 必成）。 |
+| **期望与保底周期** | 单件期望 `E[X] = (1 - 0.9^20)/0.10 ≈ 8.78` 次（约 878 颗百炼石 / 等价 ¥88，免费约 1.5 个月；保底上限 2,000 颗 / ¥200）；四件总期望约 3,514 颗（等价 ¥351，每周 150 份约 5.5 个月，全非酋上限 8,000 颗 / ¥800）。 |
 | **持久化与继承** | `EquipInstanceData` 新增 `uint32 enhance_pity_count = 5;`；成功时归零，失败时 `+1`；随实例完整穿脱、存盘、跨区迁移，未来装备升档 100% 无损继承 `enhance_level` 与 `enhance_pity_count`。 |
 | **合规公示与防重放** | `EquipEnhancePreview` 新增 `pity_limit = 10`、`current_pity_count = 11`、`pity_guaranteed_next = 12`，客户端必须精确公示单次概率与保底次数（满足 App Store 3.1.1 与小游戏审核）；`EnhanceEquipRequest` 新增 `optional uint32 expected_pity_count = 4`，与 `client_request_id` 联手杜绝弱网失败重放双扣材料；`ClientRequestRecord` 新增 `uint32 enhance_pity_count = 20` 保证重放返回首次精确保底值。 |
 
@@ -52,7 +52,7 @@
      - 未达标负/平、主动逃离、零回合、作废、切磋、PVE 失败：**0 份**。
 3. **两阶段额度账本（`EquipmentMaterialRewardLedger`）**：
    - **阶段一（`lifetime_earned < 660`）**：无每日、无周清，累计上限 **660 份**；先计入基础（至多 10），再计入放得下的额外奖（至多 5）；接近 660 尾数截断且不满基础 10 的尾奖无任何可交易份数；阶段一可交易累计上限 **60 份**（`tradable_earned_total <= 60`，用尽后完整胜局仍给 10 份全自用）。存量旧档旧 `available_units` 完整保留为自用余额、不抵扣新 660。
-   - **阶段二（`lifetime_earned >= 660`）**：自动开启 `+11` 顶格周平滑精进池——**每周上限 100 份自选材料**（UTC+8 周一 05:00 重置，`week_starts_at_ms` 抗时钟回拨），阶段二全部产出**仅自用（`bound = true`，0 免费可交易）**，按同样单场 10/15 与防挂机门槛累计，供免费玩家 2.5～3 个月叠满四件 `+11` 或收集全法宝/第二套。
+   - **阶段二（`lifetime_earned >= 660`）**：自动开启 `+11` 顶格周平滑精进池——**每周上限 150 份自选材料**（2026-11-25 开服定稿由 100 调至 150，UTC+8 周一 05:00 重置，`week_starts_at_ms` 抗时钟回拨），阶段二全部产出**仅自用（`bound = true`，0 免费可交易）**，按同样单场 10/15 与防挂机门槛累计（10 场困难/PVP 胜或 15 场普通胜正好整除拿满），供免费玩家约 1.5 个月出首件 `+11`、约 5.5 个月叠满四件 `+11` 或收集全法宝/第二套。
    - **领取与绑定严格隔离**：`ClaimEquipmentMaterialReward` 每次批次 `min(20, available_units)`，允许步长 5（支持 5/10/15/20 任意拆分）；该批兑现的可交易份数 `batch_tradable = min(batch_units, available_tradable_units)`（优先分配给打造的份额，余数分配给强化石），发放入包时可交易堆 `bound = false`、自用堆 `bound = true`，防止不同绑定态混堆洗白。
 
 ### 2.3 3 只预告首领、慢动作重劈、轮换娱乐场与 `1V1`/`3V3` 冷启动开关
@@ -85,8 +85,8 @@
 
 1. **为什么 `+11` 只做最后 1 级且必须“概率 + 保底 + 不掉级 + 100% 继承”？**  
    多级概率强化会摧毁新手留存并制造骗氪口碑；完全必成低封顶又会导致满套后缺乏材料买方。把概率精进严格收束到唯一的 `+11`（+4% 原始基础攻防 + 光效，永不掉级，满 20 次必成），既让前 10 级 100% 保持良心体感，又为中氪与玩家市场创造长期自愿消耗出口。
-2. **为什么采用「阶段一 660 无周期 + 阶段二周平滑 100」两段式账本？**  
-   既完全尊重并行总纲 [project-vision.md](project-vision.md) 对新手/普通玩家“零每日打卡、零漏签焦虑”的承诺，又通过阶段二温和的周平滑上限（每周 1～1.5 小时即可拿满）防止脚本 24 小时刷穿 `+11` 顶格，使免费 2.5～3 个月叠满 `+11` 的节奏可控且不肝。
+2. **为什么采用「阶段一 660 无周期 + 阶段二周平滑 150」两段式账本？**  
+   既完全尊重并行总纲 [project-vision.md](project-vision.md) 对新手/普通玩家“零每日打卡、零漏签焦虑”的承诺，又通过阶段二温和的周平滑上限（每周 1.5～2 小时即可拿满）防止脚本 24 小时刷穿 `+11` 顶格，使免费约 1.5 个月出首件、约 5.5 个月叠满四件 `+11` 的节奏可控且不肝。
 3. **为什么 `PlayMode.allowed_team_sizes` 用配置开关控制 `1V1`/`3V3`，且轮换 PVP 单独给 `MATCH_MODE_POLARITY_5V5`？**  
    低在线人数期最怕匹配池碎裂与串分。配置化人数档白名单让冷启动聚人、扩容零改码；独立非计分模式保证娱乐轮换绝不会通过旧 `PVP_TEAM` 通道污染正式 Elo 或排行榜。
 
@@ -96,7 +96,7 @@
 
 | 潜在漏洞 / 风险 | 硬防线 |
 |---|---|
-| **`+11` 概率失败后弱网重放导致双扣 30 颗百炼石** | 失败不改等级，故在 `EnhanceEquipRequest` 增加 `optional uint32 expected_pity_count = 4` 并结合 `client_request_id` 持久化账本（记 `enhance_pity_count`）；任一不匹配直接拒回 `kEquipEnhanceLevelChanged`，零扣费。 |
+| **`+11` 概率失败后弱网重放导致双扣 100 颗百炼石** | 失败不改等级，故在 `EnhanceEquipRequest` 增加 `optional uint32 expected_pity_count = 4` 并结合 `client_request_id` 持久化账本（记 `enhance_pity_count`）；任一不匹配直接拒回 `kEquipEnhanceLevelChanged`，零扣费。 |
 | **PVP 挂机/速死脚本刷材料与可交易额** | Battle 引擎逐回合确定性统计 `manual_action_rounds` 与 `effective_combat_contribution` 并冻结进 `BattleSettlementData`；Scene 侧对 PVP 负/平强制校验 `>=3 回合 && >=2 回合手操 && 有效贡献`，且负/平局 0 可交易。 |
 | **可交易材料与仅自用材料入包合堆洗白** | `ClaimEquipmentMaterialReward` 明确区分可交易与自用两批 `InitItemParam`（`bound = false` vs `bound = true`），沿用背包层不同绑定态不可合堆规则，杜绝洗白。 |
 | **老角色旧存档 `EquipmentMaterialRewardLedger` 迁移损坏** | 新增 `migrated_to_v2` 标志，旧档存量 `available_units` 全额保留为自用可领余额，不扣新 660 上限；`Validate` 兼容旧字段与 5 的倍数余额步长。 |
@@ -130,3 +130,32 @@
    - 运行 `go test ./...` 覆盖 `go/match`；
    - 运行客户端 `tools/client_compile_check.ps1`；
    - 更新独立 Java 仓 `xuanming-server-mmo/PARITY.md` 记录 C++/Go 权威版实现与 Java 同步状态，更新 `docs/PROGRESS.md`。
+
+---
+
+## 6. 2026-11-25 开服前价格锁死修订（首套 660/¥60 不动，+11 调至 100 颗/次 + 二阶段周上限 150 份）
+
+### 6.1 需求分析
+- 上线后绝不暗改涨价或砍产出，须在开服前一次性把长线商业化深度与物价锚定稳。
+- 原口径单份参考锚 `¥0.1/份` 下，首套 600 份（¥60，免费 4～8 小时）亲民好破冰，但四件 `+11` 原单次 30 颗仅对应期望 `1,054` 颗（¥105），对覆盖个人开发月度固定成本与维持玩家市场百炼石买方偏薄；若反过来把首套强改 6666 份或 ¥300，要么单份碎成 ¥0.01/¥0.05、要么打死新手 ¥6–¥30 首充转化。
+
+### 6.2 设计分析
+- **维持不动**：单份参考锚恒定 **¥0.1/份**；阶段一永久总池 **660 份**（首套 600 份 = ¥60，可交易终身上限 60 份 = ¥6，单场 10/15 份、4～8 小时满首套）零改动。
+- **仅改 2 项参数**：
+  1. `EquipEnhance.xlsx` 行 `id=1011`（`profile_id=1, level=11`）：`material_count` 由 `30` 调整为 **`100`**（合 ¥10/手；10% 概率、不掉级、20 次硬保底、+24% 总加成不变）；单件期望约 `878` 颗（¥88，保底 ¥200），四件全满期望约 `3,514` 颗（¥351，保底 ¥800）。
+  2. 阶段二每周全绑定平滑上限 `kWeeklyLimit` / `WEEKLY_MATERIAL_LIMIT` 由 `100` 调整为 **`150`**（10 场困难/PVP 胜或 15 场普通胜刚好整除，周玩 1.5～2 小时拿满；免费约 1.5 个月出首件 `+11`、约 5.5 个月四件全满）。
+
+### 6.3 思想分析
+- **低门槛破冰 + 长线深度分层**：新手前 8 小时只卖爽感与留存（首套 ¥60、6–30 元小额提速包 + ¥10 易容卡高转化），中氪付费与玩家市场 3.3 倍百炼石需求精准落在“跳过数月等待”的 `+11`（¥10/手补一手、¥351 期望全满）以及已落码的月卡（¥30/月）、赛季印/外观手记、定星保底符（`3405`）、天工秘墨（`3408`）和永久外观衣柜上。
+
+### 6.4 漏洞分析与防线
+- **跨端硬编码失配**：客户端 `CoreGameplayLoopModels.cs` 存在 `WeeklyLimit == 0` 时的 `100u` 兜底值，与服务端 C++/Java `kWeeklyLimit = 150` 同步修正并补单测覆盖；UI 仍优先消费权威快照字段。
+- **测试夹具百炼石备货不足**：`+11` 满 20 次硬保底消耗升至 `2,000` 颗（含 `+9→+10` 共 `2,015` 颗），同步修正 C++ `PlayerEquipV1Test` 与 Java `EnhancePityAndMaterialLedgerTest` 并新增精确余量与阶段二 `145→150` 截断断言。
+- **并行会话工作树隔离**：执行当日主仓存在并行 GuildWar 会话未提交改动，仅修改 `EquipEnhance.xlsx` 单格与阶段二周上限相关源码，绝不触碰并行会话文件；Java 端逻辑常量与单测当场对齐，`config-data/tables/equipenhance.pb` 待主仓提交后随 `ContractSync` 统一同步。
+
+### 6.5 步骤分析与执行步骤
+1. 修改 `data/EquipEnhance.xlsx` `id=1011` `material_count: 30 → 100` 并校验零其他单元格变动，运行导表器产出 `generated/tables/equipenhance.{json,pb}` 与 `generated/client_tables/equipenhance.pb`。
+2. 更新 C++ `player_equipment_material_reward.{h,cpp}`、`client_request_ledger.cpp` 及 `bag_test` 单测，执行静态门禁与串行 MSBuild + 实跑回归。
+3. 在 `mmorpg-client` 执行 `tools/sync_tables.ps1`，更新 `CoreGameplayLoopModels.cs`、`CoreGameplayLoopTests.cs` 与 `Docs/design/core-gameplay-loop-ui-handoff.md`，跑通编译体检与 NUnit 单测。
+4. 在 `xuanming-server-mmo` 更新 `PlayerClientRequestLedger.java`、`EquipmentCraftService.java`、`EnhancePityAndMaterialLedgerTest.java` 与 `PARITY.md`，跑通 Maven 定向单测。
+5. 同步更新本设计文档、`boss-trial-planning-ui.md`、`battle-festival-beast-implementation-contract.md` 与 `docs/PROGRESS.md`。

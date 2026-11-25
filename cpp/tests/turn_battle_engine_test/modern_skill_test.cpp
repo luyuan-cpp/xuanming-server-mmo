@@ -178,7 +178,7 @@ protected:
         }
         for (const auto& [id, row] : BuffTableManager::Instance().GetIdMap()) data->AddBuff(id) = *row;
         for (const auto& [id, row] : MonsterTableManager::Instance().GetIdMap()) data->AddMonster(id) = *row;
-        ASSERT_EQ(catalog.size(), 65u);
+        ASSERT_EQ(catalog.size(), 89u);
     }
     const SkillTable& Row(uint32_t id) { return catalog.at(id); }
     std::shared_ptr<MemoryBattleDataProvider> data;
@@ -187,10 +187,11 @@ protected:
 
 TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedIdentity) {
     const std::map<char, std::vector<uint32_t>> expected = {
-        {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40,41}},
-        {'B',{5,6,7,8,9,11,12,13,14,15,16}},
-        {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22}},
-        {'T',{1,5,6}}, {'O',{1,2,3}}};
+        {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40,41,
+              101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116}},
+        {'B',{5,6,7,8,9,11,12,13,14,15,16,101,102}},
+        {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22,101,102}},
+        {'T',{1,5,6,101,102}}, {'O',{1,2,3,101,102}}};
     const std::map<char,uint32_t> bases = {{'A',10000},{'B',11000},{'P',12000},{'T',13000},{'O',14000}};
     std::set<std::string> codes;
     for (const auto& [prefix, numbers] : expected) {
@@ -233,8 +234,13 @@ TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedId
     EXPECT_EQ(Row(11012).pet_max_targets(), 2u);
     EXPECT_EQ(Row(13001).caster_mask(), 2u);
     EXPECT_EQ(Row(10040).caster_mask(), 1u);
+    EXPECT_EQ(Row(10040).name(), "太清灵盾");
     EXPECT_EQ(Row(10041).caster_mask(), 1u);
     EXPECT_EQ(Row(10041).forbid_copy(), 1u);
+    EXPECT_EQ(Row(10115).forbid_copy(), 1u);
+    EXPECT_EQ(Row(10116).forbid_copy(), 1u);
+    EXPECT_EQ(Row(12101).exclusive_group(), 1u);
+    EXPECT_EQ(Row(12102).exclusive_group(), 1u);
     EXPECT_EQ(Row(11013).forbid_copy(), 1u);
     EXPECT_EQ(Row(11015).forbid_copy(), 1u);
     EXPECT_EQ(Row(11016).forbid_copy(), 1u);
@@ -269,7 +275,7 @@ TEST_F(ModernSkillCatalogTest, EveryActivePrototypeCanBeCastByEveryEligibleActor
             ++casts;
         }
     }
-    EXPECT_EQ(casts, 52u); // 人物29、宝宝12专属(含A18)+11共享。
+    EXPECT_EQ(casts, 70u); // 既有52 + 策略人物14 + 率土蓄力2 + 策略宝宝2。
 }
 
 TEST_F(ModernSkillCatalogTest, SharedAttackPreservesMainTargetAndUsesCasterTargetCap) {
@@ -821,6 +827,166 @@ TEST_F(ModernSkillCatalogTest, BossUnitsAndSkillCopyImmuneTargetsAndPassiveMirro
     }
     EXPECT_TRUE(sawResist);
     EXPECT_FALSE(sawMirror);
+}
+
+TEST_F(ModernSkillCatalogTest, StrategySkillsSelectDeterministicSecondaryTargetsAndConsumeOneShotMarks) {
+    // 1. S05 逐命斩(10105): 主目标 201，其余 2 个名额按当前气血数值最低选中 203(1000) 与 205(1500)。
+    auto req = Request(5, false);
+    Learn(*req.mutable_players(0), Row(10105));
+    req.mutable_players(5)->mutable_base_attributes()->set_health(9000); // 201 主目标
+    req.mutable_players(6)->mutable_base_attributes()->set_health(8000); // 202
+    req.mutable_players(7)->mutable_base_attributes()->set_health(1000); // 203 最低
+    req.mutable_players(8)->mutable_base_attributes()->set_health(7000); // 204
+    req.mutable_players(9)->mutable_base_attributes()->set_health(1500); // 205 次低
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    DefendAllExcept(engine, kSelf);
+    engine.SubmitAction(kSelf, Cast(10105, 201));
+    const auto r1 = engine.ResolveCurrentRound();
+    std::set<uint64_t> victims;
+    for (const auto& ev : r1.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf && ev.skill_table_id() == 10105) {
+            victims.insert(ev.target_id());
+        }
+    }
+    EXPECT_EQ(victims, (std::set<uint64_t>{201, 203, 205}));
+
+    // 2. S09 授锋战印(10109): 友方物攻最高补选 + 强化下一次物理群攻并一次性消耗。
+    auto markReq = Request(2, false);
+    Learn(*markReq.mutable_players(0), Row(10109));
+    Learn(*markReq.mutable_players(0), Row(10002));
+    markReq.mutable_players(0)->mutable_base_attributes()->set_speed(300);
+    markReq.mutable_players(1)->set_physical_attack(999);
+    TurnBattleEngine markEngine(data);
+    ASSERT_TRUE(markEngine.Initialize(markReq));
+    DefendAllExcept(markEngine, kSelf);
+    markEngine.SubmitAction(kSelf, Cast(10109, kSelf));
+    markEngine.ResolveCurrentRound();
+    auto stateAfterMark = markEngine.BuildStateSnapshot();
+    const auto hasMark = [](const BattleActorState& a, uint32_t buffId) {
+        return std::any_of(a.buffs().begin(), a.buffs().end(),
+                           [buffId](const BattleBuffEntry& b) { return b.buff_table_id() == buffId; });
+    };
+    EXPECT_TRUE(hasMark(Actor(stateAfterMark, kSelf), 101090));
+    EXPECT_TRUE(hasMark(Actor(stateAfterMark, kAlly), 101090));
+
+    DefendAllExcept(markEngine, kSelf);
+    markEngine.SubmitAction(kSelf, Cast(10002, kEnemy));
+    markEngine.ResolveCurrentRound();
+    EXPECT_FALSE(hasMark(Actor(markEngine.BuildStateSnapshot(), kSelf), 101090));
+}
+
+TEST_F(ModernSkillCatalogTest, PrepareCastChargesAndUnleashesNextRoundOrGetsInterruptedByFreeze) {
+    // 1. E01 蓄锋破阵(10115): 第1回合蓄力零伤且公开 charging_skill_id=10115，第2回合自动爆发清蓄力。
+    auto req = Request(2, false);
+    Learn(*req.mutable_players(0), Row(10115));
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    DefendAllExcept(engine, kSelf);
+    engine.SubmitAction(kSelf, Cast(10115, kEnemy));
+    const auto r1 = engine.ResolveCurrentRound();
+    for (const auto& ev : r1.events()) {
+        EXPECT_FALSE(ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf);
+    }
+    EXPECT_EQ(Actor(engine.BuildStateSnapshot(), kSelf).charging_skill_id(), 10115u);
+
+    DefendAllExcept(engine, kSelf);
+    engine.SubmitAction(kSelf, Action(BATTLE_ACTION_DEFEND));
+    const auto r2 = engine.ResolveCurrentRound();
+    bool unleashedDamage = false;
+    for (const auto& ev : r2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf &&
+            ev.skill_table_id() == 10115 && ev.value() > 0) {
+            unleashedDamage = true;
+        }
+    }
+    EXPECT_TRUE(unleashedDamage);
+    EXPECT_EQ(Actor(engine.BuildStateSnapshot(), kSelf).charging_skill_id(), 0u);
+
+    // 2. 第2回合出手前被敌方高速冰冻(A38 10038)打断，不触发蓄力伤害且清除蓄力状态。
+    auto intReq = Request(2, false);
+    Learn(*intReq.mutable_players(0), Row(10115));
+    Learn(*intReq.mutable_players(2), Row(10038));
+    intReq.mutable_players(0)->mutable_base_attributes()->set_speed(100);
+    intReq.mutable_players(2)->mutable_base_attributes()->set_speed(500);
+    auto freezeData = std::make_shared<MemoryBattleDataProvider>(*data);
+    freezeData->AddBuff(100380).set_application_chance(1.0);
+    TurnBattleEngine intEngine(freezeData);
+    ASSERT_TRUE(intEngine.Initialize(intReq));
+    DefendAllExcept(intEngine, kSelf);
+    intEngine.SubmitAction(kSelf, Cast(10115, kEnemy));
+    intEngine.ResolveCurrentRound();
+    ASSERT_EQ(Actor(intEngine.BuildStateSnapshot(), kSelf).charging_skill_id(), 10115u);
+
+    DefendAllExcept(intEngine, kEnemy);
+    intEngine.SubmitAction(kEnemy, Cast(10038, kSelf));
+    const auto r2Int = intEngine.ResolveCurrentRound();
+    for (const auto& ev : r2Int.events()) {
+        EXPECT_FALSE(ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == kSelf && ev.skill_table_id() == 10115);
+    }
+    EXPECT_EQ(Actor(intEngine.BuildStateSnapshot(), kSelf).charging_skill_id(), 0u);
+}
+
+TEST_F(ModernSkillCatalogTest, SpecializationPassivesForbidOppositeAttacksWhileBoostingOwnSide) {
+    auto req = Request(2, false);
+    Learn(*req.mutable_players(0), Row(12101)); // E03 灵法专修
+    Learn(*req.mutable_players(0), Row(10002)); // 物理主动
+    Learn(*req.mutable_players(0), Row(10006)); // 法术主动
+    Learn(*req.mutable_players(0), Row(10010)); // 治疗
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    EXPECT_EQ(engine.ValidateAction(kSelf, Action(BATTLE_ACTION_ATTACK, kEnemy)), kSkillCannotBeCastInCurrentState);
+    EXPECT_EQ(engine.ValidateAction(kSelf, Cast(10002, kEnemy)), kSkillCannotBeCastInCurrentState);
+    EXPECT_EQ(engine.ValidateAction(kSelf, Cast(10006, kEnemy)), kSuccess);
+    EXPECT_EQ(engine.ValidateAction(kSelf, Cast(10010, kSelf)), kSuccess);
+}
+
+TEST_F(ModernSkillCatalogTest, PursuitSealVulnerabilityStackingAndControlImmunityWorkEndToEnd) {
+    auto customData = std::make_shared<MemoryBattleDataProvider>(*data);
+    customData->AddBuff(131010).set_trigger_chance(1.0);
+    customData->AddBuff(131011).set_application_chance(1.0);
+    customData->AddBuff(100380).set_application_chance(1.0);
+
+    auto req = Request(2, false);
+    Learn(*req.mutable_players(0), Row(13101)); // E05 截灵追击
+    Learn(*req.mutable_players(0), Row(14101)); // E07 连击破绽
+    Learn(*req.mutable_players(0), Row(14102)); // E08 净心护阵
+    Learn(*req.mutable_players(2), Row(10038)); // 敌方冰封玄狱
+    req.mutable_players(0)->mutable_base_attributes()->set_speed(200);
+    req.mutable_players(2)->mutable_base_attributes()->set_speed(300);
+
+    TurnBattleEngine engine(customData);
+    ASSERT_TRUE(engine.Initialize(req));
+
+    // 开场状态校验：敌方 201 挂连击破绽(141010)，我方 101 挂净心护阵(141020)。
+    const auto start = engine.BuildStateSnapshot();
+    const auto findBuff = [](const BattleActorState& actor, uint32_t tableId) -> const BattleBuffEntry* {
+        for (const auto& b : actor.buffs()) if (b.buff_table_id() == tableId) return &b;
+        return nullptr;
+    };
+    ASSERT_NE(findBuff(Actor(start, kEnemy), 141010), nullptr);
+    ASSERT_NE(findBuff(Actor(start, kSelf), 141020), nullptr);
+
+    DefendAllExcept(engine, kSelf);
+    engine.SubmitAction(kSelf, Action(BATTLE_ACTION_ATTACK, kEnemy));
+    engine.SubmitAction(kEnemy, Cast(10038, kSelf));
+    const auto r1 = engine.ResolveCurrentRound();
+
+    // 敌方冰冻应被净心护阵挡下并发出 RESIST，且 101 正常出手普攻叠 1 层连击破绽 + 触发 E05 封法(131011)。
+    bool sawImmuneResist = false;
+    for (const auto& ev : r1.events()) {
+        if (ev.event_type() == BATTLE_EVENT_RESIST && ev.target_id() == kSelf && ev.buff_table_id() == 100380) {
+            sawImmuneResist = true;
+        }
+    }
+    EXPECT_TRUE(sawImmuneResist);
+    const auto afterR1 = engine.BuildStateSnapshot();
+    EXPECT_EQ(findBuff(Actor(afterR1, kSelf), 141020), nullptr);
+    const auto* vuln = findBuff(Actor(afterR1, kEnemy), 141010);
+    ASSERT_NE(vuln, nullptr);
+    EXPECT_EQ(vuln->stacks(), 1u);
+    EXPECT_NE(findBuff(Actor(afterR1, kEnemy), 131011), nullptr);
 }
 
 } // namespace

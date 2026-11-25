@@ -229,7 +229,12 @@
         "SkillCraftBookRequired": 7019,
         "SkillAlreadyBookUnlocked": 7020,
         "SkillProxyStallRequiresMaster": 7021,
-        "SkillProxyFeeInvalid": 7022
+        "SkillProxyFeeInvalid": 7022,
+        "SkillLoadoutSlotLimitReached": 7023,
+        "SkillLoadoutConflict": 7024,
+        "SkillLoadoutNotLearned": 7025,
+        "SkillLoadoutSchemeInvalid": 7026,
+        "SkillLoadoutVersionChanged": 7027
       }
     },
     "buff_error": {
@@ -327,7 +332,31 @@
         "GuildAnnouncementSensitive": 14044,
         "GuildTextCheckUnavailable": 14045,
         "GuildRenameCooldown": 14046,
-        "GuildRenameSameName": 14047
+        "GuildRenameSameName": 14047,
+        "GuildWarNotOpen": 14048,
+        "GuildWarLevelTooLow": 14049,
+        "GuildWarSameGuild": 14050,
+        "GuildWarTargetPeaceMode": 14051,
+        "GuildWarSelfPeaceMode": 14052,
+        "GuildWarPeaceCooldown": 14053,
+        "GuildWarTargetProtected": 14054,
+        "GuildWarTargetInBattle": 14055,
+        "GuildWarTargetOffline": 14056,
+        "GuildWarSafeZone": 14057,
+        "GuildWarTeamInvalid": 14058,
+        "GuildWarTeamSizeExceedsRoadLimit": 14059,
+        "GuildWarLeylineNotFound": 14060,
+        "GuildWarGarrisonFull": 14061,
+        "GuildWarGarrisonCooldown": 14062,
+        "GuildWarMilestoneLocked": 14063,
+        "GuildWarMilestoneClaimed": 14064,
+        "GuildWarDividendEmpty": 14065,
+        "GuildWarBountyInvalidTarget": 14066,
+        "GuildWarBountyAlreadyActive": 14067,
+        "GuildWarBountyLimit": 14068,
+        "GuildWarBountyNotFound": 14069,
+        "GuildWarTrackCooldown": 14070,
+        "GuildWarServiceBusy": 14071
       }
     },
     "friend_error": {
@@ -451,7 +480,12 @@
         "PetNothingToChange": 26015,
         "PetIdGenerateFailed": 26016,
         "PetNameSensitive": 26017,
-        "PetNotTransferable": 26018
+        "PetNotTransferable": 26018,
+        "PetTierMaxReached": 26019,
+        "PetTierChanged": 26020,
+        "PetTierLevelNotEnough": 26021,
+        "PetTierMaterialNotEnough": 26022,
+        "PetEntryPresetInvalid": 26023
       }
     },
     "trade_error": {

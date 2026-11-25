@@ -104,7 +104,7 @@ struct LoopTaskScope::State
 	explicit State(EventLoop& loop) : loop(loop), executor(SceneExecutor{loop, context}) {}
 };
 
-LoopTaskScope::LoopTaskScope(EventLoop& loop) : state_(std::make_shared<State>(loop))
+LoopTaskScope::LoopTaskScope(EventLoop& loop) : state(std::make_shared<State>(loop))
 {
     loop.assertInLoopThread();
 }
@@ -113,13 +113,13 @@ LoopTaskScope::~LoopTaskScope() { Stop(); }
 
 void LoopTaskScope::Close()
 {
-    state_->loop.assertInLoopThread();
-    state_->stopped = true;
+    state->loop.assertInLoopThread();
+    state->stopped = true;
 }
 
 void LoopTaskScope::Stop()
 {
-	const auto state = state_;
+	const auto state = this->state;
 	state->loop.assertInLoopThread();
 	state->stopped = true;
 	state->cancelled = true;
@@ -130,7 +130,7 @@ void LoopTaskScope::Stop()
 
 bool LoopTaskScope::IsAccepting() const
 {
-	const auto state = state_;
+	const auto state = this->state;
 	if (!state) return false;
 	state->loop.assertInLoopThread();
 	return !state->stopped;
@@ -138,7 +138,7 @@ bool LoopTaskScope::IsAccepting() const
 
 bool LoopTaskScope::Start(cobalt::task<void> task, const char* name)
 {
-	const auto state = state_;
+	const auto state = this->state;
 	if (!state) return false;
 	state->loop.assertInLoopThread();
 	if (state->stopped) return false;

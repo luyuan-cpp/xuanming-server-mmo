@@ -38,18 +38,18 @@ public:
 				<< "-bit node segment";
 			return;
 		}
-		node_id_ = static_cast<T>(node_id << kSequenceBits);
+		nodeId = static_cast<T>(node_id << kSequenceBits);
 	}
 
-	T node_id(T guid)
+	T NodeId(T guid)
 	{
 		return guid >> kSequenceBits;
 	}
 
 	T Generate()
 	{
-		seq_ = static_cast<T>((seq_ + 1) & kSeqMask);
-		return node_id_ | seq_;
+		seq = static_cast<T>((seq + 1) & kSeqMask);
+		return nodeId | seq;
 	}
 
 	// 对外短期身份不能回绕复用:node 未分配或序号耗尽时拒绝,耗尽后保持饱和。
@@ -57,23 +57,23 @@ public:
 	bool TryGenerateWithoutReuse(T& value)
 	{
 		value = 0;
-		if (node_id_ == 0 || seq_ == kSeqMask) {
+		if (nodeId == 0 || seq == kSeqMask) {
 			return false;
 		}
-		++seq_;
-		value = node_id_ | seq_;
+		++seq;
+		value = nodeId | seq;
 		return true;
 	}
 
-	T node_id_prefix() const { return node_id_; }
+	T node_id_prefix() const { return nodeId; }
 
 	T LastId()
 	{
-		return  node_id_ | seq_;
+		return  nodeId | seq;
 	}
 private:
-	T node_id_{ 0 };
-	T seq_{ 0 };
+	T nodeId{ 0 };
+	T seq{ 0 };
 };
 
 using TransientNode12BitCompositeIdGenerator  = TransientNodeCompositeIdGenerator<uint32_t, 12>;

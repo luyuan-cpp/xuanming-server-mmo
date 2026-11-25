@@ -46,17 +46,17 @@ public:
 
     void RunAfter()
     {
-        m_Timer.RunAfter(0.1, std::bind(&GameTimerTest::AfterCallBack, this));
+        timer.RunAfter(0.1, std::bind(&GameTimerTest::AfterCallBack, this));
     }
 
     void RunEvery()
     {
-        m_Timer.RunEvery(0.1, std::bind(&GameTimerTest::RunEveryCallBack, this));
+        timer.RunEvery(0.1, std::bind(&GameTimerTest::RunEveryCallBack, this));
     }
 
     void RunAt(const Timestamp& time)
     {
-        m_Timer.RunAt(time, std::bind(&GameTimerTest::RunAtCallBack, this));
+        timer.RunAt(time, std::bind(&GameTimerTest::RunAtCallBack, this));
     }
 
 
@@ -81,8 +81,8 @@ private:
 
     }
 private:
-    TimerTaskComp m_Timer;
-    TimerTaskComp m_Timer1;
+    TimerTaskComp timer;
+    TimerTaskComp timer1;
 };
 
 class RecursionTimerTest
@@ -91,7 +91,7 @@ public:
 
     void RunAt(const Timestamp& time)
     {
-        m_Timer.RunAt(time, std::bind(&RecursionTimerTest::RunAtCallBack, this));
+        timer.RunAt(time, std::bind(&RecursionTimerTest::RunAtCallBack, this));
     }
 
 private:
@@ -102,7 +102,7 @@ private:
         RunAt(Timestamp::fromUnixTime(time(NULL) + 5));
     }
 private:
-    TimerTaskComp m_Timer;
+    TimerTaskComp timer;
 };
 
 using GameTimerTestPtr = std::shared_ptr<GameTimerTest>;
@@ -129,10 +129,10 @@ public:
 
     void Add() {
         std::cout << "TestCoreDump : new callback executed." << &timer << std::endl;
-        data_.push_back(1);
+        data.push_back(1);
     }
 
-    std::vector<int32_t> data_;
+    std::vector<int32_t> data;
 
     TimerTaskComp timer;
     int32_t id{ 0 };
@@ -149,10 +149,10 @@ struct CastingTimerCompTest
 
     void Add() {
         std::cout << "TestCoreDump : new callback executed." << std::endl;
-        data_.push_back(1);
+        data.push_back(1);
     }
 
-    std::vector<int32_t> data_;
+    std::vector<int32_t> data;
 };
 
 
@@ -212,9 +212,9 @@ public:
 
     void Init()
     {
-        m_PrepareEndTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::PrePare, this));
-        m_ConclusionTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::DungeonFinish, this));
-        m_DurationTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::ForceRetreatScene, this));
+        prepareEndTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::PrePare, this));
+        conclusionTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::DungeonFinish, this));
+        durationTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::ForceRetreatScene, this));
 
     }
 
@@ -222,27 +222,27 @@ public:
     {
         std::chrono::seconds s2(1);
         std::this_thread::sleep_for(s2);
-        m_ConclusionTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::DungeonFinish, this));
+        conclusionTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::DungeonFinish, this));
     }
 
     void DungeonFinish()
     {
         std::chrono::seconds s2(2);
         std::this_thread::sleep_for(s2);
-        m_DurationTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::ForceRetreatScene, this));
+        durationTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::ForceRetreatScene, this));
     }
 
     void ForceRetreatScene()
     {
         std::chrono::seconds s2(1);
         std::this_thread::sleep_for(s2);
-        m_PrepareEndTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::PrePare, this));
+        prepareEndTimer.RunAfter(0.01, std::bind(&DungeonTimerTest::PrePare, this));
 
     }
 
-    TimerTaskComp m_PrepareEndTimer;
-    TimerTaskComp m_ConclusionTimer;
-    TimerTaskComp m_DurationTimer;
+    TimerTaskComp prepareEndTimer;
+    TimerTaskComp conclusionTimer;
+    TimerTaskComp durationTimer;
 
 };
 

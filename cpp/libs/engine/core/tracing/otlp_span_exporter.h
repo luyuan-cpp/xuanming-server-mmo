@@ -91,7 +91,7 @@ public:
     class Impl;
 
 private:
-    std::shared_ptr<Impl> impl_;
+    std::shared_ptr<Impl> impl;
 };
 
 } // namespace tracing

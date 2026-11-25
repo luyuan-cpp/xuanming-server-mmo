@@ -56,7 +56,7 @@ public:
 
 private:
     // handler 销毁即断开带 this 的订阅,dispatcher 的寿命可以长于 handler。
-    entt::scoped_connection nodeRemovedSubscription_;
+    entt::scoped_connection nodeRemovedSubscription;
     static void HandleConnectionDisconnection(const muduo::net::TcpConnectionPtr &conn);
 
     static void HandleConnectionEstablished(const muduo::net::TcpConnectionPtr &conn);

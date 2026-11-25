@@ -71,33 +71,33 @@ namespace redis_cluster
 	{
 	public:
 		HeadRetryBudget(const RetryPolicy& policy, TimePoint start)
-			: deadline_(start + policy.budget)
-			, nextBackoff_(policy.initialBackoff)
+			: deadline(start + policy.budget)
+			, nextBackoff(policy.initialBackoff)
 		{
 		}
 
 		RetryDecision Next(const RetryPolicy& policy, RetryMode mode, TimePoint now)
 		{
-			if (now >= deadline_)
+			if (now >= deadline)
 			{
 				return {RetryDecision::Kind::kExhausted, Duration::zero()};
 			}
-			if (mode == RetryMode::kImmediate && immediateRedirects_ < policy.maxImmediateRedirects)
+			if (mode == RetryMode::kImmediate && immediateRedirects < policy.maxImmediateRedirects)
 			{
-				++immediateRedirects_;
+				++immediateRedirects;
 				return {RetryDecision::Kind::kResendNow, Duration::zero()};
 			}
-			const Duration remaining = deadline_ - now;
-			const Duration delay = nextBackoff_ < remaining ? nextBackoff_ : remaining;
-			const Duration doubled = nextBackoff_ * 2;
-			nextBackoff_ = doubled < policy.maxBackoff ? doubled : policy.maxBackoff;
+			const Duration remaining = deadline - now;
+			const Duration delay = nextBackoff < remaining ? nextBackoff : remaining;
+			const Duration doubled = nextBackoff * 2;
+			nextBackoff = doubled < policy.maxBackoff ? doubled : policy.maxBackoff;
 			return {RetryDecision::Kind::kRetryAfter, delay};
 		}
 
 	private:
-		TimePoint deadline_;
-		Duration nextBackoff_;
-		uint32_t immediateRedirects_ = 0;
+		TimePoint deadline;
+		Duration nextBackoff;
+		uint32_t immediateRedirects = 0;
 	};
 
 	enum class SubmitResult : uint8_t
@@ -121,49 +121,49 @@ namespace redis_cluster
 	{
 	public:
 		SlotCommandQueues(const RetryPolicy& policy, const QueueLimits& limits)
-			: policy_(policy)
-			, limits_(limits)
+			: policy(policy)
+			, limits(limits)
 		{
 		}
 
 		SubmitResult Submit(QueueIndex queue, Command command, TimePoint now)
 		{
-			const auto found = queues_.find(queue);
-			if (found == queues_.end())
+			const auto found = queues.find(queue);
+			if (found == queues.end())
 			{
-				queues_.try_emplace(queue, std::move(command), policy_, now);
+				queues.try_emplace(queue, std::move(command), policy, now);
 				return SubmitResult::kDispatchNow;
 			}
 			Entry& entry = found->second;
-			if (entry.waiting.size() >= limits_.perQueue)
+			if (entry.waiting.size() >= limits.perQueue)
 			{
 				return SubmitResult::kQueueFull;
 			}
-			if (queuedTotal_ >= limits_.total)
+			if (queuedTotal >= limits.total)
 			{
 				return SubmitResult::kTotalQueueFull;
 			}
 			entry.waiting.push_back(std::move(command));
-			++queuedTotal_;
+			++queuedTotal;
 			return SubmitResult::kQueued;
 		}
 
 		bool Busy(QueueIndex queue) const
 		{
-			return queues_.find(queue) != queues_.end();
+			return queues.find(queue) != queues.end();
 		}
 
 		// 队头句柄;队列空闲时为空。指针只在下一次修改本对象之前有效。
 		const Command* Head(QueueIndex queue) const
 		{
-			const auto found = queues_.find(queue);
-			return found == queues_.end() ? nullptr : &found->second.head;
+			const auto found = queues.find(queue);
+			return found == queues.end() ? nullptr : &found->second.head;
 		}
 
 		std::optional<HeadState> State(QueueIndex queue) const
 		{
-			const auto found = queues_.find(queue);
-			if (found == queues_.end())
+			const auto found = queues.find(queue);
+			if (found == queues.end())
 			{
 				return std::nullopt;
 			}
@@ -172,8 +172,8 @@ namespace redis_cluster
 
 		void MarkInFlight(QueueIndex queue)
 		{
-			const auto found = queues_.find(queue);
-			if (found != queues_.end())
+			const auto found = queues.find(queue);
+			if (found != queues.end())
 			{
 				found->second.state = HeadState::kInFlight;
 			}
@@ -183,13 +183,13 @@ namespace redis_cluster
 		// kExhausted 不改状态,调用方接着 Abort。
 		RetryDecision OnNotExecuted(QueueIndex queue, RetryMode mode, TimePoint now)
 		{
-			const auto found = queues_.find(queue);
-			if (found == queues_.end())
+			const auto found = queues.find(queue);
+			if (found == queues.end())
 			{
 				return {};
 			}
 			Entry& entry = found->second;
-			const RetryDecision decision = entry.budget.Next(policy_, mode, now);
+			const RetryDecision decision = entry.budget.Next(policy, mode, now);
 			if (decision.kind == RetryDecision::Kind::kResendNow)
 			{
 				entry.state = HeadState::kPending;
@@ -205,22 +205,22 @@ namespace redis_cluster
 		// 返回 true 表示有新队头,调用方负责发送。先把业务回调跑完再发送,回调顺序才等于调用顺序。
 		bool CompleteHead(QueueIndex queue, TimePoint now)
 		{
-			const auto found = queues_.find(queue);
-			if (found == queues_.end())
+			const auto found = queues.find(queue);
+			if (found == queues.end())
 			{
 				return false;
 			}
 			Entry& entry = found->second;
 			if (entry.waiting.empty())
 			{
-				queues_.erase(found);
+				queues.erase(found);
 				return false;
 			}
 			entry.head = std::move(entry.waiting.front());
 			entry.waiting.pop_front();
-			--queuedTotal_;
+			--queuedTotal;
 			entry.state = HeadState::kPending;
-			entry.budget = HeadRetryBudget(policy_, now);
+			entry.budget = HeadRetryBudget(policy, now);
 			return true;
 		}
 
@@ -228,8 +228,8 @@ namespace redis_cluster
 		std::vector<Command> Abort(QueueIndex queue)
 		{
 			std::vector<Command> aborted;
-			const auto found = queues_.find(queue);
-			if (found == queues_.end())
+			const auto found = queues.find(queue);
+			if (found == queues.end())
 			{
 				return aborted;
 			}
@@ -240,16 +240,16 @@ namespace redis_cluster
 			{
 				aborted.push_back(std::move(command));
 			}
-			queuedTotal_ -= entry.waiting.size();
-			queues_.erase(found);
+			queuedTotal -= entry.waiting.size();
+			queues.erase(found);
 			return aborted;
 		}
 
 		std::vector<QueueIndex> BusyQueues() const
 		{
 			std::vector<QueueIndex> busy;
-			busy.reserve(queues_.size());
-			for (const auto& entry : queues_)
+			busy.reserve(queues.size());
+			for (const auto& entry : queues)
 			{
 				busy.push_back(entry.first);
 			}
@@ -258,13 +258,13 @@ namespace redis_cluster
 
 		std::size_t QueuedTotal() const
 		{
-			return queuedTotal_;
+			return queuedTotal;
 		}
 
 		std::size_t QueuedIn(QueueIndex queue) const
 		{
-			const auto found = queues_.find(queue);
-			return found == queues_.end() ? 0 : found->second.waiting.size();
+			const auto found = queues.find(queue);
+			return found == queues.end() ? 0 : found->second.waiting.size();
 		}
 
 	private:
@@ -282,10 +282,10 @@ namespace redis_cluster
 			std::deque<Command> waiting;
 		};
 
-		RetryPolicy policy_;
-		QueueLimits limits_;
+		RetryPolicy policy;
+		QueueLimits limits;
 		// 只存有命令的队列:一个进程同时忙的 slot 远少于 16384,常驻 16384 个 deque 太浪费。
-		std::unordered_map<QueueIndex, Entry> queues_;
-		std::size_t queuedTotal_ = 0;
+		std::unordered_map<QueueIndex, Entry> queues;
+		std::size_t queuedTotal = 0;
 	};
 }

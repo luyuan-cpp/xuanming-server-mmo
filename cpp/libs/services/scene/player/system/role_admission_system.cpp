@@ -506,7 +506,7 @@ void CloseOrAck(Guid playerId, Role& role) {
 }
 } // namespace
 
-RoleAdmissionSystem::ScopedDependencies::ScopedDependencies(Dependencies dependencies) : previous_(state) {
+RoleAdmissionSystem::ScopedDependencies::ScopedDependencies(Dependencies dependencies) : previous(state) {
     state = std::make_shared<RoleAdmissionState>();
     state->dependencies = std::move(dependencies);
     for (const auto& identity : state->dependencies.confirmedAdmissions) {
@@ -519,7 +519,7 @@ RoleAdmissionSystem::ScopedDependencies::ScopedDependencies(Dependencies depende
         state->nextGeneration = std::max(state->nextGeneration, identity.generation());
     }
 }
-RoleAdmissionSystem::ScopedDependencies::~ScopedDependencies() { state = std::move(previous_); }
+RoleAdmissionSystem::ScopedDependencies::~ScopedDependencies() { state = std::move(previous); }
 
 void RoleAdmissionSystem::RequestEnter(Guid playerId, PlayerEnterContext context) {
     ArmTimer();

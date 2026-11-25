@@ -76,7 +76,7 @@ public:
                             battle_connection_admission::PreAuthBudget preAuthBudget,
                             std::optional<battle_connection_admission::RateLimit> sourceRateLimit)
     {
-        admission_.Configure(rateLimit, preAuthBudget, sourceRateLimit);
+        admission.Configure(rateLimit, preAuthBudget, sourceRateLimit);
     }
 
     // 装到节点 TCP server 上(替换框架默认的 RpcCodec 回调,装上准入回调,登记连接类指标)。必须在 StartRpcServer
@@ -85,7 +85,7 @@ public:
 
     // 关源(停机 / 维护关源时调,不可撤销):之后的新直连在 accept 处以 RST 拒绝(reason = shutting_down)。
     // 已建立的直连不受影响,由 DisconnectAll 收尾。
-    void CloseSource() { admission_.CloseSource(); }
+    void CloseSource() { admission.CloseSource(); }
 
     // 下行:按 ProtobufCodec 帧写出(长度头 + 类型名 + 校验和)。
     // 绝不能裸 conn->send 序列化字节 —— 会毁掉整条连接的分帧(gate 同款教训)。
@@ -97,10 +97,10 @@ public:
     class EncodedFrame
     {
         friend class BattleClientEdge;
-        explicit EncodedFrame(std::string bytes) : bytes_(std::move(bytes)) {}
-        std::string bytes_;
+        explicit EncodedFrame(std::string bytes) : bytes(std::move(bytes)) {}
+        std::string bytes;
         // 同一份帧加上 WebSocket 帧头后的字节,给小游戏直连用;SendEncoded 第一次遇到这类连接时才拼。
-        mutable std::string webSocketBytes_;
+        mutable std::string webSocketBytes;
     };
 
     // 编码一次、多条连接复用(观众帧,battle-spectate-tiered-fanout.md §10 第 3 条):同一帧发给多条直连时
@@ -116,7 +116,7 @@ public:
     //(终局包还在排空)不再动它,由其自身的延迟强关收尾,保证"终局包先于 FIN"。
     void DisconnectAll(const char *reason);
 
-    size_t ConnectionCount() const { return sessions_.size(); }
+    size_t ConnectionCount() const { return sessions.size(); }
 
     // 并发连接的有效上限(闸 1 的判据,现读部署配置):battle_max_connections,为 0(仅 dev/test 合法)时取
     // kHardMaxConnections。「0 = 硬上限」这条规则只写在这里,节点观众席配额由它派生(BattleRoomManager::SetClientEdge)。
@@ -166,7 +166,7 @@ private:
     // 池里最老的一条可淘汰直连;没有返回空。仍在短宽限期内的半关闭连接跳过,超时未关闭的半关闭连接允许强关腾位。
     std::optional<uint64_t> OldestConnectedUnauthenticated() const;
     // 未认证的直连数(指标与判定同一个数):既没完成票据握手、也没出示有效的网络探测授权(授权由 match 签发,OnProbeStart 验过签)。
-    size_t UnauthenticatedConnectionCount() const { return unauthenticated_.size(); }
+    size_t UnauthenticatedConnectionCount() const { return unauthenticated.size(); }
     // 把连接类指标的采集回调登记进进程的指标注册表(Install 时一次)。
     void RegisterMetrics();
 
@@ -218,19 +218,19 @@ private:
     static uint64_t ConnIdOf(const muduo::net::TcpConnectionPtr &conn);
     DirectSession *FindSession(const muduo::net::TcpConnectionPtr &conn);
 
-    ProtobufDispatcher dispatcher_;
-    ProtobufCodec codec_;
-    std::unordered_map<uint64_t, DirectSession> sessions_;
-    uint64_t nextConnId_ = 1;
+    ProtobufDispatcher dispatcher;
+    ProtobufCodec codec;
+    std::unordered_map<uint64_t, DirectSession> sessions;
+    uint64_t nextConnId = 1;
     // 未认证直连池:还没完成票据握手、也没出示探测授权的直连的 connId。connId 单调递增、从不复用,有序集合即建连先后,
     // begin() 就是最老的。进池只在 HandleEstablished;出池在握手成功、探测授权验过、淘汰与 HandleClosed(会话表唯一的删除点),
     // erase 幂等,所以计数不会漂。
-    std::set<uint64_t> unauthenticated_;
+    std::set<uint64_t> unauthenticated;
     // 连接准入的状态与计数(battle_connection_admission.h)。起步按硬上限推导,main.cpp 启动时换成正式参数。
-    battle_connection_admission::Admission admission_{
+    battle_connection_admission::Admission admission{
         accept_admission::DefaultRateLimit(static_cast<uint32_t>(kHardMaxConnections))};
     // 本端 loop 刚卡过没有(client_liveness.h LoopStallWatch):Install 起一个 1 秒节拍的定时器给它打拍,
     // 未验签淘汰在卡过之后不淘汰(验签请求可能还在接收缓冲里没读),与 gate 同一口径。
-    client_liveness::LoopStallWatch loopStall_{client_liveness::kClientLiveness.checkPeriod};
-    TimerTaskComp loopStallTimer_;
+    client_liveness::LoopStallWatch loopStall{client_liveness::kClientLiveness.checkPeriod};
+    TimerTaskComp loopStallTimer;
 };

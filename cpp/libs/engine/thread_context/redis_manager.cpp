@@ -166,41 +166,41 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 {
 	// 换 Connect 周期是本端主动丢掉旧连接;要在 options_ 换成新值之前减,记回旧连接所属的那一类依赖。
 	CountConnectionDown(/*expected=*/true);
-	if (loop_)
+	if (this->loop)
 	{
 		CancelReconnectTimer();
 		CancelLivenessTimer();
 	}
 	// 连接可能仍被当前 Channel 分发保住；先让旧连接的管理器回调失效，再拆连接。
-	lifetimeToken_.reset();
+	lifetimeToken.reset();
 	// 旧连接留在局部变量中，等新周期完整建立后再收尾。旧业务命令的空应答允许重入 Connect / Shutdown
 	// 或销毁管理器，因此释放旧业务连接之后，当前调用栈不能再访问任何成员。
-	HiredisPtr oldHandshake = std::move(handshakeRedis_);
-	HiredisPtr oldZone = std::move(connection_);
-	authAwaitingReply_ = false;
+	HiredisPtr oldHandshake = std::move(handshakeRedis);
+	HiredisPtr oldZone = std::move(connection);
+	authAwaitingReply = false;
 	ResetLivenessProbe();
-	loop_ = ToLoopRef(loop);
-	redisAddr_ = addr;
-	options_ = std::move(options);
-	options_.reconnectIntervalSec = PositiveOrDefault(
-		options_.reconnectIntervalSec, RedisConnectOptions::kDefaultReconnectIntervalSec, "reconnect interval");
+	this->loop = ToLoopRef(loop);
+	redisAddr = addr;
+	this->options = std::move(options);
+	this->options.reconnectIntervalSec = PositiveOrDefault(
+		this->options.reconnectIntervalSec, RedisConnectOptions::kDefaultReconnectIntervalSec, "reconnect interval");
 	// 抖动每个 Connect 周期只抽一次:各进程的重连周期因此各不相同,Redis 恢复时不会挤在同一刻回连。
 	// 只影响连接时机,不进任何业务判定,用 random_device 抽一个数即可,不留随机数引擎成员。
 	std::random_device entropy;
 	std::uniform_real_distribution<double> unit(0.0, 1.0);
-	reconnectPeriodSec_ =
-		JitteredReconnectIntervalSec(options_.reconnectIntervalSec, options_.reconnectJitterSec, unit(entropy));
-	options_.livenessProbeIntervalSec = PositiveOrDefault(
-		options_.livenessProbeIntervalSec, RedisConnectOptions::kDefaultLivenessProbeIntervalSec, "liveness probe interval");
-	options_.livenessTimeoutSec = PositiveOrDefault(
-		options_.livenessTimeoutSec, RedisConnectOptions::kDefaultLivenessTimeoutSec, "liveness timeout");
+	reconnectPeriodSec =
+		JitteredReconnectIntervalSec(this->options.reconnectIntervalSec, this->options.reconnectJitterSec, unit(entropy));
+	this->options.livenessProbeIntervalSec = PositiveOrDefault(
+		this->options.livenessProbeIntervalSec, RedisConnectOptions::kDefaultLivenessProbeIntervalSec, "liveness probe interval");
+	this->options.livenessTimeoutSec = PositiveOrDefault(
+		this->options.livenessTimeoutSec, RedisConnectOptions::kDefaultLivenessTimeoutSec, "liveness timeout");
 	// 新的 Connect 周期换一枚令牌:上一周期排队的摘下任务与遗留的定时器闭包一律失效。
-	lifetimeToken_ = std::make_shared<LifetimeToken>();
+	lifetimeToken = std::make_shared<LifetimeToken>();
 
 	// 占位对象:只构造、从不 connect()。它的 connected() 恒为 false、command() 直接返回 REDIS_ERR 且不调回调,
 	// context 为空,析构什么也不做(Hiredis.cc 的 connected() / command() / ~Hiredis)。有了它,GetConnection()
 	// 在第一次握手完成前就非空,直接 `GetConnection()->command(` 的调用点不会解引用空指针。
-	connection_ = hiredis::Hiredis::Create(loop, redisAddr_);
+	connection = hiredis::Hiredis::Create(loop, redisAddr);
 	StartLivenessTimer();
 	StartHandshake();
 	ReleaseConnection(oldHandshake);
@@ -209,7 +209,7 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 
 void RedisManager::Shutdown()
 {
-	if (loop_)
+	if (loop)
 	{
 		CancelReconnectTimer();
 		CancelLivenessTimer();
@@ -217,11 +217,11 @@ void RedisManager::Shutdown()
 
 	// 先切断 RedisManager 自身的回调,否则 redisAsyncFree 触发 disconnect
 	// callback 时会在停机过程中重新挂一条重连定时器。
-	reconnectCb_ = {};
+	reconnectCb = {};
 	// 已排队、还没跑的摘下任务随令牌一起作废；ResetConnections 释放管理器持有的连接引用。
 	// 若仍在 I/O 分发中，Hiredis 工厂保证实际析构在 pending 阶段完成。
-	lifetimeToken_.reset();
-	loop_.reset();
+	lifetimeToken.reset();
+	loop.reset();
 	CountConnectionDown(/*expected=*/true);
 	// 释放业务连接可能同步回调并重入或销毁管理器，必须作为最后一步。
 	ResetConnections();
@@ -229,34 +229,34 @@ void RedisManager::Shutdown()
 
 void RedisManager::StartHandshake()
 {
-	if (!loop_)
+	if (!loop)
 	{
 		return;
 	}
 
 	// 回调在 connect() 之前装好:首个 SYN 就失败也能进 OnHandshakeConnected 挂上重连定时器。
-	handshakeRedis_ = hiredis::Hiredis::Create(&loop_->get(), redisAddr_);
-	handshakeRedis_->setConnectCallback(
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this](hiredis::Hiredis *me, int status)
+	handshakeRedis = hiredis::Hiredis::Create(&loop->get(), redisAddr);
+	handshakeRedis->setConnectCallback(
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this](hiredis::Hiredis *me, int status)
 		{
 			if (!token.lock()) return;
 			OnHandshakeConnected(me, status);
 		});
 	// 断线回调装在连接对象上,移交后继续有效:握手期间断开与移交后断开都走这里。
 	// reason 是 hiredis 记下的断线原因(见 DescribeConnectionError):到线、被服务端踢、网络断开在日志里分得开。
-	handshakeRedis_->setDisconnectCallback(
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this](hiredis::Hiredis *me, int status)
+	handshakeRedis->setDisconnectCallback(
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this](hiredis::Hiredis *me, int status)
 		{
 			if (!token.lock()) return;
-			LOG_ERROR << "Redis disconnected (status=" << status << ", reason=" << DescribeConnectionError(*me, options_.password)
-					  << "), scheduling reconnect to " << redisAddr_.toIpPort();
-			if (me == connection_.get())
+			LOG_ERROR << "Redis disconnected (status=" << status << ", reason=" << DescribeConnectionError(*me, options.password)
+					  << "), scheduling reconnect to " << redisAddr.toIpPort();
+			if (me == connection.get())
 			{
 				CountConnectionDown(/*expected=*/false); // 握手连接(还没移交)断开不算:它从没可用过
 			}
 			ScheduleReconnect();
 		});
-	handshakeRedis_->connect();
+	handshakeRedis->connect();
 }
 
 void RedisManager::OnHandshakeConnected(hiredis::Hiredis *me, int status)
@@ -264,15 +264,15 @@ void RedisManager::OnHandshakeConnected(hiredis::Hiredis *me, int status)
 	if (status != REDIS_OK)
 	{
 		LOG_WARN << "Redis connect attempt failed (status=" << status << ", reason="
-				 << DescribeConnectionError(*me, options_.password) << ") to " << redisAddr_.toIpPort() << ", will retry";
-		dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kConnect);
+				 << DescribeConnectionError(*me, options.password) << ") to " << redisAddr.toIpPort() << ", will retry";
+		dependency_link_metrics::OnConnectFailed(options.metricsDependency, dependency_link_metrics::FailureReason::kConnect);
 		ScheduleReconnect();
 		return;
 	}
 
-	LOG_INFO << "Redis connected to " << redisAddr_.toIpPort();
+	LOG_INFO << "Redis connected to " << redisAddr.toIpPort();
 	CancelReconnectTimer();
-	if (options_.password.empty())
+	if (options.password.empty())
 	{
 		// 不认证:连上即移交,重连回调与改动前同一时机。
 		PromoteHandshake();
@@ -289,12 +289,12 @@ void RedisManager::SendAuth()
 {
 	// 握手连接上的第一条也是唯一一条命令。%b 按长度传参:口令里的空格、引号或二进制字节都不会被拆成多个参数。
 	char *formatted = nullptr;
-	const int length = ::redisFormatCommand(&formatted, "AUTH %b", options_.password.data(), options_.password.size());
+	const int length = ::redisFormatCommand(&formatted, "AUTH %b", options.password.data(), options.password.size());
 	int ret = REDIS_ERR;
 	if (length >= 0)
 	{
-		ret = handshakeRedis_->formattedCommand(
-			[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this](hiredis::Hiredis *me, redisReply *reply)
+		ret = handshakeRedis->formattedCommand(
+			[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this](hiredis::Hiredis *me, redisReply *reply)
 			{
 				if (!token.lock()) return;
 				OnAuthReply(me, reply);
@@ -304,15 +304,15 @@ void RedisManager::SendAuth()
 	}
 	if (ret == REDIS_OK)
 	{
-		authAwaitingReply_ = true;
+		authAwaitingReply = true;
 		return;
 	}
 	// 连接回调里这条连接必然可用(hiredis 回调前已置 REDIS_CONNECTED,不会处在 DISCONNECTING / FREEING),
 	// 所以只在命令格式化失败或内存不足时发生。不移交,截止定时器到点重建。
-	LOG_ERROR << "Redis AUTH could not be sent to " << redisAddr_.toIpPort() << " (ret=" << ret
-			  << ") -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
+	LOG_ERROR << "Redis AUTH could not be sent to " << redisAddr.toIpPort() << " (ret=" << ret
+			  << ") -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec
 			  << "s (metric=zone_redis_auth_failed)";
-	dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
+	dependency_link_metrics::OnConnectFailed(options.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
 }
 
 void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
@@ -320,14 +320,14 @@ void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
 	// 空应答:这条连接正在释放或已断开,后续由断线回调 / 重连定时器负责;不移交,也不清 authAwaitingReply_ ——
 	// 应答前被服务端断开的握手由截止时的 DoReconnect 按 AUTH 超时报告。
 	// me 不是当前握手连接:被替换掉的旧握手连接的迟到回调。两种情况都不处理。
-	if (reply == nullptr || me != handshakeRedis_.get())
+	if (reply == nullptr || me != handshakeRedis.get())
 	{
 		return;
 	}
-	authAwaitingReply_ = false; // 有了应答,这次握手的结局在下面当场报告,截止时不再按超时报
+	authAwaitingReply = false; // 有了应答,这次握手的结局在下面当场报告,截止时不再按超时报
 	if (reply->type == REDIS_REPLY_STATUS)
 	{
-		LOG_INFO << "Redis AUTH ok to " << redisAddr_.toIpPort();
+		LOG_INFO << "Redis AUTH ok to " << redisAddr.toIpPort();
 		PromoteHandshake();
 		return;
 	}
@@ -335,10 +335,10 @@ void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
 	// 失败一律不移交(fail-closed,见头文件契约)。多数情况下服务端会以 NOAUTH 拒绝这条连接上的后续命令,
 	// 但服务端没开口令时命令会照常执行,所以不能把这条连接交给业务。
 	// 截止定时器已在跑，到点按既有间隔重建；Channel tie 与工厂删除器另外保证回调内释放连接也安全。
-	LOG_ERROR << "Redis AUTH rejected by " << redisAddr_.toIpPort() << ": " << DescribeAuthFailure(reply, options_.password)
-			  << " -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
+	LOG_ERROR << "Redis AUTH rejected by " << redisAddr.toIpPort() << ": " << DescribeAuthFailure(reply, options.password)
+			  << " -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec
 			  << "s (metric=zone_redis_auth_failed)";
-	dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
+	dependency_link_metrics::OnConnectFailed(options.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
 	ScheduleReconnect(); // 截止定时器已在跑时是空操作;兜底保证一定会重试
 }
 
@@ -347,14 +347,14 @@ void RedisManager::PromoteHandshake()
 	CancelReconnectTimer();
 	// 被替换的旧连接按不变量已经断开、早已减过;万一还记着(不应发生),先减掉再加,gauge 不漂。
 	CountConnectionDown(/*expected=*/true);
-	connectionCounted_ = true;
-	dependency_link_metrics::OnUp(options_.metricsDependency);
+	connectionCounted = true;
+	dependency_link_metrics::OnUp(options.metricsDependency);
 	// shared_ptr 移动赋值:先让 connection_ 指向握手连接,再释放被替换的对象。被替换的只会是占位对象或已断开的旧连接
 	// (见头文件不变量),析构不触发任何回调。握手连接本身没有被销毁,所以在它自己的连接 / 命令回调栈里移交是安全的。
-	connection_ = std::move(handshakeRedis_);
+	connection = std::move(handshakeRedis);
 	// 新连接从零开始探测;旧连接上迟到的 PING 回调因代号不符被忽略。
 	ResetLivenessProbe();
-	const ReconnectCallback callback = reconnectCb_;
+	const ReconnectCallback callback = reconnectCb;
 	if (callback)
 	{
 		callback();
@@ -363,13 +363,13 @@ void RedisManager::PromoteHandshake()
 
 void RedisManager::ScheduleReconnect()
 {
-	if (!loop_ || reconnectTimerActive_)
+	if (!loop || reconnectTimerActive)
 	{
 		return; // Timer already running; avoid stacking duplicate timers.
 	}
-	const std::uint64_t generation = ++reconnectGeneration_;
-	reconnectTimerId_ = loop_->get().runEvery(reconnectPeriodSec_,
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation]
+	const std::uint64_t generation = ++reconnectGeneration;
+	reconnectTimerId = loop->get().runEvery(reconnectPeriodSec,
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this, generation]
 		{
 			const auto alive = token.lock();
 			if (!alive)
@@ -378,29 +378,29 @@ void RedisManager::ScheduleReconnect()
 			}
 			QueueReconnect(generation);
 		});
-	reconnectTimerActive_ = true;
+	reconnectTimerActive = true;
 }
 
 void RedisManager::CancelReconnectTimer()
 {
 	// cancel 只能阻止后续定时器回调，已投递的重建任务必须另用代次作废。
-	++reconnectGeneration_;
-	if (loop_ && reconnectTimerActive_)
+	++reconnectGeneration;
+	if (loop && reconnectTimerActive)
 	{
-		loop_->get().cancel(reconnectTimerId_);
+		loop->get().cancel(reconnectTimerId);
 	}
-	reconnectTimerActive_ = false;
+	reconnectTimerActive = false;
 }
 
 void RedisManager::QueueReconnect(std::uint64_t generation)
 {
-	if (!reconnectTimerActive_ || generation != reconnectGeneration_)
+	if (!reconnectTimerActive || generation != reconnectGeneration)
 	{
 		return;
 	}
 	// timerfd 与 socket 可能同批就绪。重建会释放 Hiredis，只能在本轮 I/O 分发完的 pending 阶段执行。
-	loop_->get().queueInLoop(
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation]
+	loop->get().queueInLoop(
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this, generation]
 		{
 			const auto alive = token.lock();
 			if (!alive)
@@ -408,7 +408,7 @@ void RedisManager::QueueReconnect(std::uint64_t generation)
 				return;
 			}
 			// 同批 AUTH 成功会取消旧代次；建连成功还可能立即启动新 AUTH 截止，不能只看 active。
-			if (!reconnectTimerActive_ || generation != reconnectGeneration_)
+			if (!reconnectTimerActive || generation != reconnectGeneration)
 			{
 				return;
 			}
@@ -418,32 +418,32 @@ void RedisManager::QueueReconnect(std::uint64_t generation)
 
 void RedisManager::DoReconnect()
 {
-	if (authAwaitingReply_)
+	if (authAwaitingReply)
 	{
 		// AUTH 已发出,截止前没有任何应答:服务端卡住、中间代理只接受连接不转发,或应答前连接就被关了
 		// (后者此前已有一条 "Redis disconnected" ERROR)。与被拒同样是握手失败、zone Redis 同样不可用,
 		// 必须带 metric 打 ERROR,不能只剩下面那条 INFO(按 metric 标记的告警会漏掉)。
-		LOG_ERROR << "Redis AUTH timed out on " << redisAddr_.toIpPort() << ": no reply within "
-				  << reconnectPeriodSec_ << "s of connecting -- zone Redis stays unavailable, retrying every "
-				  << reconnectPeriodSec_ << "s (metric=zone_redis_auth_failed)";
-		dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
-		authAwaitingReply_ = false;
+		LOG_ERROR << "Redis AUTH timed out on " << redisAddr.toIpPort() << ": no reply within "
+				  << reconnectPeriodSec << "s of connecting -- zone Redis stays unavailable, retrying every "
+				  << reconnectPeriodSec << "s (metric=zone_redis_auth_failed)";
+		dependency_link_metrics::OnConnectFailed(options.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
+		authAwaitingReply = false;
 	}
-	LOG_INFO << "Attempting Redis reconnect to " << redisAddr_.toIpPort();
+	LOG_INFO << "Attempting Redis reconnect to " << redisAddr.toIpPort();
 
 	// 只重建握手连接:建连失败、握手超时或 AUTH 被拒的旧握手连接在这里(pending 阶段)销毁,
 	// 挂起的 AUTH 以空应答回调,OnAuthReply 开头就返回。connection_ 里已断开的旧连接(或占位对象)保持不动,
 	// 业务继续看到 connected()==false,直到新连接完成握手、移交时才被替换。每条新连接都会重新 AUTH。
-	ReleaseConnection(handshakeRedis_);
+	ReleaseConnection(handshakeRedis);
 	StartHandshake();
 }
 
 void RedisManager::ResetConnections()
 {
 	// 先清空成员，再释放局部连接：业务空应答即使重入或销毁管理器，也不会再次拆掉同一条连接。
-	HiredisPtr oldHandshake = std::move(handshakeRedis_);
-	HiredisPtr oldZone = std::move(connection_);
-	authAwaitingReply_ = false;
+	HiredisPtr oldHandshake = std::move(handshakeRedis);
+	HiredisPtr oldZone = std::move(connection);
+	authAwaitingReply = false;
 	ResetLivenessProbe();
 	// 显式拆除不是握手失败，不报 AUTH 超时。释放 oldZone 以后不得再访问管理器成员。
 	ReleaseConnection(oldHandshake);
@@ -452,23 +452,23 @@ void RedisManager::ResetConnections()
 
 void RedisManager::CountConnectionDown(bool expected)
 {
-	if (!connectionCounted_)
+	if (!connectionCounted)
 	{
 		return;
 	}
-	connectionCounted_ = false;
-	dependency_link_metrics::OnDown(options_.metricsDependency, expected);
+	connectionCounted = false;
+	dependency_link_metrics::OnDown(options.metricsDependency, expected);
 }
 
 void RedisManager::StartLivenessTimer()
 {
-	if (!loop_ || livenessTimerActive_)
+	if (!loop || livenessTimerActive)
 	{
 		return;
 	}
-	livenessTimerId_ = loop_->get().runEvery(
-		options_.livenessProbeIntervalSec,
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this]
+	livenessTimerId = loop->get().runEvery(
+		options.livenessProbeIntervalSec,
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this]
 		{
 			if (!token.lock())
 			{
@@ -476,15 +476,15 @@ void RedisManager::StartLivenessTimer()
 			}
 			OnLivenessTick();
 		});
-	livenessTimerActive_ = true;
+	livenessTimerActive = true;
 }
 
 void RedisManager::CancelLivenessTimer()
 {
-	if (loop_ && livenessTimerActive_)
+	if (loop && livenessTimerActive)
 	{
-		loop_->get().cancel(livenessTimerId_);
-		livenessTimerActive_ = false;
+		loop->get().cancel(livenessTimerId);
+		livenessTimerActive = false;
 	}
 }
 
@@ -492,15 +492,15 @@ void RedisManager::OnLivenessTick()
 {
 	// 只探测对业务可见、仍连着的连接。握手中、断线待重连期间 connection_ 是占位对象或已断开的旧连接,
 	// 由 AUTH 截止与重连定时器负责;握手连接上绝不发 PING(AUTH 必须是它唯一的命令)。
-	if (!connection_ || !connection_->connected())
+	if (!connection || !connection->connected())
 	{
 		return;
 	}
 
 	const auto now = std::chrono::steady_clock::now();
-	if (livenessPingOutstanding_)
+	if (livenessPingOutstanding)
 	{
-		if (now - livenessPingSentAt_ >= Seconds(options_.livenessTimeoutSec))
+		if (now - livenessPingSentAt >= Seconds(options.livenessTimeoutSec))
 		{
 			QueueDropUnresponsive();
 		}
@@ -508,9 +508,9 @@ void RedisManager::OnLivenessTick()
 		return;
 	}
 
-	const std::uint64_t generation = livenessGeneration_;
-	const int ret = connection_->formattedCommand(
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation](hiredis::Hiredis *, redisReply *reply)
+	const std::uint64_t generation = livenessGeneration;
+	const int ret = connection->formattedCommand(
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this, generation](hiredis::Hiredis *, redisReply *reply)
 		{
 			if (!token.lock()) return;
 			OnLivenessPingReply(generation, reply);
@@ -519,24 +519,24 @@ void RedisManager::OnLivenessTick()
 	if (ret != REDIS_OK)
 	{
 		// connected() 为真时只在命令格式化失败或内存不足时发生;不算判定依据,下一跳再试。
-		LOG_WARN << "Redis liveness PING could not be sent to " << redisAddr_.toIpPort() << " (ret=" << ret
-				 << "), retrying in " << options_.livenessProbeIntervalSec << "s";
+		LOG_WARN << "Redis liveness PING could not be sent to " << redisAddr.toIpPort() << " (ret=" << ret
+				 << "), retrying in " << options.livenessProbeIntervalSec << "s";
 		return;
 	}
-	livenessPingOutstanding_ = true;
-	livenessPingSentAt_ = now;
+	livenessPingOutstanding = true;
+	livenessPingSentAt = now;
 }
 
 void RedisManager::OnLivenessPingReply(std::uint64_t generation, const redisReply *reply)
 {
 	// 空应答:连接正在释放或已断开(含本探测把它摘下),由断线 / 重连路径负责。
 	// 代号不符:已被替换掉的旧连接上的迟到回调。两种情况都不碰探测状态。
-	if (reply == nullptr || generation != livenessGeneration_)
+	if (reply == nullptr || generation != livenessGeneration)
 	{
 		return;
 	}
 	// 任何非空应答(+PONG,或 -BUSY / -LOADING 之类的错误应答)都说明这条连接仍在往返数据。
-	livenessPingOutstanding_ = false;
+	livenessPingOutstanding = false;
 }
 
 void RedisManager::QueueDropUnresponsive()
@@ -546,8 +546,8 @@ void RedisManager::QueueDropUnresponsive()
 	// 最后一个引用释放即同步析构,在这里销毁一条本轮也有 I/O 的连接,Linux 是释放后使用,Windows Debug 撞 EventLoop::removeChannel 的断言。
 	// 现在 Hiredis 工厂删除器把分发期间的最终释放推迟到 pending,同批旧事件经 weak 回调与 Channel tie 失效,直接摘也不再出内存错误;
 	// 仍排到本轮的 pending functor 阶段再做,作为纵深防御、不依赖适配器的延迟释放:那时本轮 Channel 事件已全部分发完。
-	loop_->get().queueInLoop(
-		[token = std::weak_ptr<LifetimeToken>(lifetimeToken_), this, generation = livenessGeneration_]
+	loop->get().queueInLoop(
+		[token = std::weak_ptr<LifetimeToken>(lifetimeToken), this, generation = livenessGeneration]
 		{
 			if (!token.lock())
 			{
@@ -560,14 +560,14 @@ void RedisManager::QueueDropUnresponsive()
 void RedisManager::DropUnresponsive(std::uint64_t generation)
 {
 	// 排队期间情况可能已经变了:这条连接自己断开了(断线回调已接手重连),或已被移交 / 显式拆除替换。都不再处理。
-	if (!loop_ || generation != livenessGeneration_ || !connection_ || !connection_->connected())
+	if (!loop || generation != livenessGeneration || !connection || !connection->connected())
 	{
 		return;
 	}
 
-	LOG_ERROR << "Redis liveness probe timed out on " << redisAddr_.toIpPort() << ": PING got no reply within "
-			  << options_.livenessTimeoutSec << "s -- dropping the connection (in-flight commands complete with null replies), "
-			  << "reconnecting every " << reconnectPeriodSec_ << "s (metric=zone_redis_liveness_timeout)";
+	LOG_ERROR << "Redis liveness probe timed out on " << redisAddr.toIpPort() << ": PING got no reply within "
+			  << options.livenessTimeoutSec << "s -- dropping the connection (in-flight commands complete with null replies), "
+			  << "reconnecting every " << reconnectPeriodSec << "s (metric=zone_redis_liveness_timeout)";
 	ResetLivenessProbe();
 	// 被摘下连接的断线回调随释放清掉,不会再走那条路减,所以在这里减。
 	CountConnectionDown(/*expected=*/false);
@@ -579,9 +579,9 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 	// 先换上占位对象再释放:释放时在途命令以空应答回调,回调里若再取 GetConnection(),看到的是 connected()==false 的
 	// 占位对象,新命令当场 REDIS_ERR,不会发到正在释放的连接上。释放发生在本类的成员函数里、不在任何 hiredis 回调栈内;
 	// 被摘下连接的断线回调先被清掉,不会再走一遍断线日志与 ScheduleReconnect。
-	HiredisPtr unresponsive = std::move(connection_);
-	connection_ = hiredis::Hiredis::Create(&loop_->get(), redisAddr_);
-	const std::weak_ptr<LifetimeToken> oldCycle = lifetimeToken_;
+	HiredisPtr unresponsive = std::move(connection);
+	connection = hiredis::Hiredis::Create(&loop->get(), redisAddr);
+	const std::weak_ptr<LifetimeToken> oldCycle = lifetimeToken;
 	ReleaseConnection(unresponsive);
 	// 空应答业务回调可能销毁管理器或开始新 Connect 周期；只检查局部弱令牌，失效后不能再碰 this。
 	if (oldCycle.expired())
@@ -594,6 +594,6 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 
 void RedisManager::ResetLivenessProbe()
 {
-	++livenessGeneration_;
-	livenessPingOutstanding_ = false;
+	++livenessGeneration;
+	livenessPingOutstanding = false;
 }

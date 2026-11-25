@@ -64,15 +64,15 @@ public:
                         const std::string &holder = {})
     {
         PutOutcome outcome;
-        if (const auto tomb = tombstones_.find(key); tomb != tombstones_.end())
+        if (const auto tomb = tombstones.find(key); tomb != tombstones.end())
         {
             if (modRevision <= tomb->second)
             {
                 return outcome;
             }
-            tombstones_.erase(tomb);
+            tombstones.erase(tomb);
         }
-        const auto [it, inserted] = entries_.try_emplace(key);
+        const auto [it, inserted] = entries.try_emplace(key);
         if (!inserted && modRevision < it->second.modRevision)
         {
             return outcome;
@@ -98,22 +98,22 @@ public:
     DeleteOutcome ApplyDelete(const std::string &key, int64_t revision)
     {
         DeleteOutcome outcome;
-        const auto it = entries_.find(key);
-        if (it != entries_.end() && it->second.modRevision > revision)
+        const auto it = entries.find(key);
+        if (it != entries.end() && it->second.modRevision > revision)
         {
             outcome.result = DeleteResult::kStale;
             return outcome;
         }
-        const auto tomb = tombstones_.find(key);
-        if (it == entries_.end() && tomb != tombstones_.end() && tomb->second >= revision)
+        const auto tomb = tombstones.find(key);
+        if (it == entries.end() && tomb != tombstones.end() && tomb->second >= revision)
         {
             // 已经处理过不早于它的删除(重建后的 watch 从较早的 revision 回放):再交给发现层只会把宽限期重置一遍。
             outcome.result = DeleteResult::kStale;
             return outcome;
         }
-        auto &tombRevision = tombstones_[key];
+        auto &tombRevision = tombstones[key];
         tombRevision = std::max(tombRevision, revision);
-        if (it == entries_.end())
+        if (it == entries.end())
         {
             outcome.result = DeleteResult::kUnknownKey;
             return outcome;
@@ -122,7 +122,7 @@ public:
         outcome.value = std::move(it->second.value);
         outcome.holder = it->second.holder;
         DropHolder(it->second.holder);
-        entries_.erase(it);
+        entries.erase(it);
         return outcome;
     }
 
@@ -135,23 +135,23 @@ public:
     std::vector<Removed> ApplySnapshot(std::string_view prefix, const std::unordered_set<std::string> &snapshotKeys,
                                        int64_t snapshotRevision, bool complete)
     {
-        for (auto it = tombstones_.lower_bound(prefix); it != tombstones_.end() && it->first.starts_with(prefix);)
+        for (auto it = tombstones.lower_bound(prefix); it != tombstones.end() && it->first.starts_with(prefix);)
         {
-            it = it->second <= snapshotRevision ? tombstones_.erase(it) : std::next(it);
+            it = it->second <= snapshotRevision ? tombstones.erase(it) : std::next(it);
         }
         std::vector<Removed> removed;
         if (!complete)
         {
             return removed;
         }
-        for (auto it = entries_.lower_bound(prefix); it != entries_.end() && it->first.starts_with(prefix);)
+        for (auto it = entries.lower_bound(prefix); it != entries.end() && it->first.starts_with(prefix);)
         {
             if (it->second.modRevision <= snapshotRevision && !snapshotKeys.contains(it->first))
             {
                 DropHolder(it->second.holder);
                 removed.push_back({it->first, std::move(it->second.value), std::move(it->second.holder)});
-                tombstones_[it->first] = snapshotRevision;
-                it = entries_.erase(it);
+                tombstones[it->first] = snapshotRevision;
+                it = entries.erase(it);
                 continue;
             }
             ++it;
@@ -160,17 +160,17 @@ public:
     }
 
     // 这个持有者(节点 uuid)当前是否还挂在任何发现键上。空串恒为 false(无法判断)。
-    bool HoldsAnyKey(const std::string &holder) const { return !holder.empty() && holderKeys_.contains(holder); }
+    bool HoldsAnyKey(const std::string &holder) const { return !holder.empty() && holderKeys.contains(holder); }
 
     // 没有记录返回 nullptr;指针在下一次修改索引前有效。
     const std::string *FindValue(const std::string &key) const
     {
-        const auto it = entries_.find(key);
-        return it == entries_.end() ? nullptr : &it->second.value;
+        const auto it = entries.find(key);
+        return it == entries.end() ? nullptr : &it->second.value;
     }
 
-    std::size_t size() const { return entries_.size(); }
-    std::size_t tombstoneCount() const { return tombstones_.size(); }
+    std::size_t size() const { return entries.size(); }
+    std::size_t tombstoneCount() const { return tombstones.size(); }
 
 private:
     struct Entry
@@ -184,7 +184,7 @@ private:
     {
         if (!holder.empty())
         {
-            ++holderKeys_[holder];
+            ++holderKeys[holder];
         }
     }
 
@@ -194,14 +194,14 @@ private:
         {
             return;
         }
-        if (const auto it = holderKeys_.find(holder); it != holderKeys_.end() && --it->second == 0)
+        if (const auto it = holderKeys.find(holder); it != holderKeys.end() && --it->second == 0)
         {
-            holderKeys_.erase(it);
+            holderKeys.erase(it);
         }
     }
 
     // 有序容器:前缀对账用 lower_bound 扫一段。
-    std::map<std::string, Entry, std::less<>> entries_;
-    std::map<std::string, int64_t, std::less<>> tombstones_;
-    std::unordered_map<std::string, std::size_t> holderKeys_; // 持有者 → 它挂着的键数
+    std::map<std::string, Entry, std::less<>> entries;
+    std::map<std::string, int64_t, std::less<>> tombstones;
+    std::unordered_map<std::string, std::size_t> holderKeys; // 持有者 → 它挂着的键数
 };

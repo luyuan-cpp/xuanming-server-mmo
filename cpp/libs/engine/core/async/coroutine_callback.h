@@ -62,31 +62,31 @@ class Callback final : public boost::cobalt::op<std::optional<T>>
 
 public:
     Callback(muduo::net::EventLoop& loop, Submit submit, T rejected)
-        : loop_(loop), submit_(std::move(submit)), rejected_(std::move(rejected)) {}
+        : loop(loop), submit(std::move(submit)), rejected(std::move(rejected)) {}
 
     void initiate(Handler handler) override
     {
-        loop_.assertInLoopThread();
-        const auto state = std::make_shared<Completion>(loop_, std::move(handler), tracing::Current());
-        completion_ = state; // 发命令之前准备完整状态，容许拒绝、完成和停止重入。
+        loop.assertInLoopThread();
+        const auto state = std::make_shared<Completion>(loop, std::move(handler), tracing::Current());
+        completion = state; // 发命令之前准备完整状态，容许拒绝、完成和停止重入。
         const std::weak_ptr<Completion> weak = state;
         auto slot = state->handler->get_cancellation_slot();
         if (slot.is_connected())
             slot.assign([weak](boost::asio::cancellation_type) {
                 if (const auto state = weak.lock()) state->Finish(std::nullopt);
             });
-        const bool accepted = submit_(std::function<void(T)>([weak](T result) {
+        const bool accepted = submit(std::function<void(T)>([weak](T result) {
             if (const auto state = weak.lock()) state->Finish(std::move(result));
         }));
-        if (!accepted) state->Finish(std::move(rejected_));
+        if (!accepted) state->Finish(std::move(rejected));
         state->submitting = false;
     }
 
 private:
-    muduo::net::EventLoop& loop_;
-    Submit submit_;
-    T rejected_;
-    std::shared_ptr<Completion> completion_;
+    muduo::net::EventLoop& loop;
+    Submit submit;
+    T rejected;
+    std::shared_ptr<Completion> completion;
 };
 
 template<class T, class Submit>

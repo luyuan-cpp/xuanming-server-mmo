@@ -14,6 +14,21 @@ message PlayerSkillComp {
   uint32 rank = 3;
 }
 
+// 人物战法构筑装配方案（布局层：与 skill_list 实例层解耦，不靠下标承载槽位语义）。
+message SkillLoadoutScheme {
+  uint32 scheme_id = 1;                   // 1..3 显式流派方案号
+  uint32 role_tag = 2;                    // 0默认 / 1输出 / 2控场 / 3辅助
+  repeated uint32 passive_skill_ids = 3;  // 最多 3 个被动战法（同 exclusive_group 互斥）
+  repeated uint32 pursuit_skill_ids = 4;  // 最多 1 个追击战法
+  repeated uint32 opening_skill_ids = 5;  // 最多 1 个开场战法
+}
+
 message PlayerSkillListComp {
   repeated PlayerSkillComp skill_list = 1;
+  uint32 active_loadout_scheme_id = 2;           // 0 = 未启用自定义装配（全量非互斥兼容态）；1..3 = 启用对应方案
+  repeated SkillLoadoutScheme loadout_schemes = 3;
+  uint64 loadout_state_version = 4;              // 战法装配乐观锁版本号（0 按 1 计）
+  string loadout_last_request_id = 5;            // 最近一次战法装配/切换幂等键
+  uint64 loadout_last_base_version = 6;          // 最近一次战法装配/切换请求的期望版本
+  uint32 loadout_last_scheme_id = 7;             // 最近一次战法装配/切换的目标方案号
 }

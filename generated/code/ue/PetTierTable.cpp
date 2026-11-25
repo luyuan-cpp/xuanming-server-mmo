@@ -108,6 +108,11 @@ static void PetTierTableCheckNarrowedField(const TSharedPtr<FJsonObject>& Object
 static void PetTierTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, int32 RowIndex)
 {
 	PetTierTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetTierTableCheckNarrowedField(RowObject, TEXT("ascend_cost_item_id"), TEXT("ascend_cost_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetTierTableCheckNarrowedField(RowObject, TEXT("ascend_cost_item_count"), TEXT("ascend_cost_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetTierTableCheckNarrowedField(RowObject, TEXT("ascend_cost_gold"), TEXT("ascend_cost_gold"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	PetTierTableCheckNarrowedField(RowObject, TEXT("ascend_min_pet_level"), TEXT("ascend_min_pet_level"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetTierTableCheckNarrowedField(RowObject, TEXT("bonus_entry_points"), TEXT("bonus_entry_points"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UPetTierTable::LoadFromJson(const FString& JsonText, FString& OutError)

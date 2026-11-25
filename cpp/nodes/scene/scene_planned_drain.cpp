@@ -23,12 +23,12 @@ namespace
 
 void ScenePlannedDrain::Begin(Node &node, const std::function<void()> &closeCreation)
 {
-	if (started_)
+	if (started)
 	{
 		return;
 	}
-	started_ = true;
-	agonesLabelTimer_.Cancel();
+	started = true;
+	agonesLabelTimer.Cancel();
 
 	// 先摘流:不再建新场景(scene_manager 收到 UNAVAILABLE 后回滚),并发布 admission = CLOSED 让它不再往这里放东西。
 	closeCreation();
@@ -39,26 +39,26 @@ void ScenePlannedDrain::Begin(Node &node, const std::function<void()> &closeCrea
 	const auto relocationsPerSecond =
 		scene_planned_drain::RelocationsPerSecond(std::getenv(scene_planned_drain::kRelocationsPerSecondEnvVar));
 	const auto now = std::chrono::steady_clock::now();
-	selfEvacuateAt_ = now + selfEvacuateAfter;
-	lastSecondTick_ = now;
+	selfEvacuateAt = now + selfEvacuateAfter;
+	lastSecondTick = now;
 
 	PlayerLifecycleSystem::BeginPlannedDrain(relocationsPerSecond);
 	LOG_INFO << "[PlannedDrain] scene drain started: players=" << PlayerLifecycleSystem::LocalPlayerCount()
 			 << " budget_s=" << budget.count() << " self_evacuate_after_s=" << selfEvacuateAfter.count()
-			 << " trigger=" << (triggeredByAgonesLabel_ ? "agones_drain_label" : "sigterm");
+			 << " trigger=" << (triggeredByAgonesLabel ? "agones_drain_label" : "sigterm");
 
 	ReconcileAdmission(node);
 	if (!HasOpenEvacuationTarget(node))
 	{
-		noTargetSince_ = now;
+		noTargetSince = now;
 	}
-	tickTimer_.RunEvery(kTickIntervalSec, [this, &node]
+	tickTimer.RunEvery(kTickIntervalSec, [this, &node]
 						{ Tick(node); });
 }
 
 bool ScenePlannedDrain::IsComplete(Node &node)
 {
-	if (!started_)
+	if (!started)
 	{
 		return false;
 	}
@@ -67,12 +67,12 @@ bool ScenePlannedDrain::IsComplete(Node &node)
 		LogProgress(node);
 		return true;
 	}
-	if (noTargetSince_.has_value() &&
-		std::chrono::steady_clock::now() - *noTargetSince_ >= scene_planned_drain::kNoTargetGrace)
+	if (noTargetSince.has_value() &&
+		std::chrono::steady_clock::now() - *noTargetSince >= scene_planned_drain::kNoTargetGrace)
 	{
-		if (!noTargetLogged_)
+		if (!noTargetLogged)
 		{
-			noTargetLogged_ = true;
+			noTargetLogged = true;
 			LOG_WARN << "[PlannedDrain] no open world-hosting scene node in this zone for "
 					 << scene_planned_drain::kNoTargetGrace.count()
 					 << "s; remaining players go through the normal shutdown save. players="
@@ -85,25 +85,25 @@ bool ScenePlannedDrain::IsComplete(Node &node)
 
 void ScenePlannedDrain::Stop()
 {
-	tickTimer_.Cancel();
-	agonesLabelTimer_.Cancel();
+	tickTimer.Cancel();
+	agonesLabelTimer.Cancel();
 }
 
 void ScenePlannedDrain::WatchAgonesDrainLabel(Node &node)
 {
-	agonesLabelTimer_.RunEvery(kAgonesLabelPollIntervalSec, [this, &node]
+	agonesLabelTimer.RunEvery(kAgonesLabelPollIntervalSec, [this, &node]
 							   {
-		if (started_ || node.PlannedDrainStarted())
+		if (started || node.PlannedDrainStarted())
 		{
-			agonesLabelTimer_.Cancel();
+			agonesLabelTimer.Cancel();
 			return;
 		}
 		if (!agones::GameServerLifecycle::Instance().IsDraining())
 		{
 			return;
 		}
-		triggeredByAgonesLabel_ = true;
-		agonesLabelTimer_.Cancel();
+		triggeredByAgonesLabel = true;
+		agonesLabelTimer.Cancel();
 		LOG_WARN << "[PlannedDrain] Agones drain label observed; starting a planned drain";
 		node.RequestPlannedStop(); });
 }
@@ -112,22 +112,22 @@ void ScenePlannedDrain::Tick(Node &node)
 {
 	const auto now = std::chrono::steady_clock::now();
 	PlayerLifecycleSystem::PumpPlannedEvacuations(now);
-	if (now - lastSecondTick_ < kSlowTickInterval)
+	if (now - lastSecondTick < kSlowTickInterval)
 	{
 		return;
 	}
-	lastSecondTick_ = now;
+	lastSecondTick = now;
 
 	ReconcileAdmission(node);
 
 	// 自疏散:过了这个时刻还在本节点上的人(副本没打完、scene_manager 没赶上迁频道、排空开始后才路由进来的)
 	// 由节点自己排进疏散队列;之后每秒再扫一次,接住晚到的。
-	if (now >= selfEvacuateAt_)
+	if (now >= selfEvacuateAt)
 	{
 		const std::size_t queued = PlayerLifecycleSystem::QueueAllPlayersForPlannedDrain();
-		if (!selfEvacuationStarted_)
+		if (!selfEvacuationStarted)
 		{
-			selfEvacuationStarted_ = true;
+			selfEvacuationStarted = true;
 			LOG_WARN << "[PlannedDrain] self-evacuation started: queued=" << queued
 					 << " players=" << PlayerLifecycleSystem::LocalPlayerCount();
 		}
@@ -139,11 +139,11 @@ void ScenePlannedDrain::Tick(Node &node)
 
 	if (HasOpenEvacuationTarget(node))
 	{
-		noTargetSince_.reset();
+		noTargetSince.reset();
 	}
-	else if (!noTargetSince_.has_value())
+	else if (!noTargetSince.has_value())
 	{
-		noTargetSince_ = now;
+		noTargetSince = now;
 	}
 
 	LogProgress(node);
@@ -151,7 +151,7 @@ void ScenePlannedDrain::Tick(Node &node)
 
 void ScenePlannedDrain::ReconcileAdmission(Node &node)
 {
-	const auto result = node_admission::Reconcile(node, node_admission::Advertised::kClosed, advertisePolicy_);
+	const auto result = node_admission::Reconcile(node, node_admission::Advertised::kClosed, advertisePolicy);
 	if (result.action == node_admission::AdvertiseAction::kNone)
 	{
 		return;
@@ -171,12 +171,12 @@ void ScenePlannedDrain::LogProgress(Node &)
 {
 	const std::size_t players = PlayerLifecycleSystem::LocalPlayerCount();
 	const std::size_t queued = PlayerLifecycleSystem::PlannedEvacuationsQueued();
-	if (players == lastLoggedPlayers_ && queued == lastLoggedQueued_)
+	if (players == lastLoggedPlayers && queued == lastLoggedQueued)
 	{
 		return;
 	}
-	lastLoggedPlayers_ = players;
-	lastLoggedQueued_ = queued;
+	lastLoggedPlayers = players;
+	lastLoggedQueued = queued;
 	LOG_INFO << "[PlannedDrain] progress: players=" << players << " queued=" << queued
 			 << " relocate_confirms=" << PlayerLifecycleSystem::RelocateConfirmsPending();
 }

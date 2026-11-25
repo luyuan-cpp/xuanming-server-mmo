@@ -104,7 +104,7 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
+			loop = std::make_unique<muduo::net::EventLoop>();
 			InitGateCodec(SharedCodec());
 			ResetState();
 			gate_lane::SetRouterSender(&AlwaysSent);
@@ -113,15 +113,15 @@ namespace
 		void TearDown() override
 		{
 			ResetState();
-			connections_.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-			loop_.reset();
+			connections.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+			loop.reset();
 		}
 
 		// 建一条回环连接并挂成会话:验过票、登录成功、经认证绑定了 playerId(kInvalidGuid = 还在选角界面)。
 		// 连不上时这里报失败,之后的 ExpectReceived 也会失败,不会误过。
 		LoopbackConnection &AddSession(Guid playerId)
 		{
-			auto connection = std::make_unique<LoopbackConnection>(*loop_);
+			auto connection = std::make_unique<LoopbackConnection>(*loop);
 			EXPECT_TRUE(connection->Open("gate_redirect"));
 			SessionInfo &session = tlsSessionManager.sessions()[kSession];
 			session.verified = true;
@@ -131,8 +131,8 @@ namespace
 			session.authenticatedAccount = "redirect-test-account";
 			session.authenticatedOwnerRevision = 7;
 			session.conn = connection->ServerSide();
-			connections_.push_back(std::move(connection));
-			return *connections_.back();
+			connections.push_back(std::move(connection));
+			return *connections.back();
 		}
 
 		static SessionInfo &Session()
@@ -160,11 +160,11 @@ namespace
 			sentinel.set_message_id(kSentinelMessageId);
 			const std::string all = expected + Bytes(sentinel);
 			gate_push::EncodedFrame(sentinel).SendTo(serverSide);
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
+			ASSERT_TRUE(DriveLoopUntil(*loop, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
 			EXPECT_EQ(connection.ClientReceived(), all);
 		}
 
-		muduo::net::EventLoop &Loop() { return *loop_; }
+		muduo::net::EventLoop &Loop() { return *loop; }
 
 	private:
 		static void ResetState()
@@ -174,8 +174,8 @@ namespace
 			gate_drain_migration::ResetForTesting();
 		}
 
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::vector<std::unique_ptr<LoopbackConnection>> connections_;
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::vector<std::unique_ptr<LoopbackConnection>> connections;
 	};
 } // namespace
 

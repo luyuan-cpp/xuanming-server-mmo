@@ -180,6 +180,6 @@ private:
 							  scene_ownership::Clock::time_point issuedAt,
 							  const std::shared_ptr<scene_ownership::ReleaseBudget> &budget);
 
-	std::shared_ptr<Session> session_;
-	TimerTaskComp timer_;
+	std::shared_ptr<Session> session;
+	TimerTaskComp timer;
 };

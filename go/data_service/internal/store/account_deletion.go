@@ -370,6 +370,9 @@ func (s *AccountDirectoryStore) FinishDeletion(ctx context.Context, account stri
 			"ON DUPLICATE KEY UPDATE requested_ms=?,deleted_ms="+dbNowMsSQL+",source=?", accountDigest(account), requested, source, requested, source); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM "+AccountRoleTradableQuotaTableName+" WHERE account=?", []byte(account)); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM account_directory WHERE account=?", []byte(account)); err != nil {
 			return err
 		}

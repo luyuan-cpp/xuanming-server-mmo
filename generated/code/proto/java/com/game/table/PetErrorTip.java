@@ -111,6 +111,26 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetNotTransferable = 26018;</code>
      */
     kPetNotTransferable(26018),
+    /**
+     * <code>kPetTierMaxReached = 26019;</code>
+     */
+    kPetTierMaxReached(26019),
+    /**
+     * <code>kPetTierChanged = 26020;</code>
+     */
+    kPetTierChanged(26020),
+    /**
+     * <code>kPetTierLevelNotEnough = 26021;</code>
+     */
+    kPetTierLevelNotEnough(26021),
+    /**
+     * <code>kPetTierMaterialNotEnough = 26022;</code>
+     */
+    kPetTierMaterialNotEnough(26022),
+    /**
+     * <code>kPetEntryPresetInvalid = 26023;</code>
+     */
+    kPetEntryPresetInvalid(26023),
     UNRECOGNIZED(-1),
     ;
 
@@ -203,6 +223,26 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetNotTransferable = 26018;</code>
      */
     public static final int kPetNotTransferable_VALUE = 26018;
+    /**
+     * <code>kPetTierMaxReached = 26019;</code>
+     */
+    public static final int kPetTierMaxReached_VALUE = 26019;
+    /**
+     * <code>kPetTierChanged = 26020;</code>
+     */
+    public static final int kPetTierChanged_VALUE = 26020;
+    /**
+     * <code>kPetTierLevelNotEnough = 26021;</code>
+     */
+    public static final int kPetTierLevelNotEnough_VALUE = 26021;
+    /**
+     * <code>kPetTierMaterialNotEnough = 26022;</code>
+     */
+    public static final int kPetTierMaterialNotEnough_VALUE = 26022;
+    /**
+     * <code>kPetEntryPresetInvalid = 26023;</code>
+     */
+    public static final int kPetEntryPresetInvalid_VALUE = 26023;
 
 
     public final int getNumber() {
@@ -249,6 +289,11 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
         case 26016: return kPetIdGenerateFailed;
         case 26017: return kPetNameSensitive;
         case 26018: return kPetNotTransferable;
+        case 26019: return kPetTierMaxReached;
+        case 26020: return kPetTierChanged;
+        case 26021: return kPetTierLevelNotEnough;
+        case 26022: return kPetTierMaterialNotEnough;
+        case 26023: return kPetEntryPresetInvalid;
         default: return null;
       }
     }
@@ -314,7 +359,7 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023pet_error_tip.proto*\204\004\n\tpet_error\022\020\n\014k" +
+      "\n\023pet_error_tip.proto*\222\005\n\tpet_error\022\020\n\014k" +
       "Pet_errorOK\020\000\022\022\n\014kPetNotFound\020\220\313\001\022\031\n\023kPe" +
       "tTableRowMissing\020\221\313\001\022\022\n\014kPetSlotFull\020\222\313\001" +
       "\022\035\n\027kPetOwnerLevelNotEnough\020\223\313\001\022\027\n\021kPetA" +
@@ -327,8 +372,12 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       "tEnough\020\235\313\001\022\024\n\016kPetNoAutoPlan\020\236\313\001\022\031\n\023kPe" +
       "tNothingToChange\020\237\313\001\022\032\n\024kPetIdGenerateFa" +
       "iled\020\240\313\001\022\027\n\021kPetNameSensitive\020\241\313\001\022\031\n\023kPe" +
-      "tNotTransferable\020\242\313\001B$\n\016com.game.tableZ\022" +
-      "generated/pb/tableb\006proto3"
+      "tNotTransferable\020\242\313\001\022\030\n\022kPetTierMaxReach" +
+      "ed\020\243\313\001\022\025\n\017kPetTierChanged\020\244\313\001\022\034\n\026kPetTie" +
+      "rLevelNotEnough\020\245\313\001\022\037\n\031kPetTierMaterialN" +
+      "otEnough\020\246\313\001\022\034\n\026kPetEntryPresetInvalid\020\247" +
+      "\313\001B$\n\016com.game.tableZ\022generated/pb/table" +
+      "b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

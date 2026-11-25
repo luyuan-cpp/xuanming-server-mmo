@@ -43,7 +43,7 @@ func TestGrpcServiceHandler_NewBattleSkeleton(t *testing.T) {
 	assertGrpcPreservedOnce(t, header, "#include \"proto/battle/battle_node.pb.h\"\n"+grpcPreservationBegin("grpc.header.includes"), "消息头文件紧跟 include 守护段")
 	assertGrpcPreservedOnce(t, header, "class BattleNodeImpl final : public muduo_grpc::Service", "muduo_grpc 服务基类")
 	assertGrpcPreservedOnce(t, header, "void RegisterMethods(muduo_grpc::MethodTable& table) override;", "方法表声明")
-	assertGrpcPreservedOnce(t, header, "muduo::net::EventLoop& loop_;", "loop 引用成员")
+	assertGrpcPreservedOnce(t, header, "muduo::net::EventLoop& loop;", "loop 引用成员")
 	cpp := GetGrpcServiceHandlerCppStr(cppPath, methods, "", "")
 	if strings.Contains(cpp, _config.Global.Naming.YourCodeEnd+"}") {
 		t.Fatal("结束守护标记不能吞掉函数结束括号")
@@ -72,7 +72,7 @@ func TestGrpcServiceHandler_NewBattleSkeleton(t *testing.T) {
 		assertGrpcPreservedOnce(t, cpp, "table.AddUnary(std::string(k"+name+"Path),", "方法表登记")
 		assertGrpcPreservedOnce(t, cpp, "\n                "+name+"(call);\n", "解析成功后进 guard 函数")
 		assertGrpcPreservationOrder(t, grpcGuardFunction(t, cpp, "BattleNode", name),
-			"[[maybe_unused]] const "+method.CppRequest()+"* request = &call->request();",
+			"[[maybe_unused]] const "+method.CppRequest()+"* request = &call->Request();",
 			grpcPreservationBegin("grpc."+name+".guard"),
 			_config.Global.Naming.YourCodeEnd,
 			"call->Proceed();")
@@ -188,7 +188,7 @@ func TestGrpcServiceHandler_RegenerationPreservesBattleCustomSections(t *testing
 			assertGrpcPreservedOnce(t, generatedCpp, body, "CPP 自定义代码")
 		}
 		assertGrpcPreservationOrder(t, grpcGuardFunction(t, generatedCpp, "BattleNode", "CreateBattle"),
-			"[[maybe_unused]] const ::CreateBattleRequest* request = &call->request();",
+			"[[maybe_unused]] const ::CreateBattleRequest* request = &call->Request();",
 			grpcPreservationBegin("grpc.CreateBattle.guard"),
 			createGuard,
 			_config.Global.Naming.YourCodeEnd,
@@ -501,7 +501,7 @@ func TestGrpcServiceHandler_UnconsumedUnnamedSectionsRefuseGeneration(t *testing
 		{
 			name: "<M>() 里的无名段",
 			edit: func(t *testing.T, cpp string) string {
-				anchor := "    [[maybe_unused]] const ::PrepareBattleRequest* request = &call->request();\n"
+				anchor := "    [[maybe_unused]] const ::PrepareBattleRequest* request = &call->Request();\n"
 				return replaceGrpcFixtureOnce(t, cpp, anchor, anchor+"    "+begin+"\n    reject_early();\n    "+end+"\n")
 			},
 			want: "PrepareBattle:" + strayGrpcUnnamedSectionName,
@@ -636,8 +636,8 @@ func TestGrpcServiceHandler_HeaderUnnamedSections(t *testing.T) {
 		// 类外一个非空、一个空,类内一个非空(缩进)。
 		header := replaceGrpcFixtureOnce(t, fresh, "class BattleNodeImpl final",
 			begin+"\n#include \"lost.h\"\n"+end+"\n"+pair+"\n\nclass BattleNodeImpl final")
-		header = replaceGrpcFixtureOnce(t, header, "    muduo::net::EventLoop& loop_;\n",
-			"    muduo::net::EventLoop& loop_;\n    "+begin+"\n    int lost_ = 0;\n    "+end+"\n")
+		header = replaceGrpcFixtureOnce(t, header, "    muduo::net::EventLoop& loop;\n",
+			"    muduo::net::EventLoop& loop;\n    "+begin+"\n    int lost_ = 0;\n    "+end+"\n")
 		var unnamedLines []int
 		for i, line := range strings.Split(header, "\n") {
 			if strings.TrimSpace(line) == begin {
@@ -843,7 +843,7 @@ func legacyGrpcHandlerCpp(methods RPCMethods, firstCode string, sections map[str
 	var b strings.Builder
 	b.WriteString("#include \"" + methods[0].FileBaseNameNoEx() + ".h\"\n#include <future>\n")
 	b.WriteString(firstCode + "\n\n")
-	b.WriteString(service + "Impl::" + service + "Impl(muduo::net::EventLoop& loop)\n    : loop_(loop)\n{\n}\n")
+	b.WriteString(service + "Impl::" + service + "Impl(muduo::net::EventLoop& loop)\n    : loop(loop)\n{\n}\n")
 	for _, method := range methods {
 		name := method.Method()
 		b.WriteString("\nvoid " + service + "Impl::Handle" + name + "(const " + method.CppRequest() + "* request")

@@ -28,8 +28,8 @@ public:
 	std::string Render() const;
 
 private:
-	mutable std::mutex mutex_;
-	std::vector<std::pair<std::string, Collector>> collectors_;
+	mutable std::mutex mutex;
+	std::vector<std::pair<std::string, Collector>> collectors;
 };
 
 // 进程唯一的注册表(函数内静态,首次使用时构造)。

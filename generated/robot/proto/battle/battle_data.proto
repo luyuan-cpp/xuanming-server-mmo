@@ -92,6 +92,12 @@ message BattlePlayerSnapshot {
   uint32 pet_capture_slots = 22; // scene 核定的本局可捕捉数量；旧快照缺省为0。
   EquipmentEffects equipment_effects = 23; // 仅人物装备，宝宝不继承。
   uint32 active_season_id = 24; // 开局由 scene 冻结的当前赛季编号（0 = 无活跃赛季）；引擎据此复核赛季限定技能。
+  // true = 帮会帮战 V2 守旗阵 AI 托管单位(docs/design/guild-play-v2.md):强制自动行动、不等待真人指令、不发个人结算与 660 额度。
+  bool ai_controlled = 25;
+  // 论剑 V3 战前 15 秒明牌变阵备选灵宠快照（仅正式自养论剑/锦标赛由 scene 填充至多 5 只合规备选，满血满蓝且战后不回写）。
+  repeated BattlePetSnapshot standby_pets = 26;
+  // 论剑 V3 当季可用全部赛季印快照（全员免费临场切换机制槽，不重算人物基础气血/防御万分比）。
+  repeated SeasonSealEffect available_season_seals = 27;
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -177,6 +183,7 @@ message BattleActorState {
   bool competitive_temporary = 42; // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
   bool is_boss = 43; // true = 首领单位（来自 MonsterTable.is_boss）；不可被复制技能选中，客户端选目标阶段置灰。
   BattleArtifactState season_seal_state = 44; // 单槽赛季印的局内次数状态（不占用永久法宝 item_id 列表，下发客户端前清除）。
+  uint32 charging_skill_id = 45; // 非 0 表示当前处于明牌蓄力状态（如 E01/E02），下回合正常行动自动释放；对敌我双方均可见。
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
@@ -293,6 +300,48 @@ message BattleSurrenderVoteState {
   bool passed = 9;                       // true = 本次通知表示投票已通过、本方投降生效
 }
 
+// 论剑 V3 战前 15 秒明牌变阵可选赛季印摘要（仅向收信本人下发）。
+message BattlePrepSealOption {
+  uint32 seal_id = 1;
+  uint32 effect_id = 2;
+  string name = 3;
+}
+
+// 论剑 V3 战前 15 秒明牌变阵可选首发灵宠摘要（仅向收信本人下发）。
+message BattlePrepPetOption {
+  uint64 pet_id = 1;
+  uint32 pet_table_id = 2;
+  string pet_name = 3;
+  uint32 level = 4;
+  uint64 max_health = 5;
+  uint64 speed = 6;
+  uint64 physical_attack = 7;
+  uint64 magic_attack = 8;
+  uint64 defense = 9;
+  repeated uint32 skill_table_ids = 10;
+}
+
+// 论剑 V3 同队成员当前变阵与锁定状态（仅向同队成员下发，绝不向对手或观众暴露）。
+message BattlePrepPlayerState {
+  uint64 player_id = 1;
+  uint32 team_index = 2;
+  uint32 selected_seal_id = 3;
+  uint64 selected_pet_id = 4;
+  uint32 selected_pet_table_id = 5;
+  string selected_pet_name = 6;
+  bool ready = 7;
+}
+
+// 论剑 V3 战前 15 秒明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
+message BattlePrepState {
+  bool active = 1;                                    // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
+  uint64 deadline_ms = 2;                             // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
+  uint32 duration_seconds = 3;                        // 战前变阵总时长（秒，默认 15）
+  repeated BattlePrepSealOption self_available_seals = 4;
+  repeated BattlePrepPetOption self_available_pets = 5;
+  repeated BattlePrepPlayerState team_states = 6;
+}
+
 // ---- 胜负 ----
 enum eBattleOutcome {
   BATTLE_OUTCOME_ONGOING = 0;
@@ -407,6 +456,23 @@ enum eBattleActivityKind {
   BATTLE_ACTIVITY_KIND_NONE = 0;            // 普通对局:不回显上下文,结果事件照旧只发一次
   BATTLE_ACTIVITY_KIND_GUILD_TRIAL = 1;     // 帮会同道历练:go/guild 以消费组 guild-trial 消费 match-results 结算
   BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST = 2;  // 瑞兽迎春限时单人神兽挑战:scene 发起、match 准入、battle 执行、scene 收件箱结算
+  BATTLE_ACTIVITY_KIND_GUILD_WAR = 3;       // 帮会全天帮战 V2:无匹配池直打,go/guild 消费 match-results 幂等结算旗势/悬赏/追杀/奖励
+}
+
+// 帮会全天帮战 V2 开局冻结紧凑上下文(docs/design/guild-play-v2.md):只携带紧凑 ID 与标识,严禁塞入快照字节以守住 Kafka 960 KiB 红线。
+message GuildWarBattleContext {
+  uint32 zone_id = 1;                        // 归属区
+  uint64 attacker_guild_id = 2;              // 攻方帮会 ID
+  uint64 defender_guild_id = 3;              // 守方帮会 ID(无主灵脉守卫为 0)
+  uint32 leyline_id = 4;                     // 关联灵脉 ID(1八仙岛/2碧渊水宫/3月汐湾;纯野外路遇无关联为 0)
+  uint32 war_battle_kind = 5;                // 1界面真人/2守旗踢馆/3野外路遇/4灵脉现场/5追杀结单
+  uint64 bounty_id = 6;                      // 关联追杀令 ID(非追杀局为 0)
+  uint32 week_key = 7;                       // 开战时 ISO 周键(gameday.WeekKey)
+  repeated uint64 attacker_player_ids = 8;   // 攻方真人角色 ID 列表
+  repeated uint64 defender_player_ids = 9;   // 守方真人或守旗快照角色 ID 列表
+  bool gold_leyline_bonus = 10;              // 开战时该灵脉是否为当小时 1.5x 金脉
+  bool rivalry_bonus = 11;                   // 开战时双方帮会是否为本周宿敌(+20%)
+  uint64 started_at_ms = 12;                 // 开战时刻 Unix 毫秒
 }
 
 // 瑞兽迎春开局冻结上下文（由 scene 组装、match 时间窗校验后随成局原件持久化并透传至 PrepareBattle / CreateBattle / Settlement）。
@@ -445,6 +511,7 @@ message BattleActivityContext {
   uint32 guild_period_key = 6;      // 确认开战时的帮会期键(activity.GuildPeriodKey;历练即游戏日),用于每日计资金胜场上限
   uint64 launch_request_id = 7;     // 同道历练开战前持久原件；match/battle原样复制回结果，不包含账号
   FestivalBeastBattleContext festival_beast = 8; // kind == BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST 时必填
+  GuildWarBattleContext guild_war = 9;           // kind == BATTLE_ACTIVITY_KIND_GUILD_WAR 时必填
 }
 
 // 观战可见性(docs/design/battle-spectate-tiered-fanout.md §10 第 6 条 / §10.2):战斗创建时由 match 按

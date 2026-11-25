@@ -210,13 +210,13 @@ public:
     // 换成 GridLayout / 未来的 FixedSlotLayout 只需在这里换一个对象,
     // 实例层与本类的其余部分一行都不用改。
     void SetLayout(std::unique_ptr<IContainerLayout> layout);
-    [[nodiscard]] const IContainerLayout &Layout() const { return *layout_; }
+    [[nodiscard]] const IContainerLayout &Layout() const { return *layout; }
 
     // ── 准入策略 ──────────────────────────────────────────────────────
     // 默认 AcceptAll,即拆分前的唯一行为(压根没人问过"这个包收不收")。
     // 换成 AcceptByTag(节日包)只需在这里换一个对象,其余三层都不用动。
     void SetAdmission(std::unique_ptr<IAdmissionPolicy> admission);
-    [[nodiscard]] const IAdmissionPolicy &Admission() const { return *admission_; }
+    [[nodiscard]] const IAdmissionPolicy &Admission() const { return *admission; }
 
     // 一次装配一整套规则。生产代码请走这个,不要逐轴 Set —— 每加一根轴,
     // 逐轴调用的地方都得记得同改一遍,而 Profile 只改一处。
@@ -225,11 +225,11 @@ public:
     // 这个包按哪套注册规则装配的。0 = 没经过注册表(四个固定包、以及默认构造的
     // 动态包)。bag_marshal 持久化它,还原时据此重新装配 —— **规则本身不进快照,
     // 进快照的只是"这个包是哪套规则"这一个 id**。
-    [[nodiscard]] uint32_t ProfileId() const { return profileId_; }
+    [[nodiscard]] uint32_t ProfileId() const { return profileId; }
 
     // Capacity = how many grid slots this bag has unlocked. NOT the number
     // of items currently held (that's OccupiedGridCount()).
-    std::size_t Capacity() const { return layout_->Capacity(); }
+    std::size_t Capacity() const { return layout->Capacity(); }
     [[nodiscard]] Guid PlayerGuid() const { return playerGuid; }
 
     // 记下这个背包属于谁。**只用于日志**,不参与任何判定。
@@ -243,21 +243,21 @@ public:
         if (playerGuid != guid)
         {
             playerGuid = guid;
-            ++mutationVersion_;
+            ++mutationVersion;
         }
     }
     // 每次状态变更单调递增的版本号:供 BagService 事务提交前做 O(1) 同源校验,替代整包序列化指纹。
-    [[nodiscard]] uint64_t MutationVersion() const { return mutationVersion_; }
-    std::size_t OccupiedGridCount() const { return store_.Size(); }
+    [[nodiscard]] uint64_t MutationVersion() const { return mutationVersion; }
+    std::size_t OccupiedGridCount() const { return store.Size(); }
     // Number of grid slots recorded in the position map. Invariant: equals
     // OccupiedGridCount() — every held item owns exactly one grid slot.
-    std::size_t GridSlotCount() const { return layout_->OccupiedSlotCount(); }
-    const PosMap &GridSlots() const { return layout_->Slots(); }
+    std::size_t GridSlotCount() const { return layout->OccupiedSlotCount(); }
+    const PosMap &GridSlots() const { return layout->Slots(); }
 
     std::size_t GetTotalItemCount(uint32_t config_id) const;
     [[nodiscard]] std::size_t GetTotalTradableItemCount(uint32_t config_id) const;
     // 只读:本包里有没有这个实例身份。不改任何状态,可在 const 路径上用(GetItemCompByGuid 是非 const)。
-    [[nodiscard]] bool ContainsGuid(Guid guid) const { return store_.Contains(guid); }
+    [[nodiscard]] bool ContainsGuid(Guid guid) const { return store.Contains(guid); }
     ItemComp *GetItemCompByGuid(Guid guid);
     ItemComp *GetItemCompByPos(uint32_t pos);
 
@@ -271,7 +271,7 @@ public:
     // 不得和确定不足一样记成终态拒绝(ItemStore::CheckQuantities,混版本设计 §4.4 第 6 批)。
     [[nodiscard]] ItemStore::QuantityVerdict CheckQuantities(const ItemCountMap &requiredItems) const
     {
-        return store_.CheckQuantities(requiredItems);
+        return store.CheckQuantities(requiredItems);
     }
 
     // CheckQuantities 映射成 tip 码,静默:kSuccess / kFeatureUnavailable(版本错位)/ kBagInsufficientItems。
@@ -335,7 +335,7 @@ public:
 
     // 「满没满」是**布局层**的问题。拆分前它写作 items.size() >= capacity,
     // 拿实例数量去比格子数 —— 只有在"1 实例恒占 1 格"的前提下才成立。
-    bool IsFull() const { return layout_->FreeCells() == 0; }
+    bool IsFull() const { return layout->FreeCells() == 0; }
 
     // 只回答**格子数**够不够。
     //
@@ -346,7 +346,7 @@ public:
     bool IsSpaceInsufficient(std::size_t gridCount) const
     {
         AssertCapacityInvariant();
-        return !layout_->CanFit(gridCount, kSingleCell);
+        return !layout->CanFit(gridCount, kSingleCell);
     }
 
     // writtenGuidsOut(可为 nullptr)按写入顺序收集**本次调用实际落到背包里的实例 guid**。
@@ -488,7 +488,7 @@ public:
     template <typename Fn>
     void ForEachItem(Fn &&fn) const
     {
-        store_.ForEach(std::forward<Fn>(fn));
+        store.ForEach(std::forward<Fn>(fn));
     }
 
     // Get item position by guid. Returns kInvalidU32Id if the guid isn't
@@ -496,11 +496,11 @@ public:
     //
     // 拆分前这里是遍历 posToGuid 比对 value 的 O(n) 线扫;布局层有了自己的
     // 反向索引之后是 O(1)。语义完全不变。
-    uint32_t GetItemPosByGuid(Guid guid) const { return layout_->SlotOf(guid); }
+    uint32_t GetItemPosByGuid(Guid guid) const { return layout->SlotOf(guid); }
     // 只读展示占位；形状仍由桥层的唯一配置入口决定，调用者不自行猜测。
     [[nodiscard]] Footprint GetItemFootprintByGuid(Guid guid) const
     {
-        const auto* item = store_.Find(guid);
+        const auto* item = store.Find(guid);
         return item != nullptr ? FootprintFor(item->config_id()) : Footprint{0, 0};
     }
 
@@ -512,8 +512,8 @@ public:
     // 只是它在 Debug 下的断言包装。
     [[nodiscard]] bool IsLayerConsistent() const
     {
-        return store_.Size() == layout_->OccupiedSlotCount() &&
-               layout_->Capacity() >= layout_->OccupiedSlotCount();
+        return store.Size() == layout->OccupiedSlotCount() &&
+               layout->Capacity() >= layout->OccupiedSlotCount();
     }
 
     // Replace the bag's contents wholesale. Used by bag_marshal::Unmarshal
@@ -647,9 +647,9 @@ private:
     std::size_t EmptyGridCount() const
     {
         AssertCapacityInvariant();
-        return layout_->FreeCells();
+        return layout->FreeCells();
     }
-    void AssertCapacityInvariant() const { assert(layout_->Capacity() >= store_.Size()); }
+    void AssertCapacityInvariant() const { assert(layout->Capacity() >= store.Size()); }
 
     // 跨层一致性:每个实例恰好占一个槽位,槽位数不超过容量。
     //
@@ -659,12 +659,12 @@ private:
     // 方法的出口都调它一次。Release 下 assert 被编译掉,零开销。
     void AssertLayerConsistency() const { assert(IsLayerConsistent()); }
 
-    ItemStore store_{};
-    std::unique_ptr<IContainerLayout> layout_{std::make_unique<FlatLayout>(kDefaultCapacity)};
+    ItemStore store{};
+    std::unique_ptr<IContainerLayout> layout{std::make_unique<FlatLayout>(kDefaultCapacity)};
     // 默认什么都收 —— 与 layout_ 默认扁平同理:默认值必须等于拆分前的行为,
     // 否则 bag_marshal 那些默认构造出来的动态包会悄悄换语义。
-    std::unique_ptr<IAdmissionPolicy> admission_{std::make_unique<AcceptAll>()};
-    uint32_t profileId_{kBagProfileUnspecified};
+    std::unique_ptr<IAdmissionPolicy> admission{std::make_unique<AcceptAll>()};
+    uint32_t profileId{kBagProfileUnspecified};
     Guid playerGuid{kInvalidGuid};
-    uint64_t mutationVersion_{0};
+    uint64_t mutationVersion{0};
 };

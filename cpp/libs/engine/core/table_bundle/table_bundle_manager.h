@@ -174,38 +174,38 @@ private:
 						 bool isNeedsRestart,
 						 uint64_t nowMs);
 
-	std::reference_wrapper<muduo::net::EventLoop> eventLoop_;
-	TimerTaskComp pollTimer_;
-	bool stopped_ = false;
-	bool bundleMode_ = false;
-	bool useBinary_ = false;
-	std::string bundleRoot_;
-	std::string statusRoot_;
-	std::string imageConfigDir_;
+	std::reference_wrapper<muduo::net::EventLoop> eventLoop;
+	TimerTaskComp pollTimer;
+	bool stopped = false;
+	bool bundleMode = false;
+	bool useBinary = false;
+	std::string bundleRoot;
+	std::string statusRoot;
+	std::string imageConfigDir;
 
-	bool hasActiveManifest_ = false;
-	BundleManifest activeManifest_;
-	TableBundleIdentity activeIdentity_;
+	bool hasActiveManifest = false;
+	BundleManifest activeManifest;
+	TableBundleIdentity activeIdentity;
 
 	// 最近一次已被明确终结(rejected / needs_restart)的目标摘要,指针未变前不重复重试。
-	std::string terminalDigest_;
-	std::string pendingContentDigest_;
-	uint64_t pendingVersion_ = 0;
-	std::string pendingState_;
-	std::string pendingReason_;
+	std::string terminalDigest;
+	std::string pendingContentDigest;
+	uint64_t pendingVersion = 0;
+	std::string pendingState;
+	std::string pendingReason;
 
-	uint64_t stagingGeneration_ = 0;
-	std::optional<StagingState> staging_;
-	std::vector<RetiredEntry> retiredSets_;
+	uint64_t stagingGeneration = 0;
+	std::optional<StagingState> staging;
+	std::vector<RetiredEntry> retiredSets;
 
 	// 指标状态(全在主 EventLoop 线程读写)。
-	uint64_t committedCount_ = 0;
-	uint64_t rejectedCount_ = 0;
-	uint64_t needsRestartCount_ = 0;
-	double lastMaxSliceSeconds_ = 0.0;
+	uint64_t committedCount = 0;
+	uint64_t rejectedCount = 0;
+	uint64_t needsRestartCount = 0;
+	double lastMaxSliceSeconds = 0.0;
 	static constexpr std::array<double, 8> kPrepareBuckets{0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0};
-	std::array<uint64_t, 9> prepareBucketCounts_{};
-	double prepareDurationSumSeconds_ = 0.0;
+	std::array<uint64_t, 9> prepareBucketCounts{};
+	double prepareDurationSumSeconds = 0.0;
 };
 
 } // namespace table_bundle

@@ -8,7 +8,7 @@ class PlayerService
 {
 public:
 	PlayerService(std::unique_ptr<::google::protobuf::Service>&& pb_service)
-		: pb_service_(std::move(pb_service))
+		: pbService(std::move(pb_service))
 	{
 
 	}
@@ -28,9 +28,9 @@ public:
         const ::google::protobuf::Message* request,
         ::google::protobuf::Message* response) = 0;
 
-    ::google::protobuf::Service* service() { return pb_service_.get(); }
+    ::google::protobuf::Service* service() { return pbService.get(); }
 private:
-    std::unique_ptr<::google::protobuf::Service> pb_service_;
+    std::unique_ptr<::google::protobuf::Service> pbService;
 };
 
 void InitPlayerService();

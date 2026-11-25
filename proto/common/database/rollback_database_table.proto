@@ -503,6 +503,18 @@ message account_directory {
   // 国家防沉迷实名认证系统给的用户唯一标识 pi(38 位,前 6 位是出生日期);空串 = 游戏方没给这个账号做过实名。
   // 只写一次,不存姓名和身份证号(docs/design/real-name-anti-addiction.md §5.1)。
   string real_name_pi = 8;
+  // 阶段一装备材料自选跨角色终身可交易已用总额（0..60），删角不重置，仅在账号注销完成时随账号行删除。
+  uint32 stage1_tradable_material_used = 9;
+}
+
+// 账号级阶段一可交易装备材料按角色高水位确认表（与 account_directory 同在账号分片，单片事务幂等同步，防删角/多开刷 60 份可交易料）。
+message account_role_tradable_quota {
+  option(OptionTableName) = "account_role_tradable_quota";
+  option(OptionPrimaryKey) = "account,player_id";
+  string account = 1;
+  uint64 player_id = 2;
+  uint32 confirmed_units = 3; // 已记入 account_directory.stage1_tradable_material_used 的本角色确认份数（0..60）
+  uint64 updated_ms = 4;
 }
 
 // 账号注销完成的回执(docs/design/account-deletion.md §4.5),在账号所在分片,和删账号行同一个事务写。

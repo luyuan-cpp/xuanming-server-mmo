@@ -114,9 +114,19 @@ uint32_t TurnBattleEngine::CheckConfiguredSkill(const BattleActorState& actor, c
         return kSkillCannotBeCastInCurrentState;
     if (const auto blocked = CheckBuff(actor, row); blocked != kSuccess) return blocked;
     if (HasConfiguredState(actor, BattleStateKind::SealActive) ||
-        (HasConfiguredState(actor, BattleStateKind::SealPhysical) && (row.action_tags() & kActionTagPhysical)) ||
-        (HasConfiguredState(actor, BattleStateKind::SealMagic) && (row.action_tags() & kActionTagMagic)))
+        ((HasConfiguredState(actor, BattleStateKind::SealPhysical) || IsPhysicalForbidden(actor)) &&
+         (row.action_tags() & kActionTagPhysical)) ||
+        ((HasConfiguredState(actor, BattleStateKind::SealMagic) || IsMagicForbidden(actor)) &&
+         (row.action_tags() & kActionTagMagic)))
         return kSkillCannotBeCastInCurrentState;
+    if (actor.charging_skill_id() != 0) {
+        for (const auto effectId : row.effect()) {
+            const auto* effect = dataProvider->FindBuff(effectId);
+            if (effect != nullptr && effect->battle_op() == static_cast<uint32_t>(BattleEffectOp::PrepareCast)) {
+                return kSkillCannotBeCastInCurrentState;
+            }
+        }
+    }
     const auto cooling = actor.skill_cooldown_rounds().find(row.id());
     if (cooling != actor.skill_cooldown_rounds().end() && cooling->second > 0) return kSkillCooldownNotReady;
     const auto used = actor.ability_use_counts().find(row.id());
@@ -141,10 +151,95 @@ std::vector<uint64_t> TurnBattleEngine::SelectConfiguredTargets(const BattleActo
         if (candidate.actor_id() == primaryId) targets.push_back(primaryId);
         else candidates.push_back(candidate.actor_id());
     }
+    const auto policy = static_cast<SecondaryTargetPolicy>(row.secondary_target_policy());
+    if (policy == SecondaryTargetPolicy::Random) {
+        while (targets.size() < count && !candidates.empty()) {
+            const size_t index = candidates.size() == 1 ? 0 : static_cast<size_t>(RandIndex(candidates.size()));
+            targets.push_back(candidates[index]);
+            candidates.erase(candidates.begin() + index);
+        }
+        return targets;
+    }
+
+    // 策略模式副目标排序：保留主目标，其余名额按策略最优值选取；并列集合内用确定性 RNG 打破平局。
+    const auto compareBetter = [this, policy](const BattleActorState& lhs, const BattleActorState& rhs) -> int {
+        switch (policy) {
+        case SecondaryTargetPolicy::HighestPhysicalAttack: {
+            const uint64_t a = EffectivePhysicalAttack(lhs);
+            const uint64_t b = EffectivePhysicalAttack(rhs);
+            return a > b ? 1 : a < b ? -1 : 0;
+        }
+        case SecondaryTargetPolicy::HighestMagicAttack: {
+            const uint64_t a = EffectiveMagicAttack(lhs);
+            const uint64_t b = EffectiveMagicAttack(rhs);
+            return a > b ? 1 : a < b ? -1 : 0;
+        }
+        case SecondaryTargetPolicy::LowestHealthValue: {
+            const uint64_t a = lhs.attributes().health();
+            const uint64_t b = rhs.attributes().health();
+            return a < b ? 1 : a > b ? -1 : 0;
+        }
+        case SecondaryTargetPolicy::LowestHealthRatio: {
+            const long double a = lhs.max_health() > 0
+                ? static_cast<long double>(lhs.attributes().health()) / static_cast<long double>(lhs.max_health())
+                : 1.0L;
+            const long double b = rhs.max_health() > 0
+                ? static_cast<long double>(rhs.attributes().health()) / static_cast<long double>(rhs.max_health())
+                : 1.0L;
+            if (std::abs(a - b) <= 1e-12L) return 0;
+            return a < b ? 1 : -1;
+        }
+        case SecondaryTargetPolicy::LowestPhysicalDefense: {
+            const double a = EffectiveMitigationScore(lhs, false);
+            const double b = EffectiveMitigationScore(rhs, false);
+            if (std::abs(a - b) <= 1e-9) return 0;
+            return a < b ? 1 : -1;
+        }
+        case SecondaryTargetPolicy::LowestMagicDefense: {
+            const double a = EffectiveMitigationScore(lhs, true);
+            const double b = EffectiveMitigationScore(rhs, true);
+            if (std::abs(a - b) <= 1e-9) return 0;
+            return a < b ? 1 : -1;
+        }
+        case SecondaryTargetPolicy::LowestRoundSpeed: {
+            const auto itA = roundStartSpeeds.find(lhs.actor_id());
+            const auto itB = roundStartSpeeds.find(rhs.actor_id());
+            const uint64_t a = itA != roundStartSpeeds.end() ? itA->second : EffectiveSpeed(lhs);
+            const uint64_t b = itB != roundStartSpeeds.end() ? itB->second : EffectiveSpeed(rhs);
+            return a < b ? 1 : a > b ? -1 : 0;
+        }
+        default:
+            return 0;
+        }
+    };
+
     while (targets.size() < count && !candidates.empty()) {
-        const size_t index = candidates.size() == 1 ? 0 : static_cast<size_t>(RandIndex(candidates.size()));
-        targets.push_back(candidates[index]);
-        candidates.erase(candidates.begin() + index);
+        std::vector<size_t> bestIndices;
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            const auto* candidate = FindActor(candidates[i]);
+            if (candidate == nullptr) continue;
+            if (bestIndices.empty()) {
+                bestIndices.push_back(i);
+                continue;
+            }
+            const auto* currentBest = FindActor(candidates[bestIndices.front()]);
+            if (currentBest == nullptr) {
+                bestIndices.assign(1, i);
+                continue;
+            }
+            const int cmp = compareBetter(*candidate, *currentBest);
+            if (cmp > 0) {
+                bestIndices.assign(1, i);
+            } else if (cmp == 0) {
+                bestIndices.push_back(i);
+            }
+        }
+        if (bestIndices.empty()) break;
+        const size_t chosenPos = bestIndices.size() == 1
+            ? bestIndices.front()
+            : bestIndices[static_cast<size_t>(RandIndex(bestIndices.size()))];
+        targets.push_back(candidates[chosenPos]);
+        candidates.erase(candidates.begin() + chosenPos);
     }
     return targets;
 }
@@ -273,6 +368,7 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
         for (const auto effectId : row.effect()) {
             const auto* effect = dataProvider->FindBuff(effectId);
             if (effect == nullptr) continue;
+            if (i > 0 && effect->effect_target() == 1) continue;
             if (effect->battle_op() == static_cast<uint32_t>(BattleEffectOp::ConsumePeriodic) &&
                 (!HasBuffTag(*target, effect->required_tag()) || !HasBuffTag(*target, effect->second_required_tag()))) continue;
             effects.push_back(effectId);
@@ -288,10 +384,17 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     }
     currentHitIndex = 0;
     bool hitDirectly = false;
+    bool landedDirectStrike = false;
     for (int i = effectsBegin; i < result.events_size(); ++i) {
         const auto& damage = result.events(i);
         if (damage.event_type() == BATTLE_EVENT_DAMAGE && damage.source_id() == actor.actor_id() &&
-            damage.skill_table_id() == row.id() && damage.value() > 0 && damage.damage_origin() == 0) hitDirectly = true;
+            damage.skill_table_id() == row.id() && damage.damage_origin() == 0) {
+            if (damage.value() > 0) hitDirectly = true;
+            if (damage.value() > 0 || damage.absorbed() > 0) landedDirectStrike = true;
+        }
+    }
+    if (normal && landedDirectStrike && IsActorActive(actor)) {
+        ConsumeOneShotAttackModifiers(actor, row.damage_type(), result);
     }
     if (normal && hitDirectly && IsActorActive(actor)) {
         auto* primary = FindActor(targets.front());
@@ -510,6 +613,9 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
         existingId = entry.buff_id(); break;
     }
     // 覆盖拒绝与免疫均不进入概率阶段，不生成回响、不消耗清心。
+    if (hostile && op == BattleEffectOp::Control && row.state_kind() >= 1 && row.state_kind() <= 6) {
+        if (TryConsumeControlImmunity(caster, receiver, row, result)) return;
+    }
     if (hostile && row.state_kind() >= 1 && row.state_kind() <= 7 &&
         (op == BattleEffectOp::Control || op == BattleEffectOp::PeriodicDamage)) {
         if (!EquipmentControlRoll(caster, receiver, row, context, result)) return;
@@ -534,6 +640,10 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
         added->set_outgoing_heal_snapshot(value);
     if (op == BattleEffectOp::Modifier && row.modifier_stat() == static_cast<uint32_t>(BattleModifier::AdaptiveDamage))
         added->set_chosen_stat(receiver.physical_attack() >= receiver.magic_attack() ? 1 : 2);
+    if (op == BattleEffectOp::PrepareCast) {
+        added->set_secondary_value(context.primaryTargetId);
+        SyncChargingSkillId(receiver);
+    }
     if (op == BattleEffectOp::TemporaryHealth) {
         const uint64_t extra = std::min(Whole(value), receiver.max_health());
         added->set_secondary_value(extra); receiver.set_max_health(AddSafe(receiver.max_health(), extra));
@@ -545,7 +655,7 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     event->set_buff_table_id(row.id()); event->set_buff_instance_id(instance); event->set_value(1);
     if (op == BattleEffectOp::Shield) event->set_shield_after(Whole(value));
     if (op == BattleEffectOp::Shield) CommitEquipmentShield(caster, receiver.actor_id(), shieldArtifacts, result);
-    if (row.trigger_event() == 0 && op != BattleEffectOp::PursuitDamage) {
+    if (row.trigger_event() == 0 && op != BattleEffectOp::PursuitDamage && op != BattleEffectOp::PrepareCast) {
         for (const auto child : row.sub_buff()) {
             if (FindBuffIndex(receiver, instance) < 0) break;
             ApplyConfiguredEffect(caster, receiver, child, context, result, depth + 1);
@@ -598,9 +708,13 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
         const double typedOutgoing = damageType == combatdamage::kPhysicalDamage
             ? ConfiguredModifier(source, BattleModifier::OutgoingPhysicalDamage)
             : ConfiguredModifier(source, BattleModifier::OutgoingMagicDamage);
-        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage) + typedOutgoing);
+        const double oneShotOutgoing = context.origin == BattleDamageOrigin::Direct
+            ? ConfiguredModifier(source, damageType == combatdamage::kPhysicalDamage
+                ? BattleModifier::NextPhysicalAttack : BattleModifier::NextMagicAttack)
+            : 0.0;
+        damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage) + typedOutgoing + oneShotOutgoing);
         damage = supportrules::ApplyBonus(damage, petcultivation::DamageBonus(source, damageType, context.origin, hitKind));
-        damage *= std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingDamage));
+        damage *= std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingDamage) + HitVulnerabilityBonus(target));
         if (damageType == combatdamage::kMagicDamage)
             damage *= std::max(0.0, 1 - ConfiguredModifier(target, BattleModifier::MagicReduction));
         if (hitKind == BATTLE_HIT_COMBO || context.hitOrdinal > 0)
@@ -725,6 +839,11 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
         for (const auto id : sleeping) RemoveConfiguredBuff(target, id, result);
     }
     if (target.attributes().health() == 0) HandleDeath(target, source.actor_id(), result);
+    if (AddSafe(dealt, absorbed) > 0 &&
+        (context.origin == BattleDamageOrigin::Direct || context.origin == BattleDamageOrigin::Pursuit) &&
+        IsActorActive(target)) {
+        IncrementHitVulnerability(target);
+    }
     EquipmentBreakShields(source, target, shieldDamage, damageType, context, originalShields, result);
     EffectContext triggered = context; triggered.actualDamage = dealt;
     if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && IsActorActive(target))
@@ -764,6 +883,8 @@ void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleAct
         switch (op) {
         case BattleEffectOp::MirrorSkill: {
             if (HasConfiguredState(owner, BattleStateKind::Freeze) || HasConfiguredState(owner, BattleStateKind::Sleep) || !IsActorActive(other)) break;
+            if ((damageType == combatdamage::kPhysicalDamage && IsPhysicalForbidden(owner)) ||
+                (damageType == combatdamage::kMagicDamage && IsMagicForbidden(owner))) break;
             const auto* incoming = dataProvider->FindSkill(context.skillId);
             if (incoming != nullptr && (other.is_boss() || incoming->forbid_copy() != 0)) break;
             if (incoming != nullptr && incoming->battle_model() == 1) {
@@ -940,6 +1061,9 @@ void TurnBattleEngine::RemoveConfiguredBuff(BattleActorState& actor, uint64_t id
         event->set_target_max_health_after(actor.max_health()); event->set_target_health_after(actor.attributes().health());
     }
     actor.mutable_buffs()->DeleteSubrange(index, 1);
+    if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::PrepareCast)) {
+        SyncChargingSkillId(actor);
+    }
     auto* event = AppendEvent(result, BATTLE_EVENT_BUFF_REMOVE, saved.caster_id(), actor.actor_id());
     event->set_buff_table_id(saved.buff_table_id()); event->set_buff_instance_id(id);
 }
@@ -958,12 +1082,17 @@ bool TurnBattleEngine::ExecuteConfiguredControl(BattleActorState& actor, const B
                 SkillManaCost(actor, *row) > actor.attributes().mana()) continue;
             BattleAction eligibility; eligibility.set_action_type(BATTLE_ACTION_SKILL); eligibility.set_skill_table_id(skillId);
             if (CheckConfiguredSkill(actor, eligibility, *row) != kSuccess) continue;
-            if ((row->action_tags() & kActionTagPhysical) && HasConfiguredState(actor, BattleStateKind::SealPhysical)) continue;
-            if ((row->action_tags() & kActionTagMagic) && HasConfiguredState(actor, BattleStateKind::SealMagic)) continue;
+            if ((row->action_tags() & kActionTagPhysical) &&
+                (HasConfiguredState(actor, BattleStateKind::SealPhysical) || IsPhysicalForbidden(actor))) continue;
+            if ((row->action_tags() & kActionTagMagic) &&
+                (HasConfiguredState(actor, BattleStateKind::SealMagic) || IsMagicForbidden(actor))) continue;
             BattleAction confused; confused.set_action_type(BATTLE_ACTION_SKILL); confused.set_skill_table_id(skillId); confused.set_target_id(target->actor_id());
             ExecuteConfiguredSkill(actor, confused, *row, result, BattleDamageOrigin::Confusion); return true;
         }
-        if (HasConfiguredState(actor, BattleStateKind::SealPhysical)) { ExecuteDefend(actor, result); return true; }
+        if (HasConfiguredState(actor, BattleStateKind::SealPhysical) || IsPhysicalForbidden(actor)) {
+            ExecuteDefend(actor, result);
+            return true;
+        }
         bool critical = false; EffectContext context; context.origin = BattleDamageOrigin::Confusion;
         AppendEvent(result, BATTLE_EVENT_ATTACK, actor.actor_id(), target->actor_id());
         const double amount = CalculateFinalDamage(actor, *target, kBasicAttackBaseDamage,
@@ -972,7 +1101,8 @@ bool TurnBattleEngine::ExecuteConfiguredControl(BattleActorState& actor, const B
         ResolveConfiguredDamage(actor, *target, amount, combatdamage::kPhysicalDamage, context, result);
         return true;
     }
-    return action.action_type() == BATTLE_ACTION_ATTACK && HasConfiguredState(actor, BattleStateKind::SealPhysical);
+    return action.action_type() == BATTLE_ACTION_ATTACK &&
+        (HasConfiguredState(actor, BattleStateKind::SealPhysical) || IsPhysicalForbidden(actor));
 }
 std::optional<BattleAction> TurnBattleEngine::SelectAutoConfiguredSkill(const BattleActorState& actor) const {
     for (const auto skillId : actor.skill_table_ids()) {
@@ -1012,5 +1142,216 @@ bool TurnBattleEngine::SubmitActorAction(uint64_t ownerPlayerId, uint64_t actorI
         RecordManualActionForActor(*actor);
     }
     return AllPlayersReady();
+}
+
+uint64_t TurnBattleEngine::EffectiveMagicAttack(const BattleActorState& actor) const {
+    const double mult = std::max(0.1, 1.0 + ConfiguredModifier(actor, BattleModifier::MagicAttack));
+    return Whole(static_cast<double>(actor.magic_attack()) * mult);
+}
+
+double TurnBattleEngine::EffectiveMitigationScore(const BattleActorState& actor, bool isMagic) const {
+    const uint64_t resistBonus = isMagic ? actor.combat().magic_resist() : actor.combat().physical_resist();
+    const uint32_t equipResist = isMagic ? actor.equipment_effects().magic_resist_bps()
+                                         : actor.equipment_effects().physical_resist_bps();
+    const uint64_t legacyResist = SaturatingAdd(actor.attributes().resistance(), resistBonus);
+    const double received = equipbattle::ReceivedRatio(
+        actor.attributes().armor(), EffectiveDefense(actor),
+        static_cast<double>(legacyResist) * 100.0 + equipResist, actor.level());
+    // 承受比例越低说明防御越厚，返回 1 - received 作为防御厚度分，便于按“最低防御”升序挑选脆皮。
+    return 1.0 - std::clamp(received, 0.0, 1.0);
+}
+
+bool TurnBattleEngine::IsPhysicalForbidden(const BattleActorState& actor) const {
+    return ConfiguredModifier(actor, BattleModifier::ForbidPhysical) > 0.0;
+}
+
+bool TurnBattleEngine::IsMagicForbidden(const BattleActorState& actor) const {
+    return ConfiguredModifier(actor, BattleModifier::ForbidMagic) > 0.0;
+}
+
+bool TurnBattleEngine::TryConsumeControlImmunity(BattleActorState& caster, BattleActorState& target,
+                                                 const BuffTable& row, TurnResultS2C& result) {
+    for (int i = 0; i < target.buffs_size(); ++i) {
+        const auto saved = target.buffs(i);
+        const auto* guard = dataProvider->FindBuff(saved.buff_table_id());
+        if (guard == nullptr || guard->battle_op() != static_cast<uint32_t>(BattleEffectOp::ControlImmunity)) {
+            continue;
+        }
+        const uint64_t guardId = saved.buff_id();
+        if (saved.remaining_hits() <= 1) {
+            RemoveConfiguredBuff(target, guardId, result);
+        } else {
+            target.mutable_buffs(i)->set_remaining_hits(saved.remaining_hits() - 1);
+        }
+        if (target.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            antiControlOrSeasonSkillPlayers.insert(target.actor_id());
+        }
+        auto* resisted = AppendEvent(result, BATTLE_EVENT_RESIST, caster.actor_id(), target.actor_id());
+        resisted->set_buff_table_id(row.id());
+        return true;
+    }
+    return false;
+}
+
+void TurnBattleEngine::IncrementHitVulnerability(BattleActorState& target) {
+    for (int i = 0; i < target.buffs_size(); ++i) {
+        const auto& saved = target.buffs(i);
+        const auto* row = dataProvider->FindBuff(saved.buff_table_id());
+        if (row == nullptr || row->battle_op() != static_cast<uint32_t>(BattleEffectOp::HitVulnerability)) {
+            continue;
+        }
+        // 同一行动 group_id 对同一目标至多叠 1 层，防止连击或多段技能单次叠满。
+        if (saved.last_trigger_round() == roundIndex && saved.secondary_value() == currentGroupId) {
+            continue;
+        }
+        const uint32_t cap = std::max(1u, row->stack_limit());
+        if (saved.stacks() >= cap) {
+            continue;
+        }
+        auto* entry = target.mutable_buffs(i);
+        entry->set_stacks(saved.stacks() + 1);
+        entry->set_last_trigger_round(roundIndex);
+        entry->set_secondary_value(currentGroupId);
+    }
+}
+
+double TurnBattleEngine::HitVulnerabilityBonus(const BattleActorState& target) const {
+    double bonus = 0.0;
+    for (const auto& entry : target.buffs()) {
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row == nullptr || row->battle_op() != static_cast<uint32_t>(BattleEffectOp::HitVulnerability)) {
+            continue;
+        }
+        if (entry.stacks() > 0 && std::isfinite(row->ratio())) {
+            bonus += row->ratio() * static_cast<double>(entry.stacks());
+        }
+    }
+    return bonus;
+}
+
+void TurnBattleEngine::SyncChargingSkillId(BattleActorState& actor) const {
+    uint32_t chargingId = 0;
+    for (const auto& entry : actor.buffs()) {
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::PrepareCast)) {
+            chargingId = entry.source_skill_id();
+            break;
+        }
+    }
+    actor.set_charging_skill_id(chargingId);
+}
+
+bool TurnBattleEngine::ExecutePreparedCastIfReady(BattleActorState& actor, TurnResultS2C& result) {
+    int prepareIndex = -1;
+    for (int i = 0; i < actor.buffs_size(); ++i) {
+        const auto& entry = actor.buffs(i);
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::PrepareCast) &&
+            entry.applied_round() < roundIndex) {
+            prepareIndex = i;
+            break;
+        }
+    }
+    if (prepareIndex < 0) {
+        return false;
+    }
+
+    const BattleBuffEntry saved = actor.buffs(prepareIndex);
+    const auto* prepareRow = dataProvider->FindBuff(saved.buff_table_id());
+    const auto* skillRow = dataProvider->FindSkill(saved.source_skill_id());
+    const bool blocked =
+        prepareRow == nullptr || skillRow == nullptr ||
+        ActorHasBuffOfType(actor, kBuffTypeStun) || ActorHasBuffOfType(actor, kBuffTypeFreeze) ||
+        HasConfiguredState(actor, BattleStateKind::Freeze) ||
+        HasConfiguredState(actor, BattleStateKind::Sleep) ||
+        HasConfiguredState(actor, BattleStateKind::Confusion) ||
+        HasConfiguredState(actor, BattleStateKind::SealActive) ||
+        ((skillRow->action_tags() & kActionTagPhysical) != 0 &&
+         (HasConfiguredState(actor, BattleStateKind::SealPhysical) || IsPhysicalForbidden(actor))) ||
+        ((skillRow->action_tags() & kActionTagMagic) != 0 &&
+         (HasConfiguredState(actor, BattleStateKind::SealMagic) || IsMagicForbidden(actor)));
+
+    // 无论释放或被打断，蓄力状态均在本回合窗口消耗清除（打断不退蓝、不退冷却）。
+    RemoveConfiguredBuff(actor, saved.buff_id(), result);
+    if (blocked) {
+        return false;
+    }
+
+    auto targets = SelectConfiguredTargets(actor, *skillRow, saved.secondary_value());
+    if (targets.empty()) {
+        return true;
+    }
+
+    EffectContext context;
+    context.skillId = skillRow->id();
+    context.rank = std::max(1u, ConfiguredRank(actor, *skillRow));
+    context.origin = BattleDamageOrigin::Direct;
+    context.primaryTargetId = targets.front();
+    const uint32_t subjectMaxTargets = actor.actor_type() == BATTLE_ACTOR_TYPE_PET
+        ? (skillRow->pet_max_targets() > 0 ? skillRow->pet_max_targets() : skillRow->max_targets())
+        : skillRow->max_targets();
+    context.primaryFocusBonus = IsCompetitivePvpBattle() &&
+        actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+        subjectMaxTargets > 1 && saved.secondary_value() != 0 &&
+        targets.front() == saved.secondary_value() && targets.size() < subjectMaxTargets;
+    context.isMultiTargetSkill = subjectMaxTargets > 1u;
+
+    auto* event = AppendEvent(result, BATTLE_EVENT_SKILL, actor.actor_id(), targets.front());
+    event->set_skill_table_id(skillRow->id());
+    event->set_hit_kind(BATTLE_HIT_NORMAL);
+
+    const int effectsBegin = result.events_size();
+    const auto payloadBuffs = prepareRow->sub_buff();
+    for (size_t i = 0; i < targets.size(); ++i) {
+        auto* target = FindActor(targets[i]);
+        if (target == nullptr || target->fled()) continue;
+        currentHitIndex = static_cast<uint32_t>(i);
+        auto targetContext = context;
+        for (const auto childBuffId : payloadBuffs) {
+            ApplyConfiguredEffect(actor, *target, childBuffId, targetContext, result, 1);
+            const auto* def = dataProvider->FindBuff(childBuffId);
+            if (def != nullptr && def->battle_op() == static_cast<uint32_t>(BattleEffectOp::Damage)) {
+                ++targetContext.hitOrdinal;
+            }
+        }
+    }
+    currentHitIndex = 0;
+
+    bool hitDirectly = false;
+    for (int i = effectsBegin; i < result.events_size(); ++i) {
+        const auto& ev = result.events(i);
+        if (ev.event_type() == BATTLE_EVENT_DAMAGE && ev.source_id() == actor.actor_id() &&
+            ev.skill_table_id() == skillRow->id() && ev.value() > 0 && ev.damage_origin() == 0) {
+            hitDirectly = true;
+            break;
+        }
+    }
+    if (hitDirectly && IsActorActive(actor)) {
+        ConsumeOneShotAttackModifiers(actor, skillRow->damage_type(), result);
+        auto* primary = FindActor(targets.front());
+        if (primary != nullptr) {
+            TriggerConfiguredBuffs(actor, *primary, BattleTrigger::AfterSkill,
+                                   skillRow->damage_type(), context, result);
+        }
+    }
+    return true;
+}
+
+void TurnBattleEngine::ConsumeOneShotAttackModifiers(BattleActorState& source, uint32_t damageType,
+                                                     TurnResultS2C& result) {
+    const uint32_t targetStat = damageType == combatdamage::kPhysicalDamage
+        ? static_cast<uint32_t>(BattleModifier::NextPhysicalAttack)
+        : static_cast<uint32_t>(BattleModifier::NextMagicAttack);
+    std::vector<uint64_t> toRemove;
+    for (const auto& entry : source.buffs()) {
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Modifier) &&
+            row->modifier_stat() == targetStat) {
+            toRemove.push_back(entry.buff_id());
+        }
+    }
+    for (const auto buffId : toRemove) {
+        RemoveConfiguredBuff(source, buffId, result);
+    }
 }
 }  // namespace turnbattle

@@ -69,22 +69,22 @@ class RebuildGate {
 public:
 	using Clock = std::chrono::steady_clock;
 
-	explicit RebuildGate(Clock::duration minInterval) : minInterval_(minInterval) {}
+	explicit RebuildGate(Clock::duration minInterval) : minInterval(minInterval) {}
 
 	// 现在允许重建吗?允许则把 now 记为本次重建时刻。
 	bool TryAcquire(Clock::time_point now) {
-		if (hasLast_ && now - last_ < minInterval_) {
+		if (hasLast && now - last < minInterval) {
 			return false;
 		}
-		last_ = now;
-		hasLast_ = true;
+		last = now;
+		hasLast = true;
 		return true;
 	}
 
 private:
-	Clock::duration minInterval_;
-	Clock::time_point last_{};
-	bool hasLast_ = false;
+	Clock::duration minInterval;
+	Clock::time_point last{};
+	bool hasLast = false;
 };
 
 // 失败日志限流。broker 长时间不可用时,队列里成千上万条消息会在 message.timeout.ms 到期的
@@ -105,56 +105,56 @@ public:
 		std::uint64_t suppressedBeforeThis = 0;    // 非 0 = 先补报一行「上个窗口压掉了 N 条」
 	};
 
-	FailureLogThrottle(std::uint32_t burst, Clock::duration window) : burst_(burst), window_(window) {}
+	FailureLogThrottle(std::uint32_t burst, Clock::duration window) : burst(burst), window(window) {}
 
 	Decision OnFailure(Clock::time_point now) {
 		Decision decision;
-		if (!windowOpen_ || now - windowStart_ >= window_) {
-			decision.suppressedBeforeThis = suppressed_;
-			windowStart_ = now;
-			windowOpen_ = true;
-			loggedInWindow_ = 0;
-			suppressed_ = 0;
+		if (!windowOpen || now - windowStart >= window) {
+			decision.suppressedBeforeThis = suppressed;
+			windowStart = now;
+			windowOpen = true;
+			loggedInWindow = 0;
+			suppressed = 0;
 		}
-		if (loggedInWindow_ < burst_) {
-			++loggedInWindow_;
+		if (loggedInWindow < burst) {
+			++loggedInWindow;
 			decision.logThisOne = true;
 		} else {
-			++suppressed_;
+			++suppressed;
 		}
 		return decision;
 	}
 
 	// 还没补报的条数。只读,给调用方做廉价预检(为 0 就不必取时钟),不改变任何状态。
-	std::uint64_t PendingSuppressed() const { return suppressed_; }
+	std::uint64_t PendingSuppressed() const { return suppressed; }
 
 	// 窗口已过期且有压掉的条数 → 取走并清零,同时关窗(下一条失败开新窗口,不会重复补报);
 	// 否则返回 0 且不改变任何状态。
 	std::uint64_t TakeExpiredSuppressed(Clock::time_point now) {
-		if (!windowOpen_ || suppressed_ == 0 || now - windowStart_ < window_) {
+		if (!windowOpen || suppressed == 0 || now - windowStart < window) {
 			return 0;
 		}
-		const std::uint64_t taken = suppressed_;
-		suppressed_ = 0;
-		windowOpen_ = false;
+		const std::uint64_t taken = suppressed;
+		suppressed = 0;
+		windowOpen = false;
 		return taken;
 	}
 
 	// 无条件取走压掉的条数并清零(实例重建 / 析构时收尾)。窗口本身不动:
 	// 同一窗口内后续的失败照旧按 burst 规则处理。
 	std::uint64_t TakeSuppressed() {
-		const std::uint64_t taken = suppressed_;
-		suppressed_ = 0;
+		const std::uint64_t taken = suppressed;
+		suppressed = 0;
 		return taken;
 	}
 
 private:
-	std::uint32_t burst_;
-	Clock::duration window_;
-	Clock::time_point windowStart_{};
-	bool windowOpen_ = false;
-	std::uint32_t loggedInWindow_ = 0;
-	std::uint64_t suppressed_ = 0;
+	std::uint32_t burst;
+	Clock::duration window;
+	Clock::time_point windowStart{};
+	bool windowOpen = false;
+	std::uint32_t loggedInWindow = 0;
+	std::uint64_t suppressed = 0;
 };
 
 // 每个producer线程的全部发送账本。只读快照不解除准入。
@@ -162,22 +162,22 @@ private:
 class PublicationFrontier {
 public:
 	void Accepted() {
-		if (accepted_ == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return; }
-		++accepted_;
+		if (accepted == std::numeric_limits<std::uint64_t>::max()) { unknown = true; return; }
+		++accepted;
 	}
 	void Delivered(bool confirmed) {
-		if (!confirmed || confirmed_ == accepted_) { unknown_ = true; return; }
-		++confirmed_;
+		if (!confirmed || this->confirmed == accepted) { unknown = true; return; }
+		++this->confirmed;
 	}
-	void MarkUnknown() { unknown_ = true; }
-	bool Settled() const { return !unknown_ && accepted_ == confirmed_; }
-	std::uint64_t AcceptedCount() const { return accepted_; }
-	std::uint64_t ConfirmedCount() const { return confirmed_; }
-	bool HasUnknown() const { return unknown_; }
+	void MarkUnknown() { unknown = true; }
+	bool Settled() const { return !unknown && accepted == confirmed; }
+	std::uint64_t AcceptedCount() const { return accepted; }
+	std::uint64_t ConfirmedCount() const { return confirmed; }
+	bool HasUnknown() const { return unknown; }
 private:
-	std::uint64_t accepted_ = 0;
-	std::uint64_t confirmed_ = 0;
-	bool unknown_ = false;
+	std::uint64_t accepted = 0;
+	std::uint64_t confirmed = 0;
+	bool unknown = false;
 };
 
 // 跨线程只共享账本，不跨线程调用 librdkafka。句柄仍由创建线程 flush/reset/join。
@@ -202,47 +202,47 @@ public:
     using OwnerPtr = std::shared_ptr<Owner>;
 
     OwnerPtr Register() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(mutex);
         auto owner = std::make_shared<Owner>();
-        owner->closed = closed_;
+        owner->closed = closed;
         // 有限进程线程目录；超界永久 HOLD，不在排空时静默漏掉新 owner。
-        if (owners_.size() >= 4096) { unknown_ = true; owner->closed = true; }
-        else { owners_.push_back(owner); }
+        if (owners.size() >= 4096) { unknown = true; owner->closed = true; }
+        else { owners.push_back(owner); }
         return owner;
     }
     bool BeginSend(const OwnerPtr& owner) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (closed_ || owner->closed) { return false; }
-        if (owner->activeSends == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return false; }
+        std::lock_guard<std::mutex> lock(mutex);
+        if (closed || owner->closed) { return false; }
+        if (owner->activeSends == std::numeric_limits<std::uint64_t>::max()) { unknown = true; return false; }
         ++owner->activeSends;
         return true;
     }
     void EndSend(const OwnerPtr& owner) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (owner->activeSends == 0) { unknown_ = true; return; }
+        std::lock_guard<std::mutex> lock(mutex);
+        if (owner->activeSends == 0) { unknown = true; return; }
         --owner->activeSends;
     }
-    bool BeginCallback(const OwnerPtr& owner) {std::lock_guard<std::mutex> lock(mutex_);if(owner->activeCallbacks==std::numeric_limits<std::uint64_t>::max()){unknown_=true;return false;}++owner->activeCallbacks;return true;}
-    void EndCallback(const OwnerPtr& owner,bool known) {std::lock_guard<std::mutex> lock(mutex_);if(!known)owner->frontier.MarkUnknown();if(owner->activeCallbacks==0){unknown_=true;return;}--owner->activeCallbacks;}
-    bool OwnerCallbacksActive(const OwnerPtr& owner)const{std::lock_guard<std::mutex> lock(mutex_);return owner->activeCallbacks!=0;}
-    void Accepted(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.Accepted(); }
-    void Delivered(const OwnerPtr& owner, bool confirmed) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.Delivered(confirmed); }
-    bool OwnerSettled(const OwnerPtr& owner) const { std::lock_guard<std::mutex> lock(mutex_); return owner->activeCallbacks==0 && owner->frontier.Settled(); }
-    void MarkUnknown(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->frontier.MarkUnknown(); }
-    void HandleOpened(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->handleOpen = true; }
+    bool BeginCallback(const OwnerPtr& owner) {std::lock_guard<std::mutex> lock(mutex);if(owner->activeCallbacks==std::numeric_limits<std::uint64_t>::max()){unknown=true;return false;}++owner->activeCallbacks;return true;}
+    void EndCallback(const OwnerPtr& owner,bool known) {std::lock_guard<std::mutex> lock(mutex);if(!known)owner->frontier.MarkUnknown();if(owner->activeCallbacks==0){unknown=true;return;}--owner->activeCallbacks;}
+    bool OwnerCallbacksActive(const OwnerPtr& owner)const{std::lock_guard<std::mutex> lock(mutex);return owner->activeCallbacks!=0;}
+    void Accepted(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex); owner->frontier.Accepted(); }
+    void Delivered(const OwnerPtr& owner, bool confirmed) { std::lock_guard<std::mutex> lock(mutex); owner->frontier.Delivered(confirmed); }
+    bool OwnerSettled(const OwnerPtr& owner) const { std::lock_guard<std::mutex> lock(mutex); return owner->activeCallbacks==0 && owner->frontier.Settled(); }
+    void MarkUnknown(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex); owner->frontier.MarkUnknown(); }
+    void HandleOpened(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex); owner->handleOpen = true; }
     // 只有原线程的 native producer 析构真正返回后才调用；注销监听器或 outq_len==0 不等于 join。
-    void HandleJoined(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->handleOpen = false; }
-    void CloseOwner(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex_); owner->closed = true; }
-    void CloseAdmission() { std::lock_guard<std::mutex> lock(mutex_); closed_ = true; }
-    bool Closed() const { std::lock_guard<std::mutex> lock(mutex_); return closed_; }
+    void HandleJoined(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex); owner->handleOpen = false; }
+    void CloseOwner(const OwnerPtr& owner) { std::lock_guard<std::mutex> lock(mutex); owner->closed = true; }
+    void CloseAdmission() { std::lock_guard<std::mutex> lock(mutex); closed = true; }
+    bool Closed() const { std::lock_guard<std::mutex> lock(mutex); return closed; }
     Snapshot Read() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        Snapshot out; out.closed = closed_; out.unknown = unknown_;
+        std::lock_guard<std::mutex> lock(mutex);
+        Snapshot out; out.closed = closed; out.unknown = unknown;
         const auto add = [&out](std::uint64_t& target, std::uint64_t value) {
             if (value > std::numeric_limits<std::uint64_t>::max() - target) { out.unknown = true; return; }
             target += value;
         };
-        for (const auto& owner : owners_) {
+        for (const auto& owner : owners) {
             add(out.accepted, owner->frontier.AcceptedCount());
             add(out.confirmed, owner->frontier.ConfirmedCount());
             add(out.activeSends, owner->activeSends);
@@ -253,10 +253,10 @@ public:
         return out;
     }
 private:
-    mutable std::mutex mutex_;
-    std::vector<OwnerPtr> owners_;
-    bool closed_ = false;
-    bool unknown_ = false;
+    mutable std::mutex mutex;
+    std::vector<OwnerPtr> owners;
+    bool closed = false;
+    bool unknown = false;
 };
 
 
@@ -264,12 +264,12 @@ private:
 class PublicationCallbackScope {
 public:
     PublicationCallbackScope(std::shared_ptr<PublicationRegistry> registry,PublicationRegistry::OwnerPtr owner)
-        :registry_(std::move(registry)),owner_(std::move(owner)),exceptions_(std::uncaught_exceptions()),active_(registry_->BeginCallback(owner_)){}
-    ~PublicationCallbackScope(){if(active_)registry_->EndCallback(owner_,std::uncaught_exceptions()==exceptions_);}
+        :registry(std::move(registry)),owner(std::move(owner)),exceptions(std::uncaught_exceptions()),active(this->registry->BeginCallback(this->owner)){}
+    ~PublicationCallbackScope(){if(active)registry->EndCallback(owner,std::uncaught_exceptions()==exceptions);}
     PublicationCallbackScope(const PublicationCallbackScope&)=delete;
     PublicationCallbackScope& operator=(const PublicationCallbackScope&)=delete;
 private:
-    std::shared_ptr<PublicationRegistry> registry_;PublicationRegistry::OwnerPtr owner_;int exceptions_;bool active_;
+    std::shared_ptr<PublicationRegistry> registry;PublicationRegistry::OwnerPtr owner;int exceptions;bool active;
 };
 
 } // namespace kafka_producer_policy

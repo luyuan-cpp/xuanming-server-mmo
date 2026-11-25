@@ -246,6 +246,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
     kEarnedThisWeekFieldNumber = 9,
     kWeekStartsAtMsFieldNumber = 8,
     kMigratedToV2FieldNumber = 10,
+    kStage1TradableConfirmedFieldNumber = 11,
   };
   // uint64 day_starts_at_ms = 1;
   void clear_day_starts_at_ms() ;
@@ -347,11 +348,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
   void _internal_set_migrated_to_v2(bool value);
 
   public:
+  // uint32 stage1_tradable_confirmed = 11;
+  void clear_stage1_tradable_confirmed() ;
+  [[nodiscard]] ::uint32_t stage1_tradable_confirmed() const;
+  void set_stage1_tradable_confirmed(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_stage1_tradable_confirmed() const;
+  void _internal_set_stage1_tradable_confirmed(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipmentMaterialRewardLedger)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -390,6 +401,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
     ::uint32_t earned_this_week_;
     ::uint64_t week_starts_at_ms_;
     bool migrated_to_v2_;
+    ::uint32_t stage1_tradable_confirmed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2186,6 +2198,30 @@ inline bool EquipmentMaterialRewardLedger::_internal_migrated_to_v2() const {
 inline void EquipmentMaterialRewardLedger::_internal_set_migrated_to_v2(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.migrated_to_v2_ = value;
+}
+
+// uint32 stage1_tradable_confirmed = 11;
+inline void EquipmentMaterialRewardLedger::clear_stage1_tradable_confirmed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage1_tradable_confirmed_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::stage1_tradable_confirmed() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.stage1_tradable_confirmed)
+  return _internal_stage1_tradable_confirmed();
+}
+inline void EquipmentMaterialRewardLedger::set_stage1_tradable_confirmed(::uint32_t value) {
+  _internal_set_stage1_tradable_confirmed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.stage1_tradable_confirmed)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_stage1_tradable_confirmed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.stage1_tradable_confirmed_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_stage1_tradable_confirmed(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage1_tradable_confirmed_ = value;
 }
 
 // -------------------------------------------------------------------

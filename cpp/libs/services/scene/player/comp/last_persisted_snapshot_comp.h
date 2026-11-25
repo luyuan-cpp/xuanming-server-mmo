@@ -45,9 +45,9 @@ struct PlayerLastPersistedSnapshotComp
     // weak不延长异步客户端payload寿命，至多一个候选，下一次实际提交覆盖它。
     void RememberCommit(const std::shared_ptr<const PlayerAllData>& source, uint64_t epoch, uint64_t seq)
     {
-        committed_source_ = source;
-        source_owner_epoch_ = epoch;
-        source_save_seq_ = seq;
+        committedSource = source;
+        sourceOwnerEpoch = epoch;
+        sourceSaveSeq = seq;
     }
 
     // 整份替换快照(深拷贝)并记下时间。
@@ -57,12 +57,12 @@ struct PlayerLastPersistedSnapshotComp
     // 「已落盘」判定)都不读这个字段。
     void Replace(const PlayerAllData& fresh)
     {
-        const auto source = committed_source_.lock();
-        const bool exact = source && source.get() == &fresh && source_owner_epoch_ != 0
-            && source_save_seq_ != 0 && fresh.last_save_seq() == source_save_seq_;
-        committed_owner_epoch = exact ? source_owner_epoch_ : 0;
-        committed_save_seq = exact ? source_save_seq_ : 0;
-        committed_source_.reset(); source_owner_epoch_ = 0; source_save_seq_ = 0;
+        const auto source = committedSource.lock();
+        const bool exact = source && source.get() == &fresh && sourceOwnerEpoch != 0
+            && sourceSaveSeq != 0 && fresh.last_save_seq() == sourceSaveSeq;
+        committed_owner_epoch = exact ? sourceOwnerEpoch : 0;
+        committed_save_seq = exact ? sourceSaveSeq : 0;
+        committedSource.reset(); sourceOwnerEpoch = 0; sourceSaveSeq = 0;
         if (!snapshot)
         {
             snapshot = std::make_unique<PlayerAllData>(fresh);
@@ -87,7 +87,7 @@ struct PlayerLastPersistedSnapshotComp
     }
 
 private:
-    std::weak_ptr<const PlayerAllData> committed_source_;
-    uint64_t source_owner_epoch_{0};
-    uint64_t source_save_seq_{0};
+    std::weak_ptr<const PlayerAllData> committedSource;
+    uint64_t sourceOwnerEpoch{0};
+    uint64_t sourceSaveSeq{0};
 };

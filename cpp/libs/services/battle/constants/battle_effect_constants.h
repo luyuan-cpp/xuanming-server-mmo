@@ -10,7 +10,8 @@ enum class BattleEffectOp : uint32_t {
     Control = 13, ConsumePeriodic = 14, ExtendPeriodic = 15, DrainMana = 16,
     RetreatPet = 17, TemporaryHealth = 18, MirrorSkill = 19, PursuitDamage = 20,
     ApplyChildren = 21, ConditionalHeal = 22, ConditionalMana = 23,
-    EvasionCharge = 24, GrowingAura = 25, CopyTargetSkill = 26, kCount
+    EvasionCharge = 24, GrowingAura = 25, CopyTargetSkill = 26,
+    PrepareCast = 27, HitVulnerability = 28, ControlImmunity = 29, kCount
 };
 enum class BattleModifier : uint32_t {
     None = 0, PhysicalAttack = 1, MagicAttack = 2, Defense = 3, Speed = 4,
@@ -18,7 +19,20 @@ enum class BattleModifier : uint32_t {
     ManaCost = 9, MagicReduction = 10, RetreatResist = 11, ControlResist = 12,
     LaterHitReduction = 13, NextDirectDamage = 14, AdaptiveDamage = 15,
     IncomingDamage = 16, OutgoingShield = 17, OutgoingPhysicalDamage = 18,
-    OutgoingMagicDamage = 19, SelfGrowingDefense = 20, kCount
+    OutgoingMagicDamage = 19, SelfGrowingDefense = 20,
+    NextPhysicalAttack = 21, NextMagicAttack = 22,
+    ForbidPhysical = 23, ForbidMagic = 24, kCount
+};
+enum class SecondaryTargetPolicy : uint32_t {
+    Random = 0,
+    HighestPhysicalAttack = 1,
+    HighestMagicAttack = 2,
+    LowestHealthValue = 3,
+    LowestHealthRatio = 4,
+    LowestPhysicalDefense = 5,
+    LowestMagicDefense = 6,
+    LowestRoundSpeed = 7,
+    kCount
 };
 enum class BattleDamageOrigin : uint32_t {
     Direct = 0, Periodic = 1, Reflect = 2, Redirect = 3, ResourceCost = 4,

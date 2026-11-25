@@ -235,6 +235,131 @@ func (x *PetDerivedInfo) GetMana() uint64 {
 	return 0
 }
 
+// 宝宝灵阶突破（五阶养成闭环）下一阶预览，客户端零配表直接渲染。
+type PetTierAscensionInfo struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NextTier         uint32                 `protobuf:"varint,1,opt,name=next_tier,json=nextTier,proto3" json:"next_tier,omitempty"` // 下一灵阶（2..5）；已满阶为 0
+	NextTierName     string                 `protobuf:"bytes,2,opt,name=next_tier_name,json=nextTierName,proto3" json:"next_tier_name,omitempty"`
+	NextArtKey       string                 `protobuf:"bytes,3,opt,name=next_art_key,json=nextArtKey,proto3" json:"next_art_key,omitempty"`
+	MinPetLevel      uint32                 `protobuf:"varint,4,opt,name=min_pet_level,json=minPetLevel,proto3" json:"min_pet_level,omitempty"`
+	CostItemId       uint32                 `protobuf:"varint,5,opt,name=cost_item_id,json=costItemId,proto3" json:"cost_item_id,omitempty"`
+	CostItemCount    uint32                 `protobuf:"varint,6,opt,name=cost_item_count,json=costItemCount,proto3" json:"cost_item_count,omitempty"`
+	CostGold         uint64                 `protobuf:"varint,7,opt,name=cost_gold,json=costGold,proto3" json:"cost_gold,omitempty"`
+	BonusEntryPoints uint32                 `protobuf:"varint,8,opt,name=bonus_entry_points,json=bonusEntryPoints,proto3" json:"bonus_entry_points,omitempty"` // 突破后该阶赋予的总额外条目点（相对基础 20 点）
+	OwnedItemCount   uint64                 `protobuf:"varint,9,opt,name=owned_item_count,json=ownedItemCount,proto3" json:"owned_item_count,omitempty"`       // 玩家当前持有的突破材料数量
+	CanAscend        bool                   `protobuf:"varint,10,opt,name=can_ascend,json=canAscend,proto3" json:"can_ascend,omitempty"`                       // 服务端综合等级/材料/银两/非战内后的可执行判定
+	BlockTipId       uint32                 `protobuf:"varint,11,opt,name=block_tip_id,json=blockTipId,proto3" json:"block_tip_id,omitempty"`                  // 不可突破时的权威 tip 码（0 表示可突破）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PetTierAscensionInfo) Reset() {
+	*x = PetTierAscensionInfo{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetTierAscensionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetTierAscensionInfo) ProtoMessage() {}
+
+func (x *PetTierAscensionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetTierAscensionInfo.ProtoReflect.Descriptor instead.
+func (*PetTierAscensionInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PetTierAscensionInfo) GetNextTier() uint32 {
+	if x != nil {
+		return x.NextTier
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetNextTierName() string {
+	if x != nil {
+		return x.NextTierName
+	}
+	return ""
+}
+
+func (x *PetTierAscensionInfo) GetNextArtKey() string {
+	if x != nil {
+		return x.NextArtKey
+	}
+	return ""
+}
+
+func (x *PetTierAscensionInfo) GetMinPetLevel() uint32 {
+	if x != nil {
+		return x.MinPetLevel
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetCostItemId() uint32 {
+	if x != nil {
+		return x.CostItemId
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetCostItemCount() uint32 {
+	if x != nil {
+		return x.CostItemCount
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetCostGold() uint64 {
+	if x != nil {
+		return x.CostGold
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetBonusEntryPoints() uint32 {
+	if x != nil {
+		return x.BonusEntryPoints
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetOwnedItemCount() uint64 {
+	if x != nil {
+		return x.OwnedItemCount
+	}
+	return 0
+}
+
+func (x *PetTierAscensionInfo) GetCanAscend() bool {
+	if x != nil {
+		return x.CanAscend
+	}
+	return false
+}
+
+func (x *PetTierAscensionInfo) GetBlockTipId() uint32 {
+	if x != nil {
+		return x.BlockTipId
+	}
+	return 0
+}
+
 type PetInfo struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	PetId               uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
@@ -256,14 +381,15 @@ type PetInfo struct {
 	CultivationTierName string                 `protobuf:"bytes,18,opt,name=cultivation_tier_name,json=cultivationTierName,proto3" json:"cultivation_tier_name,omitempty"`
 	CultivationArtKey   string                 `protobuf:"bytes,19,opt,name=cultivation_art_key,json=cultivationArtKey,proto3" json:"cultivation_art_key,omitempty"`
 	Entries             *PetEntriesInfo        `protobuf:"bytes,20,opt,name=entries,proto3" json:"entries,omitempty"`
-	Desc                string                 `protobuf:"bytes,16,opt,name=desc,proto3" json:"desc,omitempty"` // 种类说明(PetTable.desc),客户端 tooltip 用
+	NextTier            *PetTierAscensionInfo  `protobuf:"bytes,21,opt,name=next_tier,json=nextTier,proto3" json:"next_tier,omitempty"` // 下一灵阶突破预览（已满阶时 next_tier == 0）
+	Desc                string                 `protobuf:"bytes,16,opt,name=desc,proto3" json:"desc,omitempty"`                         // 种类说明(PetTable.desc),客户端 tooltip 用
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PetInfo) Reset() {
 	*x = PetInfo{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[2]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +401,7 @@ func (x *PetInfo) String() string {
 func (*PetInfo) ProtoMessage() {}
 
 func (x *PetInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[2]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +414,7 @@ func (x *PetInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetInfo.ProtoReflect.Descriptor instead.
 func (*PetInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{2}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PetInfo) GetPetId() uint64 {
@@ -424,6 +550,13 @@ func (x *PetInfo) GetEntries() *PetEntriesInfo {
 	return nil
 }
 
+func (x *PetInfo) GetNextTier() *PetTierAscensionInfo {
+	if x != nil {
+		return x.NextTier
+	}
+	return nil
+}
+
 func (x *PetInfo) GetDesc() string {
 	if x != nil {
 		return x.Desc
@@ -443,7 +576,7 @@ type PetListInfo struct {
 
 func (x *PetListInfo) Reset() {
 	*x = PetListInfo{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[3]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -455,7 +588,7 @@ func (x *PetListInfo) String() string {
 func (*PetListInfo) ProtoMessage() {}
 
 func (x *PetListInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[3]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -468,7 +601,7 @@ func (x *PetListInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetListInfo.ProtoReflect.Descriptor instead.
 func (*PetListInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PetListInfo) GetPets() []*PetInfo {
@@ -507,7 +640,7 @@ type GetPetListRequest struct {
 
 func (x *GetPetListRequest) Reset() {
 	*x = GetPetListRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[4]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -519,7 +652,7 @@ func (x *GetPetListRequest) String() string {
 func (*GetPetListRequest) ProtoMessage() {}
 
 func (x *GetPetListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[4]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -532,7 +665,7 @@ func (x *GetPetListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetListRequest.ProtoReflect.Descriptor instead.
 func (*GetPetListRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{4}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{5}
 }
 
 type GetPetListResponse struct {
@@ -545,7 +678,7 @@ type GetPetListResponse struct {
 
 func (x *GetPetListResponse) Reset() {
 	*x = GetPetListResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[5]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -557,7 +690,7 @@ func (x *GetPetListResponse) String() string {
 func (*GetPetListResponse) ProtoMessage() {}
 
 func (x *GetPetListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[5]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -570,7 +703,7 @@ func (x *GetPetListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetListResponse.ProtoReflect.Descriptor instead.
 func (*GetPetListResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GetPetListResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -597,7 +730,7 @@ type SummonPetRequest struct {
 
 func (x *SummonPetRequest) Reset() {
 	*x = SummonPetRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[6]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -609,7 +742,7 @@ func (x *SummonPetRequest) String() string {
 func (*SummonPetRequest) ProtoMessage() {}
 
 func (x *SummonPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[6]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +755,7 @@ func (x *SummonPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummonPetRequest.ProtoReflect.Descriptor instead.
 func (*SummonPetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SummonPetRequest) GetPetId() uint64 {
@@ -642,7 +775,7 @@ type SummonPetResponse struct {
 
 func (x *SummonPetResponse) Reset() {
 	*x = SummonPetResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[7]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -654,7 +787,7 @@ func (x *SummonPetResponse) String() string {
 func (*SummonPetResponse) ProtoMessage() {}
 
 func (x *SummonPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[7]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -667,7 +800,7 @@ func (x *SummonPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummonPetResponse.ProtoReflect.Descriptor instead.
 func (*SummonPetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SummonPetResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -693,7 +826,7 @@ type RecallPetRequest struct {
 
 func (x *RecallPetRequest) Reset() {
 	*x = RecallPetRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[8]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +838,7 @@ func (x *RecallPetRequest) String() string {
 func (*RecallPetRequest) ProtoMessage() {}
 
 func (x *RecallPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[8]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +851,7 @@ func (x *RecallPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecallPetRequest.ProtoReflect.Descriptor instead.
 func (*RecallPetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{9}
 }
 
 type RecallPetResponse struct {
@@ -731,7 +864,7 @@ type RecallPetResponse struct {
 
 func (x *RecallPetResponse) Reset() {
 	*x = RecallPetResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[9]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -743,7 +876,7 @@ func (x *RecallPetResponse) String() string {
 func (*RecallPetResponse) ProtoMessage() {}
 
 func (x *RecallPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[9]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -756,7 +889,7 @@ func (x *RecallPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecallPetResponse.ProtoReflect.Descriptor instead.
 func (*RecallPetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RecallPetResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -784,7 +917,7 @@ type AllocatePetPointsRequest struct {
 
 func (x *AllocatePetPointsRequest) Reset() {
 	*x = AllocatePetPointsRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[10]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +929,7 @@ func (x *AllocatePetPointsRequest) String() string {
 func (*AllocatePetPointsRequest) ProtoMessage() {}
 
 func (x *AllocatePetPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[10]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +942,7 @@ func (x *AllocatePetPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocatePetPointsRequest.ProtoReflect.Descriptor instead.
 func (*AllocatePetPointsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AllocatePetPointsRequest) GetPetId() uint64 {
@@ -836,7 +969,7 @@ type AllocatePetPointsResponse struct {
 
 func (x *AllocatePetPointsResponse) Reset() {
 	*x = AllocatePetPointsResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[11]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -848,7 +981,7 @@ func (x *AllocatePetPointsResponse) String() string {
 func (*AllocatePetPointsResponse) ProtoMessage() {}
 
 func (x *AllocatePetPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[11]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -861,7 +994,7 @@ func (x *AllocatePetPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocatePetPointsResponse.ProtoReflect.Descriptor instead.
 func (*AllocatePetPointsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AllocatePetPointsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -888,7 +1021,7 @@ type ResetPetPointsRequest struct {
 
 func (x *ResetPetPointsRequest) Reset() {
 	*x = ResetPetPointsRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[12]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -900,7 +1033,7 @@ func (x *ResetPetPointsRequest) String() string {
 func (*ResetPetPointsRequest) ProtoMessage() {}
 
 func (x *ResetPetPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[12]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -913,7 +1046,7 @@ func (x *ResetPetPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPetPointsRequest.ProtoReflect.Descriptor instead.
 func (*ResetPetPointsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResetPetPointsRequest) GetPetId() uint64 {
@@ -933,7 +1066,7 @@ type ResetPetPointsResponse struct {
 
 func (x *ResetPetPointsResponse) Reset() {
 	*x = ResetPetPointsResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[13]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -945,7 +1078,7 @@ func (x *ResetPetPointsResponse) String() string {
 func (*ResetPetPointsResponse) ProtoMessage() {}
 
 func (x *ResetPetPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[13]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -958,7 +1091,7 @@ func (x *ResetPetPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPetPointsResponse.ProtoReflect.Descriptor instead.
 func (*ResetPetPointsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{13}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResetPetPointsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -985,7 +1118,7 @@ type AutoAllocatePetPointsRequest struct {
 
 func (x *AutoAllocatePetPointsRequest) Reset() {
 	*x = AutoAllocatePetPointsRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[14]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1130,7 @@ func (x *AutoAllocatePetPointsRequest) String() string {
 func (*AutoAllocatePetPointsRequest) ProtoMessage() {}
 
 func (x *AutoAllocatePetPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[14]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1143,7 @@ func (x *AutoAllocatePetPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoAllocatePetPointsRequest.ProtoReflect.Descriptor instead.
 func (*AutoAllocatePetPointsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{14}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AutoAllocatePetPointsRequest) GetPetId() uint64 {
@@ -1031,7 +1164,7 @@ type AutoAllocatePetPointsResponse struct {
 
 func (x *AutoAllocatePetPointsResponse) Reset() {
 	*x = AutoAllocatePetPointsResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[15]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1043,7 +1176,7 @@ func (x *AutoAllocatePetPointsResponse) String() string {
 func (*AutoAllocatePetPointsResponse) ProtoMessage() {}
 
 func (x *AutoAllocatePetPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[15]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1056,7 +1189,7 @@ func (x *AutoAllocatePetPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AutoAllocatePetPointsResponse.ProtoReflect.Descriptor instead.
 func (*AutoAllocatePetPointsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{15}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AutoAllocatePetPointsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1090,7 +1223,7 @@ type RenamePetRequest struct {
 
 func (x *RenamePetRequest) Reset() {
 	*x = RenamePetRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[16]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1102,7 +1235,7 @@ func (x *RenamePetRequest) String() string {
 func (*RenamePetRequest) ProtoMessage() {}
 
 func (x *RenamePetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[16]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1115,7 +1248,7 @@ func (x *RenamePetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenamePetRequest.ProtoReflect.Descriptor instead.
 func (*RenamePetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{16}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RenamePetRequest) GetPetId() uint64 {
@@ -1142,7 +1275,7 @@ type RenamePetResponse struct {
 
 func (x *RenamePetResponse) Reset() {
 	*x = RenamePetResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[17]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1154,7 +1287,7 @@ func (x *RenamePetResponse) String() string {
 func (*RenamePetResponse) ProtoMessage() {}
 
 func (x *RenamePetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[17]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1167,7 +1300,7 @@ func (x *RenamePetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenamePetResponse.ProtoReflect.Descriptor instead.
 func (*RenamePetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{17}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RenamePetResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1194,7 +1327,7 @@ type PetListChangedS2C struct {
 
 func (x *PetListChangedS2C) Reset() {
 	*x = PetListChangedS2C{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[18]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1206,7 +1339,7 @@ func (x *PetListChangedS2C) String() string {
 func (*PetListChangedS2C) ProtoMessage() {}
 
 func (x *PetListChangedS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[18]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1219,7 +1352,7 @@ func (x *PetListChangedS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetListChangedS2C.ProtoReflect.Descriptor instead.
 func (*PetListChangedS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{18}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PetListChangedS2C) GetPets() *PetListInfo {
@@ -1241,7 +1374,7 @@ type GmGrantPetRequest struct {
 
 func (x *GmGrantPetRequest) Reset() {
 	*x = GmGrantPetRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[19]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1253,7 +1386,7 @@ func (x *GmGrantPetRequest) String() string {
 func (*GmGrantPetRequest) ProtoMessage() {}
 
 func (x *GmGrantPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[19]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1266,7 +1399,7 @@ func (x *GmGrantPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmGrantPetRequest.ProtoReflect.Descriptor instead.
 func (*GmGrantPetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{19}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GmGrantPetRequest) GetPetTableId() uint32 {
@@ -1287,7 +1420,7 @@ type GmGrantPetResponse struct {
 
 func (x *GmGrantPetResponse) Reset() {
 	*x = GmGrantPetResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[20]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1299,7 +1432,7 @@ func (x *GmGrantPetResponse) String() string {
 func (*GmGrantPetResponse) ProtoMessage() {}
 
 func (x *GmGrantPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[20]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1312,7 +1445,7 @@ func (x *GmGrantPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmGrantPetResponse.ProtoReflect.Descriptor instead.
 func (*GmGrantPetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{20}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GmGrantPetResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1351,7 +1484,7 @@ type PetShopOffer struct {
 
 func (x *PetShopOffer) Reset() {
 	*x = PetShopOffer{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[21]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1363,7 +1496,7 @@ func (x *PetShopOffer) String() string {
 func (*PetShopOffer) ProtoMessage() {}
 
 func (x *PetShopOffer) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[21]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1376,7 +1509,7 @@ func (x *PetShopOffer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetShopOffer.ProtoReflect.Descriptor instead.
 func (*PetShopOffer) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{21}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PetShopOffer) GetPetTableId() uint32 {
@@ -1429,7 +1562,7 @@ type GetPetShopRequest struct {
 
 func (x *GetPetShopRequest) Reset() {
 	*x = GetPetShopRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[22]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1441,7 +1574,7 @@ func (x *GetPetShopRequest) String() string {
 func (*GetPetShopRequest) ProtoMessage() {}
 
 func (x *GetPetShopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[22]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1454,7 +1587,7 @@ func (x *GetPetShopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetShopRequest.ProtoReflect.Descriptor instead.
 func (*GetPetShopRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{22}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{23}
 }
 
 type GetPetShopResponse struct {
@@ -1469,7 +1602,7 @@ type GetPetShopResponse struct {
 
 func (x *GetPetShopResponse) Reset() {
 	*x = GetPetShopResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[23]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1481,7 +1614,7 @@ func (x *GetPetShopResponse) String() string {
 func (*GetPetShopResponse) ProtoMessage() {}
 
 func (x *GetPetShopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[23]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1494,7 +1627,7 @@ func (x *GetPetShopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetShopResponse.ProtoReflect.Descriptor instead.
 func (*GetPetShopResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{23}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetPetShopResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1536,7 +1669,7 @@ type BuyPetRequest struct {
 
 func (x *BuyPetRequest) Reset() {
 	*x = BuyPetRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[24]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1681,7 @@ func (x *BuyPetRequest) String() string {
 func (*BuyPetRequest) ProtoMessage() {}
 
 func (x *BuyPetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[24]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1694,7 @@ func (x *BuyPetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetRequest.ProtoReflect.Descriptor instead.
 func (*BuyPetRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{24}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *BuyPetRequest) GetPetTableId() uint32 {
@@ -1598,7 +1731,7 @@ type BuyPetResponse struct {
 
 func (x *BuyPetResponse) Reset() {
 	*x = BuyPetResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[25]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1610,7 +1743,7 @@ func (x *BuyPetResponse) String() string {
 func (*BuyPetResponse) ProtoMessage() {}
 
 func (x *BuyPetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[25]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1623,7 +1756,7 @@ func (x *BuyPetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyPetResponse.ProtoReflect.Descriptor instead.
 func (*BuyPetResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{25}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *BuyPetResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1682,7 +1815,7 @@ type PetEntryInfo struct {
 
 func (x *PetEntryInfo) Reset() {
 	*x = PetEntryInfo{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[26]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1694,7 +1827,7 @@ func (x *PetEntryInfo) String() string {
 func (*PetEntryInfo) ProtoMessage() {}
 
 func (x *PetEntryInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[26]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1707,7 +1840,7 @@ func (x *PetEntryInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetEntryInfo.ProtoReflect.Descriptor instead.
 func (*PetEntryInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{26}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *PetEntryInfo) GetId() uint32 {
@@ -1794,6 +1927,74 @@ func (x *PetEntryInfo) GetIcon() string {
 	return ""
 }
 
+type PetEntryPresetSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotId        uint32                 `protobuf:"varint,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`                                                                    // 1..3
+	Tag           uint32                 `protobuf:"varint,2,opt,name=tag,proto3" json:"tag,omitempty"`                                                                                        // 0默认 / 1输出 / 2控场 / 3辅助
+	UsedPoints    uint32                 `protobuf:"varint,3,opt,name=used_points,json=usedPoints,proto3" json:"used_points,omitempty"`                                                        // 该方案当前已投入总点数
+	Allocated     map[uint32]uint32      `protobuf:"bytes,4,rep,name=allocated,proto3" json:"allocated,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // entry_id -> 已分配点（紧凑非零项）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetEntryPresetSummary) Reset() {
+	*x = PetEntryPresetSummary{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetEntryPresetSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetEntryPresetSummary) ProtoMessage() {}
+
+func (x *PetEntryPresetSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetEntryPresetSummary.ProtoReflect.Descriptor instead.
+func (*PetEntryPresetSummary) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *PetEntryPresetSummary) GetSlotId() uint32 {
+	if x != nil {
+		return x.SlotId
+	}
+	return 0
+}
+
+func (x *PetEntryPresetSummary) GetTag() uint32 {
+	if x != nil {
+		return x.Tag
+	}
+	return 0
+}
+
+func (x *PetEntryPresetSummary) GetUsedPoints() uint32 {
+	if x != nil {
+		return x.UsedPoints
+	}
+	return 0
+}
+
+func (x *PetEntryPresetSummary) GetAllocated() map[uint32]uint32 {
+	if x != nil {
+		return x.Allocated
+	}
+	return nil
+}
+
 type PetEntriesInfo struct {
 	state             protoimpl.MessageState           `protogen:"open.v1"`
 	PetId             uint64                           `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
@@ -1807,14 +2008,16 @@ type PetEntriesInfo struct {
 	Effective         bool                             `protobuf:"varint,9,opt,name=effective,proto3" json:"effective,omitempty"`
 	UnknownUsedPoints uint64                           `protobuf:"varint,10,opt,name=unknown_used_points,json=unknownUsedPoints,proto3" json:"unknown_used_points,omitempty"`
 	// 供断线重连确认最近成功请求；客户端仍须核完整目标和版本。
-	LastRequestId string `protobuf:"bytes,11,opt,name=last_request_id,json=lastRequestId,proto3" json:"last_request_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	LastRequestId    string                   `protobuf:"bytes,11,opt,name=last_request_id,json=lastRequestId,proto3" json:"last_request_id,omitempty"`
+	ActivePresetSlot uint32                   `protobuf:"varint,12,opt,name=active_preset_slot,json=activePresetSlot,proto3" json:"active_preset_slot,omitempty"` // 当前生效方案槽位（1..3）
+	Presets          []*PetEntryPresetSummary `protobuf:"bytes,13,rep,name=presets,proto3" json:"presets,omitempty"`                                              // 全部 3 套方案概览（按 slot_id 升序）
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PetEntriesInfo) Reset() {
 	*x = PetEntriesInfo{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[27]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1826,7 +2029,7 @@ func (x *PetEntriesInfo) String() string {
 func (*PetEntriesInfo) ProtoMessage() {}
 
 func (x *PetEntriesInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[27]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1839,7 +2042,7 @@ func (x *PetEntriesInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetEntriesInfo.ProtoReflect.Descriptor instead.
 func (*PetEntriesInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{27}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *PetEntriesInfo) GetPetId() uint64 {
@@ -1919,6 +2122,20 @@ func (x *PetEntriesInfo) GetLastRequestId() string {
 	return ""
 }
 
+func (x *PetEntriesInfo) GetActivePresetSlot() uint32 {
+	if x != nil {
+		return x.ActivePresetSlot
+	}
+	return 0
+}
+
+func (x *PetEntriesInfo) GetPresets() []*PetEntryPresetSummary {
+	if x != nil {
+		return x.Presets
+	}
+	return nil
+}
+
 type GetPetEntriesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
@@ -1928,7 +2145,7 @@ type GetPetEntriesRequest struct {
 
 func (x *GetPetEntriesRequest) Reset() {
 	*x = GetPetEntriesRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[28]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1940,7 +2157,7 @@ func (x *GetPetEntriesRequest) String() string {
 func (*GetPetEntriesRequest) ProtoMessage() {}
 
 func (x *GetPetEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[28]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1953,7 +2170,7 @@ func (x *GetPetEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetEntriesRequest.ProtoReflect.Descriptor instead.
 func (*GetPetEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{28}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetPetEntriesRequest) GetPetId() uint64 {
@@ -1973,7 +2190,7 @@ type GetPetEntriesResponse struct {
 
 func (x *GetPetEntriesResponse) Reset() {
 	*x = GetPetEntriesResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[29]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1985,7 +2202,7 @@ func (x *GetPetEntriesResponse) String() string {
 func (*GetPetEntriesResponse) ProtoMessage() {}
 
 func (x *GetPetEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[29]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1998,7 +2215,7 @@ func (x *GetPetEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPetEntriesResponse.ProtoReflect.Descriptor instead.
 func (*GetPetEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{29}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetPetEntriesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2027,7 +2244,7 @@ type PreviewPetEntriesRequest struct {
 
 func (x *PreviewPetEntriesRequest) Reset() {
 	*x = PreviewPetEntriesRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[30]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2039,7 +2256,7 @@ func (x *PreviewPetEntriesRequest) String() string {
 func (*PreviewPetEntriesRequest) ProtoMessage() {}
 
 func (x *PreviewPetEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[30]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2052,7 +2269,7 @@ func (x *PreviewPetEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewPetEntriesRequest.ProtoReflect.Descriptor instead.
 func (*PreviewPetEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{30}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PreviewPetEntriesRequest) GetPetId() uint64 {
@@ -2093,7 +2310,7 @@ type PreviewPetEntriesResponse struct {
 
 func (x *PreviewPetEntriesResponse) Reset() {
 	*x = PreviewPetEntriesResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[31]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2105,7 +2322,7 @@ func (x *PreviewPetEntriesResponse) String() string {
 func (*PreviewPetEntriesResponse) ProtoMessage() {}
 
 func (x *PreviewPetEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[31]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2118,7 +2335,7 @@ func (x *PreviewPetEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewPetEntriesResponse.ProtoReflect.Descriptor instead.
 func (*PreviewPetEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{31}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PreviewPetEntriesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2148,7 +2365,7 @@ type SavePetEntriesRequest struct {
 
 func (x *SavePetEntriesRequest) Reset() {
 	*x = SavePetEntriesRequest{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[32]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2160,7 +2377,7 @@ func (x *SavePetEntriesRequest) String() string {
 func (*SavePetEntriesRequest) ProtoMessage() {}
 
 func (x *SavePetEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[32]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2173,7 +2390,7 @@ func (x *SavePetEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SavePetEntriesRequest.ProtoReflect.Descriptor instead.
 func (*SavePetEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{32}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SavePetEntriesRequest) GetPetId() uint64 {
@@ -2223,7 +2440,7 @@ type SavePetEntriesResponse struct {
 
 func (x *SavePetEntriesResponse) Reset() {
 	*x = SavePetEntriesResponse{}
-	mi := &file_proto_scene_player_pet_proto_msgTypes[33]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2235,7 +2452,7 @@ func (x *SavePetEntriesResponse) String() string {
 func (*SavePetEntriesResponse) ProtoMessage() {}
 
 func (x *SavePetEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_pet_proto_msgTypes[33]
+	mi := &file_proto_scene_player_pet_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2248,7 +2465,7 @@ func (x *SavePetEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SavePetEntriesResponse.ProtoReflect.Descriptor instead.
 func (*SavePetEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{33}
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *SavePetEntriesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2279,6 +2496,304 @@ func (x *SavePetEntriesResponse) GetReplayed() bool {
 	return false
 }
 
+// 切换宝宝条目方案槽位（1..3）或更新其用途标签（0默认/1输出/2控场/3辅助）；战外免费、乐观锁 + 幂等。
+type SwitchPetEntryPresetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	SlotId        uint32                 `protobuf:"varint,2,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`
+	Tag           uint32                 `protobuf:"varint,3,opt,name=tag,proto3" json:"tag,omitempty"` // 0..3；传 0xFFFFFFFF 表示保持目标槽位原有标签不变
+	StateVersion  uint64                 `protobuf:"varint,4,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`
+	ConfigVersion uint32                 `protobuf:"varint,5,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
+	RequestId     string                 `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 16-64字节ASCII标识
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchPetEntryPresetRequest) Reset() {
+	*x = SwitchPetEntryPresetRequest{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchPetEntryPresetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchPetEntryPresetRequest) ProtoMessage() {}
+
+func (x *SwitchPetEntryPresetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchPetEntryPresetRequest.ProtoReflect.Descriptor instead.
+func (*SwitchPetEntryPresetRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *SwitchPetEntryPresetRequest) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *SwitchPetEntryPresetRequest) GetSlotId() uint32 {
+	if x != nil {
+		return x.SlotId
+	}
+	return 0
+}
+
+func (x *SwitchPetEntryPresetRequest) GetTag() uint32 {
+	if x != nil {
+		return x.Tag
+	}
+	return 0
+}
+
+func (x *SwitchPetEntryPresetRequest) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SwitchPetEntryPresetRequest) GetConfigVersion() uint32 {
+	if x != nil {
+		return x.ConfigVersion
+	}
+	return 0
+}
+
+func (x *SwitchPetEntryPresetRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type SwitchPetEntryPresetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Entries       *PetEntriesInfo        `protobuf:"bytes,2,opt,name=entries,proto3" json:"entries,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Replayed      bool                   `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchPetEntryPresetResponse) Reset() {
+	*x = SwitchPetEntryPresetResponse{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchPetEntryPresetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchPetEntryPresetResponse) ProtoMessage() {}
+
+func (x *SwitchPetEntryPresetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchPetEntryPresetResponse.ProtoReflect.Descriptor instead.
+func (*SwitchPetEntryPresetResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *SwitchPetEntryPresetResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SwitchPetEntryPresetResponse) GetEntries() *PetEntriesInfo {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *SwitchPetEntryPresetResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SwitchPetEntryPresetResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// 宝宝灵阶突破（普通→变异→灵兽→神兽→圣兽）：消耗 PetTier 配表材料与银两，乐观锁 + 幂等。
+type AscendPetTierRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PetId           uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	ExpectedTier    uint32                 `protobuf:"varint,2,opt,name=expected_tier,json=expectedTier,proto3" json:"expected_tier,omitempty"`            // 客户端看到的当前阶位（1..4）
+	ClientRequestId uint64                 `protobuf:"varint,3,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0；断线重放原样传回
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AscendPetTierRequest) Reset() {
+	*x = AscendPetTierRequest{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AscendPetTierRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AscendPetTierRequest) ProtoMessage() {}
+
+func (x *AscendPetTierRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AscendPetTierRequest.ProtoReflect.Descriptor instead.
+func (*AscendPetTierRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *AscendPetTierRequest) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *AscendPetTierRequest) GetExpectedTier() uint32 {
+	if x != nil {
+		return x.ExpectedTier
+	}
+	return 0
+}
+
+func (x *AscendPetTierRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type AscendPetTierResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Pets            *PetListInfo           `protobuf:"bytes,2,opt,name=pets,proto3" json:"pets,omitempty"`
+	Gold            uint64                 `protobuf:"varint,3,opt,name=gold,proto3" json:"gold,omitempty"`
+	ClientRequestId uint64                 `protobuf:"varint,4,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Replayed        bool                   `protobuf:"varint,5,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	NewTier         uint32                 `protobuf:"varint,6,opt,name=new_tier,json=newTier,proto3" json:"new_tier,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AscendPetTierResponse) Reset() {
+	*x = AscendPetTierResponse{}
+	mi := &file_proto_scene_player_pet_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AscendPetTierResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AscendPetTierResponse) ProtoMessage() {}
+
+func (x *AscendPetTierResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_pet_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AscendPetTierResponse.ProtoReflect.Descriptor instead.
+func (*AscendPetTierResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_pet_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *AscendPetTierResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *AscendPetTierResponse) GetPets() *PetListInfo {
+	if x != nil {
+		return x.Pets
+	}
+	return nil
+}
+
+func (x *AscendPetTierResponse) GetGold() uint64 {
+	if x != nil {
+		return x.Gold
+	}
+	return 0
+}
+
+func (x *AscendPetTierResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *AscendPetTierResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *AscendPetTierResponse) GetNewTier() uint32 {
+	if x != nil {
+		return x.NewTier
+	}
+	return 0
+}
+
 var File_proto_scene_player_pet_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_pet_proto_rawDesc = "" +
@@ -2303,7 +2818,24 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\x05speed\x18\x05 \x01(\x04R\x05speed\x12\x18\n" +
 	"\adefense\x18\x06 \x01(\x04R\adefense\x12\x16\n" +
 	"\x06health\x18\a \x01(\x04R\x06health\x12\x12\n" +
-	"\x04mana\x18\b \x01(\x04R\x04mana\"\xb9\x05\n" +
+	"\x04mana\x18\b \x01(\x04R\x04mana\"\x9f\x03\n" +
+	"\x14PetTierAscensionInfo\x12\x1b\n" +
+	"\tnext_tier\x18\x01 \x01(\rR\bnextTier\x12$\n" +
+	"\x0enext_tier_name\x18\x02 \x01(\tR\fnextTierName\x12 \n" +
+	"\fnext_art_key\x18\x03 \x01(\tR\n" +
+	"nextArtKey\x12\"\n" +
+	"\rmin_pet_level\x18\x04 \x01(\rR\vminPetLevel\x12 \n" +
+	"\fcost_item_id\x18\x05 \x01(\rR\n" +
+	"costItemId\x12&\n" +
+	"\x0fcost_item_count\x18\x06 \x01(\rR\rcostItemCount\x12\x1b\n" +
+	"\tcost_gold\x18\a \x01(\x04R\bcostGold\x12,\n" +
+	"\x12bonus_entry_points\x18\b \x01(\rR\x10bonusEntryPoints\x12(\n" +
+	"\x10owned_item_count\x18\t \x01(\x04R\x0eownedItemCount\x12\x1d\n" +
+	"\n" +
+	"can_ascend\x18\n" +
+	" \x01(\bR\tcanAscend\x12 \n" +
+	"\fblock_tip_id\x18\v \x01(\rR\n" +
+	"blockTipId\"\xed\x05\n" +
 	"\aPetInfo\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -2327,7 +2859,8 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\x10cultivation_tier\x18\x11 \x01(\rR\x0fcultivationTier\x122\n" +
 	"\x15cultivation_tier_name\x18\x12 \x01(\tR\x13cultivationTierName\x12.\n" +
 	"\x13cultivation_art_key\x18\x13 \x01(\tR\x11cultivationArtKey\x12)\n" +
-	"\aentries\x18\x14 \x01(\v2\x0f.PetEntriesInfoR\aentries\x12\x12\n" +
+	"\aentries\x18\x14 \x01(\v2\x0f.PetEntriesInfoR\aentries\x122\n" +
+	"\tnext_tier\x18\x15 \x01(\v2\x15.PetTierAscensionInfoR\bnextTier\x12\x12\n" +
 	"\x04desc\x18\x10 \x01(\tR\x04desc\"\x94\x01\n" +
 	"\vPetListInfo\x12\x1c\n" +
 	"\x04pets\x18\x01 \x03(\v2\b.PetInfoR\x04pets\x12\"\n" +
@@ -2426,7 +2959,16 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\reffective_bps\x18\n" +
 	" \x01(\rR\feffectiveBps\x12\x12\n" +
 	"\x04sort\x18\v \x01(\rR\x04sort\x12\x12\n" +
-	"\x04icon\x18\f \x01(\tR\x04icon\"\xb9\x03\n" +
+	"\x04icon\x18\f \x01(\tR\x04icon\"\xe6\x01\n" +
+	"\x15PetEntryPresetSummary\x12\x17\n" +
+	"\aslot_id\x18\x01 \x01(\rR\x06slotId\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\rR\x03tag\x12\x1f\n" +
+	"\vused_points\x18\x03 \x01(\rR\n" +
+	"usedPoints\x12C\n" +
+	"\tallocated\x18\x04 \x03(\v2%.PetEntryPresetSummary.AllocatedEntryR\tallocated\x1a<\n" +
+	"\x0eAllocatedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x99\x04\n" +
 	"\x0ePetEntriesInfo\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12#\n" +
 	"\rstate_version\x18\x02 \x01(\x04R\fstateVersion\x12%\n" +
@@ -2439,7 +2981,9 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\teffective\x18\t \x01(\bR\teffective\x12.\n" +
 	"\x13unknown_used_points\x18\n" +
 	" \x01(\x04R\x11unknownUsedPoints\x12&\n" +
-	"\x0flast_request_id\x18\v \x01(\tR\rlastRequestId\"-\n" +
+	"\x0flast_request_id\x18\v \x01(\tR\rlastRequestId\x12,\n" +
+	"\x12active_preset_slot\x18\f \x01(\rR\x10activePresetSlot\x120\n" +
+	"\apresets\x18\r \x03(\v2\x16.PetEntryPresetSummaryR\apresets\"-\n" +
 	"\x14GetPetEntriesRequest\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\"x\n" +
 	"\x15GetPetEntriesResponse\x124\n" +
@@ -2471,7 +3015,32 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\aentries\x18\x02 \x01(\v2\x0f.PetEntriesInfoR\aentries\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x03 \x01(\tR\trequestId\x12\x1a\n" +
-	"\breplayed\x18\x04 \x01(\bR\breplayed2\xff\x06\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"\xca\x01\n" +
+	"\x1bSwitchPetEntryPresetRequest\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x17\n" +
+	"\aslot_id\x18\x02 \x01(\rR\x06slotId\x12\x10\n" +
+	"\x03tag\x18\x03 \x01(\rR\x03tag\x12#\n" +
+	"\rstate_version\x18\x04 \x01(\x04R\fstateVersion\x12%\n" +
+	"\x0econfig_version\x18\x05 \x01(\rR\rconfigVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x06 \x01(\tR\trequestId\"\xba\x01\n" +
+	"\x1cSwitchPetEntryPresetResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
+	"\aentries\x18\x02 \x01(\v2\x0f.PetEntriesInfoR\aentries\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"~\n" +
+	"\x14AscendPetTierRequest\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12#\n" +
+	"\rexpected_tier\x18\x02 \x01(\rR\fexpectedTier\x12*\n" +
+	"\x11client_request_id\x18\x03 \x01(\x04R\x0fclientRequestId\"\xe6\x01\n" +
+	"\x15AscendPetTierResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12 \n" +
+	"\x04pets\x18\x02 \x01(\v2\f.PetListInfoR\x04pets\x12\x12\n" +
+	"\x04gold\x18\x03 \x01(\x04R\x04gold\x12*\n" +
+	"\x11client_request_id\x18\x04 \x01(\x04R\x0fclientRequestId\x12\x1a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\x12\x19\n" +
+	"\bnew_tier\x18\x06 \x01(\rR\anewTier2\x94\b\n" +
 	"\x14ScenePetClientPlayer\x125\n" +
 	"\n" +
 	"GetPetList\x12\x12.GetPetListRequest\x1a\x13.GetPetListResponse\x122\n" +
@@ -2489,7 +3058,9 @@ const file_proto_scene_player_pet_proto_rawDesc = "" +
 	"\x06BuyPet\x12\x0e.BuyPetRequest\x1a\x0f.BuyPetResponse\x12>\n" +
 	"\rGetPetEntries\x12\x15.GetPetEntriesRequest\x1a\x16.GetPetEntriesResponse\x12J\n" +
 	"\x11PreviewPetEntries\x12\x19.PreviewPetEntriesRequest\x1a\x1a.PreviewPetEntriesResponse\x12A\n" +
-	"\x0eSavePetEntries\x12\x16.SavePetEntriesRequest\x1a\x17.SavePetEntriesResponse\x1a\n" +
+	"\x0eSavePetEntries\x12\x16.SavePetEntriesRequest\x1a\x17.SavePetEntriesResponse\x12S\n" +
+	"\x14SwitchPetEntryPreset\x12\x1c.SwitchPetEntryPresetRequest\x1a\x1d.SwitchPetEntryPresetResponse\x12>\n" +
+	"\rAscendPetTier\x12\x15.AscendPetTierRequest\x1a\x16.AscendPetTierResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -2504,120 +3075,138 @@ func file_proto_scene_player_pet_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_pet_proto_rawDescData
 }
 
-var file_proto_scene_player_pet_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_proto_scene_player_pet_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_proto_scene_player_pet_proto_goTypes = []any{
 	(*PetDimensionInfo)(nil),                // 0: PetDimensionInfo
 	(*PetDerivedInfo)(nil),                  // 1: PetDerivedInfo
-	(*PetInfo)(nil),                         // 2: PetInfo
-	(*PetListInfo)(nil),                     // 3: PetListInfo
-	(*GetPetListRequest)(nil),               // 4: GetPetListRequest
-	(*GetPetListResponse)(nil),              // 5: GetPetListResponse
-	(*SummonPetRequest)(nil),                // 6: SummonPetRequest
-	(*SummonPetResponse)(nil),               // 7: SummonPetResponse
-	(*RecallPetRequest)(nil),                // 8: RecallPetRequest
-	(*RecallPetResponse)(nil),               // 9: RecallPetResponse
-	(*AllocatePetPointsRequest)(nil),        // 10: AllocatePetPointsRequest
-	(*AllocatePetPointsResponse)(nil),       // 11: AllocatePetPointsResponse
-	(*ResetPetPointsRequest)(nil),           // 12: ResetPetPointsRequest
-	(*ResetPetPointsResponse)(nil),          // 13: ResetPetPointsResponse
-	(*AutoAllocatePetPointsRequest)(nil),    // 14: AutoAllocatePetPointsRequest
-	(*AutoAllocatePetPointsResponse)(nil),   // 15: AutoAllocatePetPointsResponse
-	(*RenamePetRequest)(nil),                // 16: RenamePetRequest
-	(*RenamePetResponse)(nil),               // 17: RenamePetResponse
-	(*PetListChangedS2C)(nil),               // 18: PetListChangedS2C
-	(*GmGrantPetRequest)(nil),               // 19: GmGrantPetRequest
-	(*GmGrantPetResponse)(nil),              // 20: GmGrantPetResponse
-	(*PetShopOffer)(nil),                    // 21: PetShopOffer
-	(*GetPetShopRequest)(nil),               // 22: GetPetShopRequest
-	(*GetPetShopResponse)(nil),              // 23: GetPetShopResponse
-	(*BuyPetRequest)(nil),                   // 24: BuyPetRequest
-	(*BuyPetResponse)(nil),                  // 25: BuyPetResponse
-	(*PetEntryInfo)(nil),                    // 26: PetEntryInfo
-	(*PetEntriesInfo)(nil),                  // 27: PetEntriesInfo
-	(*GetPetEntriesRequest)(nil),            // 28: GetPetEntriesRequest
-	(*GetPetEntriesResponse)(nil),           // 29: GetPetEntriesResponse
-	(*PreviewPetEntriesRequest)(nil),        // 30: PreviewPetEntriesRequest
-	(*PreviewPetEntriesResponse)(nil),       // 31: PreviewPetEntriesResponse
-	(*SavePetEntriesRequest)(nil),           // 32: SavePetEntriesRequest
-	(*SavePetEntriesResponse)(nil),          // 33: SavePetEntriesResponse
-	nil,                                     // 34: AllocatePetPointsRequest.AllocatedEntry
-	nil,                                     // 35: AutoAllocatePetPointsResponse.SuggestedEntry
-	nil,                                     // 36: PreviewPetEntriesRequest.TargetEntry
-	nil,                                     // 37: SavePetEntriesRequest.TargetEntry
-	(*base.TipInfoMessage)(nil),             // 38: TipInfoMessage
-	(*component.PetCultivationEffects)(nil), // 39: PetCultivationEffects
-	(*base.Empty)(nil),                      // 40: Empty
+	(*PetTierAscensionInfo)(nil),            // 2: PetTierAscensionInfo
+	(*PetInfo)(nil),                         // 3: PetInfo
+	(*PetListInfo)(nil),                     // 4: PetListInfo
+	(*GetPetListRequest)(nil),               // 5: GetPetListRequest
+	(*GetPetListResponse)(nil),              // 6: GetPetListResponse
+	(*SummonPetRequest)(nil),                // 7: SummonPetRequest
+	(*SummonPetResponse)(nil),               // 8: SummonPetResponse
+	(*RecallPetRequest)(nil),                // 9: RecallPetRequest
+	(*RecallPetResponse)(nil),               // 10: RecallPetResponse
+	(*AllocatePetPointsRequest)(nil),        // 11: AllocatePetPointsRequest
+	(*AllocatePetPointsResponse)(nil),       // 12: AllocatePetPointsResponse
+	(*ResetPetPointsRequest)(nil),           // 13: ResetPetPointsRequest
+	(*ResetPetPointsResponse)(nil),          // 14: ResetPetPointsResponse
+	(*AutoAllocatePetPointsRequest)(nil),    // 15: AutoAllocatePetPointsRequest
+	(*AutoAllocatePetPointsResponse)(nil),   // 16: AutoAllocatePetPointsResponse
+	(*RenamePetRequest)(nil),                // 17: RenamePetRequest
+	(*RenamePetResponse)(nil),               // 18: RenamePetResponse
+	(*PetListChangedS2C)(nil),               // 19: PetListChangedS2C
+	(*GmGrantPetRequest)(nil),               // 20: GmGrantPetRequest
+	(*GmGrantPetResponse)(nil),              // 21: GmGrantPetResponse
+	(*PetShopOffer)(nil),                    // 22: PetShopOffer
+	(*GetPetShopRequest)(nil),               // 23: GetPetShopRequest
+	(*GetPetShopResponse)(nil),              // 24: GetPetShopResponse
+	(*BuyPetRequest)(nil),                   // 25: BuyPetRequest
+	(*BuyPetResponse)(nil),                  // 26: BuyPetResponse
+	(*PetEntryInfo)(nil),                    // 27: PetEntryInfo
+	(*PetEntryPresetSummary)(nil),           // 28: PetEntryPresetSummary
+	(*PetEntriesInfo)(nil),                  // 29: PetEntriesInfo
+	(*GetPetEntriesRequest)(nil),            // 30: GetPetEntriesRequest
+	(*GetPetEntriesResponse)(nil),           // 31: GetPetEntriesResponse
+	(*PreviewPetEntriesRequest)(nil),        // 32: PreviewPetEntriesRequest
+	(*PreviewPetEntriesResponse)(nil),       // 33: PreviewPetEntriesResponse
+	(*SavePetEntriesRequest)(nil),           // 34: SavePetEntriesRequest
+	(*SavePetEntriesResponse)(nil),          // 35: SavePetEntriesResponse
+	(*SwitchPetEntryPresetRequest)(nil),     // 36: SwitchPetEntryPresetRequest
+	(*SwitchPetEntryPresetResponse)(nil),    // 37: SwitchPetEntryPresetResponse
+	(*AscendPetTierRequest)(nil),            // 38: AscendPetTierRequest
+	(*AscendPetTierResponse)(nil),           // 39: AscendPetTierResponse
+	nil,                                     // 40: AllocatePetPointsRequest.AllocatedEntry
+	nil,                                     // 41: AutoAllocatePetPointsResponse.SuggestedEntry
+	nil,                                     // 42: PetEntryPresetSummary.AllocatedEntry
+	nil,                                     // 43: PreviewPetEntriesRequest.TargetEntry
+	nil,                                     // 44: SavePetEntriesRequest.TargetEntry
+	(*base.TipInfoMessage)(nil),             // 45: TipInfoMessage
+	(*component.PetCultivationEffects)(nil), // 46: PetCultivationEffects
+	(*base.Empty)(nil),                      // 47: Empty
 }
 var file_proto_scene_player_pet_proto_depIdxs = []int32{
 	0,  // 0: PetInfo.dimensions:type_name -> PetDimensionInfo
 	1,  // 1: PetInfo.derived:type_name -> PetDerivedInfo
-	27, // 2: PetInfo.entries:type_name -> PetEntriesInfo
-	2,  // 3: PetListInfo.pets:type_name -> PetInfo
-	38, // 4: GetPetListResponse.error_message:type_name -> TipInfoMessage
-	3,  // 5: GetPetListResponse.pets:type_name -> PetListInfo
-	38, // 6: SummonPetResponse.error_message:type_name -> TipInfoMessage
-	3,  // 7: SummonPetResponse.pets:type_name -> PetListInfo
-	38, // 8: RecallPetResponse.error_message:type_name -> TipInfoMessage
-	3,  // 9: RecallPetResponse.pets:type_name -> PetListInfo
-	34, // 10: AllocatePetPointsRequest.allocated:type_name -> AllocatePetPointsRequest.AllocatedEntry
-	38, // 11: AllocatePetPointsResponse.error_message:type_name -> TipInfoMessage
-	3,  // 12: AllocatePetPointsResponse.pets:type_name -> PetListInfo
-	38, // 13: ResetPetPointsResponse.error_message:type_name -> TipInfoMessage
-	3,  // 14: ResetPetPointsResponse.pets:type_name -> PetListInfo
-	38, // 15: AutoAllocatePetPointsResponse.error_message:type_name -> TipInfoMessage
-	35, // 16: AutoAllocatePetPointsResponse.suggested:type_name -> AutoAllocatePetPointsResponse.SuggestedEntry
-	38, // 17: RenamePetResponse.error_message:type_name -> TipInfoMessage
-	3,  // 18: RenamePetResponse.pets:type_name -> PetListInfo
-	3,  // 19: PetListChangedS2C.pets:type_name -> PetListInfo
-	38, // 20: GmGrantPetResponse.error_message:type_name -> TipInfoMessage
-	3,  // 21: GmGrantPetResponse.pets:type_name -> PetListInfo
-	38, // 22: GetPetShopResponse.error_message:type_name -> TipInfoMessage
-	21, // 23: GetPetShopResponse.offers:type_name -> PetShopOffer
-	38, // 24: BuyPetResponse.error_message:type_name -> TipInfoMessage
-	3,  // 25: BuyPetResponse.pets:type_name -> PetListInfo
-	26, // 26: PetEntriesInfo.entries:type_name -> PetEntryInfo
-	39, // 27: PetEntriesInfo.effects:type_name -> PetCultivationEffects
-	38, // 28: GetPetEntriesResponse.error_message:type_name -> TipInfoMessage
-	27, // 29: GetPetEntriesResponse.entries:type_name -> PetEntriesInfo
-	36, // 30: PreviewPetEntriesRequest.target:type_name -> PreviewPetEntriesRequest.TargetEntry
-	38, // 31: PreviewPetEntriesResponse.error_message:type_name -> TipInfoMessage
-	27, // 32: PreviewPetEntriesResponse.entries:type_name -> PetEntriesInfo
-	37, // 33: SavePetEntriesRequest.target:type_name -> SavePetEntriesRequest.TargetEntry
-	38, // 34: SavePetEntriesResponse.error_message:type_name -> TipInfoMessage
-	27, // 35: SavePetEntriesResponse.entries:type_name -> PetEntriesInfo
-	4,  // 36: ScenePetClientPlayer.GetPetList:input_type -> GetPetListRequest
-	6,  // 37: ScenePetClientPlayer.SummonPet:input_type -> SummonPetRequest
-	8,  // 38: ScenePetClientPlayer.RecallPet:input_type -> RecallPetRequest
-	10, // 39: ScenePetClientPlayer.AllocatePetPoints:input_type -> AllocatePetPointsRequest
-	12, // 40: ScenePetClientPlayer.ResetPetPoints:input_type -> ResetPetPointsRequest
-	14, // 41: ScenePetClientPlayer.AutoAllocatePetPoints:input_type -> AutoAllocatePetPointsRequest
-	16, // 42: ScenePetClientPlayer.RenamePet:input_type -> RenamePetRequest
-	18, // 43: ScenePetClientPlayer.NotifyPetListChanged:input_type -> PetListChangedS2C
-	19, // 44: ScenePetClientPlayer.GmGrantPet:input_type -> GmGrantPetRequest
-	22, // 45: ScenePetClientPlayer.GetPetShop:input_type -> GetPetShopRequest
-	24, // 46: ScenePetClientPlayer.BuyPet:input_type -> BuyPetRequest
-	28, // 47: ScenePetClientPlayer.GetPetEntries:input_type -> GetPetEntriesRequest
-	30, // 48: ScenePetClientPlayer.PreviewPetEntries:input_type -> PreviewPetEntriesRequest
-	32, // 49: ScenePetClientPlayer.SavePetEntries:input_type -> SavePetEntriesRequest
-	5,  // 50: ScenePetClientPlayer.GetPetList:output_type -> GetPetListResponse
-	7,  // 51: ScenePetClientPlayer.SummonPet:output_type -> SummonPetResponse
-	9,  // 52: ScenePetClientPlayer.RecallPet:output_type -> RecallPetResponse
-	11, // 53: ScenePetClientPlayer.AllocatePetPoints:output_type -> AllocatePetPointsResponse
-	13, // 54: ScenePetClientPlayer.ResetPetPoints:output_type -> ResetPetPointsResponse
-	15, // 55: ScenePetClientPlayer.AutoAllocatePetPoints:output_type -> AutoAllocatePetPointsResponse
-	17, // 56: ScenePetClientPlayer.RenamePet:output_type -> RenamePetResponse
-	40, // 57: ScenePetClientPlayer.NotifyPetListChanged:output_type -> Empty
-	20, // 58: ScenePetClientPlayer.GmGrantPet:output_type -> GmGrantPetResponse
-	23, // 59: ScenePetClientPlayer.GetPetShop:output_type -> GetPetShopResponse
-	25, // 60: ScenePetClientPlayer.BuyPet:output_type -> BuyPetResponse
-	29, // 61: ScenePetClientPlayer.GetPetEntries:output_type -> GetPetEntriesResponse
-	31, // 62: ScenePetClientPlayer.PreviewPetEntries:output_type -> PreviewPetEntriesResponse
-	33, // 63: ScenePetClientPlayer.SavePetEntries:output_type -> SavePetEntriesResponse
-	50, // [50:64] is the sub-list for method output_type
-	36, // [36:50] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	29, // 2: PetInfo.entries:type_name -> PetEntriesInfo
+	2,  // 3: PetInfo.next_tier:type_name -> PetTierAscensionInfo
+	3,  // 4: PetListInfo.pets:type_name -> PetInfo
+	45, // 5: GetPetListResponse.error_message:type_name -> TipInfoMessage
+	4,  // 6: GetPetListResponse.pets:type_name -> PetListInfo
+	45, // 7: SummonPetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 8: SummonPetResponse.pets:type_name -> PetListInfo
+	45, // 9: RecallPetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 10: RecallPetResponse.pets:type_name -> PetListInfo
+	40, // 11: AllocatePetPointsRequest.allocated:type_name -> AllocatePetPointsRequest.AllocatedEntry
+	45, // 12: AllocatePetPointsResponse.error_message:type_name -> TipInfoMessage
+	4,  // 13: AllocatePetPointsResponse.pets:type_name -> PetListInfo
+	45, // 14: ResetPetPointsResponse.error_message:type_name -> TipInfoMessage
+	4,  // 15: ResetPetPointsResponse.pets:type_name -> PetListInfo
+	45, // 16: AutoAllocatePetPointsResponse.error_message:type_name -> TipInfoMessage
+	41, // 17: AutoAllocatePetPointsResponse.suggested:type_name -> AutoAllocatePetPointsResponse.SuggestedEntry
+	45, // 18: RenamePetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 19: RenamePetResponse.pets:type_name -> PetListInfo
+	4,  // 20: PetListChangedS2C.pets:type_name -> PetListInfo
+	45, // 21: GmGrantPetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 22: GmGrantPetResponse.pets:type_name -> PetListInfo
+	45, // 23: GetPetShopResponse.error_message:type_name -> TipInfoMessage
+	22, // 24: GetPetShopResponse.offers:type_name -> PetShopOffer
+	45, // 25: BuyPetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 26: BuyPetResponse.pets:type_name -> PetListInfo
+	42, // 27: PetEntryPresetSummary.allocated:type_name -> PetEntryPresetSummary.AllocatedEntry
+	27, // 28: PetEntriesInfo.entries:type_name -> PetEntryInfo
+	46, // 29: PetEntriesInfo.effects:type_name -> PetCultivationEffects
+	28, // 30: PetEntriesInfo.presets:type_name -> PetEntryPresetSummary
+	45, // 31: GetPetEntriesResponse.error_message:type_name -> TipInfoMessage
+	29, // 32: GetPetEntriesResponse.entries:type_name -> PetEntriesInfo
+	43, // 33: PreviewPetEntriesRequest.target:type_name -> PreviewPetEntriesRequest.TargetEntry
+	45, // 34: PreviewPetEntriesResponse.error_message:type_name -> TipInfoMessage
+	29, // 35: PreviewPetEntriesResponse.entries:type_name -> PetEntriesInfo
+	44, // 36: SavePetEntriesRequest.target:type_name -> SavePetEntriesRequest.TargetEntry
+	45, // 37: SavePetEntriesResponse.error_message:type_name -> TipInfoMessage
+	29, // 38: SavePetEntriesResponse.entries:type_name -> PetEntriesInfo
+	45, // 39: SwitchPetEntryPresetResponse.error_message:type_name -> TipInfoMessage
+	29, // 40: SwitchPetEntryPresetResponse.entries:type_name -> PetEntriesInfo
+	45, // 41: AscendPetTierResponse.error_message:type_name -> TipInfoMessage
+	4,  // 42: AscendPetTierResponse.pets:type_name -> PetListInfo
+	5,  // 43: ScenePetClientPlayer.GetPetList:input_type -> GetPetListRequest
+	7,  // 44: ScenePetClientPlayer.SummonPet:input_type -> SummonPetRequest
+	9,  // 45: ScenePetClientPlayer.RecallPet:input_type -> RecallPetRequest
+	11, // 46: ScenePetClientPlayer.AllocatePetPoints:input_type -> AllocatePetPointsRequest
+	13, // 47: ScenePetClientPlayer.ResetPetPoints:input_type -> ResetPetPointsRequest
+	15, // 48: ScenePetClientPlayer.AutoAllocatePetPoints:input_type -> AutoAllocatePetPointsRequest
+	17, // 49: ScenePetClientPlayer.RenamePet:input_type -> RenamePetRequest
+	19, // 50: ScenePetClientPlayer.NotifyPetListChanged:input_type -> PetListChangedS2C
+	20, // 51: ScenePetClientPlayer.GmGrantPet:input_type -> GmGrantPetRequest
+	23, // 52: ScenePetClientPlayer.GetPetShop:input_type -> GetPetShopRequest
+	25, // 53: ScenePetClientPlayer.BuyPet:input_type -> BuyPetRequest
+	30, // 54: ScenePetClientPlayer.GetPetEntries:input_type -> GetPetEntriesRequest
+	32, // 55: ScenePetClientPlayer.PreviewPetEntries:input_type -> PreviewPetEntriesRequest
+	34, // 56: ScenePetClientPlayer.SavePetEntries:input_type -> SavePetEntriesRequest
+	36, // 57: ScenePetClientPlayer.SwitchPetEntryPreset:input_type -> SwitchPetEntryPresetRequest
+	38, // 58: ScenePetClientPlayer.AscendPetTier:input_type -> AscendPetTierRequest
+	6,  // 59: ScenePetClientPlayer.GetPetList:output_type -> GetPetListResponse
+	8,  // 60: ScenePetClientPlayer.SummonPet:output_type -> SummonPetResponse
+	10, // 61: ScenePetClientPlayer.RecallPet:output_type -> RecallPetResponse
+	12, // 62: ScenePetClientPlayer.AllocatePetPoints:output_type -> AllocatePetPointsResponse
+	14, // 63: ScenePetClientPlayer.ResetPetPoints:output_type -> ResetPetPointsResponse
+	16, // 64: ScenePetClientPlayer.AutoAllocatePetPoints:output_type -> AutoAllocatePetPointsResponse
+	18, // 65: ScenePetClientPlayer.RenamePet:output_type -> RenamePetResponse
+	47, // 66: ScenePetClientPlayer.NotifyPetListChanged:output_type -> Empty
+	21, // 67: ScenePetClientPlayer.GmGrantPet:output_type -> GmGrantPetResponse
+	24, // 68: ScenePetClientPlayer.GetPetShop:output_type -> GetPetShopResponse
+	26, // 69: ScenePetClientPlayer.BuyPet:output_type -> BuyPetResponse
+	31, // 70: ScenePetClientPlayer.GetPetEntries:output_type -> GetPetEntriesResponse
+	33, // 71: ScenePetClientPlayer.PreviewPetEntries:output_type -> PreviewPetEntriesResponse
+	35, // 72: ScenePetClientPlayer.SavePetEntries:output_type -> SavePetEntriesResponse
+	37, // 73: ScenePetClientPlayer.SwitchPetEntryPreset:output_type -> SwitchPetEntryPresetResponse
+	39, // 74: ScenePetClientPlayer.AscendPetTier:output_type -> AscendPetTierResponse
+	59, // [59:75] is the sub-list for method output_type
+	43, // [43:59] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_pet_proto_init() }
@@ -2631,7 +3220,7 @@ func file_proto_scene_player_pet_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_pet_proto_rawDesc), len(file_proto_scene_player_pet_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

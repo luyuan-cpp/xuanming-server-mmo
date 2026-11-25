@@ -75,22 +75,22 @@ namespace
 } // namespace
 
 BattleClientEdge::BattleClientEdge()
-    : dispatcher_([this](const muduo::net::TcpConnectionPtr &conn, const MessagePtr &msg, muduo::Timestamp ts)
+    : dispatcher([this](const muduo::net::TcpConnectionPtr &conn, const MessagePtr &msg, muduo::Timestamp ts)
                   { OnUnknownMessage(conn, msg, ts); }),
-      codec_([this](const muduo::net::TcpConnectionPtr &conn, const MessagePtr &msg, muduo::Timestamp ts)
-             { dispatcher_.onProtobufMessage(conn, msg, ts); })
+      codec([this](const muduo::net::TcpConnectionPtr &conn, const MessagePtr &msg, muduo::Timestamp ts)
+             { dispatcher.onProtobufMessage(conn, msg, ts); })
 {
-    dispatcher_.registerMessageCallback<::BattleTokenVerifyRequest>(
+    dispatcher.registerMessageCallback<::BattleTokenVerifyRequest>(
         [this](const muduo::net::TcpConnectionPtr &conn,
                const std::shared_ptr<::BattleTokenVerifyRequest> &request, muduo::Timestamp ts)
         { OnTokenVerify(conn, request, ts); });
-    dispatcher_.registerMessageCallback<::ClientRequest>(
+    dispatcher.registerMessageCallback<::ClientRequest>(
         [this](const muduo::net::TcpConnectionPtr &conn,
                const std::shared_ptr<::ClientRequest> &request, muduo::Timestamp ts)
         { OnClientRequest(conn, request, ts); });
-    dispatcher_.registerMessageCallback<match::NetworkProbeStart>([this](const auto& conn,const auto& request,auto ts){OnProbeStart(conn,request,ts);});
-    dispatcher_.registerMessageCallback<match::NetworkProbeEcho>([this](const auto& conn,const auto& request,auto ts){OnProbeEcho(conn,request,ts);});
-    dispatcher_.registerMessageCallback<::ClientHeartbeatRequest>(
+    dispatcher.registerMessageCallback<match::NetworkProbeStart>([this](const auto& conn,const auto& request,auto ts){OnProbeStart(conn,request,ts);});
+    dispatcher.registerMessageCallback<match::NetworkProbeEcho>([this](const auto& conn,const auto& request,auto ts){OnProbeEcho(conn,request,ts);});
+    dispatcher.registerMessageCallback<::ClientHeartbeatRequest>(
         [this](const muduo::net::TcpConnectionPtr &conn,
                const std::shared_ptr<::ClientHeartbeatRequest> &request, muduo::Timestamp ts)
         { OnHeartbeat(conn, request, ts); });
@@ -110,43 +110,43 @@ void BattleClientEdge::Install(muduo::net::TcpServer &server)
                                  { if(auto self=weak.lock()) self->OnConnection(conn); });
     server.setMessageCallback([weak](const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf,
                                      muduo::Timestamp ts)
-                              { if(auto self=weak.lock()) self->codec_.onMessage(conn, buf, ts); });
+                              { if(auto self=weak.lock()) self->codec.onMessage(conn, buf, ts); });
     RegisterMetrics();
     // loop 卡顿的节拍(未验签淘汰用):只绑 weak 自己(AGENTS.md §11.7),在主 loop 上跑,不起线程。
     const double tickSeconds = std::chrono::duration<double>(client_liveness::kClientLiveness.checkPeriod).count();
-    loopStallTimer_.RunEvery(tickSeconds, [weak]
+    loopStallTimer.RunEvery(tickSeconds, [weak]
                              {
         if (const auto self = weak.lock())
         {
-            self->loopStall_.Tick(std::chrono::steady_clock::now());
+            self->loopStall.Tick(std::chrono::steady_clock::now());
         } });
 }
 
 bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
                                        const battle_connection_admission::SteadyTime now)
 {
-    const uint64_t unauthenticated = unauthenticated_.size();
+    const uint64_t unauthenticated = this->unauthenticated.size();
     // 最老的一条未认证直连只在池承压时用得上,也只在那时才找。本端 loop 刚卡过就不找:那时「建连多久还没握手」不可信,
     // 握手包可能还在接收缓冲里没读,不该据此淘汰。
     std::optional<uint64_t> oldestConnId;
     std::optional<battle_connection_admission::SteadyTime::duration> oldestAge;
-    if (unauthenticated >= admission_.CurrentPreAuthBudget().earlyDropStart && !loopStall_.RecentlyStalled(now))
+    if (unauthenticated >= admission.CurrentPreAuthBudget().earlyDropStart && !loopStall.RecentlyStalled(now))
     {
         oldestConnId = OldestConnectedUnauthenticated();
         if (oldestConnId)
         {
-            const auto &session = sessions_.at(*oldestConnId);
+            const auto &session = sessions.at(*oldestConnId);
             const auto conn = session.conn.lock();
             const std::optional<battle_connection_admission::SteadyTime::duration> halfClosedAge =
                 session.halfClosedAt
                     ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *session.halfClosedAt)
                     : std::nullopt;
             oldestAge = battle_connection_admission::EffectivePreAuthEvictAge(
-                conn && conn->connected(), now - session.openedAt, halfClosedAge, admission_.CurrentPreAuthBudget());
+                conn && conn->connected(), now - session.openedAt, halfClosedAge, admission.CurrentPreAuthBudget());
         }
     }
     const auto verdict =
-        admission_.Admit(peer, sessions_.size(), EffectiveMaxConnections(), unauthenticated, oldestAge, now);
+        admission.Admit(peer, sessions.size(), EffectiveMaxConnections(), unauthenticated, oldestAge, now);
     if (!verdict.rejected)
     {
         if (verdict.sourceUntracked)
@@ -178,12 +178,12 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
 std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
 {
     const auto now = std::chrono::steady_clock::now();
-    const auto &budget = admission_.CurrentPreAuthBudget();
+    const auto &budget = admission.CurrentPreAuthBudget();
     // 通常第一条就是;仍在短宽限期内的半关闭连接跳过,超过宽限期仍留在池内的半关闭连接允许淘汰强关。
-    for (const uint64_t connId : unauthenticated_)
+    for (const uint64_t connId : unauthenticated)
     {
-        const auto it = sessions_.find(connId);
-        if (it == sessions_.end())
+        const auto it = sessions.find(connId);
+        if (it == sessions.end())
         {
             continue;
         }
@@ -210,20 +210,20 @@ std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
 
 void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_connection_admission::SteadyTime now)
 {
-    const auto it = sessions_.find(connId);
-    if (it == sessions_.end())
+    const auto it = sessions.find(connId);
+    if (it == sessions.end())
     {
         return;
     }
     const auto conn = it->second.conn.lock();
     if (!conn)
     {
-        unauthenticated_.erase(connId);
+        unauthenticated.erase(connId);
         return;
     }
     // 先移出池:这一刻起它不再算在池里(与 gate 先收回占位同一做法),紧接着的下一条 accept 看到的就是腾出位置之后的池。
-    unauthenticated_.erase(connId);
-    admission_.NotePreAuthEvicted();
+    unauthenticated.erase(connId);
+    admission.NotePreAuthEvicted();
     // 淘汰的量与只建连不握手的流量同一量级:按原因采样(与其余拒绝同一个限流表)。对端地址只进日志。
     uint64_t total = 0;
     if (SampleRejection("preauth_evicted", total))
@@ -231,7 +231,7 @@ void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_
         LOG_WARN << "battle evicting the oldest unauthenticated direct connection to admit a new one(sampled): age_ms="
                  << std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.openedAt).count()
                  << " latest_conn_id=" << connId << " latest_peer=" << conn->peerAddress().toIpPort()
-                 << " evicted_total=" << admission_.GetCounters().preAuthEvicted;
+                 << " evicted_total=" << admission.GetCounters().preAuthEvicted;
     }
     // forceClose 只把连接置成关闭中、真正的关闭排到之后的 loop 轮次,随后照常走 HandleClosed 删会话;不在准入回调里摘。
     // 连接一进关闭中,codec 就不再分发它的帧,被选中之后不会再握手成功。
@@ -251,7 +251,7 @@ void BattleClientEdge::RegisterMetrics()
             {
                 return;
             }
-            self->admission_.CollectMetrics(writer, self->sessions_.size(), self->EffectiveMaxConnections(),
+            self->admission.CollectMetrics(writer, self->sessions.size(), self->EffectiveMaxConnections(),
                                             self->UnauthenticatedConnectionCount()); });
     if (!registered)
     {
@@ -286,19 +286,19 @@ void BattleClientEdge::SendEncoded(const muduo::net::TcpConnectionPtr &conn, con
     }
     if (!websocket::IsUpgraded(conn))
     {
-        conn->send(muduo::StringPiece(frame.bytes_));
+        conn->send(muduo::StringPiece(frame.bytes));
         return;
     }
     // 小游戏直连(WebSocket):同一份帧字节前面加一个帧头。服务端帧不加掩码,所有连接收到的字节相同,
     // 第一次用到时拼一份,之后的连接复用,仍然只编码一次。
-    if (frame.webSocketBytes_.empty())
+    if (frame.webSocketBytes.empty())
     {
         char header[10];
-        const std::size_t headerLen = websocket::EncodeBinaryHeader(frame.bytes_.size(), header);
-        frame.webSocketBytes_.reserve(headerLen + frame.bytes_.size());
-        frame.webSocketBytes_.assign(header, headerLen).append(frame.bytes_);
+        const std::size_t headerLen = websocket::EncodeBinaryHeader(frame.bytes.size(), header);
+        frame.webSocketBytes.reserve(headerLen + frame.bytes.size());
+        frame.webSocketBytes.assign(header, headerLen).append(frame.bytes);
     }
-    conn->send(muduo::StringPiece(frame.webSocketBytes_));
+    conn->send(muduo::StringPiece(frame.webSocketBytes));
 }
 
 size_t BattleClientEdge::EffectiveMaxConnections() const
@@ -309,12 +309,12 @@ size_t BattleClientEdge::EffectiveMaxConnections() const
 
 void BattleClientEdge::DisconnectAll(const char *reason)
 {
-    if (sessions_.empty())
+    if (sessions.empty())
     {
         return;
     }
-    LOG_INFO << "battle all direct connections disconnected: count=" << sessions_.size() << " reason=" << reason;
-    for (auto &[connId, session] : sessions_)
+    LOG_INFO << "battle all direct connections disconnected: count=" << sessions.size() << " reason=" << reason;
+    for (auto &[connId, session] : sessions)
     {
         session.handshakeTimer.Cancel();
         session.idleTimer.Cancel();
@@ -354,8 +354,8 @@ BattleClientEdge::DirectSession *BattleClientEdge::FindSession(const muduo::net:
     {
         return nullptr;
     }
-    const auto it = sessions_.find(connId);
-    return it == sessions_.end() ? nullptr : &it->second;
+    const auto it = sessions.find(connId);
+    return it == sessions.end() ? nullptr : &it->second;
 }
 
 void BattleClientEdge::OnConnection(const muduo::net::TcpConnectionPtr &conn)
@@ -380,9 +380,9 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
     // 这里留着,是为了准入回调没装上时(有人改了装配顺序,或单测直接调连接回调)上限仍然成立。第一道装上之后走不到:
     // accept、准入、建连、插入会话在同一个 loop 回调里同步完成,两处读到的会话数相同,用的也是同一个 EffectiveMaxConnections。
     // 0 = 关闭运维阈值(仅 dev/test 合法,启动门禁已核过),但硬上限仍在。
-    if (sessions_.size() >= EffectiveMaxConnections())
+    if (sessions.size() >= EffectiveMaxConnections())
     {
-        admission_.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kCapacity);
+        admission.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kCapacity);
         LogRejectionSampled("capacity", conn);
         conn->forceClose();
         return;
@@ -393,24 +393,24 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
                                                               battle_security::CurrentRunMode());
     if (verdict == battle_security::TokenSecretVerdict::kRefuse)
     {
-        admission_.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kNoTokenSecret);
+        admission.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kNoTokenSecret);
         LogRejectionSampled("token_secret_not_configured", conn);
         conn->forceClose();
         return;
     }
 
-    const uint64_t connId = nextConnId_++;
+    const uint64_t connId = nextConnId++;
     conn->setContext(connId);
     conn->setHighWaterMarkCallback(OnDirectConnHighWaterMark, kDirectConnHighWaterMark);
 
-    auto [it, inserted] = sessions_.try_emplace(connId);
+    auto [it, inserted] = sessions.try_emplace(connId);
     DirectSession &session = it->second;
     session.connId = connId;
     session.conn = conn;
     session.openedAt = std::chrono::steady_clock::now();
-    admission_.NoteAccepted();
+    admission.NoteAccepted();
     // 进未认证池:到握手成功、出示探测授权、被淘汰或断开时出池。
-    unauthenticated_.insert(connId);
+    unauthenticated.insert(connId);
 
     // 闸 3:握手期限。回调只持 connId,到期时重查会话;已验证则什么都不做。
     std::weak_ptr<muduo::net::TcpConnection> weakConn = conn;
@@ -418,14 +418,14 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
     session.handshakeTimer.RunAfter(kHandshakeTimeoutSec, [weakSelf, connId, weakConn]
                                     {
         const auto self=weakSelf.lock();if(!self)return;
-        const auto found = self->sessions_.find(connId);
-        if (found == self->sessions_.end() || found->second.verified)
+        const auto found = self->sessions.find(connId);
+        if (found == self->sessions.end() || found->second.verified)
         {
             return;
         }
         if (const auto c = weakConn.lock(); c)
         {
-            self->admission_.NoteHandshakeTimeout();
+            self->admission.NoteHandshakeTimeout();
             LogRejectionSampled("handshake_timeout", c);
             c->forceClose();
         } });
@@ -436,7 +436,7 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
         LOG_INFO << "battle direct connection accepted(sampled): latest_conn_id=" << connId
                  << " latest_peer=" << conn->peerAddress().toIpPort()
                  << " accepted_total=" << acceptedCount
-                 << " current=" << sessions_.size();
+                 << " current=" << sessions.size();
     }
 }
 
@@ -456,7 +456,7 @@ void BattleClientEdge::OnProbeStart(const muduo::net::TcpConnectionPtr& conn,
     s->probeGrant=std::move(grant);
     // 出示了 match 签发、验过签的探测授权:出未认证池。探测连接从不握手,不出池的话每台的未认证数都会随探测量涨,
     // 和「建连不认证」的流量分不开。
-    unauthenticated_.erase(s->connId);
+    unauthenticated.erase(s->connId);
     SendProbeChallenge(*s,conn);
 }
 
@@ -495,8 +495,8 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
         // 容量 / 密钥闸拒掉的连接从未建立会话
         return;
     }
-    const auto it = sessions_.find(connId);
-    if (it == sessions_.end())
+    const auto it = sessions.find(connId);
+    if (it == sessions.end())
     {
         return;
     }
@@ -511,10 +511,10 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
                  << " player_id=" << session.playerId
                  << " role=" << ::eBattleTicketRole_Name(session.role)
                  << " peer=" << conn->peerAddress().toIpPort()
-                 << " remaining=" << (sessions_.size() - 1);
+                 << " remaining=" << (sessions.size() - 1);
     }
-    unauthenticated_.erase(connId);
-    sessions_.erase(it);
+    unauthenticated.erase(connId);
+    sessions.erase(it);
 }
 
 // ---- 握手 ----
@@ -631,7 +631,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
     }
 
     session->verified = true;
-    unauthenticated_.erase(session->connId);
+    unauthenticated.erase(session->connId);
     session->battleId = payload.battle_id();
     session->playerId = payload.player_id();
     session->role = payload.role();
@@ -640,7 +640,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
     IllegalPacketCounter::Reset(session->illegalPacketCount);
     session->handshakeTimer.Cancel();
     // 握手耗时(建连到第一次握手成功)进直方图;重复握手在上面已经提前返回,不会再记。
-    admission_.NoteHandshake(session->openedAt, std::chrono::steady_clock::now());
+    admission.NoteHandshake(session->openedAt, std::chrono::steady_clock::now());
 
     SendVerifyReply(conn, true, "", payload.battle_id());
     // 应答里已通告心跳参数:从这一刻起这条直连按读空闲判死(闸 6)。
@@ -823,6 +823,18 @@ void BattleClientEdge::DispatchVerifiedRequest(DirectSession &session,
         reply.set_serialized_message(resp.SerializeAsString());
         break;
     }
+    case BattleClientPlayerUpdateBattlePrepMessageId:
+    {
+        ::UpdateBattlePrepRequest req;
+        if (!parseOrReject(req))
+        {
+            return;
+        }
+        ::UpdateBattlePrepResponse resp;
+        BattleRoomManager::Instance().HandleUpdateBattlePrep(sessionDetails, req, resp);
+        reply.set_serialized_message(resp.SerializeAsString());
+        break;
+    }
     default:
         SendEnvelopeError(conn, request, kInvalidParameter);
         RegisterIllegalPacket(session, conn, "message_id_not_allowed");
@@ -934,8 +946,8 @@ void BattleClientEdge::ScheduleIdleCheck(DirectSession &session, const client_li
 void BattleClientEdge::CheckIdle(const uint64_t connId, const client_liveness::SteadyTime due,
                                  const client_liveness::SteadyTime now)
 {
-    const auto it = sessions_.find(connId);
-    if (it == sessions_.end() || !it->second.liveness.tracked)
+    const auto it = sessions.find(connId);
+    if (it == sessions.end() || !it->second.liveness.tracked)
     {
         return;
     }

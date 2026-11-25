@@ -83,6 +83,23 @@ inline bool ValidRequestId(const std::string& id) {
     return true;
 }
 
+inline constexpr uint32_t kMaxPresetSlots = 3;
+inline constexpr uint32_t kMaxPresetTag = 3;
+inline constexpr uint32_t kKeepPresetTag = 0xFFFFFFFFu;
+inline constexpr uint32_t kMaxCultivationTier = 5;
+
+inline bool ValidPresetSlot(uint32_t slotId) {
+    return slotId >= 1u && slotId <= kMaxPresetSlots;
+}
+
+inline bool ValidPresetTag(uint32_t tag) {
+    return tag <= kMaxPresetTag || tag == kKeepPresetTag;
+}
+
+inline uint32_t EffectivePresetSlot(uint32_t stored) {
+    return ValidPresetSlot(stored) ? stored : 1u;
+}
+
 inline uint64_t Version(uint64_t value) {
     return value == 0 ? 1 : value;
 }

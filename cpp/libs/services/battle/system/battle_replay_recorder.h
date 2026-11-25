@@ -51,14 +51,14 @@ public:
     // 无论成败,冻结后都释放已录的帧,之后再调用返回空。
     std::optional<::BattleReplayEnvelope> Freeze(::eBattleOutcome outcome, uint32_t totalRounds, uint64_t finishedAtMs);
 
-    bool Truncated() const { return replay_.truncated(); }
-    std::size_t RecordedBytes() const { return recordedBytes_; }
-    int RecordedRounds() const { return replay_.rounds_size(); }
+    bool Truncated() const { return replay.truncated(); }
+    std::size_t RecordedBytes() const { return recordedBytes; }
+    int RecordedRounds() const { return replay.rounds_size(); }
 
 private:
-    ::BattleReplay replay_;
-    std::size_t recordedBytes_ = 0;
-    bool frozen_ = false;
+    ::BattleReplay replay;
+    std::size_t recordedBytes = 0;
+    bool frozen = false;
 };
 
 // gzip(RFC 1952)压缩。失败返回空。

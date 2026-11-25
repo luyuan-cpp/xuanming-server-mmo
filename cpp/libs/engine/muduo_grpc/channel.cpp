@@ -45,71 +45,71 @@ std::shared_ptr<MaintenanceState> Channel::ProcessControlMaintenance()
 }
 bool MaintenanceState::Begin()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (closed_) return false;
-    if (accepted_ == std::numeric_limits<std::uint64_t>::max()) { unknown_ = true; return false; }
-    ++accepted_; return true;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (closed) return false;
+    if (accepted == std::numeric_limits<std::uint64_t>::max()) { unknown = true; return false; }
+    ++accepted; return true;
 }
 void MaintenanceState::Complete(bool known)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!known || accepted_ == completed_) unknown_ = true;
-    if (completed_ < accepted_) ++completed_;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!known || accepted == completed) unknown = true;
+    if (completed < accepted) ++completed;
 }
-void MaintenanceState::Close() { std::lock_guard<std::mutex> lock(mutex_); closed_ = true; }
-bool MaintenanceState::Closed() const { std::lock_guard<std::mutex> lock(mutex_); return closed_; }
+void MaintenanceState::Close() { std::lock_guard<std::mutex> lock(mutex); closed = true; }
+bool MaintenanceState::Closed() const { std::lock_guard<std::mutex> lock(mutex); return closed; }
 bool MaintenanceState::Joined() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return closed_ && !callbackTrackingLost_ && accepted_ == completed_ && callbacksAccepted_ == callbacksCompleted_;
+    std::lock_guard<std::mutex> lock(mutex);
+    return closed && !callbackTrackingLost && accepted == completed && callbacksAccepted == callbacksCompleted;
 }
 bool MaintenanceState::SettledFrontier(std::string& value) const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (unknown_ || callbackTrackingLost_ || accepted_ != completed_ || callbacksAccepted_ != callbacksCompleted_) return false;
-    value = "grpc-call-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_) + ":" +
-        std::to_string(callbacksAccepted_) + ":" + std::to_string(callbacksCompleted_);
+    std::lock_guard<std::mutex> lock(mutex);
+    if (unknown || callbackTrackingLost || accepted != completed || callbacksAccepted != callbacksCompleted) return false;
+    value = "grpc-call-v2:" + std::to_string(accepted) + ":" + std::to_string(completed) + ":" +
+        std::to_string(callbacksAccepted) + ":" + std::to_string(callbacksCompleted);
     return true;
 }
 void MaintenanceState::OwnerOpened()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (liveOwners_ == std::numeric_limits<std::uint64_t>::max()) { callbackTrackingLost_ = true; unknown_ = true; }
-    else ++liveOwners_;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (liveOwners == std::numeric_limits<std::uint64_t>::max()) { callbackTrackingLost = true; unknown = true; }
+    else ++liveOwners;
 }
 void MaintenanceState::OwnerJoined()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (liveOwners_ == 0) { callbackTrackingLost_ = true; unknown_ = true; } else --liveOwners_;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (liveOwners == 0) { callbackTrackingLost = true; unknown = true; } else --liveOwners;
 }
 bool MaintenanceState::NativeJoined() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return closed_ && !callbackTrackingLost_ && liveOwners_ == 0;
+    std::lock_guard<std::mutex> lock(mutex);
+    return closed && !callbackTrackingLost && liveOwners == 0;
 }
 void MaintenanceState::BeginCallback()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (callbacksAccepted_ == std::numeric_limits<std::uint64_t>::max())
+    std::lock_guard<std::mutex> lock(mutex);
+    if (callbacksAccepted == std::numeric_limits<std::uint64_t>::max())
     {
-        unknown_ = true;
-        callbackTrackingLost_ = true;
+        unknown = true;
+        callbackTrackingLost = true;
         return;
     }
-    ++callbacksAccepted_;
+    ++callbacksAccepted;
 }
 void MaintenanceState::CompleteCallback(bool returned)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!returned || callbacksAccepted_ == callbacksCompleted_) unknown_ = true;
-    if (callbacksCompleted_ < callbacksAccepted_) ++callbacksCompleted_;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!returned || callbacksAccepted == callbacksCompleted) unknown = true;
+    if (callbacksCompleted < callbacksAccepted) ++callbacksCompleted;
 }
 bool MaintenanceState::Frontier(std::string& value) const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!closed_ || unknown_ || callbackTrackingLost_ || accepted_ != completed_ || callbacksAccepted_ != callbacksCompleted_) return false;
-    value = "grpc-call-v2:" + std::to_string(accepted_) + ":" + std::to_string(completed_) + ":" +
-        std::to_string(callbacksAccepted_) + ":" + std::to_string(callbacksCompleted_);
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!closed || unknown || callbackTrackingLost || accepted != completed || callbacksAccepted != callbacksCompleted) return false;
+    value = "grpc-call-v2:" + std::to_string(accepted) + ":" + std::to_string(completed) + ":" +
+        std::to_string(callbacksAccepted) + ":" + std::to_string(callbacksCompleted);
     return true;
 }
 namespace detail {
@@ -180,66 +180,66 @@ std::shared_ptr<Channel> Channel::Create(muduo::net::EventLoop &loop, const std:
 
 Channel::Channel(PrivateTag, muduo::net::EventLoop &loop, const std::string &ip, uint16_t port,
                  ChannelOptions options)
-    : maintenance_(options.maintenance ? options.maintenance : ProcessMaintenance()),
-      loop_(loop),
-      target_(ip + ":" + std::to_string(port)),
-      address_(ip, port),
-      options_(std::move(options)),
-      nextBackoffMs_(static_cast<double>(options_.backoff.initial.count())),
-      rng_(std::random_device{}())
+    : maintenance(options.maintenance ? options.maintenance : ProcessMaintenance()),
+      loop(loop),
+      target(ip + ":" + std::to_string(port)),
+      address(ip, port),
+      options(std::move(options)),
+      nextBackoffMs(static_cast<double>(this->options.backoff.initial.count())),
+      rng(std::random_device{}())
 {
-    maintenance_->OwnerOpened();
-    transportOptions_.session.authority = options_.authority.empty() ? target_ : options_.authority;
-    transportOptions_.session.userAgent = options_.userAgent;
-    transportOptions_.session.maxReceiveMessageBytes = options_.maxReceiveMessageBytes;
-    transportOptions_.session.maxHeaderListBytes = options_.maxHeaderListBytes;
-    transportOptions_.session.initialStreamWindowBytes = options_.initialStreamWindowBytes;
-    transportOptions_.session.connectionWindowBytes = options_.connectionWindowBytes;
-    transportOptions_.maxPendingOutputBytes = options_.maxPendingOutputBytes;
-    transportOptions_.connectTimeout = options_.connectTimeout;
-    transportOptions_.keepaliveTimeout = options_.keepaliveTimeout;
-    transportOptions_.keepaliveTime = options_.keepaliveTime;
+    maintenance->OwnerOpened();
+    transportOptions.session.authority = this->options.authority.empty() ? target : this->options.authority;
+    transportOptions.session.userAgent = this->options.userAgent;
+    transportOptions.session.maxReceiveMessageBytes = this->options.maxReceiveMessageBytes;
+    transportOptions.session.maxHeaderListBytes = this->options.maxHeaderListBytes;
+    transportOptions.session.initialStreamWindowBytes = this->options.initialStreamWindowBytes;
+    transportOptions.session.connectionWindowBytes = this->options.connectionWindowBytes;
+    transportOptions.maxPendingOutputBytes = this->options.maxPendingOutputBytes;
+    transportOptions.connectTimeout = this->options.connectTimeout;
+    transportOptions.keepaliveTimeout = this->options.keepaliveTimeout;
+    transportOptions.keepaliveTime = this->options.keepaliveTime;
 }
 
 Channel::~Channel()
 {
-    if (state_ == ConnectivityState::kReady)
+    if (this->state == ConnectivityState::kReady)
     {
         NotifyLink(ChannelLinkEvent::kClosed);
     }
-    state_ = ConnectivityState::kShutdown;
+    this->state = ConnectivityState::kShutdown;
     const bool loopIsCurrent = LoopIsCurrent();
     if (!loopIsCurrent)
     {
         // 正常关机路径(Node::FinalizeShutdownInLoop)一定在 loop 线程上、loop 仍在运行时析构;走到这里说明有人漏了清理。
-        LOG_ERROR << "muduo_grpc::Channel " << target_
+        LOG_ERROR << "muduo_grpc::Channel " << target
                   << " destroyed outside its EventLoop thread; pending callbacks are dropped";
     }
     else
     {
-        if (deadlineTimerArmed_)
+        if (deadlineTimerArmed)
         {
-            loop_.cancel(deadlineTimer_);
+            this->loop.cancel(deadlineTimer);
         }
-        if (backoffTimerArmed_)
+        if (backoffTimerArmed)
         {
-            loop_.cancel(backoffTimer_);
+            this->loop.cancel(backoffTimer);
         }
         // 未完成的调用:回调不捕获通道,通道析构后照样安全执行。
-        for (auto &[callId, call] : calls_)
+        for (auto &[callId, call] : calls)
         {
-            loop_.queueInLoop([done = std::move(call.done)]() mutable
+            this->loop.queueInLoop([done = std::move(call.done)]() mutable
                               { done(FailureResult(Status(StatusCode::kUnavailable, "channel shut down"))); });
         }
         // 未结束的双向流同理:onClose 只捕获流记录,不捕获通道。
-        for (auto &[recordId, record] : streams_)
+        for (auto &[recordId, record] : streams)
         {
             if (record->closed || record->cancelled)
             {
                 continue;
             }
             record->closed = true;
-            loop_.queueInLoop([record]
+            this->loop.queueInLoop([record]
                               {
                 if (!record->cancelled && record->callbacks.onClose)
                 {
@@ -247,18 +247,18 @@ Channel::~Channel()
                 } });
         }
     }
-    calls_.clear();
-    pending_.clear();
-    deadlines_.clear();
-    streamToCall_.clear();
-    streams_.clear();
-    pendingStreams_.clear();
-    streamToBidi_.clear();
-    if (current_)
+    calls.clear();
+    pending.clear();
+    deadlines.clear();
+    streamToCall.clear();
+    streams.clear();
+    pendingStreams.clear();
+    streamToBidi.clear();
+    if (current)
     {
-        draining_.push_back(std::move(current_));
+        draining.push_back(std::move(current));
     }
-    for (auto &transport : draining_)
+    for (auto &transport : draining)
     {
         transport->Shutdown();
         if (loopIsCurrent)
@@ -266,15 +266,15 @@ Channel::~Channel()
             // 连接对象也排到队尾再析构,与 ReleaseTransport 一致,不就地释放(§11.7);关机时也仍在两跳排空之内。
             // 以前这里还要靠 FIFO 让 ~TcpClient 排在 muduo Connector 排队的 resetChannel 之后(上游绑裸 this);
             // 那处已改持 shared_from_this()(muduo LOCAL DELTA),Connector 自己活到 channel_ 释放,不再依赖这里的顺序。
-            loop_.queueInLoop([released = std::move(transport)]() mutable { released.reset(); });
+            this->loop.queueInLoop([released = std::move(transport)]() mutable { released.reset(); });
         }
     }
     // loop 不在本线程(漏了关机清理)时只能就地析构;这条兜底路径的根治见设计 §10.1 F012 / F022。
-    draining_.clear();
+    draining.clear();
     if (loopIsCurrent) {
         // released.reset 先排 forceClose，再排 connectDestroyed；在它们之后两跳才确认本机传输退出。
-        auto* loop = &loop_;
-        loop->queueInLoop([loop, state = maintenance_] {
+        auto* loop = &this->loop;
+        loop->queueInLoop([loop, state = maintenance] {
             loop->queueInLoop([loop, state] { loop->queueInLoop([state] { state->OwnerJoined(); }); });
         });
     }
@@ -282,7 +282,7 @@ Channel::~Channel()
 
 void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
 {
-    loop_.assertInLoopThread();
+    loop.assertInLoopThread();
     if (!done)
     {
         LOG_ERROR << "muduo_grpc::Channel::StartUnaryCall called without a completion callback, method="
@@ -290,9 +290,9 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
         return;
     }
     // 出站拦截排在所有本地检查之前:下面任何一条本地拒绝也走包装后的回调(ChannelOptions::unaryInterceptor)。
-    if (options_.unaryInterceptor)
+    if (options.unaryInterceptor)
     {
-        done = options_.unaryInterceptor(request.method, request.metadata, std::move(done));
+        done = options.unaryInterceptor(request.method, request.metadata, std::move(done));
         if (!done)
         {
             LOG_FATAL << "muduo_grpc::Channel unary interceptor returned an empty completion callback, method="
@@ -300,23 +300,23 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
         }
     }
     const auto now = std::chrono::steady_clock::now();
-    if (state_ == ConnectivityState::kShutdown)
+    if (state == ConnectivityState::kShutdown)
     {
         FailSoon(std::move(done), Status(StatusCode::kUnavailable, "channel shut down"));
         return;
     }
-    if (calls_.size() >= options_.maxOutstandingCalls)
+    if (calls.size() >= options.maxOutstandingCalls)
     {
         FailSoon(std::move(done), Status(StatusCode::kResourceExhausted,
-                                         "too many outstanding calls on channel " + target_ + " (limit " +
-                                             std::to_string(options_.maxOutstandingCalls) + ")"));
+                                         "too many outstanding calls on channel " + target + " (limit " +
+                                             std::to_string(options.maxOutstandingCalls) + ")"));
         return;
     }
-    if (request.message.size() > options_.maxSendMessageBytes)
+    if (request.message.size() > options.maxSendMessageBytes)
     {
         FailSoon(std::move(done), Status(StatusCode::kResourceExhausted,
                                          "sent message larger than max (" + std::to_string(request.message.size()) +
-                                             " vs. " + std::to_string(options_.maxSendMessageBytes) + ")"));
+                                             " vs. " + std::to_string(options.maxSendMessageBytes) + ")"));
         return;
     }
     for (const auto &[key, value] : request.metadata)
@@ -333,12 +333,12 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
         return;
     }
 
-    if (!maintenance_->Begin()) { FailSoon(std::move(done), Status(StatusCode::kUnavailable, "maintenance publications closed")); return; }
-    const auto operation = std::make_shared<detail::MaintenanceOperation>(maintenance_);
+    if (!maintenance->Begin()) { FailSoon(std::move(done), Status(StatusCode::kUnavailable, "maintenance publications closed")); return; }
+    const auto operation = std::make_shared<detail::MaintenanceOperation>(maintenance);
     auto framed = std::make_shared<std::string>();
     AppendLengthPrefixedMessage(*framed, request.message);
 
-    const uint64_t callId = nextCallId_++;
+    const uint64_t callId = nextCallId++;
     Call call;
     call.id = callId;
     call.path = std::move(request.method);
@@ -348,45 +348,45 @@ void Channel::StartUnaryCall(UnaryCallRequest request, UnaryCallback done)
     const auto owner = std::make_shared<detail::UnaryCompletionOwner>();
     owner->operation = operation; owner->callback = std::move(done);
     call.done = [owner](UnaryCallResult&& result) { owner->Run(std::move(result)); };
-    calls_.emplace(callId, std::move(call));
-    deadlines_.emplace(request.deadline, callId);
+    calls.emplace(callId, std::move(call));
+    deadlines.emplace(request.deadline, callId);
     ArmDeadlineTimer();
     Dispatch(callId);
 }
 
 ConnectivityState Channel::GetState(bool tryToConnect)
 {
-    loop_.assertInLoopThread();
-    if (tryToConnect && state_ == ConnectivityState::kIdle)
+    loop.assertInLoopThread();
+    if (tryToConnect && state == ConnectivityState::kIdle)
     {
         StartConnecting();
     }
-    return state_;
+    return state;
 }
 
 void Channel::Dispatch(uint64_t callId)
 {
-    const auto it = calls_.find(callId);
-    if (it == calls_.end() || it->second.active)
+    const auto it = calls.find(callId);
+    if (it == calls.end() || it->second.active)
     {
         return;
     }
-    switch (state_)
+    switch (state)
     {
     case ConnectivityState::kReady:
         StartOnCurrentTransport(it->second);
         break;
     case ConnectivityState::kIdle:
-        pending_.push_back(callId);
+        pending.push_back(callId);
         StartConnecting();
         break;
     case ConnectivityState::kConnecting:
-        pending_.push_back(callId);
+        pending.push_back(callId);
         break;
     case ConnectivityState::kTransientFailure:
         // 未开 wait_for_ready:与现网官方客户端一致,立即失败。
         CompleteCall(callId, FailureResult(Status(StatusCode::kUnavailable,
-                                                  "failed to connect to " + target_ + ": " + lastFailure_.message())));
+                                                  "failed to connect to " + target + ": " + lastFailure.message())));
         break;
     case ConnectivityState::kShutdown:
         CompleteCall(callId, FailureResult(Status(StatusCode::kUnavailable, "channel shut down")));
@@ -396,10 +396,10 @@ void Channel::Dispatch(uint64_t callId)
 
 void Channel::StartOnCurrentTransport(Call &call)
 {
-    if (!current_ || !current_->ready() || current_->draining())
+    if (!current || !current->Ready() || current->Draining())
     {
         // 状态与连接对不上(不应发生):当作连接已退役,重新排队并换连接。
-        pending_.push_back(call.id);
+        pending.push_back(call.id);
         RetireCurrentTransport();
         return;
     }
@@ -410,16 +410,16 @@ void Channel::StartOnCurrentTransport(Call &call)
     spec.grpcTimeout = EncodeGrpcTimeout(
         std::chrono::duration_cast<std::chrono::nanoseconds>(call.deadline - std::chrono::steady_clock::now()));
 
-    const std::shared_ptr<Http2Transport> transport = current_;
+    const std::shared_ptr<Http2Transport> transport = current;
     const auto result = transport->StartUnaryStream(spec);
     if (result.streamId > 0)
     {
         call.active = true;
-        call.transportId = transport->id();
+        call.transportId = transport->Id();
         call.streamId = result.streamId;
         call.startedAt = std::chrono::steady_clock::now();
         // 先登记再发送:发送过程中同步到达的流结束事件要能找到这次调用。
-        streamToCall_[{call.transportId, call.streamId}] = call.id;
+        streamToCall[{call.transportId, call.streamId}] = call.id;
         transport->FlushOutput();
         return;
     }
@@ -428,8 +428,8 @@ void Channel::StartOnCurrentTransport(Call &call)
         // 请求没有发出(stream id 用尽 / 连接已 GOAWAY):换新连接重排队是安全的。
         const uint64_t callId = call.id;
         RetireCurrentTransport();
-        pending_.push_back(callId);
-        if (state_ == ConnectivityState::kIdle)
+        pending.push_back(callId);
+        if (state == ConnectivityState::kIdle)
         {
             StartConnecting();
         }
@@ -440,19 +440,19 @@ void Channel::StartOnCurrentTransport(Call &call)
 
 void Channel::FlushPending()
 {
-    flushPendingQueued_ = false;
-    if (state_ != ConnectivityState::kReady)
+    flushPendingQueued = false;
+    if (state != ConnectivityState::kReady)
     {
         return;
     }
     std::deque<uint64_t> pending;
-    pending.swap(pending_);
+    pending.swap(this->pending);
     for (const uint64_t callId : pending)
     {
         Dispatch(callId); // 已完成的残留 id 在 Dispatch 里按 calls_ 查不到而跳过
     }
     std::deque<uint64_t> pendingStreams;
-    pendingStreams.swap(pendingStreams_);
+    pendingStreams.swap(this->pendingStreams);
     for (const uint64_t streamRecordId : pendingStreams)
     {
         DispatchStream(streamRecordId); // 已取消 / 已结束的残留 id 按 streams_ 查不到而跳过
@@ -461,13 +461,13 @@ void Channel::FlushPending()
 
 void Channel::QueueFlushPending()
 {
-    if (flushPendingQueued_)
+    if (flushPendingQueued)
     {
         return;
     }
-    flushPendingQueued_ = true;
+    flushPendingQueued = true;
     std::weak_ptr<Channel> weakSelf = weak_from_this();
-    loop_.queueInLoop([weakSelf]
+    loop.queueInLoop([weakSelf]
                       {
         if (const auto self = weakSelf.lock())
         {
@@ -478,7 +478,7 @@ void Channel::QueueFlushPending()
 void Channel::QueueRedispatch(uint64_t callId)
 {
     std::weak_ptr<Channel> weakSelf = weak_from_this();
-    loop_.queueInLoop([weakSelf, callId]
+    loop.queueInLoop([weakSelf, callId]
                       {
         if (const auto self = weakSelf.lock())
         {
@@ -488,34 +488,34 @@ void Channel::QueueRedispatch(uint64_t callId)
 
 void Channel::CompleteCall(uint64_t callId, UnaryCallResult result)
 {
-    const auto it = calls_.find(callId);
-    if (it == calls_.end())
+    const auto it = calls.find(callId);
+    if (it == calls.end())
     {
         return;
     }
     Call call = std::move(it->second);
-    calls_.erase(it);
-    deadlines_.erase({call.deadline, callId});
+    calls.erase(it);
+    deadlines.erase({call.deadline, callId});
     if (call.active)
     {
-        streamToCall_.erase({call.transportId, call.streamId});
+        streamToCall.erase({call.transportId, call.streamId});
     }
     // pending_ 里可能还留着这个 id:FlushPending / EnterTransientFailure 按 calls_ 查不到就跳过。
-    loop_.queueInLoop([done = std::move(call.done), result = std::move(result)]() mutable
+    loop.queueInLoop([done = std::move(call.done), result = std::move(result)]() mutable
                       { done(std::move(result)); });
 }
 
 void Channel::FailSoon(UnaryCallback done, Status status)
 {
     const auto owner = std::make_shared<detail::UnaryCompletionOwner>();
-    owner->completion = std::make_shared<detail::MaintenanceCompletion>(maintenance_); owner->callback = std::move(done);
-    loop_.queueInLoop([owner, status = std::move(status)]() mutable { owner->Run(FailureResult(std::move(status))); });
+    owner->completion = std::make_shared<detail::MaintenanceCompletion>(maintenance); owner->callback = std::move(done);
+    loop.queueInLoop([owner, status = std::move(status)]() mutable { owner->Run(FailureResult(std::move(status))); });
 }
 
 void Channel::ExpireCall(uint64_t callId)
 {
-    const auto it = calls_.find(callId);
-    if (it == calls_.end())
+    const auto it = calls.find(callId);
+    if (it == calls.end())
     {
         return;
     }
@@ -543,14 +543,14 @@ void Channel::ExpireCall(uint64_t callId)
 
 void Channel::OnTransportReady(Http2Transport &transport)
 {
-    if (current_.get() != &transport)
+    if (current.get() != &transport)
     {
         return;
     }
-    LOG_INFO << "muduo_grpc channel " << target_ << " is READY (connection #" << transport.id() << ")";
-    nextBackoffMs_ = static_cast<double>(options_.backoff.initial.count());
-    lastFailure_ = Status::Ok();
-    if (state_ != ConnectivityState::kReady)
+    LOG_INFO << "muduo_grpc channel " << target << " is READY (connection #" << transport.Id() << ")";
+    nextBackoffMs = static_cast<double>(options.backoff.initial.count());
+    lastFailure = Status::Ok();
+    if (state != ConnectivityState::kReady)
     {
         NotifyLink(ChannelLinkEvent::kReady);
     }
@@ -565,17 +565,17 @@ void Channel::OnTransportGoaway(Http2Transport &transport, int32_t lastStreamId,
     constexpr uint32_t kHttp2NoError = 0x0;
     if (errorCode == kHttp2NoError)
     {
-        LOG_INFO << "muduo_grpc channel " << target_ << " received GOAWAY on connection #" << transport.id()
+        LOG_INFO << "muduo_grpc channel " << target << " received GOAWAY on connection #" << transport.Id()
                  << " last_stream_id=" << lastStreamId << " debug='" << std::string(debugData)
                  << "'; new calls move to a new connection";
     }
     else
     {
-        LOG_WARN << "muduo_grpc channel " << target_ << " received GOAWAY on connection #" << transport.id()
+        LOG_WARN << "muduo_grpc channel " << target << " received GOAWAY on connection #" << transport.Id()
                  << " error_code=" << errorCode << " last_stream_id=" << lastStreamId << " debug='"
                  << std::string(debugData) << "'";
     }
-    if (current_.get() == &transport)
+    if (current.get() == &transport)
     {
         RetireCurrentTransport();
     }
@@ -583,15 +583,15 @@ void Channel::OnTransportGoaway(Http2Transport &transport, int32_t lastStreamId,
 
 void Channel::OnTransportStreamClosed(Http2Transport &transport, int32_t streamId, StreamOutcome outcome)
 {
-    const auto mapping = streamToCall_.find({transport.id(), streamId});
-    if (mapping == streamToCall_.end())
+    const auto mapping = streamToCall.find({transport.Id(), streamId});
+    if (mapping == streamToCall.end())
     {
         // 不是 unary 调用:看是不是双向流。流不做透明重试(§13.2),结果原样交给 onClose,由上层决定是否重建。
-        if (const auto bidi = streamToBidi_.find({transport.id(), streamId}); bidi != streamToBidi_.end())
+        if (const auto bidi = streamToBidi.find({transport.Id(), streamId}); bidi != streamToBidi.end())
         {
             const uint64_t recordId = bidi->second;
-            streamToBidi_.erase(bidi);
-            if (const auto it = streams_.find(recordId); it != streams_.end())
+            streamToBidi.erase(bidi);
+            if (const auto it = streams.find(recordId); it != streams.end())
             {
                 const StreamRecordPtr record = it->second;
                 record->active = false;
@@ -602,9 +602,9 @@ void Channel::OnTransportStreamClosed(Http2Transport &transport, int32_t streamI
         return;
     }
     const uint64_t callId = mapping->second;
-    streamToCall_.erase(mapping);
-    const auto it = calls_.find(callId);
-    if (it == calls_.end())
+    streamToCall.erase(mapping);
+    const auto it = calls.find(callId);
+    if (it == calls.end())
     {
         MaybeReleaseDrainingTransport(transport);
         return;
@@ -615,7 +615,7 @@ void Channel::OnTransportStreamClosed(Http2Transport &transport, int32_t streamI
     const auto now = std::chrono::steady_clock::now();
 
     if (outcome.unprocessed && !call.transparentRetried && now < call.deadline &&
-        state_ != ConnectivityState::kShutdown)
+        state != ConnectivityState::kShutdown)
     {
         // §4.6:对端可证明没处理 → 内部重发一次。投递到下一轮,不在 nghttp2 回调栈里提交新流。
         call.transparentRetried = true;
@@ -623,7 +623,7 @@ void Channel::OnTransportStreamClosed(Http2Transport &transport, int32_t streamI
         MaybeReleaseDrainingTransport(transport);
         return;
     }
-    if (outcome.status.code() == StatusCode::kCancelled && now >= call.deadline)
+    if (outcome.status.Code() == StatusCode::kCancelled && now >= call.deadline)
     {
         // 对端因 grpc-timeout 到期回 RST_STREAM(CANCEL):与 grpc-go 一样报 DEADLINE_EXCEEDED。
         outcome.status = Status(StatusCode::kDeadlineExceeded, "deadline exceeded (stream cancelled by peer)");
@@ -639,11 +639,11 @@ void Channel::OnTransportStreamClosed(Http2Transport &transport, int32_t streamI
 
 void Channel::OnTransportClosed(Http2Transport &transport, const Status &reason)
 {
-    if (current_.get() == &transport)
+    if (current.get() == &transport)
     {
-        std::shared_ptr<Http2Transport> closed = std::move(current_);
-        current_.reset();
-        const ConnectivityState previous = state_;
+        std::shared_ptr<Http2Transport> closed = std::move(current);
+        current.reset();
+        const ConnectivityState previous = state;
         ReleaseTransport(std::move(closed));
         if (previous == ConnectivityState::kShutdown)
         {
@@ -654,7 +654,7 @@ void Channel::OnTransportClosed(Http2Transport &transport, const Status &reason)
             NotifyLink(ChannelLinkEvent::kLost);
             // pick_first 语义:READY 连接断开回 IDLE,有排队调用就立即重连。
             SetState(ConnectivityState::kIdle);
-            if (!pending_.empty() || !pendingStreams_.empty())
+            if (!pending.empty() || !pendingStreams.empty())
             {
                 StartConnecting();
             }
@@ -663,20 +663,20 @@ void Channel::OnTransportClosed(Http2Transport &transport, const Status &reason)
         EnterTransientFailure(reason);
         return;
     }
-    const auto it = std::find_if(draining_.begin(), draining_.end(),
+    const auto it = std::find_if(draining.begin(), draining.end(),
                                  [&transport](const std::shared_ptr<Http2Transport> &candidate)
                                  { return candidate.get() == &transport; });
-    if (it != draining_.end())
+    if (it != draining.end())
     {
         std::shared_ptr<Http2Transport> closed = std::move(*it);
-        draining_.erase(it);
+        draining.erase(it);
         ReleaseTransport(std::move(closed));
     }
 }
 
 void Channel::StartConnecting()
 {
-    if (current_ || state_ == ConnectivityState::kShutdown)
+    if (current || state == ConnectivityState::kShutdown)
     {
         return;
     }
@@ -686,22 +686,22 @@ void Channel::StartConnecting()
 
 void Channel::CreateTransport()
 {
-    const uint64_t transportId = nextTransportId_++;
+    const uint64_t transportId = nextTransportId++;
     std::weak_ptr<Http2TransportListener> listener = std::static_pointer_cast<Http2TransportListener>(shared_from_this());
-    current_ = Http2Transport::Create(loop_, address_, "muduo_grpc:" + target_ + "#" + std::to_string(transportId),
-                                      transportOptions_, std::move(listener), transportId);
-    current_->Connect();
+    current = Http2Transport::Create(loop, address, "muduo_grpc:" + target + "#" + std::to_string(transportId),
+                                      transportOptions, std::move(listener), transportId);
+    current->Connect();
 }
 
 void Channel::RetireCurrentTransport()
 {
-    std::shared_ptr<Http2Transport> retired = std::move(current_);
-    current_.reset();
-    if (state_ == ConnectivityState::kReady)
+    std::shared_ptr<Http2Transport> retired = std::move(current);
+    current.reset();
+    if (state == ConnectivityState::kReady)
     {
         NotifyLink(ChannelLinkEvent::kRetired);
     }
-    if (state_ != ConnectivityState::kShutdown && state_ != ConnectivityState::kTransientFailure)
+    if (state != ConnectivityState::kShutdown && state != ConnectivityState::kTransientFailure)
     {
         SetState(ConnectivityState::kIdle);
     }
@@ -714,15 +714,15 @@ void Channel::RetireCurrentTransport()
         }
         else
         {
-            draining_.push_back(std::move(retired));
+            draining.push_back(std::move(retired));
         }
     }
-    if (state_ == ConnectivityState::kTransientFailure)
+    if (state == ConnectivityState::kTransientFailure)
     {
         // 后台重连的那条连接被退役了(例如握手前就收到 GOAWAY):重新排一次退避,否则通道会卡在 TF。
         ScheduleReconnect();
     }
-    else if (state_ == ConnectivityState::kIdle && (!pending_.empty() || !pendingStreams_.empty()))
+    else if (state == ConnectivityState::kIdle && (!pending.empty() || !pendingStreams.empty()))
     {
         StartConnecting();
     }
@@ -730,28 +730,28 @@ void Channel::RetireCurrentTransport()
 
 void Channel::EnterTransientFailure(const Status &reason)
 {
-    if (state_ != ConnectivityState::kTransientFailure)
+    if (state != ConnectivityState::kTransientFailure)
     {
-        LOG_WARN << "muduo_grpc channel " << target_ << " entered TRANSIENT_FAILURE: " << reason.ToString();
+        LOG_WARN << "muduo_grpc channel " << target << " entered TRANSIENT_FAILURE: " << reason.ToString();
     }
     NotifyLink(ChannelLinkEvent::kConnectFailed);
-    lastFailure_ = reason;
+    lastFailure = reason;
     SetState(ConnectivityState::kTransientFailure);
     std::deque<uint64_t> pending;
-    pending.swap(pending_);
+    pending.swap(this->pending);
     for (const uint64_t callId : pending)
     {
         CompleteCall(callId, FailureResult(Status(StatusCode::kUnavailable,
-                                                  "failed to connect to " + target_ + ": " + reason.message())));
+                                                  "failed to connect to " + target + ": " + reason.message())));
     }
     std::deque<uint64_t> pendingStreams;
-    pendingStreams.swap(pendingStreams_);
+    pendingStreams.swap(this->pendingStreams);
     for (const uint64_t streamRecordId : pendingStreams)
     {
-        if (const auto it = streams_.find(streamRecordId); it != streams_.end())
+        if (const auto it = streams.find(streamRecordId); it != streams.end())
         {
             const StreamRecordPtr record = it->second;
-            CloseStream(record, Status(StatusCode::kUnavailable, "failed to connect to " + target_ + ": " + reason.message()),
+            CloseStream(record, Status(StatusCode::kUnavailable, "failed to connect to " + target + ": " + reason.message()),
                         Metadata());
         }
     }
@@ -760,29 +760,29 @@ void Channel::EnterTransientFailure(const Status &reason)
 
 void Channel::ScheduleReconnect()
 {
-    if (backoffTimerArmed_)
+    if (backoffTimerArmed)
     {
         return;
     }
     // gRPC connection-backoff:本次等待 = 当前退避 × (1 ± jitter),然后退避 ×multiplier,封顶 max。
-    std::uniform_real_distribution<double> spread(-options_.backoff.jitter, options_.backoff.jitter);
-    const double delayMs = std::max(0.0, nextBackoffMs_ * (1.0 + spread(rng_)));
-    nextBackoffMs_ = std::min(nextBackoffMs_ * options_.backoff.multiplier,
-                              static_cast<double>(options_.backoff.max.count()));
+    std::uniform_real_distribution<double> spread(-options.backoff.jitter, options.backoff.jitter);
+    const double delayMs = std::max(0.0, nextBackoffMs * (1.0 + spread(rng)));
+    nextBackoffMs = std::min(nextBackoffMs * options.backoff.multiplier,
+                              static_cast<double>(options.backoff.max.count()));
     std::weak_ptr<Channel> weakSelf = weak_from_this();
-    backoffTimer_ = loop_.runAfter(delayMs / 1000.0, [weakSelf]
+    backoffTimer = loop.runAfter(delayMs / 1000.0, [weakSelf]
                                    {
         if (const auto self = weakSelf.lock())
         {
             self->OnBackoffTimer();
         } });
-    backoffTimerArmed_ = true;
+    backoffTimerArmed = true;
 }
 
 void Channel::OnBackoffTimer()
 {
-    backoffTimerArmed_ = false;
-    if (state_ != ConnectivityState::kTransientFailure || current_)
+    backoffTimerArmed = false;
+    if (state != ConnectivityState::kTransientFailure || current)
     {
         return;
     }
@@ -798,38 +798,38 @@ void Channel::ReleaseTransport(std::shared_ptr<Http2Transport> transport)
     }
     transport->Shutdown();
     // 最后一个引用放到排队任务里释放:此刻可能正处在这条连接自己的回调栈上(§11.7)。
-    loop_.queueInLoop([transport = std::move(transport)]() mutable { transport.reset(); });
+    loop.queueInLoop([transport = std::move(transport)]() mutable { transport.reset(); });
 }
 
 void Channel::MaybeReleaseDrainingTransport(Http2Transport &transport)
 {
     // 已关闭的连接正在 FailAllStreams 里逐个报告流结束:这时释放会清空它的 listener,
     // 剩下的流结束事件就丢了(调用只能等到截止)。交给紧随其后的 OnTransportClosed 统一释放。
-    if (current_.get() == &transport || transport.closed() || transport.ActiveStreamCount() != 0)
+    if (current.get() == &transport || transport.Closed() || transport.ActiveStreamCount() != 0)
     {
         return;
     }
-    const auto it = std::find_if(draining_.begin(), draining_.end(),
+    const auto it = std::find_if(draining.begin(), draining.end(),
                                  [&transport](const std::shared_ptr<Http2Transport> &candidate)
                                  { return candidate.get() == &transport; });
-    if (it == draining_.end())
+    if (it == draining.end())
     {
         return;
     }
     std::shared_ptr<Http2Transport> drained = std::move(*it);
-    draining_.erase(it);
+    draining.erase(it);
     ReleaseTransport(std::move(drained));
 }
 
 std::shared_ptr<Http2Transport> Channel::FindTransport(uint64_t transportId) const
 {
-    if (current_ && current_->id() == transportId)
+    if (current && current->Id() == transportId)
     {
-        return current_;
+        return current;
     }
-    for (const auto &transport : draining_)
+    for (const auto &transport : draining)
     {
-        if (transport->id() == transportId)
+        if (transport->Id() == transportId)
         {
             return transport;
         }
@@ -839,40 +839,40 @@ std::shared_ptr<Http2Transport> Channel::FindTransport(uint64_t transportId) con
 
 void Channel::ArmDeadlineTimer()
 {
-    if (deadlines_.empty())
+    if (deadlines.empty())
     {
         return;
     }
-    const auto earliest = deadlines_.begin()->first;
-    if (deadlineTimerArmed_ && deadlineTimerFor_ <= earliest)
+    const auto earliest = deadlines.begin()->first;
+    if (deadlineTimerArmed && deadlineTimerFor <= earliest)
     {
         return;
     }
-    if (deadlineTimerArmed_)
+    if (deadlineTimerArmed)
     {
-        loop_.cancel(deadlineTimer_);
+        loop.cancel(deadlineTimer);
     }
     // muduo 定时器已按单调时钟到期(muduo-timer-cancellation-hazards.md「定时器时钟」),墙钟跳变不再影响;
     // 到点仍用 steady_clock 复核,未到就重新 arm(§6),兜住秒→微秒截断造成的微秒级早到。
     // 加 1ms 余量,避免这点截断让定时器早到一点而空转一轮。
     const double delaySeconds = ToSeconds(earliest - std::chrono::steady_clock::now()) + 0.001;
     std::weak_ptr<Channel> weakSelf = weak_from_this();
-    deadlineTimer_ = loop_.runAfter(delaySeconds, [weakSelf]
+    deadlineTimer = loop.runAfter(delaySeconds, [weakSelf]
                                     {
         if (const auto self = weakSelf.lock())
         {
             self->OnDeadlineTimer();
         } });
-    deadlineTimerArmed_ = true;
-    deadlineTimerFor_ = earliest;
+    deadlineTimerArmed = true;
+    deadlineTimerFor = earliest;
 }
 
 void Channel::OnDeadlineTimer()
 {
-    deadlineTimerArmed_ = false;
+    deadlineTimerArmed = false;
     const auto now = std::chrono::steady_clock::now();
     std::vector<uint64_t> due;
-    for (const auto &[deadline, callId] : deadlines_)
+    for (const auto &[deadline, callId] : deadlines)
     {
         if (deadline > now)
         {
@@ -889,26 +889,26 @@ void Channel::OnDeadlineTimer()
 
 void Channel::NotifyLink(ChannelLinkEvent event)
 {
-    if (options_.linkObserver)
+    if (options.linkObserver)
     {
-        options_.linkObserver(event);
+        options.linkObserver(event);
     }
 }
 
 void Channel::SetState(ConnectivityState state)
 {
-    if (state_ == state)
+    if (this->state == state)
     {
         return;
     }
-    LOG_DEBUG << "muduo_grpc channel " << target_ << " state " << ConnectivityStateName(state_) << " -> "
+    LOG_DEBUG << "muduo_grpc channel " << target << " state " << ConnectivityStateName(this->state) << " -> "
               << ConnectivityStateName(state);
-    state_ = state;
+    this->state = state;
 }
 
 bool Channel::LoopIsCurrent() const
 {
-    return muduo::net::EventLoop::getEventLoopOfCurrentThread() == &loop_;
+    return muduo::net::EventLoop::getEventLoopOfCurrentThread() == &loop;
 }
 
 // ── 双向流(§13.2)──────────────────────────────────────────────────────────
@@ -920,43 +920,43 @@ ClientStream::~ClientStream()
 
 bool ClientStream::Write(std::string message)
 {
-    const auto channel = channel_.lock();
-    return channel && channel->StreamWrite(id_, std::move(message));
+    const auto channel = this->channel.lock();
+    return channel && channel->StreamWrite(id, std::move(message));
 }
 
 void ClientStream::WritesDone()
 {
-    if (const auto channel = channel_.lock())
+    if (const auto channel = this->channel.lock())
     {
-        channel->StreamWritesDone(id_);
+        channel->StreamWritesDone(id);
     }
 }
 
 void ClientStream::Cancel()
 {
     // 先就地压住回调:流可能已结束、onClose 还在队列里,通道甚至可能已析构(记录由排队的回调持有)。
-    if (const auto record = record_.lock())
+    if (const auto record = this->record.lock())
     {
         record->cancelled = true;
     }
-    if (const auto channel = channel_.lock())
+    if (const auto channel = this->channel.lock())
     {
-        channel->StreamCancel(id_);
+        channel->StreamCancel(id);
     }
 }
 
 bool ClientStream::closed() const
 {
-    const auto channel = channel_.lock();
-    const auto record = record_.lock();
-    return !channel || !record || record->closed || channel->StreamIsClosed(id_);
+    const auto channel = this->channel.lock();
+    const auto record = this->record.lock();
+    return !channel || !record || record->closed || channel->StreamIsClosed(id);
 }
 
 std::shared_ptr<ClientStream> Channel::StartStream(std::string method, Metadata metadata, StreamCallbacks callbacks)
 {
-    loop_.assertInLoopThread();
+    loop.assertInLoopThread();
     auto record = std::make_shared<StreamRecord>();
-    record->id = nextCallId_++;
+    record->id = nextCallId++;
     record->path = std::move(method);
     record->metadata = std::move(metadata);
     record->callbacks = std::move(callbacks);
@@ -974,44 +974,44 @@ std::shared_ptr<ClientStream> Channel::StartStream(std::string method, Metadata 
     {
         if (!IsValidCustomMetadataKey(key) || (!IsBinaryHeaderKey(key) && !IsValidAsciiMetadataValue(value)))
         {
-            streams_.emplace(record->id, record);
+            streams.emplace(record->id, record);
             CloseStream(record, Status(StatusCode::kInternal, "invalid metadata '" + key + "'"), Metadata());
             return handle;
         }
     }
-    if (!maintenance_->Begin()) {
-        streams_.emplace(record->id, record);
+    if (!maintenance->Begin()) {
+        streams.emplace(record->id, record);
         CloseStream(record, Status(StatusCode::kUnavailable, "maintenance publications closed"), Metadata());
         return handle;
     }
-    record->maintenance = std::make_shared<detail::MaintenanceOperation>(maintenance_);
-    streams_.emplace(record->id, record);
+    record->maintenance = std::make_shared<detail::MaintenanceOperation>(maintenance);
+    streams.emplace(record->id, record);
     DispatchStream(record->id);
     return handle;
 }
 
 void Channel::DispatchStream(uint64_t id)
 {
-    const auto it = streams_.find(id);
-    if (it == streams_.end() || it->second->active || it->second->closed)
+    const auto it = streams.find(id);
+    if (it == streams.end() || it->second->active || it->second->closed)
     {
         return;
     }
     const StreamRecordPtr record = it->second;
-    switch (state_)
+    switch (state)
     {
     case ConnectivityState::kReady:
         OpenStreamOnCurrentTransport(record);
         break;
     case ConnectivityState::kIdle:
-        pendingStreams_.push_back(id);
+        pendingStreams.push_back(id);
         StartConnecting();
         break;
     case ConnectivityState::kConnecting:
-        pendingStreams_.push_back(id);
+        pendingStreams.push_back(id);
         break;
     case ConnectivityState::kTransientFailure:
-        CloseStream(record, Status(StatusCode::kUnavailable, "failed to connect to " + target_ + ": " + lastFailure_.message()),
+        CloseStream(record, Status(StatusCode::kUnavailable, "failed to connect to " + target + ": " + lastFailure.message()),
                     Metadata());
         break;
     case ConnectivityState::kShutdown:
@@ -1022,21 +1022,21 @@ void Channel::DispatchStream(uint64_t id)
 
 void Channel::OpenStreamOnCurrentTransport(const StreamRecordPtr &record)
 {
-    if (!current_ || !current_->ready() || current_->draining())
+    if (!current || !current->Ready() || current->Draining())
     {
-        pendingStreams_.push_back(record->id);
+        pendingStreams.push_back(record->id);
         RetireCurrentTransport();
         return;
     }
-    const std::shared_ptr<Http2Transport> transport = current_;
+    const std::shared_ptr<Http2Transport> transport = current;
     const auto result = transport->StartBidiStream(record->path, record->metadata);
     if (result.streamId > 0)
     {
         record->active = true;
-        record->transportId = transport->id();
+        record->transportId = transport->Id();
         record->streamId = result.streamId;
         // 先登记再发送(理由同 StartOnCurrentTransport)。
-        streamToBidi_[{record->transportId, record->streamId}] = record->id;
+        streamToBidi[{record->transportId, record->streamId}] = record->id;
         for (const auto &framed : record->pendingFramed)
         {
             transport->WriteStreamMessage(record->streamId, framed);
@@ -1054,8 +1054,8 @@ void Channel::OpenStreamOnCurrentTransport(const StreamRecordPtr &record)
     {
         // 请求头没有发出:换新连接再开是安全的。
         RetireCurrentTransport();
-        pendingStreams_.push_back(record->id);
-        if (state_ == ConnectivityState::kIdle)
+        pendingStreams.push_back(record->id);
+        if (state == ConnectivityState::kIdle)
         {
             StartConnecting();
         }
@@ -1073,13 +1073,13 @@ void Channel::CloseStream(const StreamRecordPtr &record, Status status, Metadata
     record->closed = true;
     if (record->active)
     {
-        streamToBidi_.erase({record->transportId, record->streamId});
+        streamToBidi.erase({record->transportId, record->streamId});
         record->active = false;
     }
-    streams_.erase(record->id);
+    streams.erase(record->id);
     // pendingStreams_ 里可能还留着这个 id:FlushPending / EnterTransientFailure 按 streams_ 查不到就跳过。
-    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
-    loop_.queueInLoop([owner, status = std::move(status), trailing = std::move(trailingMetadata)]
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance, record);
+    loop.queueInLoop([owner, status = std::move(status), trailing = std::move(trailingMetadata)]
                       {
         const auto& record = owner->record;
         if (!record->cancelled && record->callbacks.onClose)
@@ -1093,22 +1093,22 @@ void Channel::CloseStream(const StreamRecordPtr &record, Status status, Metadata
 
 bool Channel::StreamWrite(uint64_t id, std::string message)
 {
-    loop_.assertInLoopThread();
-    const auto it = streams_.find(id);
-    if (it == streams_.end())
+    loop.assertInLoopThread();
+    const auto it = streams.find(id);
+    if (it == streams.end())
     {
         return false;
     }
     const StreamRecordPtr record = it->second;
-    if (maintenance_->Closed() || record->closed || record->cancelled || record->writesDone)
+    if (maintenance->Closed() || record->closed || record->cancelled || record->writesDone)
     {
         return false;
     }
-    if (message.size() > options_.maxSendMessageBytes)
+    if (message.size() > options.maxSendMessageBytes)
     {
         StreamCancelForError(record, Status(StatusCode::kResourceExhausted,
                                             "sent message larger than max (" + std::to_string(message.size()) +
-                                                " vs. " + std::to_string(options_.maxSendMessageBytes) + ")"));
+                                                " vs. " + std::to_string(options.maxSendMessageBytes) + ")"));
         return false;
     }
     std::string framed;
@@ -1117,7 +1117,7 @@ bool Channel::StreamWrite(uint64_t id, std::string message)
     // 待发上限只在「已经有积压」时生效:缓冲为空时总放行一条(单条大小已受 maxSendMessageBytes 约束),
     // 否则大于 maxStreamPendingSendBytes 的单条消息永远发不出去。内存上界 = max(上限, 一条消息) + 一条消息。
     const auto overLimit = [this, &framed](size_t pending)
-    { return pending != 0 && pending + framed.size() > options_.maxStreamPendingSendBytes; };
+    { return pending != 0 && pending + framed.size() > options.maxStreamPendingSendBytes; };
     if (!record->active)
     {
         if (overLimit(record->pendingBytes))
@@ -1164,9 +1164,9 @@ void Channel::StreamCancelForError(const StreamRecordPtr &record, Status status)
 
 void Channel::StreamWritesDone(uint64_t id)
 {
-    loop_.assertInLoopThread();
-    const auto it = streams_.find(id);
-    if (it == streams_.end() || it->second->closed || it->second->writesDone)
+    loop.assertInLoopThread();
+    const auto it = streams.find(id);
+    if (it == streams.end() || it->second->closed || it->second->writesDone)
     {
         return;
     }
@@ -1187,22 +1187,22 @@ void Channel::StreamCancel(uint64_t id)
     {
         // 句柄在 loop 线程之外析构(漏了关机清理):ClientStream::Cancel 已就地压住回调,这里不动 streams_ / 连接,
         // 否则会与 loop 线程竞争。流随通道析构或连接断开结束。
-        LOG_ERROR << "muduo_grpc::ClientStream cancelled outside its EventLoop thread on channel " << target_
+        LOG_ERROR << "muduo_grpc::ClientStream cancelled outside its EventLoop thread on channel " << target
                   << "; the stream is left to the channel teardown";
         return;
     }
-    const auto it = streams_.find(id);
-    if (it == streams_.end())
+    const auto it = streams.find(id);
+    if (it == streams.end())
     {
         return; // 已结束或已取消
     }
     const StreamRecordPtr record = it->second;
     record->cancelled = true; // 之后排队中的回调一律不执行
     record->closed = true;
-    streams_.erase(it);
+    streams.erase(it);
     if (record->active)
     {
-        streamToBidi_.erase({record->transportId, record->streamId});
+        streamToBidi.erase({record->transportId, record->streamId});
         record->active = false;
         if (const auto transport = FindTransport(record->transportId))
         {
@@ -1213,24 +1213,24 @@ void Channel::StreamCancel(uint64_t id)
 
 bool Channel::StreamIsClosed(uint64_t id) const
 {
-    return streams_.find(id) == streams_.end();
+    return streams.find(id) == streams.end();
 }
 
 void Channel::OnTransportStreamHeaders(Http2Transport &transport, int32_t streamId, const Metadata &initialMetadata)
 {
-    const auto bidi = streamToBidi_.find({transport.id(), streamId});
-    if (bidi == streamToBidi_.end())
+    const auto bidi = streamToBidi.find({transport.Id(), streamId});
+    if (bidi == streamToBidi.end())
     {
         return;
     }
-    const auto it = streams_.find(bidi->second);
-    if (it == streams_.end() || !it->second->callbacks.onHeaders)
+    const auto it = streams.find(bidi->second);
+    if (it == streams.end() || !it->second->callbacks.onHeaders)
     {
         return;
     }
     const StreamRecordPtr record = it->second;
-    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
-    loop_.queueInLoop([owner, metadata = initialMetadata]
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance, record);
+    loop.queueInLoop([owner, metadata = initialMetadata]
                       {
         const auto& record = owner->record;
         if (!record->cancelled)
@@ -1243,19 +1243,19 @@ void Channel::OnTransportStreamHeaders(Http2Transport &transport, int32_t stream
 
 void Channel::OnTransportStreamMessage(Http2Transport &transport, int32_t streamId, std::string message)
 {
-    const auto bidi = streamToBidi_.find({transport.id(), streamId});
-    if (bidi == streamToBidi_.end())
+    const auto bidi = streamToBidi.find({transport.Id(), streamId});
+    if (bidi == streamToBidi.end())
     {
         return;
     }
-    const auto it = streams_.find(bidi->second);
-    if (it == streams_.end() || !it->second->callbacks.onMessage)
+    const auto it = streams.find(bidi->second);
+    if (it == streams.end() || !it->second->callbacks.onMessage)
     {
         return;
     }
     const StreamRecordPtr record = it->second;
-    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance_, record);
-    loop_.queueInLoop([owner, message = std::move(message)]() mutable
+    const auto owner = std::make_shared<detail::StreamCompletionOwner>(maintenance, record);
+    loop.queueInLoop([owner, message = std::move(message)]() mutable
                       {
         const auto& record = owner->record;
         if (!record->cancelled)

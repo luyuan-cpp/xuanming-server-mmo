@@ -2,6 +2,7 @@
 #include "player_support_effects.h"
 
 #include <algorithm>
+#include <limits>
 #include <unordered_set>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "player/system/player_season.h"
+#include "player/system/skill_loadout_rules.h"
 #include "services/battle/constants/turn_battle_constants.h"
 #include "services/battle/system/class_skill_rules.h"
 #include "services/battle/system/season_rules.h"
@@ -202,6 +204,259 @@ namespace
 			break;
 		}
 		return 0;
+	}
+
+	uint32_t MapLoadoutError(skillloadout::Error err)
+	{
+		switch (err)
+		{
+		case skillloadout::Error::None:
+			return kSuccess;
+		case skillloadout::Error::InvalidScheme:
+		case skillloadout::Error::InvalidRoleTag:
+			return kSkillLoadoutSchemeInvalid;
+		case skillloadout::Error::NotLearned:
+			return kSkillLoadoutNotLearned;
+		case skillloadout::Error::SlotLimitReached:
+			return kSkillLoadoutSlotLimitReached;
+		case skillloadout::Error::ExclusiveConflict:
+			return kSkillLoadoutConflict;
+		case skillloadout::Error::WrongCategory:
+		case skillloadout::Error::DuplicateSkill:
+		default:
+			return kInvalidParameter;
+		}
+	}
+
+	const SkillLoadoutScheme *FindLoadoutScheme(const PlayerSkillListComp &list, uint32_t schemeId)
+	{
+		for (const auto &scheme : list.loadout_schemes())
+		{
+			if (scheme.scheme_id() == schemeId)
+			{
+				return &scheme;
+			}
+		}
+		return nullptr;
+	}
+
+	SkillLoadoutScheme *FindOrCreateLoadoutScheme(PlayerSkillListComp &list, uint32_t schemeId)
+	{
+		for (auto &scheme : *list.mutable_loadout_schemes())
+		{
+			if (scheme.scheme_id() == schemeId)
+			{
+				return &scheme;
+			}
+		}
+		auto *created = list.add_loadout_schemes();
+		created->set_scheme_id(schemeId);
+		created->set_role_tag(0);
+		return created;
+	}
+
+	// 计算当前生效的非主动战法集合（被动 / 追击 / 开场）：
+	//   - active_loadout_scheme_id == 0（未自定义前）：全量已学且无互斥冲突（同 exclusive_group 按 ID 升序取首条）；
+	//   - active_loadout_scheme_id in 1..3：严格按当前方案已装配且仍合法的战法生效。
+	std::unordered_set<uint32_t> CollectEquippedNonActiveSkills(const PlayerSkillListComp &list, uint32_t classId,
+																bool classHasClassSkills, uint32_t level)
+	{
+		std::unordered_set<uint32_t> equipped;
+		std::unordered_set<uint32_t> occupiedGroups;
+
+		const auto canUseSkill = [&](uint32_t skillId) -> const SkillTable * {
+			const auto *row = FindSkillRow(skillId);
+			if (row == nullptr || row->battle_model() != 1 || row->season_id() != 0 || row->ability_kind() <= 1)
+			{
+				return nullptr;
+			}
+			const auto *entry = FindEntry(list, skillId);
+			if (entry == nullptr || !IsUsable(*row, *entry, classId, classHasClassSkills, level))
+			{
+				return nullptr;
+			}
+			return row;
+		};
+
+		if (skillloadout::ValidSchemeId(list.active_loadout_scheme_id()))
+		{
+			const auto *scheme = FindLoadoutScheme(list, list.active_loadout_scheme_id());
+			if (scheme == nullptr)
+			{
+				return equipped;
+			}
+			const auto addFrom = [&](const google::protobuf::RepeatedField<uint32_t> &ids, uint32_t expectedKind,
+									 size_t limit) {
+				size_t count = 0;
+				for (const uint32_t id : ids)
+				{
+					if (count >= limit)
+					{
+						break;
+					}
+					const auto *row = canUseSkill(id);
+					if (row == nullptr || row->ability_kind() != expectedKind)
+					{
+						continue;
+					}
+					if (row->exclusive_group() != 0 && !occupiedGroups.insert(row->exclusive_group()).second)
+					{
+						continue;
+					}
+					if (equipped.insert(id).second)
+					{
+						++count;
+					}
+				}
+			};
+			addFrom(scheme->passive_skill_ids(), 2u, skillloadout::kMaxPassiveSlots);
+			addFrom(scheme->pursuit_skill_ids(), 3u, skillloadout::kMaxPursuitSlots);
+			addFrom(scheme->opening_skill_ids(), 4u, skillloadout::kMaxOpeningSlots);
+			return equipped;
+		}
+
+		// 兼容态（未手动启用自定义方案）：按 skill_table_id 升序全部生效，仅拦截同 exclusive_group 互斥冲突。
+		std::vector<uint32_t> learnedIds;
+		for (const auto &entry : list.skill_list())
+		{
+			if (canUseSkill(entry.skill_table_id()) != nullptr)
+			{
+				learnedIds.push_back(entry.skill_table_id());
+			}
+		}
+		std::sort(learnedIds.begin(), learnedIds.end());
+		for (const uint32_t id : learnedIds)
+		{
+			const auto *row = FindSkillRow(id);
+			if (row == nullptr)
+			{
+				continue;
+			}
+			if (row->exclusive_group() != 0 && !occupiedGroups.insert(row->exclusive_group()).second)
+			{
+				continue;
+			}
+			equipped.insert(id);
+		}
+		return equipped;
+	}
+
+	void FillLoadoutSnapshot(const PlayerSkillListComp &list, uint32_t classId, bool classHasClassSkills,
+							 uint32_t level, SkillLoadoutSnapshot &out)
+	{
+		out.Clear();
+		const bool customEnabled = skillloadout::ValidSchemeId(list.active_loadout_scheme_id());
+		out.set_custom_enabled(customEnabled);
+		out.set_active_scheme_id(customEnabled ? list.active_loadout_scheme_id() : 1u);
+		out.set_state_version(skillloadout::Version(list.loadout_state_version()));
+		out.set_max_passive_slots(skillloadout::kMaxPassiveSlots);
+		out.set_max_pursuit_slots(skillloadout::kMaxPursuitSlots);
+		out.set_max_opening_slots(skillloadout::kMaxOpeningSlots);
+		out.set_last_request_id(list.loadout_last_request_id());
+
+		for (uint32_t schemeId = 1; schemeId <= skillloadout::kMaxSchemes; ++schemeId)
+		{
+			auto *info = out.add_schemes();
+			info->set_scheme_id(schemeId);
+			const auto *stored = FindLoadoutScheme(list, schemeId);
+			if (stored != nullptr)
+			{
+				info->set_role_tag(stored->role_tag());
+				for (const uint32_t id : stored->passive_skill_ids()) info->add_passive_skill_ids(id);
+				for (const uint32_t id : stored->pursuit_skill_ids()) info->add_pursuit_skill_ids(id);
+				for (const uint32_t id : stored->opening_skill_ids()) info->add_opening_skill_ids(id);
+			}
+			else if (!customEnabled && schemeId == 1)
+			{
+				// 未自定义前为方案 1 生成一份建议初始装配（按 ID 升序填满 3 被动 / 1 追击 / 1 开场），便于客户端直接微调保存。
+				std::vector<uint32_t> learnedIds;
+				for (const auto &entry : list.skill_list())
+				{
+					const auto *row = FindSkillRow(entry.skill_table_id());
+					if (row != nullptr && row->battle_model() == 1 && row->season_id() == 0 &&
+						row->ability_kind() > 1 && IsUsable(*row, entry, classId, classHasClassSkills, level))
+					{
+						learnedIds.push_back(entry.skill_table_id());
+					}
+				}
+				std::sort(learnedIds.begin(), learnedIds.end());
+				std::unordered_set<uint32_t> groups;
+				for (const uint32_t id : learnedIds)
+				{
+					const auto *row = FindSkillRow(id);
+					if (row == nullptr) continue;
+					if (row->exclusive_group() != 0 && groups.contains(row->exclusive_group())) continue;
+					bool added = false;
+					if (row->ability_kind() == 2 &&
+						static_cast<uint32_t>(info->passive_skill_ids_size()) < skillloadout::kMaxPassiveSlots)
+					{
+						info->add_passive_skill_ids(id);
+						added = true;
+					}
+					else if (row->ability_kind() == 3 &&
+							 static_cast<uint32_t>(info->pursuit_skill_ids_size()) < skillloadout::kMaxPursuitSlots)
+					{
+						info->add_pursuit_skill_ids(id);
+						added = true;
+					}
+					else if (row->ability_kind() == 4 &&
+							 static_cast<uint32_t>(info->opening_skill_ids_size()) < skillloadout::kMaxOpeningSlots)
+					{
+						info->add_opening_skill_ids(id);
+						added = true;
+					}
+					if (added && row->exclusive_group() != 0)
+					{
+						groups.insert(row->exclusive_group());
+					}
+				}
+			}
+		}
+	}
+
+	void TryAutoSlotNewlyLearned(PlayerSkillListComp &list, const SkillTable &row)
+	{
+		if (row.battle_model() != 1 || row.season_id() != 0 || row.ability_kind() <= 1 ||
+			!skillloadout::ValidSchemeId(list.active_loadout_scheme_id()))
+		{
+			return;
+		}
+		auto *scheme = FindOrCreateLoadoutScheme(list, list.active_loadout_scheme_id());
+		auto *slotList = row.ability_kind() == 2 ? scheme->mutable_passive_skill_ids()
+						 : row.ability_kind() == 3 ? scheme->mutable_pursuit_skill_ids()
+												   : scheme->mutable_opening_skill_ids();
+		const uint32_t limit = row.ability_kind() == 2 ? skillloadout::kMaxPassiveSlots
+							   : row.ability_kind() == 3 ? skillloadout::kMaxPursuitSlots
+														 : skillloadout::kMaxOpeningSlots;
+		if (static_cast<uint32_t>(slotList->size()) >= limit)
+		{
+			return;
+		}
+		if (std::find(slotList->begin(), slotList->end(), row.id()) != slotList->end())
+		{
+			return;
+		}
+		if (row.exclusive_group() != 0)
+		{
+			const auto conflictsWith = [&](const google::protobuf::RepeatedField<uint32_t> &ids) {
+				for (const uint32_t existingId : ids)
+				{
+					const auto *existing = FindSkillRow(existingId);
+					if (existing != nullptr && existing->exclusive_group() == row.exclusive_group())
+					{
+						return true;
+					}
+				}
+				return false;
+			};
+			if (conflictsWith(scheme->passive_skill_ids()) || conflictsWith(scheme->pursuit_skill_ids()) ||
+				conflictsWith(scheme->opening_skill_ids()))
+			{
+				return;
+			}
+		}
+		slotList->Add(row.id());
+		std::sort(slotList->begin(), slotList->end());
 	}
 
 	// 附带增减益的持续回合(技能书展示用):effect[] 第一个 buff 行的时长换成回合
@@ -496,6 +751,13 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 
 	if (changed)
 	{
+		// 保留战法构筑方案与乐观锁状态，防止清洗 skill_list 时误丢装配方案。
+		sanitizedSkillList.set_active_loadout_scheme_id(skillList->active_loadout_scheme_id());
+		*sanitizedSkillList.mutable_loadout_schemes() = skillList->loadout_schemes();
+		sanitizedSkillList.set_loadout_state_version(skillList->loadout_state_version());
+		sanitizedSkillList.set_loadout_last_request_id(skillList->loadout_last_request_id());
+		sanitizedSkillList.set_loadout_last_base_version(skillList->loadout_last_base_version());
+		sanitizedSkillList.set_loadout_last_scheme_id(skillList->loadout_last_scheme_id());
 		// 整体替换会丢掉组件本层的未知字段(新版本给 PlayerSkillListComp 加的),先并过来再换
 		// (docs/design/mixed-version-persist-field-protection.md §4.2 L5)。逐条技能经 CopyFrom 已各自带着。
 		sanitizedSkillList.mutable_unknown_fields()->MergeFrom(skillList->unknown_fields());
@@ -589,6 +851,8 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	SupportEffectSummary support;
 	PlayerSupportEffectSystem::Build(player, support);
 	const bool craftGateEnabled = PlayerCraftSystem::IsCraftUnlockGateEnabled();
+	const auto equippedNonActive = CollectEquippedNonActiveSkills(list, classId, classHasClassSkills, level);
+	FillLoadoutSnapshot(list, classId, classHasClassSkills, level, *response.mutable_loadout());
 	for (const auto *row : rows)
 	{
 		auto* entry = response.add_catalog();
@@ -597,7 +861,9 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 			: StoredRank(list, row->id());
 		const bool craftRequired = craftGateEnabled && row->season_id() == 0 && row->scroll_id() > 0;
 		const bool unlockedByBook = PlayerCraftSystem::IsSkillBookUnlocked(player, row->id());
-		FillCatalogEntry(*row, rank, level, balance, busyTip, false, *entry, craftRequired, unlockedByBook);
+		const bool equipped = rank > 0 && (row->season_id() != 0 || row->battle_model() != 1 ||
+			row->ability_kind() == 1 || equippedNonActive.contains(row->id()));
+		FillCatalogEntry(*row, rank, level, balance, busyTip, false, *entry, craftRequired, unlockedByBook, equipped);
 		for (const auto& preview : support.previews()) if (preview.skill_table_id() == row->id()) {
 			*entry->mutable_support_preview() = preview; break;
 		}
@@ -607,7 +873,7 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 
 void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
 	uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view,
-	bool craftUnlockRequired, bool unlockedByBook)
+	bool craftUnlockRequired, bool unlockedByBook, bool equipped)
 {
 	const auto rankLimit = classskill::RankLimit(level, row.unlock_level(), row.max_rank());
 	const bool isSeasonal = row.season_id() != 0;
@@ -638,6 +904,9 @@ void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, u
 	view.set_rarity_tier(row.rarity_tier());
 	view.set_craft_unlock_required(craftUnlockRequired);
 	view.set_unlocked_by_book(unlockedByBook);
+	view.set_secondary_target_policy(row.secondary_target_policy());
+	view.set_exclusive_group(row.exclusive_group());
+	view.set_equipped(equipped);
 	const bool blockedByBook = craftUnlockRequired && !unlockedByBook && rank == 0;
 	view.set_upgrade_block_tip_id(isSeasonal ? static_cast<uint32_t>(kSeasonSkillNoUpgrade) :
 		busyTip != 0 ? busyTip : blockedByBook ? static_cast<uint32_t>(kSkillCraftBookRequired) :
@@ -749,6 +1018,10 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 		entry->set_skill_table_id(row->id());
 	}
 	entry->set_rank(plan.finalRank);
+	if (storedRank == 0)
+	{
+		TryAutoSlotNewlyLearned(list, *row);
+	}
 
 	response.set_upgraded_count(plan.steps);
 	if (plan.steps < request.count())
@@ -783,11 +1056,16 @@ void PlayerSkillSystem::FillBattleSnapshot(entt::entity player, BattlePlayerSnap
 	const auto level = PlayerLevel(player);
 	const bool classHasClassSkills = ClassHasClassSkills(classId);
 	const uint32_t activeSeasonId = ActiveSeasonIdNow();
+	const auto equippedNonActive = CollectEquippedNonActiveSkills(*list, classId, classHasClassSkills, level);
 	snapshot.set_active_season_id(activeSeasonId);
 	for (const auto &skill : list->skill_list())
 	{
 		const auto *row = FindSkillRow(skill.skill_table_id());
 		if (row == nullptr || row->season_id() != 0 || !IsUsable(*row, skill, classId, classHasClassSkills, level))
+		{
+			continue;
+		}
+		if (row->battle_model() == 1 && row->ability_kind() > 1 && !equippedNonActive.contains(row->id()))
 		{
 			continue;
 		}
@@ -839,7 +1117,9 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 	}
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
+	const bool classHasClassSkills = ClassHasClassSkills(classId);
 	const uint32_t activeSeasonId = ActiveSeasonIdNow();
+	const auto equippedNonActive = CollectEquippedNonActiveSkills(*list, classId, classHasClassSkills, level);
 	const auto accumulatePassive = [&](const SkillTable &row, uint32_t rank) {
 		if (rank == 0 || row.passive_stat().empty())
 		{
@@ -887,6 +1167,10 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 		{
 			continue;
 		}
+		if (row->battle_model() == 1 && row->ability_kind() > 1 && !equippedNonActive.contains(row->id()))
+		{
+			continue;
+		}
 		accumulatePassive(*row, EffectiveRankOf(*row, skill.rank(), level));
 	}
 	if (activeSeasonId != 0)
@@ -901,4 +1185,249 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 		}
 	}
 	return bonus;
+}
+
+bool PlayerSkillSystem::IsSkillEquipped(entt::entity player, uint32_t skillTableId)
+{
+	if (!tlsEcs.actorRegistry.valid(player) || !HasClassAndLevel(player, "IsSkillEquipped"))
+	{
+		return false;
+	}
+	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
+	const auto *row = FindSkillRow(skillTableId);
+	if (list == nullptr || row == nullptr)
+	{
+		return false;
+	}
+	const auto classId = PlayerClassId(player);
+	const auto level = PlayerLevel(player);
+	if (row->season_id() != 0)
+	{
+		return IsActiveSeasonalPlayerSkill(*row, ActiveSeasonIdNow()) &&
+			   seasonrules::EffectiveSeasonalSkillRank(level, row->unlock_level(), row->max_rank()) > 0;
+	}
+	const bool classHasClassSkills = ClassHasClassSkills(classId);
+	const auto *entry = FindEntry(*list, skillTableId);
+	if (entry == nullptr || !IsUsable(*row, *entry, classId, classHasClassSkills, level))
+	{
+		return false;
+	}
+	if (row->battle_model() != 1 || row->ability_kind() <= 1)
+	{
+		return true;
+	}
+	return CollectEquippedNonActiveSkills(*list, classId, classHasClassSkills, level).contains(skillTableId);
+}
+
+void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutRequest &request,
+									SaveSkillLoadoutResponse &response)
+{
+	response.Clear();
+	response.set_request_id(request.request_id());
+
+	const auto finish = [&](uint32_t errorTip) {
+		if (errorTip != 0)
+		{
+			response.mutable_error_message()->set_id(errorTip);
+		}
+		if (const auto bookErr = BuildSkillBook(player, *response.mutable_state()); bookErr != kSuccess)
+		{
+			response.clear_state();
+			if (errorTip == 0)
+			{
+				response.mutable_error_message()->set_id(bookErr);
+			}
+		}
+	};
+
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		response.mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	if (!tlsEcs.actorRegistry.all_of<PlayerSkillListComp, PlayerUint32Comp, LevelComp>(player))
+	{
+		finish(kServiceUnavailable);
+		return;
+	}
+	if (!skillloadout::ValidRequestId(request.request_id()))
+	{
+		finish(kInvalidParameter);
+		return;
+	}
+
+	auto &list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+	if (list.loadout_last_request_id() == request.request_id())
+	{
+		const bool sameRequest =
+			list.loadout_last_base_version() == request.state_version() &&
+			list.loadout_last_scheme_id() == request.scheme_id();
+		if (!sameRequest)
+		{
+			finish(kInvalidParameter);
+			return;
+		}
+		response.set_replayed(true);
+		finish(0);
+		return;
+	}
+
+	if (const auto busyTip = CheckSkillWritable(player); busyTip != 0)
+	{
+		finish(busyTip);
+		return;
+	}
+	if (request.state_version() != skillloadout::Version(list.loadout_state_version()) ||
+		list.loadout_state_version() == std::numeric_limits<uint64_t>::max())
+	{
+		finish(kSkillLoadoutVersionChanged);
+		return;
+	}
+
+	const auto classId = PlayerClassId(player);
+	const auto level = PlayerLevel(player);
+	const bool classHasClassSkills = ClassHasClassSkills(classId);
+
+	std::vector<uint32_t> passiveIds(request.passive_skill_ids().begin(), request.passive_skill_ids().end());
+	std::vector<uint32_t> pursuitIds(request.pursuit_skill_ids().begin(), request.pursuit_skill_ids().end());
+	std::vector<uint32_t> openingIds(request.opening_skill_ids().begin(), request.opening_skill_ids().end());
+
+	const auto validationErr = skillloadout::ValidateScheme(
+		request.scheme_id(), request.role_tag(), passiveIds, pursuitIds, openingIds,
+		[&](uint32_t skillId) -> skillloadout::SkillMeta {
+			skillloadout::SkillMeta meta;
+			const auto *row = FindSkillRow(skillId);
+			if (row == nullptr || row->battle_model() != 1 || row->season_id() != 0 || !IsFreeSkillFor(*row, 1))
+			{
+				return meta;
+			}
+			meta.valid = true;
+			meta.abilityKind = row->ability_kind();
+			meta.exclusiveGroup = row->exclusive_group();
+			const auto *entry = FindEntry(list, skillId);
+			meta.learned = entry != nullptr && IsUsable(*row, *entry, classId, classHasClassSkills, level);
+			return meta;
+		});
+	if (validationErr != skillloadout::Error::None)
+	{
+		finish(MapLoadoutError(validationErr));
+		return;
+	}
+
+	std::sort(passiveIds.begin(), passiveIds.end());
+	std::sort(pursuitIds.begin(), pursuitIds.end());
+	std::sort(openingIds.begin(), openingIds.end());
+
+	auto *scheme = FindOrCreateLoadoutScheme(list, request.scheme_id());
+	scheme->set_role_tag(request.role_tag());
+	scheme->clear_passive_skill_ids();
+	scheme->clear_pursuit_skill_ids();
+	scheme->clear_opening_skill_ids();
+	for (const uint32_t id : passiveIds) scheme->add_passive_skill_ids(id);
+	for (const uint32_t id : pursuitIds) scheme->add_pursuit_skill_ids(id);
+	for (const uint32_t id : openingIds) scheme->add_opening_skill_ids(id);
+
+	list.set_active_loadout_scheme_id(request.scheme_id());
+	list.set_loadout_state_version(skillloadout::Version(list.loadout_state_version()) + 1);
+	list.set_loadout_last_request_id(request.request_id());
+	list.set_loadout_last_base_version(request.state_version());
+	list.set_loadout_last_scheme_id(request.scheme_id());
+
+	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_loadout_saved");
+	PlayerAttributeSystem::PushPanel(player);
+	LOG_INFO << "[PlayerSkill] Loadout saved: player_id=" << GuidForLog(player)
+			 << " scheme_id=" << request.scheme_id()
+			 << " role_tag=" << request.role_tag()
+			 << " passives=" << passiveIds.size()
+			 << " pursuits=" << pursuitIds.size()
+			 << " openings=" << openingIds.size()
+			 << " version=" << list.loadout_state_version();
+	finish(0);
+}
+
+void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoadoutRequest &request,
+									  SwitchSkillLoadoutResponse &response)
+{
+	response.Clear();
+	response.set_request_id(request.request_id());
+
+	const auto finish = [&](uint32_t errorTip) {
+		if (errorTip != 0)
+		{
+			response.mutable_error_message()->set_id(errorTip);
+		}
+		if (const auto bookErr = BuildSkillBook(player, *response.mutable_state()); bookErr != kSuccess)
+		{
+			response.clear_state();
+			if (errorTip == 0)
+			{
+				response.mutable_error_message()->set_id(bookErr);
+			}
+		}
+	};
+
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		response.mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	if (!tlsEcs.actorRegistry.all_of<PlayerSkillListComp, PlayerUint32Comp, LevelComp>(player))
+	{
+		finish(kServiceUnavailable);
+		return;
+	}
+	if (!skillloadout::ValidRequestId(request.request_id()))
+	{
+		finish(kInvalidParameter);
+		return;
+	}
+	if (!skillloadout::ValidSchemeId(request.scheme_id()))
+	{
+		finish(kSkillLoadoutSchemeInvalid);
+		return;
+	}
+
+	auto &list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+	if (list.loadout_last_request_id() == request.request_id())
+	{
+		const bool sameRequest =
+			list.loadout_last_base_version() == request.state_version() &&
+			list.loadout_last_scheme_id() == request.scheme_id();
+		if (!sameRequest)
+		{
+			finish(kInvalidParameter);
+			return;
+		}
+		response.set_replayed(true);
+		finish(0);
+		return;
+	}
+
+	if (const auto busyTip = CheckSkillWritable(player); busyTip != 0)
+	{
+		finish(busyTip);
+		return;
+	}
+	if (request.state_version() != skillloadout::Version(list.loadout_state_version()) ||
+		list.loadout_state_version() == std::numeric_limits<uint64_t>::max())
+	{
+		finish(kSkillLoadoutVersionChanged);
+		return;
+	}
+
+	FindOrCreateLoadoutScheme(list, request.scheme_id());
+	list.set_active_loadout_scheme_id(request.scheme_id());
+	list.set_loadout_state_version(skillloadout::Version(list.loadout_state_version()) + 1);
+	list.set_loadout_last_request_id(request.request_id());
+	list.set_loadout_last_base_version(request.state_version());
+	list.set_loadout_last_scheme_id(request.scheme_id());
+
+	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_loadout_switched");
+	PlayerAttributeSystem::PushPanel(player);
+	LOG_INFO << "[PlayerSkill] Loadout switched: player_id=" << GuidForLog(player)
+			 << " scheme_id=" << request.scheme_id()
+			 << " version=" << list.loadout_state_version();
+	finish(0);
 }

@@ -45,7 +45,7 @@ muduo_grpc::UnaryCallback InjectTraceIntoUnaryCall(const std::string &method, mu
         recorded->SetGrpcStatusCode(result.status.code_value());
         if (!result.status.ok())
         {
-            recorded->SetError(muduo_grpc::StatusCodeName(result.status.code()));
+            recorded->SetError(muduo_grpc::StatusCodeName(result.status.Code()));
         }
         recorded->End();
         done(std::move(result)); });

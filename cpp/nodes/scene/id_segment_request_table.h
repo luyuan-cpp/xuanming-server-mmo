@@ -33,53 +33,53 @@ public:
 
 	std::optional<GuidKind> InFlightKind() const
 	{
-		return inflight_ ? std::optional{inflight_->kind} : std::nullopt;
+		return inflight ? std::optional{inflight->kind} : std::nullopt;
 	}
 
 	Check BeforeSend(double now, double timeout)
 	{
-		if (inflight_)
+		if (inflight)
 		{
-			if (now - inflight_->sentAt < timeout) return {Admission::kBusy, std::nullopt};
-			abandoned_ = std::exchange(inflight_, std::nullopt);
-			abandonedUntil_ = now + kLateWindowSeconds;
-			return {Admission::kOpenedLateWindow, abandoned_};
+			if (now - inflight->sentAt < timeout) return {Admission::kBusy, std::nullopt};
+			abandoned = std::exchange(inflight, std::nullopt);
+			abandonedUntil = now + kLateWindowSeconds;
+			return {Admission::kOpenedLateWindow, abandoned};
 		}
-		if (abandoned_)
+		if (abandoned)
 		{
-			if (now < abandonedUntil_) return {Admission::kBusy, std::nullopt};
-			return {Admission::kExpiredLateWindow, std::exchange(abandoned_, std::nullopt)};
+			if (now < abandonedUntil) return {Admission::kBusy, std::nullopt};
+			return {Admission::kExpiredLateWindow, std::exchange(abandoned, std::nullopt)};
 		}
 		return {Admission::kReady, std::nullopt};
 	}
 
 	uint64_t Reserve(GuidKind kind, double now)
 	{
-		assert(!inflight_ && !abandoned_);
-		const auto sequence = ++nextSequence_;
-		inflight_ = Request{sequence, kind, now};
+		assert(!inflight && !abandoned);
+		const auto sequence = ++nextSequence;
+		inflight = Request{sequence, kind, now};
 		return sequence;
 	}
 
 	std::optional<Completion> Take(uint64_t sequence)
 	{
-		if (inflight_ && inflight_->sequence == sequence)
-			return Completion{std::exchange(inflight_, std::nullopt)->kind, false};
-		if (abandoned_ && abandoned_->sequence == sequence)
-			return Completion{std::exchange(abandoned_, std::nullopt)->kind, true};
+		if (inflight && inflight->sequence == sequence)
+			return Completion{std::exchange(inflight, std::nullopt)->kind, false};
+		if (abandoned && abandoned->sequence == sequence)
+			return Completion{std::exchange(abandoned, std::nullopt)->kind, true};
 		return std::nullopt;
 	}
 
 	void Clear()
 	{
-		inflight_.reset();
-		abandoned_.reset();
+		inflight.reset();
+		abandoned.reset();
 	}
 
 private:
-	std::optional<Request> inflight_;
-	std::optional<Request> abandoned_;
-	double abandonedUntil_ = 0;
-	uint64_t nextSequence_ = 0;
+	std::optional<Request> inflight;
+	std::optional<Request> abandoned;
+	double abandonedUntil = 0;
+	uint64_t nextSequence = 0;
 };
 }

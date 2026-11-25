@@ -79,7 +79,7 @@ DESIGN_RULES = [
         "character-appearance-identity.md", "activity_maintenance_auto_shift.md",
         "exploit_loss_prevention*", "player-attribute-allocation.md", "player-pet.md",
         "player-features-ui.md", "equipment-*", "season-*", "mystery-merchant.md", "stall-system.md",
-        "payment-recharge.md",
+        "payment-recharge.md", "spirit-shop-*",
     ]),
     ("基础设施与中间件", [
         "kafka-*", "infra-reconnect-overview.md", "go-zero-rpc-timeout-fix.md",

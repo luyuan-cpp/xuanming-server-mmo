@@ -46,3 +46,11 @@ constexpr uint32_t SceneSkillClientPlayerSetCraftProxyStallIndex = 9;
 constexpr uint32_t SceneSkillClientPlayerListCraftProxyStallsMessageId = 464;
 constexpr uint32_t SceneSkillClientPlayerListCraftProxyStallsIndex = 10;
 #define SceneSkillClientPlayerListCraftProxyStallsMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneSkillClientPlayerSaveSkillLoadoutMessageId = 502;
+constexpr uint32_t SceneSkillClientPlayerSaveSkillLoadoutIndex = 11;
+#define SceneSkillClientPlayerSaveSkillLoadoutMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t SceneSkillClientPlayerSwitchSkillLoadoutMessageId = 503;
+constexpr uint32_t SceneSkillClientPlayerSwitchSkillLoadoutIndex = 12;
+#define SceneSkillClientPlayerSwitchSkillLoadoutMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(12)

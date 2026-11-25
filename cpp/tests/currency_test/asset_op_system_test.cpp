@@ -161,15 +161,15 @@ protected:
 		PlayerAssetOpSystem::SetPersistFnForTest(&FakePersist);
 		PlayerAssetOpSystem::SetSecretLookupForTest(&FakeSecretLookup);
 
-		player_ = tlsEcs.actorRegistry.create();
-		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_, kTestPlayerId);
-		tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
-		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
-		tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player_);
+		player = tlsEcs.actorRegistry.create();
+		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kTestPlayerId);
+		tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
+		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+		tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player);
 		// 资产通道只在存盘带归属围栏的实体上记账(B4c,08-save-owner-fence.md §8.2.1):
 		// 默认给一个已铸造的 epoch,epoch == 0 / 组件缺失的行为由 OwnerEpoch* 用例单独覆盖。
-		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player_).epoch = 1;
-		tlsEcs.playerList[kTestPlayerId] = player_;
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
+		tlsEcs.playerList[kTestPlayerId] = player;
 
 		ArmItemSegment();
 	}
@@ -177,9 +177,9 @@ protected:
 	void TearDown() override
 	{
 		tlsEcs.playerList.erase(kTestPlayerId);
-		if (tlsEcs.actorRegistry.valid(player_))
+		if (tlsEcs.actorRegistry.valid(player))
 		{
-			tlsEcs.actorRegistry.destroy(player_);
+			tlsEcs.actorRegistry.destroy(player);
 		}
 		tlsGuidSegmentRegistry.Get(GuidKind::kItem).Reset();
 
@@ -209,20 +209,20 @@ protected:
 
 	void GiveBags()
 	{
-		tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player_);
+		tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
 	}
 
 	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次提交成功的玩家存档"(生产里是 go/db Save 回 COMMITTED / EQUAL 之后换上的快照)。
-	void CompleteFakeSave() { CaptureLedgerSnapshot(player_); }
+	void CompleteFakeSave() { CaptureLedgerSnapshot(player); }
 
 	const AssetOpStreamLedger* Ledger(AssetOpStream stream) const
 	{
-		return FindAssetOpStream(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_), stream);
+		return FindAssetOpStream(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player), stream);
 	}
 
 	uint64_t Gold() const
 	{
-		return CurrencySystem::GetBalance(player_, kCurrencyGold);
+		return CurrencySystem::GetBalance(player, kCurrencyGold);
 	}
 
 	// caller 留空 = 用夹具默认 "guild"。签名必须在所有参与 canonical 的字段填好之后算。
@@ -286,14 +286,14 @@ protected:
 		return response;
 	}
 
-	entt::entity player_{entt::null};
+	entt::entity player{entt::null};
 };
 
 // ── 扣款:成功 / durable / 幂等 ─────────────────────────────────────────────
 
 TEST_F(AssetOpSystemTest, DebitAppliedThenDurable)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	const auto first = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, first.outcome());
@@ -316,7 +316,7 @@ TEST_F(AssetOpSystemTest, DebitAppliedThenDurable)
 
 TEST_F(AssetOpSystemTest, DebitInsufficientRejectedFixed)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 10));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
 
 	const auto rejected = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome());
@@ -324,7 +324,7 @@ TEST_F(AssetOpSystemTest, DebitInsufficientRejectedFixed)
 	EXPECT_EQ(10u, Gold());
 
 	// 结局固定(I2):后来钱够了,同 seq 仍然是拒绝。
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 90));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 90));
 	const auto still = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, still.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetCurrencyInsufficient), still.reason().id());
@@ -335,7 +335,7 @@ TEST_F(AssetOpSystemTest, DebitInsufficientRejectedFixed)
 // 够扣就扣掉;不够是固定的拒绝(交易服务据此转人工),不透支。
 TEST_F(AssetOpSystemTest, PaymentReversalDebitsOnTradeStreamAndNeverOverdraws)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	::AssetOpRequest first = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 60, TX_PAYMENT_REVERSAL);
 	SignForTest("debit", first, "trade");
@@ -358,13 +358,13 @@ TEST_F(AssetOpSystemTest, PaymentReversalDebitsStackableAcrossWarehouseAndNonSta
 {
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	GiveBags();
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	constexpr uint32_t kStackable = 10;
 	constexpr uint32_t kInstanceConfig = 1;
 
 	// 1. 堆叠物品分散在背包(1)与仓库(2),扣回 3 件须跨包扣净。
-	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kInventory], ItemCountMap{{kStackable, 1}}, TX_GM_GRANT, 0, "seed-inv"));
-	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kWarehouse], ItemCountMap{{kStackable, 2}}, TX_GM_GRANT, 0, "seed-wh"));
+	ASSERT_EQ(kSuccess, BagService::AddItems(player, bags.bags[kInventory], ItemCountMap{{kStackable, 1}}, TX_GM_GRANT, 0, "seed-inv"));
+	ASSERT_EQ(kSuccess, BagService::AddItems(player, bags.bags[kWarehouse], ItemCountMap{{kStackable, 2}}, TX_GM_GRANT, 0, "seed-wh"));
 	::AssetOpRequest stackReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 0, TX_PAYMENT_REVERSAL);
 	stackReq.mutable_bundle()->clear_currencies();
 	auto* stackItem = stackReq.mutable_bundle()->add_items();
@@ -421,8 +421,8 @@ TEST_F(AssetOpSystemTest, NotOnNode)
 
 TEST_F(AssetOpSystemTest, FrozenRetryNotRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 
 	const auto frozen = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, frozen.outcome());
@@ -431,7 +431,7 @@ TEST_F(AssetOpSystemTest, FrozenRetryNotRecorded)
 	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "RETRY 不记账";
 	EXPECT_EQ(0, g_persistCalls);
 
-	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	EXPECT_EQ(70u, Gold());
 }
@@ -441,8 +441,8 @@ TEST_F(AssetOpSystemTest, FrozenRetryNotRecorded)
 // 会跳过写盘并返回 false,结局会被误报成 durable。
 TEST_F(AssetOpSystemTest, TravelHandoffRetryNotRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	auto& travel = tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player_);
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	auto& travel = tlsEcs.actorRegistry.emplace<PlayerTravelHandoffComp>(player);
 	travel.targetZoneId = 2;
 	travel.requestedAtMs = 1;
 
@@ -457,8 +457,8 @@ TEST_F(AssetOpSystemTest, TravelHandoffRetryNotRecorded)
 
 TEST_F(AssetOpSystemTest, InBattleRetryAbortAllowed)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player_);
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	auto& inBattle = tlsEcs.actorRegistry.emplace<InBattleComp>(player);
 	inBattle.set_battle_id(4242);
 
 	const auto blocked = CallDebit(1, 30);
@@ -471,7 +471,7 @@ TEST_F(AssetOpSystemTest, InBattleRetryAbortAllowed)
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, aborted.outcome());
 	EXPECT_EQ(0u, aborted.reason().id());
 
-	tlsEcs.actorRegistry.remove<InBattleComp>(player_);
+	tlsEcs.actorRegistry.remove<InBattleComp>(player);
 	const auto afterBattle = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, afterBattle.outcome()) << "中止占位已固定结局";
 	EXPECT_EQ(100u, Gold());
@@ -479,7 +479,7 @@ TEST_F(AssetOpSystemTest, InBattleRetryAbortAllowed)
 
 TEST_F(AssetOpSystemTest, AbortSeenAppliedReturnsApplied)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 
 	const auto aborted = CallAbort(1);
@@ -489,11 +489,11 @@ TEST_F(AssetOpSystemTest, AbortSeenAppliedReturnsApplied)
 
 TEST_F(AssetOpSystemTest, UnregisterRetryButReadOnlyAnswers)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	const int persistAfterApply = g_persistCalls;
 
-	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player_);
+	tlsEcs.actorRegistry.emplace<UnregisterPlayer>(player);
 
 	const auto newSeq = CallDebit(2, 10);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, newSeq.outcome());
@@ -508,7 +508,7 @@ TEST_F(AssetOpSystemTest, UnregisterRetryButReadOnlyAnswers)
 
 TEST_F(AssetOpSystemTest, LedgerInvalidTagRetry)
 {
-	tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerInvalidComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerInvalidComp>(player);
 
 	const auto response = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome());
@@ -520,7 +520,7 @@ TEST_F(AssetOpSystemTest, LedgerInvalidTagRetry)
 
 TEST_F(AssetOpSystemTest, EnvelopeInvalid)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	// 方向不符:GUILD_CREDIT 调 AssetDebit
 	{
@@ -566,7 +566,7 @@ TEST_F(AssetOpSystemTest, EnvelopeInvalid)
 
 TEST_F(AssetOpSystemTest, AuthFailureUnknownNoRecord)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
 	// 另一把 32 字节密钥签名:信封合法,签名不符。
@@ -583,7 +583,7 @@ TEST_F(AssetOpSystemTest, AuthFailureUnknownNoRecord)
 
 TEST_F(AssetOpSystemTest, BehindWindowUnknown)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 1000));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
 
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 1).outcome());
 	// 每步都在跳号上限(max_seq + 1024)之内,一步步把窗口推上去:
@@ -598,7 +598,7 @@ TEST_F(AssetOpSystemTest, BehindWindowUnknown)
 
 TEST_F(AssetOpSystemTest, JumpTooFarUnknown)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 1000));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 
 	const auto tooFar = CallDebit(2000, 30);
@@ -611,7 +611,7 @@ TEST_F(AssetOpSystemTest, JumpTooFarUnknown)
 
 TEST_F(AssetOpSystemTest, EpochResetAppliesFresh)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30, 100).outcome());
 	EXPECT_EQ(70u, Gold());
@@ -627,7 +627,7 @@ TEST_F(AssetOpSystemTest, EpochResetAppliesFresh)
 
 TEST_F(AssetOpSystemTest, StaleEpochUnknownNoRecord)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30, 200).outcome());
 
 	const auto stale = CallDebit(1, 30, 100);
@@ -643,10 +643,10 @@ TEST_F(AssetOpSystemTest, StaleEpochUnknownNoRecord)
 // 闸门回 RETRY 时**不得**重置纪元,否则已见结局会凭空消失(违反 I2)。
 TEST_F(AssetOpSystemTest, RetryDoesNotResetEpoch)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30, 100).outcome());
 
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	const auto frozen = CallDebit(1, 30, 200);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, frozen.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), frozen.reason().id());
@@ -655,7 +655,7 @@ TEST_F(AssetOpSystemTest, RetryDoesNotResetEpoch)
 	ASSERT_NE(nullptr, ledger);
 	EXPECT_EQ(100u, ledger->stream_epoch());
 
-	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30, 100).outcome()) << "旧纪元结局仍在";
 	EXPECT_EQ(70u, Gold());
 }
@@ -666,7 +666,7 @@ TEST_F(AssetOpSystemTest, DebitBundleInvalidRecorded)
 {
 	// 本例验证背包已加载的玩家;缺背包的 Debit 与 Credit 行为由后续用例分别覆盖。
 	GiveBags();
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	// Debit v1 只收恰好 1 条货币、0 件物品。
 	auto withItem = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
@@ -714,8 +714,8 @@ TEST_F(AssetOpSystemTest, DebitBundleInvalidRecorded)
 
 TEST_F(AssetOpSystemTest, DebitWithItemWithoutBagsRejectedAndRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player_));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player));
 
 	// Debit 不写物品,非法物品包应固定为拒绝,不能因缺背包先返回未记账的 RETRY。
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
@@ -737,7 +737,7 @@ TEST_F(AssetOpSystemTest, DebitWithItemWithoutBagsRejectedAndRecorded)
 	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, changedBundle.outcome()) << "同 seq 改包不能借用原收据";
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), changedBundle.reason().id());
 	EXPECT_EQ(100u, Gold());
-	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player_));
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player));
 }
 
 // Credit 确实需要写物品,缺持久背包时仍须整体重试,不能为了修复 Debit 而放开这道门禁。
@@ -746,9 +746,9 @@ TEST_F(AssetOpSystemTest, DebitWithItemWithoutBagsRejectedAndRecorded)
 TEST_F(AssetOpSystemTest, CreditMissingBagsRetriesBeforeAnyMixedBundleMutation)
 {
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置，不能以坏包替代背包未加载场景";
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player_));
-	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player));
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString();
 	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
 	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
 
@@ -763,11 +763,11 @@ TEST_F(AssetOpSystemTest, CreditMissingBagsRetriesBeforeAnyMixedBundleMutation)
 	EXPECT_FALSE(response.durable());
 	EXPECT_FALSE(response.partial());
 	EXPECT_EQ(100u, Gold());
-	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString());
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString());
 	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued);
 	EXPECT_EQ(0, g_addCurrencyCalls);
 	EXPECT_EQ(0, g_persistCalls);
-	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player_));
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player));
 }
 
 // v1 不支持的 P2 字段(item_uuids / pet_id)现在是**记账式终局拒绝**(§4.9 第 8 步)。
@@ -779,7 +779,7 @@ TEST_F(AssetOpSystemTest, CreditMissingBagsRetriesBeforeAnyMixedBundleMutation)
 // 于是按规格记账才是对的 —— Go 能当场终结并退回业务,不必让 outbox 行永远 PENDING。
 TEST_F(AssetOpSystemTest, UnsupportedP2FieldsRejectedAndRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	auto withPet = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
 	withPet.mutable_bundle()->set_pet_id(1);
@@ -812,7 +812,7 @@ TEST_F(AssetOpSystemTest, UnsupportedP2FieldsRejectedAndRecorded)
 // 篡改仍然挡得住,只是改由**签名**来挡,而不是靠信封档忽略载荷。
 TEST_F(AssetOpSystemTest, TamperedP2FieldsFailAuthNotRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 
 	// 攻击者拿到一条合法请求:先按真实载荷签名,再追加字段。
 	auto tampered = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
@@ -895,7 +895,7 @@ TEST_F(AssetOpSystemTest, QuantityDebitOfItemConfigUnknownToThisNodeRetriesWitho
 TEST_F(AssetOpSystemTest, CreditWithDebtClawback)
 {
 	// 补缴:欠款先扣属于正常应用,记 APPLIED。
-	ASSERT_EQ(static_cast<uint32_t>(kSuccess), CurrencySystem::AttachDebt(player_, kCurrencyGold, 50, "test", "gm"));
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), CurrencySystem::AttachDebt(player, kCurrencyGold, 50, "test", "gm"));
 
 	const auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
 	const auto response = CallCredit(request);
@@ -911,14 +911,14 @@ TEST_F(AssetOpSystemTest, CreditWithDebtClawback)
 TEST_F(AssetOpSystemTest, CreditMissingCurrencyRuntimeRetriesBeforeAnyMixedBundleMutation)
 {
 	GiveBags();
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	const auto occupiedBefore = inventory.OccupiedGridCount();
 	const auto itemCountBefore = inventory.GetTotalItemCount(10);
-	const auto currencyBefore = tlsEcs.actorRegistry.get<CurrencyComp>(player_).SerializeAsString();
-	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+	const auto currencyBefore = tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString();
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString();
 	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
 
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
@@ -933,19 +933,19 @@ TEST_F(AssetOpSystemTest, CreditMissingCurrencyRuntimeRetriesBeforeAnyMixedBundl
 	EXPECT_FALSE(response.partial());
 	EXPECT_EQ(occupiedBefore, inventory.OccupiedGridCount());
 	EXPECT_EQ(itemCountBefore, inventory.GetTotalItemCount(10));
-	EXPECT_EQ(currencyBefore, tlsEcs.actorRegistry.get<CurrencyComp>(player_).SerializeAsString());
-	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString());
+	EXPECT_EQ(currencyBefore, tlsEcs.actorRegistry.get<CurrencyComp>(player).SerializeAsString());
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString());
 	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT));
 	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued);
 	EXPECT_EQ(0, g_addCurrencyCalls);
 	EXPECT_EQ(0, g_persistCalls);
 	EXPECT_EQ(0, g_persistSkippedCalls);
-	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerCurrencyComp>(player_));
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerCurrencyComp>(player));
 }
 
 TEST_F(AssetOpSystemTest, CreditBlockedRejected)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
 
 	const auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
 	const auto response = CallCredit(request);
@@ -955,7 +955,7 @@ TEST_F(AssetOpSystemTest, CreditBlockedRejected)
 	EXPECT_EQ(0u, Gold());
 
 	// 已记账:解封后同 seq 仍然是拒绝。
-	ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player_, kCurrencyGold));
+	ASSERT_EQ(kSuccess, CurrencySystem::UnblockCurrency(player, kCurrencyGold));
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallCredit(request).outcome());
 	EXPECT_EQ(0u, Gold());
 }
@@ -970,11 +970,11 @@ TEST_F(AssetOpSystemTest, CreditWithAPlayerBannedItemIsRejectedWholeBeforeAnyMut
 {
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
 	GiveBags();
-	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_); // 生产里由加载创建
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player); // 生产里由加载创建
 	constexpr uint32_t kBanned = 10;
 	constexpr uint32_t kAllowed = 11;
-	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, kBanned));
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, kBanned));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
 	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
 
@@ -998,7 +998,7 @@ TEST_F(AssetOpSystemTest, CreditWithAPlayerBannedItemIsRejectedWholeBeforeAnyMut
 	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued) << "拒绝发生在铸号之前";
 	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "记账式终局拒绝,不是 RETRY";
 
-	ASSERT_EQ(kSuccess, GainBlockService::UnblockPlayerItemGain(player_, kBanned));
+	ASSERT_EQ(kSuccess, GainBlockService::UnblockPlayerItemGain(player, kBanned));
 	const auto replay = CallCredit(request);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, replay.outcome()) << "结局固定:解封后同 seq 仍是拒绝";
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), replay.reason().id());
@@ -1010,10 +1010,10 @@ TEST_F(AssetOpSystemTest, CreditOfABannedItemIntoAFullBagIsRejectedNotRetried)
 {
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
 	GiveBags();
-	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	bags.bags[kInventory].SetCapacityForRestore(0); // 塞满 = 一格都没有
-	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 10));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, 10));
 
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
 	request.mutable_bundle()->clear_currencies();
@@ -1034,9 +1034,9 @@ TEST_F(AssetOpSystemTest, CreditOfAPlayerBannedCompleteInstanceIsRejected)
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
 	GiveBags();
-	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
-	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 1));
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, 1));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp incoming;
 	incoming.set_item_id(950199995);
 	incoming.set_config_id(1);
@@ -1067,12 +1067,12 @@ TEST_F(AssetOpSystemTest, TradeReturnOfOwnEscrowIgnoresGainBlocks)
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
 	GiveBags();
-	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+	tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
 	constexpr uint32_t kStackable = 10;
-	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyGold));
-	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, 1));
-	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player_, kStackable));
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, 1));
+	ASSERT_EQ(kSuccess, GainBlockService::BlockPlayerItemGain(player, kStackable));
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 
 	const auto credit = [&](uint64_t seq, TransactionType txType, uint64_t instanceGuid)
 	{
@@ -1120,11 +1120,11 @@ TEST_F(AssetOpSystemTest, CreditThatWouldOverflowACurrencyIsRejectedBeforeAnyCha
 	constexpr uint32_t kStackable = 10;
 	// 直接写余额(同 currency_add_guard_test 的 SetBalance):用 AddCurrency 堆到这么大,会顺带触发异常检测。
 	constexpr uint64_t nearlyFull = std::numeric_limits<uint64_t>::max() - 5;
-	auto& balances = tlsEcs.actorRegistry.get<CurrencyComp>(player_);
+	auto& balances = tlsEcs.actorRegistry.get<CurrencyComp>(player);
 	while (balances.values_size() <= static_cast<int>(kCurrencyGold)) balances.add_values(0);
 	balances.set_values(static_cast<int>(kCurrencyGold), nearlyFull);
 	ASSERT_EQ(nearlyFull, Gold());
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 
 	const auto credit = [&](uint64_t seq)
 	{
@@ -1135,7 +1135,7 @@ TEST_F(AssetOpSystemTest, CreditThatWouldOverflowACurrencyIsRejectedBeforeAnyCha
 		return CallCredit(request);
 	};
 
-	EXPECT_TRUE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 10));
+	EXPECT_TRUE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 10));
 	const auto rejected = credit(1);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome()) << "确定拒绝,不回 RETRY";
 	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), rejected.reason().id());
@@ -1146,8 +1146,8 @@ TEST_F(AssetOpSystemTest, CreditThatWouldOverflowACurrencyIsRejectedBeforeAnyCha
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackable));
 
 	// 欠款把这笔收入全抵掉:净入账 0,不溢出,照常应用。
-	ASSERT_EQ(static_cast<uint32_t>(kSuccess), CurrencySystem::AttachDebt(player_, kCurrencyGold, 50, "test", "gm"));
-	EXPECT_FALSE(CurrencySystem::CreditOverflows(player_, kCurrencyGold, 10));
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), CurrencySystem::AttachDebt(player, kCurrencyGold, 50, "test", "gm"));
+	EXPECT_FALSE(CurrencySystem::CreditOverflows(player, kCurrencyGold, 10));
 	const auto applied = credit(2);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
 	EXPECT_FALSE(applied.partial());
@@ -1189,7 +1189,7 @@ TEST_F(AssetOpSystemTest, CreditPartialFlagged)
 	EXPECT_TRUE(response.partial());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetPartialApplied), response.reason().id());
 	EXPECT_EQ(30u, Gold());
-	EXPECT_EQ(0u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
+	EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
 
 	const auto* ledger = Ledger(ASSET_OP_STREAM_GUILD_CREDIT);
 	ASSERT_NE(nullptr, ledger);
@@ -1209,7 +1209,7 @@ TEST_F(AssetOpSystemTest, CreditBagFullRetry)
 		GTEST_SKIP() << "Item 表未随 currency_test 部署,跳过物品发放用例";
 	}
 	GiveBags();
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	bags.bags[kInventory].SetCapacityForRestore(0); // 塞满 = 一格都没有
 
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
@@ -1233,7 +1233,7 @@ TEST_F(AssetOpSystemTest, CreditBagFullRetry)
 
 TEST_F(AssetOpSystemTest, ResaveThrottle)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	ASSERT_EQ(1, g_persistCalls);
 
@@ -1254,7 +1254,7 @@ TEST_F(AssetOpSystemTest, ResaveThrottle)
 // Redis快照已含结局仍不能证明SQL提交；重查必须有机会补发强制保存来重建SQL证据。
 TEST_F(AssetOpSystemTest, RedisDurableCanRebuildSQLCommitProof)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	CompleteFakeSave();
 
@@ -1273,7 +1273,7 @@ TEST_F(AssetOpSystemTest, RedisDurableCanRebuildSQLCommitProof)
 // PersistAndProbeDurable 根本不会被调用。
 TEST_F(AssetOpSystemTest, SkippedSaveMeansDurable)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	ASSERT_FALSE(CallDebit(1, 30).durable()) << "落盘回调还没到";
 
@@ -1311,8 +1311,8 @@ TEST_F(AssetOpSystemTest, AbortDurableAfterSave)
 // E1:epoch == 0 时 Debit / Credit / AbortDebit 都不记账。
 TEST_F(AssetOpSystemTest, OwnerEpochZeroRetryNotRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0;
 
 	const auto debit = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, debit.outcome());
@@ -1337,8 +1337,8 @@ TEST_F(AssetOpSystemTest, OwnerEpochZeroRetryNotRecorded)
 // E2:组件缺失与 epoch == 0 同样处理(fail-closed)。
 TEST_F(AssetOpSystemTest, OwnerEpochMissingRetryNotRecorded)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	tlsEcs.actorRegistry.remove<PlayerOwnerEpochComp>(player_);
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.remove<PlayerOwnerEpochComp>(player);
 
 	const auto debit = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, debit.outcome());
@@ -1351,11 +1351,11 @@ TEST_F(AssetOpSystemTest, OwnerEpochMissingRetryNotRecorded)
 // E3:已见 seq 的只读答复不受闸影响,但 epoch == 0 时不补存 —— 补存同样是一份无守卫的写。
 TEST_F(AssetOpSystemTest, OwnerEpochZeroSeenSeqAnswersWithoutResave)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome()) << "epoch == 1 时照常记账";
 	const int persistAfterApply = g_persistCalls;
 
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0;
 	g_fakeNowMs += kAssetOpResaveMinIntervalMs; // 限频窗口已过,若不设闸本该补存
 
 	const auto seen = CallDebit(1, 30);
@@ -1368,7 +1368,7 @@ TEST_F(AssetOpSystemTest, OwnerEpochZeroSeenSeqAnswersWithoutResave)
 	const auto afterUnfencedSave = CallDebit(1, 30);
 	EXPECT_FALSE(afterUnfencedSave.durable()) << "epoch == 0 时没有受围栏提交证据,绝不能报 durable";
 
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 1;
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 1;
 	CompleteFakeSave();
 	const auto afterFencedSave = CallDebit(1, 30);
 	EXPECT_TRUE(afterFencedSave.durable()) << "当前所有权代次确认提交后才报 durable";
@@ -1377,7 +1377,7 @@ TEST_F(AssetOpSystemTest, OwnerEpochZeroSeenSeqAnswersWithoutResave)
 // E3b:未绑定提交证据(只调用 Replace 未经 RememberCommit)或代次失配的快照,Debit 与 AckReceipt 都不能报 durable。
 TEST_F(AssetOpSystemTest, UncommittedOrStaleEpochSnapshotNeverReportsDurable)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	auto tradeReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 30, TX_TRADE);
 	SignForTest("debit", tradeReq, "trade");
 	::AssetOpResponse debitResp;
@@ -1385,14 +1385,14 @@ TEST_F(AssetOpSystemTest, UncommittedOrStaleEpochSnapshotNeverReportsDurable)
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
 
 	// 1) 未经 RememberCommit 的裸 Replace(committed_owner_epoch/committed_save_seq 为 0)
-	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/0, /*saveSeq=*/0);
+	CaptureLedgerSnapshot(player, /*ownerEpoch=*/0, /*saveSeq=*/0);
 	debitResp.Clear();
 	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
 	EXPECT_FALSE(debitResp.durable());
 
 	// 2) 旧代次提交的快照(committed_owner_epoch != 当前 owner->epoch)
-	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/99, /*saveSeq=*/1);
+	CaptureLedgerSnapshot(player, /*ownerEpoch=*/99, /*saveSeq=*/1);
 	debitResp.Clear();
 	PlayerAssetOpSystem::Debit(tradeReq, debitResp);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, debitResp.outcome());
@@ -1412,7 +1412,7 @@ TEST_F(AssetOpSystemTest, UncommittedOrStaleEpochSnapshotNeverReportsDurable)
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, ackResp.outcome());
 	EXPECT_FALSE(ackResp.durable());
 
-	CaptureLedgerSnapshot(player_, /*ownerEpoch=*/99, /*saveSeq=*/2);
+	CaptureLedgerSnapshot(player, /*ownerEpoch=*/99, /*saveSeq=*/2);
 	ackResp.Clear();
 	PlayerAssetOpSystem::AckReceipt(tradeReq, ackResp);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, ackResp.outcome());
@@ -1428,11 +1428,11 @@ TEST_F(AssetOpSystemTest, UncommittedOrStaleEpochSnapshotNeverReportsDurable)
 // E4:闸只看当前 epoch,不留粘性状态 —— 铸造之后同一 seq 重投照常应用。
 TEST_F(AssetOpSystemTest, OwnerEpochMintedLaterAppliesSameSeq)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0;
 	ASSERT_EQ(ASSET_OP_OUTCOME_RETRY, CallDebit(1, 30).outcome());
 
-	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 7;
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 7;
 	const auto applied = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
 	EXPECT_EQ(70u, Gold());
@@ -1440,13 +1440,13 @@ TEST_F(AssetOpSystemTest, OwnerEpochMintedLaterAppliesSameSeq)
 }
 TEST_F(AssetOpSystemTest, ReceiptAckRequiresMatchingCorrelationAndKeepsOriginalOutcome)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	auto ack = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 30, TX_TRADE);
 	SignForTest("debit", ack, "trade");
 	::AssetOpResponse response;
 	PlayerAssetOpSystem::Debit(ack, response);
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, response.outcome());
-	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_);
+	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player);
 	auto& stream = MutableAssetOpStream(comp, ASSET_OP_STREAM_TRADE_DEBIT);
 	ASSERT_EQ(1, stream.receipts_size());
 	auto* receipt = stream.mutable_receipts(0);
@@ -1482,7 +1482,7 @@ TEST_F(AssetOpSystemTest, ReceiptAckRequiresMatchingCorrelationAndKeepsOriginalO
 
 TEST_F(AssetOpSystemTest, CoinAndRejectedReplaysRequireOriginalIdentity)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	CompleteFakeSave();
 	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, CallDebit(1, 31).outcome());
@@ -1492,7 +1492,7 @@ TEST_F(AssetOpSystemTest, CoinAndRejectedReplaysRequireOriginalIdentity)
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallDebit(2, 100).outcome());
 	EXPECT_EQ(70u, Gold());
 	ASSERT_EQ(2, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)->receipts_size());
-	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_)).empty());
+	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player)).empty());
 }
 
 TEST_F(AssetOpSystemTest, MailCreditReplayRequiresOriginalIdentity)
@@ -1513,10 +1513,10 @@ TEST_F(AssetOpSystemTest, MailCreditReplayRequiresOriginalIdentity)
 
 TEST_F(AssetOpSystemTest, LegacySeenBitmapWithoutIdentityNeverProvesNewRequest)
 {
-	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_);
+	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player);
 	auto& stream = MutableAssetOpStream(comp, ASSET_OP_STREAM_GUILD_DEBIT);
 	ASSERT_TRUE(RecordAssetOpOutcome(stream, kTestEpoch, 1, AssetOpRecordKind::kApplied, 0));
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 70));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 70));
 	CompleteFakeSave();
 	const auto response = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, response.outcome());
@@ -1528,7 +1528,7 @@ TEST_F(AssetOpSystemTest, LegacySeenBitmapWithoutIdentityNeverProvesNewRequest)
 
 TEST_F(AssetOpSystemTest, FiveFullIdentityWindowsDoNotConsumeSnapshotBudgetOrBlockPruning)
 {
-	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_);
+	auto& comp = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player);
 	const auto max = (std::numeric_limits<uint64_t>::max)();
 	const auto watermark = max - 2048;
 	for (const auto kind : {ASSET_OP_STREAM_GUILD_DEBIT, ASSET_OP_STREAM_GUILD_CREDIT,
@@ -1563,7 +1563,7 @@ TEST_F(AssetOpSystemTest, CompleteItemEscrowReplayAndCreditKeepIdentityGrowthAnd
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置，不能跳过托管验证";
 	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp original;
 	original.set_item_id(950199999); original.set_config_id(1); original.set_size(1);
 	original.mutable_equip()->set_enhance_level(7);
@@ -1611,7 +1611,7 @@ TEST_F(AssetOpSystemTest, CreditRejectsAnInstanceAlreadyCarriedInAnUnsupportedBa
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	ASSERT_NE(nullptr, ItemTableManager::Instance().FindByIdSilent(1).first);
 	GiveBags();
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	ItemComp carried;
 	carried.set_item_id(950199997); carried.set_config_id(1); carried.set_size(1);
 
@@ -1652,7 +1652,7 @@ TEST_F(AssetOpSystemTest, CompleteInstanceWithConfigUnknownToThisNodeRetriesWith
 {
 	constexpr uint32_t kConfigNotOnThisNode = 999999999;
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp newer;
 	newer.set_item_id(950199051); newer.set_config_id(kConfigNotOnThisNode); newer.set_size(1);
 
@@ -1688,14 +1688,14 @@ TEST_F(AssetOpSystemTest, QuantityDebitOfStacksCarryingNewerVersionFieldsRetries
 	ASSERT_NE(nullptr, row);
 	ASSERT_GT(row->max_stack_size(), 7u) << "数量扣出只收可叠加配置";
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp plain;
 	plain.set_item_id(950199991); plain.set_config_id(kStackableConfig); plain.set_size(2);
 	ItemComp fromNewerVersion;
 	fromNewerVersion.set_item_id(950199992); fromNewerVersion.set_config_id(kStackableConfig); fromNewerVersion.set_size(5);
 	fromNewerVersion.mutable_unknown_fields()->AddVarint(412345, 1); // 新版本给物品加的属性(例如绑定)
 	inventory.RestoreItems({{plain, 0}, {fromNewerVersion, 1}});
-	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString();
 
 	const auto quantityDebit = [](uint64_t seq, uint32_t count)
 	{
@@ -1712,7 +1712,7 @@ TEST_F(AssetOpSystemTest, QuantityDebitOfStacksCarryingNewerVersionFieldsRetries
 	PlayerAssetOpSystem::Debit(quantityDebit(1, 4), skewed);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, skewed.outcome()) << "版本错位不得记终态";
 	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), skewed.reason().id());
-	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString()) << "不记账";
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString()) << "不记账";
 	EXPECT_EQ(2u, inventory.GetTotalItemCount(kStackableConfig));
 	ASSERT_NE(nullptr, inventory.GetItemCompByGuid(fromNewerVersion.item_id()));
 	EXPECT_EQ(5u, inventory.GetItemCompByGuid(fromNewerVersion.item_id())->size());
@@ -1742,7 +1742,7 @@ TEST_F(AssetOpSystemTest, QuantityDebitRejectsEquipmentEvenWhenMisconfiguredAsSt
 	ASSERT_NE(nullptr, row);
 	ASSERT_NE(0u, row->equip_kind()) << "配置 1 是装备,是本用例的前置";
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp gear;
 	gear.set_item_id(950199041); gear.set_config_id(kEquipmentConfig); gear.set_size(1);
 	inventory.RestoreItems({{gear, 0}});
@@ -1772,7 +1772,7 @@ TEST_F(AssetOpSystemTest, QuantityDebitDeterministicRejectionsComeBeforeVersionS
 	constexpr Guid kGuidNotInBag = 950199999;
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp plain;
 	plain.set_item_id(950199991); plain.set_config_id(kStackableConfig); plain.set_size(2);
 	ItemComp fromNewerVersion;
@@ -1812,9 +1812,9 @@ TEST_F(AssetOpSystemTest, CreditWithCurrencyUnknownToThisVersionRetriesWithoutAn
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是合法载荷的前置";
 	ASSERT_FALSE(IsKnownCurrencyType(kCurrencyFromNewerVersion));
 	GiveBags();
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	PlayerAssetOpSystem::SetAddCurrencyFnForTest(&FakeAddCurrency);
-	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString();
+	const auto ledgerBefore = tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString();
 	const auto issuedBefore = tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued;
 
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
@@ -1830,17 +1830,17 @@ TEST_F(AssetOpSystemTest, CreditWithCurrencyUnknownToThisVersionRetriesWithoutAn
 	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
 	EXPECT_FALSE(response.durable());
 	EXPECT_FALSE(response.partial());
-	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_).SerializeAsString()) << "不记账";
+	EXPECT_EQ(ledgerBefore, tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player).SerializeAsString()) << "不记账";
 	EXPECT_EQ(0, g_persistCalls) << "不存盘";
 	EXPECT_EQ(0, g_addCurrencyCalls) << "已知币种也不先加";
 	EXPECT_EQ(100u, Gold());
 	EXPECT_EQ(issuedBefore, tlsGuidSegmentRegistry.Get(GuidKind::kItem).GetStats().issued) << "不分配物品号";
-	EXPECT_EQ(0u, tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory].GetTotalItemCount(10)) << "不发物品";
+	EXPECT_EQ(0u, tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory].GetTotalItemCount(10)) << "不发物品";
 }
 
 TEST_F(AssetOpSystemTest, DebitWithCurrencyUnknownToThisVersionRetriesWithoutRecording)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	auto request = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
 	request.mutable_bundle()->mutable_currencies(0)->set_currency_type(kCurrencyFromNewerVersion);
 	SignForTest("debit", request);
@@ -1874,7 +1874,7 @@ TEST_F(AssetOpSystemTest, DuplicateUnknownCurrencyIsStillRejected)
 // 中止排在 8b 之前:旧节点仍能在截止时刻给带新币种的 seq 关门;此后同 seq 的扣款回放已定的拒绝。
 TEST_F(AssetOpSystemTest, AbortStillClosesASeqWhoseBundleCarriesAnUnknownCurrency)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	auto abortRequest = MakeAbortRequest(1);
 	abortRequest.mutable_bundle()->mutable_currencies(0)->set_currency_type(kCurrencyFromNewerVersion);
 	SignForTest("abort_debit", abortRequest);
@@ -1958,29 +1958,29 @@ protected:
 
 TEST_F(AssetOpRecallTest, CurrencyWithEnoughBalanceHasNoDebt)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	::AssetOpResponse response;
 	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), response);
 	ExpectLine(response, 30, 30, 0, 0);
 	EXPECT_EQ(70u, Gold());
-	EXPECT_TRUE(CurrencySystem::QueryDebts(player_).empty());
+	EXPECT_TRUE(CurrencySystem::QueryDebts(player).empty());
 }
 
 TEST_F(AssetOpRecallTest, CurrencyShortfallBecomesDebtAndBalanceNeverGoesNegative)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 20));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 20));
 	::AssetOpResponse response;
 	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 50), response);
 	ExpectLine(response, 50, 20, 30, 0);
 	EXPECT_EQ(0u, Gold());
 
-	const auto debts = CurrencySystem::QueryDebts(player_);
+	const auto debts = CurrencySystem::QueryDebts(player);
 	ASSERT_EQ(1u, debts.size());
 	EXPECT_EQ(30u, debts[0].owed());
 	EXPECT_EQ(0u, debts[0].expires_at()) << "回收的欠款不能到点自动免除";
 
 	// 之后的收入先抵扣。
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 40));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 40));
 	EXPECT_EQ(10u, Gold());
 }
 
@@ -1993,7 +1993,7 @@ TEST_F(AssetOpRecallTest, CurrencyOverBalanceIsNotRejected)
 
 TEST_F(AssetOpRecallTest, ReplayAnswersOriginalReceiptWithoutSecondDeduction)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	::AssetOpResponse first;
 	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), first);
 	ExpectLine(first, 30, 30, 0, 0);
@@ -2004,13 +2004,13 @@ TEST_F(AssetOpRecallTest, ReplayAnswersOriginalReceiptWithoutSecondDeduction)
 	ExpectLine(replay, 30, 30, 0, 0);
 	EXPECT_TRUE(replay.durable());
 	EXPECT_EQ(70u, Gold()) << "同 seq 只读答复,不再扣";
-	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_)).empty())
+	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player)).empty())
 		<< "只带明细的收据要过账本校验,否则下次加载整个资产通道关掉";
 }
 
 TEST_F(AssetOpRecallTest, ReplayWithChangedAmountIsUnknownNotApplied)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	::AssetOpResponse first;
 	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), first);
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, first.outcome());
@@ -2023,7 +2023,7 @@ TEST_F(AssetOpRecallTest, ReplayWithChangedAmountIsUnknownNotApplied)
 
 TEST_F(AssetOpRecallTest, AbortOfUnseenSeqNeverApplies)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	::AssetOpRequest abort = MakeCurrencyRequest(ASSET_OP_STREAM_GM_RECALL, 1, 30, TX_BATCH_RECALL, 901);
 	auto* auth = abort.mutable_auth();
 	auth->set_caller("data_service");
@@ -2042,8 +2042,8 @@ TEST_F(AssetOpRecallTest, AbortOfUnseenSeqNeverApplies)
 
 TEST_F(AssetOpRecallTest, FrozenRetriesWithoutRecording)
 {
-	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
-	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player_);
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	::AssetOpResponse response;
 	PlayerAssetOpSystem::Debit(CurrencyRecall(1, 30), response);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome());
@@ -2106,7 +2106,7 @@ TEST_F(AssetOpRecallTest, StackableTakesWhatIsHeldAcrossBagsAndReportsShortfall)
 	constexpr uint32_t kStackableConfig = 10;
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	GiveBags();
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	ItemComp inInventory;
 	inInventory.set_item_id(950199001); inInventory.set_config_id(kStackableConfig); inInventory.set_size(2);
 	ItemComp inWarehouse;
@@ -2135,7 +2135,7 @@ TEST_F(AssetOpRecallTest, UnitsCarryingNewerFieldsRetryInsteadOfReportingShortfa
 	constexpr uint32_t kStackableConfig = 10;
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	ItemComp plain;
 	plain.set_item_id(950199011); plain.set_config_id(kStackableConfig); plain.set_size(2);
 	ItemComp fromNewerVersion;
@@ -2162,7 +2162,7 @@ TEST_F(AssetOpRecallTest, InstancesAreRecalledOnlyByName)
 	constexpr uint32_t kInstanceConfig = 1;
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	GiveBags();
-	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_).bags[kInventory];
+	auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
 	const auto put = [&inventory](uint64_t guid)
 	{
 		ItemComp item;
@@ -2198,7 +2198,7 @@ TEST_F(AssetOpRecallTest, InstancesAreRecalledOnlyByName)
 	ExpectLine(repeated, 2, 1, 0, 1);
 	EXPECT_FALSE(inventory.ContainsGuid(950199021));
 	EXPECT_TRUE(inventory.ContainsGuid(950199022));
-	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_)).empty());
+	EXPECT_TRUE(ValidateAssetOpLedger(tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player)).empty());
 }
 
 // 点名的实例在哪个包里都能回收,穿在身上的也不例外。
@@ -2208,7 +2208,7 @@ TEST_F(AssetOpRecallTest, NamedInstanceIsRecalledFromAnyBagIncludingWornGear)
 	ASSERT_TRUE(ItemTableAvailable()) << "真实物品配置是本用例的前置";
 	EquipSlotTableManager::Instance().Load(); // 装备栏的槽位来自这张表,没加载就放不进去
 	GiveBags();
-	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player_);
+	auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	ItemComp worn;
 	worn.set_item_id(950199031); worn.set_config_id(kInstanceConfig); worn.set_size(1);
 	ItemComp spare;

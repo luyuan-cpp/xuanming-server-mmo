@@ -120,6 +120,61 @@
    "limit_period": 0,
    "name": "同心结",
    "required_guild_level": 5
+  },
+  {
+   "category": 1,
+   "cost_contribution": 120,
+   "id": 105,
+   "item_count": 1,
+   "item_id": 3403,
+   "limit_count": 10,
+   "limit_period": 2,
+   "name": "重铸砂",
+   "required_guild_level": 2
+  },
+  {
+   "category": 2,
+   "cost_contribution": 100,
+   "id": 205,
+   "item_count": 1,
+   "item_id": 3406,
+   "limit_count": 12,
+   "limit_period": 2,
+   "name": "悟道残页",
+   "required_guild_level": 3
+  },
+  {
+   "category": 2,
+   "cost_contribution": 350,
+   "id": 206,
+   "item_count": 1,
+   "item_id": 3405,
+   "limit_count": 3,
+   "limit_period": 2,
+   "name": "定星保底符",
+   "required_guild_level": 4
+  },
+  {
+   "category": 3,
+   "cost_contribution": 1200,
+   "id": 304,
+   "item_count": 1,
+   "item_id": 3404,
+   "limit_count": 1,
+   "limit_period": 2,
+   "name": "自用法宝拓印",
+   "required_guild_level": 5
+  },
+  {
+   "category": 3,
+   "cost_contribution": 3600,
+   "id": 305,
+   "item_count": 1,
+   "item_id": 3402,
+   "limit_count": 1,
+   "limit_period": 2,
+   "name": "角色形象卡",
+   "required_guild_level": 6
   }
  ]
 }

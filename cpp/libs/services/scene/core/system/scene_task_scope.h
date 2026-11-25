@@ -28,6 +28,6 @@ public:
 
 private:
 	struct State;
-	static thread_local std::weak_ptr<State> current_;
-	std::shared_ptr<State> state_;
+	static thread_local std::weak_ptr<State> current;
+	std::shared_ptr<State> state;
 };

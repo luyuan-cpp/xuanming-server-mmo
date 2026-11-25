@@ -66,10 +66,10 @@ protected:
 
     void SetUp() override
     {
-        loop_.runAfter(kSafetyQuitSeconds, [this] { loop_.quit(); });
+        loop.runAfter(kSafetyQuitSeconds, [this] { loop.quit(); });
     }
 
-    muduo::net::EventLoop loop_;
+    muduo::net::EventLoop loop;
 };
 
 // 别的线程 queueInLoop 时 loop 正阻塞在 poll 里(或刚跑完上一轮的 pending functor、即将进入 poll):
@@ -77,7 +77,7 @@ protected:
 TEST_F(EventLoopWakeupTest, CrossThreadQueueInLoopWakesBlockedPoll)
 {
     std::vector<Clock::duration> latencies;  // 只在 loop 线程上写;loop() 返回、投递线程 join 之后才读
-    muduo::net::EventLoop &loop = loop_;
+    muduo::net::EventLoop &loop = this->loop;
 
     std::thread poster([&loop, &latencies]
     {
@@ -122,7 +122,7 @@ TEST_F(EventLoopWakeupTest, CrossThreadQueueInLoopWakesBlockedPoll)
 TEST_F(EventLoopWakeupTest, ChainedQueueInLoopFromPendingFunctorRunsPromptly)
 {
     std::vector<Clock::duration> latencies;
-    muduo::net::EventLoop &loop = loop_;
+    muduo::net::EventLoop &loop = this->loop;
 
     std::function<void(int, Clock::time_point)> link;
     link = [&loop, &latencies, &link](int remaining, Clock::time_point queuedAt)
@@ -162,7 +162,7 @@ TEST_F(EventLoopWakeupTest, BurstOfWakeupsIsDrainedAndIdleLoopDoesNotSpin)
 {
     int64_t idleStartIteration = -1;
     int64_t idleIterations = -1;
-    muduo::net::EventLoop &loop = loop_;
+    muduo::net::EventLoop &loop = this->loop;
 
     const auto blockerStarted = std::make_shared<std::promise<void>>();
     std::future<void> blockerStartedFuture = blockerStarted->get_future();

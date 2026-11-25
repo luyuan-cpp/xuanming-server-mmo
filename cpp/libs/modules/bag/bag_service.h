@@ -143,7 +143,8 @@ public:
         const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
         uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
         const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit,
-        bool tradableOnly = false, bool* consumedBoundOut = nullptr);
+        bool tradableOnly = false, bool* consumedBoundOut = nullptr,
+        bool bindOutputsIfConsumedBound = false);
 
     // ── 物品数量预留(docs/design/battle-item-reservation.md)──────────────────────────────────
     // 一份预留 = 「人物背包里这几种物品各有这么多已被某件事占住」,数据在持久组件 PlayerItemHoldComp,规则在 item_hold.h。
@@ -338,7 +339,8 @@ public:
 		TransactionType txType,
 		uint64_t correlationId = 0,
 		const std::string &extra = {},
-		bool tradableOnly = false);
+		bool tradableOnly = false,
+		bool *consumedBoundOut = nullptr);
 
 	// Orchestrated 按 guid 全或无扣出(聚宝斋 P2 托管):
 	//   frozen check → Bag::ReserveForBatchRemove(纯预检)→ 逐个 Bag::RemoveItem

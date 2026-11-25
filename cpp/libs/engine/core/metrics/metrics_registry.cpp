@@ -6,15 +6,15 @@ bool MetricsRegistry::Register(std::string name, Collector collector)
 	{
 		return false;
 	}
-	std::lock_guard<std::mutex> lock(mutex_);
-	for (const auto &[existing, _] : collectors_)
+	std::lock_guard<std::mutex> lock(mutex);
+	for (const auto &[existing, _] : collectors)
 	{
 		if (existing == name)
 		{
 			return false;
 		}
 	}
-	collectors_.emplace_back(std::move(name), std::move(collector));
+	collectors.emplace_back(std::move(name), std::move(collector));
 	return true;
 }
 
@@ -22,8 +22,8 @@ std::string MetricsRegistry::Render() const
 {
 	std::vector<std::pair<std::string, Collector>> snapshot;
 	{
-		std::lock_guard<std::mutex> lock(mutex_);
-		snapshot = collectors_;
+		std::lock_guard<std::mutex> lock(mutex);
+		snapshot = collectors;
 	}
 	prometheus_text::Writer writer;
 	for (const auto &[_, collector] : snapshot)

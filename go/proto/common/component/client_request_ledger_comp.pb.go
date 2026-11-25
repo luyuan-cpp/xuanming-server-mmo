@@ -302,19 +302,20 @@ func (x *ClientRequestRecord) GetScrollBonusFragments() uint32 {
 //	阶段一（lifetime_earned < 660）：无每日/周清打卡，永久累计至 660 份，其中胜局基础含至多 60 份可交易；
 //	阶段二（lifetime_earned >= 660）：开启 +11 顶格周平滑精进池，每周 100 份绑定自选（UTC+8 周一 05:00 重置）。
 type EquipmentMaterialRewardLedger struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	DayStartsAtMs          uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"` // 历史日账字段（旧档兼容保留）。
-	EarnedToday            uint32                 `protobuf:"varint,2,opt,name=earned_today,json=earnedToday,proto3" json:"earned_today,omitempty"`
-	AvailableUnits         uint64                 `protobuf:"varint,3,opt,name=available_units,json=availableUnits,proto3" json:"available_units,omitempty"`
-	Revision               uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`                                                             // 仅成功领取+1；入账不改变领取水位，饱和时拒绝领取，永不回退。
-	LifetimeEarned         uint32                 `protobuf:"varint,5,opt,name=lifetime_earned,json=lifetimeEarned,proto3" json:"lifetime_earned,omitempty"`                           // 阶段一永久首套累计已获份数（上限 660）。
-	TradableEarnedTotal    uint32                 `protobuf:"varint,6,opt,name=tradable_earned_total,json=tradableEarnedTotal,proto3" json:"tradable_earned_total,omitempty"`          // 阶段一累计已获可交易份数（上限 60）。
-	AvailableTradableUnits uint64                 `protobuf:"varint,7,opt,name=available_tradable_units,json=availableTradableUnits,proto3" json:"available_tradable_units,omitempty"` // 当前未领余额中可交易子集（不变量：<= available_units）。
-	WeekStartsAtMs         uint64                 `protobuf:"varint,8,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                       // 阶段二当前游戏周起点（UTC+8 周一 05:00）。
-	EarnedThisWeek         uint32                 `protobuf:"varint,9,opt,name=earned_this_week,json=earnedThisWeek,proto3" json:"earned_this_week,omitempty"`                         // 阶段二本周已获绑定份数（上限 100）。
-	MigratedToV2           bool                   `protobuf:"varint,10,opt,name=migrated_to_v2,json=migratedToV2,proto3" json:"migrated_to_v2,omitempty"`                              // 标记已进入两阶段新账（旧档历史余额全额保留为自用，不抵扣新 660）。
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	DayStartsAtMs           uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"` // 历史日账字段（旧档兼容保留）。
+	EarnedToday             uint32                 `protobuf:"varint,2,opt,name=earned_today,json=earnedToday,proto3" json:"earned_today,omitempty"`
+	AvailableUnits          uint64                 `protobuf:"varint,3,opt,name=available_units,json=availableUnits,proto3" json:"available_units,omitempty"`
+	Revision                uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`                                                                 // 仅成功领取+1；入账不改变领取水位，饱和时拒绝领取，永不回退。
+	LifetimeEarned          uint32                 `protobuf:"varint,5,opt,name=lifetime_earned,json=lifetimeEarned,proto3" json:"lifetime_earned,omitempty"`                               // 阶段一永久首套累计已获份数（上限 660）。
+	TradableEarnedTotal     uint32                 `protobuf:"varint,6,opt,name=tradable_earned_total,json=tradableEarnedTotal,proto3" json:"tradable_earned_total,omitempty"`              // 阶段一累计已获可交易份数（上限 60）。
+	AvailableTradableUnits  uint64                 `protobuf:"varint,7,opt,name=available_tradable_units,json=availableTradableUnits,proto3" json:"available_tradable_units,omitempty"`     // 当前未领余额中可交易子集（不变量：<= available_units）。
+	WeekStartsAtMs          uint64                 `protobuf:"varint,8,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                           // 阶段二当前游戏周起点（UTC+8 周一 05:00）。
+	EarnedThisWeek          uint32                 `protobuf:"varint,9,opt,name=earned_this_week,json=earnedThisWeek,proto3" json:"earned_this_week,omitempty"`                             // 阶段二本周已获份数（上限 150）。
+	MigratedToV2            bool                   `protobuf:"varint,10,opt,name=migrated_to_v2,json=migratedToV2,proto3" json:"migrated_to_v2,omitempty"`                                  // 标记已进入两阶段新账（旧档历史余额全额保留为自用，不抵扣新 660）。
+	Stage1TradableConfirmed uint32                 `protobuf:"varint,11,opt,name=stage1_tradable_confirmed,json=stage1TradableConfirmed,proto3" json:"stage1_tradable_confirmed,omitempty"` // 已由 data_service 账号目录确认的本角色阶段一可交易份数（<= tradable_earned_total）。
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *EquipmentMaterialRewardLedger) Reset() {
@@ -415,6 +416,13 @@ func (x *EquipmentMaterialRewardLedger) GetMigratedToV2() bool {
 		return x.MigratedToV2
 	}
 	return false
+}
+
+func (x *EquipmentMaterialRewardLedger) GetStage1TradableConfirmed() uint32 {
+	if x != nil {
+		return x.Stage1TradableConfirmed
+	}
+	return 0
 }
 
 type ClientRequestLedgerComp struct {
@@ -524,7 +532,7 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x15crafted_skill_book_id\x18\x1a \x01(\x04R\x12craftedSkillBookId\x123\n" +
 	"\x16crafted_skill_table_id\x18\x1b \x01(\rR\x13craftedSkillTableId\x122\n" +
 	"\x15scroll_craft_revision\x18\x1c \x01(\x04R\x13scrollCraftRevision\x124\n" +
-	"\x16scroll_bonus_fragments\x18\x1d \x01(\rR\x14scrollBonusFragments\"\xc2\x03\n" +
+	"\x16scroll_bonus_fragments\x18\x1d \x01(\rR\x14scrollBonusFragments\"\xfe\x03\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +
@@ -536,7 +544,8 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x11week_starts_at_ms\x18\b \x01(\x04R\x0eweekStartsAtMs\x12(\n" +
 	"\x10earned_this_week\x18\t \x01(\rR\x0eearnedThisWeek\x12$\n" +
 	"\x0emigrated_to_v2\x18\n" +
-	" \x01(\bR\fmigratedToV2\"\xd4\x01\n" +
+	" \x01(\bR\fmigratedToV2\x12:\n" +
+	"\x19stage1_tradable_confirmed\x18\v \x01(\rR\x17stage1TradableConfirmed\"\xd4\x01\n" +
 	"\x17ClientRequestLedgerComp\x12.\n" +
 	"\arecords\x18\x01 \x03(\v2\x14.ClientRequestRecordR\arecords\x12\x19\n" +
 	"\bnext_seq\x18\x02 \x01(\x04R\anextSeq\x12%\n" +

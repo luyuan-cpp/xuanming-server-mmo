@@ -84,12 +84,12 @@ public:
     void BeginCallback();
     void CompleteCallback(bool returned);
 private:
-    mutable std::mutex mutex_;
-    std::uint64_t accepted_ = 0, completed_ = 0;
-    std::uint64_t callbacksAccepted_ = 0, callbacksCompleted_ = 0;
-    bool closed_ = false, unknown_ = false;
-    bool callbackTrackingLost_ = false;
-    std::uint64_t liveOwners_ = 0;
+    mutable std::mutex mutex;
+    std::uint64_t accepted = 0, completed = 0;
+    std::uint64_t callbacksAccepted = 0, callbacksCompleted = 0;
+    bool closed = false, unknown = false;
+    bool callbackTrackingLost = false;
+    std::uint64_t liveOwners = 0;
 };
 
 struct UnaryCallResult;
@@ -214,13 +214,13 @@ public:
 private:
     friend class Channel;
     ClientStream(std::weak_ptr<Channel> channel, std::weak_ptr<detail::StreamRecord> record, uint64_t id)
-        : channel_(std::move(channel)), record_(std::move(record)), id_(id)
+        : channel(std::move(channel)), record(std::move(record)), id(id)
     {
     }
 
-    std::weak_ptr<Channel> channel_;
-    std::weak_ptr<detail::StreamRecord> record_;
-    uint64_t id_;
+    std::weak_ptr<Channel> channel;
+    std::weak_ptr<detail::StreamRecord> record;
+    uint64_t id;
 };
 
 class Channel : public std::enable_shared_from_this<Channel>, public Http2TransportListener
@@ -252,8 +252,8 @@ public:
     // 与 grpc::Channel::GetState 同义:tryToConnect 且处于 IDLE 时开始连接。
     ConnectivityState GetState(bool tryToConnect);
 
-    const std::string &target() const { return target_; }
-    size_t outstandingCalls() const { return calls_.size(); }
+    const std::string &Target() const { return target; }
+    size_t outstandingCalls() const { return calls.size(); }
 
 private:
     struct Call
@@ -320,38 +320,38 @@ private:
     void NotifyLink(ChannelLinkEvent event);
     bool LoopIsCurrent() const;
 
-    std::shared_ptr<MaintenanceState> maintenance_;
-    muduo::net::EventLoop &loop_;
-    const std::string target_;
-    const muduo::net::InetAddress address_;
-    const ChannelOptions options_;
-    Http2TransportOptions transportOptions_;
+    std::shared_ptr<MaintenanceState> maintenance;
+    muduo::net::EventLoop &loop;
+    const std::string target;
+    const muduo::net::InetAddress address;
+    const ChannelOptions options;
+    Http2TransportOptions transportOptions;
 
-    ConnectivityState state_{ConnectivityState::kIdle};
-    Status lastFailure_;
+    ConnectivityState state{ConnectivityState::kIdle};
+    Status lastFailure;
 
-    std::shared_ptr<Http2Transport> current_;                 // 正在连接或 READY 的连接
-    std::vector<std::shared_ptr<Http2Transport>> draining_;   // GOAWAY 后等在途流结束的连接
-    uint64_t nextTransportId_{1};
+    std::shared_ptr<Http2Transport> current;                 // 正在连接或 READY 的连接
+    std::vector<std::shared_ptr<Http2Transport>> draining;   // GOAWAY 后等在途流结束的连接
+    uint64_t nextTransportId{1};
 
-    uint64_t nextCallId_{1};
-    std::unordered_map<uint64_t, Call> calls_;                // 所有未完成的调用
-    std::deque<uint64_t> pending_;                            // 等连接 READY 的调用(可能含已完成的残留 id)
-    std::set<std::pair<std::chrono::steady_clock::time_point, uint64_t>> deadlines_;
-    std::map<std::pair<uint64_t, int32_t>, uint64_t> streamToCall_;  // (连接, 流) → 调用
-    std::unordered_map<uint64_t, StreamRecordPtr> streams_;           // 所有未结束的双向流
-    std::deque<uint64_t> pendingStreams_;                             // 等连接 READY 的双向流
-    std::map<std::pair<uint64_t, int32_t>, uint64_t> streamToBidi_;   // (连接, 流) → 双向流
-    bool flushPendingQueued_{false};
+    uint64_t nextCallId{1};
+    std::unordered_map<uint64_t, Call> calls;                // 所有未完成的调用
+    std::deque<uint64_t> pending;                            // 等连接 READY 的调用(可能含已完成的残留 id)
+    std::set<std::pair<std::chrono::steady_clock::time_point, uint64_t>> deadlines;
+    std::map<std::pair<uint64_t, int32_t>, uint64_t> streamToCall;  // (连接, 流) → 调用
+    std::unordered_map<uint64_t, StreamRecordPtr> streams;           // 所有未结束的双向流
+    std::deque<uint64_t> pendingStreams;                             // 等连接 READY 的双向流
+    std::map<std::pair<uint64_t, int32_t>, uint64_t> streamToBidi;   // (连接, 流) → 双向流
+    bool flushPendingQueued{false};
 
-    muduo::net::TimerId deadlineTimer_;
-    bool deadlineTimerArmed_{false};
-    std::chrono::steady_clock::time_point deadlineTimerFor_{};
+    muduo::net::TimerId deadlineTimer;
+    bool deadlineTimerArmed{false};
+    std::chrono::steady_clock::time_point deadlineTimerFor{};
 
-    muduo::net::TimerId backoffTimer_;
-    bool backoffTimerArmed_{false};
-    double nextBackoffMs_;
-    std::mt19937 rng_;
+    muduo::net::TimerId backoffTimer;
+    bool backoffTimerArmed{false};
+    double nextBackoffMs;
+    std::mt19937 rng;
 };
 
 } // namespace muduo_grpc

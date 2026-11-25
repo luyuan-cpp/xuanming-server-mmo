@@ -149,77 +149,77 @@ void InvokeUnaryHandler(const UnaryDispatchInterceptor &interceptor, const Unary
 
 // ── ServerCall / CallToken ─────────────────────────────────────────────
 
-ServerCall::ServerCall(std::shared_ptr<detail::CallToken> token) : token_(std::move(token))
+ServerCall::ServerCall(std::shared_ptr<detail::CallToken> token) : token(std::move(token))
 {
 }
 
 uint64_t ServerCall::id() const
 {
-    return token_ ? token_->callId : 0;
+    return token ? token->callId : 0;
 }
 
 const std::string &ServerCall::method() const
 {
-    return token_ ? token_->method : EmptyString();
+    return token ? token->method : EmptyString();
 }
 
 const std::string &ServerCall::peer() const
 {
-    return token_ ? token_->peer : EmptyString();
+    return token ? token->peer : EmptyString();
 }
 
 const Metadata &ServerCall::metadata() const
 {
-    return token_ ? token_->metadata : EmptyMetadata();
+    return token ? token->metadata : EmptyMetadata();
 }
 
 std::optional<std::chrono::steady_clock::time_point> ServerCall::deadline() const
 {
-    return token_ ? token_->deadline : std::nullopt;
+    return token ? token->deadline : std::nullopt;
 }
 
 bool ServerCall::IsActive() const
 {
-    if (!token_)
+    if (!token)
     {
         return false;
     }
-    RequireLoopThread(*token_, "IsActive");
-    const auto server = token_->server.lock();
-    return server && server->calls_.count(token_->callId) != 0;
+    RequireLoopThread(*token, "IsActive");
+    const auto server = token->server.lock();
+    return server && server->calls.count(token->callId) != 0;
 }
 
 bool ServerCall::ServerDraining() const
 {
-    if (!token_)
+    if (!token)
     {
         return true;
     }
-    RequireLoopThread(*token_, "ServerDraining");
-    const auto server = token_->server.lock();
+    RequireLoopThread(*token, "ServerDraining");
+    const auto server = token->server.lock();
     return !server || server->draining();
 }
 
 bool ServerCall::TryStartBusiness() const
 {
-    if (!token_)
+    if (!token)
     {
         return false;
     }
-    RequireLoopThread(*token_, "TryStartBusiness");
-    const auto server = token_->server.lock();
-    return server && server->TryStartBusiness(token_->callId);
+    RequireLoopThread(*token, "TryStartBusiness");
+    const auto server = token->server.lock();
+    return server && server->TryStartBusiness(token->callId);
 }
 
 void ServerCall::FinishOk(std::string responseBytes) const
 {
-    if (!token_)
+    if (!token)
     {
         LOG_ERROR << "muduo_grpc::ServerCall::FinishOk called on an empty call handle";
         return;
     }
-    RequireLoopThread(*token_, "FinishOk");
-    const auto server = token_->server.lock();
+    RequireLoopThread(*token, "FinishOk");
+    const auto server = token->server.lock();
     if (!server)
     {
         return; // 服务端已销毁:~Server 已静默收口全部调用
@@ -227,24 +227,24 @@ void ServerCall::FinishOk(std::string responseBytes) const
     Server::CallEnd end;
     end.kind = Server::CallEndKind::kResponse;
     end.response = std::move(responseBytes);
-    server->FinishFromHandler(*token_, std::move(end));
+    server->FinishFromHandler(*token, std::move(end));
 }
 
 void ServerCall::FinishError(Status status) const
 {
-    if (!token_)
+    if (!token)
     {
         LOG_ERROR << "muduo_grpc::ServerCall::FinishError called on an empty call handle";
         return;
     }
-    RequireLoopThread(*token_, "FinishError");
+    RequireLoopThread(*token, "FinishError");
     if (status.ok())
     {
-        LOG_ERROR << "muduo_grpc::ServerCall::FinishError called with an OK status, method=" << token_->method
+        LOG_ERROR << "muduo_grpc::ServerCall::FinishError called with an OK status, method=" << token->method
                   << "; replying INTERNAL";
         status = Status(StatusCode::kInternal, "server finished the call with an OK status but no response");
     }
-    const auto server = token_->server.lock();
+    const auto server = token->server.lock();
     if (!server)
     {
         return;
@@ -252,7 +252,7 @@ void ServerCall::FinishError(Status status) const
     Server::CallEnd end;
     end.kind = Server::CallEndKind::kStatus;
     end.status = std::move(status);
-    server->FinishFromHandler(*token_, std::move(end));
+    server->FinishFromHandler(*token, std::move(end));
 }
 
 detail::CallToken::~CallToken()
@@ -284,14 +284,14 @@ class ServerConnection final : public std::enable_shared_from_this<ServerConnect
 public:
     ServerConnection(muduo::net::EventLoop &loop, std::weak_ptr<Server> server, uint64_t id, std::string peer,
                      const ServerOptions &options)
-        : loop_(loop),
-          server_(std::move(server)),
-          id_(id),
-          peer_(std::move(peer)),
-          maxPendingOutputBytes_(options.maxPendingOutputBytes),
-          handshakeTimeout_(options.handshakeTimeout),
-          maxTrackedHeaderTimes_(std::max<size_t>(16, static_cast<size_t>(options.session.maxConcurrentStreams) * 2)),
-          session_(options.session, static_cast<ServerSession::Observer &>(*this))
+        : loop(loop),
+          server(std::move(server)),
+          id(id),
+          peer(std::move(peer)),
+          maxPendingOutputBytes(options.maxPendingOutputBytes),
+          handshakeTimeout(options.handshakeTimeout),
+          maxTrackedHeaderTimes(std::max<size_t>(16, static_cast<size_t>(options.session.maxConcurrentStreams) * 2)),
+          session(options.session, static_cast<ServerSession::Observer &>(*this))
     {
     }
 
@@ -300,43 +300,43 @@ public:
     ServerConnection(const ServerConnection &) = delete;
     ServerConnection &operator=(const ServerConnection &) = delete;
 
-    uint64_t id() const { return id_; }
-    const std::string &peer() const { return peer_; }
-    bool receivedAnyBytes() const { return session_.receivedAnyBytes(); }
+    uint64_t Id() const { return id; }
+    const std::string &Peer() const { return peer; }
+    bool receivedAnyBytes() const { return session.ReceivedAnyBytes(); }
 
     // connectEstablished 之后调用:建会话、上弦握手超时。本端 SETTINGS 只提交进 nghttp2,
     // 收到对端首字节之前不写(§15.5.1)。
     void Start(const muduo::net::TcpConnectionPtr &conn)
     {
-        tcp_ = conn;
-        const Status started = session_.Start();
+        tcp = conn;
+        const Status started = session.Start();
         if (!started.ok())
         {
-            LOG_ERROR << "[GrpcServer] failed to start the HTTP/2 session for " << peer_ << ": " << started.ToString();
+            LOG_ERROR << "[GrpcServer] failed to start the HTTP/2 session for " << peer << ": " << started.ToString();
             ForceClose();
             return;
         }
-        if (handshakeTimeout_.count() > 0)
+        if (handshakeTimeout.count() > 0)
         {
-            handshakeDeadline_ = SteadyClock::now() + handshakeTimeout_;
+            handshakeDeadline = SteadyClock::now() + handshakeTimeout;
             ArmHandshakeTimer();
         }
     }
 
     void HandleMessage(muduo::net::Buffer &buffer)
     {
-        if (closed_)
+        if (closed)
         {
             buffer.retrieveAll();
             return;
         }
         // muduo 一次读事件只做一次 readv;nghttp2 同步解完,这一步只做分帧和 HPACK(§15.6)。
-        ++sessionDepth_;
+        ++sessionDepth;
         const Status status =
-            session_.Receive(reinterpret_cast<const uint8_t *>(buffer.peek()), buffer.readableBytes());
-        --sessionDepth_;
+            session.Receive(reinterpret_cast<const uint8_t *>(buffer.peek()), buffer.readableBytes());
+        --sessionDepth;
         buffer.retrieveAll();
-        if (closed_)
+        if (closed)
         {
             return;
         }
@@ -348,10 +348,10 @@ public:
             return;
         }
         ApplyDeferredResponses();
-        if (finalGoawayRequested_)
+        if (finalGoawayRequested)
         {
             // PING ACK 在 Receive 的回调栈里到达;最终 GOAWAY 推迟到这里提交。
-            finalGoawayRequested_ = false;
+            finalGoawayRequested = false;
             SubmitFinalGoaway();
         }
         // 首次:本端 SETTINGS;之后:SETTINGS ACK / PING ACK / WINDOW_UPDATE / 早拒,以及对端 WINDOW_UPDATE 放行的应答 DATA;
@@ -366,25 +366,25 @@ public:
     {
         for (;;)
         {
-            if (closed_ || closing_ || !session_.receivedAnyBytes())
+            if (closed || closing || !session.ReceivedAnyBytes())
             {
                 return; // 已摘表 / 已写半关 / 已 forceClose:不再写;收到对端首字节之前不写(会话层也有同样的检查)
             }
-            if (sessionDepth_ > 0)
+            if (sessionDepth > 0)
             {
-                flushDeferred_ = true;
+                flushDeferred = true;
                 return;
             }
-            const auto conn = tcp_.lock();
+            const auto conn = tcp.lock();
             if (!conn || !conn->connected())
             {
                 return; // 已断开
             }
-            if (conn->outputBuffer()->readableBytes() >= maxPendingOutputBytes_)
+            if (conn->outputBuffer()->readableBytes() >= maxPendingOutputBytes)
             {
                 return; // writeComplete 后继续;能否写半关也到那时再判断
             }
-            flushDeferred_ = false;
+            flushDeferred = false;
             const Status status = DrainSessionInto(*conn);
             if (!status.ok())
             {
@@ -394,12 +394,12 @@ public:
                 StartGracefulClose();
                 break;
             }
-            if (!deferred_.empty())
+            if (!deferred.empty())
             {
                 ApplyDeferredResponses();
-                flushDeferred_ = true;
+                flushDeferred = true;
             }
-            if (!flushDeferred_)
+            if (!flushDeferred)
             {
                 break;
             }
@@ -410,44 +410,44 @@ public:
     // CompleteCall 的应答出口。对端已走(流已关闭 / 已应答)时 Submit* 返回 false,忽略即可。
     void Respond(int32_t streamId, Server::CallEnd end)
     {
-        if (closed_ || end.kind == Server::CallEndKind::kSilent)
+        if (closed || end.kind == Server::CallEndKind::kSilent)
         {
             return;
         }
-        if (sessionDepth_ > 0)
+        if (sessionDepth > 0)
         {
             // 不在 nghttp2 回调栈里提交(ServerSession 的约定);回调返回后由 ApplyDeferredResponses 补交。
-            deferred_.push_back(DeferredResponse{streamId, std::move(end)});
-            flushDeferred_ = true;
+            deferred.push_back(DeferredResponse{streamId, std::move(end)});
+            flushDeferred = true;
             return;
         }
         SubmitNow(streamId, std::move(end));
     }
 
-    void BindStream(int32_t streamId, uint64_t callId) { streamCalls_[streamId] = callId; }
-    void ForgetStream(int32_t streamId) { streamCalls_.erase(streamId); }
+    void BindStream(int32_t streamId, uint64_t callId) { streamCalls[streamId] = callId; }
+    void ForgetStream(int32_t streamId) { streamCalls.erase(streamId); }
 
     std::optional<uint64_t> TakeStream(int32_t streamId)
     {
-        const auto it = streamCalls_.find(streamId);
-        if (it == streamCalls_.end())
+        const auto it = streamCalls.find(streamId);
+        if (it == streamCalls.end())
         {
             return std::nullopt;
         }
         const uint64_t callId = it->second;
-        streamCalls_.erase(it);
+        streamCalls.erase(it);
         return callId;
     }
 
     std::vector<uint64_t> TakeAllCalls()
     {
         std::vector<uint64_t> callIds;
-        callIds.reserve(streamCalls_.size());
-        for (const auto &entry : streamCalls_)
+        callIds.reserve(streamCalls.size());
+        for (const auto &entry : streamCalls)
         {
             callIds.push_back(entry.second);
         }
-        streamCalls_.clear();
+        streamCalls.clear();
         std::sort(callIds.begin(), callIds.end());
         return callIds;
     }
@@ -456,18 +456,18 @@ public:
     // 冲出由调用方负责(Server::BeginShutdown 标记 dirty)。
     void BeginShutdown(std::chrono::milliseconds goawayPingTimeout, std::chrono::milliseconds closeGrace)
     {
-        if (closed_ || shutdownStarted_)
+        if (closed || shutdownStarted)
         {
             return;
         }
-        shutdownStarted_ = true;
-        closeGrace_ = closeGrace;
-        if (closing_ || gracefulCloseStarted_)
+        shutdownStarted = true;
+        this->closeGrace = closeGrace;
+        if (closing || gracefulCloseStarted)
         {
             return; // 已在关闭(协议错误 / 对端 GOAWAY 之后):不再发 GOAWAY
         }
-        session_.SubmitShutdownNotice();
-        pingDeadline_ = SteadyClock::now() + goawayPingTimeout;
+        session.SubmitShutdownNotice();
+        pingDeadline = SteadyClock::now() + goawayPingTimeout;
         ArmPingTimer();
     }
 
@@ -481,11 +481,11 @@ public:
     // 返回本次拒掉的上传中流的个数(调用方计入 refused_on_shutdown)。调用方保证不在会话回调栈里。
     size_t ExpireDrain()
     {
-        if (closed_ || closing_)
+        if (closed || closing)
         {
             return 0; // 已写半关或已 forceClose:之后什么都写不出去
         }
-        if (!session_.receivedAnyBytes())
+        if (!session.ReceivedAnyBytes())
         {
             ForceClose();
             return 0;
@@ -498,8 +498,8 @@ public:
 
     void ForceClose()
     {
-        closing_ = true;
-        if (const auto conn = tcp_.lock())
+        closing = true;
+        if (const auto conn = tcp.lock())
         {
             conn->forceClose();
         }
@@ -508,11 +508,11 @@ public:
     // 摘表时调用:取消定时器,之后不再读写、不再回调 Server。
     void Close()
     {
-        closed_ = true;
-        closing_ = true;
+        closed = true;
+        closing = true;
         CancelTimers();
-        deferred_.clear();
-        headersReceivedAt_.clear();
+        deferred.clear();
+        headersReceivedAt.clear();
     }
 
 private:
@@ -526,16 +526,16 @@ private:
 
     void OnClientSettings() override
     {
-        if (handshakeTimerArmed_)
+        if (handshakeTimerArmed)
         {
-            loop_.cancel(handshakeTimer_);
-            handshakeTimerArmed_ = false;
+            loop.cancel(handshakeTimer);
+            handshakeTimerArmed = false;
         }
     }
 
     Verdict OnRequestHeaders(int32_t streamId, const RequestHeaders &headers) override
     {
-        const auto server = server_.lock();
+        const auto server = this->server.lock();
         if (!server)
         {
             return RefuseVerdict();
@@ -552,12 +552,12 @@ private:
     {
         // 截止从头部收完时起算(§15.5.4);记录被修剪掉(见 RememberHeadersTime)时退回「现在」。
         SteadyClock::time_point headersAt = SteadyClock::now();
-        if (const auto it = headersReceivedAt_.find(streamId); it != headersReceivedAt_.end())
+        if (const auto it = headersReceivedAt.find(streamId); it != headersReceivedAt.end())
         {
             headersAt = it->second;
-            headersReceivedAt_.erase(it);
+            headersReceivedAt.erase(it);
         }
-        const auto server = server_.lock();
+        const auto server = this->server.lock();
         if (!server)
         {
             return RefuseVerdict();
@@ -567,8 +567,8 @@ private:
 
     void OnStreamAborted(int32_t streamId, uint32_t /*http2ErrorCode*/) override
     {
-        headersReceivedAt_.erase(streamId);
-        if (const auto server = server_.lock())
+        headersReceivedAt.erase(streamId);
+        if (const auto server = this->server.lock())
         {
             server->AbortStream(*this, streamId);
         }
@@ -577,18 +577,18 @@ private:
     void OnShutdownPingAck() override
     {
         // 在 Receive 的回调栈里:不得同步提交,HandleMessage 在 Receive 返回后提交最终 GOAWAY。
-        finalGoawayRequested_ = true;
-        if (pingTimerArmed_)
+        finalGoawayRequested = true;
+        if (pingTimerArmed)
         {
-            loop_.cancel(pingTimer_);
-            pingTimerArmed_ = false;
+            loop.cancel(pingTimer);
+            pingTimerArmed = false;
         }
     }
 
     void OnRequestRejected(int32_t streamId, int httpStatus, const Status &status) override
     {
-        headersReceivedAt_.erase(streamId);
-        if (const auto server = server_.lock())
+        headersReceivedAt.erase(streamId);
+        if (const auto server = this->server.lock())
         {
             server->OnSessionRejected(*this, httpStatus, status);
         }
@@ -599,26 +599,26 @@ private:
     // 排空到期要拒的上传中流不看这份记录(见 RefuseUnfinishedRequests),修剪不影响停机。
     void RememberHeadersTime(int32_t streamId)
     {
-        headersReceivedAt_[streamId] = SteadyClock::now();
-        if (headersReceivedAt_.size() <= maxTrackedHeaderTimes_)
+        headersReceivedAt[streamId] = SteadyClock::now();
+        if (headersReceivedAt.size() <= maxTrackedHeaderTimes)
         {
             return;
         }
-        while (headersReceivedAt_.size() > maxTrackedHeaderTimes_ / 2)
+        while (headersReceivedAt.size() > maxTrackedHeaderTimes / 2)
         {
-            headersReceivedAt_.erase(headersReceivedAt_.begin());
+            headersReceivedAt.erase(headersReceivedAt.begin());
         }
     }
 
     // 每条连接只计一次 protocol_errors(Receive 的致命错误是粘滞的,forceClose 之前可能再报)。
     void ReportProtocolError(const Status &status)
     {
-        if (protocolErrorReported_)
+        if (protocolErrorReported)
         {
             return;
         }
-        protocolErrorReported_ = true;
-        if (const auto server = server_.lock())
+        protocolErrorReported = true;
+        if (const auto server = this->server.lock())
         {
             server->OnConnectionProtocolError(*this, status);
         }
@@ -629,13 +629,13 @@ private:
         switch (end.kind)
         {
         case Server::CallEndKind::kResponse:
-            session_.SubmitResponse(streamId, std::move(end.response));
+            session.SubmitResponse(streamId, std::move(end.response));
             return;
         case Server::CallEndKind::kStatus:
-            session_.SubmitStatus(streamId, end.status);
+            session.SubmitStatus(streamId, end.status);
             return;
         case Server::CallEndKind::kRefuse:
-            session_.RefuseStream(streamId);
+            session.RefuseStream(streamId);
             return;
         case Server::CallEndKind::kSilent:
             return;
@@ -644,12 +644,12 @@ private:
 
     void ApplyDeferredResponses()
     {
-        if (deferred_.empty() || sessionDepth_ > 0)
+        if (deferred.empty() || sessionDepth > 0)
         {
             return;
         }
         std::vector<DeferredResponse> pending;
-        pending.swap(deferred_);
+        pending.swap(deferred);
         for (auto &response : pending)
         {
             SubmitNow(response.streamId, std::move(response.end));
@@ -658,29 +658,29 @@ private:
 
     void SubmitFinalGoaway()
     {
-        if (sessionDepth_ > 0)
+        if (sessionDepth > 0)
         {
-            finalGoawayRequested_ = true;
+            finalGoawayRequested = true;
             return;
         }
-        if (pingTimerArmed_)
+        if (pingTimerArmed)
         {
-            loop_.cancel(pingTimer_);
-            pingTimerArmed_ = false;
+            loop.cancel(pingTimer);
+            pingTimerArmed = false;
         }
-        session_.SubmitFinalGoaway();
+        session.SubmitFinalGoaway();
     }
 
     // 把 nghttp2 里排队的帧交给 muduo;输出缓冲达到 maxPendingOutputBytes_ 就先停(writeComplete 后由 FlushOutput 继续)。
     // 调用方保证不在会话回调栈里(sessionDepth_ == 0)。
     Status DrainSessionInto(muduo::net::TcpConnection &conn)
     {
-        ++sessionDepth_;
-        const Status status = session_.DrainOutput([this, &conn](std::string_view chunk)
+        ++sessionDepth;
+        const Status status = session.DrainOutput([this, &conn](std::string_view chunk)
                                                    {
             conn.send(chunk.data(), static_cast<int>(chunk.size()));
-            return conn.outputBuffer()->readableBytes() < maxPendingOutputBytes_; });
-        --sessionDepth_;
+            return conn.outputBuffer()->readableBytes() < maxPendingOutputBytes; });
+        --sessionDepth;
         return status;
     }
 
@@ -692,14 +692,14 @@ private:
     size_t RefuseUnfinishedRequests()
     {
         size_t refused = 0;
-        for (const int32_t streamId : session_.AcceptedUndispatchedStreams())
+        for (const int32_t streamId : session.AcceptedUndispatchedStreams())
         {
-            if (session_.RefuseStream(streamId))
+            if (session.RefuseStream(streamId))
             {
                 ++refused;
             }
         }
-        headersReceivedAt_.clear();
+        headersReceivedAt.clear();
         return refused;
     }
 
@@ -710,12 +710,12 @@ private:
     // 幂等:硬上限只按第一次进入的时刻算。
     void StartGracefulClose()
     {
-        if (closed_ || closing_ || gracefulCloseStarted_)
+        if (closed || closing || gracefulCloseStarted)
         {
             return;
         }
-        gracefulCloseStarted_ = true;
-        graceDeadline_ = SteadyClock::now() + closeGrace_;
+        gracefulCloseStarted = true;
+        graceDeadline = SteadyClock::now() + closeGrace;
         ArmGraceTimer();
     }
 
@@ -729,45 +729,45 @@ private:
     // 调用方保证不在会话回调栈里(只从 FlushOutput 的尾部调用)。
     void ShutdownWriteWhenSessionDone()
     {
-        if (closed_ || closing_ || !session_.ShouldClose())
+        if (closed || closing || !session.ShouldClose())
         {
             return;
         }
-        const auto conn = tcp_.lock();
+        const auto conn = tcp.lock();
         if (!conn)
         {
             return;
         }
         StartGracefulClose();
-        closing_ = true;
+        closing = true;
         conn->shutdown();
     }
 
     void ArmHandshakeTimer()
     {
         const std::weak_ptr<ServerConnection> weakSelf = weak_from_this();
-        handshakeTimer_ = loop_.runAfter(ToSeconds(handshakeDeadline_ - SteadyClock::now()) + 0.001, [weakSelf]
+        handshakeTimer = loop.runAfter(ToSeconds(handshakeDeadline - SteadyClock::now()) + 0.001, [weakSelf]
                                          {
             if (const auto self = weakSelf.lock())
             {
                 self->OnHandshakeTimer();
             } });
-        handshakeTimerArmed_ = true;
+        handshakeTimerArmed = true;
     }
 
     void OnHandshakeTimer()
     {
-        handshakeTimerArmed_ = false;
-        if (closed_ || session_.handshakeComplete())
+        handshakeTimerArmed = false;
+        if (closed || session.HandshakeComplete())
         {
             return;
         }
-        if (SteadyClock::now() < handshakeDeadline_)
+        if (SteadyClock::now() < handshakeDeadline)
         {
             ArmHandshakeTimer(); // 定时器早到(秒→微秒截断等):按单调钟剩余时间重新上弦
             return;
         }
-        if (const auto server = server_.lock())
+        if (const auto server = this->server.lock())
         {
             server->OnHandshakeTimeout(*this);
         }
@@ -777,23 +777,23 @@ private:
     void ArmPingTimer()
     {
         const std::weak_ptr<ServerConnection> weakSelf = weak_from_this();
-        pingTimer_ = loop_.runAfter(ToSeconds(pingDeadline_ - SteadyClock::now()) + 0.001, [weakSelf]
+        pingTimer = loop.runAfter(ToSeconds(pingDeadline - SteadyClock::now()) + 0.001, [weakSelf]
                                     {
             if (const auto self = weakSelf.lock())
             {
                 self->OnPingTimer();
             } });
-        pingTimerArmed_ = true;
+        pingTimerArmed = true;
     }
 
     void OnPingTimer()
     {
-        pingTimerArmed_ = false;
-        if (closed_)
+        pingTimerArmed = false;
+        if (closed)
         {
             return;
         }
-        if (SteadyClock::now() < pingDeadline_)
+        if (SteadyClock::now() < pingDeadline)
         {
             ArmPingTimer();
             return;
@@ -806,23 +806,23 @@ private:
     void ArmGraceTimer()
     {
         const std::weak_ptr<ServerConnection> weakSelf = weak_from_this();
-        graceTimer_ = loop_.runAfter(ToSeconds(graceDeadline_ - SteadyClock::now()) + 0.001, [weakSelf]
+        graceTimer = loop.runAfter(ToSeconds(graceDeadline - SteadyClock::now()) + 0.001, [weakSelf]
                                      {
             if (const auto self = weakSelf.lock())
             {
                 self->OnGraceTimer();
             } });
-        graceTimerArmed_ = true;
+        graceTimerArmed = true;
     }
 
     void OnGraceTimer()
     {
-        graceTimerArmed_ = false;
-        if (closed_)
+        graceTimerArmed = false;
+        if (closed)
         {
             return;
         }
-        if (SteadyClock::now() < graceDeadline_)
+        if (SteadyClock::now() < graceDeadline)
         {
             ArmGraceTimer();
             return;
@@ -833,66 +833,66 @@ private:
     void CancelTimers()
     {
         // 进程退出路径上 EventLoop 可能已不在本线程(或已析构):定时器随 loop 一起释放,闭包只持 weak_ptr。
-        if (muduo::net::EventLoop::getEventLoopOfCurrentThread() != &loop_)
+        if (muduo::net::EventLoop::getEventLoopOfCurrentThread() != &loop)
         {
-            handshakeTimerArmed_ = false;
-            pingTimerArmed_ = false;
-            graceTimerArmed_ = false;
+            handshakeTimerArmed = false;
+            pingTimerArmed = false;
+            graceTimerArmed = false;
             return;
         }
-        if (handshakeTimerArmed_)
+        if (handshakeTimerArmed)
         {
-            loop_.cancel(handshakeTimer_);
-            handshakeTimerArmed_ = false;
+            loop.cancel(handshakeTimer);
+            handshakeTimerArmed = false;
         }
-        if (pingTimerArmed_)
+        if (pingTimerArmed)
         {
-            loop_.cancel(pingTimer_);
-            pingTimerArmed_ = false;
+            loop.cancel(pingTimer);
+            pingTimerArmed = false;
         }
-        if (graceTimerArmed_)
+        if (graceTimerArmed)
         {
-            loop_.cancel(graceTimer_);
-            graceTimerArmed_ = false;
+            loop.cancel(graceTimer);
+            graceTimerArmed = false;
         }
     }
 
-    muduo::net::EventLoop &loop_;
-    const std::weak_ptr<Server> server_;
-    const uint64_t id_;
-    const std::string peer_;
-    const size_t maxPendingOutputBytes_;
-    const std::chrono::milliseconds handshakeTimeout_;
-    const size_t maxTrackedHeaderTimes_;
-    std::weak_ptr<muduo::net::TcpConnection> tcp_;   // §11.7:只存 weak,强持有者是 Server::connections_
-    ServerSession session_;
+    muduo::net::EventLoop &loop;
+    const std::weak_ptr<Server> server;
+    const uint64_t id;
+    const std::string peer;
+    const size_t maxPendingOutputBytes;
+    const std::chrono::milliseconds handshakeTimeout;
+    const size_t maxTrackedHeaderTimes;
+    std::weak_ptr<muduo::net::TcpConnection> tcp;   // §11.7:只存 weak,强持有者是 Server::connections_
+    ServerSession session;
 
-    std::unordered_map<int32_t, uint64_t> streamCalls_;                  // streamId → callId(已登记的调用)
-    std::map<int32_t, SteadyClock::time_point> headersReceivedAt_;      // 按流 id 有序,便于修剪最老的
-    std::vector<DeferredResponse> deferred_;
+    std::unordered_map<int32_t, uint64_t> streamCalls;                  // streamId → callId(已登记的调用)
+    std::map<int32_t, SteadyClock::time_point> headersReceivedAt;      // 按流 id 有序,便于修剪最老的
+    std::vector<DeferredResponse> deferred;
 
     // >0 表示正处在 session_ 的 Receive / DrainOutput 调用栈里:此时不重入 nghttp2。
-    int sessionDepth_{0};
-    bool flushDeferred_{false};
-    bool closed_{false};                 // 已摘表
-    bool closing_{false};                // 已写半关或已 forceClose:不再写
-    bool gracefulCloseStarted_{false};   // 已进入优雅关闭(硬上限已上弦);写半关要等会话既不想读也不想写
-    bool shutdownStarted_{false};        // 已发第一段 GOAWAY
-    bool finalGoawayRequested_{false};   // PING ACK 已到,等 Receive 返回后提交第二段
-    bool protocolErrorReported_{false};
+    int sessionDepth{0};
+    bool flushDeferred{false};
+    bool closed{false};                 // 已摘表
+    bool closing{false};                // 已写半关或已 forceClose:不再写
+    bool gracefulCloseStarted{false};   // 已进入优雅关闭(硬上限已上弦);写半关要等会话既不想读也不想写
+    bool shutdownStarted{false};        // 已发第一段 GOAWAY
+    bool finalGoawayRequested{false};   // PING ACK 已到,等 Receive 返回后提交第二段
+    bool protocolErrorReported{false};
 
-    std::chrono::milliseconds closeGrace_{ServerShutdownOptions{}.closeGrace};   // 优雅关闭的硬上限,从进入时起算
+    std::chrono::milliseconds closeGrace{ServerShutdownOptions{}.closeGrace};   // 优雅关闭的硬上限,从进入时起算
 
     // muduo 定时器已按单调时钟到期;到点仍按 steady_clock 复核(兜住秒→微秒截断造成的早到)。
-    muduo::net::TimerId handshakeTimer_;
-    bool handshakeTimerArmed_{false};
-    SteadyClock::time_point handshakeDeadline_{};
-    muduo::net::TimerId pingTimer_;
-    bool pingTimerArmed_{false};
-    SteadyClock::time_point pingDeadline_{};
-    muduo::net::TimerId graceTimer_;
-    bool graceTimerArmed_{false};
-    SteadyClock::time_point graceDeadline_{};
+    muduo::net::TimerId handshakeTimer;
+    bool handshakeTimerArmed{false};
+    SteadyClock::time_point handshakeDeadline{};
+    muduo::net::TimerId pingTimer;
+    bool pingTimerArmed{false};
+    SteadyClock::time_point pingDeadline{};
+    muduo::net::TimerId graceTimer;
+    bool graceTimerArmed{false};
+    SteadyClock::time_point graceDeadline{};
 };
 
 } // namespace detail
@@ -902,19 +902,19 @@ private:
 class Server::BatchScope
 {
 public:
-    explicit BatchScope(Server &server) : server_(server) { ++server_.batchDepth_; }
+    explicit BatchScope(Server &server) : server(server) { ++this->server.batchDepth; }
     ~BatchScope()
     {
-        if (--server_.batchDepth_ == 0)
+        if (--server.batchDepth == 0)
         {
-            server_.FlushDirtyConnections();
+            server.FlushDirtyConnections();
         }
     }
     BatchScope(const BatchScope &) = delete;
     BatchScope &operator=(const BatchScope &) = delete;
 
 private:
-    Server &server_;
+    Server &server;
 };
 
 std::shared_ptr<Server> Server::Create(muduo::net::EventLoop &loop, const std::string &ipv4, uint16_t port,
@@ -932,60 +932,60 @@ std::shared_ptr<Server> Server::Create(muduo::net::EventLoop &loop, const std::s
 
 Server::Server(PrivateTag, muduo::net::EventLoop &loop, const muduo::net::InetAddress &listenAddress,
                ServerOptions options)
-    : loop_(loop),
-      listenInetAddress_(listenAddress),
-      listenAddress_(listenAddress.toIpPort()),
-      options_(std::move(options))
+    : loop(loop),
+      listenInetAddress(listenAddress),
+      listenAddress(listenAddress.toIpPort()),
+      options(std::move(options))
 {
 }
 
 Server::~Server()
 {
     // 照 TcpServer::~TcpServer:只在 loop 线程析构。
-    loop_.assertInLoopThread();
+    loop.assertInLoopThread();
     CancelTimers();
     // 剩余调用静默收口:之后的 Finish / 句柄析构经 weak_ptr 落空。
-    calls_.clear();
-    ready_.clear();
-    deadlines_.clear();
-    dirtyConnections_.clear();
+    calls.clear();
+    ready.clear();
+    deadlines.clear();
+    dirtyConnections.clear();
     // 剩余连接逐条 forceClose:forceCloseInLoop 排进队列并持有连接;随后 handleClose 调 close 回调,
     // 回调里 lock 不到 Server,照样无条件排 connectDestroyed(两趟都由节点的两跳 quit 覆盖)。
-    for (auto &entry : connections_)
+    for (auto &entry : connections)
     {
         entry.second.connection->Close();
         entry.second.tcp->forceClose();
     }
-    connections_.clear();
+    connections.clear();
     // 没 BeginShutdown 就析构时 Acceptor 在这里同步销毁(见头文件「析构前置」)。
-    acceptor_.reset();
-    onDrained_ = nullptr; // 不调 onDrained
+    acceptor.reset();
+    onDrained = nullptr; // 不调 onDrained
 }
 
 bool Server::RegisterService(Service &service)
 {
-    loop_.assertInLoopThread();
-    if (phase_ != Phase::kCreated)
+    loop.assertInLoopThread();
+    if (phase != Phase::kCreated)
     {
-        LOG_ERROR << "muduo_grpc::Server " << listenAddress_ << ": RegisterService must be called before Start";
+        LOG_ERROR << "muduo_grpc::Server " << listenAddress << ": RegisterService must be called before Start";
         return false;
     }
-    const bool validBefore = methodTable_.valid();
-    service.RegisterMethods(methodTable_);
-    return validBefore && methodTable_.valid();
+    const bool validBefore = methodTable.Valid();
+    service.RegisterMethods(methodTable);
+    return validBefore && methodTable.Valid();
 }
 
 void Server::Start()
 {
-    loop_.assertInLoopThread();
-    if (phase_ != Phase::kCreated)
+    loop.assertInLoopThread();
+    if (phase != Phase::kCreated)
     {
-        LOG_ERROR << "muduo_grpc::Server " << listenAddress_ << ": Start ignored (already started or shutting down)";
+        LOG_ERROR << "muduo_grpc::Server " << listenAddress << ": Start ignored (already started or shutting down)";
         return;
     }
-    if (!methodTable_.valid())
+    if (!methodTable.Valid())
     {
-        LOG_FATAL << "muduo_grpc::Server " << listenAddress_
+        LOG_FATAL << "muduo_grpc::Server " << listenAddress
                   << " refuses to start: the method table has malformed or duplicate entries (see earlier errors)";
     }
     if (weak_from_this().expired())
@@ -994,7 +994,7 @@ void Server::Start()
     }
 
     // 冻结方法表:下标即 methodIndex(派发与按方法统计用);统计名取方法名,同名时退回完整路径。
-    const std::vector<std::string> paths = methodTable_.Paths();
+    const std::vector<std::string> paths = methodTable.Paths();
     std::map<std::string, size_t, std::less<>> methodNameCount;
     std::set<std::string, std::less<>> services;
     for (const auto &path : paths)
@@ -1006,11 +1006,11 @@ void Server::Start()
             services.emplace(parts->first);
         }
     }
-    methods_.reserve(paths.size());
+    methods.reserve(paths.size());
     for (const auto &path : paths)
     {
         const auto parts = SplitMethodPath(path);
-        const UnaryMethodHandler *handler = methodTable_.Find(path);
+        const UnaryMethodHandler *handler = methodTable.Find(path);
         if (!parts || handler == nullptr)
         {
             continue; // 不可达:AddUnary 已校验
@@ -1020,15 +1020,15 @@ void Server::Start()
         const std::string methodName(parts->second);
         entry.displayName = methodNameCount[methodName] > 1 ? path : methodName;
         entry.handler = *handler;
-        methodIndex_.emplace(path, methods_.size());
-        methods_.push_back(std::move(entry));
+        methodIndex.emplace(path, methods.size());
+        methods.push_back(std::move(entry));
     }
-    stats_.methodCodes.assign(methods_.size(), {});
+    stats.methodCodes.assign(methods.size(), {});
 
-    phase_ = Phase::kRunning;
+    phase = Phase::kRunning;
     const std::weak_ptr<Server> weakSelf = weak_from_this();
-    acceptor_ = std::make_shared<muduo::net::Acceptor>(&loop_, listenInetAddress_, false);
-    acceptor_->setNewConnectionCallback([weakSelf](int sockfd, const muduo::net::InetAddress &peerAddress)
+    acceptor = std::make_shared<muduo::net::Acceptor>(&loop, listenInetAddress, false);
+    acceptor->setNewConnectionCallback([weakSelf](int sockfd, const muduo::net::InetAddress &peerAddress)
                                         {
         if (const auto self = weakSelf.lock())
         {
@@ -1036,17 +1036,17 @@ void Server::Start()
             return;
         }
         muduo::net::sockets::close(sockfd); });
-    acceptor_->listen();
+    acceptor->listen();
 
-    if (options_.statsLogInterval.count() > 0)
+    if (options.statsLogInterval.count() > 0)
     {
-        statsTimer_ = loop_.runEvery(static_cast<double>(options_.statsLogInterval.count()), [weakSelf]
+        statsTimer = loop.runEvery(static_cast<double>(options.statsLogInterval.count()), [weakSelf]
                                      {
             if (const auto self = weakSelf.lock())
             {
                 self->LogStatsIfChanged();
             } });
-        statsTimerArmed_ = true;
+        statsTimerArmed = true;
     }
 
     std::string serviceList;
@@ -1058,49 +1058,49 @@ void Server::Start()
         }
         serviceList += service;
     }
-    LOG_INFO << "gRPC server (muduo_grpc) listening on " << listenAddress_ << " services=[" << serviceList
-             << "] methods=" << methods_.size() << " max_streams_per_conn=" << options_.session.maxConcurrentStreams
-             << " max_in_flight=" << options_.maxInFlightCalls << " dispatch_per_turn=" << options_.maxDispatchPerTurn
-             << "/" << FormatBudget(options_.dispatchTurnBudget) << " threads=0";
+    LOG_INFO << "gRPC server (muduo_grpc) listening on " << listenAddress << " services=[" << serviceList
+             << "] methods=" << methods.size() << " max_streams_per_conn=" << options.session.maxConcurrentStreams
+             << " max_in_flight=" << options.maxInFlightCalls << " dispatch_per_turn=" << options.maxDispatchPerTurn
+             << "/" << FormatBudget(options.dispatchTurnBudget) << " threads=0";
 }
 
 bool Server::draining() const
 {
-    loop_.assertInLoopThread();
-    return phase_ == Phase::kDraining || phase_ == Phase::kDrainExpired || phase_ == Phase::kDrained;
+    loop.assertInLoopThread();
+    return phase == Phase::kDraining || phase == Phase::kDrainExpired || phase == Phase::kDrained;
 }
 
 size_t Server::inFlightCalls() const
 {
-    loop_.assertInLoopThread();
-    return calls_.size();
+    loop.assertInLoopThread();
+    return calls.size();
 }
 
 size_t Server::connectionCount() const
 {
-    loop_.assertInLoopThread();
-    return connections_.size();
+    loop.assertInLoopThread();
+    return connections.size();
 }
 
 void Server::HandleNewConnection(int sockfd, const muduo::net::InetAddress &peerAddress)
 {
-    loop_.assertInLoopThread();
-    if (phase_ != Phase::kRunning)
+    loop.assertInLoopThread();
+    if (phase != Phase::kRunning)
     {
         // 排空开始之后、Acceptor 被排队销毁之前到达的接入(§15.10 b):直接关掉,不建连接。
         muduo::net::sockets::close(sockfd);
         return;
     }
     // 以下照抄 TcpServer::newConnection 的时序:建连接 → 入表 → 设回调 → connectEstablished。
-    const uint64_t connectionId = nextConnectionId_++;
-    ++stats_.accepted;
-    const std::string name = options_.name + "-" + listenAddress_ + "#" + std::to_string(connectionId);
+    const uint64_t connectionId = nextConnectionId++;
+    ++stats.accepted;
+    const std::string name = options.name + "-" + listenAddress + "#" + std::to_string(connectionId);
     const muduo::net::InetAddress localAddress(muduo::net::sockets::getLocalAddr(sockfd));
-    const auto conn = std::make_shared<muduo::net::TcpConnection>(&loop_, name, sockfd, localAddress, peerAddress);
-    const auto connection = std::make_shared<detail::ServerConnection>(loop_, weak_from_this(), connectionId,
-                                                                       peerAddress.toIpPort(), options_);
-    connections_.emplace(connectionId, ConnectionEntry{conn, connection});
-    stats_.connectionsPeak = std::max<uint64_t>(stats_.connectionsPeak, connections_.size());
+    const auto conn = std::make_shared<muduo::net::TcpConnection>(&loop, name, sockfd, localAddress, peerAddress);
+    const auto connection = std::make_shared<detail::ServerConnection>(loop, weak_from_this(), connectionId,
+                                                                       peerAddress.toIpPort(), options);
+    connections.emplace(connectionId, ConnectionEntry{conn, connection});
+    stats.connectionsPeak = std::max<uint64_t>(stats.connectionsPeak, connections.size());
 
     // connectEstablished / handleClose / connectDestroyed 无条件调用 connectionCallback_:空的 std::function 会抛异常,
     // 必须设。连接的建立与断开由本类自己记录,这里给空函数(Linux 上游 TcpServer 每次建连 / 断连各打一行 INFO)。
@@ -1145,14 +1145,14 @@ void Server::HandleNewConnection(int sockfd, const muduo::net::InetAddress &peer
 
 std::shared_ptr<detail::ServerConnection> Server::DetachConnection(uint64_t connectionId)
 {
-    const auto it = connections_.find(connectionId);
-    if (it == connections_.end())
+    const auto it = connections.find(connectionId);
+    if (it == connections.end())
     {
         return nullptr;
     }
     std::shared_ptr<detail::ServerConnection> connection = std::move(it->second.connection);
-    connections_.erase(it);
-    dirtyConnections_.erase(connectionId);
+    connections.erase(it);
+    dirtyConnections.erase(connectionId);
     connection->Close();
     // §15.7 第 5 条:逐个撤销这条连接上的调用,所以连接表为空就意味着调用表为空。
     for (const uint64_t callId : connection->TakeAllCalls())
@@ -1164,35 +1164,35 @@ std::shared_ptr<detail::ServerConnection> Server::DetachConnection(uint64_t conn
         }
         if (*phase == CallPhase::kStarted)
         {
-            ++stats_.abortedAfterStart;
+            ++stats.abortedAfterStart;
         }
         else
         {
-            ++stats_.cancelledBeforeStart;
+            ++stats.cancelledBeforeStart;
         }
     }
     if (!connection->receivedAnyBytes())
     {
         // 探针(kubelet tcpSocket)连上就关:本端一个字节都没写,只打 DEBUG(§15.5.1)。
-        ++stats_.closedBeforePreface;
-        LOG_DEBUG << "[GrpcServer] connection from " << connection->peer() << " closed before the HTTP/2 preface";
+        ++stats.closedBeforePreface;
+        LOG_DEBUG << "[GrpcServer] connection from " << connection->Peer() << " closed before the HTTP/2 preface";
     }
     else
     {
-        LOG_DEBUG << "[GrpcServer] connection from " << connection->peer() << " closed";
+        LOG_DEBUG << "[GrpcServer] connection from " << connection->Peer() << " closed";
     }
     return connection;
 }
 
 void Server::MarkConnectionDirty(uint64_t connectionId)
 {
-    if (batchDepth_ > 0)
+    if (batchDepth > 0)
     {
-        dirtyConnections_.insert(connectionId);
+        dirtyConnections.insert(connectionId);
         return;
     }
-    const auto it = connections_.find(connectionId);
-    if (it != connections_.end())
+    const auto it = connections.find(connectionId);
+    if (it != connections.end())
     {
         const auto connection = it->second.connection; // 冲出期间保活
         connection->FlushOutput();
@@ -1201,14 +1201,14 @@ void Server::MarkConnectionDirty(uint64_t connectionId)
 
 void Server::FlushDirtyConnections()
 {
-    while (!dirtyConnections_.empty())
+    while (!dirtyConnections.empty())
     {
         std::set<uint64_t> dirty;
-        dirty.swap(dirtyConnections_);
+        dirty.swap(dirtyConnections);
         for (const uint64_t connectionId : dirty)
         {
-            const auto it = connections_.find(connectionId);
-            if (it != connections_.end())
+            const auto it = connections.find(connectionId);
+            if (it != connections.end())
             {
                 const auto connection = it->second.connection;
                 connection->FlushOutput();
@@ -1219,20 +1219,20 @@ void Server::FlushDirtyConnections()
 
 ServerSession::Verdict Server::RouteRequest(const RequestHeaders &headers)
 {
-    if (phase_ == Phase::kDrainExpired || phase_ == Phase::kDrained)
+    if (phase == Phase::kDrainExpired || phase == Phase::kDrained)
     {
-        ++stats_.refusedOnShutdown; // 排空到期之后才开的流:没处理,客户端可透明重试(§15.3 Q4)
+        ++stats.refusedOnShutdown; // 排空到期之后才开的流:没处理,客户端可透明重试(§15.3 Q4)
         return RefuseVerdict();
     }
-    if (const auto known = methodIndex_.find(std::string_view(headers.path)); known != methodIndex_.end())
+    if (const auto known = methodIndex.find(std::string_view(headers.path)); known != methodIndex.end())
     {
         // 准入(ServerOptions::admission,节点接的是热关停):业务开始之前拒绝,请求体不收、handler 不执行。
         // 拒绝的状态码由准入决定,计入 codes / methods 统计;逐条不打日志(准入方自己计数与采样)。
-        if (options_.admission)
+        if (options.admission)
         {
-            if (auto denied = options_.admission(headers.path); denied && denied->code() != StatusCode::kOk)
+            if (auto denied = options.admission(headers.path); denied && denied->Code() != StatusCode::kOk)
             {
-                CountStatus(known->second, denied->code());
+                CountStatus(known->second, denied->Code());
                 return RejectVerdict(std::move(*denied));
             }
         }
@@ -1245,7 +1245,7 @@ ServerSession::Verdict Server::RouteRequest(const RequestHeaders &headers)
     {
         status = Status(StatusCode::kUnimplemented, "malformed method name: \"" + headers.path + "\"");
     }
-    else if (!methodTable_.HasService(parts->first))
+    else if (!methodTable.HasService(parts->first))
     {
         status = Status(StatusCode::kUnimplemented, "unknown service " + std::string(parts->first));
     }
@@ -1254,11 +1254,11 @@ ServerSession::Verdict Server::RouteRequest(const RequestHeaders &headers)
         status = Status(StatusCode::kUnimplemented, "unknown method " + std::string(parts->second) + " for service " +
                                                         std::string(parts->first));
     }
-    const uint64_t occurrence = ++stats_.unimplemented;
-    CountStatus(std::nullopt, status.code());
+    const uint64_t occurrence = ++stats.unimplemented;
+    CountStatus(std::nullopt, status.Code());
     if (ShouldLogServerEvent(occurrence))
     {
-        LOG_WARN << "[GrpcServer] " << listenAddress_ << ": " << status.message() << " (occurrence " << occurrence
+        LOG_WARN << "[GrpcServer] " << listenAddress << ": " << status.message() << " (occurrence " << occurrence
                  << ")";
     }
     return RejectVerdict(std::move(status));
@@ -1268,41 +1268,41 @@ ServerSession::Verdict Server::AcceptCall(detail::ServerConnection &connection, 
                                           RequestHeaders headers, std::string message,
                                           std::chrono::steady_clock::time_point headersAt)
 {
-    if (phase_ == Phase::kDrainExpired || phase_ == Phase::kDrained)
+    if (phase == Phase::kDrainExpired || phase == Phase::kDrained)
     {
         // 防御:到期时仍在上传的流已被 ExpireDrain 按会话状态全部拒掉(ServerSession::AcceptedUndispatchedStreams),
         // 到期之后才收完头部的流在 RouteRequest 就被拒,正常走不到这里。真走到了也不派发,同样回 REFUSED_STREAM。
-        ++stats_.refusedOnShutdown;
+        ++stats.refusedOnShutdown;
         return RefuseVerdict();
     }
-    const auto found = methodIndex_.find(std::string_view(headers.path));
-    if (found == methodIndex_.end())
+    const auto found = this->methodIndex.find(std::string_view(headers.path));
+    if (found == this->methodIndex.end())
     {
         return RouteRequest(headers); // 不可达:头部阶段已路由
     }
     const size_t methodIndex = found->second;
-    if (calls_.size() >= options_.maxInFlightCalls)
+    if (calls.size() >= options.maxInFlightCalls)
     {
         // 业务之前回 RESOURCE_EXHAUSTED(不用 REFUSED_STREAM:grpc-go 会立刻在同一连接透明重试),§15.3 Q2。
-        const uint64_t occurrence = ++stats_.rejectedOverload;
+        const uint64_t occurrence = ++stats.rejectedOverload;
         CountStatus(methodIndex, StatusCode::kResourceExhausted);
         if (ShouldLogServerEvent(occurrence))
         {
-            LOG_WARN << "[GrpcServer] " << listenAddress_ << ": in-flight call limit (" << options_.maxInFlightCalls
-                     << ") reached, rejecting " << methods_[methodIndex].displayName << " (occurrence " << occurrence
+            LOG_WARN << "[GrpcServer] " << listenAddress << ": in-flight call limit (" << options.maxInFlightCalls
+                     << ") reached, rejecting " << methods[methodIndex].displayName << " (occurrence " << occurrence
                      << ")";
         }
         return RejectVerdict(Status(StatusCode::kResourceExhausted, "server in-flight call limit (" +
-                                                                        std::to_string(options_.maxInFlightCalls) +
+                                                                        std::to_string(options.maxInFlightCalls) +
                                                                         ") reached"));
     }
 
-    const uint64_t callId = nextCallId_++;
+    const uint64_t callId = nextCallId++;
     CallRecord record;
-    record.connectionId = connection.id();
+    record.connectionId = connection.Id();
     record.streamId = streamId;
     record.methodIndex = methodIndex;
-    record.peer = connection.peer();
+    record.peer = connection.Peer();
     record.metadata = std::move(headers.metadata);
     if (headers.timeout)
     {
@@ -1310,16 +1310,16 @@ ServerSession::Verdict Server::AcceptCall(detail::ServerConnection &connection, 
     }
     record.message = std::move(message);
     const auto deadline = record.deadline;
-    calls_.emplace(callId, std::move(record));
+    calls.emplace(callId, std::move(record));
     connection.BindStream(streamId, callId);
-    stats_.inFlightPeak = std::max<uint64_t>(stats_.inFlightPeak, calls_.size());
+    stats.inFlightPeak = std::max<uint64_t>(stats.inFlightPeak, calls.size());
     if (deadline)
     {
-        deadlines_.emplace(*deadline, callId);
+        deadlines.emplace(*deadline, callId);
         ArmDeadlineTimer();
     }
-    ready_.push_back(callId);
-    stats_.maxBacklog = std::max<uint64_t>(stats_.maxBacklog, ready_.size());
+    ready.push_back(callId);
+    stats.maxBacklog = std::max<uint64_t>(stats.maxBacklog, ready.size());
     ScheduleDispatch();
     return AcceptVerdict();
 }
@@ -1339,28 +1339,28 @@ void Server::AbortStream(detail::ServerConnection &connection, int32_t streamId)
     }
     if (*phase == CallPhase::kStarted)
     {
-        ++stats_.abortedAfterStart;
+        ++stats.abortedAfterStart;
     }
     else
     {
-        ++stats_.cancelledBeforeStart;
+        ++stats.cancelledBeforeStart;
     }
 }
 
 void Server::OnSessionRejected(const detail::ServerConnection &connection, int httpStatus, const Status &status)
 {
-    CountStatus(std::nullopt, status.code());
-    if (status.code() == StatusCode::kDeadlineExceeded)
+    CountStatus(std::nullopt, status.Code());
+    if (status.Code() == StatusCode::kDeadlineExceeded)
     {
         // 会话层只在 grpc-timeout <= 0 时回这个码:截止在客户端发出前就已到,来自合法客户端,不是畸形请求。
         // 计入 deadline_before_start(§15.11),不计 rejected_protocol、不打 WARN(server_session.h OnRequestRejected)。
-        ++stats_.deadlineBeforeStart;
+        ++stats.deadlineBeforeStart;
         return;
     }
-    const uint64_t occurrence = ++stats_.rejectedProtocol;
+    const uint64_t occurrence = ++stats.rejectedProtocol;
     if (ShouldLogServerEvent(occurrence))
     {
-        LOG_WARN << "[GrpcServer] " << listenAddress_ << ": rejected a request from " << connection.peer()
+        LOG_WARN << "[GrpcServer] " << listenAddress << ": rejected a request from " << connection.Peer()
                  << " before dispatch with HTTP " << httpStatus << " " << status.ToString() << " (occurrence "
                  << occurrence << ")";
     }
@@ -1368,32 +1368,32 @@ void Server::OnSessionRejected(const detail::ServerConnection &connection, int h
 
 void Server::OnConnectionProtocolError(const detail::ServerConnection &connection, const Status &status)
 {
-    const uint64_t occurrence = ++stats_.protocolErrors;
+    const uint64_t occurrence = ++stats.protocolErrors;
     if (ShouldLogServerEvent(occurrence))
     {
-        LOG_WARN << "[GrpcServer] " << listenAddress_ << ": closing connection from " << connection.peer()
+        LOG_WARN << "[GrpcServer] " << listenAddress << ": closing connection from " << connection.Peer()
                  << " after a protocol error: " << status.message() << " (occurrence " << occurrence << ")";
     }
 }
 
 void Server::OnHandshakeTimeout(const detail::ServerConnection &connection)
 {
-    ++stats_.handshakeTimeout;
-    LOG_DEBUG << "[GrpcServer] " << listenAddress_ << ": HTTP/2 handshake with " << connection.peer()
-              << " timed out after " << options_.handshakeTimeout.count() << "ms";
+    ++stats.handshakeTimeout;
+    LOG_DEBUG << "[GrpcServer] " << listenAddress << ": HTTP/2 handshake with " << connection.Peer()
+              << " timed out after " << options.handshakeTimeout.count() << "ms";
 }
 
 void Server::ScheduleDispatch()
 {
-    if (dispatchQueued_ || ready_.empty())
+    if (dispatchQueued || ready.empty())
     {
         return;
     }
-    dispatchQueued_ = true;
+    dispatchQueued = true;
     // 泵任务经 queueInLoop 排队,同一时刻至多一个。泵内再排时 callingPendingFunctors_ 为真,会唤醒并落到下一轮,
     // 中间让出给定时器与 I/O(§15.6)。
     const std::weak_ptr<Server> weakSelf = weak_from_this();
-    loop_.queueInLoop([weakSelf]
+    loop.queueInLoop([weakSelf]
                       {
         if (const auto self = weakSelf.lock())
         {
@@ -1403,22 +1403,22 @@ void Server::ScheduleDispatch()
 
 void Server::RunDispatchTurn()
 {
-    dispatchQueued_ = false;
+    dispatchQueued = false;
     BatchScope batch(*this); // 本轮产生的应答在泵结束时统一冲出
-    const size_t maxPerTurn = std::max<size_t>(1, options_.maxDispatchPerTurn);
+    const size_t maxPerTurn = std::max<size_t>(1, options.maxDispatchPerTurn);
     const auto turnStart = SteadyClock::now();
     size_t processed = 0;
     uint64_t dispatchedThisTurn = 0;
-    while (!ready_.empty() && processed < maxPerTurn)
+    while (!ready.empty() && processed < maxPerTurn)
     {
-        if (processed > 0 && SteadyClock::now() - turnStart >= options_.dispatchTurnBudget)
+        if (processed > 0 && SteadyClock::now() - turnStart >= options.dispatchTurnBudget)
         {
             break; // 每轮累计 ≤ 预算,至少处理 1 个
         }
-        const uint64_t callId = ready_.front();
-        ready_.pop_front();
-        const auto it = calls_.find(callId);
-        if (it == calls_.end() || it->second.phase != CallPhase::kQueued)
+        const uint64_t callId = ready.front();
+        ready.pop_front();
+        const auto it = calls.find(callId);
+        if (it == calls.end() || it->second.phase != CallPhase::kQueued)
         {
             continue; // 排队期间已被撤销(对端 RST / 断连 / 截止)
         }
@@ -1429,7 +1429,7 @@ void Server::RunDispatchTurn()
             CompleteCall(callId, CallEnd{CallEndKind::kStatus, std::string(),
                                          Status(StatusCode::kDeadlineExceeded,
                                                 "deadline exceeded before the call started")});
-            ++stats_.deadlineBeforeStart;
+            ++stats.deadlineBeforeStart;
             continue;
         }
         record.phase = CallPhase::kDispatched;
@@ -1437,20 +1437,20 @@ void Server::RunDispatchTurn()
         token->server = weak_from_this();
         token->callId = callId;
         token->loopThread = std::this_thread::get_id();
-        token->method = methods_[record.methodIndex].path;
+        token->method = methods[record.methodIndex].path;
         token->peer = record.peer;
         token->metadata = std::move(record.metadata);
         token->deadline = record.deadline;
         // 先把 message 移出记录:handler 可能同步完成并删掉记录。methods_ 在 Start 后不再修改,引用稳定。
         const std::string message = std::move(record.message);
-        const UnaryMethodHandler &handler = methods_[record.methodIndex].handler;
-        ++stats_.dispatched;
+        const UnaryMethodHandler &handler = methods[record.methodIndex].handler;
+        ++stats.dispatched;
         ++dispatchedThisTurn;
-        InvokeUnaryHandler(options_.dispatchInterceptor, handler, ServerCall(std::move(token)), std::string_view(message),
-                           methods_[record.methodIndex].displayName, methods_[record.methodIndex].path);
+        InvokeUnaryHandler(options.dispatchInterceptor, handler, ServerCall(std::move(token)), std::string_view(message),
+                           methods[record.methodIndex].displayName, methods[record.methodIndex].path);
     }
-    stats_.maxDispatchedPerTurn = std::max(stats_.maxDispatchedPerTurn, dispatchedThisTurn);
-    if (!ready_.empty())
+    stats.maxDispatchedPerTurn = std::max(stats.maxDispatchedPerTurn, dispatchedThisTurn);
+    if (!ready.empty())
     {
         ScheduleDispatch();
     }
@@ -1460,16 +1460,16 @@ std::optional<Server::CallPhase> Server::CompleteCall(uint64_t callId, CallEnd e
 {
     // §15.7:找到即 erase —— 恰好一次的唯一裁决点。先移出记录并删表,再递减在途、提交应答、标记冲出;
     // 记录本身(请求体、metadata)在函数结束时才释放。
-    const auto it = calls_.find(callId);
-    if (it == calls_.end())
+    const auto it = calls.find(callId);
+    if (it == calls.end())
     {
         return std::nullopt;
     }
     CallRecord record = std::move(it->second);
-    calls_.erase(it);
+    calls.erase(it);
     if (record.deadline)
     {
-        deadlines_.erase({*record.deadline, callId});
+        deadlines.erase({*record.deadline, callId});
     }
     if (end.kind == CallEndKind::kResponse)
     {
@@ -1477,10 +1477,10 @@ std::optional<Server::CallPhase> Server::CompleteCall(uint64_t callId, CallEnd e
     }
     else if (end.kind == CallEndKind::kStatus)
     {
-        CountStatus(record.methodIndex, end.status.code());
+        CountStatus(record.methodIndex, end.status.Code());
     }
-    const auto connectionIt = connections_.find(record.connectionId);
-    if (connectionIt != connections_.end())
+    const auto connectionIt = connections.find(record.connectionId);
+    if (connectionIt != connections.end())
     {
         const auto connection = connectionIt->second.connection;
         connection->ForgetStream(record.streamId);
@@ -1495,8 +1495,8 @@ std::optional<Server::CallPhase> Server::CompleteCall(uint64_t callId, CallEnd e
 
 bool Server::TryStartBusiness(uint64_t callId)
 {
-    const auto it = calls_.find(callId);
-    if (it == calls_.end())
+    const auto it = calls.find(callId);
+    if (it == calls.end())
     {
         return false; // 已被截止 / 取消 / 排空收口
     }
@@ -1510,7 +1510,7 @@ bool Server::TryStartBusiness(uint64_t callId)
         CompleteCall(callId, CallEnd{CallEndKind::kStatus, std::string(),
                                      Status(StatusCode::kDeadlineExceeded,
                                             "deadline exceeded before the call started")});
-        ++stats_.deadlineBeforeStart;
+        ++stats.deadlineBeforeStart;
         return false;
     }
     it->second.phase = CallPhase::kStarted;
@@ -1519,9 +1519,9 @@ bool Server::TryStartBusiness(uint64_t callId)
 
 void Server::FinishFromHandler(const detail::CallToken &token, CallEnd end)
 {
-    if (calls_.find(token.callId) == calls_.end())
+    if (calls.find(token.callId) == calls.end())
     {
-        const uint64_t occurrence = ++stats_.lateFinish;
+        const uint64_t occurrence = ++stats.lateFinish;
         if (ShouldLogServerEvent(occurrence))
         {
             LOG_DEBUG << "[GrpcServer] late finish ignored (call already completed): method=" << token.method
@@ -1529,14 +1529,14 @@ void Server::FinishFromHandler(const detail::CallToken &token, CallEnd end)
         }
         return;
     }
-    if (end.kind == CallEndKind::kResponse && end.response.size() > options_.maxSendMessageBytes)
+    if (end.kind == CallEndKind::kResponse && end.response.size() > options.maxSendMessageBytes)
     {
         // 发生在业务之后(§15.13):Go 客户端收包时本来也报同一个码。
         LOG_ERROR << "[GrpcServer] response of " << token.method << " is " << end.response.size()
-                  << " bytes, larger than max " << options_.maxSendMessageBytes << "; replying RESOURCE_EXHAUSTED";
+                  << " bytes, larger than max " << options.maxSendMessageBytes << "; replying RESOURCE_EXHAUSTED";
         const std::string message = "grpc: trying to send message larger than max (" +
                                     std::to_string(end.response.size()) + " vs. " +
-                                    std::to_string(options_.maxSendMessageBytes) + ")";
+                                    std::to_string(options.maxSendMessageBytes) + ")";
         end = CallEnd{CallEndKind::kStatus, std::string(), Status(StatusCode::kResourceExhausted, message)};
     }
     CompleteCall(token.callId, std::move(end));
@@ -1544,12 +1544,12 @@ void Server::FinishFromHandler(const detail::CallToken &token, CallEnd end)
 
 void Server::OnTokenDropped(const detail::CallToken &token)
 {
-    if (calls_.find(token.callId) == calls_.end())
+    if (calls.find(token.callId) == calls.end())
     {
         return; // 正常路径:调用已完成
     }
     // 业务可能已执行,只能回「结果未知」码(§15.4.3)。
-    const uint64_t occurrence = ++stats_.dropped;
+    const uint64_t occurrence = ++stats.dropped;
     if (ShouldLogServerEvent(occurrence))
     {
         LOG_ERROR << "[GrpcServer] call dropped without completion: method=" << token.method
@@ -1563,48 +1563,48 @@ void Server::OnTokenDropped(const detail::CallToken &token)
 void Server::CountStatus(std::optional<size_t> methodIndex, StatusCode code)
 {
     const uint32_t value = static_cast<uint32_t>(code);
-    ++stats_.codes[value];
-    if (methodIndex && *methodIndex < stats_.methodCodes.size())
+    ++stats.codes[value];
+    if (methodIndex && *methodIndex < stats.methodCodes.size())
     {
-        ++stats_.methodCodes[*methodIndex][value];
+        ++stats.methodCodes[*methodIndex][value];
     }
 }
 
 void Server::ArmDeadlineTimer()
 {
-    if (deadlines_.empty())
+    if (deadlines.empty())
     {
         return;
     }
-    const auto earliest = deadlines_.begin()->first;
-    if (deadlineTimerArmed_ && deadlineTimerFor_ <= earliest)
+    const auto earliest = deadlines.begin()->first;
+    if (deadlineTimerArmed && deadlineTimerFor <= earliest)
     {
         return;
     }
-    if (deadlineTimerArmed_)
+    if (deadlineTimerArmed)
     {
-        loop_.cancel(deadlineTimer_);
+        loop.cancel(deadlineTimer);
     }
     // muduo 定时器已按单调时钟到期;到点仍用 steady_clock 复核,未到就重新上弦(照 Channel),
     // 兜住秒→微秒截断造成的微秒级早到。加 1ms 余量,避免这点截断让定时器早到一点而空转一轮。
     const std::weak_ptr<Server> weakSelf = weak_from_this();
-    deadlineTimer_ = loop_.runAfter(ToSeconds(earliest - SteadyClock::now()) + 0.001, [weakSelf]
+    deadlineTimer = loop.runAfter(ToSeconds(earliest - SteadyClock::now()) + 0.001, [weakSelf]
                                     {
         if (const auto self = weakSelf.lock())
         {
             self->OnDeadlineTimer();
         } });
-    deadlineTimerArmed_ = true;
-    deadlineTimerFor_ = earliest;
+    deadlineTimerArmed = true;
+    deadlineTimerFor = earliest;
 }
 
 void Server::OnDeadlineTimer()
 {
-    deadlineTimerArmed_ = false;
+    deadlineTimerArmed = false;
     BatchScope batch(*this);
     const auto now = SteadyClock::now();
     std::vector<uint64_t> due;
-    for (const auto &[deadline, callId] : deadlines_)
+    for (const auto &[deadline, callId] : deadlines)
     {
         if (deadline > now)
         {
@@ -1614,8 +1614,8 @@ void Server::OnDeadlineTimer()
     }
     for (const uint64_t callId : due)
     {
-        const auto it = calls_.find(callId);
-        if (it == calls_.end())
+        const auto it = calls.find(callId);
+        if (it == calls.end())
         {
             continue;
         }
@@ -1624,7 +1624,7 @@ void Server::OnDeadlineTimer()
             // 业务已开始(只有延后完成的 handler 会处在这里):立即回,业务不打断,迟到的完成丢弃并计 late_finish。
             CompleteCall(callId, CallEnd{CallEndKind::kStatus, std::string(),
                                          Status(StatusCode::kDeadlineExceeded, "deadline exceeded")});
-            ++stats_.deadlineAfterStart;
+            ++stats.deadlineAfterStart;
         }
         else
         {
@@ -1632,7 +1632,7 @@ void Server::OnDeadlineTimer()
             CompleteCall(callId, CallEnd{CallEndKind::kStatus, std::string(),
                                          Status(StatusCode::kDeadlineExceeded,
                                                 "deadline exceeded before the call started")});
-            ++stats_.deadlineBeforeStart;
+            ++stats.deadlineBeforeStart;
         }
     }
     ArmDeadlineTimer();
@@ -1640,35 +1640,35 @@ void Server::OnDeadlineTimer()
 
 void Server::BeginShutdown(ServerShutdownOptions options, std::function<void()> onDrained)
 {
-    loop_.assertInLoopThread();
-    if (phase_ != Phase::kCreated && phase_ != Phase::kRunning)
+    loop.assertInLoopThread();
+    if (phase != Phase::kCreated && phase != Phase::kRunning)
     {
-        LOG_WARN << "[GrpcServer] " << listenAddress_ << ": BeginShutdown called again; ignored";
+        LOG_WARN << "[GrpcServer] " << listenAddress << ": BeginShutdown called again; ignored";
         return;
     }
     // a) 置排空:此后 ServerCall::ServerDraining() 为真。
-    phase_ = Phase::kDraining;
-    shutdownOptions_ = options;
-    onDrained_ = std::move(onDrained);
-    drainStartedAt_ = SteadyClock::now();
-    drainDeadline_ = drainStartedAt_ + options.drainTimeout;
-    LOG_INFO << "gRPC server draining: listen=" << listenAddress_ << " conns=" << connections_.size()
-             << " inflight=" << calls_.size() << " drain_timeout_ms=" << options.drainTimeout.count();
+    phase = Phase::kDraining;
+    shutdownOptions = options;
+    this->onDrained = std::move(onDrained);
+    drainStartedAt = SteadyClock::now();
+    drainDeadline = drainStartedAt + options.drainTimeout;
+    LOG_INFO << "gRPC server draining: listen=" << listenAddress << " conns=" << connections.size()
+             << " inflight=" << calls.size() << " drain_timeout_ms=" << options.drainTimeout.count();
 
     // b) 停听:Acceptor 移进 queueInLoop 闭包销毁。不能在这里同步销毁 —— 本调用可能在定时器回调里
     //    (Windows 的定时器跑在 eventHandling_ 期间,Linux 的 timerfd 本身就是活跃 channel),
     //    而 Acceptor 的 channel 可能同在本轮 activeChannels_ 里,removeChannel 会撞断言。
     //    销毁前到达的接入由 HandleNewConnection 一律 close。
-    if (acceptor_)
+    if (this->acceptor)
     {
-        loop_.queueInLoop([acceptor = std::move(acceptor_)]() mutable { acceptor.reset(); });
-        acceptor_.reset();
+        loop.queueInLoop([acceptor = std::move(this->acceptor)]() mutable { acceptor.reset(); });
+        this->acceptor.reset();
     }
 
     {
         BatchScope batch(*this);
         // c) 每条连接:收到过字节 → 第一段 GOAWAY + PING;没收到过 → forceClose(只排队,不会同步摘表)。
-        for (auto &entry : connections_)
+        for (auto &entry : connections)
         {
             if (!entry.second.connection->receivedAnyBytes())
             {
@@ -1689,43 +1689,43 @@ void Server::BeginShutdown(ServerShutdownOptions options, std::function<void()> 
 void Server::ArmDrainTimer()
 {
     const std::weak_ptr<Server> weakSelf = weak_from_this();
-    drainTimer_ = loop_.runAfter(ToSeconds(drainDeadline_ - SteadyClock::now()) + 0.001, [weakSelf]
+    drainTimer = loop.runAfter(ToSeconds(drainDeadline - SteadyClock::now()) + 0.001, [weakSelf]
                                  {
         if (const auto self = weakSelf.lock())
         {
             self->OnDrainTimer();
         } });
-    drainTimerArmed_ = true;
+    drainTimerArmed = true;
 }
 
 void Server::OnDrainTimer()
 {
-    drainTimerArmed_ = false;
-    if (phase_ != Phase::kDraining)
+    drainTimerArmed = false;
+    if (phase != Phase::kDraining)
     {
         return;
     }
-    if (SteadyClock::now() < drainDeadline_)
+    if (SteadyClock::now() < drainDeadline)
     {
         ArmDrainTimer();
         return;
     }
-    phase_ = Phase::kDrainExpired;
+    phase = Phase::kDrainExpired;
     uint64_t refused = 0;
     uint64_t unavailable = 0;
     {
         BatchScope batch(*this);
         std::vector<uint64_t> callIds;
-        callIds.reserve(calls_.size());
-        for (const auto &entry : calls_)
+        callIds.reserve(calls.size());
+        for (const auto &entry : calls)
         {
             callIds.push_back(entry.first);
         }
         std::sort(callIds.begin(), callIds.end());
         for (const uint64_t callId : callIds)
         {
-            const auto it = calls_.find(callId);
-            if (it == calls_.end())
+            const auto it = calls.find(callId);
+            if (it == calls.end())
             {
                 continue;
             }
@@ -1734,14 +1734,14 @@ void Server::OnDrainTimer()
                 // 业务已开始:结果未知(§15.3 Q4)。
                 CompleteCall(callId, CallEnd{CallEndKind::kStatus, std::string(),
                                              Status(StatusCode::kUnavailable, "server shutting down")});
-                ++stats_.unavailableOnShutdown;
+                ++stats.unavailableOnShutdown;
                 ++unavailable;
             }
             else
             {
                 // 业务未开始:REFUSED_STREAM = RFC 9113 §8.7 的「未处理」,grpc-go 透明重试到新连接。
                 CompleteCall(callId, CallEnd{CallEndKind::kRefuse, std::string(), Status()});
-                ++stats_.refusedOnShutdown;
+                ++stats.refusedOnShutdown;
                 ++refused;
             }
         }
@@ -1749,81 +1749,81 @@ void Server::OnDrainTimer()
         // 不立即写半关:本作用域结束时 FlushDirtyConnections 按背压把上面提交的 RST / trailers 与最终 GOAWAY 交给输出缓冲,
         // 之后连接继续读写,会话把已提交的帧(含被对端流控窗口卡住的应答 DATA)全部写出、所有流关闭才写半关。
         std::vector<std::shared_ptr<detail::ServerConnection>> remaining;
-        remaining.reserve(connections_.size());
-        for (const auto &entry : connections_)
+        remaining.reserve(connections.size());
+        for (const auto &entry : connections)
         {
             remaining.push_back(entry.second.connection);
         }
         for (const auto &connection : remaining)
         {
             const size_t refusedUploads = connection->ExpireDrain();
-            stats_.refusedOnShutdown += refusedUploads;
+            stats.refusedOnShutdown += refusedUploads;
             refused += refusedUploads;
-            MarkConnectionDirty(connection->id());
+            MarkConnectionDirty(connection->Id());
         }
     }
-    LOG_WARN << "[GrpcServer] " << listenAddress_ << ": drain timeout after " << shutdownOptions_.drainTimeout.count()
-             << "ms: refused=" << refused << " unavailable=" << unavailable << " connections=" << connections_.size();
+    LOG_WARN << "[GrpcServer] " << listenAddress << ": drain timeout after " << shutdownOptions.drainTimeout.count()
+             << "ms: refused=" << refused << " unavailable=" << unavailable << " connections=" << connections.size();
 }
 
 void Server::MaybeFinishDrain()
 {
-    if ((phase_ != Phase::kDraining && phase_ != Phase::kDrainExpired) || !connections_.empty())
+    if ((phase != Phase::kDraining && phase != Phase::kDrainExpired) || !connections.empty())
     {
         return;
     }
-    phase_ = Phase::kDrained;
-    if (drainTimerArmed_)
+    phase = Phase::kDrained;
+    if (drainTimerArmed)
     {
-        loop_.cancel(drainTimer_);
-        drainTimerArmed_ = false;
+        loop.cancel(drainTimer);
+        drainTimerArmed = false;
     }
-    LOG_DEBUG << "[GrpcServer] " << listenAddress_ << " drained after "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(SteadyClock::now() - drainStartedAt_).count()
+    LOG_DEBUG << "[GrpcServer] " << listenAddress << " drained after "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(SteadyClock::now() - drainStartedAt).count()
               << "ms";
-    if (onDrained_)
+    if (onDrained)
     {
         // 恰好一次,经 queueInLoop:FIFO 排在最后一个 connectDestroyed(close 回调先排)之后。
         std::function<void()> done;
-        done.swap(onDrained_);
-        loop_.queueInLoop(std::move(done));
+        done.swap(onDrained);
+        loop.queueInLoop(std::move(done));
     }
 }
 
 ServerStatsSnapshot Server::Stats() const
 {
-    loop_.assertInLoopThread();
+    loop.assertInLoopThread();
     ServerStatsSnapshot snapshot;
-    snapshot.listen = listenAddress_;
-    snapshot.connections = connections_.size();
-    snapshot.connectionsPeak = stats_.connectionsPeak;
-    snapshot.accepted = stats_.accepted;
-    snapshot.closedBeforePreface = stats_.closedBeforePreface;
-    snapshot.handshakeTimeout = stats_.handshakeTimeout;
-    snapshot.protocolErrors = stats_.protocolErrors;
-    snapshot.inFlight = calls_.size();
-    snapshot.inFlightPeak = stats_.inFlightPeak;
-    snapshot.dispatched = stats_.dispatched;
-    snapshot.maxBacklog = stats_.maxBacklog;
-    snapshot.maxDispatchedPerTurn = stats_.maxDispatchedPerTurn;
-    snapshot.rejectedOverload = stats_.rejectedOverload;
-    snapshot.rejectedProtocol = stats_.rejectedProtocol;
-    snapshot.unimplemented = stats_.unimplemented;
-    snapshot.deadlineBeforeStart = stats_.deadlineBeforeStart;
-    snapshot.deadlineAfterStart = stats_.deadlineAfterStart;
-    snapshot.cancelledBeforeStart = stats_.cancelledBeforeStart;
-    snapshot.abortedAfterStart = stats_.abortedAfterStart;
-    snapshot.refusedOnShutdown = stats_.refusedOnShutdown;
-    snapshot.unavailableOnShutdown = stats_.unavailableOnShutdown;
-    snapshot.lateFinish = stats_.lateFinish;
-    snapshot.dropped = stats_.dropped;
+    snapshot.listen = listenAddress;
+    snapshot.connections = connections.size();
+    snapshot.connectionsPeak = stats.connectionsPeak;
+    snapshot.accepted = stats.accepted;
+    snapshot.closedBeforePreface = stats.closedBeforePreface;
+    snapshot.handshakeTimeout = stats.handshakeTimeout;
+    snapshot.protocolErrors = stats.protocolErrors;
+    snapshot.inFlight = calls.size();
+    snapshot.inFlightPeak = stats.inFlightPeak;
+    snapshot.dispatched = stats.dispatched;
+    snapshot.maxBacklog = stats.maxBacklog;
+    snapshot.maxDispatchedPerTurn = stats.maxDispatchedPerTurn;
+    snapshot.rejectedOverload = stats.rejectedOverload;
+    snapshot.rejectedProtocol = stats.rejectedProtocol;
+    snapshot.unimplemented = stats.unimplemented;
+    snapshot.deadlineBeforeStart = stats.deadlineBeforeStart;
+    snapshot.deadlineAfterStart = stats.deadlineAfterStart;
+    snapshot.cancelledBeforeStart = stats.cancelledBeforeStart;
+    snapshot.abortedAfterStart = stats.abortedAfterStart;
+    snapshot.refusedOnShutdown = stats.refusedOnShutdown;
+    snapshot.unavailableOnShutdown = stats.unavailableOnShutdown;
+    snapshot.lateFinish = stats.lateFinish;
+    snapshot.dropped = stats.dropped;
     snapshot.droppedOffLoop = DroppedOffLoopCounter().load(std::memory_order_relaxed);
-    snapshot.codes = stats_.codes;
-    for (size_t i = 0; i < methods_.size() && i < stats_.methodCodes.size(); ++i)
+    snapshot.codes = stats.codes;
+    for (size_t i = 0; i < methods.size() && i < stats.methodCodes.size(); ++i)
     {
-        for (const auto &[code, count] : stats_.methodCodes[i])
+        for (const auto &[code, count] : stats.methodCodes[i])
         {
-            snapshot.methods[methods_[i].displayName][code] += count;
+            snapshot.methods[methods[i].displayName][code] += count;
         }
     }
     return snapshot;
@@ -1832,11 +1832,11 @@ ServerStatsSnapshot Server::Stats() const
 void Server::LogStatsIfChanged()
 {
     std::string current = FormatServerStats(Stats());
-    if (current == lastLoggedStats_)
+    if (current == lastLoggedStats)
     {
         return;
     }
-    lastLoggedStats_ = current;
+    lastLoggedStats = current;
     if (current.size() > kMaxSummaryLogBytes)
     {
         current.resize(kMaxSummaryLogBytes);
@@ -1847,20 +1847,20 @@ void Server::LogStatsIfChanged()
 
 void Server::CancelTimers()
 {
-    if (deadlineTimerArmed_)
+    if (deadlineTimerArmed)
     {
-        loop_.cancel(deadlineTimer_);
-        deadlineTimerArmed_ = false;
+        loop.cancel(deadlineTimer);
+        deadlineTimerArmed = false;
     }
-    if (drainTimerArmed_)
+    if (drainTimerArmed)
     {
-        loop_.cancel(drainTimer_);
-        drainTimerArmed_ = false;
+        loop.cancel(drainTimer);
+        drainTimerArmed = false;
     }
-    if (statsTimerArmed_)
+    if (statsTimerArmed)
     {
-        loop_.cancel(statsTimer_);
-        statsTimerArmed_ = false;
+        loop.cancel(statsTimer);
+        statsTimerArmed = false;
     }
 }
 

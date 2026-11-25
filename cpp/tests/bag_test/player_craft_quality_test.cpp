@@ -563,4 +563,134 @@ TEST_F(PlayerCraftQualityTest, SkillScrollCraftingDismantleRareAntiLaunderingAnd
     EXPECT_EQ(kSkillBookNotDismantlable, badDisResp.error_message().id());
 }
 
+TEST_F(PlayerCraftQualityTest, UnsealTalismanStripsBoundProgressionAndInheritCopiesEnhanceAsBound) {
+    GrantItem(buyer, kForgeMat, 200, true);
+    GrantItem(buyer, equipcraft::kUnsealTalismanConfigId, 2, true);
+    GrantItem(buyer, equipcraft::kInheritTalismanConfigId, 2, true);
+
+    // 1. 用绑定材料打造并装词条，装备必然绑定，再人为写入 +5 强化与宗师署名模拟已养成绑定装备。
+    const Guid boundWeaponId = ForgeAndInstall(buyer, 3101, 1, 101, 0);
+    auto* boundWeapon = InventoryOf(buyer).GetItemCompByGuid(boundWeaponId);
+    ASSERT_NE(nullptr, boundWeapon);
+    ASSERT_TRUE(boundWeapon->bound());
+    boundWeapon->mutable_equip()->set_enhance_level(5);
+    boundWeapon->mutable_equip()->set_enhance_pity_count(3);
+    boundWeapon->mutable_equip()->set_crafter_name("青云宗师");
+    boundWeapon->mutable_equip()->set_crafter_player_id(999);
+
+    // 2. 再造一件同部位同等级副套武器（+0、可交易）用于测试流派副套继承符。
+    GrantItem(buyer, kForgeMat, 100, false);
+    EquipmentCraftChoice createAlt;
+    createAlt.set_operation(EquipmentCraftChoice::CREATE_ITEM);
+    createAlt.set_config_id(3101);
+    const auto altCreated = CommitEquip(buyer, createAlt);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, altCreated.outcome()) << altCreated.DebugString();
+    const Guid altWeaponId = altCreated.item_id();
+    ASSERT_FALSE(InventoryOf(buyer).GetItemCompByGuid(altWeaponId)->bound());
+
+    // 3. 流派副套继承符：把 boundWeapon (+5, pity=3) 继承到 altWeapon (+0)，altWeapon 升级为 +5 并强制转为绑定防洗白；源装备不动。
+    EquipmentCraftChoice inherit;
+    inherit.set_operation(EquipmentCraftChoice::INHERIT_ENHANCE);
+    inherit.set_item_id(altWeaponId);
+    inherit.set_source_item_id(boundWeaponId);
+    const auto inheritResp = CommitEquip(buyer, inherit);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, inheritResp.outcome()) << inheritResp.DebugString();
+    const auto* altAfter = InventoryOf(buyer).GetItemCompByGuid(altWeaponId);
+    ASSERT_NE(nullptr, altAfter);
+    EXPECT_EQ(5u, altAfter->equip().enhance_level());
+    EXPECT_EQ(3u, altAfter->equip().enhance_pity_count());
+    EXPECT_TRUE(altAfter->bound());
+    EXPECT_EQ(5u, InventoryOf(buyer).GetItemCompByGuid(boundWeaponId)->equip().enhance_level());
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kInheritTalismanConfigId));
+
+    // 4. 解封剥离符：如果镶嵌了宝石必须先拒绝（防误销毁宝石）；取下宝石后剥离成功，清空所有绑定养成并恢复纯 T 原胚。
+    boundWeapon = InventoryOf(buyer).GetItemCompByGuid(boundWeaponId);
+    auto* gem = boundWeapon->mutable_equip()->add_gems();
+    gem->set_socket(0);
+    gem->set_gem_config_id(3201);
+    EquipmentCraftChoice unseal;
+    unseal.set_operation(EquipmentCraftChoice::UNSEAL_TO_TRADABLE);
+    unseal.set_item_id(boundWeaponId);
+    const auto blockedUnseal = CommitEquip(buyer, unseal);
+    EXPECT_EQ(CommitEquipmentCraftResponse::REJECTED, blockedUnseal.outcome());
+
+    boundWeapon->mutable_equip()->clear_gems();
+    const auto unsealResp = CommitEquip(buyer, unseal);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, unsealResp.outcome()) << unsealResp.DebugString();
+    const auto* unsealed = InventoryOf(buyer).GetItemCompByGuid(boundWeaponId);
+    ASSERT_NE(nullptr, unsealed);
+    EXPECT_FALSE(unsealed->bound());
+    EXPECT_EQ(0u, unsealed->equip().enhance_level());
+    EXPECT_EQ(0u, unsealed->equip().enhance_pity_count());
+    EXPECT_EQ(0, unsealed->equip().fixed_affixes_size());
+    EXPECT_TRUE(unsealed->equip().crafter_name().empty());
+    EXPECT_EQ(0u, unsealed->equip().crafter_player_id());
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kUnsealTalismanConfigId));
+}
+
+TEST_F(PlayerCraftQualityTest, EnhanceAndCraftBindStrictlyOnActualBoundConsumptionWithoutFalseBinding) {
+    // 1. 造纯可交易武器并装词条。
+    GrantItem(buyer, kForgeMat, 100, false);
+    const Guid weaponId = ForgeAndInstall(buyer, 3101, 1, 101, 0);
+    ASSERT_FALSE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
+
+    // 2. PlanBoundPolicy 误绑回归：背包同时有充足可交易重铸砂(5)和绑定重铸砂(2)时，
+    //    即使传 allow_bound_materials=true，也必须优先只扣可交易砂，预览 will_bind_item=false 且提交后保持纯 T。
+    GrantItem(buyer, equipcraft::kPolishSandConfigId, 5, false);
+    GrantItem(buyer, equipcraft::kPolishSandConfigId, 2, true);
+    EquipmentCraftChoice polish;
+    polish.set_operation(EquipmentCraftChoice::POLISH_AFFIX);
+    polish.set_item_id(weaponId);
+    polish.set_affix_slot(1);
+    polish.set_allow_bound_materials(true);
+    PreviewEquipmentCraftRequest previewReq;
+    *previewReq.mutable_choice() = polish;
+    PreviewEquipmentCraftResponse previewResp;
+    ASSERT_EQ(kSuccess, PlayerEquipmentV1System::Preview(buyer, previewReq, previewResp));
+    EXPECT_TRUE(previewResp.preview().available());
+    EXPECT_FALSE(previewResp.preview().will_bind_item());
+    EXPECT_FALSE(previewResp.preview().result().bound());
+
+    gForcedQualityRoll = 7000;
+    const auto polishResp = CommitEquip(buyer, polish);
+    ASSERT_EQ(CommitEquipmentCraftResponse::APPLIED, polishResp.outcome()) << polishResp.DebugString();
+    EXPECT_FALSE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
+    EXPECT_EQ(4u, InventoryOf(buyer).GetTotalTradableItemCount(equipcraft::kPolishSandConfigId));
+    EXPECT_EQ(6u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kPolishSandConfigId));
+
+    // 3. Enhance() T/B 隔离与无误绑回归：
+    //    3a. 背包同时有充足可交易百炼石(20)与绑定百炼石(10)时，哪怕 allowBoundMaterials=true 也不误扣绑定石染毒纯 T 装。
+    constexpr uint32_t kEnhanceStone = 3002;
+    GrantItem(buyer, kEnhanceStone, 20, false);
+    GrantItem(buyer, kEnhanceStone, 10, true);
+    PlayerEquipSystem::EnhanceOutcome enhanceOutcome;
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(buyer, weaponId, 0, enhanceOutcome, std::nullopt, /*allowBoundMaterials=*/true));
+    EXPECT_TRUE(enhanceOutcome.success);
+    EXPECT_EQ(1u, enhanceOutcome.level);
+    EXPECT_FALSE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
+    EXPECT_EQ(18u, InventoryOf(buyer).GetTotalTradableItemCount(kEnhanceStone)); // +1 耗 2 颗纯可交易石
+    EXPECT_EQ(28u, InventoryOf(buyer).GetTotalItemCount(kEnhanceStone));         // 10 颗绑定石原封未动
+
+    //    3b. 清空可交易石，仅剩绑定石：默认 allowBoundMaterials=false 必须拦截 kEquipBindConfirmRequired，不扣石不变绑。
+    ASSERT_EQ(kSuccess, BagService::RemoveItemsExact(buyer, InventoryOf(buyer), {{kEnhanceStone, 18}}, TX_EQUIP_ENHANCE, 1, "", true));
+    EXPECT_EQ(0u, InventoryOf(buyer).GetTotalTradableItemCount(kEnhanceStone));
+    EXPECT_EQ(10u, InventoryOf(buyer).GetTotalItemCount(kEnhanceStone));
+    EXPECT_EQ(kEquipBindConfirmRequired, PlayerEquipSystem::Enhance(buyer, weaponId, 1, enhanceOutcome, std::nullopt, false));
+    EXPECT_EQ(10u, InventoryOf(buyer).GetTotalItemCount(kEnhanceStone));
+    EXPECT_FALSE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
+
+    //    3c. 显式确认 allowBoundMaterials=true：扣绑定石且装备永久转绑（即便 +11 失败也同样转绑防洗白）。
+    auto* weapon = InventoryOf(buyer).GetItemCompByGuid(weaponId);
+    ASSERT_NE(nullptr, weapon);
+    weapon->mutable_equip()->set_enhance_level(10);
+    GrantItem(buyer, kEnhanceStone, 100, true);
+    PlayerEquipSystem::SetRandomSourceForTest([](uint64_t n) { return n > 0 ? n - 1 : 0; }); // 必败
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(buyer, weaponId, 10, enhanceOutcome, 0, /*allowBoundMaterials=*/true));
+    PlayerEquipSystem::SetRandomSourceForTest(nullptr);
+    EXPECT_FALSE(enhanceOutcome.success);
+    EXPECT_EQ(10u, enhanceOutcome.level);
+    EXPECT_EQ(1u, enhanceOutcome.pityCount);
+    EXPECT_TRUE(InventoryOf(buyer).GetItemCompByGuid(weaponId)->bound());
+}
+
 } // namespace

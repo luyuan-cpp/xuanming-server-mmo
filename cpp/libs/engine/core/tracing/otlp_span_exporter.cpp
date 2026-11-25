@@ -39,16 +39,16 @@ public:
     };
 
     HttpConnection(muduo::net::EventLoop& loop, const muduo::net::InetAddress& address, uint64_t id, Callbacks callbacks)
-        : loop_(loop),
-          client_(&loop, address, "otlp-span-export#" + std::to_string(id)),
-          id_(id),
-          callbacks_(std::move(callbacks))
+        : loop(loop),
+          client(&loop, address, "otlp-span-export#" + std::to_string(id)),
+          id(id),
+          callbacks(std::move(callbacks))
     {
     }
 
     ~HttpConnection()
     {
-        const auto conn = client_.connection();
+        const auto conn = client.connection();
         if (conn) {
             conn->forceClose();
         }
@@ -59,48 +59,48 @@ public:
 
     void Connect()
     {
-        if (connectStarted_) {
+        if (connectStarted) {
             return;
         }
-        connectStarted_ = true;
+        connectStarted = true;
         std::weak_ptr<HttpConnection> weakSelf = weak_from_this();
-        client_.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn) {
+        client.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn) {
             if (const auto self = weakSelf.lock()) {
                 if (conn->connected()) {
-                    self->callbacks_.onUp(self->id_);
+                    self->callbacks.onUp(self->id);
                 } else {
-                    self->callbacks_.onDown(self->id_);
+                    self->callbacks.onDown(self->id);
                 }
             }
         });
-        client_.setMessageCallback(
+        client.setMessageCallback(
             [weakSelf](const muduo::net::TcpConnectionPtr&, muduo::net::Buffer* buffer, muduo::Timestamp) {
                 if (const auto self = weakSelf.lock()) {
-                    self->callbacks_.onBytes(self->id_, buffer);
+                    self->callbacks.onBytes(self->id, buffer);
                     return;
                 }
                 buffer->retrieveAll();
             });
         // muduo LOCAL DELTA 的连接失败回调:先停掉 Connector 的内部重试,上报排到下一轮(回调可能正处在 Connector 自己的
         // 事件栈上,也可能在 connect() 里同步发生),做法同 muduo_grpc::Http2Transport::HandleConnectFailed。
-        client_.setConnectFailedCallback([weakSelf](int savedErrno) {
+        client.setConnectFailedCallback([weakSelf](int savedErrno) {
             const auto self = weakSelf.lock();
             if (!self) {
                 return;
             }
-            self->client_.stop();
-            self->loop_.queueInLoop([weakSelf, savedErrno] {
+            self->client.stop();
+            self->loop.queueInLoop([weakSelf, savedErrno] {
                 if (const auto again = weakSelf.lock()) {
-                    again->callbacks_.onConnectFailed(again->id_, savedErrno);
+                    again->callbacks.onConnectFailed(again->id, savedErrno);
                 }
             });
         });
-        client_.connect();
+        client.connect();
     }
 
     bool Send(const std::string& bytes)
     {
-        const auto conn = client_.connection();
+        const auto conn = client.connection();
         if (!conn || !conn->connected()) {
             return false;
         }
@@ -111,28 +111,28 @@ public:
     // 关掉连接(还没连上就停掉 Connector)。关闭结果经 onDown 回来;调用方随后把本对象排进 queueInLoop 释放。
     void Close()
     {
-        const auto conn = client_.connection();
+        const auto conn = client.connection();
         if (conn) {
             conn->forceClose();
             return;
         }
-        if (connectStarted_) {
-            client_.stop();
+        if (connectStarted) {
+            client.stop();
         }
     }
 
     bool Connected() const
     {
-        const auto conn = client_.connection();
+        const auto conn = client.connection();
         return conn && conn->connected();
     }
 
 private:
-    muduo::net::EventLoop& loop_; // 借用节点的 loop,连接对象在它析构之前释放
-    muduo::net::TcpClient client_;
-    uint64_t id_;
-    Callbacks callbacks_;
-    bool connectStarted_{false};
+    muduo::net::EventLoop& loop; // 借用节点的 loop,连接对象在它析构之前释放
+    muduo::net::TcpClient client;
+    uint64_t id;
+    Callbacks callbacks;
+    bool connectStarted{false};
 };
 
 } // namespace
@@ -153,30 +153,30 @@ std::optional<muduo::net::InetAddress> ResolveOtlpEndpoint(const OtlpHttpEndpoin
 class OtlpSpanExporter::Impl : public std::enable_shared_from_this<OtlpSpanExporter::Impl> {
 public:
     Impl(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options)
-        : loop_(loop), queue_(queue), stats_(stats), options_(std::move(options)), url_(options_.endpoint.ToUrl())
+        : loop(loop), queue(queue), stats(stats), options(std::move(options)), url(this->options.endpoint.ToUrl())
     {
-        options_.maxExportBatchSize = std::max<size_t>(options_.maxExportBatchSize, 1);
+        this->options.maxExportBatchSize = std::max<size_t>(this->options.maxExportBatchSize, 1);
     }
 
     void Start()
     {
-        loop_.assertInLoopThread();
-        if (started_) {
+        this->loop.assertInLoopThread();
+        if (started) {
             return;
         }
-        started_ = true;
+        started = true;
         std::weak_ptr<Impl> weakSelf = weak_from_this();
         // 周期定时器只绑 weak:Impl 先没了就是空操作。
-        periodicTimer_ = loop_.runEvery(ToSeconds(options_.scheduleDelay), [weakSelf] {
+        periodicTimer = this->loop.runEvery(ToSeconds(options.scheduleDelay), [weakSelf] {
             if (const auto self = weakSelf.lock()) {
                 self->TryExport();
             }
         });
-        periodicTimerArmed_ = true;
+        periodicTimerArmed = true;
         // 攒够一批时提前发。回调在 Submit 的线程上、持队列锁执行,只做一次 queueInLoop(Kafka 的 poll 线程就地派发时也安全);
         // 停机摘掉回调之后 loop 不会再被碰到,摘回调与 Submit 持同一把锁。
-        muduo::net::EventLoop* loop = &loop_;
-        queue_.SetBatchReadyCallback([loop, weakSelf] {
+        muduo::net::EventLoop* loop = &this->loop;
+        queue.SetBatchReadyCallback([loop, weakSelf] {
             loop->queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
                     self->TryExport();
@@ -187,38 +187,38 @@ public:
 
     void BeginShutdown()
     {
-        loop_.assertInLoopThread();
-        if (shuttingDown_ || finished_) {
+        loop.assertInLoopThread();
+        if (shuttingDown || finished) {
             return;
         }
-        shuttingDown_ = true;
-        shutdownDeadline_ = SteadyClock::now() + options_.shutdownTimeout;
-        queue_.SetBatchReadyCallback(nullptr);
+        shuttingDown = true;
+        shutdownDeadline = SteadyClock::now() + options.shutdownTimeout;
+        queue.SetBatchReadyCallback(nullptr);
         CancelPeriodicTimer();
         std::weak_ptr<Impl> weakSelf = weak_from_this();
-        shutdownTimer_ = loop_.runAfter(ToSeconds(options_.shutdownTimeout), [weakSelf] {
+        shutdownTimer = loop.runAfter(ToSeconds(options.shutdownTimeout), [weakSelf] {
             if (const auto self = weakSelf.lock()) {
-                self->shutdownTimerArmed_ = false;
+                self->shutdownTimerArmed = false;
                 self->OnShutdownDeadline();
             }
         });
-        shutdownTimerArmed_ = true;
+        shutdownTimerArmed = true;
         ContinueShutdown();
     }
 
-    bool Finished() const { return finished_; }
+    bool Finished() const { return finished; }
 
     // 析构前收口(没走完停机冲刷就析构时):不再发,剩下的按停机丢弃计数。
     void StopNow()
     {
-        if (!finished_) {
-            queue_.SetBatchReadyCallback(nullptr);
-            if (phase_ != Phase::kIdle && inFlightSpans_ > 0) {
-                stats_.failedSpans.fetch_add(inFlightSpans_, std::memory_order_relaxed);
-                stats_.failedBatches.fetch_add(1, std::memory_order_relaxed);
-                inFlightSpans_ = 0;
+        if (!finished) {
+            queue.SetBatchReadyCallback(nullptr);
+            if (phase != Phase::kIdle && inFlightSpans > 0) {
+                stats.failedSpans.fetch_add(inFlightSpans, std::memory_order_relaxed);
+                stats.failedBatches.fetch_add(1, std::memory_order_relaxed);
+                inFlightSpans = 0;
             }
-            phase_ = Phase::kIdle;
+            phase = Phase::kIdle;
             FinishShutdown();
         }
     }
@@ -232,31 +232,31 @@ private:
 
     void TryExport()
     {
-        if (finished_ || phase_ != Phase::kIdle) {
+        if (finished || phase != Phase::kIdle) {
             return;   // 同一时刻最多一个在途请求;它结束时会自己复核还要不要接着发
         }
-        if (!shuttingDown_ && SteadyClock::now() < backoffUntil_) {
+        if (!shuttingDown && SteadyClock::now() < backoffUntil) {
             DropOneBatchWhileBackingOff();
             return;
         }
-        if (queue_.Size() == 0) {
-            if (shuttingDown_) {
+        if (queue.Size() == 0) {
+            if (shuttingDown) {
                 FinishShutdown();
             }
             return;   // 空闲的周期:不建连
         }
-        batch_.clear();
-        inFlightSpans_ = queue_.PopBatch(batch_, options_.maxExportBatchSize);
-        const std::string body = EncodeExportTraceServiceRequest(options_.resource, batch_);
-        batch_.clear();
+        batch.clear();
+        inFlightSpans = queue.PopBatch(batch, options.maxExportBatchSize);
+        const std::string body = EncodeExportTraceServiceRequest(options.resource, batch);
+        batch.clear();
         if (body.empty()) {
             FailInFlight("cannot serialize OTLP request", /*backoff=*/false);
             return;
         }
-        request_ = BuildOtlpHttpRequest(options_.endpoint, body);
+        request = BuildOtlpHttpRequest(options.endpoint, body);
         ArmExportDeadline();
 
-        if (connection_ && connection_->Connected()) {
+        if (connection && connection->Connected()) {
             SendInFlight();
             return;
         }
@@ -279,27 +279,27 @@ private:
         callbacks.onConnectFailed = [weakSelf](uint64_t id, int savedErrno) {
             if (const auto self = weakSelf.lock()) self->OnConnectFailed(id, savedErrno);
         };
-        connectionId_ = nextConnectionId_++;
-        connection_ = std::make_shared<HttpConnection>(loop_, options_.address, connectionId_, std::move(callbacks));
-        phase_ = Phase::kConnecting;
-        connection_->Connect();
+        connectionId = nextConnectionId++;
+        connection = std::make_shared<HttpConnection>(loop, options.address, connectionId, std::move(callbacks));
+        phase = Phase::kConnecting;
+        connection->Connect();
     }
 
     void SendInFlight()
     {
-        response_.clear();
-        phase_ = Phase::kAwaitingResponse;
-        if (!connection_->Send(request_)) {
+        response.clear();
+        phase = Phase::kAwaitingResponse;
+        if (!connection->Send(request)) {
             FailInFlight("connection lost before send", /*backoff=*/true);
         }
     }
 
     void OnUp(uint64_t id)
     {
-        if (id != connectionId_ || !connection_) {
+        if (id != connectionId || !connection) {
             return;
         }
-        if (phase_ == Phase::kConnecting) {
+        if (phase == Phase::kConnecting) {
             SendInFlight();
         }
     }
@@ -307,13 +307,13 @@ private:
     // 下面几个回调都先处置连接、再结算在途的一批:结算可能接着发下一批,那时不能再碰这条旧连接。
     void OnDown(uint64_t id)
     {
-        if (id != connectionId_ || !connection_) {
+        if (id != connectionId || !connection) {
             return;
         }
-        const Phase phase = phase_;
+        const Phase phase = this->phase;
         // 正文到连接关闭为止的响应:关闭就是完整。
         const HttpResponseParse parsed =
-            phase == Phase::kAwaitingResponse ? ParseHttpResponse(response_) : HttpResponseParse{};
+            phase == Phase::kAwaitingResponse ? ParseHttpResponse(response) : HttpResponseParse{};
         ReleaseConnection();
         if (phase == Phase::kAwaitingResponse) {
             if (parsed.headersComplete && parsed.bodyUntilClose) {
@@ -328,29 +328,29 @@ private:
 
     void OnConnectFailed(uint64_t id, int savedErrno)
     {
-        if (id != connectionId_ || !connection_) {
+        if (id != connectionId || !connection) {
             return;
         }
         ReleaseConnection();
-        if (phase_ == Phase::kConnecting) {
-            lastErrno_ = savedErrno;
+        if (phase == Phase::kConnecting) {
+            lastErrno = savedErrno;
             FailInFlight("connect failed", /*backoff=*/true);
         }
     }
 
     void OnBytes(uint64_t id, muduo::net::Buffer* buffer)
     {
-        if (id != connectionId_ || !connection_ || phase_ != Phase::kAwaitingResponse) {
+        if (id != connectionId || !connection || phase != Phase::kAwaitingResponse) {
             // 没在等响应时收到的字节:旧连接的残余或对端多发,连接不能再用。
             buffer->retrieveAll();
-            if (id == connectionId_ && connection_) {
+            if (id == connectionId && connection) {
                 CloseConnection();
             }
             return;
         }
-        response_.append(buffer->peek(), buffer->readableBytes());
+        response.append(buffer->peek(), buffer->readableBytes());
         buffer->retrieveAll();
-        const HttpResponseParse parsed = ParseHttpResponse(response_);
+        const HttpResponseParse parsed = ParseHttpResponse(response);
         switch (parsed.state) {
         case HttpResponseParse::State::kNeedMore:
             return;
@@ -362,7 +362,7 @@ private:
             break;
         }
         // 响应之后还多出字节、或对端要求关闭:这条连接不再复用。
-        if (!parsed.keepAlive || parsed.consumed != response_.size()) {
+        if (!parsed.keepAlive || parsed.consumed != response.size()) {
             CloseConnection();
         }
         CompleteInFlight(parsed.statusCode);
@@ -371,36 +371,36 @@ private:
     void ArmExportDeadline()
     {
         CancelExportDeadline();
-        auto timeout = options_.exportTimeout;
-        if (shuttingDown_) {
-            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(shutdownDeadline_ - SteadyClock::now());
+        auto timeout = options.exportTimeout;
+        if (shuttingDown) {
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(shutdownDeadline - SteadyClock::now());
             timeout = std::max(std::min(timeout, remaining), std::chrono::milliseconds(1));
         }
-        const uint64_t generation = ++exportGeneration_;
+        const uint64_t generation = ++exportGeneration;
         std::weak_ptr<Impl> weakSelf = weak_from_this();
-        exportDeadline_ = loop_.runAfter(ToSeconds(timeout), [weakSelf, generation] {
+        exportDeadline = loop.runAfter(ToSeconds(timeout), [weakSelf, generation] {
             if (const auto self = weakSelf.lock()) {
                 self->OnExportDeadline(generation);
             }
         });
-        exportDeadlineArmed_ = true;
+        exportDeadlineArmed = true;
     }
 
     void CancelExportDeadline()
     {
-        if (exportDeadlineArmed_) {
-            loop_.cancel(exportDeadline_);
-            exportDeadlineArmed_ = false;
+        if (exportDeadlineArmed) {
+            loop.cancel(exportDeadline);
+            exportDeadlineArmed = false;
         }
     }
 
     void OnExportDeadline(uint64_t generation)
     {
-        if (generation != exportGeneration_) {
+        if (generation != exportGeneration) {
             return;
         }
-        exportDeadlineArmed_ = false;
-        if (phase_ == Phase::kIdle) {
+        exportDeadlineArmed = false;
+        if (phase == Phase::kIdle) {
             return;
         }
         CloseConnection();
@@ -410,20 +410,20 @@ private:
     void CompleteInFlight(int statusCode)
     {
         CancelExportDeadline();
-        phase_ = Phase::kIdle;
-        const uint64_t spans = inFlightSpans_;
-        inFlightSpans_ = 0;
-        request_.clear();
+        phase = Phase::kIdle;
+        const uint64_t spans = inFlightSpans;
+        inFlightSpans = 0;
+        request.clear();
         if (statusCode >= 200 && statusCode < 300) {
-            stats_.exportedSpans.fetch_add(spans, std::memory_order_relaxed);
-            stats_.exportedBatches.fetch_add(1, std::memory_order_relaxed);
-            consecutiveTransportFailures_ = 0;
-            backoffUntil_ = SteadyClock::time_point{};
-            if (failing_) {
-                LOG_INFO << "[Tracing] OTLP span export to " << url_ << " recovered after " << failedBatchesWhileFailing_
+            stats.exportedSpans.fetch_add(spans, std::memory_order_relaxed);
+            stats.exportedBatches.fetch_add(1, std::memory_order_relaxed);
+            consecutiveTransportFailures = 0;
+            backoffUntil = SteadyClock::time_point{};
+            if (failing) {
+                LOG_INFO << "[Tracing] OTLP span export to " << url << " recovered after " << failedBatchesWhileFailing
                          << " failed batch(es)";
-                failing_ = false;
-                failedBatchesWhileFailing_ = 0;
+                failing = false;
+                failedBatchesWhileFailing = 0;
             }
         } else {
             // 采集器拒收(4xx / 5xx):这一批丢掉,不退避(对端是通的)。
@@ -435,26 +435,26 @@ private:
     void FailInFlight(const std::string& reason, bool backoff)
     {
         CancelExportDeadline();
-        phase_ = Phase::kIdle;
-        const uint64_t spans = inFlightSpans_;
-        inFlightSpans_ = 0;
-        request_.clear();
+        phase = Phase::kIdle;
+        const uint64_t spans = inFlightSpans;
+        inFlightSpans = 0;
+        request.clear();
         std::string detail = reason;
-        if (lastErrno_ != 0) {
-            detail += " (errno " + std::to_string(lastErrno_) + ")";
-            lastErrno_ = 0;
+        if (lastErrno != 0) {
+            detail += " (errno " + std::to_string(lastErrno) + ")";
+            lastErrno = 0;
         }
         if (spans > 0) {
             RecordFailedBatch(spans, detail);
         }
-        if (backoff && !shuttingDown_) {
-            ++consecutiveTransportFailures_;
-            auto delay = options_.initialBackoff;
-            for (uint32_t i = 1; i < consecutiveTransportFailures_ && delay < options_.maxBackoff; ++i) {
+        if (backoff && !shuttingDown) {
+            ++consecutiveTransportFailures;
+            auto delay = options.initialBackoff;
+            for (uint32_t i = 1; i < consecutiveTransportFailures && delay < options.maxBackoff; ++i) {
                 delay *= 2;
             }
-            delay = std::min(delay, options_.maxBackoff);
-            backoffUntil_ = SteadyClock::now() + delay;
+            delay = std::min(delay, options.maxBackoff);
+            backoffUntil = SteadyClock::now() + delay;
         }
         AfterInFlightSettled();
     }
@@ -462,12 +462,12 @@ private:
     // 记一批失败:状态从正常转成失败时打一行 WARN,之后只计数,恢复时打一行 INFO(不按批刷日志)。
     void RecordFailedBatch(uint64_t spans, const std::string& reason)
     {
-        stats_.failedSpans.fetch_add(spans, std::memory_order_relaxed);
-        stats_.failedBatches.fetch_add(1, std::memory_order_relaxed);
-        ++failedBatchesWhileFailing_;
-        if (!failing_) {
-            failing_ = true;
-            LOG_WARN << "[Tracing] OTLP span export to " << url_ << " failed: " << reason << "; dropped " << spans
+        stats.failedSpans.fetch_add(spans, std::memory_order_relaxed);
+        stats.failedBatches.fetch_add(1, std::memory_order_relaxed);
+        ++failedBatchesWhileFailing;
+        if (!failing) {
+            failing = true;
+            LOG_WARN << "[Tracing] OTLP span export to " << url << " failed: " << reason << "; dropped " << spans
                      << " span(s). Batches are dropped (not retried) until the collector accepts again";
         }
     }
@@ -475,9 +475,9 @@ private:
     void DropOneBatchWhileBackingOff()
     {
         std::vector<SpanRecord> dropped;
-        const size_t count = queue_.PopBatch(dropped, options_.maxExportBatchSize);
+        const size_t count = queue.PopBatch(dropped, options.maxExportBatchSize);
         if (count > 0) {
-            stats_.failedSpans.fetch_add(count, std::memory_order_relaxed);
+            stats.failedSpans.fetch_add(count, std::memory_order_relaxed);
         }
     }
 
@@ -485,8 +485,8 @@ private:
     {
         // 接下来的动作一律排到下一轮:这里可能正处在连接的回调栈上,不在这里同步建新连接或再发一批。
         std::weak_ptr<Impl> weakSelf = weak_from_this();
-        if (shuttingDown_) {
-            loop_.queueInLoop([weakSelf] {
+        if (shuttingDown) {
+            loop.queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
                     self->ContinueShutdown();
                 }
@@ -494,8 +494,8 @@ private:
             return;
         }
         // 还够一批就接着发,不等下一个周期(BatchSpanProcessor 的语义)。
-        if (queue_.Size() >= options_.maxExportBatchSize) {
-            loop_.queueInLoop([weakSelf] {
+        if (queue.Size() >= options.maxExportBatchSize) {
+            loop.queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
                     self->TryExport();
                 }
@@ -505,10 +505,10 @@ private:
 
     void ContinueShutdown()
     {
-        if (finished_ || phase_ != Phase::kIdle) {
+        if (finished || phase != Phase::kIdle) {
             return;
         }
-        if (SteadyClock::now() >= shutdownDeadline_) {
+        if (SteadyClock::now() >= shutdownDeadline) {
             FinishShutdown();
             return;
         }
@@ -517,17 +517,17 @@ private:
 
     void OnShutdownDeadline()
     {
-        if (finished_) {
+        if (finished) {
             return;
         }
-        if (phase_ != Phase::kIdle) {
+        if (phase != Phase::kIdle) {
             CancelExportDeadline();
-            const uint64_t spans = inFlightSpans_;
-            inFlightSpans_ = 0;
-            phase_ = Phase::kIdle;
+            const uint64_t spans = inFlightSpans;
+            inFlightSpans = 0;
+            phase = Phase::kIdle;
             if (spans > 0) {
-                stats_.failedSpans.fetch_add(spans, std::memory_order_relaxed);
-                stats_.failedBatches.fetch_add(1, std::memory_order_relaxed);
+                stats.failedSpans.fetch_add(spans, std::memory_order_relaxed);
+                stats.failedBatches.fetch_add(1, std::memory_order_relaxed);
             }
         }
         FinishShutdown();
@@ -535,17 +535,17 @@ private:
 
     void FinishShutdown()
     {
-        if (finished_) {
+        if (finished) {
             return;
         }
-        finished_ = true;
+        finished = true;
         CancelExportDeadline();
         CancelPeriodicTimer();
-        if (shutdownTimerArmed_) {
-            loop_.cancel(shutdownTimer_);
-            shutdownTimerArmed_ = false;
+        if (shutdownTimerArmed) {
+            loop.cancel(shutdownTimer);
+            shutdownTimerArmed = false;
         }
-        const size_t discarded = queue_.DiscardAll();
+        const size_t discarded = queue.DiscardAll();
         if (discarded > 0) {
             LOG_WARN << "[Tracing] span exporter stopped with " << discarded << " span(s) not exported";
         }
@@ -556,8 +556,8 @@ private:
 
     void CloseConnection()
     {
-        if (connection_) {
-            connection_->Close();
+        if (connection) {
+            connection->Close();
             ReleaseConnection();
         }
     }
@@ -565,81 +565,81 @@ private:
     // 不在连接自己的回调栈上析构:移进排队任务。之后这条连接的回调按 connectionId_ 认出是旧的,一律忽略。
     void ReleaseConnection()
     {
-        if (!connection_) {
+        if (!connection) {
             return;
         }
-        connectionId_ = 0;
-        loop_.queueInLoop([released = std::move(connection_)]() mutable { released.reset(); });
-        connection_.reset();
+        connectionId = 0;
+        loop.queueInLoop([released = std::move(connection)]() mutable { released.reset(); });
+        connection.reset();
     }
 
     void CancelPeriodicTimer()
     {
-        if (periodicTimerArmed_) {
-            loop_.cancel(periodicTimer_);
-            periodicTimerArmed_ = false;
+        if (periodicTimerArmed) {
+            loop.cancel(periodicTimer);
+            periodicTimerArmed = false;
         }
     }
 
-    muduo::net::EventLoop& loop_; // 借用节点的 loop;Impl 只在它的线程上使用,先于它析构
-    SpanExportQueue& queue_;
-    SpanExportStats& stats_;
-    OtlpSpanExporterOptions options_;
-    const std::string url_;
+    muduo::net::EventLoop& loop; // 借用节点的 loop;Impl 只在它的线程上使用,先于它析构
+    SpanExportQueue& queue;
+    SpanExportStats& stats;
+    OtlpSpanExporterOptions options;
+    const std::string url;
 
-    bool started_{false};
-    Phase phase_{Phase::kIdle};
-    std::vector<SpanRecord> batch_;
-    std::string request_;
-    std::string response_;
-    uint64_t inFlightSpans_{0};
-    std::shared_ptr<HttpConnection> connection_;
-    uint64_t connectionId_{0};
-    uint64_t nextConnectionId_{1};
-    int lastErrno_{0};
+    bool started{false};
+    Phase phase{Phase::kIdle};
+    std::vector<SpanRecord> batch;
+    std::string request;
+    std::string response;
+    uint64_t inFlightSpans{0};
+    std::shared_ptr<HttpConnection> connection;
+    uint64_t connectionId{0};
+    uint64_t nextConnectionId{1};
+    int lastErrno{0};
 
-    muduo::net::TimerId periodicTimer_;
-    bool periodicTimerArmed_{false};
-    muduo::net::TimerId exportDeadline_;
-    bool exportDeadlineArmed_{false};
-    uint64_t exportGeneration_{0};
+    muduo::net::TimerId periodicTimer;
+    bool periodicTimerArmed{false};
+    muduo::net::TimerId exportDeadline;
+    bool exportDeadlineArmed{false};
+    uint64_t exportGeneration{0};
 
-    uint32_t consecutiveTransportFailures_{0};
-    SteadyClock::time_point backoffUntil_{};
-    bool failing_{false};
-    uint64_t failedBatchesWhileFailing_{0};
+    uint32_t consecutiveTransportFailures{0};
+    SteadyClock::time_point backoffUntil{};
+    bool failing{false};
+    uint64_t failedBatchesWhileFailing{0};
 
-    bool shuttingDown_{false};
-    bool finished_{false};
-    SteadyClock::time_point shutdownDeadline_{};
-    muduo::net::TimerId shutdownTimer_;
-    bool shutdownTimerArmed_{false};
+    bool shuttingDown{false};
+    bool finished{false};
+    SteadyClock::time_point shutdownDeadline{};
+    muduo::net::TimerId shutdownTimer;
+    bool shutdownTimerArmed{false};
 };
 
 OtlpSpanExporter::OtlpSpanExporter(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats,
                                    OtlpSpanExporterOptions options)
-    : impl_(std::make_shared<Impl>(loop, queue, stats, std::move(options)))
+    : impl(std::make_shared<Impl>(loop, queue, stats, std::move(options)))
 {
 }
 
 OtlpSpanExporter::~OtlpSpanExporter()
 {
-    impl_->StopNow();
+    impl->StopNow();
 }
 
 void OtlpSpanExporter::Start()
 {
-    impl_->Start();
+    impl->Start();
 }
 
 void OtlpSpanExporter::BeginShutdown()
 {
-    impl_->BeginShutdown();
+    impl->BeginShutdown();
 }
 
 bool OtlpSpanExporter::Finished() const
 {
-    return impl_->Finished();
+    return impl->Finished();
 }
 
 SpanExportStats& ProcessSpanExportStats()

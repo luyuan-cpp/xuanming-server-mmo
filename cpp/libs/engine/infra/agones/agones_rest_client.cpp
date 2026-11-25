@@ -249,40 +249,40 @@ namespace agones
 	}
 
 	AgonesRestClient::AgonesRestClient(std::string baseUrl, HttpTransport& transport, HttpTimeouts timeouts)
-		: baseUrl_(std::move(baseUrl)), transport_(transport), timeouts_(timeouts)
+		: baseUrl(std::move(baseUrl)), transport(transport), timeouts(timeouts)
 	{
 	}
 
 	// Agones REST SDK 的这几个端点都接受空 JSON 对象作为 body。
 	HttpResponse AgonesRestClient::Ready(std::stop_token cancel)
 	{
-		return transport_.Post(baseUrl_ + "/ready", "{}", timeouts_, std::move(cancel));
+		return transport.Post(baseUrl + "/ready", "{}", timeouts, std::move(cancel));
 	}
 
 	HttpResponse AgonesRestClient::Health(std::stop_token cancel)
 	{
-		return transport_.Post(baseUrl_ + "/health", "{}", timeouts_, std::move(cancel));
+		return transport.Post(baseUrl + "/health", "{}", timeouts, std::move(cancel));
 	}
 
 	HttpResponse AgonesRestClient::Allocate(std::stop_token cancel)
 	{
-		return transport_.Post(baseUrl_ + "/allocate", "{}", timeouts_, std::move(cancel));
+		return transport.Post(baseUrl + "/allocate", "{}", timeouts, std::move(cancel));
 	}
 
 	HttpResponse AgonesRestClient::Shutdown()
 	{
 		// 显式传空令牌(不可取消),理由见头文件。
-		return transport_.Post(baseUrl_ + "/shutdown", "{}", timeouts_, std::stop_token{});
+		return transport.Post(baseUrl + "/shutdown", "{}", timeouts, std::stop_token{});
 	}
 
 	HttpResponse AgonesRestClient::GameServer(std::stop_token cancel)
 	{
-		return transport_.Get(baseUrl_ + "/gameserver", timeouts_, std::move(cancel));
+		return transport.Get(baseUrl + "/gameserver", timeouts, std::move(cancel));
 	}
 
 	HttpResponse AgonesRestClient::GameServer(const HttpTimeouts& timeouts)
 	{
-		return transport_.Get(baseUrl_ + "/gameserver", timeouts);
+		return transport.Get(baseUrl + "/gameserver", timeouts);
 	}
 
 } // namespace agones

@@ -54,8 +54,8 @@ namespace prometheus_text
 		void HistogramDouble(std::initializer_list<Label> labels, std::span<const double> upperBounds,
 							 std::span<const uint64_t> bucketCounts, double sum);
 
-		const std::string &Text() const { return text_; }
-		uint32_t DroppedSamples() const { return droppedSamples_; }
+		const std::string &Text() const { return text; }
+		uint32_t DroppedSamples() const { return droppedSamples; }
 
 	private:
 		// 写一行 <族名><suffix>{labels[,extra]} value。调用方已校验族与标签。
@@ -64,10 +64,10 @@ namespace prometheus_text
 		void AppendSampleText(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
 							  std::string_view valueText);
 
-		std::string text_;
-		std::string family_;
-		MetricType familyType_{MetricType::kCounter};
-		bool familyValid_{false};
-		uint32_t droppedSamples_{0};
+		std::string text;
+		std::string family;
+		MetricType familyType{MetricType::kCounter};
+		bool familyValid{false};
+		uint32_t droppedSamples{0};
 	};
 } // namespace prometheus_text

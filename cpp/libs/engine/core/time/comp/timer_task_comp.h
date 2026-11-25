@@ -60,5 +60,5 @@ private:
     // 开火期间强持有 State,cb 销毁或移动宿主也不会释放当前状态。
     // generation 使已被 muduo 摘进到期批次的旧回调在取消或重新武装后失效。
     static void OnTimer(State &state, uint32_t firedGeneration, bool repeating, const TimerCallback &cb);
-    std::shared_ptr<State> state_;
+    std::shared_ptr<State> state;
 };

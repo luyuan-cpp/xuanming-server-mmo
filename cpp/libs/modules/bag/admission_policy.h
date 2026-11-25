@@ -81,17 +81,17 @@ class AcceptByConfigSet final : public IAdmissionPolicy
 {
 public:
     explicit AcceptByConfigSet(std::unordered_set<uint32_t> allowed)
-        : allowed_(std::move(allowed))
+        : allowed(std::move(allowed))
     {
     }
 
     [[nodiscard]] bool Accepts(uint32_t configId) const override
     {
-        return allowed_.contains(configId);
+        return allowed.contains(configId);
     }
 
-    [[nodiscard]] const std::unordered_set<uint32_t> &Allowed() const { return allowed_; }
+    [[nodiscard]] const std::unordered_set<uint32_t> &Allowed() const { return allowed; }
 
 private:
-    std::unordered_set<uint32_t> allowed_;
+    std::unordered_set<uint32_t> allowed;
 };

@@ -17,7 +17,7 @@
 
 EtcdService::~EtcdService()
 {
-	if (registrationTasks_) registrationTasks_->Stop();
+	if (registrationTasks) registrationTasks->Stop();
 }
 
 void EtcdService::Init() {
@@ -47,8 +47,8 @@ void EtcdService::Init() {
 		[] { gNode->StartRpcServer(); },
 		[] { gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed); },
 	});
-	transport_ = etcd_transport::Create(*gNode->GetLoop(), etcdAddr, *this);
-	LOG_INFO << "etcd transport=" << transport_->Name()
+	transport = etcd_transport::Create(*gNode->GetLoop(), etcdAddr, *this);
+	LOG_INFO << "etcd transport=" << transport->Name()
 			 << ": watch / keepalive streams are rebuilt with backoff, each prefix re-ranged and reconciled"
 			 << " (docs/design/grpc-muduo-transport.md §13.5)";
 	LOG_INFO << "EtcdService initialized with etcd: " << etcdAddr;
@@ -56,9 +56,9 @@ void EtcdService::Init() {
 
 void EtcdService::ConfigureRegistration(muduo::net::EventLoop& loop, RegistrationIo io)
 {
-	registrationLoop_ = loop;
-	registrationIo_ = std::move(io);
-	registrationTasks_.emplace(loop);
+	registrationLoop = loop;
+	registrationIo = std::move(io);
+	registrationTasks.emplace(loop);
 }
 
 void EtcdService::OnRange(const etcdserverpb::RangeRequest* request, const etcdserverpb::RangeResponse& reply)
@@ -97,7 +97,7 @@ void EtcdService::ApplyDiscoveryPut(const std::string& key, const std::string& v
 									std::vector<PendingRemoval>& removals)
 {
 	const std::string currentUuid = NodeUuidOf(value);
-	auto outcome = discoveryKeys_.ApplyPut(key, value, modRevision, currentUuid);
+	auto outcome = discoveryKeys.ApplyPut(key, value, modRevision, currentUuid);
 	if (!outcome.accepted)
 	{
 		// Range 与 watch 走不同的流:这条比已经处理过的事件(更新的 PUT 或删除)旧。
@@ -124,7 +124,7 @@ void EtcdService::FlushPendingRemovals(std::vector<PendingRemoval>& removals)
 	// uuid 解析不了(空串)时无法判断,照旧交给发现层。
 	for (auto& removal : removals)
 	{
-		if (discoveryKeys_.HoldsAnyKey(removal.uuid))
+		if (discoveryKeys.HoldsAnyKey(removal.uuid))
 		{
 			LOG_INFO << "etcd key " << removal.key << " no longer belongs to node " << removal.uuid << " ("
 					 << removal.reason << "), but the node is still registered under another key; keeping it";
@@ -142,7 +142,7 @@ void EtcdService::OnPrefixRange(const std::string& prefix, const etcdserverpb::R
 {
 	const int64_t snapshotRevision = reply.header().revision();
 	// 不持有 map 元素的引用:下面的 HandlePutEvent / HandleDeleteEvent 可能经冲突关机重入本对象。
-	const int64_t appliedRevision = appliedSnapshotRevision_[prefix];
+	const int64_t appliedRevision = appliedSnapshotRevision[prefix];
 	if (snapshotRevision < appliedRevision)
 	{
 		// 比已经应用过的快照旧(同一前缀多个 Range 同时在途、乱序到达):整条丢弃,不应用 PUT、不对账 ——
@@ -185,13 +185,13 @@ void EtcdService::OnPrefixRange(const std::string& prefix, const etcdserverpb::R
 			ApplyDiscoveryPut(key, kv.value(), kv.mod_revision(), removals);
 		}
 
-		for (auto& removed : discoveryKeys_.ApplySnapshot(prefix, snapshotKeys, snapshotRevision, complete))
+		for (auto& removed : discoveryKeys.ApplySnapshot(prefix, snapshotKeys, snapshotRevision, complete))
 		{
 			removals.push_back({std::move(removed.key), std::move(removed.value), std::move(removed.holder),
 								"absent from the range snapshot of " + prefix + " at revision " +
 									std::to_string(snapshotRevision)});
 		}
-		appliedSnapshotRevision_[prefix] = snapshotRevision;
+		appliedSnapshotRevision[prefix] = snapshotRevision;
 		// 整个快照应用完再摘:同一快照里旧持有者可能已经出现在另一个键上(换号的 Go 节点)。
 		FlushPendingRemovals(removals);
 	}
@@ -199,12 +199,12 @@ void EtcdService::OnPrefixRange(const std::string& prefix, const etcdserverpb::R
 	// 这个前缀在当前流上还没有 watch:从已应用快照之后的第一个 revision 建,快照与 watch 之间不漏事件,
 	// 也不从更旧的 revision 回放(重建前发出的旧 Range 晚到时同样如此)。
 	const int64_t watchFrom = std::max(snapshotRevision, appliedRevision) + 1;
-	auto& watch = prefixWatches_[prefix];
+	auto& watch = prefixWatches[prefix];
 	if (!watch.createSent)
 	{
 		watch.createSent = true;
-		pendingWatchCreates_.push_back(prefix);
-		if (exactDiscoveryKeys_.contains(prefix))
+		pendingWatchCreates.push_back(prefix);
+		if (exactDiscoveryKeys.contains(prefix))
 		{
 			EtcdHelper::StartWatchingKey(prefix, watchFrom);
 			LOG_INFO << "Watching key: " << prefix << " from revision " << watchFrom;
@@ -219,14 +219,14 @@ void EtcdService::OnPrefixRange(const std::string& prefix, const etcdserverpb::R
 
 void EtcdService::AddExactDiscoveryKey(const std::string& key)
 {
-	exactDiscoveryKeys_.insert(key);
+	exactDiscoveryKeys.insert(key);
 }
 
 void EtcdService::RangeDiscoveryScope(const std::string& scope)
 {
 	// 精确键的快照里最多只有它自己。对账(discoveryKeys_.ApplySnapshot)按前缀扫索引,把它当前缀扫也只会扫到它:
 	// 本节点不 Range / watch 自身类型的前缀(否则不会登记成精确键),同类别的节点的键不会进索引。
-	if (exactDiscoveryKeys_.contains(scope))
+	if (exactDiscoveryKeys.contains(scope))
 	{
 		EtcdHelper::RangeKey(scope);
 		return;
@@ -265,20 +265,20 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 	if (response.created())
 	{
 		// etcd 在一条流上按收到 create 的顺序逐个回 created(创建失败也回,只是同时带 canceled)。
-		if (pendingWatchCreates_.empty())
+		if (pendingWatchCreates.empty())
 		{
 			LOG_WARN << "etcd watch created (watch_id=" << response.watch_id() << ") without a pending create request";
 		}
 		else
 		{
-			std::string prefix = std::move(pendingWatchCreates_.front());
-			pendingWatchCreates_.pop_front();
-			prefixWatches_[prefix].watchId = response.watch_id();
-			watchIdToPrefix_[response.watch_id()] = prefix;
+			std::string prefix = std::move(pendingWatchCreates.front());
+			pendingWatchCreates.pop_front();
+			prefixWatches[prefix].watchId = response.watch_id();
+			watchIdToPrefix[response.watch_id()] = prefix;
 			if (!response.canceled())
 			{
 				// 建成了:这个前缀的取消退避清零(discovery_resync_policy.h)。
-				cancelRetryBackoffSeconds_.erase(prefix);
+				cancelRetryBackoffSeconds.erase(prefix);
 			}
 			LOG_INFO << "etcd watch created: prefix=" << prefix << " watch_id=" << response.watch_id();
 		}
@@ -290,8 +290,8 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 	{
 		return;
 	}
-	const auto mapped = watchIdToPrefix_.find(response.watch_id());
-	if (mapped == watchIdToPrefix_.end())
+	const auto mapped = watchIdToPrefix.find(response.watch_id());
+	if (mapped == watchIdToPrefix.end())
 	{
 		LOG_WARN << "etcd watch canceled for unknown watch_id=" << response.watch_id()
 				 << " reason=" << response.cancel_reason();
@@ -315,21 +315,21 @@ void EtcdService::OnStreamWatchResponse(const etcdserverpb::WatchResponse& respo
 
 void EtcdService::ScheduleCanceledPrefixRetry(const std::string& prefix)
 {
-	double& backoff = cancelRetryBackoffSeconds_[prefix];
+	double& backoff = cancelRetryBackoffSeconds[prefix];
 	backoff = discovery_resync::NextCancelRetrySeconds(backoff);
-	if (std::find(canceledPrefixesToRetry_.begin(), canceledPrefixesToRetry_.end(), prefix) == canceledPrefixesToRetry_.end())
+	if (std::find(canceledPrefixesToRetry.begin(), canceledPrefixesToRetry.end(), prefix) == canceledPrefixesToRetry.end())
 	{
-		canceledPrefixesToRetry_.push_back(prefix);
+		canceledPrefixesToRetry.push_back(prefix);
 	}
-	if (cancelRetryTimer_.IsActive())
+	if (cancelRetryTimer.IsActive())
 	{
 		// 已经排了一拍:这个前缀随那一拍一起重拉(最多晚到 30 秒的上限)。
 		return;
 	}
 	LOG_WARN << "etcd watch for prefix " << prefix << " canceled; re-ranging in " << backoff << "s";
-	cancelRetryTimer_.RunAfter(backoff, [this] {
+	cancelRetryTimer.RunAfter(backoff, [this] {
 		std::vector<std::string> prefixes;
-		prefixes.swap(canceledPrefixesToRetry_);
+		prefixes.swap(canceledPrefixesToRetry);
 		for (const auto& p : prefixes)
 		{
 			// 应答到了走 OnPrefixRange:对账,并在当前流上还没有 watch 时从快照之后建。
@@ -368,7 +368,7 @@ void EtcdService::ApplyWatchEvents(const etcdserverpb::WatchResponse& response)
 		// 删除事件的 kv.mod_revision 就是删除发生的 revision;缺省时退回应答头的 revision。
 		const int64_t deletedAt =
 			event.kv().mod_revision() != 0 ? event.kv().mod_revision() : response.header().revision();
-		auto outcome = discoveryKeys_.ApplyDelete(key, deletedAt);
+		auto outcome = discoveryKeys.ApplyDelete(key, deletedAt);
 		if (outcome.result == DiscoveryKeyIndex::DeleteResult::kStale)
 		{
 			LOG_INFO << "Ignore stale watch DELETE " << key << " at revision " << deletedAt
@@ -394,12 +394,12 @@ void EtcdService::ApplyWatchEvents(const etcdserverpb::WatchResponse& response)
 
 void EtcdService::ResetPrefixWatch(const std::string& prefix)
 {
-	const auto it = prefixWatches_.find(prefix);
-	if (it == prefixWatches_.end())
+	const auto it = prefixWatches.find(prefix);
+	if (it == prefixWatches.end())
 	{
 		return;
 	}
-	watchIdToPrefix_.erase(it->second.watchId);
+	watchIdToPrefix.erase(it->second.watchId);
 	it->second = PrefixWatch{};
 }
 
@@ -410,12 +410,12 @@ void EtcdService::OnWatchStreamRestarted()
 	// 与 FetchServiceNodes 同一份前缀(zone-scoped 类型只看本 zone,control-plane-zone-scoping-20261105.md §3.1)。
 	const auto prefixes = gNode->GetServiceDiscoveryManager().EffectiveDiscoveryPrefixes();
 	LOG_WARN << "etcd watch stream rebuilt; re-ranging " << prefixes.size() << " prefixes before re-creating watches";
-	prefixWatches_.clear();
-	pendingWatchCreates_.clear();
-	watchIdToPrefix_.clear();
+	prefixWatches.clear();
+	pendingWatchCreates.clear();
+	watchIdToPrefix.clear();
 	// 全部前缀马上重拉,排着的取消重拉不必再跑。
-	cancelRetryTimer_.Cancel();
-	canceledPrefixesToRetry_.clear();
+	cancelRetryTimer.Cancel();
+	canceledPrefixesToRetry.clear();
 	for (const auto& prefix : prefixes)
 	{
 		RangeDiscoveryScope(prefix);
@@ -445,21 +445,21 @@ const char* EtcdService::RegistrationModeName(RegistrationMode mode) const {
 }
 
 void EtcdService::SetRegistrationMode(RegistrationMode mode, const char* reason) {
-	if (registrationMode_ == mode) {
+	if (registrationMode == mode) {
 		return;
 	}
 
-	LOG_INFO << "Registration mode: " << RegistrationModeName(registrationMode_)
+	LOG_INFO << "Registration mode: " << RegistrationModeName(registrationMode)
 		<< " -> " << RegistrationModeName(mode)
 		<< ", reason=" << reason;
-	registrationMode_ = mode;
+	registrationMode = mode;
 }
 
 void EtcdService::PublishDiscoveryAfterGrpcReady()
 {
-	registrationLoop_->get().assertInLoopThread();
-	grpcReady_ = true;
-	if (auto done = std::exchange(grpcReadyCompletion_, {})) done(true);
+	registrationLoop->get().assertInLoopThread();
+	grpcReady = true;
+	if (auto done = std::exchange(grpcReadyCompletion, {})) done(true);
 }
 
 void EtcdService::HandlePutEvent(const std::string &key, const std::string &value)
@@ -526,11 +526,11 @@ void EtcdService::HandleDeleteEvent(const std::string &key, const std::string &v
 
 void EtcdService::RequestNodeLease()
 {
-	if (registrationStopped_ || registrationRunning_ || !registrationTasks_) return;
-	auto& loop = registrationLoop_->get();
+	if (registrationStopped || registrationRunning || !registrationTasks) return;
+	auto& loop = registrationLoop->get();
 	loop.assertInLoopThread();
-	registrationRunning_ = true;
-	if (!registrationTasks_->Start(RegisterAsync(loop), "[EtcdRegistration]")) registrationRunning_ = false;
+	registrationRunning = true;
+	if (!registrationTasks->Start(RegisterAsync(loop), "[EtcdRegistration]")) registrationRunning = false;
 }
 
 boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop)
@@ -540,27 +540,27 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 	{
 		bool& running;
 		~RunningGuard() { running = false; }
-	} runningGuard{registrationRunning_};
+	} runningGuard{registrationRunning};
 	using Stage = RegistrationStage;
 	constexpr double kResponseBudgetSeconds = 10.0;
 	constexpr double kConflictRetrySeconds = 1.0;
 	TimerTaskComp timer;
 
-	while (!registrationStopped_)
+	while (!registrationStopped)
 	{
-		restartRegistration_ = false;
-		const bool reRegistering = registrationMode_ == RegistrationMode::kReRegisterExisting;
-		LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode_);
+		restartRegistration = false;
+		const bool reRegistering = registrationMode == RegistrationMode::kReRegisterExisting;
+		LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode);
 		auto lease = co_await etcd_registration::AwaitReply<etcdserverpb::LeaseGrantResponse>(loop, timer,
-			kResponseBudgetSeconds, registrationIo_.requestLease);
+			kResponseBudgetSeconds, registrationIo.requestLease);
 		timer.Cancel();
 		// 提交时可能先完成、再重入停止。收到成功也要复核本地注册仍可推进。
-		if (registrationStopped_ || !lease) co_return;
-		if (restartRegistration_) continue;
+		if (registrationStopped || !lease) co_return;
+		if (restartRegistration) continue;
 		if (!*lease)
 		{
 			LOG_ERROR << "No etcd LeaseGrant response within the budget; retrying. mode="
-					  << RegistrationModeName(registrationMode_);
+					  << RegistrationModeName(registrationMode);
 			continue;
 		}
 
@@ -570,49 +570,49 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 			LOG_ERROR << "Invalid lease ID received.";
 			co_return;
 		}
-		leaseTtlSeconds_ = (*lease)->ttl();
-		lastKeepAliveAckTime_ = std::chrono::steady_clock::now();
-		LOG_INFO << "Lease granted: id=" << leaseId << ", ttl=" << leaseTtlSeconds_ << "s";
-		registrationIo_.startKeepAlive();
+		leaseTtlSeconds = (*lease)->ttl();
+		lastKeepAliveAckTime = std::chrono::steady_clock::now();
+		LOG_INFO << "Lease granted: id=" << leaseId << ", ttl=" << leaseTtlSeconds << "s";
+		registrationIo.startKeepAlive();
 
 		Stage stage = Stage::kPort;
 		bool retryUnknown = false;
-		while (!restartRegistration_ && !registrationStopped_)
+		while (!restartRegistration && !registrationStopped)
 		{
 			// CAS 结果未知时复核同一个键，不重新挑选端口或节点号。
-			if (stage == Stage::kPort && !reRegistering && !retryUnknown && !registrationIo_.selectPort())
+			if (stage == Stage::kPort && !reRegistering && !retryUnknown && !registrationIo.selectPort())
 			{
 				LOG_ERROR << "RPC port allocation failed; nothing published to etcd, retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
-				if (registrationStopped_ || !waited || !*waited) co_return;
+				if (registrationStopped || !waited || !*waited) co_return;
 				continue;
 			}
-			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) registrationIo_.selectNodeId();
+			if (stage == Stage::kAllocation && !reRegistering && !retryUnknown) registrationIo.selectNodeId();
 
 			// 普通引导的监听在 StartRpcServer 内就绪。维护预备态需等提交开放监听；
 			// 失租重注册通常已经就绪，但维护预备态也必须守住这一道闸。
-			if (stage == Stage::kPublish && !grpcReady_)
+			if (stage == Stage::kPublish && !grpcReady)
 			{
-				auto ready = co_await loop_async::AwaitCallback<bool>(loop, [&completion = grpcReadyCompletion_](auto done) {
+				auto ready = co_await loop_async::AwaitCallback<bool>(loop, [&completion = grpcReadyCompletion](auto done) {
 					completion = std::move(done);
 					return true;
 				}, false);
-				if (registrationStopped_ || !ready) co_return;
-				if (!*ready || restartRegistration_) break;
+				if (registrationStopped || !ready) co_return;
+				if (!*ready || restartRegistration) break;
 			}
 
-			const std::string key = registrationIo_.key(stage);
+			const std::string key = registrationIo.key(stage);
 			auto reply = co_await etcd_registration::AwaitReply<etcdserverpb::TxnResponse>(loop, timer,
-				kResponseBudgetSeconds, [&claim = registrationIo_.claim, stage, reRegistering, retryUnknown](auto done) {
+				kResponseBudgetSeconds, [&claim = registrationIo.claim, stage, reRegistering, retryUnknown](auto done) {
 					claim(stage, reRegistering, retryUnknown, std::move(done));
 				});
 			timer.Cancel();
-			if (registrationStopped_ || !reply) co_return;
-			if (restartRegistration_) break;
+			if (registrationStopped || !reply) co_return;
+			if (restartRegistration) break;
 			if (!*reply)
 			{
 				LOG_ERROR << "No etcd txn response for key " << key << " within the budget; "
-						  << "rechecking the same key. mode=" << RegistrationModeName(registrationMode_);
+						  << "rechecking the same key. mode=" << RegistrationModeName(registrationMode);
 				retryUnknown = true;
 				continue;
 			}
@@ -624,13 +624,13 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 				{
 					SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration failed");
 					LOG_ERROR << "Node re-registration FAILED for key: " << key;
-					registrationIo_.fenceIdentity();
+					registrationIo.fenceIdentity();
 					co_return;
 				}
-				if (stage == Stage::kAllocation) registrationIo_.recordLostNodeId();
+				if (stage == Stage::kAllocation) registrationIo.recordLostNodeId();
 				LOG_WARN << "etcd registration CAS rejected for " << key << "; retrying in 1s";
 				const auto waited = co_await etcd_registration::Delay(loop, timer, kConflictRetrySeconds);
-				if (registrationStopped_ || !waited || !*waited) co_return;
+				if (registrationStopped || !waited || !*waited) co_return;
 				continue;
 			}
 
@@ -642,10 +642,10 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 			if (stage == Stage::kAllocation)
 			{
 				LOG_INFO << "Global node-id allocation acquired: " << key;
-				if (!rpcPrepared_)
+				if (!rpcPrepared)
 				{
-					rpcPrepared_ = true;
-					registrationIo_.startRpc();
+					rpcPrepared = true;
+					registrationIo.startRpc();
 				}
 				stage = Stage::kPublish;
 				continue;
@@ -667,46 +667,46 @@ boost::cobalt::task<void> EtcdService::RegisterAsync(muduo::net::EventLoop& loop
 
 void EtcdService::Shutdown()
 {
-	if (!registrationStopped_)
+	if (!registrationStopped)
 	{
-		registrationStopped_ = true;
-		if (registrationTasks_) registrationTasks_->Stop();
-		grpcReadyCompletion_ = {};
+		registrationStopped = true;
+		if (registrationTasks) registrationTasks->Stop();
+		grpcReadyCompletion = {};
 	}
-	cancelRetryTimer_.Cancel();
-	canceledPrefixesToRetry_.clear();
+	cancelRetryTimer.Cancel();
+	canceledPrefixesToRetry.clear();
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
 	EtcdHelper::StopAllWatching();
 	gNode->GetEtcdManager().Shutdown();
 
 	// FinalizeShutdownInLoop 已经发出 LeaseRevoke，先停本地注册等待再拆传输。
-	if (transport_)
+	if (transport)
 	{
-		transport_->Shutdown();
-		transport_.reset();
+		transport->Shutdown();
+		transport.reset();
 	}
-	prefixWatches_.clear();
-	pendingWatchCreates_.clear();
-	watchIdToPrefix_.clear();
+	prefixWatches.clear();
+	pendingWatchCreates.clear();
+	watchIdToPrefix.clear();
 }
 
 void EtcdService::RequestReRegistration(const char *reason)
 {
-	if (!registrationLoop_) return;
-	registrationLoop_->get().assertInLoopThread();
-	if (registrationStopped_) return;
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	if (!registrationLoop) return;
+	registrationLoop->get().assertInLoopThread();
+	if (registrationStopped) return;
+	if (registrationMode == RegistrationMode::kReRegisterExisting)
 	{
 		LOG_DEBUG << "Re-registration already in progress, skipping duplicate attempt. reason=" << reason;
 		return;
 	}
-	if (rpcPrepared_ || !registrationRunning_) SetRegistrationMode(RegistrationMode::kReRegisterExisting, reason);
-	if (registrationRunning_)
+	if (rpcPrepared || !registrationRunning) SetRegistrationMode(RegistrationMode::kReRegisterExisting, reason);
+	if (registrationRunning)
 	{
 		// 旧调用结束或预算到期后只领新租约，不再推进失租前的步骤。若在等监听开放，立即唤醒。
-		restartRegistration_ = true;
-		if (auto done = std::exchange(grpcReadyCompletion_, {})) done(false);
+		restartRegistration = true;
+		if (auto done = std::exchange(grpcReadyCompletion, {})) done(false);
 		return;
 	}
 	RequestNodeLease();
@@ -714,11 +714,11 @@ void EtcdService::RequestReRegistration(const char *reason)
 
 void EtcdService::StopRegistrationRetries()
 {
-	if (registrationLoop_) registrationLoop_->get().assertInLoopThread();
-	if (registrationStopped_) return;
-	registrationStopped_ = true;
-	if (registrationTasks_) registrationTasks_->Stop();
-	grpcReadyCompletion_ = {};
+	if (registrationLoop) registrationLoop->get().assertInLoopThread();
+	if (registrationStopped) return;
+	registrationStopped = true;
+	if (registrationTasks) registrationTasks->Stop();
+	grpcReadyCompletion = {};
 	LOG_INFO << "Registration retries stopped (node identity is no longer ours).";
 }
 
@@ -745,35 +745,35 @@ void EtcdService::OnKeepAliveResponse(const etcdserverpb::LeaseKeepAliveResponse
 		return;
 	}
 
-	lastKeepAliveAckTime_ = std::chrono::steady_clock::now();
+	lastKeepAliveAckTime = std::chrono::steady_clock::now();
 	LOG_TRACE << "Lease keepalive ACK, ttl=" << reply.ttl();
 }
 
 bool EtcdService::IsLeasePresumablyExpired() const
 {
-	if (leaseTtlSeconds_ <= 0)
+	if (leaseTtlSeconds <= 0)
 	{
 		return false; // Lease not yet granted
 	}
 
-	auto elapsed = std::chrono::steady_clock::now() - lastKeepAliveAckTime_;
+	auto elapsed = std::chrono::steady_clock::now() - lastKeepAliveAckTime;
 	auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-	return elapsedSeconds > leaseTtlSeconds_;
+	return elapsedSeconds > leaseTtlSeconds;
 }
 
 bool EtcdService::IsIdentityConfirmedFresh() const
 {
-	if (registrationStopped_ || leaseId <= 0 || leaseTtlSeconds_ <= 0)
+	if (registrationStopped || leaseId <= 0 || leaseTtlSeconds <= 0)
 	{
 		return false;
 	}
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	if (registrationMode == RegistrationMode::kReRegisterExisting)
 	{
 		return false;
 	}
-	const auto elapsed = std::chrono::steady_clock::now() - lastKeepAliveAckTime_;
+	const auto elapsed = std::chrono::steady_clock::now() - lastKeepAliveAckTime;
 	const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-	return elapsedMs * 2 <= leaseTtlSeconds_ * 1000;
+	return elapsedMs * 2 <= leaseTtlSeconds * 1000;
 }
 
 // 2026-09-08 起这里不再激活任何发号器(旧 ActivateSnowFlakeAfterGuard:读分 zone Redis

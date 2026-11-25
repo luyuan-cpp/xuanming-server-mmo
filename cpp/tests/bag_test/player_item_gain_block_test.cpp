@@ -62,23 +62,23 @@ namespace
 	{
 	public:
 		explicit ScopedGlobalItemBan(uint32_t configId)
-			: configId_(configId), wasBlocked_(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId))
+			: configId(configId), wasBlocked(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId))
 		{
-			GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId_);
+			GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, this->configId);
 		}
 		~ScopedGlobalItemBan()
 		{
-			if (!wasBlocked_)
+			if (!wasBlocked)
 			{
-				GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId_);
+				GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId);
 			}
 		}
 		ScopedGlobalItemBan(const ScopedGlobalItemBan &) = delete;
 		ScopedGlobalItemBan &operator=(const ScopedGlobalItemBan &) = delete;
 
 	private:
-		uint32_t configId_;
-		bool wasBlocked_;
+		uint32_t configId;
+		bool wasBlocked;
 	};
 
 	class PlayerItemGainBlockTest : public testing::Test
@@ -86,14 +86,14 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			banned_ = CreateLoadedPlayer(kBannedPlayerId);
-			other_ = CreateLoadedPlayer(kOtherPlayerId);
+			banned = CreateLoadedPlayer(kBannedPlayerId);
+			other = CreateLoadedPlayer(kOtherPlayerId);
 		}
 
 		void TearDown() override
 		{
-			DestroyPlayer(kBannedPlayerId, banned_);
-			DestroyPlayer(kOtherPlayerId, other_);
+			DestroyPlayer(kBannedPlayerId, banned);
+			DestroyPlayer(kOtherPlayerId, other);
 		}
 
 		static void DestroyPlayer(Guid playerId, entt::entity player)
@@ -140,11 +140,11 @@ namespace
 
 		void Ban(uint32_t configId) const
 		{
-			ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::BlockPlayerItemGain(banned_, configId));
+			ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::BlockPlayerItemGain(banned, configId));
 		}
 
-		entt::entity banned_{entt::null};
-		entt::entity other_{entt::null};
+		entt::entity banned{entt::null};
+		entt::entity other{entt::null};
 	};
 } // namespace
 
@@ -152,22 +152,22 @@ namespace
 TEST_F(PlayerItemGainBlockTest, BannedConfigIsRejectedByEveryBagEntryForThisPlayerOnly)
 {
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
-	auto &inventory = Inventory(banned_);
+	auto &inventory = Inventory(banned);
 	const auto issuedBefore = ItemIdsIssued();
 
-	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned_, inventory, Piece(kStackItem, 1)));
-	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItems(banned_, inventory, ItemCountMap{{kStackItem, 1}}));
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned, inventory, Piece(kStackItem, 1)));
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItems(banned, inventory, ItemCountMap{{kStackItem, 1}}));
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::AddItems(banned_, inventory, std::vector<InitItemParam>{Piece(kStackItem, 1)}));
+			  BagService::AddItems(banned, inventory, std::vector<InitItemParam>{Piece(kStackItem, 1)}));
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackItem));
 	EXPECT_EQ(0u, inventory.OccupiedGridCount());
 	EXPECT_EQ(issuedBefore, ItemIdsIssued()) << "封禁在容器规划之前判,一个号都不铸";
 
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned_, inventory, Piece(kMaterialItem, 1)))
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned, inventory, Piece(kMaterialItem, 1)))
 		<< "同一名玩家的其它配置照常";
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(other_, Inventory(other_), Piece(kStackItem, 2)))
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(other, Inventory(other), Piece(kStackItem, 2)))
 		<< "另一名玩家照常获得被封的配置";
-	EXPECT_EQ(2u, Inventory(other_).GetTotalItemCount(kStackItem));
+	EXPECT_EQ(2u, Inventory(other).GetTotalItemCount(kStackItem));
 	EXPECT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, kStackItem));
 }
 
@@ -175,13 +175,13 @@ TEST_F(PlayerItemGainBlockTest, BannedConfigIsRejectedByEveryBagEntryForThisPlay
 TEST_F(PlayerItemGainBlockTest, MixedBatchWithOneBannedConfigGrantsNothing)
 {
 	ASSERT_NO_FATAL_FAILURE(Ban(kNonStackItem));
-	auto &inventory = Inventory(banned_);
+	auto &inventory = Inventory(banned);
 	const auto issuedBefore = ItemIdsIssued();
 
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::AddItems(banned_, inventory, ItemCountMap{{kMaterialItem, 3}, {kNonStackItem, 1}, {kOtherNonStack, 1}}));
+			  BagService::AddItems(banned, inventory, ItemCountMap{{kMaterialItem, 3}, {kNonStackItem, 1}, {kOtherNonStack, 1}}));
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::AddItems(banned_, inventory,
+			  BagService::AddItems(banned, inventory,
 								   std::vector<InitItemParam>{Piece(kMaterialItem, 3), Piece(kNonStackItem, 1)}));
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kMaterialItem));
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kNonStackItem));
@@ -194,8 +194,8 @@ TEST_F(PlayerItemGainBlockTest, MixedBatchWithOneBannedConfigGrantsNothing)
 // 主包放不下时的临时格兜底只用于容量不足,封禁不会走到它。解封后同一笔照常落到临时格,证明拦住它的就是封禁。
 TEST_F(PlayerItemGainBlockTest, ConsumeInventoryAndGrantRejectsBeforeConsumingAndNeverFallsBackToTemporary)
 {
-	auto &inventory = Inventory(banned_);
-	auto &temporary = Temporary(banned_);
+	auto &inventory = Inventory(banned);
+	auto &temporary = Temporary(banned);
 	inventory.SetCapacityForRestore(1);
 	temporary.SetCapacityForRestore(1);
 	inventory.InsertItemForRestore(950700101, kMaterialItem, 3, 0); // 存档还原:不是新增获得
@@ -203,25 +203,25 @@ TEST_F(PlayerItemGainBlockTest, ConsumeInventoryAndGrantRejectsBeforeConsumingAn
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem)); // 与材料不同配置:主包唯一的格子被材料占着,掉落要另占一格
 
 	int credits = 0;
-	const auto creditGold = [&credits, player = banned_] {
+	const auto creditGold = [&credits, player = banned] {
 		++credits;
 		return CurrencySystem::AddCurrency(player, kCurrencyGold, 5);
 	};
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::ConsumeInventoryAndGrant(banned_, {{kMaterialItem, 1}}, {{kStackItem, 1}}, 7101,
+			  BagService::ConsumeInventoryAndGrant(banned, {{kMaterialItem, 1}}, {{kStackItem, 1}}, 7101,
 												   "item-ban-test", creditGold));
 	EXPECT_EQ(0, credits) << "外层回调(发币)不调";
-	EXPECT_EQ(0u, CurrencySystem::GetBalance(banned_, kCurrencyGold));
+	EXPECT_EQ(0u, CurrencySystem::GetBalance(banned, kCurrencyGold));
 	EXPECT_EQ(3u, inventory.GetTotalItemCount(kMaterialItem)) << "材料一件不扣";
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackItem));
 	EXPECT_EQ(0u, temporary.OccupiedGridCount()) << "不改投临时格";
 
-	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned_, kStackItem));
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned, kStackItem));
 	ASSERT_EQ(static_cast<uint32_t>(kSuccess),
-			  BagService::ConsumeInventoryAndGrant(banned_, {{kMaterialItem, 1}}, {{kStackItem, 1}}, 7102,
+			  BagService::ConsumeInventoryAndGrant(banned, {{kMaterialItem, 1}}, {{kStackItem, 1}}, 7102,
 												   "item-ban-test", creditGold));
 	EXPECT_EQ(1, credits);
-	EXPECT_EQ(5u, CurrencySystem::GetBalance(banned_, kCurrencyGold));
+	EXPECT_EQ(5u, CurrencySystem::GetBalance(banned, kCurrencyGold));
 	EXPECT_EQ(2u, inventory.GetTotalItemCount(kMaterialItem));
 	EXPECT_EQ(1u, temporary.GetTotalItemCount(kStackItem)) << "解封之后主包放不下才落临时格";
 }
@@ -229,25 +229,25 @@ TEST_F(PlayerItemGainBlockTest, ConsumeInventoryAndGrantRejectsBeforeConsumingAn
 // 整笔换取的新增里混着一项被封禁的配置:整笔拒绝,另一项掉落也不发。
 TEST_F(PlayerItemGainBlockTest, ConsumeInventoryAndGrantMixedGainsGrantNothing)
 {
-	auto &inventory = Inventory(banned_);
+	auto &inventory = Inventory(banned);
 	inventory.InsertItemForRestore(950700102, kMaterialItem, 2, 0);
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
 
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::ConsumeInventoryAndGrant(banned_, {{kMaterialItem, 1}}, {{kOtherNonStack, 1}, {kStackItem, 4}}, 7103,
+			  BagService::ConsumeInventoryAndGrant(banned, {{kMaterialItem, 1}}, {{kOtherNonStack, 1}, {kStackItem, 4}}, 7103,
 												   "item-ban-test"));
 	EXPECT_EQ(2u, inventory.GetTotalItemCount(kMaterialItem));
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kOtherNonStack));
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackItem));
-	EXPECT_EQ(0u, Temporary(banned_).OccupiedGridCount());
+	EXPECT_EQ(0u, Temporary(banned).OccupiedGridCount());
 }
 
 // 封禁只挡今后的新增获得:封禁之前已持有的不扣、照常可用(消耗、整理);存档还原与同一所有者内部搬运
 // (背包 → 仓库,与装备穿脱同一对 TakeInstance / PutInstance 原语)不经过获得判定。
 TEST_F(PlayerItemGainBlockTest, ExistingStockStaysAndRestoreOrInternalMovesAreNotGains)
 {
-	auto &inventory = Inventory(banned_);
-	auto &warehouse = Warehouse(banned_);
+	auto &inventory = Inventory(banned);
+	auto &warehouse = Warehouse(banned);
 	constexpr Guid kHeldInstance = 950700103;
 	inventory.InsertItemForRestore(950700104, kStackItem, 5, 0);
 	inventory.InsertItemForRestore(kHeldInstance, kNonStackItem, 1, 1);
@@ -267,14 +267,14 @@ TEST_F(PlayerItemGainBlockTest, ExistingStockStaysAndRestoreOrInternalMovesAreNo
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kNonStackItem));
 
 	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
-			  BagService::MergeAndCompact(banned_, inventory, CompactPolicy::kMergeAndReorder)) << "整理不是新增获得";
+			  BagService::MergeAndCompact(banned, inventory, CompactPolicy::kMergeAndReorder)) << "整理不是新增获得";
 	EXPECT_EQ(7u, inventory.GetTotalItemCount(kStackItem));
 	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
-			  BagService::RemoveItemsExact(banned_, inventory, ItemCountMap{{kStackItem, 3}}, TX_ITEM_DESTROY))
+			  BagService::RemoveItemsExact(banned, inventory, ItemCountMap{{kStackItem, 3}}, TX_ITEM_DESTROY))
 		<< "已有库存照常可消耗";
 	EXPECT_EQ(4u, inventory.GetTotalItemCount(kStackItem));
 
-	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned_, inventory, Piece(kStackItem, 1)))
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned, inventory, Piece(kStackItem, 1)))
 		<< "新增获得仍被拦";
 }
 
@@ -283,18 +283,18 @@ TEST_F(PlayerItemGainBlockTest, ExistingStockStaysAndRestoreOrInternalMovesAreNo
 TEST_F(PlayerItemGainBlockTest, TradeReturnOfOwnEscrowIsNotAGain)
 {
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
-	auto &inventory = Inventory(banned_);
+	auto &inventory = Inventory(banned);
 	EXPECT_FALSE(GainBlockService::CountsAsGain(TX_AUCTION_RETURN));
 	EXPECT_TRUE(GainBlockService::CountsAsGain(TX_AUCTION_BUY));
 
 	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked),
-			  BagService::AddItems(banned_, inventory, ItemCountMap{{kStackItem, 1}}, TX_AUCTION_BUY))
+			  BagService::AddItems(banned, inventory, ItemCountMap{{kStackItem, 1}}, TX_AUCTION_BUY))
 		<< "成交所得照常被拦";
 	EXPECT_EQ(0u, inventory.GetTotalItemCount(kStackItem));
 	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
-			  BagService::AddItems(banned_, inventory, ItemCountMap{{kStackItem, 2}}, TX_AUCTION_RETURN));
+			  BagService::AddItems(banned, inventory, ItemCountMap{{kStackItem, 2}}, TX_AUCTION_RETURN));
 	EXPECT_EQ(static_cast<uint32_t>(kSuccess),
-			  BagService::AddItems(banned_, inventory, std::vector<InitItemParam>{Piece(kStackItem, 1)}, TX_AUCTION_RETURN));
+			  BagService::AddItems(banned, inventory, std::vector<InitItemParam>{Piece(kStackItem, 1)}, TX_AUCTION_RETURN));
 	EXPECT_EQ(3u, inventory.GetTotalItemCount(kStackItem)) << "退回的照常入包";
 }
 
@@ -303,13 +303,13 @@ TEST_F(PlayerItemGainBlockTest, UnbanRestoresGainsAndRepeatsAreIdempotent)
 {
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
-	EXPECT_EQ(1, tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(banned_).item_config_ids_size());
-	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned_, Inventory(banned_), Piece(kStackItem, 1)));
+	EXPECT_EQ(1, tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(banned).item_config_ids_size());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned, Inventory(banned), Piece(kStackItem, 1)));
 
-	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned_, kStackItem));
-	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned_, kStackItem));
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned_, Inventory(banned_), Piece(kStackItem, 1)));
-	EXPECT_EQ(1u, Inventory(banned_).GetTotalItemCount(kStackItem));
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned, kStackItem));
+	ASSERT_EQ(static_cast<uint32_t>(kSuccess), GainBlockService::UnblockPlayerItemGain(banned, kStackItem));
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned, Inventory(banned), Piece(kStackItem, 1)));
+	EXPECT_EQ(1u, Inventory(banned).GetTotalItemCount(kStackItem));
 }
 
 // 全服封禁与单人封禁互相独立:全服封了谁都拿不到;解除全服封禁不会解开单人封禁,反之亦然。
@@ -318,15 +318,15 @@ TEST_F(PlayerItemGainBlockTest, GlobalAndPlayerBansAreIndependent)
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
 	{
 		const ScopedGlobalItemBan global(kMaterialItem);
-		EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned_, Inventory(banned_), Piece(kMaterialItem, 1)));
-		EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(other_, Inventory(other_), Piece(kMaterialItem, 1)))
+		EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned, Inventory(banned), Piece(kMaterialItem, 1)));
+		EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(other, Inventory(other), Piece(kMaterialItem, 1)))
 			<< "全服封禁对所有玩家生效";
-		EXPECT_FALSE(GainBlockService::IsPlayerItemGainBlocked(banned_, kMaterialItem)) << "全服封禁不写进玩家存档";
+		EXPECT_FALSE(GainBlockService::IsPlayerItemGainBlocked(banned, kMaterialItem)) << "全服封禁不写进玩家存档";
 	}
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned_, Inventory(banned_), Piece(kMaterialItem, 1)));
-	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned_, Inventory(banned_), Piece(kStackItem, 1)))
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned, Inventory(banned), Piece(kMaterialItem, 1)));
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), BagService::AddItem(banned, Inventory(banned), Piece(kStackItem, 1)))
 		<< "解除全服封禁不影响单人封禁";
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(other_, Inventory(other_), Piece(kStackItem, 1)));
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(other, Inventory(other), Piece(kStackItem, 1)));
 }
 
 // 判定的口径(见 gain_block_service.h):无效句柄没有玩家,只判全服;有效玩家缺封禁表(加载不变量被破坏)
@@ -337,11 +337,11 @@ TEST_F(PlayerItemGainBlockTest, ReadPathNeverCreatesTheBanComponent)
 	ASSERT_NO_FATAL_FAILURE(Ban(kStackItem));
 	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(entt::null, kStackItem));
 
-	tlsEcs.actorRegistry.remove<PlayerItemGainBlockComp>(banned_);
-	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(banned_, kStackItem));
-	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned_, Inventory(banned_), Piece(kStackItem, 1)));
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(banned_)) << "读路径不改变实体的组件集合";
-	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), GainBlockService::BlockPlayerItemGain(banned_, kStackItem))
+	tlsEcs.actorRegistry.remove<PlayerItemGainBlockComp>(banned);
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(banned, kStackItem));
+	EXPECT_EQ(static_cast<uint32_t>(kSuccess), BagService::AddItem(banned, Inventory(banned), Piece(kStackItem, 1)));
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(banned)) << "读路径不改变实体的组件集合";
+	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), GainBlockService::BlockPlayerItemGain(banned, kStackItem))
 		<< "写路径只取不建";
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(banned_));
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(banned));
 }

@@ -160,7 +160,7 @@ public:
 	void Add(entt::entity entity, bool includeSelf);
 	// 把全部登记发出并清空;没有登记时什么都不做。
 	void Flush();
-	[[nodiscard]] bool Empty() const { return entries_.empty(); }
+	[[nodiscard]] bool Empty() const { return entries.empty(); }
 
 private:
 	struct Entry
@@ -168,5 +168,5 @@ private:
 		entt::entity entity{entt::null};
 		bool includeSelf{false};
 	};
-	std::vector<Entry> entries_;
+	std::vector<Entry> entries;
 };

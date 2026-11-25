@@ -69,6 +69,7 @@ const (
 	DataService_GetPlayerInboxLedger_FullMethodName          = "/data_service.DataService/GetPlayerInboxLedger"
 	DataService_GetPlayerItemGainBlock_FullMethodName        = "/data_service.DataService/GetPlayerItemGainBlock"
 	DataService_UpdateRoleAppearance_FullMethodName          = "/data_service.DataService/UpdateRoleAppearance"
+	DataService_SyncAccountStage1Tradable_FullMethodName     = "/data_service.DataService/SyncAccountStage1Tradable"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -197,6 +198,10 @@ type DataServiceClient interface {
 	// scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
 	// 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
 	UpdateRoleAppearance(ctx context.Context, in *UpdateRoleAppearanceRequest, opts ...grpc.CallOption) (*UpdateRoleAppearanceResponse, error)
+	// ── 账号级阶段一可交易材料配额同步 ─────────────────────────────
+	// 单角色累计阶段一可交易装备材料时，在账号分片单事务内幂等确认归属份数并更新 account_directory.stage1_tradable_material_used（跨角色/删角共享终身 60 份上限）。
+	// 只认 scene 调用证明(RoleAdmissionAuth)。
+	SyncAccountStage1Tradable(ctx context.Context, in *SyncAccountStage1TradableRequest, opts ...grpc.CallOption) (*SyncAccountStage1TradableResponse, error)
 }
 
 type dataServiceClient struct {
@@ -697,6 +702,16 @@ func (c *dataServiceClient) UpdateRoleAppearance(ctx context.Context, in *Update
 	return out, nil
 }
 
+func (c *dataServiceClient) SyncAccountStage1Tradable(ctx context.Context, in *SyncAccountStage1TradableRequest, opts ...grpc.CallOption) (*SyncAccountStage1TradableResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SyncAccountStage1TradableResponse)
+	err := c.cc.Invoke(ctx, DataService_SyncAccountStage1Tradable_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -823,6 +838,10 @@ type DataServiceServer interface {
 	// scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
 	// 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
 	UpdateRoleAppearance(context.Context, *UpdateRoleAppearanceRequest) (*UpdateRoleAppearanceResponse, error)
+	// ── 账号级阶段一可交易材料配额同步 ─────────────────────────────
+	// 单角色累计阶段一可交易装备材料时，在账号分片单事务内幂等确认归属份数并更新 account_directory.stage1_tradable_material_used（跨角色/删角共享终身 60 份上限）。
+	// 只认 scene 调用证明(RoleAdmissionAuth)。
+	SyncAccountStage1Tradable(context.Context, *SyncAccountStage1TradableRequest) (*SyncAccountStage1TradableResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -979,6 +998,9 @@ func (UnimplementedDataServiceServer) GetPlayerItemGainBlock(context.Context, *G
 }
 func (UnimplementedDataServiceServer) UpdateRoleAppearance(context.Context, *UpdateRoleAppearanceRequest) (*UpdateRoleAppearanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateRoleAppearance not implemented")
+}
+func (UnimplementedDataServiceServer) SyncAccountStage1Tradable(context.Context, *SyncAccountStage1TradableRequest) (*SyncAccountStage1TradableResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncAccountStage1Tradable not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -1883,6 +1905,24 @@ func _DataService_UpdateRoleAppearance_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_SyncAccountStage1Tradable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncAccountStage1TradableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).SyncAccountStage1Tradable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_SyncAccountStage1Tradable_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).SyncAccountStage1Tradable(ctx, req.(*SyncAccountStage1TradableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2085,6 +2125,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateRoleAppearance",
 			Handler:    _DataService_UpdateRoleAppearance_Handler,
+		},
+		{
+			MethodName: "SyncAccountStage1Tradable",
+			Handler:    _DataService_SyncAccountStage1Tradable_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

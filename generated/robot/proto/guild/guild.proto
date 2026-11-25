@@ -239,6 +239,7 @@ enum GuildChangeKind {
   GUILD_CHANGE_KIND_ACTIVITY_CHANGED     = 12;  // B6
   GUILD_CHANGE_KIND_DELIVERY_DONE        = 13;  // B5
   GUILD_CHANGE_KIND_RENAMED              = 14;  // 帮会改名
+  GUILD_CHANGE_KIND_WAR_UPDATED          = 15;  // 帮会全天帮战 V2 状态变动
 }
 
 message GuildChangedS2C {
@@ -626,4 +627,393 @@ service GuildService {
   rpc ClaimGuildReunion (ClaimGuildReunionRequest) returns (ClaimGuildReunionResponse);
   rpc StartGuildTrial (StartGuildTrialRequest) returns (StartGuildTrialResponse);
   rpc RespondGuildTrialInvite (RespondGuildTrialInviteRequest) returns (RespondGuildTrialInviteResponse);
+
+  // 帮会全天帮战 V2(docs/design/guild-play-v2.md):无匹配池直打、三座灵脉、守旗阵、4 层奖励与江湖追杀令。
+  rpc GetGuildWarOverview (GetGuildWarOverviewRequest) returns (GetGuildWarOverviewResponse);
+  rpc SetGuildWarStance (SetGuildWarStanceRequest) returns (SetGuildWarStanceResponse);
+  rpc RegisterGuildWarGarrison (RegisterGuildWarGarrisonRequest) returns (RegisterGuildWarGarrisonResponse);
+  rpc StartGuildWarBattle (StartGuildWarBattleRequest) returns (StartGuildWarBattleResponse);
+  rpc ClaimGuildWarMilestone (ClaimGuildWarMilestoneRequest) returns (ClaimGuildWarMilestoneResponse);
+  rpc ClaimGuildWarDividend (ClaimGuildWarDividendRequest) returns (ClaimGuildWarDividendResponse);
+  rpc PostGuildWarBounty (PostGuildWarBountyRequest) returns (PostGuildWarBountyResponse);
+  rpc TrackGuildWarBounty (TrackGuildWarBountyRequest) returns (TrackGuildWarBountyResponse);
+  rpc GetGuildWarBattleResult (GetGuildWarBattleResultRequest) returns (GetGuildWarBattleResultResponse);
+  rpc NotifyGuildWarAlert (GuildWarAlertS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+  rpc InspectFieldWarTargets (InspectFieldWarTargetsRequest) returns (InspectFieldWarTargetsResponse);
+}
+
+// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ─────────────────────────────
+
+enum GuildWarTargetKind {
+  GUILD_WAR_TARGET_KIND_UNSPECIFIED = 0;
+  GUILD_WAR_TARGET_KIND_QUICK_AUTO = 1;       // 一键快速开战:优先在线迎战活人,无活人 0 秒打守旗阵
+  GUILD_WAR_TARGET_KIND_LIVE_PLAYER = 2;      // 界面直打在线挂牌/战区异帮活人
+  GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON = 3; // 攻打指定灵脉守旗阵或无主灵脉守卫
+  GUILD_WAR_TARGET_KIND_BOUNTY = 4;           // 追杀榜直打挂牌中的追杀目标
+  GUILD_WAR_TARGET_KIND_FIELD_PLAYER = 5;     // 野外三图现场点选任意异帮玩家直打
+}
+
+enum GuildWarBattleKind {
+  GUILD_WAR_BATTLE_KIND_UNSPECIFIED = 0;
+  GUILD_WAR_BATTLE_KIND_PANEL_PVP = 1;        // 帮会界面真人直打
+  GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE = 2;   // 守旗阵踢馆 / 灵脉守卫战(AI 托管)
+  GUILD_WAR_BATTLE_KIND_FIELD_ROAD = 3;       // 野外路上任意异帮点战
+  GUILD_WAR_BATTLE_KIND_LEYLINE_PVP = 4;      // 灵脉现场真人攻防
+  GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT = 5;      // 追杀令结单战
+}
+
+enum GuildWarBountyTier {
+  GUILD_WAR_BOUNTY_TIER_UNSPECIFIED = 0;
+  GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER = 1;    // 5,000 银两(10% 税,4,500 入赏金池)
+  GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER = 2;     // 15,000 银两(10% 税,13,500 入赏金池)
+  GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC = 3;     // 帮会公费(2,000 帮会资金,每日限 2 张)
+}
+
+enum GuildWarBountyStatus {
+  GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED = 0;
+  GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING = 1; // 扣款确认中
+  GUILD_WAR_BOUNTY_STATUS_ACTIVE = 2;         // 追杀中
+  GUILD_WAR_BOUNTY_STATUS_COMPLETED = 3;      // 追杀成功已销单
+  GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET = 4; // 目标反杀 2 人撕单
+  GUILD_WAR_BOUNTY_STATUS_EXPIRED = 5;        // 24h 过期退本
+}
+
+enum GuildWarAlertKind {
+  GUILD_WAR_ALERT_KIND_UNSPECIFIED = 0;
+  GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE = 1; // 本帮灵脉正被踢馆
+  GUILD_WAR_ALERT_KIND_LEYLINE_CAPTURED = 2;    // 灵脉易主广播
+  GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP = 3; // 追兵踏入目标所在野外图
+  GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED = 4;     // 追杀雪耻或反杀撕单播报
+  GUILD_WAR_ALERT_KIND_STREAK_BOUNTY = 5;       // 连胜悬赏挂牌或终结播报
+}
+
+message GuildWarStanceView {
+  bool   peace_mode = 1;
+  uint64 peace_ready_at_ms = 2;
+  bool   open_challenge = 3;
+  uint64 protect_until_ms = 4;
+  uint32 my_streak = 5;
+  uint64 my_weekly_merit = 6;
+  uint32 my_bounty_payouts_today = 7;
+  uint32 my_bounty_payout_limit = 8;
+  uint64 bounty_protect_until_ms = 9;
+  uint64 next_garrison_refresh_ms = 10;
+  uint64 next_track_at_ms = 11;
+}
+
+message GuildWarBannerHonorView {
+  uint32 occupied_leyline_id = 1;
+  repeated string weekly_mvps = 2;
+  repeated string first_win_names = 3;
+  uint64 first_win_at_ms = 4;
+  repeated uint64 rival_guild_ids = 5;  // 本周宿敌帮会 ID 列表(交战 +20% 帮贡战功)
+  repeated string rival_guild_names = 6;
+}
+
+message GuildWarLeylineView {
+  uint32 leyline_id = 1;
+  string name = 2;
+  uint32 scene_config_id = 3;
+  uint64 owner_guild_id = 4;
+  string owner_guild_name = 5;
+  uint32 banner_hp = 6;
+  uint32 banner_max_hp = 7;
+  uint64 shield_until_ms = 8;
+  uint32 active_battle_count = 9;
+  bool   under_siege = 10;
+  uint64 featured_watch_battle_id = 11;
+  bool   is_gold_leyline = 12;          // 当前小时 1.5x 金脉(全服自然聚堆热点)
+  uint32 garrison_count = 13;           // 占领帮当前登记守旗槽数
+  uint64 recommended_scene_id = 14;     // 该灵脉推荐聚人分线 scene_id(前往灵脉直接 EnterScene)
+  uint32 recommended_channel_no = 15;   // 推荐分线号
+}
+
+message GuildWarMilestoneView {
+  uint32 milestone_id = 1;
+  uint64 required_merit = 2;
+  uint64 guild_merit = 3;
+  bool   claimed = 4;
+  bool   claimable = 5;
+  string reward_preview = 6;
+  repeated GuildRewardItem reward_items = 7;
+  uint64 reward_silver = 8;
+  uint64 reward_contribution = 9;
+}
+
+message GuildWarDividendView {
+  uint32 claimable_count = 1;
+  uint32 claimed_this_week = 2;
+  uint32 weekly_cap = 3;
+  uint32 guild_produced_this_week = 4;
+  uint32 guild_weekly_cap = 5;
+  uint64 min_personal_merit = 6;
+}
+
+message GuildWarStreakBountyView {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint64 guild_id = 3;
+  string guild_name = 4;
+  uint32 streak = 5;
+  uint64 bonus_contribution = 6;
+  uint64 bonus_silver = 7;
+  bool   in_battle = 8;
+  uint64 battle_id = 9;
+}
+
+message GuildWarLiveTargetView {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint64 guild_id = 3;
+  string guild_name = 4;
+  uint32 level = 5;
+  string pet_name = 6;
+  uint32 party_size = 7;
+  uint32 streak = 8;
+  bool   in_battle = 9;
+  uint64 battle_id = 10;
+  uint32 leyline_id = 11;
+  bool   is_rival_guild = 12;
+  uint64 active_bounty_id = 13;
+}
+
+message GuildWarGarrisonSlotView {
+  uint32 slot_index = 1;
+  uint64 player_id = 2;
+  string player_name = 3;
+  uint32 level = 4;
+  string appearance_id = 5;
+  string pet_name = 6;
+  uint32 pet_table_id = 7;
+  uint64 updated_ms = 8;
+}
+
+message GuildWarEnemyView {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint64 guild_id = 3;
+  string guild_name = 4;
+  string victim_name = 5;
+  GuildWarBattleKind battle_kind = 6;
+  uint64 occurred_at_ms = 7;
+  bool   can_post_bounty = 8;
+  uint32 blocked_tip_id = 9;
+}
+
+message GuildWarBountyView {
+  uint64 bounty_id = 1;
+  uint64 target_player_id = 2;
+  string target_name = 3;
+  uint64 target_guild_id = 4;
+  string target_guild_name = 5;
+  uint64 issuer_guild_id = 6;
+  string issuer_guild_name = 7;
+  GuildWarBountyTier tier = 8;
+  uint64 reward_silver = 9;
+  bool   public_board = 10;
+  GuildWarBountyStatus status = 11;
+  uint32 counter_kills = 12;
+  uint32 counter_kills_to_tear = 13;
+  uint64 expires_at_ms = 14;
+  uint32 last_scene_config_id = 15;
+  uint32 last_channel_no = 16;
+  bool   target_in_safe_zone = 17;
+  bool   target_online = 18;
+  uint64 next_track_at_ms = 19;
+  bool   can_direct_attack = 20;
+}
+
+message GuildWarRecentLogView {
+  uint64 battle_id = 1;
+  GuildWarBattleKind war_battle_kind = 2;
+  uint32 leyline_id = 3;
+  string attacker_guild_name = 4;
+  string defender_guild_name = 5;
+  string attacker_summary = 6;
+  string defender_summary = 7;
+  uint32 outcome = 8;
+  uint32 rounds = 9;
+  int32  banner_hp_delta = 10;
+  uint32 bounty_outcome_tag = 11;
+  bool   self_participated = 12;
+  uint64 finished_at_ms = 13;
+}
+
+message GetGuildWarOverviewRequest {}
+message GetGuildWarOverviewResponse {
+  TipInfoMessage error_message = 1;
+  uint64 server_time_ms = 2;
+  uint32 week_key = 3;
+  uint64 next_weekly_reset_ms = 4;
+  uint32 gold_leyline_id = 5;           // 当小时 1.5x 金脉 ID(1..3)
+  uint64 gold_leyline_ends_at_ms = 6;   // 当小时金脉轮换时刻
+  GuildWarStanceView my_stance = 7;
+  GuildWarBannerHonorView banner_honor = 8;
+  repeated GuildWarLeylineView leylines = 9;
+  repeated GuildWarMilestoneView milestones = 10;
+  GuildWarDividendView dividend = 11;
+  repeated GuildWarStreakBountyView streak_bounties = 12;
+  repeated GuildWarLiveTargetView live_targets = 13;
+  repeated GuildWarGarrisonSlotView garrison_slots = 14;
+  repeated GuildWarEnemyView enemies = 15;
+  repeated GuildWarBountyView bounties = 16;
+  repeated GuildWarRecentLogView recent_logs = 17;
+  uint64 active_battle_id = 18;
+  uint64 contribution_balance = 19;
+  uint32 public_bounty_used_today = 20;
+  uint32 public_bounty_daily_limit = 21;
+}
+
+message SetGuildWarStanceRequest {
+  optional bool set_peace_mode = 1;
+  optional bool set_open_challenge = 2;
+}
+message SetGuildWarStanceResponse {
+  TipInfoMessage error_message = 1;
+  GuildWarStanceView my_stance = 2;
+  uint64 server_time_ms = 3;
+}
+
+message RegisterGuildWarGarrisonRequest {
+  uint32 action = 1;               // 1=登记/刷新本人守旗阵 / 2=下阵 / 3=帮主或长老置顶/移槽
+  uint64 target_player_id = 2;     // action=2/3 管理他人槽位时填
+}
+message RegisterGuildWarGarrisonResponse {
+  TipInfoMessage error_message = 1;
+  repeated GuildWarGarrisonSlotView garrison_slots = 2;
+  uint64 next_refresh_at_ms = 3;
+}
+
+message StartGuildWarBattleRequest {
+  GuildWarTargetKind target_kind = 1;
+  uint32 leyline_id = 2;
+  uint64 target_player_id = 3;
+  uint64 bounty_id = 4;
+  uint64 client_request_id = 5;
+}
+message StartGuildWarBattleResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  GuildWarBattleKind war_battle_kind = 3;
+  uint64 offender_player_id = 4;
+  uint64 offender_battle_id = 5;   // 目标刚入战时返回其 battle_id 供一键观战
+}
+
+message ClaimGuildWarMilestoneRequest {
+  uint32 milestone_id = 1;
+  uint64 client_request_id = 2;
+}
+message ClaimGuildWarMilestoneResponse {
+  TipInfoMessage error_message = 1;
+  GuildWarMilestoneView milestone = 2;
+  GuildAssetOrderStatus asset_order_status = 3;
+}
+
+message ClaimGuildWarDividendRequest {
+  uint64 client_request_id = 1;
+}
+message ClaimGuildWarDividendResponse {
+  TipInfoMessage error_message = 1;
+  uint32 claimed_count = 2;
+  GuildWarDividendView dividend = 3;
+  GuildAssetOrderStatus asset_order_status = 4;
+}
+
+message PostGuildWarBountyRequest {
+  uint64 target_player_id = 1;
+  GuildWarBountyTier tier = 2;
+  bool   public_board = 3;
+  uint64 client_request_id = 4;
+}
+message PostGuildWarBountyResponse {
+  TipInfoMessage error_message = 1;
+  GuildWarBountyView bounty = 2;
+}
+
+message TrackGuildWarBountyRequest {
+  uint64 bounty_id = 1;
+}
+message TrackGuildWarBountyResponse {
+  TipInfoMessage error_message = 1;
+  bool   target_online = 2;
+  bool   in_safe_zone = 3;
+  uint32 scene_config_id = 4;
+  uint32 channel_no = 5;
+  uint64 next_track_at_ms = 6;
+  uint64 scene_id = 7;                  // 目标当前所在野外分线 scene_id(安全区或离线时为 0)
+}
+
+message GetGuildWarBattleResultRequest {
+  uint64 battle_id = 1;
+}
+message GetGuildWarBattleResultResponse {
+  TipInfoMessage error_message = 1;
+  bool   settled = 2;
+  uint64 battle_id = 3;
+  GuildWarBattleKind war_battle_kind = 4;
+  uint32 outcome = 5;
+  uint32 rounds = 6;
+  uint32 material_units_added = 7;
+  uint32 material_tradable_added = 8;
+  bool   material_pvp_loss_ineligible = 9;
+  uint64 contribution_gain = 10;
+  uint64 silver_gain = 11;
+  uint64 guild_funds_gain = 12;
+  uint64 merit_gain = 13;
+  uint32 streak_after = 14;
+  uint64 bounty_jackpot_contribution = 15;
+  uint64 bounty_jackpot_silver = 16;
+  uint32 bounty_outcome_tag = 17;  // 0无/1终结连胜/2追杀成功/3反杀成功/4反杀撕单/5破旗首功
+  uint32 diminish_percent = 18;    // 100/50/20/0
+  uint32 leyline_id = 19;
+  uint32 banner_hp_before = 20;
+  uint32 banner_hp_after = 21;
+  bool   banner_shielded = 22;
+  bool   can_post_bounty = 23;
+  uint64 bounty_candidate_player_id = 24;
+  string bounty_candidate_name = 25;
+  bool   gold_leyline_bonus = 26;
+  bool   rivalry_bonus = 27;
+}
+
+message GuildWarAlertS2C {
+  GuildWarAlertKind kind = 1;
+  uint32 leyline_id = 2;
+  uint32 scene_config_id = 3;
+  uint32 channel_no = 4;
+  string attacker_guild_name = 5;
+  string defender_guild_name = 6;
+  string actor_name = 7;
+  string target_name = 8;
+  uint32 banner_hp_percent = 9;
+  uint64 bounty_id = 10;
+  uint64 battle_id = 11;
+  uint64 reward_silver = 12;
+  uint32 streak_count = 13;
+}
+
+message FieldWarTargetBrief {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint64 guild_id = 3;
+  string guild_name = 4;
+  bool   peace_mode = 5;
+  uint64 protect_until_ms = 6;
+  uint32 streak = 7;
+  bool   in_battle = 8;
+  uint64 battle_id = 9;
+  bool   is_rival_guild = 10;
+  uint64 active_bounty_id = 11;
+  uint64 active_bounty_reward_silver = 12;
+  GuildWarBountyTier active_bounty_tier = 13;
+  bool   can_attack_now = 14;
+}
+
+message InspectFieldWarTargetsRequest {
+  repeated uint64 player_ids = 1;       // 同屏玩家 ID 列表(最多 30 个)
+}
+
+message InspectFieldWarTargetsResponse {
+  TipInfoMessage error_message = 1;
+  repeated FieldWarTargetBrief targets = 2;
 }

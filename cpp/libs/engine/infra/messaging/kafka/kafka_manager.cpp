@@ -51,7 +51,7 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 	KafkaMessageCallback callback,
 	const KafkaPartitionAssignPolicy& assignPolicy,
     const Maintenance::ManualConsumerAssignment& manualIdentity) {
-	if (consumersStopped_ || shutdown_) {
+	if (consumersStopped || shutdown) {
 		LOG_WARN << "KafkaManager: shutdown has started; rejecting new consumer subscription.";
 		return false;
 	}
@@ -77,7 +77,7 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 		effectiveGroupId,
 		topics,
 		partitions,
-		[state = callbacks_, callback = std::move(callback)](const std::string& topic, const std::string& payload) {
+		[state = callbacks, callback = std::move(callback)](const std::string& topic, const std::string& payload) {
 			{ std::lock_guard<std::mutex> lock(state->mutex);
 			  if (state->accepted == std::numeric_limits<std::uint64_t>::max()) { state->unknown = true; return; }
 			  ++state->accepted; }
@@ -85,7 +85,7 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 			catch (...) { std::lock_guard<std::mutex> lock(state->mutex); state->unknown = true; ++state->completed; throw; }
 			{ std::lock_guard<std::mutex> lock(state->mutex); ++state->completed; }
 		},
-		assignPolicy, manualIdentity, prepareOnly_
+		assignPolicy, manualIdentity, prepareOnly
 	)) {
 		LOG_ERROR << "KafkaManager: Failed to initialize Kafka consumer for topics: "
 			<< boost::algorithm::join(topics, ",");
@@ -98,10 +98,10 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 		return false;
 	}
 
-	if (dispatchLoop_) {
-		consumer->startBackgroundPolling(&dispatchLoop_->get());
+	if (dispatchLoop) {
+		consumer->startBackgroundPolling(&dispatchLoop->get());
 	}
-	consumers_.push_back(std::move(consumer));
+	consumers.push_back(std::move(consumer));
 
 	LOG_INFO << "KafkaManager initialized successfully. Brokers: " << brokers
 		<< " Topics: " << boost::algorithm::join(topics, ",");
@@ -109,7 +109,7 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 }
 
 bool KafkaManager::Publish(const std::string& topic, const std::string& msg) {
-	if (shutdown_) { return false; }
+	if (shutdown) { return false; }
 
 	auto err = KafkaProducer::Instance().send(topic, msg);
 	if (err != RdKafka::ERR_NO_ERROR) {
@@ -121,7 +121,7 @@ bool KafkaManager::Publish(const std::string& topic, const std::string& msg) {
 }
 
 void KafkaManager::Poll() {
-	for (auto& consumer : consumers_) {
+	for (auto& consumer : consumers) {
 		if (consumer) {
 			consumer->poll();
 		}
@@ -129,7 +129,7 @@ void KafkaManager::Poll() {
 }
 
 void KafkaManager::StartBackgroundPolling(muduo::net::EventLoop* dispatchLoop) {
-	if (consumersStopped_ || shutdown_) {
+	if (consumersStopped || shutdown) {
 		LOG_WARN << "KafkaManager::StartBackgroundPolling ignored after shutdown started.";
 		return;
 	}
@@ -137,8 +137,8 @@ void KafkaManager::StartBackgroundPolling(muduo::net::EventLoop* dispatchLoop) {
 		LOG_ERROR << "KafkaManager::StartBackgroundPolling requires a non-null dispatch loop.";
 		return;
 	}
-	dispatchLoop_ = std::ref(*dispatchLoop);
-	for (auto& consumer : consumers_) {
+	this->dispatchLoop = std::ref(*dispatchLoop);
+	for (auto& consumer : consumers) {
 		if (consumer) {
 			consumer->startBackgroundPolling(dispatchLoop);
 		}
@@ -154,59 +154,59 @@ std::size_t KafkaManager::PendingProducerMessages() const {
 }
 
 void KafkaManager::StopConsumers() {
-	if (consumersStopped_) {
+	if (consumersStopped) {
 		return;
 	}
-	consumersStopped_ = true;
-	for (auto& consumer : consumers_) {
+	consumersStopped = true;
+	for (auto& consumer : consumers) {
 		if (consumer) {
 			consumer->stop();
 		}
 	}
     // stop已close/reset native并join；保留只读快照owner直到P3原件写完，异步控制工作仅持shared owner。
 	// stop 已真实 join，之后不会再向 loop 投递；FIFO 标记排在已有回调之后。
-	const auto state = callbacks_;
+	const auto state = callbacks;
 	const auto joined = [state] { std::lock_guard<std::mutex> lock(state->mutex); state->joined = true; };
-	if (dispatchLoop_) { dispatchLoop_->get().queueInLoop(joined); } else { joined(); }
+	if (dispatchLoop) { dispatchLoop->get().queueInLoop(joined); } else { joined(); }
 }
 
 bool KafkaManager::ConsumersJoined() const {
-    for(const auto& consumer:consumers_)if(consumer&&!consumer->CallbacksJoined(false))return false;
-    std::lock_guard<std::mutex> lock(callbacks_->mutex);
-    return consumersStopped_ && callbacks_->joined && callbacks_->accepted == callbacks_->completed;
+    for(const auto& consumer:consumers)if(consumer&&!consumer->CallbacksJoined(false))return false;
+    std::lock_guard<std::mutex> lock(callbacks->mutex);
+    return consumersStopped && callbacks->joined && callbacks->accepted == callbacks->completed;
 }
 
 bool KafkaManager::LocalWorkJoined() const {
     const auto producers = KafkaProducer::ProcessPublicationFrontier();
-    return shutdown_ && ConsumersJoined() && producers.closed && producers.activeSends == 0 && producers.activeCallbacks == 0 && producers.openHandles == 0;
+    return shutdown && ConsumersJoined() && producers.closed && producers.activeSends == 0 && producers.activeCallbacks == 0 && producers.openHandles == 0;
 }
 
 std::optional<std::string> KafkaManager::ClosedPublicationFrontier() const {
-    for(const auto& consumer:consumers_)if(consumer&&!consumer->CallbacksJoined(true))return std::nullopt;
+    for(const auto& consumer:consumers)if(consumer&&!consumer->CallbacksJoined(true))return std::nullopt;
     const auto producers = KafkaProducer::ProcessPublicationFrontier();
-    std::lock_guard<std::mutex> lock(callbacks_->mutex);
-    if (!shutdown_ || !producers.Settled() || !callbacks_->joined || callbacks_->unknown || callbacks_->accepted != callbacks_->completed) { return std::nullopt; }
+    std::lock_guard<std::mutex> lock(callbacks->mutex);
+    if (!shutdown || !producers.Settled() || !callbacks->joined || callbacks->unknown || callbacks->accepted != callbacks->completed) { return std::nullopt; }
     // 编码仅为本 owner 的运行时账本；正式 proto 身份和原件摘要由 Node 绑定。
     return std::string("kafka-frontier-v1:") + std::to_string(producers.accepted) + ":" +
-        std::to_string(producers.confirmed) + ":" + std::to_string(callbacks_->accepted) + ":" + std::to_string(callbacks_->completed);
+        std::to_string(producers.confirmed) + ":" + std::to_string(callbacks->accepted) + ":" + std::to_string(callbacks->completed);
 }
 
 bool KafkaManager::Shutdown(std::chrono::milliseconds producerFlushTimeout) {
-    if (!shutdown_) {
-        shutdown_ = true;
+    if (!shutdown) {
+        shutdown = true;
         StopConsumers();
         KafkaProducer::CloseProcessAdmission();
-        shutdownResult_ = KafkaProducer::Instance().StopAndJoin(producerFlushTimeout);
+        shutdownResult = KafkaProducer::Instance().StopAndJoin(producerFlushTimeout);
     }
     // 其它线程必须在自己的 poll/析构中完成 native join；不从主线程访问其 TLS 句柄。
     // 首次返回 false 后允许只读重查；UNKNOWN 永久保留，绝不重发消息补成功。
-    const bool settled = shutdownResult_ && ClosedPublicationFrontier().has_value();
+    const bool settled = shutdownResult && ClosedPublicationFrontier().has_value();
     if (!settled) { LOG_ERROR << "Kafka lifecycle HOLD: producer/callback frontier is not settled"; }
     return settled;
 }
 
 std::future<std::optional<KafkaManager::Maintenance::ConsumerReadiness>> KafkaManager::PrepareReadiness(const Maintenance::Plan& plan,const std::string& manifest,const std::string& issuer,const std::string& instance){
-    const auto owners=consumers_;const auto state=prepared_;const bool allowed=prepareOnly_&&!consumersStopped_&&!shutdown_;
+    const auto owners=consumers;const auto state=prepared;const bool allowed=prepareOnly&&!consumersStopped&&!shutdown;
     return std::async(std::launch::async,[owners,state,allowed,plan,manifest,issuer,instance]()->std::optional<Maintenance::ConsumerReadiness>{
         if(!allowed)return std::nullopt;Maintenance::ConsumerReadiness aggregate;std::vector<Maintenance::ConsumerReadiness> reports;
         for(const auto& owner:owners){auto report=owner->PrepareReadiness(plan,manifest,issuer,instance);if(!report)return std::nullopt;
@@ -218,18 +218,18 @@ std::future<std::optional<KafkaManager::Maintenance::ConsumerReadiness>> KafkaMa
     });
 }
 bool KafkaManager::OpenPrepared(const Maintenance::ConsumerReadiness& expected,const std::function<bool()>& openSource){
-    if(!prepareOnly_||consumersStopped_||shutdown_||!openSource)return false;
+    if(!prepareOnly||consumersStopped||shutdown||!openSource)return false;
     std::vector<Maintenance::ConsumerReadiness> reports;
-    {std::lock_guard<std::mutex> lock(prepared_->mutex);if(!prepared_->aggregate||!google::protobuf::util::MessageDifferencer::Equals(expected,*prepared_->aggregate)||prepared_->owners.size()!=consumers_.size())return false;reports=prepared_->owners;}
+    {std::lock_guard<std::mutex> lock(prepared->mutex);if(!prepared->aggregate||!google::protobuf::util::MessageDifferencer::Equals(expected,*prepared->aggregate)||prepared->owners.size()!=consumers.size())return false;reports=prepared->owners;}
     std::vector<std::unique_ptr<KafkaConsumer::PreparedLease>> leases;
-    for(std::size_t i=0;i<consumers_.size();++i){auto lease=consumers_[i]->AcquirePrepared(reports[i]);if(!lease)return false;leases.push_back(std::move(lease));}
+    for(std::size_t i=0;i<consumers.size();++i){auto lease=consumers[i]->AcquirePrepared(reports[i]);if(!lease)return false;leases.push_back(std::move(lease));}
     for(auto& lease:leases)if(!lease->Resume())return false;
     // 所有native owner锁仍被lease持有；失败会pause，成功才在同临界区最后打开真实SOURCE。
     if(!openSource())return false;
-    for(auto& lease:leases)lease->Commit();prepareOnly_=false;return true;
+    for(auto& lease:leases)lease->Commit();prepareOnly=false;return true;
 }
 std::future<std::optional<KafkaManager::Maintenance::ManualConsumerEvidence>> KafkaManager::ManualEvidence(const std::string& operation,const std::string& manifest,const std::string& issuer,const std::string& instance){
-    const auto owners=consumers_;
+    const auto owners=consumers;
     return std::async(std::launch::async,[owners,operation,manifest,issuer,instance]()->std::optional<Maintenance::ManualConsumerEvidence>{
         Maintenance::ManualConsumerEvidence aggregate;aggregate.set_operation_id(operation);aggregate.set_manifest_digest(manifest);aggregate.set_accepting_closed(true);aggregate.set_callbacks_joined(true);
         for(const auto& owner:owners){if(!owner->HasManualAssignment())continue;auto report=owner->ManualEvidence(operation,manifest,issuer,instance);if(!report)return std::nullopt;
@@ -243,6 +243,6 @@ std::future<std::optional<KafkaManager::Maintenance::ManualConsumerEvidence>> Ka
 }
 
 std::future<bool> KafkaManager::BeginManualDrain(){
-    const auto owners=consumers_;return std::async(std::launch::async,[owners]{for(const auto& owner:owners)if(!owner->BeginManualDrain())return false;return true;});
+    const auto owners=consumers;return std::async(std::launch::async,[owners]{for(const auto& owner:owners)if(!owner->BeginManualDrain())return false;return true;});
 }
-bool KafkaManager::ManualDrainReady() const{for(const auto& owner:consumers_)if(!owner->ManualDrainReady())return false;return true;}
+bool KafkaManager::ManualDrainReady() const{for(const auto& owner:consumers)if(!owner->ManualDrainReady())return false;return true;}

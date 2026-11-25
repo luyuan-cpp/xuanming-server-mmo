@@ -9,10 +9,10 @@
 #include "muduo/net/http/HttpResponse.h"
 
 MetricsHttpExporter::MetricsHttpExporter(muduo::net::EventLoop *loop, uint16_t port, Render render)
-	: port_(port),
-	  server_(loop, muduo::net::InetAddress(port), "metrics")
+	: port(port),
+	  server(loop, muduo::net::InetAddress(port), "metrics")
 {
-	server_.setHttpCallback([render = std::move(render)](const muduo::net::HttpRequest &request,
+	server.setHttpCallback([render = std::move(render)](const muduo::net::HttpRequest &request,
 														 muduo::net::HttpResponse *response)
 	{
 		if (request.method() != muduo::net::HttpRequest::kGet || request.path() != "/metrics")
@@ -31,8 +31,8 @@ MetricsHttpExporter::MetricsHttpExporter(muduo::net::EventLoop *loop, uint16_t p
 
 void MetricsHttpExporter::Start()
 {
-	server_.start();
-	LOG_INFO << "[Metrics] Prometheus exporter listening on 0.0.0.0:" << port_ << "/metrics";
+	server.start();
+	LOG_INFO << "[Metrics] Prometheus exporter listening on 0.0.0.0:" << port << "/metrics";
 }
 
 std::optional<uint16_t> ParseMetricsPortEnv(const char *raw)

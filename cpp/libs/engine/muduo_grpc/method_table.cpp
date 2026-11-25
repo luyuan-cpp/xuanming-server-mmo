@@ -34,43 +34,43 @@ bool MethodTable::AddUnary(std::string path, UnaryMethodHandler handler)
     if (!parts)
     {
         LOG_ERROR << "grpc method table: malformed method path '" << path << "'";
-        valid_ = false;
+        valid = false;
         return false;
     }
     if (!handler)
     {
         LOG_ERROR << "grpc method table: empty handler for '" << path << "'";
-        valid_ = false;
+        valid = false;
         return false;
     }
-    if (methods_.find(std::string_view(path)) != methods_.end())
+    if (methods.find(std::string_view(path)) != methods.end())
     {
         LOG_ERROR << "grpc method table: duplicate method '" << path << "'";
-        valid_ = false;
+        valid = false;
         return false;
     }
-    services_.emplace(parts->first);
+    services.emplace(parts->first);
     // parts 指向 path,必须在 path 被移走之前用完。
-    methods_.emplace(std::move(path), std::move(handler));
+    methods.emplace(std::move(path), std::move(handler));
     return true;
 }
 
 const UnaryMethodHandler *MethodTable::Find(std::string_view path) const
 {
-    const auto it = methods_.find(path);
-    return it == methods_.end() ? nullptr : &it->second;
+    const auto it = methods.find(path);
+    return it == methods.end() ? nullptr : &it->second;
 }
 
 bool MethodTable::HasService(std::string_view fullServiceName) const
 {
-    return services_.find(fullServiceName) != services_.end();
+    return services.find(fullServiceName) != services.end();
 }
 
 std::vector<std::string> MethodTable::Paths() const
 {
     std::vector<std::string> paths;
-    paths.reserve(methods_.size());
-    for (const auto &entry : methods_)
+    paths.reserve(methods.size());
+    for (const auto &entry : methods)
     {
         paths.push_back(entry.first);
     }

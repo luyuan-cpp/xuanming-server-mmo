@@ -34,7 +34,7 @@ RpcServer::RpcServer(EventLoop* loop,
 void RpcServer::registerService(google::protobuf::Service* service)
 {
   const google::protobuf::ServiceDescriptor* desc = service->GetDescriptor();
-  services_[std::string(desc->full_name())] = service;
+  services[std::string(desc->full_name())] = service;
 }
 
 void RpcServer::start()
@@ -64,8 +64,8 @@ void RpcServer::onConnection(const TcpConnectionPtr& conn)
         kInterNodeHighWaterMark);
     // 每条入站连接一个 channel,由连接的 context 持有;服务表拷进 channel(不借用本对象的成员)。
     // 节点链路开了心跳(setLinkHeartbeat)时,channel 自己按节拍检查:读空闲满超时就 forceClose,走下面的 DOWN 分支。
-    ::RpcChannelPtr channel = ::RpcChannel::Create(*conn->getLoop(), conn, services_,
-                                                   ::RpcChannel::ProcessMaintenance(), heartbeat_);
+    ::RpcChannelPtr channel = ::RpcChannel::Create(*conn->getLoop(), conn, services,
+                                                   ::RpcChannel::ProcessMaintenance(), heartbeat);
     // 消息回调只绑 weak(§11.7):以前绑的是裸 get_pointer(channel),安全性全靠 context 恰好还持着它。
     std::weak_ptr<::RpcChannel> weakChannel = channel;
     conn->setMessageCallback(
@@ -100,8 +100,8 @@ void RpcServer::onConnection(const TcpConnectionPtr& conn)
   }
 
   // 观察者声明在 tcpServer 之前,~TcpServer 同步回调 DOWN 时它仍然有效。
-  if (connectionObserver_)
+  if (connectionObserver)
   {
-    connectionObserver_(conn);
+    connectionObserver(conn);
   }
 }

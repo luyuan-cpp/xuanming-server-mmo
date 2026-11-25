@@ -137,34 +137,34 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
-			before_ = websocket::GetCounters();
+			loop = std::make_unique<muduo::net::EventLoop>();
+			before = websocket::GetCounters();
 			Reopen();
 		}
 
 		void TearDown() override
 		{
 			CloseLink();
-			loop_.reset();
+			loop.reset();
 		}
 
 		// 换一条新连接(一个用例里要测多种违规帧时用)。
 		void Reopen()
 		{
 			CloseLink();
-			input_.retrieveAll();
-			receivedIds_.clear();
-			link_ = std::make_unique<LoopbackConnection>(*loop_);
-			ASSERT_TRUE(link_->Open("websocket_entry"));
+			input.retrieveAll();
+			receivedIds.clear();
+			link = std::make_unique<LoopbackConnection>(*loop);
+			ASSERT_TRUE(link->Open("websocket_entry"));
 		}
 
-		muduo::net::TcpConnectionPtr Conn() const { return link_->ServerSide(); }
+		muduo::net::TcpConnectionPtr Conn() const { return link->ServerSide(); }
 
 		// 模拟 muduo 读到这些字节:追加进这条连接的输入缓冲再交给 codec,没吃完的留在缓冲里等下一次读。
 		void Read(const std::string &bytes)
 		{
-			input_.append(bytes);
-			codec_.onMessage(Conn(), &input_, muduo::Timestamp::now());
+			input.append(bytes);
+			codec.onMessage(Conn(), &input, muduo::Timestamp::now());
 		}
 
 		// 连接还开着:客户端至今收到的字节必须恰好是 expected。每条连接只核对一次(核对本身会多发一帧哨兵)。
@@ -177,25 +177,25 @@ namespace
 			const std::string all =
 				expected + (websocket::IsUpgraded(conn) ? ServerFrame(kBinary, Bytes(sentinel)) : Bytes(sentinel));
 			ProtobufCodec::send(conn, sentinel);
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [this, &all] { return link_->ClientReceived().size() >= all.size(); }));
-			EXPECT_EQ(link_->ClientReceived(), all);
+			ASSERT_TRUE(DriveLoopUntil(*loop, [this, &all] { return link->ClientReceived().size() >= all.size(); }));
+			EXPECT_EQ(link->ClientReceived(), all);
 		}
 
 		// 连接被服务端关掉:等两端都断开,客户端收到的全部字节必须恰好是 expected。
 		void ExpectClosedAfter(const std::string &expected)
 		{
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [this] { return link_->BothSidesDown(); }));
-			EXPECT_EQ(link_->ClientReceived(), expected);
+			ASSERT_TRUE(DriveLoopUntil(*loop, [this] { return link->BothSidesDown(); }));
+			EXPECT_EQ(link->ClientReceived(), expected);
 		}
 
-		const websocket::Counters &Before() const { return before_; }
-		const std::vector<uint64_t> &ReceivedIds() const { return receivedIds_; }
-		std::size_t UnreadInput() const { return input_.readableBytes(); }
+		const websocket::Counters &Before() const { return before; }
+		const std::vector<uint64_t> &ReceivedIds() const { return receivedIds; }
+		std::size_t UnreadInput() const { return input.readableBytes(); }
 
 	private:
 		void CloseLink()
 		{
-			if (!link_)
+			if (!link)
 			{
 				return;
 			}
@@ -204,18 +204,18 @@ namespace
 			{
 				websocket::Forget(conn);
 			}
-			link_.reset();
+			link.reset();
 		}
 
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::unique_ptr<LoopbackConnection> link_;
-		muduo::net::Buffer input_;
-		std::vector<uint64_t> receivedIds_;
-		websocket::Counters before_;
-		ProtobufCodec codec_{[this](const muduo::net::TcpConnectionPtr &, const MessagePtr &message, muduo::Timestamp) {
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::unique_ptr<LoopbackConnection> link;
+		muduo::net::Buffer input;
+		std::vector<uint64_t> receivedIds;
+		websocket::Counters before;
+		ProtobufCodec codec{[this](const muduo::net::TcpConnectionPtr &, const MessagePtr &message, muduo::Timestamp) {
 			const auto request = std::dynamic_pointer_cast<ClientRequest>(message);
 			ASSERT_NE(request, nullptr);
-			receivedIds_.push_back(request->id());
+			receivedIds.push_back(request->id());
 		}};
 	};
 } // namespace

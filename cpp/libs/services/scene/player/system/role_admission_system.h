@@ -54,7 +54,7 @@ public:
         ScopedDependencies(const ScopedDependencies&) = delete;
         ScopedDependencies& operator=(const ScopedDependencies&) = delete;
     private:
-        std::shared_ptr<RoleAdmissionState> previous_;
+        std::shared_ptr<RoleAdmissionState> previous;
     };
     static void RequestEnter(Guid playerId, PlayerEnterContext context);
     static bool Allows(Guid playerId, uint64_t generation, uint64_t ownerRevision);

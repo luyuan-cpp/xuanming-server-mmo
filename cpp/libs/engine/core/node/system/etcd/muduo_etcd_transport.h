@@ -45,5 +45,5 @@ public:
 
 private:
     class Core;
-    std::shared_ptr<Core> core_;
+    std::shared_ptr<Core> core;
 };

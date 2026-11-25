@@ -55,34 +55,34 @@ public:
 
     // start 是基线时刻(channel 创建时),此前视为刚收发过。options 必须满足 IsValidLinkHeartbeat,由调用方校验。
     RpcLinkLiveness(const RpcLinkHeartbeat& options, Clock::time_point start)
-        : options_(options), lastReceivedAt_(start), lastSentAt_(start), lastCheckAt_(start)
+        : options(options), lastReceivedAt(start), lastSentAt(start), lastCheckAt(start)
     {
     }
 
-    void OnReceived() { receivedSinceCheck_ = true; }   // 收到任何字节
-    void OnSent() { sentSinceCheck_ = true; }           // 发出任何非心跳帧;心跳由 Check 自己记
+    void OnReceived() { receivedSinceCheck = true; }   // 收到任何字节
+    void OnSent() { sentSinceCheck = true; }           // 发出任何非心跳帧;心跳由 Check 自己记
 
     Verdict Check(Clock::time_point now)
     {
         Verdict verdict;
-        verdict.checkGap = now - lastCheckAt_;
+        verdict.checkGap = now - lastCheckAt;
         // 距上一次检查超过两个节拍,说明本端 loop 卡过:对端的帧可能还在接收缓冲里没读。
         // Linux muduo 的 timerfd 与连接 fd 在同一次 epoll_wait 里返回,处理先后不定,一次也未必返回全部就绪的 fd。
         // 所以这一次不判对端已死,留到下一次检查(那时积压的输入已经读过)。
-        const bool late = verdict.checkGap > 2 * options_.checkPeriod;
-        lastCheckAt_ = now;
-        if (receivedSinceCheck_)
+        const bool late = verdict.checkGap > 2 * options.checkPeriod;
+        lastCheckAt = now;
+        if (receivedSinceCheck)
         {
-            receivedSinceCheck_ = false;
-            lastReceivedAt_ = now;
+            receivedSinceCheck = false;
+            lastReceivedAt = now;
             verdict.inboundSeen = true;
         }
-        if (sentSinceCheck_)
+        if (sentSinceCheck)
         {
-            sentSinceCheck_ = false;
-            lastSentAt_ = now;
+            sentSinceCheck = false;
+            lastSentAt = now;
         }
-        if (now - lastReceivedAt_ >= options_.idleTimeout)
+        if (now - lastReceivedAt >= options.idleTimeout)
         {
             if (!late)
             {
@@ -91,24 +91,24 @@ public:
             }
             verdict.idleDeferred = true;
         }
-        if (now - lastSentAt_ >= options_.interval)
+        if (now - lastSentAt >= options.interval)
         {
             verdict.sendHeartbeat = true;
-            lastSentAt_ = now;
+            lastSentAt = now;
         }
         return verdict;
     }
 
-    const RpcLinkHeartbeat& options() const { return options_; }
+    const RpcLinkHeartbeat& Options() const { return options; }
 
     // 距最近一次确认收到的时长,日志用。
-    Clock::duration SilentFor(Clock::time_point now) const { return now - lastReceivedAt_; }
+    Clock::duration SilentFor(Clock::time_point now) const { return now - lastReceivedAt; }
 
 private:
-    RpcLinkHeartbeat options_;
-    Clock::time_point lastReceivedAt_;
-    Clock::time_point lastSentAt_;
-    Clock::time_point lastCheckAt_;
-    bool receivedSinceCheck_{false};
-    bool sentSinceCheck_{false};
+    RpcLinkHeartbeat options;
+    Clock::time_point lastReceivedAt;
+    Clock::time_point lastSentAt;
+    Clock::time_point lastCheckAt;
+    bool receivedSinceCheck{false};
+    bool sentSinceCheck{false};
 };

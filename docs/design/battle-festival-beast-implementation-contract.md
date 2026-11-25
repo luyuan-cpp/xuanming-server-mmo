@@ -32,7 +32,7 @@
    - 神兽复用正常 `PetInstance` 养成体系（不继承首领重击、无额外词条点、不增出战位）；新增专属赠送容量 `exclusive_gift_slots = 1`，独立于普通 `max_pets`，普通商店/捕捉/交易不得占用。
    - 神兽绑定角色（`transfer_policy = 1`），禁止单独交易、赠送、寄售或分解/合成，且校验前置到整单资产副作用之前；合法整角色转让保留宠物与领取记录不重置资格。
    - 胜局接入现有全游戏装备材料自选账（`PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit`，`MATCH_MODE_PVE_SOLO` 难度 1，每胜至多 +10 份）；不额外发阶段材料，关闭普通经验、银两、掉落、捕捉。
-     - **现状口径对齐说明**：本仓 `xuanming-server-mmo-cpp` 现行 `PlayerEquipmentMaterialRewardSystem` 已在 `5d96a4f79`（`season-pvp-pve-economy-unified-v1.md`）升级为两阶段池（阶段一首套 660 份永久池无日限，单胜至多 +10；阶段二每周一 UTC+8 05:00 重置 100 份全绑定；同时保留 UTC+8 05:00 换日时间戳字段与兼容字段）。本活动直接复用该单一真相入口、不另建平行材料账，并在契约中下发权威 `quota_mode`、`earnable_remaining_units`、`expected_win_units`、`available_units`、`day_starts_at_ms`、`next_day_reset_at_ms`、`week_starts_at_ms`、`next_week_reset_at_ms`，让 UI 零硬编码即可准确展示。
+     - **现状口径对齐说明**：本仓 `xuanming-server-mmo-cpp` 现行 `PlayerEquipmentMaterialRewardSystem` 已在 `5d96a4f79`（`season-pvp-pve-economy-unified-v1.md`）升级为两阶段池（阶段一首套 660 份永久池无日限，单胜至多 +10；阶段二每周一 UTC+8 05:00 重置 150 份全绑定；同时保留 UTC+8 05:00 换日时间戳字段与兼容字段）。本活动直接复用该单一真相入口、不另建平行材料账，并在契约中下发权威 `quota_mode`、`earnable_remaining_units`、`expected_win_units`、`available_units`、`day_starts_at_ms`、`next_day_reset_at_ms`、`week_starts_at_ms`、`next_week_reset_at_ms`，让 UI 零硬编码即可准确展示。
    - 服务端 UTC 毫秒裁定、左闭右开 `[effective_start_at_ms, effective_end_at_ms)`；UI 显示北京时间 UTC+8。
    - 截止前已持久准入的在途局允许结算至原期；结束后保留 7 天集中领奖展示，之后转入历史态，但已达成永久资格永远可领。
    - 领取时宠物实例 + 领取记录 + 请求回执同一同步提交并经 `PlayerLastPersistedSnapshotComp` 确认后才公开成功；同 UUID 重试回原结果，不同 UUID 并发至多得到同一只宝宝，号源失败或存盘未知不消耗资格；新设备无本地 UUID 通过角色查询即可恢复在途开局、在途/已完成领取及原 `pet_id`。

@@ -250,3 +250,21 @@ void ScenePetClientPlayerHandler::SavePetEntries(entt::entity player,const ::Sav
 ///<<< END WRITING YOUR CODE
 
 }
+
+void ScenePetClientPlayerHandler::SwitchPetEntryPreset(entt::entity player,const ::SwitchPetEntryPresetRequest* request,
+	::SwitchPetEntryPresetResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PetSystem::SwitchEntryPreset(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::AscendPetTier(entt::entity player,const ::AscendPetTierRequest* request,
+	::AscendPetTierResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PetSystem::AscendTier(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

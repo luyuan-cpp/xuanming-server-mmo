@@ -29,18 +29,18 @@ public:
         const std::string& uuid)
         : connection(conn),
           node_uuid(uuid),
-          loop_(LoopOf(conn, uuid))
+          loop(LoopOf(conn, uuid))
     {
         // 只有 RpcServer 会在 context 里放 RpcChannelPtr;别的连接(或 context 为空)时 channel 为空,调用一律 kNotSent。
         if (const auto* channel = boost::any_cast<RpcChannelPtr>(&conn->getContext()); channel != nullptr)
         {
-            channel_ = *channel;
+            this->channel = *channel;
         }
     }
 
     [[nodiscard]] bool IsConnected() const
     {
-        const auto channel = channel_.lock();
+        const auto channel = this->channel.lock();
         return channel && channel->IsConnected();
     }
 
@@ -48,7 +48,7 @@ public:
     void CallMethod(uint32_t messageId, const ::google::protobuf::Message& request, ClientDoneCallback done,
                     const RpcCallOptions& options = {}) const
     {
-        if (const auto channel = channel_.lock())
+        if (const auto channel = this->channel.lock())
         {
             channel->CallMethod(messageId, request, std::move(done), options);
             return;
@@ -59,7 +59,7 @@ public:
     template <typename Method, typename Done>
     void CallMethod(const typename Method::Request& request, Done&& done, const RpcCallOptions& options = {}) const
     {
-        if (const auto channel = channel_.lock())
+        if (const auto channel = this->channel.lock())
         {
             channel->CallMethod<Method>(request, std::forward<Done>(done), options);
             return;
@@ -74,7 +74,7 @@ public:
     // 单向(调用方不要应答)。channel 已不在时返回 false 并计数。
     bool SendRequest(uint32_t messageId, const ::google::protobuf::Message& message) const
     {
-        if (const auto channel = channel_.lock())
+        if (const auto channel = this->channel.lock())
         {
             return channel->SendRequest(messageId, message);
         }
@@ -96,7 +96,7 @@ public:
     // 节点关机阶段 0(NodeUtils::CloseAllRpcChannels)。
     void CloseChannel() const
     {
-        if (const auto channel = channel_.lock())
+        if (const auto channel = this->channel.lock())
         {
             channel->Close();
         }
@@ -121,12 +121,12 @@ private:
     // loop_ 自构造起必有值,所以本地失败一律经 loop 以 kNotSent 投递(恰好一次、不同步执行)。
     void FailNotConnected(uint32_t messageId, ClientDoneCallback done) const
     {
-        RpcChannel::FailNotSent(loop_.get(), messageId, std::move(done), "session channel gone", node_uuid);
+        RpcChannel::FailNotSent(loop.get(), messageId, std::move(done), "session channel gone", node_uuid);
     }
 
-    std::weak_ptr<RpcChannel> channel_;
+    std::weak_ptr<RpcChannel> channel;
     std::string node_uuid;
     // 连接所在的 loop:channel 已不在时用它投递 kNotSent。引用不是指针(no-raw-pointer-member);
     // reference_wrapper 可拷贝 / 移动赋值,entt 存储删除时的 swap-and-pop(std::exchange 移动赋值)照常可用。
-    std::reference_wrapper<muduo::net::EventLoop> loop_;
+    std::reference_wrapper<muduo::net::EventLoop> loop;
 };

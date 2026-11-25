@@ -201,7 +201,7 @@ public:
     size_t connectionCount() const;
     ServerStatsSnapshot Stats() const;
     // 构造后不变:任何线程可读,不断言。
-    const std::string &listenAddress() const { return listenAddress_; }
+    const std::string &ListenAddress() const { return listenAddress; }
 
 private:
     friend class ServerCall;
@@ -340,45 +340,45 @@ private:
     void LogStatsIfChanged();
     void CancelTimers();
 
-    muduo::net::EventLoop &loop_;
-    const muduo::net::InetAddress listenInetAddress_;
-    const std::string listenAddress_;
-    const ServerOptions options_;
+    muduo::net::EventLoop &loop;
+    const muduo::net::InetAddress listenInetAddress;
+    const std::string listenAddress;
+    const ServerOptions options;
 
-    MethodTable methodTable_;                                                  // Start 之前登记;之后只读
-    std::vector<MethodEntry> methods_;                                         // Start 时冻结,下标即 methodIndex
-    std::unordered_map<std::string, size_t, StringHash, std::equal_to<>> methodIndex_;
+    MethodTable methodTable;                                                  // Start 之前登记;之后只读
+    std::vector<MethodEntry> methods;                                         // Start 时冻结,下标即 methodIndex
+    std::unordered_map<std::string, size_t, StringHash, std::equal_to<>> methodIndex;
 
-    std::shared_ptr<muduo::net::Acceptor> acceptor_;   // shared_ptr:BeginShutdown 把它移进 queueInLoop 闭包销毁
-    std::map<uint64_t, ConnectionEntry> connections_;
-    uint64_t nextConnectionId_{1};
+    std::shared_ptr<muduo::net::Acceptor> acceptor;   // shared_ptr:BeginShutdown 把它移进 queueInLoop 闭包销毁
+    std::map<uint64_t, ConnectionEntry> connections;
+    uint64_t nextConnectionId{1};
 
-    std::unordered_map<uint64_t, CallRecord> calls_;
-    uint64_t nextCallId_{1};
-    std::deque<uint64_t> ready_;   // 等派发的 callId(先进先出;已被撤销的残留 id 派发时跳过)
-    std::set<std::pair<std::chrono::steady_clock::time_point, uint64_t>> deadlines_;
-    bool dispatchQueued_{false};
+    std::unordered_map<uint64_t, CallRecord> calls;
+    uint64_t nextCallId{1};
+    std::deque<uint64_t> ready;   // 等派发的 callId(先进先出;已被撤销的残留 id 派发时跳过)
+    std::set<std::pair<std::chrono::steady_clock::time_point, uint64_t>> deadlines;
+    bool dispatchQueued{false};
 
-    int batchDepth_{0};
-    std::set<uint64_t> dirtyConnections_;
+    int batchDepth{0};
+    std::set<uint64_t> dirtyConnections;
 
-    Phase phase_{Phase::kCreated};
-    ServerShutdownOptions shutdownOptions_;
-    std::function<void()> onDrained_;
-    std::chrono::steady_clock::time_point drainStartedAt_{};
-    std::chrono::steady_clock::time_point drainDeadline_{};
+    Phase phase{Phase::kCreated};
+    ServerShutdownOptions shutdownOptions;
+    std::function<void()> onDrained;
+    std::chrono::steady_clock::time_point drainStartedAt{};
+    std::chrono::steady_clock::time_point drainDeadline{};
 
     // muduo 定时器已按单调时钟到期;到点仍按 steady_clock 复核,未到就按剩余时间重新上弦(兜住秒→微秒截断造成的早到)。
-    muduo::net::TimerId deadlineTimer_;
-    bool deadlineTimerArmed_{false};
-    std::chrono::steady_clock::time_point deadlineTimerFor_{};
-    muduo::net::TimerId drainTimer_;
-    bool drainTimerArmed_{false};
-    muduo::net::TimerId statsTimer_;
-    bool statsTimerArmed_{false};
-    std::string lastLoggedStats_;
+    muduo::net::TimerId deadlineTimer;
+    bool deadlineTimerArmed{false};
+    std::chrono::steady_clock::time_point deadlineTimerFor{};
+    muduo::net::TimerId drainTimer;
+    bool drainTimerArmed{false};
+    muduo::net::TimerId statsTimer;
+    bool statsTimerArmed{false};
+    std::string lastLoggedStats;
 
-    Counters stats_;
+    Counters stats;
 };
 
 } // namespace muduo_grpc

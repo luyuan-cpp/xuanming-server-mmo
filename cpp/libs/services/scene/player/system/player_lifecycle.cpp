@@ -53,6 +53,7 @@
 #include "player/system/afk_hosting.h" // 断线保留期间查挂机月卡:开通挂机的玩家离线托管、照常跟随
 #include "player/system/afk_pass.h" // 挂机月卡投影:加载、存盘提交、托管心跳三处写出(docs/design/afk-monthly-card.md §5.2)
 #include "player/system/player_appearance.h" // 角色形象切换与 1 小时试用(docs/design/character-appearance-switch.md)
+#include "player/system/player_equipment_material_reward.h" // 账号级阶段一可交易装备材料配额异步同步
 #include "player/system/player_rename.h" // 角色改名:入场续做、存盘提交后发 RenameRole、销毁清理(docs/design/rename-and-content-safety.md §4)
 #include "player/system/hosted_presence.h" // 托管在场心跳与托管归位信息(RefreshHostedPresence)
 #include "engine/core/type_define/type_define.h"
@@ -3514,6 +3515,7 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	RoleAdmissionSystem::OnDestroyed(playerId);
 	PlayerAppearanceSystem::OnPlayerDestroyed(playerId);
 	PlayerRenameSystem::OnPlayerDestroyed(playerId);
+	PlayerEquipmentMaterialRewardSystem::OnPlayerDestroyed(playerId);
 
 	// 存盘状态:还有未落定的存盘时这次不生效,落定时由 onSettled 回收(连同没交出去的审计记录)。
 	if (PlayerStore().Forget(playerId))
@@ -5542,6 +5544,8 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	PlayerAppearanceSystem::OnPlayerLoaded(player, TimeSystem::NowSecondsUTC());
 	// 角色改名未完结记录随存档入场立即续发 RenameRole(docs/design/rename-and-content-safety.md §4.5)。
 	PlayerRenameSystem::OnPlayerLoaded(player, TimeSystem::NowMillisecondsUTC());
+	// 账号级阶段一可交易装备材料配额同步(跨角色/删角共享终身 60 份硬上限)。
+	PlayerEquipmentMaterialRewardSystem::OnPlayerLoaded(player, TimeSystem::NowMillisecondsUTC());
 
 	return player;
 }

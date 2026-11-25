@@ -35,7 +35,7 @@
 // <optional> / <thread>)。
 #include "muduo/base/Logging.h"
 
-template <typename Request, typename Response>
+template <typename RequestT, typename ResponseT>
 class GrpcUnaryCall final
 {
     struct PrivateTag
@@ -45,7 +45,7 @@ class GrpcUnaryCall final
 
 public:
     // 不用函数指针字段(§15.2 #13)。参数与生成的 Handle<M> 签名一致;无应答体的方法由生成代码包一层 lambda。
-    using Handler = std::function<void(const Request *request, Response *response)>;
+    using Handler = std::function<void(const RequestT *request, ResponseT *response)>;
 
     static std::shared_ptr<GrpcUnaryCall> Create(muduo_grpc::ServerCall call, Handler handler)
     {
@@ -56,18 +56,18 @@ public:
     // 生成的 RegisterMethods 在派发钩子的作用域里同步构造本对象:派发钩子开的 server span(grpc_trace_hooks)由本对象接过来,
     // 量到调用完成为止(docs/design/distributed-tracing.md §10.3)。守护段异步之后再 Proceed 的,回复晚于派发作用域结束。
     GrpcUnaryCall(PrivateTag, muduo_grpc::ServerCall call, Handler handler)
-        : call_(std::move(call)), handler_(std::move(handler)),
-          span_(tracing::PendingSpan::TakeCurrentServerSpan(tracing::SpanSystem::kGrpc))
+        : call(std::move(call)), handler(std::move(handler)),
+          span(tracing::PendingSpan::TakeCurrentServerSpan(tracing::SpanSystem::kGrpc))
     {
     }
 
     // 没经本对象完成就释放(守护段丢下调用、截止或对端取消之后才释放):server span 在这里结束并标错。
     ~GrpcUnaryCall()
     {
-        if (span_.Recording())
+        if (span.Recording())
         {
-            span_.SetError("call released without a reply from the handler");
-            span_.End();
+            span.SetError("call released without a reply from the handler");
+            span.End();
         }
     }
 
@@ -82,7 +82,7 @@ public:
     {
         // 会话层已把单条消息限制在 4MiB 以内,这里的 int 上限只是防御 ParseFromArray 的参数窄化。
         if (bytes.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
-            !request_.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())))
+            !request.ParseFromArray(bytes.data(), static_cast<int>(bytes.size())))
         {
             FinishError(muduo_grpc::Status(muduo_grpc::StatusCode::kInternal, "grpc: error unmarshalling request"));
             return false;
@@ -90,10 +90,10 @@ public:
         return true;
     }
 
-    const Request &request() const { return request_; }
-    const muduo_grpc::ServerCall &server_call() const { return call_; }
-    bool IsActive() const { return call_.IsActive(); }
-    bool ServerDraining() const { return call_.ServerDraining(); }
+    const RequestT &Request() const { return request; }
+    const muduo_grpc::ServerCall &server_call() const { return call; }
+    bool IsActive() const { return call.IsActive(); }
+    bool ServerDraining() const { return call.ServerDraining(); }
 
     // 不进 Handle*,以 status 完成调用。status 必须非 OK:OK 视为编程错误,由 ServerCall::FinishError
     // 改回 INTERNAL 并 LOG_ERROR。调用已完成(截止 / 取消 / 排空)时被吞掉。
@@ -104,47 +104,47 @@ public:
     // 调用已被截止 / 取消 / 排空收口时什么都不做。重复调用没有副作用:业务最多执行一次。
     void Proceed()
     {
-        if (businessStarted_)
+        if (businessStarted)
         {
             return;
         }
-        if (!handler_)
+        if (!handler)
         {
             // 生成代码总会传入 handler;走到这里是装配缺陷。业务没有执行,所以回「未执行」的 INTERNAL。
-            LOG_ERROR << "gRPC unary call has no handler, method=" << call_.method();
+            LOG_ERROR << "gRPC unary call has no handler, method=" << call.method();
             FinishError(muduo_grpc::Status(muduo_grpc::StatusCode::kInternal, "grpc: no handler for method"));
             return;
         }
         // 判定「有效且未到期」与标记「业务已开始」在 ServerCall 里一次完成(§15.7 第 4 条)。
-        if (!call_.TryStartBusiness())
+        if (!call.TryStartBusiness())
         {
             // 调用已由别的完成源收口(截止、对端取消、排空到期),最终状态码不经本对象:server span 只标错,不记码。
-            if (span_.Recording())
+            if (span.Recording())
             {
-                span_.SetError("call completed before the handler ran");
-                span_.End();
+                span.SetError("call completed before the handler ran");
+                span.End();
             }
             return;
         }
         // 先置位再调业务:handler 里即使再次走到 Proceed(重入)也不会执行第二次。
-        businessStarted_ = true;
+        businessStarted = true;
         {
             // 业务日志带上请求顶层的 player_id(docs/design/distributed-tracing.md §5.5),口径同 Go 的
             // tracing.PlayerFieldInterceptor;没有这个字段的请求装 0,不沿用执行线程上残留的玩家。
             // 只覆盖 handler 的同步部分;trace 由派发钩子(grpc_trace_hooks)按 traceparent 接续。
-            const tracing::ScopedPlayerId player(tracing::TopLevelPlayerId(request_));
-            handler_(&request_, &response_);
+            const tracing::ScopedPlayerId player(tracing::TopLevelPlayerId(request));
+            handler(&request, &response);
         }
 
         std::string responseBytes;
-        if (!response_.SerializeToString(&responseBytes))
+        if (!response.SerializeToString(&responseBytes))
         {
             // proto3 下实际不会发生(§15.13);真发生时业务已执行,打 ERROR 留痕。
-            LOG_ERROR << "gRPC response serialization failed after the handler ran, method=" << call_.method();
+            LOG_ERROR << "gRPC response serialization failed after the handler ran, method=" << call.method();
             FinishError(muduo_grpc::Status(muduo_grpc::StatusCode::kInternal, "grpc: error while marshaling"));
             return;
         }
-        call_.FinishOk(std::move(responseBytes));
+        call.FinishOk(std::move(responseBytes));
         // 应答超过 maxSendMessageBytes 时 FinishOk 改回 RESOURCE_EXHAUSTED(它打 ERROR);那不算服务端故障码,span 仍记 OK。
         EndSpan(muduo_grpc::StatusCode::kOk, {});
     }
@@ -153,9 +153,9 @@ private:
     void FinishError(muduo_grpc::Status status)
     {
         // status 为 OK 是编程错误,ServerCall::FinishError 会改回 INTERNAL;span 记同一个码。
-        const muduo_grpc::StatusCode code = status.ok() ? muduo_grpc::StatusCode::kInternal : status.code();
+        const muduo_grpc::StatusCode code = status.ok() ? muduo_grpc::StatusCode::kInternal : status.Code();
         const std::string description = status.message();
-        call_.FinishError(std::move(status));
+        call.FinishError(std::move(status));
         EndSpan(code, description);
     }
 
@@ -163,11 +163,11 @@ private:
     // (UNKNOWN、DEADLINE_EXCEEDED、UNIMPLEMENTED、INTERNAL、UNAVAILABLE、DATA_LOSS);参数不对、没找到这类是调用方的问题。
     void EndSpan(muduo_grpc::StatusCode code, std::string_view description)
     {
-        if (!span_.Recording())
+        if (!span.Recording())
         {
             return;
         }
-        span_.SetGrpcStatusCode(static_cast<uint32_t>(code));
+        span.SetGrpcStatusCode(static_cast<uint32_t>(code));
         switch (code)
         {
         case muduo_grpc::StatusCode::kUnknown:
@@ -176,20 +176,20 @@ private:
         case muduo_grpc::StatusCode::kInternal:
         case muduo_grpc::StatusCode::kUnavailable:
         case muduo_grpc::StatusCode::kDataLoss:
-            span_.SetError(description.empty() ? std::string_view(muduo_grpc::StatusCodeName(code)) : description);
+            span.SetError(description.empty() ? std::string_view(muduo_grpc::StatusCodeName(code)) : description);
             break;
         default:
             break;
         }
-        span_.End();
+        span.End();
     }
 
-    muduo_grpc::ServerCall call_;
-    Handler handler_;
-    Request request_;
-    Response response_;
+    muduo_grpc::ServerCall call;
+    Handler handler;
+    RequestT request;
+    ResponseT response;
     // 本对象是否已经把调用交给业务;保证 Proceed 重复调用时业务最多执行一次(不依赖 ServerCall 的记录状态)。
-    bool businessStarted_{false};
+    bool businessStarted{false};
     // 本次调用的 server span(§10.3);不在 trace 里、没装导出去处时为空。
-    tracing::PendingSpan span_;
+    tracing::PendingSpan span;
 };

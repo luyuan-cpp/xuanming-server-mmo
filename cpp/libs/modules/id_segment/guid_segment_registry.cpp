@@ -50,18 +50,18 @@ bool ParseGuidKind(std::string_view name, GuidKind &out)
 
 GuidSegmentClient &GuidSegmentRegistry::Get(GuidKind kind)
 {
-    return clients_[IndexOf(kind)];
+    return clients[IndexOf(kind)];
 }
 
 const GuidSegmentClient &GuidSegmentRegistry::Get(GuidKind kind) const
 {
-    return clients_[IndexOf(kind)];
+    return clients[IndexOf(kind)];
 }
 
 std::size_t GuidSegmentRegistry::EnabledCount() const
 {
     std::size_t count = 0;
-    for (const auto &client : clients_)
+    for (const auto &client : clients)
     {
         count += client.IsEnabled() ? 1 : 0;
     }
@@ -70,7 +70,7 @@ std::size_t GuidSegmentRegistry::EnabledCount() const
 
 bool GuidSegmentRegistry::AllEnabledReady() const
 {
-    for (const auto &client : clients_)
+    for (const auto &client : clients)
     {
         if (client.IsEnabled() && !client.IsReady())
         {
@@ -85,7 +85,7 @@ std::string GuidSegmentRegistry::DescribeNotReady() const
     std::string out;
     for (std::size_t i = 0; i < kGuidKindCount; ++i)
     {
-        const auto &client = clients_[i];
+        const auto &client = clients[i];
         if (client.IsEnabled() && !client.IsReady())
         {
             if (!out.empty())
@@ -100,7 +100,7 @@ std::string GuidSegmentRegistry::DescribeNotReady() const
 
 void GuidSegmentRegistry::WarmAll()
 {
-    for (auto &client : clients_)
+    for (auto &client : clients)
     {
         client.Warm();
     }
@@ -108,7 +108,7 @@ void GuidSegmentRegistry::WarmAll()
 
 void GuidSegmentRegistry::ShutdownAll()
 {
-    for (auto &client : clients_)
+    for (auto &client : clients)
     {
         client.Shutdown();
     }
@@ -116,7 +116,7 @@ void GuidSegmentRegistry::ShutdownAll()
 
 void GuidSegmentRegistry::ResetAll()
 {
-    for (auto &client : clients_)
+    for (auto &client : clients)
     {
         client.Reset();
     }

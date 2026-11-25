@@ -45,6 +45,7 @@ const (
 	GuildChangeKind_GUILD_CHANGE_KIND_ACTIVITY_CHANGED     GuildChangeKind = 12 // B6
 	GuildChangeKind_GUILD_CHANGE_KIND_DELIVERY_DONE        GuildChangeKind = 13 // B5
 	GuildChangeKind_GUILD_CHANGE_KIND_RENAMED              GuildChangeKind = 14 // 帮会改名
+	GuildChangeKind_GUILD_CHANGE_KIND_WAR_UPDATED          GuildChangeKind = 15 // 帮会全天帮战 V2 状态变动
 )
 
 // Enum value maps for GuildChangeKind.
@@ -65,6 +66,7 @@ var (
 		12: "GUILD_CHANGE_KIND_ACTIVITY_CHANGED",
 		13: "GUILD_CHANGE_KIND_DELIVERY_DONE",
 		14: "GUILD_CHANGE_KIND_RENAMED",
+		15: "GUILD_CHANGE_KIND_WAR_UPDATED",
 	}
 	GuildChangeKind_value = map[string]int32{
 		"GUILD_CHANGE_KIND_UNSPECIFIED":          0,
@@ -82,6 +84,7 @@ var (
 		"GUILD_CHANGE_KIND_ACTIVITY_CHANGED":     12,
 		"GUILD_CHANGE_KIND_DELIVERY_DONE":        13,
 		"GUILD_CHANGE_KIND_RENAMED":              14,
+		"GUILD_CHANGE_KIND_WAR_UPDATED":          15,
 	}
 )
 
@@ -334,6 +337,290 @@ func (x GuildTrialLobbyState) Number() protoreflect.EnumNumber {
 // Deprecated: Use GuildTrialLobbyState.Descriptor instead.
 func (GuildTrialLobbyState) EnumDescriptor() ([]byte, []int) {
 	return file_proto_guild_guild_proto_rawDescGZIP(), []int{4}
+}
+
+type GuildWarTargetKind int32
+
+const (
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_UNSPECIFIED      GuildWarTargetKind = 0
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_QUICK_AUTO       GuildWarTargetKind = 1 // 一键快速开战:优先在线迎战活人,无活人 0 秒打守旗阵
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LIVE_PLAYER      GuildWarTargetKind = 2 // 界面直打在线挂牌/战区异帮活人
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON GuildWarTargetKind = 3 // 攻打指定灵脉守旗阵或无主灵脉守卫
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_BOUNTY           GuildWarTargetKind = 4 // 追杀榜直打挂牌中的追杀目标
+	GuildWarTargetKind_GUILD_WAR_TARGET_KIND_FIELD_PLAYER     GuildWarTargetKind = 5 // 野外三图现场点选任意异帮玩家直打
+)
+
+// Enum value maps for GuildWarTargetKind.
+var (
+	GuildWarTargetKind_name = map[int32]string{
+		0: "GUILD_WAR_TARGET_KIND_UNSPECIFIED",
+		1: "GUILD_WAR_TARGET_KIND_QUICK_AUTO",
+		2: "GUILD_WAR_TARGET_KIND_LIVE_PLAYER",
+		3: "GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON",
+		4: "GUILD_WAR_TARGET_KIND_BOUNTY",
+		5: "GUILD_WAR_TARGET_KIND_FIELD_PLAYER",
+	}
+	GuildWarTargetKind_value = map[string]int32{
+		"GUILD_WAR_TARGET_KIND_UNSPECIFIED":      0,
+		"GUILD_WAR_TARGET_KIND_QUICK_AUTO":       1,
+		"GUILD_WAR_TARGET_KIND_LIVE_PLAYER":      2,
+		"GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON": 3,
+		"GUILD_WAR_TARGET_KIND_BOUNTY":           4,
+		"GUILD_WAR_TARGET_KIND_FIELD_PLAYER":     5,
+	}
+)
+
+func (x GuildWarTargetKind) Enum() *GuildWarTargetKind {
+	p := new(GuildWarTargetKind)
+	*p = x
+	return p
+}
+
+func (x GuildWarTargetKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildWarTargetKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_proto_enumTypes[5].Descriptor()
+}
+
+func (GuildWarTargetKind) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_proto_enumTypes[5]
+}
+
+func (x GuildWarTargetKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildWarTargetKind.Descriptor instead.
+func (GuildWarTargetKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{5}
+}
+
+type GuildWarBattleKind int32
+
+const (
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_UNSPECIFIED    GuildWarBattleKind = 0
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_PANEL_PVP      GuildWarBattleKind = 1 // 帮会界面真人直打
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE GuildWarBattleKind = 2 // 守旗阵踢馆 / 灵脉守卫战(AI 托管)
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_FIELD_ROAD     GuildWarBattleKind = 3 // 野外路上任意异帮点战
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_LEYLINE_PVP    GuildWarBattleKind = 4 // 灵脉现场真人攻防
+	GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT    GuildWarBattleKind = 5 // 追杀令结单战
+)
+
+// Enum value maps for GuildWarBattleKind.
+var (
+	GuildWarBattleKind_name = map[int32]string{
+		0: "GUILD_WAR_BATTLE_KIND_UNSPECIFIED",
+		1: "GUILD_WAR_BATTLE_KIND_PANEL_PVP",
+		2: "GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE",
+		3: "GUILD_WAR_BATTLE_KIND_FIELD_ROAD",
+		4: "GUILD_WAR_BATTLE_KIND_LEYLINE_PVP",
+		5: "GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT",
+	}
+	GuildWarBattleKind_value = map[string]int32{
+		"GUILD_WAR_BATTLE_KIND_UNSPECIFIED":    0,
+		"GUILD_WAR_BATTLE_KIND_PANEL_PVP":      1,
+		"GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE": 2,
+		"GUILD_WAR_BATTLE_KIND_FIELD_ROAD":     3,
+		"GUILD_WAR_BATTLE_KIND_LEYLINE_PVP":    4,
+		"GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT":    5,
+	}
+)
+
+func (x GuildWarBattleKind) Enum() *GuildWarBattleKind {
+	p := new(GuildWarBattleKind)
+	*p = x
+	return p
+}
+
+func (x GuildWarBattleKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildWarBattleKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_proto_enumTypes[6].Descriptor()
+}
+
+func (GuildWarBattleKind) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_proto_enumTypes[6]
+}
+
+func (x GuildWarBattleKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildWarBattleKind.Descriptor instead.
+func (GuildWarBattleKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{6}
+}
+
+type GuildWarBountyTier int32
+
+const (
+	GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED   GuildWarBountyTier = 0
+	GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER GuildWarBountyTier = 1 // 5,000 银两(10% 税,4,500 入赏金池)
+	GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER  GuildWarBountyTier = 2 // 15,000 银两(10% 税,13,500 入赏金池)
+	GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC  GuildWarBountyTier = 3 // 帮会公费(2,000 帮会资金,每日限 2 张)
+)
+
+// Enum value maps for GuildWarBountyTier.
+var (
+	GuildWarBountyTier_name = map[int32]string{
+		0: "GUILD_WAR_BOUNTY_TIER_UNSPECIFIED",
+		1: "GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER",
+		2: "GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER",
+		3: "GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC",
+	}
+	GuildWarBountyTier_value = map[string]int32{
+		"GUILD_WAR_BOUNTY_TIER_UNSPECIFIED":   0,
+		"GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER": 1,
+		"GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER":  2,
+		"GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC":  3,
+	}
+)
+
+func (x GuildWarBountyTier) Enum() *GuildWarBountyTier {
+	p := new(GuildWarBountyTier)
+	*p = x
+	return p
+}
+
+func (x GuildWarBountyTier) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildWarBountyTier) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_proto_enumTypes[7].Descriptor()
+}
+
+func (GuildWarBountyTier) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_proto_enumTypes[7]
+}
+
+func (x GuildWarBountyTier) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildWarBountyTier.Descriptor instead.
+func (GuildWarBountyTier) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{7}
+}
+
+type GuildWarBountyStatus int32
+
+const (
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED    GuildWarBountyStatus = 0
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING GuildWarBountyStatus = 1 // 扣款确认中
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE         GuildWarBountyStatus = 2 // 追杀中
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED      GuildWarBountyStatus = 3 // 追杀成功已销单
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET GuildWarBountyStatus = 4 // 目标反杀 2 人撕单
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED        GuildWarBountyStatus = 5 // 24h 过期退本
+)
+
+// Enum value maps for GuildWarBountyStatus.
+var (
+	GuildWarBountyStatus_name = map[int32]string{
+		0: "GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED",
+		1: "GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING",
+		2: "GUILD_WAR_BOUNTY_STATUS_ACTIVE",
+		3: "GUILD_WAR_BOUNTY_STATUS_COMPLETED",
+		4: "GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET",
+		5: "GUILD_WAR_BOUNTY_STATUS_EXPIRED",
+	}
+	GuildWarBountyStatus_value = map[string]int32{
+		"GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED":    0,
+		"GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING": 1,
+		"GUILD_WAR_BOUNTY_STATUS_ACTIVE":         2,
+		"GUILD_WAR_BOUNTY_STATUS_COMPLETED":      3,
+		"GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET": 4,
+		"GUILD_WAR_BOUNTY_STATUS_EXPIRED":        5,
+	}
+)
+
+func (x GuildWarBountyStatus) Enum() *GuildWarBountyStatus {
+	p := new(GuildWarBountyStatus)
+	*p = x
+	return p
+}
+
+func (x GuildWarBountyStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildWarBountyStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_proto_enumTypes[8].Descriptor()
+}
+
+func (GuildWarBountyStatus) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_proto_enumTypes[8]
+}
+
+func (x GuildWarBountyStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildWarBountyStatus.Descriptor instead.
+func (GuildWarBountyStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{8}
+}
+
+type GuildWarAlertKind int32
+
+const (
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_UNSPECIFIED         GuildWarAlertKind = 0
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE GuildWarAlertKind = 1 // 本帮灵脉正被踢馆
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_LEYLINE_CAPTURED    GuildWarAlertKind = 2 // 灵脉易主广播
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP GuildWarAlertKind = 3 // 追兵踏入目标所在野外图
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED     GuildWarAlertKind = 4 // 追杀雪耻或反杀撕单播报
+	GuildWarAlertKind_GUILD_WAR_ALERT_KIND_STREAK_BOUNTY       GuildWarAlertKind = 5 // 连胜悬赏挂牌或终结播报
+)
+
+// Enum value maps for GuildWarAlertKind.
+var (
+	GuildWarAlertKind_name = map[int32]string{
+		0: "GUILD_WAR_ALERT_KIND_UNSPECIFIED",
+		1: "GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE",
+		2: "GUILD_WAR_ALERT_KIND_LEYLINE_CAPTURED",
+		3: "GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP",
+		4: "GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED",
+		5: "GUILD_WAR_ALERT_KIND_STREAK_BOUNTY",
+	}
+	GuildWarAlertKind_value = map[string]int32{
+		"GUILD_WAR_ALERT_KIND_UNSPECIFIED":         0,
+		"GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE": 1,
+		"GUILD_WAR_ALERT_KIND_LEYLINE_CAPTURED":    2,
+		"GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP": 3,
+		"GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED":     4,
+		"GUILD_WAR_ALERT_KIND_STREAK_BOUNTY":       5,
+	}
+)
+
+func (x GuildWarAlertKind) Enum() *GuildWarAlertKind {
+	p := new(GuildWarAlertKind)
+	*p = x
+	return p
+}
+
+func (x GuildWarAlertKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildWarAlertKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_proto_enumTypes[9].Descriptor()
+}
+
+func (GuildWarAlertKind) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_proto_enumTypes[9]
+}
+
+func (x GuildWarAlertKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildWarAlertKind.Descriptor instead.
+func (GuildWarAlertKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{9}
 }
 
 type GuildMember struct {
@@ -4733,6 +5020,3130 @@ func (x *GetGuildRankByGuildResponse) GetEntry() *GuildRankEntry {
 	return nil
 }
 
+type GuildWarStanceView struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	PeaceMode             bool                   `protobuf:"varint,1,opt,name=peace_mode,json=peaceMode,proto3" json:"peace_mode,omitempty"`
+	PeaceReadyAtMs        uint64                 `protobuf:"varint,2,opt,name=peace_ready_at_ms,json=peaceReadyAtMs,proto3" json:"peace_ready_at_ms,omitempty"`
+	OpenChallenge         bool                   `protobuf:"varint,3,opt,name=open_challenge,json=openChallenge,proto3" json:"open_challenge,omitempty"`
+	ProtectUntilMs        uint64                 `protobuf:"varint,4,opt,name=protect_until_ms,json=protectUntilMs,proto3" json:"protect_until_ms,omitempty"`
+	MyStreak              uint32                 `protobuf:"varint,5,opt,name=my_streak,json=myStreak,proto3" json:"my_streak,omitempty"`
+	MyWeeklyMerit         uint64                 `protobuf:"varint,6,opt,name=my_weekly_merit,json=myWeeklyMerit,proto3" json:"my_weekly_merit,omitempty"`
+	MyBountyPayoutsToday  uint32                 `protobuf:"varint,7,opt,name=my_bounty_payouts_today,json=myBountyPayoutsToday,proto3" json:"my_bounty_payouts_today,omitempty"`
+	MyBountyPayoutLimit   uint32                 `protobuf:"varint,8,opt,name=my_bounty_payout_limit,json=myBountyPayoutLimit,proto3" json:"my_bounty_payout_limit,omitempty"`
+	BountyProtectUntilMs  uint64                 `protobuf:"varint,9,opt,name=bounty_protect_until_ms,json=bountyProtectUntilMs,proto3" json:"bounty_protect_until_ms,omitempty"`
+	NextGarrisonRefreshMs uint64                 `protobuf:"varint,10,opt,name=next_garrison_refresh_ms,json=nextGarrisonRefreshMs,proto3" json:"next_garrison_refresh_ms,omitempty"`
+	NextTrackAtMs         uint64                 `protobuf:"varint,11,opt,name=next_track_at_ms,json=nextTrackAtMs,proto3" json:"next_track_at_ms,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GuildWarStanceView) Reset() {
+	*x = GuildWarStanceView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarStanceView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarStanceView) ProtoMessage() {}
+
+func (x *GuildWarStanceView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarStanceView.ProtoReflect.Descriptor instead.
+func (*GuildWarStanceView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *GuildWarStanceView) GetPeaceMode() bool {
+	if x != nil {
+		return x.PeaceMode
+	}
+	return false
+}
+
+func (x *GuildWarStanceView) GetPeaceReadyAtMs() uint64 {
+	if x != nil {
+		return x.PeaceReadyAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetOpenChallenge() bool {
+	if x != nil {
+		return x.OpenChallenge
+	}
+	return false
+}
+
+func (x *GuildWarStanceView) GetProtectUntilMs() uint64 {
+	if x != nil {
+		return x.ProtectUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetMyStreak() uint32 {
+	if x != nil {
+		return x.MyStreak
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetMyWeeklyMerit() uint64 {
+	if x != nil {
+		return x.MyWeeklyMerit
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetMyBountyPayoutsToday() uint32 {
+	if x != nil {
+		return x.MyBountyPayoutsToday
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetMyBountyPayoutLimit() uint32 {
+	if x != nil {
+		return x.MyBountyPayoutLimit
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetBountyProtectUntilMs() uint64 {
+	if x != nil {
+		return x.BountyProtectUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetNextGarrisonRefreshMs() uint64 {
+	if x != nil {
+		return x.NextGarrisonRefreshMs
+	}
+	return 0
+}
+
+func (x *GuildWarStanceView) GetNextTrackAtMs() uint64 {
+	if x != nil {
+		return x.NextTrackAtMs
+	}
+	return 0
+}
+
+type GuildWarBannerHonorView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OccupiedLeylineId uint32                 `protobuf:"varint,1,opt,name=occupied_leyline_id,json=occupiedLeylineId,proto3" json:"occupied_leyline_id,omitempty"`
+	WeeklyMvps        []string               `protobuf:"bytes,2,rep,name=weekly_mvps,json=weeklyMvps,proto3" json:"weekly_mvps,omitempty"`
+	FirstWinNames     []string               `protobuf:"bytes,3,rep,name=first_win_names,json=firstWinNames,proto3" json:"first_win_names,omitempty"`
+	FirstWinAtMs      uint64                 `protobuf:"varint,4,opt,name=first_win_at_ms,json=firstWinAtMs,proto3" json:"first_win_at_ms,omitempty"`
+	RivalGuildIds     []uint64               `protobuf:"varint,5,rep,packed,name=rival_guild_ids,json=rivalGuildIds,proto3" json:"rival_guild_ids,omitempty"` // 本周宿敌帮会 ID 列表(交战 +20% 帮贡战功)
+	RivalGuildNames   []string               `protobuf:"bytes,6,rep,name=rival_guild_names,json=rivalGuildNames,proto3" json:"rival_guild_names,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildWarBannerHonorView) Reset() {
+	*x = GuildWarBannerHonorView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarBannerHonorView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarBannerHonorView) ProtoMessage() {}
+
+func (x *GuildWarBannerHonorView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarBannerHonorView.ProtoReflect.Descriptor instead.
+func (*GuildWarBannerHonorView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *GuildWarBannerHonorView) GetOccupiedLeylineId() uint32 {
+	if x != nil {
+		return x.OccupiedLeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarBannerHonorView) GetWeeklyMvps() []string {
+	if x != nil {
+		return x.WeeklyMvps
+	}
+	return nil
+}
+
+func (x *GuildWarBannerHonorView) GetFirstWinNames() []string {
+	if x != nil {
+		return x.FirstWinNames
+	}
+	return nil
+}
+
+func (x *GuildWarBannerHonorView) GetFirstWinAtMs() uint64 {
+	if x != nil {
+		return x.FirstWinAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBannerHonorView) GetRivalGuildIds() []uint64 {
+	if x != nil {
+		return x.RivalGuildIds
+	}
+	return nil
+}
+
+func (x *GuildWarBannerHonorView) GetRivalGuildNames() []string {
+	if x != nil {
+		return x.RivalGuildNames
+	}
+	return nil
+}
+
+type GuildWarLeylineView struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	LeylineId             uint32                 `protobuf:"varint,1,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	Name                  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	SceneConfigId         uint32                 `protobuf:"varint,3,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`
+	OwnerGuildId          uint64                 `protobuf:"varint,4,opt,name=owner_guild_id,json=ownerGuildId,proto3" json:"owner_guild_id,omitempty"`
+	OwnerGuildName        string                 `protobuf:"bytes,5,opt,name=owner_guild_name,json=ownerGuildName,proto3" json:"owner_guild_name,omitempty"`
+	BannerHp              uint32                 `protobuf:"varint,6,opt,name=banner_hp,json=bannerHp,proto3" json:"banner_hp,omitempty"`
+	BannerMaxHp           uint32                 `protobuf:"varint,7,opt,name=banner_max_hp,json=bannerMaxHp,proto3" json:"banner_max_hp,omitempty"`
+	ShieldUntilMs         uint64                 `protobuf:"varint,8,opt,name=shield_until_ms,json=shieldUntilMs,proto3" json:"shield_until_ms,omitempty"`
+	ActiveBattleCount     uint32                 `protobuf:"varint,9,opt,name=active_battle_count,json=activeBattleCount,proto3" json:"active_battle_count,omitempty"`
+	UnderSiege            bool                   `protobuf:"varint,10,opt,name=under_siege,json=underSiege,proto3" json:"under_siege,omitempty"`
+	FeaturedWatchBattleId uint64                 `protobuf:"varint,11,opt,name=featured_watch_battle_id,json=featuredWatchBattleId,proto3" json:"featured_watch_battle_id,omitempty"`
+	IsGoldLeyline         bool                   `protobuf:"varint,12,opt,name=is_gold_leyline,json=isGoldLeyline,proto3" json:"is_gold_leyline,omitempty"`                      // 当前小时 1.5x 金脉(全服自然聚堆热点)
+	GarrisonCount         uint32                 `protobuf:"varint,13,opt,name=garrison_count,json=garrisonCount,proto3" json:"garrison_count,omitempty"`                        // 占领帮当前登记守旗槽数
+	RecommendedSceneId    uint64                 `protobuf:"varint,14,opt,name=recommended_scene_id,json=recommendedSceneId,proto3" json:"recommended_scene_id,omitempty"`       // 该灵脉推荐聚人分线 scene_id(前往灵脉直接 EnterScene)
+	RecommendedChannelNo  uint32                 `protobuf:"varint,15,opt,name=recommended_channel_no,json=recommendedChannelNo,proto3" json:"recommended_channel_no,omitempty"` // 推荐分线号
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GuildWarLeylineView) Reset() {
+	*x = GuildWarLeylineView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarLeylineView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarLeylineView) ProtoMessage() {}
+
+func (x *GuildWarLeylineView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarLeylineView.ProtoReflect.Descriptor instead.
+func (*GuildWarLeylineView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *GuildWarLeylineView) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *GuildWarLeylineView) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetOwnerGuildId() uint64 {
+	if x != nil {
+		return x.OwnerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetOwnerGuildName() string {
+	if x != nil {
+		return x.OwnerGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarLeylineView) GetBannerHp() uint32 {
+	if x != nil {
+		return x.BannerHp
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetBannerMaxHp() uint32 {
+	if x != nil {
+		return x.BannerMaxHp
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetShieldUntilMs() uint64 {
+	if x != nil {
+		return x.ShieldUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetActiveBattleCount() uint32 {
+	if x != nil {
+		return x.ActiveBattleCount
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetUnderSiege() bool {
+	if x != nil {
+		return x.UnderSiege
+	}
+	return false
+}
+
+func (x *GuildWarLeylineView) GetFeaturedWatchBattleId() uint64 {
+	if x != nil {
+		return x.FeaturedWatchBattleId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetIsGoldLeyline() bool {
+	if x != nil {
+		return x.IsGoldLeyline
+	}
+	return false
+}
+
+func (x *GuildWarLeylineView) GetGarrisonCount() uint32 {
+	if x != nil {
+		return x.GarrisonCount
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetRecommendedSceneId() uint64 {
+	if x != nil {
+		return x.RecommendedSceneId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineView) GetRecommendedChannelNo() uint32 {
+	if x != nil {
+		return x.RecommendedChannelNo
+	}
+	return 0
+}
+
+type GuildWarMilestoneView struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	MilestoneId        uint32                 `protobuf:"varint,1,opt,name=milestone_id,json=milestoneId,proto3" json:"milestone_id,omitempty"`
+	RequiredMerit      uint64                 `protobuf:"varint,2,opt,name=required_merit,json=requiredMerit,proto3" json:"required_merit,omitempty"`
+	GuildMerit         uint64                 `protobuf:"varint,3,opt,name=guild_merit,json=guildMerit,proto3" json:"guild_merit,omitempty"`
+	Claimed            bool                   `protobuf:"varint,4,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	Claimable          bool                   `protobuf:"varint,5,opt,name=claimable,proto3" json:"claimable,omitempty"`
+	RewardPreview      string                 `protobuf:"bytes,6,opt,name=reward_preview,json=rewardPreview,proto3" json:"reward_preview,omitempty"`
+	RewardItems        []*GuildRewardItem     `protobuf:"bytes,7,rep,name=reward_items,json=rewardItems,proto3" json:"reward_items,omitempty"`
+	RewardSilver       uint64                 `protobuf:"varint,8,opt,name=reward_silver,json=rewardSilver,proto3" json:"reward_silver,omitempty"`
+	RewardContribution uint64                 `protobuf:"varint,9,opt,name=reward_contribution,json=rewardContribution,proto3" json:"reward_contribution,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GuildWarMilestoneView) Reset() {
+	*x = GuildWarMilestoneView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarMilestoneView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarMilestoneView) ProtoMessage() {}
+
+func (x *GuildWarMilestoneView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarMilestoneView.ProtoReflect.Descriptor instead.
+func (*GuildWarMilestoneView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *GuildWarMilestoneView) GetMilestoneId() uint32 {
+	if x != nil {
+		return x.MilestoneId
+	}
+	return 0
+}
+
+func (x *GuildWarMilestoneView) GetRequiredMerit() uint64 {
+	if x != nil {
+		return x.RequiredMerit
+	}
+	return 0
+}
+
+func (x *GuildWarMilestoneView) GetGuildMerit() uint64 {
+	if x != nil {
+		return x.GuildMerit
+	}
+	return 0
+}
+
+func (x *GuildWarMilestoneView) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
+func (x *GuildWarMilestoneView) GetClaimable() bool {
+	if x != nil {
+		return x.Claimable
+	}
+	return false
+}
+
+func (x *GuildWarMilestoneView) GetRewardPreview() string {
+	if x != nil {
+		return x.RewardPreview
+	}
+	return ""
+}
+
+func (x *GuildWarMilestoneView) GetRewardItems() []*GuildRewardItem {
+	if x != nil {
+		return x.RewardItems
+	}
+	return nil
+}
+
+func (x *GuildWarMilestoneView) GetRewardSilver() uint64 {
+	if x != nil {
+		return x.RewardSilver
+	}
+	return 0
+}
+
+func (x *GuildWarMilestoneView) GetRewardContribution() uint64 {
+	if x != nil {
+		return x.RewardContribution
+	}
+	return 0
+}
+
+type GuildWarDividendView struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	ClaimableCount        uint32                 `protobuf:"varint,1,opt,name=claimable_count,json=claimableCount,proto3" json:"claimable_count,omitempty"`
+	ClaimedThisWeek       uint32                 `protobuf:"varint,2,opt,name=claimed_this_week,json=claimedThisWeek,proto3" json:"claimed_this_week,omitempty"`
+	WeeklyCap             uint32                 `protobuf:"varint,3,opt,name=weekly_cap,json=weeklyCap,proto3" json:"weekly_cap,omitempty"`
+	GuildProducedThisWeek uint32                 `protobuf:"varint,4,opt,name=guild_produced_this_week,json=guildProducedThisWeek,proto3" json:"guild_produced_this_week,omitempty"`
+	GuildWeeklyCap        uint32                 `protobuf:"varint,5,opt,name=guild_weekly_cap,json=guildWeeklyCap,proto3" json:"guild_weekly_cap,omitempty"`
+	MinPersonalMerit      uint64                 `protobuf:"varint,6,opt,name=min_personal_merit,json=minPersonalMerit,proto3" json:"min_personal_merit,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GuildWarDividendView) Reset() {
+	*x = GuildWarDividendView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarDividendView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarDividendView) ProtoMessage() {}
+
+func (x *GuildWarDividendView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarDividendView.ProtoReflect.Descriptor instead.
+func (*GuildWarDividendView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *GuildWarDividendView) GetClaimableCount() uint32 {
+	if x != nil {
+		return x.ClaimableCount
+	}
+	return 0
+}
+
+func (x *GuildWarDividendView) GetClaimedThisWeek() uint32 {
+	if x != nil {
+		return x.ClaimedThisWeek
+	}
+	return 0
+}
+
+func (x *GuildWarDividendView) GetWeeklyCap() uint32 {
+	if x != nil {
+		return x.WeeklyCap
+	}
+	return 0
+}
+
+func (x *GuildWarDividendView) GetGuildProducedThisWeek() uint32 {
+	if x != nil {
+		return x.GuildProducedThisWeek
+	}
+	return 0
+}
+
+func (x *GuildWarDividendView) GetGuildWeeklyCap() uint32 {
+	if x != nil {
+		return x.GuildWeeklyCap
+	}
+	return 0
+}
+
+func (x *GuildWarDividendView) GetMinPersonalMerit() uint64 {
+	if x != nil {
+		return x.MinPersonalMerit
+	}
+	return 0
+}
+
+type GuildWarStreakBountyView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId          uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName        string                 `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	GuildId           uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	GuildName         string                 `protobuf:"bytes,4,opt,name=guild_name,json=guildName,proto3" json:"guild_name,omitempty"`
+	Streak            uint32                 `protobuf:"varint,5,opt,name=streak,proto3" json:"streak,omitempty"`
+	BonusContribution uint64                 `protobuf:"varint,6,opt,name=bonus_contribution,json=bonusContribution,proto3" json:"bonus_contribution,omitempty"`
+	BonusSilver       uint64                 `protobuf:"varint,7,opt,name=bonus_silver,json=bonusSilver,proto3" json:"bonus_silver,omitempty"`
+	InBattle          bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`
+	BattleId          uint64                 `protobuf:"varint,9,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildWarStreakBountyView) Reset() {
+	*x = GuildWarStreakBountyView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarStreakBountyView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarStreakBountyView) ProtoMessage() {}
+
+func (x *GuildWarStreakBountyView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarStreakBountyView.ProtoReflect.Descriptor instead.
+func (*GuildWarStreakBountyView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *GuildWarStreakBountyView) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarStreakBountyView) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *GuildWarStreakBountyView) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarStreakBountyView) GetGuildName() string {
+	if x != nil {
+		return x.GuildName
+	}
+	return ""
+}
+
+func (x *GuildWarStreakBountyView) GetStreak() uint32 {
+	if x != nil {
+		return x.Streak
+	}
+	return 0
+}
+
+func (x *GuildWarStreakBountyView) GetBonusContribution() uint64 {
+	if x != nil {
+		return x.BonusContribution
+	}
+	return 0
+}
+
+func (x *GuildWarStreakBountyView) GetBonusSilver() uint64 {
+	if x != nil {
+		return x.BonusSilver
+	}
+	return 0
+}
+
+func (x *GuildWarStreakBountyView) GetInBattle() bool {
+	if x != nil {
+		return x.InBattle
+	}
+	return false
+}
+
+func (x *GuildWarStreakBountyView) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type GuildWarLiveTargetView struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName     string                 `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	GuildId        uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	GuildName      string                 `protobuf:"bytes,4,opt,name=guild_name,json=guildName,proto3" json:"guild_name,omitempty"`
+	Level          uint32                 `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
+	PetName        string                 `protobuf:"bytes,6,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
+	PartySize      uint32                 `protobuf:"varint,7,opt,name=party_size,json=partySize,proto3" json:"party_size,omitempty"`
+	Streak         uint32                 `protobuf:"varint,8,opt,name=streak,proto3" json:"streak,omitempty"`
+	InBattle       bool                   `protobuf:"varint,9,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`
+	BattleId       uint64                 `protobuf:"varint,10,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	LeylineId      uint32                 `protobuf:"varint,11,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	IsRivalGuild   bool                   `protobuf:"varint,12,opt,name=is_rival_guild,json=isRivalGuild,proto3" json:"is_rival_guild,omitempty"`
+	ActiveBountyId uint64                 `protobuf:"varint,13,opt,name=active_bounty_id,json=activeBountyId,proto3" json:"active_bounty_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GuildWarLiveTargetView) Reset() {
+	*x = GuildWarLiveTargetView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[75]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarLiveTargetView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarLiveTargetView) ProtoMessage() {}
+
+func (x *GuildWarLiveTargetView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[75]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarLiveTargetView.ProtoReflect.Descriptor instead.
+func (*GuildWarLiveTargetView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{75}
+}
+
+func (x *GuildWarLiveTargetView) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *GuildWarLiveTargetView) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetGuildName() string {
+	if x != nil {
+		return x.GuildName
+	}
+	return ""
+}
+
+func (x *GuildWarLiveTargetView) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetPetName() string {
+	if x != nil {
+		return x.PetName
+	}
+	return ""
+}
+
+func (x *GuildWarLiveTargetView) GetPartySize() uint32 {
+	if x != nil {
+		return x.PartySize
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetStreak() uint32 {
+	if x != nil {
+		return x.Streak
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetInBattle() bool {
+	if x != nil {
+		return x.InBattle
+	}
+	return false
+}
+
+func (x *GuildWarLiveTargetView) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarLiveTargetView) GetIsRivalGuild() bool {
+	if x != nil {
+		return x.IsRivalGuild
+	}
+	return false
+}
+
+func (x *GuildWarLiveTargetView) GetActiveBountyId() uint64 {
+	if x != nil {
+		return x.ActiveBountyId
+	}
+	return 0
+}
+
+type GuildWarGarrisonSlotView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotIndex     uint32                 `protobuf:"varint,1,opt,name=slot_index,json=slotIndex,proto3" json:"slot_index,omitempty"`
+	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName    string                 `protobuf:"bytes,3,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	Level         uint32                 `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
+	AppearanceId  string                 `protobuf:"bytes,5,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	PetName       string                 `protobuf:"bytes,6,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
+	PetTableId    uint32                 `protobuf:"varint,7,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
+	UpdatedMs     uint64                 `protobuf:"varint,8,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildWarGarrisonSlotView) Reset() {
+	*x = GuildWarGarrisonSlotView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarGarrisonSlotView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarGarrisonSlotView) ProtoMessage() {}
+
+func (x *GuildWarGarrisonSlotView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarGarrisonSlotView.ProtoReflect.Descriptor instead.
+func (*GuildWarGarrisonSlotView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *GuildWarGarrisonSlotView) GetSlotIndex() uint32 {
+	if x != nil {
+		return x.SlotIndex
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonSlotView) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonSlotView) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonSlotView) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonSlotView) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonSlotView) GetPetName() string {
+	if x != nil {
+		return x.PetName
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonSlotView) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonSlotView) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+type GuildWarEnemyView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName    string                 `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	GuildId       uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	GuildName     string                 `protobuf:"bytes,4,opt,name=guild_name,json=guildName,proto3" json:"guild_name,omitempty"`
+	VictimName    string                 `protobuf:"bytes,5,opt,name=victim_name,json=victimName,proto3" json:"victim_name,omitempty"`
+	BattleKind    GuildWarBattleKind     `protobuf:"varint,6,opt,name=battle_kind,json=battleKind,proto3,enum=guildpb.GuildWarBattleKind" json:"battle_kind,omitempty"`
+	OccurredAtMs  uint64                 `protobuf:"varint,7,opt,name=occurred_at_ms,json=occurredAtMs,proto3" json:"occurred_at_ms,omitempty"`
+	CanPostBounty bool                   `protobuf:"varint,8,opt,name=can_post_bounty,json=canPostBounty,proto3" json:"can_post_bounty,omitempty"`
+	BlockedTipId  uint32                 `protobuf:"varint,9,opt,name=blocked_tip_id,json=blockedTipId,proto3" json:"blocked_tip_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildWarEnemyView) Reset() {
+	*x = GuildWarEnemyView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarEnemyView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarEnemyView) ProtoMessage() {}
+
+func (x *GuildWarEnemyView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarEnemyView.ProtoReflect.Descriptor instead.
+func (*GuildWarEnemyView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *GuildWarEnemyView) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarEnemyView) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *GuildWarEnemyView) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarEnemyView) GetGuildName() string {
+	if x != nil {
+		return x.GuildName
+	}
+	return ""
+}
+
+func (x *GuildWarEnemyView) GetVictimName() string {
+	if x != nil {
+		return x.VictimName
+	}
+	return ""
+}
+
+func (x *GuildWarEnemyView) GetBattleKind() GuildWarBattleKind {
+	if x != nil {
+		return x.BattleKind
+	}
+	return GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_UNSPECIFIED
+}
+
+func (x *GuildWarEnemyView) GetOccurredAtMs() uint64 {
+	if x != nil {
+		return x.OccurredAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarEnemyView) GetCanPostBounty() bool {
+	if x != nil {
+		return x.CanPostBounty
+	}
+	return false
+}
+
+func (x *GuildWarEnemyView) GetBlockedTipId() uint32 {
+	if x != nil {
+		return x.BlockedTipId
+	}
+	return 0
+}
+
+type GuildWarBountyView struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	BountyId           uint64                 `protobuf:"varint,1,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"`
+	TargetPlayerId     uint64                 `protobuf:"varint,2,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	TargetName         string                 `protobuf:"bytes,3,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	TargetGuildId      uint64                 `protobuf:"varint,4,opt,name=target_guild_id,json=targetGuildId,proto3" json:"target_guild_id,omitempty"`
+	TargetGuildName    string                 `protobuf:"bytes,5,opt,name=target_guild_name,json=targetGuildName,proto3" json:"target_guild_name,omitempty"`
+	IssuerGuildId      uint64                 `protobuf:"varint,6,opt,name=issuer_guild_id,json=issuerGuildId,proto3" json:"issuer_guild_id,omitempty"`
+	IssuerGuildName    string                 `protobuf:"bytes,7,opt,name=issuer_guild_name,json=issuerGuildName,proto3" json:"issuer_guild_name,omitempty"`
+	Tier               GuildWarBountyTier     `protobuf:"varint,8,opt,name=tier,proto3,enum=guildpb.GuildWarBountyTier" json:"tier,omitempty"`
+	RewardSilver       uint64                 `protobuf:"varint,9,opt,name=reward_silver,json=rewardSilver,proto3" json:"reward_silver,omitempty"`
+	PublicBoard        bool                   `protobuf:"varint,10,opt,name=public_board,json=publicBoard,proto3" json:"public_board,omitempty"`
+	Status             GuildWarBountyStatus   `protobuf:"varint,11,opt,name=status,proto3,enum=guildpb.GuildWarBountyStatus" json:"status,omitempty"`
+	CounterKills       uint32                 `protobuf:"varint,12,opt,name=counter_kills,json=counterKills,proto3" json:"counter_kills,omitempty"`
+	CounterKillsToTear uint32                 `protobuf:"varint,13,opt,name=counter_kills_to_tear,json=counterKillsToTear,proto3" json:"counter_kills_to_tear,omitempty"`
+	ExpiresAtMs        uint64                 `protobuf:"varint,14,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	LastSceneConfigId  uint32                 `protobuf:"varint,15,opt,name=last_scene_config_id,json=lastSceneConfigId,proto3" json:"last_scene_config_id,omitempty"`
+	LastChannelNo      uint32                 `protobuf:"varint,16,opt,name=last_channel_no,json=lastChannelNo,proto3" json:"last_channel_no,omitempty"`
+	TargetInSafeZone   bool                   `protobuf:"varint,17,opt,name=target_in_safe_zone,json=targetInSafeZone,proto3" json:"target_in_safe_zone,omitempty"`
+	TargetOnline       bool                   `protobuf:"varint,18,opt,name=target_online,json=targetOnline,proto3" json:"target_online,omitempty"`
+	NextTrackAtMs      uint64                 `protobuf:"varint,19,opt,name=next_track_at_ms,json=nextTrackAtMs,proto3" json:"next_track_at_ms,omitempty"`
+	CanDirectAttack    bool                   `protobuf:"varint,20,opt,name=can_direct_attack,json=canDirectAttack,proto3" json:"can_direct_attack,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *GuildWarBountyView) Reset() {
+	*x = GuildWarBountyView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarBountyView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarBountyView) ProtoMessage() {}
+
+func (x *GuildWarBountyView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarBountyView.ProtoReflect.Descriptor instead.
+func (*GuildWarBountyView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *GuildWarBountyView) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *GuildWarBountyView) GetTargetGuildId() uint64 {
+	if x != nil {
+		return x.TargetGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetTargetGuildName() string {
+	if x != nil {
+		return x.TargetGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarBountyView) GetIssuerGuildId() uint64 {
+	if x != nil {
+		return x.IssuerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetIssuerGuildName() string {
+	if x != nil {
+		return x.IssuerGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarBountyView) GetTier() GuildWarBountyTier {
+	if x != nil {
+		return x.Tier
+	}
+	return GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED
+}
+
+func (x *GuildWarBountyView) GetRewardSilver() uint64 {
+	if x != nil {
+		return x.RewardSilver
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetPublicBoard() bool {
+	if x != nil {
+		return x.PublicBoard
+	}
+	return false
+}
+
+func (x *GuildWarBountyView) GetStatus() GuildWarBountyStatus {
+	if x != nil {
+		return x.Status
+	}
+	return GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED
+}
+
+func (x *GuildWarBountyView) GetCounterKills() uint32 {
+	if x != nil {
+		return x.CounterKills
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetCounterKillsToTear() uint32 {
+	if x != nil {
+		return x.CounterKillsToTear
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetExpiresAtMs() uint64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetLastSceneConfigId() uint32 {
+	if x != nil {
+		return x.LastSceneConfigId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetLastChannelNo() uint32 {
+	if x != nil {
+		return x.LastChannelNo
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetTargetInSafeZone() bool {
+	if x != nil {
+		return x.TargetInSafeZone
+	}
+	return false
+}
+
+func (x *GuildWarBountyView) GetTargetOnline() bool {
+	if x != nil {
+		return x.TargetOnline
+	}
+	return false
+}
+
+func (x *GuildWarBountyView) GetNextTrackAtMs() uint64 {
+	if x != nil {
+		return x.NextTrackAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBountyView) GetCanDirectAttack() bool {
+	if x != nil {
+		return x.CanDirectAttack
+	}
+	return false
+}
+
+type GuildWarRecentLogView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	BattleId          uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	WarBattleKind     GuildWarBattleKind     `protobuf:"varint,2,opt,name=war_battle_kind,json=warBattleKind,proto3,enum=guildpb.GuildWarBattleKind" json:"war_battle_kind,omitempty"`
+	LeylineId         uint32                 `protobuf:"varint,3,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	AttackerGuildName string                 `protobuf:"bytes,4,opt,name=attacker_guild_name,json=attackerGuildName,proto3" json:"attacker_guild_name,omitempty"`
+	DefenderGuildName string                 `protobuf:"bytes,5,opt,name=defender_guild_name,json=defenderGuildName,proto3" json:"defender_guild_name,omitempty"`
+	AttackerSummary   string                 `protobuf:"bytes,6,opt,name=attacker_summary,json=attackerSummary,proto3" json:"attacker_summary,omitempty"`
+	DefenderSummary   string                 `protobuf:"bytes,7,opt,name=defender_summary,json=defenderSummary,proto3" json:"defender_summary,omitempty"`
+	Outcome           uint32                 `protobuf:"varint,8,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Rounds            uint32                 `protobuf:"varint,9,opt,name=rounds,proto3" json:"rounds,omitempty"`
+	BannerHpDelta     int32                  `protobuf:"varint,10,opt,name=banner_hp_delta,json=bannerHpDelta,proto3" json:"banner_hp_delta,omitempty"`
+	BountyOutcomeTag  uint32                 `protobuf:"varint,11,opt,name=bounty_outcome_tag,json=bountyOutcomeTag,proto3" json:"bounty_outcome_tag,omitempty"`
+	SelfParticipated  bool                   `protobuf:"varint,12,opt,name=self_participated,json=selfParticipated,proto3" json:"self_participated,omitempty"`
+	FinishedAtMs      uint64                 `protobuf:"varint,13,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildWarRecentLogView) Reset() {
+	*x = GuildWarRecentLogView{}
+	mi := &file_proto_guild_guild_proto_msgTypes[79]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarRecentLogView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarRecentLogView) ProtoMessage() {}
+
+func (x *GuildWarRecentLogView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[79]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarRecentLogView.ProtoReflect.Descriptor instead.
+func (*GuildWarRecentLogView) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{79}
+}
+
+func (x *GuildWarRecentLogView) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetWarBattleKind() GuildWarBattleKind {
+	if x != nil {
+		return x.WarBattleKind
+	}
+	return GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_UNSPECIFIED
+}
+
+func (x *GuildWarRecentLogView) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetAttackerGuildName() string {
+	if x != nil {
+		return x.AttackerGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarRecentLogView) GetDefenderGuildName() string {
+	if x != nil {
+		return x.DefenderGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarRecentLogView) GetAttackerSummary() string {
+	if x != nil {
+		return x.AttackerSummary
+	}
+	return ""
+}
+
+func (x *GuildWarRecentLogView) GetDefenderSummary() string {
+	if x != nil {
+		return x.DefenderSummary
+	}
+	return ""
+}
+
+func (x *GuildWarRecentLogView) GetOutcome() uint32 {
+	if x != nil {
+		return x.Outcome
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetRounds() uint32 {
+	if x != nil {
+		return x.Rounds
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetBannerHpDelta() int32 {
+	if x != nil {
+		return x.BannerHpDelta
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetBountyOutcomeTag() uint32 {
+	if x != nil {
+		return x.BountyOutcomeTag
+	}
+	return 0
+}
+
+func (x *GuildWarRecentLogView) GetSelfParticipated() bool {
+	if x != nil {
+		return x.SelfParticipated
+	}
+	return false
+}
+
+func (x *GuildWarRecentLogView) GetFinishedAtMs() uint64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+type GetGuildWarOverviewRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGuildWarOverviewRequest) Reset() {
+	*x = GetGuildWarOverviewRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGuildWarOverviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGuildWarOverviewRequest) ProtoMessage() {}
+
+func (x *GetGuildWarOverviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGuildWarOverviewRequest.ProtoReflect.Descriptor instead.
+func (*GetGuildWarOverviewRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{80}
+}
+
+type GetGuildWarOverviewResponse struct {
+	state                  protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage           *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ServerTimeMs           uint64                      `protobuf:"varint,2,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	WeekKey                uint32                      `protobuf:"varint,3,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`
+	NextWeeklyResetMs      uint64                      `protobuf:"varint,4,opt,name=next_weekly_reset_ms,json=nextWeeklyResetMs,proto3" json:"next_weekly_reset_ms,omitempty"`
+	GoldLeylineId          uint32                      `protobuf:"varint,5,opt,name=gold_leyline_id,json=goldLeylineId,proto3" json:"gold_leyline_id,omitempty"`                       // 当小时 1.5x 金脉 ID(1..3)
+	GoldLeylineEndsAtMs    uint64                      `protobuf:"varint,6,opt,name=gold_leyline_ends_at_ms,json=goldLeylineEndsAtMs,proto3" json:"gold_leyline_ends_at_ms,omitempty"` // 当小时金脉轮换时刻
+	MyStance               *GuildWarStanceView         `protobuf:"bytes,7,opt,name=my_stance,json=myStance,proto3" json:"my_stance,omitempty"`
+	BannerHonor            *GuildWarBannerHonorView    `protobuf:"bytes,8,opt,name=banner_honor,json=bannerHonor,proto3" json:"banner_honor,omitempty"`
+	Leylines               []*GuildWarLeylineView      `protobuf:"bytes,9,rep,name=leylines,proto3" json:"leylines,omitempty"`
+	Milestones             []*GuildWarMilestoneView    `protobuf:"bytes,10,rep,name=milestones,proto3" json:"milestones,omitempty"`
+	Dividend               *GuildWarDividendView       `protobuf:"bytes,11,opt,name=dividend,proto3" json:"dividend,omitempty"`
+	StreakBounties         []*GuildWarStreakBountyView `protobuf:"bytes,12,rep,name=streak_bounties,json=streakBounties,proto3" json:"streak_bounties,omitempty"`
+	LiveTargets            []*GuildWarLiveTargetView   `protobuf:"bytes,13,rep,name=live_targets,json=liveTargets,proto3" json:"live_targets,omitempty"`
+	GarrisonSlots          []*GuildWarGarrisonSlotView `protobuf:"bytes,14,rep,name=garrison_slots,json=garrisonSlots,proto3" json:"garrison_slots,omitempty"`
+	Enemies                []*GuildWarEnemyView        `protobuf:"bytes,15,rep,name=enemies,proto3" json:"enemies,omitempty"`
+	Bounties               []*GuildWarBountyView       `protobuf:"bytes,16,rep,name=bounties,proto3" json:"bounties,omitempty"`
+	RecentLogs             []*GuildWarRecentLogView    `protobuf:"bytes,17,rep,name=recent_logs,json=recentLogs,proto3" json:"recent_logs,omitempty"`
+	ActiveBattleId         uint64                      `protobuf:"varint,18,opt,name=active_battle_id,json=activeBattleId,proto3" json:"active_battle_id,omitempty"`
+	ContributionBalance    uint64                      `protobuf:"varint,19,opt,name=contribution_balance,json=contributionBalance,proto3" json:"contribution_balance,omitempty"`
+	PublicBountyUsedToday  uint32                      `protobuf:"varint,20,opt,name=public_bounty_used_today,json=publicBountyUsedToday,proto3" json:"public_bounty_used_today,omitempty"`
+	PublicBountyDailyLimit uint32                      `protobuf:"varint,21,opt,name=public_bounty_daily_limit,json=publicBountyDailyLimit,proto3" json:"public_bounty_daily_limit,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *GetGuildWarOverviewResponse) Reset() {
+	*x = GetGuildWarOverviewResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGuildWarOverviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGuildWarOverviewResponse) ProtoMessage() {}
+
+func (x *GetGuildWarOverviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGuildWarOverviewResponse.ProtoReflect.Descriptor instead.
+func (*GetGuildWarOverviewResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *GetGuildWarOverviewResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetServerTimeMs() uint64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetWeekKey() uint32 {
+	if x != nil {
+		return x.WeekKey
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetNextWeeklyResetMs() uint64 {
+	if x != nil {
+		return x.NextWeeklyResetMs
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetGoldLeylineId() uint32 {
+	if x != nil {
+		return x.GoldLeylineId
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetGoldLeylineEndsAtMs() uint64 {
+	if x != nil {
+		return x.GoldLeylineEndsAtMs
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetMyStance() *GuildWarStanceView {
+	if x != nil {
+		return x.MyStance
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetBannerHonor() *GuildWarBannerHonorView {
+	if x != nil {
+		return x.BannerHonor
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetLeylines() []*GuildWarLeylineView {
+	if x != nil {
+		return x.Leylines
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetMilestones() []*GuildWarMilestoneView {
+	if x != nil {
+		return x.Milestones
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetDividend() *GuildWarDividendView {
+	if x != nil {
+		return x.Dividend
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetStreakBounties() []*GuildWarStreakBountyView {
+	if x != nil {
+		return x.StreakBounties
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetLiveTargets() []*GuildWarLiveTargetView {
+	if x != nil {
+		return x.LiveTargets
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetGarrisonSlots() []*GuildWarGarrisonSlotView {
+	if x != nil {
+		return x.GarrisonSlots
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetEnemies() []*GuildWarEnemyView {
+	if x != nil {
+		return x.Enemies
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetBounties() []*GuildWarBountyView {
+	if x != nil {
+		return x.Bounties
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetRecentLogs() []*GuildWarRecentLogView {
+	if x != nil {
+		return x.RecentLogs
+	}
+	return nil
+}
+
+func (x *GetGuildWarOverviewResponse) GetActiveBattleId() uint64 {
+	if x != nil {
+		return x.ActiveBattleId
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetContributionBalance() uint64 {
+	if x != nil {
+		return x.ContributionBalance
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetPublicBountyUsedToday() uint32 {
+	if x != nil {
+		return x.PublicBountyUsedToday
+	}
+	return 0
+}
+
+func (x *GetGuildWarOverviewResponse) GetPublicBountyDailyLimit() uint32 {
+	if x != nil {
+		return x.PublicBountyDailyLimit
+	}
+	return 0
+}
+
+type SetGuildWarStanceRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SetPeaceMode     *bool                  `protobuf:"varint,1,opt,name=set_peace_mode,json=setPeaceMode,proto3,oneof" json:"set_peace_mode,omitempty"`
+	SetOpenChallenge *bool                  `protobuf:"varint,2,opt,name=set_open_challenge,json=setOpenChallenge,proto3,oneof" json:"set_open_challenge,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SetGuildWarStanceRequest) Reset() {
+	*x = SetGuildWarStanceRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGuildWarStanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGuildWarStanceRequest) ProtoMessage() {}
+
+func (x *SetGuildWarStanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGuildWarStanceRequest.ProtoReflect.Descriptor instead.
+func (*SetGuildWarStanceRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *SetGuildWarStanceRequest) GetSetPeaceMode() bool {
+	if x != nil && x.SetPeaceMode != nil {
+		return *x.SetPeaceMode
+	}
+	return false
+}
+
+func (x *SetGuildWarStanceRequest) GetSetOpenChallenge() bool {
+	if x != nil && x.SetOpenChallenge != nil {
+		return *x.SetOpenChallenge
+	}
+	return false
+}
+
+type SetGuildWarStanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	MyStance      *GuildWarStanceView    `protobuf:"bytes,2,opt,name=my_stance,json=myStance,proto3" json:"my_stance,omitempty"`
+	ServerTimeMs  uint64                 `protobuf:"varint,3,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetGuildWarStanceResponse) Reset() {
+	*x = SetGuildWarStanceResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetGuildWarStanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetGuildWarStanceResponse) ProtoMessage() {}
+
+func (x *SetGuildWarStanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetGuildWarStanceResponse.ProtoReflect.Descriptor instead.
+func (*SetGuildWarStanceResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *SetGuildWarStanceResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SetGuildWarStanceResponse) GetMyStance() *GuildWarStanceView {
+	if x != nil {
+		return x.MyStance
+	}
+	return nil
+}
+
+func (x *SetGuildWarStanceResponse) GetServerTimeMs() uint64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+type RegisterGuildWarGarrisonRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Action         uint32                 `protobuf:"varint,1,opt,name=action,proto3" json:"action,omitempty"`                                         // 1=登记/刷新本人守旗阵 / 2=下阵 / 3=帮主或长老置顶/移槽
+	TargetPlayerId uint64                 `protobuf:"varint,2,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"` // action=2/3 管理他人槽位时填
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RegisterGuildWarGarrisonRequest) Reset() {
+	*x = RegisterGuildWarGarrisonRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterGuildWarGarrisonRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterGuildWarGarrisonRequest) ProtoMessage() {}
+
+func (x *RegisterGuildWarGarrisonRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterGuildWarGarrisonRequest.ProtoReflect.Descriptor instead.
+func (*RegisterGuildWarGarrisonRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *RegisterGuildWarGarrisonRequest) GetAction() uint32 {
+	if x != nil {
+		return x.Action
+	}
+	return 0
+}
+
+func (x *RegisterGuildWarGarrisonRequest) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+type RegisterGuildWarGarrisonResponse struct {
+	state           protoimpl.MessageState      `protogen:"open.v1"`
+	ErrorMessage    *base.TipInfoMessage        `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	GarrisonSlots   []*GuildWarGarrisonSlotView `protobuf:"bytes,2,rep,name=garrison_slots,json=garrisonSlots,proto3" json:"garrison_slots,omitempty"`
+	NextRefreshAtMs uint64                      `protobuf:"varint,3,opt,name=next_refresh_at_ms,json=nextRefreshAtMs,proto3" json:"next_refresh_at_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RegisterGuildWarGarrisonResponse) Reset() {
+	*x = RegisterGuildWarGarrisonResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterGuildWarGarrisonResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterGuildWarGarrisonResponse) ProtoMessage() {}
+
+func (x *RegisterGuildWarGarrisonResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterGuildWarGarrisonResponse.ProtoReflect.Descriptor instead.
+func (*RegisterGuildWarGarrisonResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *RegisterGuildWarGarrisonResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RegisterGuildWarGarrisonResponse) GetGarrisonSlots() []*GuildWarGarrisonSlotView {
+	if x != nil {
+		return x.GarrisonSlots
+	}
+	return nil
+}
+
+func (x *RegisterGuildWarGarrisonResponse) GetNextRefreshAtMs() uint64 {
+	if x != nil {
+		return x.NextRefreshAtMs
+	}
+	return 0
+}
+
+type StartGuildWarBattleRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TargetKind      GuildWarTargetKind     `protobuf:"varint,1,opt,name=target_kind,json=targetKind,proto3,enum=guildpb.GuildWarTargetKind" json:"target_kind,omitempty"`
+	LeylineId       uint32                 `protobuf:"varint,2,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	TargetPlayerId  uint64                 `protobuf:"varint,3,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	BountyId        uint64                 `protobuf:"varint,4,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"`
+	ClientRequestId uint64                 `protobuf:"varint,5,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *StartGuildWarBattleRequest) Reset() {
+	*x = StartGuildWarBattleRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartGuildWarBattleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartGuildWarBattleRequest) ProtoMessage() {}
+
+func (x *StartGuildWarBattleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartGuildWarBattleRequest.ProtoReflect.Descriptor instead.
+func (*StartGuildWarBattleRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *StartGuildWarBattleRequest) GetTargetKind() GuildWarTargetKind {
+	if x != nil {
+		return x.TargetKind
+	}
+	return GuildWarTargetKind_GUILD_WAR_TARGET_KIND_UNSPECIFIED
+}
+
+func (x *StartGuildWarBattleRequest) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *StartGuildWarBattleRequest) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *StartGuildWarBattleRequest) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+func (x *StartGuildWarBattleRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type StartGuildWarBattleResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	BattleId         uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	WarBattleKind    GuildWarBattleKind     `protobuf:"varint,3,opt,name=war_battle_kind,json=warBattleKind,proto3,enum=guildpb.GuildWarBattleKind" json:"war_battle_kind,omitempty"`
+	OffenderPlayerId uint64                 `protobuf:"varint,4,opt,name=offender_player_id,json=offenderPlayerId,proto3" json:"offender_player_id,omitempty"`
+	OffenderBattleId uint64                 `protobuf:"varint,5,opt,name=offender_battle_id,json=offenderBattleId,proto3" json:"offender_battle_id,omitempty"` // 目标刚入战时返回其 battle_id 供一键观战
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *StartGuildWarBattleResponse) Reset() {
+	*x = StartGuildWarBattleResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartGuildWarBattleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartGuildWarBattleResponse) ProtoMessage() {}
+
+func (x *StartGuildWarBattleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartGuildWarBattleResponse.ProtoReflect.Descriptor instead.
+func (*StartGuildWarBattleResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *StartGuildWarBattleResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *StartGuildWarBattleResponse) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *StartGuildWarBattleResponse) GetWarBattleKind() GuildWarBattleKind {
+	if x != nil {
+		return x.WarBattleKind
+	}
+	return GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_UNSPECIFIED
+}
+
+func (x *StartGuildWarBattleResponse) GetOffenderPlayerId() uint64 {
+	if x != nil {
+		return x.OffenderPlayerId
+	}
+	return 0
+}
+
+func (x *StartGuildWarBattleResponse) GetOffenderBattleId() uint64 {
+	if x != nil {
+		return x.OffenderBattleId
+	}
+	return 0
+}
+
+type ClaimGuildWarMilestoneRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MilestoneId     uint32                 `protobuf:"varint,1,opt,name=milestone_id,json=milestoneId,proto3" json:"milestone_id,omitempty"`
+	ClientRequestId uint64                 `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ClaimGuildWarMilestoneRequest) Reset() {
+	*x = ClaimGuildWarMilestoneRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimGuildWarMilestoneRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimGuildWarMilestoneRequest) ProtoMessage() {}
+
+func (x *ClaimGuildWarMilestoneRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimGuildWarMilestoneRequest.ProtoReflect.Descriptor instead.
+func (*ClaimGuildWarMilestoneRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *ClaimGuildWarMilestoneRequest) GetMilestoneId() uint32 {
+	if x != nil {
+		return x.MilestoneId
+	}
+	return 0
+}
+
+func (x *ClaimGuildWarMilestoneRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type ClaimGuildWarMilestoneResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Milestone        *GuildWarMilestoneView `protobuf:"bytes,2,opt,name=milestone,proto3" json:"milestone,omitempty"`
+	AssetOrderStatus GuildAssetOrderStatus  `protobuf:"varint,3,opt,name=asset_order_status,json=assetOrderStatus,proto3,enum=guildpb.GuildAssetOrderStatus" json:"asset_order_status,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ClaimGuildWarMilestoneResponse) Reset() {
+	*x = ClaimGuildWarMilestoneResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimGuildWarMilestoneResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimGuildWarMilestoneResponse) ProtoMessage() {}
+
+func (x *ClaimGuildWarMilestoneResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimGuildWarMilestoneResponse.ProtoReflect.Descriptor instead.
+func (*ClaimGuildWarMilestoneResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *ClaimGuildWarMilestoneResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimGuildWarMilestoneResponse) GetMilestone() *GuildWarMilestoneView {
+	if x != nil {
+		return x.Milestone
+	}
+	return nil
+}
+
+func (x *ClaimGuildWarMilestoneResponse) GetAssetOrderStatus() GuildAssetOrderStatus {
+	if x != nil {
+		return x.AssetOrderStatus
+	}
+	return GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_UNSPECIFIED
+}
+
+type ClaimGuildWarDividendRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ClaimGuildWarDividendRequest) Reset() {
+	*x = ClaimGuildWarDividendRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimGuildWarDividendRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimGuildWarDividendRequest) ProtoMessage() {}
+
+func (x *ClaimGuildWarDividendRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimGuildWarDividendRequest.ProtoReflect.Descriptor instead.
+func (*ClaimGuildWarDividendRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *ClaimGuildWarDividendRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type ClaimGuildWarDividendResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClaimedCount     uint32                 `protobuf:"varint,2,opt,name=claimed_count,json=claimedCount,proto3" json:"claimed_count,omitempty"`
+	Dividend         *GuildWarDividendView  `protobuf:"bytes,3,opt,name=dividend,proto3" json:"dividend,omitempty"`
+	AssetOrderStatus GuildAssetOrderStatus  `protobuf:"varint,4,opt,name=asset_order_status,json=assetOrderStatus,proto3,enum=guildpb.GuildAssetOrderStatus" json:"asset_order_status,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ClaimGuildWarDividendResponse) Reset() {
+	*x = ClaimGuildWarDividendResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimGuildWarDividendResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimGuildWarDividendResponse) ProtoMessage() {}
+
+func (x *ClaimGuildWarDividendResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimGuildWarDividendResponse.ProtoReflect.Descriptor instead.
+func (*ClaimGuildWarDividendResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *ClaimGuildWarDividendResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimGuildWarDividendResponse) GetClaimedCount() uint32 {
+	if x != nil {
+		return x.ClaimedCount
+	}
+	return 0
+}
+
+func (x *ClaimGuildWarDividendResponse) GetDividend() *GuildWarDividendView {
+	if x != nil {
+		return x.Dividend
+	}
+	return nil
+}
+
+func (x *ClaimGuildWarDividendResponse) GetAssetOrderStatus() GuildAssetOrderStatus {
+	if x != nil {
+		return x.AssetOrderStatus
+	}
+	return GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_UNSPECIFIED
+}
+
+type PostGuildWarBountyRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TargetPlayerId  uint64                 `protobuf:"varint,1,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	Tier            GuildWarBountyTier     `protobuf:"varint,2,opt,name=tier,proto3,enum=guildpb.GuildWarBountyTier" json:"tier,omitempty"`
+	PublicBoard     bool                   `protobuf:"varint,3,opt,name=public_board,json=publicBoard,proto3" json:"public_board,omitempty"`
+	ClientRequestId uint64                 `protobuf:"varint,4,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PostGuildWarBountyRequest) Reset() {
+	*x = PostGuildWarBountyRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PostGuildWarBountyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PostGuildWarBountyRequest) ProtoMessage() {}
+
+func (x *PostGuildWarBountyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PostGuildWarBountyRequest.ProtoReflect.Descriptor instead.
+func (*PostGuildWarBountyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *PostGuildWarBountyRequest) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *PostGuildWarBountyRequest) GetTier() GuildWarBountyTier {
+	if x != nil {
+		return x.Tier
+	}
+	return GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED
+}
+
+func (x *PostGuildWarBountyRequest) GetPublicBoard() bool {
+	if x != nil {
+		return x.PublicBoard
+	}
+	return false
+}
+
+func (x *PostGuildWarBountyRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type PostGuildWarBountyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Bounty        *GuildWarBountyView    `protobuf:"bytes,2,opt,name=bounty,proto3" json:"bounty,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PostGuildWarBountyResponse) Reset() {
+	*x = PostGuildWarBountyResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PostGuildWarBountyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PostGuildWarBountyResponse) ProtoMessage() {}
+
+func (x *PostGuildWarBountyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PostGuildWarBountyResponse.ProtoReflect.Descriptor instead.
+func (*PostGuildWarBountyResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *PostGuildWarBountyResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PostGuildWarBountyResponse) GetBounty() *GuildWarBountyView {
+	if x != nil {
+		return x.Bounty
+	}
+	return nil
+}
+
+type TrackGuildWarBountyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BountyId      uint64                 `protobuf:"varint,1,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrackGuildWarBountyRequest) Reset() {
+	*x = TrackGuildWarBountyRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrackGuildWarBountyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrackGuildWarBountyRequest) ProtoMessage() {}
+
+func (x *TrackGuildWarBountyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrackGuildWarBountyRequest.ProtoReflect.Descriptor instead.
+func (*TrackGuildWarBountyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *TrackGuildWarBountyRequest) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+type TrackGuildWarBountyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	TargetOnline  bool                   `protobuf:"varint,2,opt,name=target_online,json=targetOnline,proto3" json:"target_online,omitempty"`
+	InSafeZone    bool                   `protobuf:"varint,3,opt,name=in_safe_zone,json=inSafeZone,proto3" json:"in_safe_zone,omitempty"`
+	SceneConfigId uint32                 `protobuf:"varint,4,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`
+	ChannelNo     uint32                 `protobuf:"varint,5,opt,name=channel_no,json=channelNo,proto3" json:"channel_no,omitempty"`
+	NextTrackAtMs uint64                 `protobuf:"varint,6,opt,name=next_track_at_ms,json=nextTrackAtMs,proto3" json:"next_track_at_ms,omitempty"`
+	SceneId       uint64                 `protobuf:"varint,7,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"` // 目标当前所在野外分线 scene_id(安全区或离线时为 0)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrackGuildWarBountyResponse) Reset() {
+	*x = TrackGuildWarBountyResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrackGuildWarBountyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrackGuildWarBountyResponse) ProtoMessage() {}
+
+func (x *TrackGuildWarBountyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrackGuildWarBountyResponse.ProtoReflect.Descriptor instead.
+func (*TrackGuildWarBountyResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *TrackGuildWarBountyResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *TrackGuildWarBountyResponse) GetTargetOnline() bool {
+	if x != nil {
+		return x.TargetOnline
+	}
+	return false
+}
+
+func (x *TrackGuildWarBountyResponse) GetInSafeZone() bool {
+	if x != nil {
+		return x.InSafeZone
+	}
+	return false
+}
+
+func (x *TrackGuildWarBountyResponse) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *TrackGuildWarBountyResponse) GetChannelNo() uint32 {
+	if x != nil {
+		return x.ChannelNo
+	}
+	return 0
+}
+
+func (x *TrackGuildWarBountyResponse) GetNextTrackAtMs() uint64 {
+	if x != nil {
+		return x.NextTrackAtMs
+	}
+	return 0
+}
+
+func (x *TrackGuildWarBountyResponse) GetSceneId() uint64 {
+	if x != nil {
+		return x.SceneId
+	}
+	return 0
+}
+
+type GetGuildWarBattleResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetGuildWarBattleResultRequest) Reset() {
+	*x = GetGuildWarBattleResultRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGuildWarBattleResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGuildWarBattleResultRequest) ProtoMessage() {}
+
+func (x *GetGuildWarBattleResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGuildWarBattleResultRequest.ProtoReflect.Descriptor instead.
+func (*GetGuildWarBattleResultRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *GetGuildWarBattleResultRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type GetGuildWarBattleResultResponse struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage              *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Settled                   bool                   `protobuf:"varint,2,opt,name=settled,proto3" json:"settled,omitempty"`
+	BattleId                  uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	WarBattleKind             GuildWarBattleKind     `protobuf:"varint,4,opt,name=war_battle_kind,json=warBattleKind,proto3,enum=guildpb.GuildWarBattleKind" json:"war_battle_kind,omitempty"`
+	Outcome                   uint32                 `protobuf:"varint,5,opt,name=outcome,proto3" json:"outcome,omitempty"`
+	Rounds                    uint32                 `protobuf:"varint,6,opt,name=rounds,proto3" json:"rounds,omitempty"`
+	MaterialUnitsAdded        uint32                 `protobuf:"varint,7,opt,name=material_units_added,json=materialUnitsAdded,proto3" json:"material_units_added,omitempty"`
+	MaterialTradableAdded     uint32                 `protobuf:"varint,8,opt,name=material_tradable_added,json=materialTradableAdded,proto3" json:"material_tradable_added,omitempty"`
+	MaterialPvpLossIneligible bool                   `protobuf:"varint,9,opt,name=material_pvp_loss_ineligible,json=materialPvpLossIneligible,proto3" json:"material_pvp_loss_ineligible,omitempty"`
+	ContributionGain          uint64                 `protobuf:"varint,10,opt,name=contribution_gain,json=contributionGain,proto3" json:"contribution_gain,omitempty"`
+	SilverGain                uint64                 `protobuf:"varint,11,opt,name=silver_gain,json=silverGain,proto3" json:"silver_gain,omitempty"`
+	GuildFundsGain            uint64                 `protobuf:"varint,12,opt,name=guild_funds_gain,json=guildFundsGain,proto3" json:"guild_funds_gain,omitempty"`
+	MeritGain                 uint64                 `protobuf:"varint,13,opt,name=merit_gain,json=meritGain,proto3" json:"merit_gain,omitempty"`
+	StreakAfter               uint32                 `protobuf:"varint,14,opt,name=streak_after,json=streakAfter,proto3" json:"streak_after,omitempty"`
+	BountyJackpotContribution uint64                 `protobuf:"varint,15,opt,name=bounty_jackpot_contribution,json=bountyJackpotContribution,proto3" json:"bounty_jackpot_contribution,omitempty"`
+	BountyJackpotSilver       uint64                 `protobuf:"varint,16,opt,name=bounty_jackpot_silver,json=bountyJackpotSilver,proto3" json:"bounty_jackpot_silver,omitempty"`
+	BountyOutcomeTag          uint32                 `protobuf:"varint,17,opt,name=bounty_outcome_tag,json=bountyOutcomeTag,proto3" json:"bounty_outcome_tag,omitempty"` // 0无/1终结连胜/2追杀成功/3反杀成功/4反杀撕单/5破旗首功
+	DiminishPercent           uint32                 `protobuf:"varint,18,opt,name=diminish_percent,json=diminishPercent,proto3" json:"diminish_percent,omitempty"`      // 100/50/20/0
+	LeylineId                 uint32                 `protobuf:"varint,19,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	BannerHpBefore            uint32                 `protobuf:"varint,20,opt,name=banner_hp_before,json=bannerHpBefore,proto3" json:"banner_hp_before,omitempty"`
+	BannerHpAfter             uint32                 `protobuf:"varint,21,opt,name=banner_hp_after,json=bannerHpAfter,proto3" json:"banner_hp_after,omitempty"`
+	BannerShielded            bool                   `protobuf:"varint,22,opt,name=banner_shielded,json=bannerShielded,proto3" json:"banner_shielded,omitempty"`
+	CanPostBounty             bool                   `protobuf:"varint,23,opt,name=can_post_bounty,json=canPostBounty,proto3" json:"can_post_bounty,omitempty"`
+	BountyCandidatePlayerId   uint64                 `protobuf:"varint,24,opt,name=bounty_candidate_player_id,json=bountyCandidatePlayerId,proto3" json:"bounty_candidate_player_id,omitempty"`
+	BountyCandidateName       string                 `protobuf:"bytes,25,opt,name=bounty_candidate_name,json=bountyCandidateName,proto3" json:"bounty_candidate_name,omitempty"`
+	GoldLeylineBonus          bool                   `protobuf:"varint,26,opt,name=gold_leyline_bonus,json=goldLeylineBonus,proto3" json:"gold_leyline_bonus,omitempty"`
+	RivalryBonus              bool                   `protobuf:"varint,27,opt,name=rivalry_bonus,json=rivalryBonus,proto3" json:"rivalry_bonus,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *GetGuildWarBattleResultResponse) Reset() {
+	*x = GetGuildWarBattleResultResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetGuildWarBattleResultResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetGuildWarBattleResultResponse) ProtoMessage() {}
+
+func (x *GetGuildWarBattleResultResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetGuildWarBattleResultResponse.ProtoReflect.Descriptor instead.
+func (*GetGuildWarBattleResultResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *GetGuildWarBattleResultResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetGuildWarBattleResultResponse) GetSettled() bool {
+	if x != nil {
+		return x.Settled
+	}
+	return false
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetWarBattleKind() GuildWarBattleKind {
+	if x != nil {
+		return x.WarBattleKind
+	}
+	return GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_UNSPECIFIED
+}
+
+func (x *GetGuildWarBattleResultResponse) GetOutcome() uint32 {
+	if x != nil {
+		return x.Outcome
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetRounds() uint32 {
+	if x != nil {
+		return x.Rounds
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetMaterialUnitsAdded() uint32 {
+	if x != nil {
+		return x.MaterialUnitsAdded
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetMaterialTradableAdded() uint32 {
+	if x != nil {
+		return x.MaterialTradableAdded
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetMaterialPvpLossIneligible() bool {
+	if x != nil {
+		return x.MaterialPvpLossIneligible
+	}
+	return false
+}
+
+func (x *GetGuildWarBattleResultResponse) GetContributionGain() uint64 {
+	if x != nil {
+		return x.ContributionGain
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetSilverGain() uint64 {
+	if x != nil {
+		return x.SilverGain
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetGuildFundsGain() uint64 {
+	if x != nil {
+		return x.GuildFundsGain
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetMeritGain() uint64 {
+	if x != nil {
+		return x.MeritGain
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetStreakAfter() uint32 {
+	if x != nil {
+		return x.StreakAfter
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBountyJackpotContribution() uint64 {
+	if x != nil {
+		return x.BountyJackpotContribution
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBountyJackpotSilver() uint64 {
+	if x != nil {
+		return x.BountyJackpotSilver
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBountyOutcomeTag() uint32 {
+	if x != nil {
+		return x.BountyOutcomeTag
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetDiminishPercent() uint32 {
+	if x != nil {
+		return x.DiminishPercent
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBannerHpBefore() uint32 {
+	if x != nil {
+		return x.BannerHpBefore
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBannerHpAfter() uint32 {
+	if x != nil {
+		return x.BannerHpAfter
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBannerShielded() bool {
+	if x != nil {
+		return x.BannerShielded
+	}
+	return false
+}
+
+func (x *GetGuildWarBattleResultResponse) GetCanPostBounty() bool {
+	if x != nil {
+		return x.CanPostBounty
+	}
+	return false
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBountyCandidatePlayerId() uint64 {
+	if x != nil {
+		return x.BountyCandidatePlayerId
+	}
+	return 0
+}
+
+func (x *GetGuildWarBattleResultResponse) GetBountyCandidateName() string {
+	if x != nil {
+		return x.BountyCandidateName
+	}
+	return ""
+}
+
+func (x *GetGuildWarBattleResultResponse) GetGoldLeylineBonus() bool {
+	if x != nil {
+		return x.GoldLeylineBonus
+	}
+	return false
+}
+
+func (x *GetGuildWarBattleResultResponse) GetRivalryBonus() bool {
+	if x != nil {
+		return x.RivalryBonus
+	}
+	return false
+}
+
+type GuildWarAlertS2C struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Kind              GuildWarAlertKind      `protobuf:"varint,1,opt,name=kind,proto3,enum=guildpb.GuildWarAlertKind" json:"kind,omitempty"`
+	LeylineId         uint32                 `protobuf:"varint,2,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	SceneConfigId     uint32                 `protobuf:"varint,3,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`
+	ChannelNo         uint32                 `protobuf:"varint,4,opt,name=channel_no,json=channelNo,proto3" json:"channel_no,omitempty"`
+	AttackerGuildName string                 `protobuf:"bytes,5,opt,name=attacker_guild_name,json=attackerGuildName,proto3" json:"attacker_guild_name,omitempty"`
+	DefenderGuildName string                 `protobuf:"bytes,6,opt,name=defender_guild_name,json=defenderGuildName,proto3" json:"defender_guild_name,omitempty"`
+	ActorName         string                 `protobuf:"bytes,7,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
+	TargetName        string                 `protobuf:"bytes,8,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"`
+	BannerHpPercent   uint32                 `protobuf:"varint,9,opt,name=banner_hp_percent,json=bannerHpPercent,proto3" json:"banner_hp_percent,omitempty"`
+	BountyId          uint64                 `protobuf:"varint,10,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"`
+	BattleId          uint64                 `protobuf:"varint,11,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	RewardSilver      uint64                 `protobuf:"varint,12,opt,name=reward_silver,json=rewardSilver,proto3" json:"reward_silver,omitempty"`
+	StreakCount       uint32                 `protobuf:"varint,13,opt,name=streak_count,json=streakCount,proto3" json:"streak_count,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildWarAlertS2C) Reset() {
+	*x = GuildWarAlertS2C{}
+	mi := &file_proto_guild_guild_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarAlertS2C) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarAlertS2C) ProtoMessage() {}
+
+func (x *GuildWarAlertS2C) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarAlertS2C.ProtoReflect.Descriptor instead.
+func (*GuildWarAlertS2C) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *GuildWarAlertS2C) GetKind() GuildWarAlertKind {
+	if x != nil {
+		return x.Kind
+	}
+	return GuildWarAlertKind_GUILD_WAR_ALERT_KIND_UNSPECIFIED
+}
+
+func (x *GuildWarAlertS2C) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetChannelNo() uint32 {
+	if x != nil {
+		return x.ChannelNo
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetAttackerGuildName() string {
+	if x != nil {
+		return x.AttackerGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarAlertS2C) GetDefenderGuildName() string {
+	if x != nil {
+		return x.DefenderGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarAlertS2C) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *GuildWarAlertS2C) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *GuildWarAlertS2C) GetBannerHpPercent() uint32 {
+	if x != nil {
+		return x.BannerHpPercent
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetRewardSilver() uint64 {
+	if x != nil {
+		return x.RewardSilver
+	}
+	return 0
+}
+
+func (x *GuildWarAlertS2C) GetStreakCount() uint32 {
+	if x != nil {
+		return x.StreakCount
+	}
+	return 0
+}
+
+type FieldWarTargetBrief struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId                 uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName               string                 `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	GuildId                  uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	GuildName                string                 `protobuf:"bytes,4,opt,name=guild_name,json=guildName,proto3" json:"guild_name,omitempty"`
+	PeaceMode                bool                   `protobuf:"varint,5,opt,name=peace_mode,json=peaceMode,proto3" json:"peace_mode,omitempty"`
+	ProtectUntilMs           uint64                 `protobuf:"varint,6,opt,name=protect_until_ms,json=protectUntilMs,proto3" json:"protect_until_ms,omitempty"`
+	Streak                   uint32                 `protobuf:"varint,7,opt,name=streak,proto3" json:"streak,omitempty"`
+	InBattle                 bool                   `protobuf:"varint,8,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`
+	BattleId                 uint64                 `protobuf:"varint,9,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	IsRivalGuild             bool                   `protobuf:"varint,10,opt,name=is_rival_guild,json=isRivalGuild,proto3" json:"is_rival_guild,omitempty"`
+	ActiveBountyId           uint64                 `protobuf:"varint,11,opt,name=active_bounty_id,json=activeBountyId,proto3" json:"active_bounty_id,omitempty"`
+	ActiveBountyRewardSilver uint64                 `protobuf:"varint,12,opt,name=active_bounty_reward_silver,json=activeBountyRewardSilver,proto3" json:"active_bounty_reward_silver,omitempty"`
+	ActiveBountyTier         GuildWarBountyTier     `protobuf:"varint,13,opt,name=active_bounty_tier,json=activeBountyTier,proto3,enum=guildpb.GuildWarBountyTier" json:"active_bounty_tier,omitempty"`
+	CanAttackNow             bool                   `protobuf:"varint,14,opt,name=can_attack_now,json=canAttackNow,proto3" json:"can_attack_now,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *FieldWarTargetBrief) Reset() {
+	*x = FieldWarTargetBrief{}
+	mi := &file_proto_guild_guild_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FieldWarTargetBrief) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FieldWarTargetBrief) ProtoMessage() {}
+
+func (x *FieldWarTargetBrief) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FieldWarTargetBrief.ProtoReflect.Descriptor instead.
+func (*FieldWarTargetBrief) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *FieldWarTargetBrief) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *FieldWarTargetBrief) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetGuildName() string {
+	if x != nil {
+		return x.GuildName
+	}
+	return ""
+}
+
+func (x *FieldWarTargetBrief) GetPeaceMode() bool {
+	if x != nil {
+		return x.PeaceMode
+	}
+	return false
+}
+
+func (x *FieldWarTargetBrief) GetProtectUntilMs() uint64 {
+	if x != nil {
+		return x.ProtectUntilMs
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetStreak() uint32 {
+	if x != nil {
+		return x.Streak
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetInBattle() bool {
+	if x != nil {
+		return x.InBattle
+	}
+	return false
+}
+
+func (x *FieldWarTargetBrief) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetIsRivalGuild() bool {
+	if x != nil {
+		return x.IsRivalGuild
+	}
+	return false
+}
+
+func (x *FieldWarTargetBrief) GetActiveBountyId() uint64 {
+	if x != nil {
+		return x.ActiveBountyId
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetActiveBountyRewardSilver() uint64 {
+	if x != nil {
+		return x.ActiveBountyRewardSilver
+	}
+	return 0
+}
+
+func (x *FieldWarTargetBrief) GetActiveBountyTier() GuildWarBountyTier {
+	if x != nil {
+		return x.ActiveBountyTier
+	}
+	return GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED
+}
+
+func (x *FieldWarTargetBrief) GetCanAttackNow() bool {
+	if x != nil {
+		return x.CanAttackNow
+	}
+	return false
+}
+
+type InspectFieldWarTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerIds     []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"` // 同屏玩家 ID 列表(最多 30 个)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InspectFieldWarTargetsRequest) Reset() {
+	*x = InspectFieldWarTargetsRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InspectFieldWarTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InspectFieldWarTargetsRequest) ProtoMessage() {}
+
+func (x *InspectFieldWarTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InspectFieldWarTargetsRequest.ProtoReflect.Descriptor instead.
+func (*InspectFieldWarTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *InspectFieldWarTargetsRequest) GetPlayerIds() []uint64 {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+type InspectFieldWarTargetsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Targets       []*FieldWarTargetBrief `protobuf:"bytes,2,rep,name=targets,proto3" json:"targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InspectFieldWarTargetsResponse) Reset() {
+	*x = InspectFieldWarTargetsResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InspectFieldWarTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InspectFieldWarTargetsResponse) ProtoMessage() {}
+
+func (x *InspectFieldWarTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InspectFieldWarTargetsResponse.ProtoReflect.Descriptor instead.
+func (*InspectFieldWarTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{101}
+}
+
+func (x *InspectFieldWarTargetsResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *InspectFieldWarTargetsResponse) GetTargets() []*FieldWarTargetBrief {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
 var File_proto_guild_guild_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_proto_rawDesc = "" +
@@ -5081,7 +8492,333 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildIdJ\x04\b\x02\x10\x03\"\x82\x01\n" +
 	"\x1bGetGuildRankByGuildResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12-\n" +
-	"\x05entry\x18\x02 \x01(\v2\x17.guildpb.GuildRankEntryR\x05entry*\xc5\x04\n" +
+	"\x05entry\x18\x02 \x01(\v2\x17.guildpb.GuildRankEntryR\x05entry\"\xf9\x03\n" +
+	"\x12GuildWarStanceView\x12\x1d\n" +
+	"\n" +
+	"peace_mode\x18\x01 \x01(\bR\tpeaceMode\x12)\n" +
+	"\x11peace_ready_at_ms\x18\x02 \x01(\x04R\x0epeaceReadyAtMs\x12%\n" +
+	"\x0eopen_challenge\x18\x03 \x01(\bR\ropenChallenge\x12(\n" +
+	"\x10protect_until_ms\x18\x04 \x01(\x04R\x0eprotectUntilMs\x12\x1b\n" +
+	"\tmy_streak\x18\x05 \x01(\rR\bmyStreak\x12&\n" +
+	"\x0fmy_weekly_merit\x18\x06 \x01(\x04R\rmyWeeklyMerit\x125\n" +
+	"\x17my_bounty_payouts_today\x18\a \x01(\rR\x14myBountyPayoutsToday\x123\n" +
+	"\x16my_bounty_payout_limit\x18\b \x01(\rR\x13myBountyPayoutLimit\x125\n" +
+	"\x17bounty_protect_until_ms\x18\t \x01(\x04R\x14bountyProtectUntilMs\x127\n" +
+	"\x18next_garrison_refresh_ms\x18\n" +
+	" \x01(\x04R\x15nextGarrisonRefreshMs\x12'\n" +
+	"\x10next_track_at_ms\x18\v \x01(\x04R\rnextTrackAtMs\"\x8d\x02\n" +
+	"\x17GuildWarBannerHonorView\x12.\n" +
+	"\x13occupied_leyline_id\x18\x01 \x01(\rR\x11occupiedLeylineId\x12\x1f\n" +
+	"\vweekly_mvps\x18\x02 \x03(\tR\n" +
+	"weeklyMvps\x12&\n" +
+	"\x0ffirst_win_names\x18\x03 \x03(\tR\rfirstWinNames\x12%\n" +
+	"\x0ffirst_win_at_ms\x18\x04 \x01(\x04R\ffirstWinAtMs\x12&\n" +
+	"\x0frival_guild_ids\x18\x05 \x03(\x04R\rrivalGuildIds\x12*\n" +
+	"\x11rival_guild_names\x18\x06 \x03(\tR\x0frivalGuildNames\"\xea\x04\n" +
+	"\x13GuildWarLeylineView\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x01 \x01(\rR\tleylineId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12&\n" +
+	"\x0fscene_config_id\x18\x03 \x01(\rR\rsceneConfigId\x12$\n" +
+	"\x0eowner_guild_id\x18\x04 \x01(\x04R\fownerGuildId\x12(\n" +
+	"\x10owner_guild_name\x18\x05 \x01(\tR\x0eownerGuildName\x12\x1b\n" +
+	"\tbanner_hp\x18\x06 \x01(\rR\bbannerHp\x12\"\n" +
+	"\rbanner_max_hp\x18\a \x01(\rR\vbannerMaxHp\x12&\n" +
+	"\x0fshield_until_ms\x18\b \x01(\x04R\rshieldUntilMs\x12.\n" +
+	"\x13active_battle_count\x18\t \x01(\rR\x11activeBattleCount\x12\x1f\n" +
+	"\vunder_siege\x18\n" +
+	" \x01(\bR\n" +
+	"underSiege\x127\n" +
+	"\x18featured_watch_battle_id\x18\v \x01(\x04R\x15featuredWatchBattleId\x12&\n" +
+	"\x0fis_gold_leyline\x18\f \x01(\bR\risGoldLeyline\x12%\n" +
+	"\x0egarrison_count\x18\r \x01(\rR\rgarrisonCount\x120\n" +
+	"\x14recommended_scene_id\x18\x0e \x01(\x04R\x12recommendedSceneId\x124\n" +
+	"\x16recommended_channel_no\x18\x0f \x01(\rR\x14recommendedChannelNo\"\xf4\x02\n" +
+	"\x15GuildWarMilestoneView\x12!\n" +
+	"\fmilestone_id\x18\x01 \x01(\rR\vmilestoneId\x12%\n" +
+	"\x0erequired_merit\x18\x02 \x01(\x04R\rrequiredMerit\x12\x1f\n" +
+	"\vguild_merit\x18\x03 \x01(\x04R\n" +
+	"guildMerit\x12\x18\n" +
+	"\aclaimed\x18\x04 \x01(\bR\aclaimed\x12\x1c\n" +
+	"\tclaimable\x18\x05 \x01(\bR\tclaimable\x12%\n" +
+	"\x0ereward_preview\x18\x06 \x01(\tR\rrewardPreview\x12;\n" +
+	"\freward_items\x18\a \x03(\v2\x18.guildpb.GuildRewardItemR\vrewardItems\x12#\n" +
+	"\rreward_silver\x18\b \x01(\x04R\frewardSilver\x12/\n" +
+	"\x13reward_contribution\x18\t \x01(\x04R\x12rewardContribution\"\x9b\x02\n" +
+	"\x14GuildWarDividendView\x12'\n" +
+	"\x0fclaimable_count\x18\x01 \x01(\rR\x0eclaimableCount\x12*\n" +
+	"\x11claimed_this_week\x18\x02 \x01(\rR\x0fclaimedThisWeek\x12\x1d\n" +
+	"\n" +
+	"weekly_cap\x18\x03 \x01(\rR\tweeklyCap\x127\n" +
+	"\x18guild_produced_this_week\x18\x04 \x01(\rR\x15guildProducedThisWeek\x12(\n" +
+	"\x10guild_weekly_cap\x18\x05 \x01(\rR\x0eguildWeeklyCap\x12,\n" +
+	"\x12min_personal_merit\x18\x06 \x01(\x04R\x10minPersonalMerit\"\xb6\x02\n" +
+	"\x18GuildWarStreakBountyView\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x02 \x01(\tR\n" +
+	"playerName\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x1d\n" +
+	"\n" +
+	"guild_name\x18\x04 \x01(\tR\tguildName\x12\x16\n" +
+	"\x06streak\x18\x05 \x01(\rR\x06streak\x12-\n" +
+	"\x12bonus_contribution\x18\x06 \x01(\x04R\x11bonusContribution\x12!\n" +
+	"\fbonus_silver\x18\a \x01(\x04R\vbonusSilver\x12\x1b\n" +
+	"\tin_battle\x18\b \x01(\bR\binBattle\x12\x1b\n" +
+	"\tbattle_id\x18\t \x01(\x04R\bbattleId\"\xa1\x03\n" +
+	"\x16GuildWarLiveTargetView\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x02 \x01(\tR\n" +
+	"playerName\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x1d\n" +
+	"\n" +
+	"guild_name\x18\x04 \x01(\tR\tguildName\x12\x14\n" +
+	"\x05level\x18\x05 \x01(\rR\x05level\x12\x19\n" +
+	"\bpet_name\x18\x06 \x01(\tR\apetName\x12\x1d\n" +
+	"\n" +
+	"party_size\x18\a \x01(\rR\tpartySize\x12\x16\n" +
+	"\x06streak\x18\b \x01(\rR\x06streak\x12\x1b\n" +
+	"\tin_battle\x18\t \x01(\bR\binBattle\x12\x1b\n" +
+	"\tbattle_id\x18\n" +
+	" \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\v \x01(\rR\tleylineId\x12$\n" +
+	"\x0eis_rival_guild\x18\f \x01(\bR\fisRivalGuild\x12(\n" +
+	"\x10active_bounty_id\x18\r \x01(\x04R\x0eactiveBountyId\"\x8e\x02\n" +
+	"\x18GuildWarGarrisonSlotView\x12\x1d\n" +
+	"\n" +
+	"slot_index\x18\x01 \x01(\rR\tslotIndex\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x03 \x01(\tR\n" +
+	"playerName\x12\x14\n" +
+	"\x05level\x18\x04 \x01(\rR\x05level\x12#\n" +
+	"\rappearance_id\x18\x05 \x01(\tR\fappearanceId\x12\x19\n" +
+	"\bpet_name\x18\x06 \x01(\tR\apetName\x12 \n" +
+	"\fpet_table_id\x18\a \x01(\rR\n" +
+	"petTableId\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\b \x01(\x04R\tupdatedMs\"\xde\x02\n" +
+	"\x11GuildWarEnemyView\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x02 \x01(\tR\n" +
+	"playerName\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x1d\n" +
+	"\n" +
+	"guild_name\x18\x04 \x01(\tR\tguildName\x12\x1f\n" +
+	"\vvictim_name\x18\x05 \x01(\tR\n" +
+	"victimName\x12<\n" +
+	"\vbattle_kind\x18\x06 \x01(\x0e2\x1b.guildpb.GuildWarBattleKindR\n" +
+	"battleKind\x12$\n" +
+	"\x0eoccurred_at_ms\x18\a \x01(\x04R\foccurredAtMs\x12&\n" +
+	"\x0fcan_post_bounty\x18\b \x01(\bR\rcanPostBounty\x12$\n" +
+	"\x0eblocked_tip_id\x18\t \x01(\rR\fblockedTipId\"\xd2\x06\n" +
+	"\x12GuildWarBountyView\x12\x1b\n" +
+	"\tbounty_id\x18\x01 \x01(\x04R\bbountyId\x12(\n" +
+	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x12\x1f\n" +
+	"\vtarget_name\x18\x03 \x01(\tR\n" +
+	"targetName\x12&\n" +
+	"\x0ftarget_guild_id\x18\x04 \x01(\x04R\rtargetGuildId\x12*\n" +
+	"\x11target_guild_name\x18\x05 \x01(\tR\x0ftargetGuildName\x12&\n" +
+	"\x0fissuer_guild_id\x18\x06 \x01(\x04R\rissuerGuildId\x12*\n" +
+	"\x11issuer_guild_name\x18\a \x01(\tR\x0fissuerGuildName\x12/\n" +
+	"\x04tier\x18\b \x01(\x0e2\x1b.guildpb.GuildWarBountyTierR\x04tier\x12#\n" +
+	"\rreward_silver\x18\t \x01(\x04R\frewardSilver\x12!\n" +
+	"\fpublic_board\x18\n" +
+	" \x01(\bR\vpublicBoard\x125\n" +
+	"\x06status\x18\v \x01(\x0e2\x1d.guildpb.GuildWarBountyStatusR\x06status\x12#\n" +
+	"\rcounter_kills\x18\f \x01(\rR\fcounterKills\x121\n" +
+	"\x15counter_kills_to_tear\x18\r \x01(\rR\x12counterKillsToTear\x12\"\n" +
+	"\rexpires_at_ms\x18\x0e \x01(\x04R\vexpiresAtMs\x12/\n" +
+	"\x14last_scene_config_id\x18\x0f \x01(\rR\x11lastSceneConfigId\x12&\n" +
+	"\x0flast_channel_no\x18\x10 \x01(\rR\rlastChannelNo\x12-\n" +
+	"\x13target_in_safe_zone\x18\x11 \x01(\bR\x10targetInSafeZone\x12#\n" +
+	"\rtarget_online\x18\x12 \x01(\bR\ftargetOnline\x12'\n" +
+	"\x10next_track_at_ms\x18\x13 \x01(\x04R\rnextTrackAtMs\x12*\n" +
+	"\x11can_direct_attack\x18\x14 \x01(\bR\x0fcanDirectAttack\"\xa9\x04\n" +
+	"\x15GuildWarRecentLogView\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12C\n" +
+	"\x0fwar_battle_kind\x18\x02 \x01(\x0e2\x1b.guildpb.GuildWarBattleKindR\rwarBattleKind\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x03 \x01(\rR\tleylineId\x12.\n" +
+	"\x13attacker_guild_name\x18\x04 \x01(\tR\x11attackerGuildName\x12.\n" +
+	"\x13defender_guild_name\x18\x05 \x01(\tR\x11defenderGuildName\x12)\n" +
+	"\x10attacker_summary\x18\x06 \x01(\tR\x0fattackerSummary\x12)\n" +
+	"\x10defender_summary\x18\a \x01(\tR\x0fdefenderSummary\x12\x18\n" +
+	"\aoutcome\x18\b \x01(\rR\aoutcome\x12\x16\n" +
+	"\x06rounds\x18\t \x01(\rR\x06rounds\x12&\n" +
+	"\x0fbanner_hp_delta\x18\n" +
+	" \x01(\x05R\rbannerHpDelta\x12,\n" +
+	"\x12bounty_outcome_tag\x18\v \x01(\rR\x10bountyOutcomeTag\x12+\n" +
+	"\x11self_participated\x18\f \x01(\bR\x10selfParticipated\x12$\n" +
+	"\x0efinished_at_ms\x18\r \x01(\x04R\ffinishedAtMs\"\x1c\n" +
+	"\x1aGetGuildWarOverviewRequest\"\xb2\t\n" +
+	"\x1bGetGuildWarOverviewResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12$\n" +
+	"\x0eserver_time_ms\x18\x02 \x01(\x04R\fserverTimeMs\x12\x19\n" +
+	"\bweek_key\x18\x03 \x01(\rR\aweekKey\x12/\n" +
+	"\x14next_weekly_reset_ms\x18\x04 \x01(\x04R\x11nextWeeklyResetMs\x12&\n" +
+	"\x0fgold_leyline_id\x18\x05 \x01(\rR\rgoldLeylineId\x124\n" +
+	"\x17gold_leyline_ends_at_ms\x18\x06 \x01(\x04R\x13goldLeylineEndsAtMs\x128\n" +
+	"\tmy_stance\x18\a \x01(\v2\x1b.guildpb.GuildWarStanceViewR\bmyStance\x12C\n" +
+	"\fbanner_honor\x18\b \x01(\v2 .guildpb.GuildWarBannerHonorViewR\vbannerHonor\x128\n" +
+	"\bleylines\x18\t \x03(\v2\x1c.guildpb.GuildWarLeylineViewR\bleylines\x12>\n" +
+	"\n" +
+	"milestones\x18\n" +
+	" \x03(\v2\x1e.guildpb.GuildWarMilestoneViewR\n" +
+	"milestones\x129\n" +
+	"\bdividend\x18\v \x01(\v2\x1d.guildpb.GuildWarDividendViewR\bdividend\x12J\n" +
+	"\x0fstreak_bounties\x18\f \x03(\v2!.guildpb.GuildWarStreakBountyViewR\x0estreakBounties\x12B\n" +
+	"\flive_targets\x18\r \x03(\v2\x1f.guildpb.GuildWarLiveTargetViewR\vliveTargets\x12H\n" +
+	"\x0egarrison_slots\x18\x0e \x03(\v2!.guildpb.GuildWarGarrisonSlotViewR\rgarrisonSlots\x124\n" +
+	"\aenemies\x18\x0f \x03(\v2\x1a.guildpb.GuildWarEnemyViewR\aenemies\x127\n" +
+	"\bbounties\x18\x10 \x03(\v2\x1b.guildpb.GuildWarBountyViewR\bbounties\x12?\n" +
+	"\vrecent_logs\x18\x11 \x03(\v2\x1e.guildpb.GuildWarRecentLogViewR\n" +
+	"recentLogs\x12(\n" +
+	"\x10active_battle_id\x18\x12 \x01(\x04R\x0eactiveBattleId\x121\n" +
+	"\x14contribution_balance\x18\x13 \x01(\x04R\x13contributionBalance\x127\n" +
+	"\x18public_bounty_used_today\x18\x14 \x01(\rR\x15publicBountyUsedToday\x129\n" +
+	"\x19public_bounty_daily_limit\x18\x15 \x01(\rR\x16publicBountyDailyLimit\"\xa2\x01\n" +
+	"\x18SetGuildWarStanceRequest\x12)\n" +
+	"\x0eset_peace_mode\x18\x01 \x01(\bH\x00R\fsetPeaceMode\x88\x01\x01\x121\n" +
+	"\x12set_open_challenge\x18\x02 \x01(\bH\x01R\x10setOpenChallenge\x88\x01\x01B\x11\n" +
+	"\x0f_set_peace_modeB\x15\n" +
+	"\x13_set_open_challenge\"\xb1\x01\n" +
+	"\x19SetGuildWarStanceResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
+	"\tmy_stance\x18\x02 \x01(\v2\x1b.guildpb.GuildWarStanceViewR\bmyStance\x12$\n" +
+	"\x0eserver_time_ms\x18\x03 \x01(\x04R\fserverTimeMs\"c\n" +
+	"\x1fRegisterGuildWarGarrisonRequest\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\rR\x06action\x12(\n" +
+	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\"\xcf\x01\n" +
+	" RegisterGuildWarGarrisonResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12H\n" +
+	"\x0egarrison_slots\x18\x02 \x03(\v2!.guildpb.GuildWarGarrisonSlotViewR\rgarrisonSlots\x12+\n" +
+	"\x12next_refresh_at_ms\x18\x03 \x01(\x04R\x0fnextRefreshAtMs\"\xec\x01\n" +
+	"\x1aStartGuildWarBattleRequest\x12<\n" +
+	"\vtarget_kind\x18\x01 \x01(\x0e2\x1b.guildpb.GuildWarTargetKindR\n" +
+	"targetKind\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x02 \x01(\rR\tleylineId\x12(\n" +
+	"\x10target_player_id\x18\x03 \x01(\x04R\x0etargetPlayerId\x12\x1b\n" +
+	"\tbounty_id\x18\x04 \x01(\x04R\bbountyId\x12*\n" +
+	"\x11client_request_id\x18\x05 \x01(\x04R\x0fclientRequestId\"\x91\x02\n" +
+	"\x1bStartGuildWarBattleResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1b\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12C\n" +
+	"\x0fwar_battle_kind\x18\x03 \x01(\x0e2\x1b.guildpb.GuildWarBattleKindR\rwarBattleKind\x12,\n" +
+	"\x12offender_player_id\x18\x04 \x01(\x04R\x10offenderPlayerId\x12,\n" +
+	"\x12offender_battle_id\x18\x05 \x01(\x04R\x10offenderBattleId\"n\n" +
+	"\x1dClaimGuildWarMilestoneRequest\x12!\n" +
+	"\fmilestone_id\x18\x01 \x01(\rR\vmilestoneId\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\"\xe2\x01\n" +
+	"\x1eClaimGuildWarMilestoneResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12<\n" +
+	"\tmilestone\x18\x02 \x01(\v2\x1e.guildpb.GuildWarMilestoneViewR\tmilestone\x12L\n" +
+	"\x12asset_order_status\x18\x03 \x01(\x0e2\x1e.guildpb.GuildAssetOrderStatusR\x10assetOrderStatus\"J\n" +
+	"\x1cClaimGuildWarDividendRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\"\x83\x02\n" +
+	"\x1dClaimGuildWarDividendResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
+	"\rclaimed_count\x18\x02 \x01(\rR\fclaimedCount\x129\n" +
+	"\bdividend\x18\x03 \x01(\v2\x1d.guildpb.GuildWarDividendViewR\bdividend\x12L\n" +
+	"\x12asset_order_status\x18\x04 \x01(\x0e2\x1e.guildpb.GuildAssetOrderStatusR\x10assetOrderStatus\"\xc5\x01\n" +
+	"\x19PostGuildWarBountyRequest\x12(\n" +
+	"\x10target_player_id\x18\x01 \x01(\x04R\x0etargetPlayerId\x12/\n" +
+	"\x04tier\x18\x02 \x01(\x0e2\x1b.guildpb.GuildWarBountyTierR\x04tier\x12!\n" +
+	"\fpublic_board\x18\x03 \x01(\bR\vpublicBoard\x12*\n" +
+	"\x11client_request_id\x18\x04 \x01(\x04R\x0fclientRequestId\"\x87\x01\n" +
+	"\x1aPostGuildWarBountyResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
+	"\x06bounty\x18\x02 \x01(\v2\x1b.guildpb.GuildWarBountyViewR\x06bounty\"9\n" +
+	"\x1aTrackGuildWarBountyRequest\x12\x1b\n" +
+	"\tbounty_id\x18\x01 \x01(\x04R\bbountyId\"\xa5\x02\n" +
+	"\x1bTrackGuildWarBountyResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
+	"\rtarget_online\x18\x02 \x01(\bR\ftargetOnline\x12 \n" +
+	"\fin_safe_zone\x18\x03 \x01(\bR\n" +
+	"inSafeZone\x12&\n" +
+	"\x0fscene_config_id\x18\x04 \x01(\rR\rsceneConfigId\x12\x1d\n" +
+	"\n" +
+	"channel_no\x18\x05 \x01(\rR\tchannelNo\x12'\n" +
+	"\x10next_track_at_ms\x18\x06 \x01(\x04R\rnextTrackAtMs\x12\x19\n" +
+	"\bscene_id\x18\a \x01(\x04R\asceneId\"=\n" +
+	"\x1eGetGuildWarBattleResultRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\xbd\t\n" +
+	"\x1fGetGuildWarBattleResultResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x18\n" +
+	"\asettled\x18\x02 \x01(\bR\asettled\x12\x1b\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12C\n" +
+	"\x0fwar_battle_kind\x18\x04 \x01(\x0e2\x1b.guildpb.GuildWarBattleKindR\rwarBattleKind\x12\x18\n" +
+	"\aoutcome\x18\x05 \x01(\rR\aoutcome\x12\x16\n" +
+	"\x06rounds\x18\x06 \x01(\rR\x06rounds\x120\n" +
+	"\x14material_units_added\x18\a \x01(\rR\x12materialUnitsAdded\x126\n" +
+	"\x17material_tradable_added\x18\b \x01(\rR\x15materialTradableAdded\x12?\n" +
+	"\x1cmaterial_pvp_loss_ineligible\x18\t \x01(\bR\x19materialPvpLossIneligible\x12+\n" +
+	"\x11contribution_gain\x18\n" +
+	" \x01(\x04R\x10contributionGain\x12\x1f\n" +
+	"\vsilver_gain\x18\v \x01(\x04R\n" +
+	"silverGain\x12(\n" +
+	"\x10guild_funds_gain\x18\f \x01(\x04R\x0eguildFundsGain\x12\x1d\n" +
+	"\n" +
+	"merit_gain\x18\r \x01(\x04R\tmeritGain\x12!\n" +
+	"\fstreak_after\x18\x0e \x01(\rR\vstreakAfter\x12>\n" +
+	"\x1bbounty_jackpot_contribution\x18\x0f \x01(\x04R\x19bountyJackpotContribution\x122\n" +
+	"\x15bounty_jackpot_silver\x18\x10 \x01(\x04R\x13bountyJackpotSilver\x12,\n" +
+	"\x12bounty_outcome_tag\x18\x11 \x01(\rR\x10bountyOutcomeTag\x12)\n" +
+	"\x10diminish_percent\x18\x12 \x01(\rR\x0fdiminishPercent\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x13 \x01(\rR\tleylineId\x12(\n" +
+	"\x10banner_hp_before\x18\x14 \x01(\rR\x0ebannerHpBefore\x12&\n" +
+	"\x0fbanner_hp_after\x18\x15 \x01(\rR\rbannerHpAfter\x12'\n" +
+	"\x0fbanner_shielded\x18\x16 \x01(\bR\x0ebannerShielded\x12&\n" +
+	"\x0fcan_post_bounty\x18\x17 \x01(\bR\rcanPostBounty\x12;\n" +
+	"\x1abounty_candidate_player_id\x18\x18 \x01(\x04R\x17bountyCandidatePlayerId\x122\n" +
+	"\x15bounty_candidate_name\x18\x19 \x01(\tR\x13bountyCandidateName\x12,\n" +
+	"\x12gold_leyline_bonus\x18\x1a \x01(\bR\x10goldLeylineBonus\x12#\n" +
+	"\rrivalry_bonus\x18\x1b \x01(\bR\frivalryBonus\"\xf6\x03\n" +
+	"\x10GuildWarAlertS2C\x12.\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1a.guildpb.GuildWarAlertKindR\x04kind\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x02 \x01(\rR\tleylineId\x12&\n" +
+	"\x0fscene_config_id\x18\x03 \x01(\rR\rsceneConfigId\x12\x1d\n" +
+	"\n" +
+	"channel_no\x18\x04 \x01(\rR\tchannelNo\x12.\n" +
+	"\x13attacker_guild_name\x18\x05 \x01(\tR\x11attackerGuildName\x12.\n" +
+	"\x13defender_guild_name\x18\x06 \x01(\tR\x11defenderGuildName\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\a \x01(\tR\tactorName\x12\x1f\n" +
+	"\vtarget_name\x18\b \x01(\tR\n" +
+	"targetName\x12*\n" +
+	"\x11banner_hp_percent\x18\t \x01(\rR\x0fbannerHpPercent\x12\x1b\n" +
+	"\tbounty_id\x18\n" +
+	" \x01(\x04R\bbountyId\x12\x1b\n" +
+	"\tbattle_id\x18\v \x01(\x04R\bbattleId\x12#\n" +
+	"\rreward_silver\x18\f \x01(\x04R\frewardSilver\x12!\n" +
+	"\fstreak_count\x18\r \x01(\rR\vstreakCount\"\xa8\x04\n" +
+	"\x13FieldWarTargetBrief\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x02 \x01(\tR\n" +
+	"playerName\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x1d\n" +
+	"\n" +
+	"guild_name\x18\x04 \x01(\tR\tguildName\x12\x1d\n" +
+	"\n" +
+	"peace_mode\x18\x05 \x01(\bR\tpeaceMode\x12(\n" +
+	"\x10protect_until_ms\x18\x06 \x01(\x04R\x0eprotectUntilMs\x12\x16\n" +
+	"\x06streak\x18\a \x01(\rR\x06streak\x12\x1b\n" +
+	"\tin_battle\x18\b \x01(\bR\binBattle\x12\x1b\n" +
+	"\tbattle_id\x18\t \x01(\x04R\bbattleId\x12$\n" +
+	"\x0eis_rival_guild\x18\n" +
+	" \x01(\bR\fisRivalGuild\x12(\n" +
+	"\x10active_bounty_id\x18\v \x01(\x04R\x0eactiveBountyId\x12=\n" +
+	"\x1bactive_bounty_reward_silver\x18\f \x01(\x04R\x18activeBountyRewardSilver\x12I\n" +
+	"\x12active_bounty_tier\x18\r \x01(\x0e2\x1b.guildpb.GuildWarBountyTierR\x10activeBountyTier\x12$\n" +
+	"\x0ecan_attack_now\x18\x0e \x01(\bR\fcanAttackNow\">\n" +
+	"\x1dInspectFieldWarTargetsRequest\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x01 \x03(\x04R\tplayerIds\"\x8e\x01\n" +
+	"\x1eInspectFieldWarTargetsResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x126\n" +
+	"\atargets\x18\x02 \x03(\v2\x1c.guildpb.FieldWarTargetBriefR\atargets*\xe8\x04\n" +
 	"\x0fGuildChangeKind\x12!\n" +
 	"\x1dGUILD_CHANGE_KIND_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fGUILD_CHANGE_KIND_MEMBER_JOINED\x10\x01\x12!\n" +
@@ -5098,7 +8835,8 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"&GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED\x10\v\x12&\n" +
 	"\"GUILD_CHANGE_KIND_ACTIVITY_CHANGED\x10\f\x12#\n" +
 	"\x1fGUILD_CHANGE_KIND_DELIVERY_DONE\x10\r\x12\x1d\n" +
-	"\x19GUILD_CHANGE_KIND_RENAMED\x10\x0e*\x88\x02\n" +
+	"\x19GUILD_CHANGE_KIND_RENAMED\x10\x0e\x12!\n" +
+	"\x1dGUILD_CHANGE_KIND_WAR_UPDATED\x10\x0f*\x88\x02\n" +
 	"\x15GuildAssetOrderStatus\x12(\n" +
 	"$GUILD_ASSET_ORDER_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" GUILD_ASSET_ORDER_STATUS_PENDING\x10\x01\x12$\n" +
@@ -5122,7 +8860,40 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x1fGUILD_TRIAL_LOBBY_STATE_PENDING\x10\x01\x12%\n" +
 	"!GUILD_TRIAL_LOBBY_STATE_LAUNCHING\x10\x02\x12$\n" +
 	" GUILD_TRIAL_LOBBY_STATE_LAUNCHED\x10\x03\x12!\n" +
-	"\x1dGUILD_TRIAL_LOBBY_STATE_ENDED\x10\x042\x94\x14\n" +
+	"\x1dGUILD_TRIAL_LOBBY_STATE_ENDED\x10\x04*\xfe\x01\n" +
+	"\x12GuildWarTargetKind\x12%\n" +
+	"!GUILD_WAR_TARGET_KIND_UNSPECIFIED\x10\x00\x12$\n" +
+	" GUILD_WAR_TARGET_KIND_QUICK_AUTO\x10\x01\x12%\n" +
+	"!GUILD_WAR_TARGET_KIND_LIVE_PLAYER\x10\x02\x12*\n" +
+	"&GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON\x10\x03\x12 \n" +
+	"\x1cGUILD_WAR_TARGET_KIND_BOUNTY\x10\x04\x12&\n" +
+	"\"GUILD_WAR_TARGET_KIND_FIELD_PLAYER\x10\x05*\xfe\x01\n" +
+	"\x12GuildWarBattleKind\x12%\n" +
+	"!GUILD_WAR_BATTLE_KIND_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fGUILD_WAR_BATTLE_KIND_PANEL_PVP\x10\x01\x12(\n" +
+	"$GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE\x10\x02\x12$\n" +
+	" GUILD_WAR_BATTLE_KIND_FIELD_ROAD\x10\x03\x12%\n" +
+	"!GUILD_WAR_BATTLE_KIND_LEYLINE_PVP\x10\x04\x12%\n" +
+	"!GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT\x10\x05*\xb4\x01\n" +
+	"\x12GuildWarBountyTier\x12%\n" +
+	"!GUILD_WAR_BOUNTY_TIER_UNSPECIFIED\x10\x00\x12'\n" +
+	"#GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER\x10\x01\x12&\n" +
+	"\"GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER\x10\x02\x12&\n" +
+	"\"GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC\x10\x03*\x87\x02\n" +
+	"\x14GuildWarBountyStatus\x12'\n" +
+	"#GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED\x10\x00\x12*\n" +
+	"&GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING\x10\x01\x12\"\n" +
+	"\x1eGUILD_WAR_BOUNTY_STATUS_ACTIVE\x10\x02\x12%\n" +
+	"!GUILD_WAR_BOUNTY_STATUS_COMPLETED\x10\x03\x12*\n" +
+	"&GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET\x10\x04\x12#\n" +
+	"\x1fGUILD_WAR_BOUNTY_STATUS_EXPIRED\x10\x05*\x92\x02\n" +
+	"\x11GuildWarAlertKind\x12$\n" +
+	" GUILD_WAR_ALERT_KIND_UNSPECIFIED\x10\x00\x12,\n" +
+	"(GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE\x10\x01\x12)\n" +
+	"%GUILD_WAR_ALERT_KIND_LEYLINE_CAPTURED\x10\x02\x12,\n" +
+	"(GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP\x10\x03\x12(\n" +
+	"$GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED\x10\x04\x12&\n" +
+	"\"GUILD_WAR_ALERT_KIND_STREAK_BOUNTY\x10\x052\xd3\x1c\n" +
 	"\fGuildService\x12H\n" +
 	"\vCreateGuild\x12\x1b.guildpb.CreateGuildRequest\x1a\x1c.guildpb.CreateGuildResponse\x12?\n" +
 	"\bGetGuild\x12\x18.guildpb.GetGuildRequest\x1a\x19.guildpb.GetGuildResponse\x12Q\n" +
@@ -5153,7 +8924,18 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x11LightGuildLantern\x12!.guildpb.LightGuildLanternRequest\x1a\".guildpb.LightGuildLanternResponse\x12Z\n" +
 	"\x11ClaimGuildReunion\x12!.guildpb.ClaimGuildReunionRequest\x1a\".guildpb.ClaimGuildReunionResponse\x12T\n" +
 	"\x0fStartGuildTrial\x12\x1f.guildpb.StartGuildTrialRequest\x1a .guildpb.StartGuildTrialResponse\x12l\n" +
-	"\x17RespondGuildTrialInvite\x12'.guildpb.RespondGuildTrialInviteRequest\x1a(.guildpb.RespondGuildTrialInviteResponse\x1a\x05\x88\xa8\xc3\x01\x01B\rZ\vproto/guildb\x06proto3"
+	"\x17RespondGuildTrialInvite\x12'.guildpb.RespondGuildTrialInviteRequest\x1a(.guildpb.RespondGuildTrialInviteResponse\x12`\n" +
+	"\x13GetGuildWarOverview\x12#.guildpb.GetGuildWarOverviewRequest\x1a$.guildpb.GetGuildWarOverviewResponse\x12Z\n" +
+	"\x11SetGuildWarStance\x12!.guildpb.SetGuildWarStanceRequest\x1a\".guildpb.SetGuildWarStanceResponse\x12o\n" +
+	"\x18RegisterGuildWarGarrison\x12(.guildpb.RegisterGuildWarGarrisonRequest\x1a).guildpb.RegisterGuildWarGarrisonResponse\x12`\n" +
+	"\x13StartGuildWarBattle\x12#.guildpb.StartGuildWarBattleRequest\x1a$.guildpb.StartGuildWarBattleResponse\x12i\n" +
+	"\x16ClaimGuildWarMilestone\x12&.guildpb.ClaimGuildWarMilestoneRequest\x1a'.guildpb.ClaimGuildWarMilestoneResponse\x12f\n" +
+	"\x15ClaimGuildWarDividend\x12%.guildpb.ClaimGuildWarDividendRequest\x1a&.guildpb.ClaimGuildWarDividendResponse\x12]\n" +
+	"\x12PostGuildWarBounty\x12\".guildpb.PostGuildWarBountyRequest\x1a#.guildpb.PostGuildWarBountyResponse\x12`\n" +
+	"\x13TrackGuildWarBounty\x12#.guildpb.TrackGuildWarBountyRequest\x1a$.guildpb.TrackGuildWarBountyResponse\x12l\n" +
+	"\x17GetGuildWarBattleResult\x12'.guildpb.GetGuildWarBattleResultRequest\x1a(.guildpb.GetGuildWarBattleResultResponse\x12?\n" +
+	"\x13NotifyGuildWarAlert\x12\x19.guildpb.GuildWarAlertS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12i\n" +
+	"\x16InspectFieldWarTargets\x12&.guildpb.InspectFieldWarTargetsRequest\x1a'.guildpb.InspectFieldWarTargetsResponse\x1a\x05\x88\xa8\xc3\x01\x01B\rZ\vproto/guildb\x06proto3"
 
 var (
 	file_proto_guild_guild_proto_rawDescOnce sync.Once
@@ -5167,215 +8949,315 @@ func file_proto_guild_guild_proto_rawDescGZIP() []byte {
 	return file_proto_guild_guild_proto_rawDescData
 }
 
-var file_proto_guild_guild_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_guild_guild_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_proto_guild_guild_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_proto_guild_guild_proto_msgTypes = make([]protoimpl.MessageInfo, 102)
 var file_proto_guild_guild_proto_goTypes = []any{
-	(GuildChangeKind)(0),                    // 0: guildpb.GuildChangeKind
-	(GuildAssetOrderStatus)(0),              // 1: guildpb.GuildAssetOrderStatus
-	(GuildActivityType)(0),                  // 2: guildpb.GuildActivityType
-	(GuildActivityState)(0),                 // 3: guildpb.GuildActivityState
-	(GuildTrialLobbyState)(0),               // 4: guildpb.GuildTrialLobbyState
-	(*GuildMember)(nil),                     // 5: guildpb.GuildMember
-	(*GuildInfo)(nil),                       // 6: guildpb.GuildInfo
-	(*CreateGuildRequest)(nil),              // 7: guildpb.CreateGuildRequest
-	(*CreateGuildResponse)(nil),             // 8: guildpb.CreateGuildResponse
-	(*GetGuildRequest)(nil),                 // 9: guildpb.GetGuildRequest
-	(*GetGuildResponse)(nil),                // 10: guildpb.GetGuildResponse
-	(*GetPlayerGuildRequest)(nil),           // 11: guildpb.GetPlayerGuildRequest
-	(*GetPlayerGuildResponse)(nil),          // 12: guildpb.GetPlayerGuildResponse
-	(*LeaveGuildRequest)(nil),               // 13: guildpb.LeaveGuildRequest
-	(*LeaveGuildResponse)(nil),              // 14: guildpb.LeaveGuildResponse
-	(*DisbandGuildRequest)(nil),             // 15: guildpb.DisbandGuildRequest
-	(*DisbandGuildResponse)(nil),            // 16: guildpb.DisbandGuildResponse
-	(*SetAnnouncementRequest)(nil),          // 17: guildpb.SetAnnouncementRequest
-	(*SetAnnouncementResponse)(nil),         // 18: guildpb.SetAnnouncementResponse
-	(*RenameGuildRequest)(nil),              // 19: guildpb.RenameGuildRequest
-	(*RenameGuildResponse)(nil),             // 20: guildpb.RenameGuildResponse
-	(*SetGuildMemberRoleRequest)(nil),       // 21: guildpb.SetGuildMemberRoleRequest
-	(*SetGuildMemberRoleResponse)(nil),      // 22: guildpb.SetGuildMemberRoleResponse
-	(*KickGuildMemberRequest)(nil),          // 23: guildpb.KickGuildMemberRequest
-	(*KickGuildMemberResponse)(nil),         // 24: guildpb.KickGuildMemberResponse
-	(*TransferGuildLeaderRequest)(nil),      // 25: guildpb.TransferGuildLeaderRequest
-	(*TransferGuildLeaderResponse)(nil),     // 26: guildpb.TransferGuildLeaderResponse
-	(*ApplyJoinGuildRequest)(nil),           // 27: guildpb.ApplyJoinGuildRequest
-	(*ApplyJoinGuildResponse)(nil),          // 28: guildpb.ApplyJoinGuildResponse
-	(*CancelGuildApplicationRequest)(nil),   // 29: guildpb.CancelGuildApplicationRequest
-	(*CancelGuildApplicationResponse)(nil),  // 30: guildpb.CancelGuildApplicationResponse
-	(*GuildApplicationView)(nil),            // 31: guildpb.GuildApplicationView
-	(*ListMyGuildApplicationsRequest)(nil),  // 32: guildpb.ListMyGuildApplicationsRequest
-	(*ListMyGuildApplicationsResponse)(nil), // 33: guildpb.ListMyGuildApplicationsResponse
-	(*GuildApplicantView)(nil),              // 34: guildpb.GuildApplicantView
-	(*ListGuildApplicationsRequest)(nil),    // 35: guildpb.ListGuildApplicationsRequest
-	(*ListGuildApplicationsResponse)(nil),   // 36: guildpb.ListGuildApplicationsResponse
-	(*ReviewGuildApplicationRequest)(nil),   // 37: guildpb.ReviewGuildApplicationRequest
-	(*ReviewGuildApplicationResponse)(nil),  // 38: guildpb.ReviewGuildApplicationResponse
-	(*GuildChangedS2C)(nil),                 // 39: guildpb.GuildChangedS2C
-	(*GuildDonationView)(nil),               // 40: guildpb.GuildDonationView
-	(*GuildDonateOptionView)(nil),           // 41: guildpb.GuildDonateOptionView
-	(*GuildShopGoodsView)(nil),              // 42: guildpb.GuildShopGoodsView
-	(*GuildShopOrderView)(nil),              // 43: guildpb.GuildShopOrderView
-	(*GetGuildDonateOptionsRequest)(nil),    // 44: guildpb.GetGuildDonateOptionsRequest
-	(*GetGuildDonateOptionsResponse)(nil),   // 45: guildpb.GetGuildDonateOptionsResponse
-	(*DonateToGuildRequest)(nil),            // 46: guildpb.DonateToGuildRequest
-	(*DonateToGuildResponse)(nil),           // 47: guildpb.DonateToGuildResponse
-	(*UpgradeGuildRequest)(nil),             // 48: guildpb.UpgradeGuildRequest
-	(*UpgradeGuildResponse)(nil),            // 49: guildpb.UpgradeGuildResponse
-	(*GetGuildShopRequest)(nil),             // 50: guildpb.GetGuildShopRequest
-	(*GetGuildShopResponse)(nil),            // 51: guildpb.GetGuildShopResponse
-	(*BuyGuildShopGoodsRequest)(nil),        // 52: guildpb.BuyGuildShopGoodsRequest
-	(*BuyGuildShopGoodsResponse)(nil),       // 53: guildpb.BuyGuildShopGoodsResponse
-	(*GuildRewardItem)(nil),                 // 54: guildpb.GuildRewardItem
-	(*GuildTrialLobbyView)(nil),             // 55: guildpb.GuildTrialLobbyView
-	(*GuildActivityView)(nil),               // 56: guildpb.GuildActivityView
-	(*GetGuildActivitiesRequest)(nil),       // 57: guildpb.GetGuildActivitiesRequest
-	(*GetGuildActivitiesResponse)(nil),      // 58: guildpb.GetGuildActivitiesResponse
-	(*LightGuildLanternRequest)(nil),        // 59: guildpb.LightGuildLanternRequest
-	(*LightGuildLanternResponse)(nil),       // 60: guildpb.LightGuildLanternResponse
-	(*ClaimGuildReunionRequest)(nil),        // 61: guildpb.ClaimGuildReunionRequest
-	(*ClaimGuildReunionResponse)(nil),       // 62: guildpb.ClaimGuildReunionResponse
-	(*StartGuildTrialRequest)(nil),          // 63: guildpb.StartGuildTrialRequest
-	(*StartGuildTrialResponse)(nil),         // 64: guildpb.StartGuildTrialResponse
-	(*RespondGuildTrialInviteRequest)(nil),  // 65: guildpb.RespondGuildTrialInviteRequest
-	(*RespondGuildTrialInviteResponse)(nil), // 66: guildpb.RespondGuildTrialInviteResponse
-	(*GuildRankEntry)(nil),                  // 67: guildpb.GuildRankEntry
-	(*UpdateGuildScoreRequest)(nil),         // 68: guildpb.UpdateGuildScoreRequest
-	(*UpdateGuildScoreResponse)(nil),        // 69: guildpb.UpdateGuildScoreResponse
-	(*GetGuildRankRequest)(nil),             // 70: guildpb.GetGuildRankRequest
-	(*GetGuildRankResponse)(nil),            // 71: guildpb.GetGuildRankResponse
-	(*GetGuildRankByGuildRequest)(nil),      // 72: guildpb.GetGuildRankByGuildRequest
-	(*GetGuildRankByGuildResponse)(nil),     // 73: guildpb.GetGuildRankByGuildResponse
-	(*base.TipInfoMessage)(nil),             // 74: TipInfoMessage
-	(*base.Empty)(nil),                      // 75: Empty
+	(GuildChangeKind)(0),                     // 0: guildpb.GuildChangeKind
+	(GuildAssetOrderStatus)(0),               // 1: guildpb.GuildAssetOrderStatus
+	(GuildActivityType)(0),                   // 2: guildpb.GuildActivityType
+	(GuildActivityState)(0),                  // 3: guildpb.GuildActivityState
+	(GuildTrialLobbyState)(0),                // 4: guildpb.GuildTrialLobbyState
+	(GuildWarTargetKind)(0),                  // 5: guildpb.GuildWarTargetKind
+	(GuildWarBattleKind)(0),                  // 6: guildpb.GuildWarBattleKind
+	(GuildWarBountyTier)(0),                  // 7: guildpb.GuildWarBountyTier
+	(GuildWarBountyStatus)(0),                // 8: guildpb.GuildWarBountyStatus
+	(GuildWarAlertKind)(0),                   // 9: guildpb.GuildWarAlertKind
+	(*GuildMember)(nil),                      // 10: guildpb.GuildMember
+	(*GuildInfo)(nil),                        // 11: guildpb.GuildInfo
+	(*CreateGuildRequest)(nil),               // 12: guildpb.CreateGuildRequest
+	(*CreateGuildResponse)(nil),              // 13: guildpb.CreateGuildResponse
+	(*GetGuildRequest)(nil),                  // 14: guildpb.GetGuildRequest
+	(*GetGuildResponse)(nil),                 // 15: guildpb.GetGuildResponse
+	(*GetPlayerGuildRequest)(nil),            // 16: guildpb.GetPlayerGuildRequest
+	(*GetPlayerGuildResponse)(nil),           // 17: guildpb.GetPlayerGuildResponse
+	(*LeaveGuildRequest)(nil),                // 18: guildpb.LeaveGuildRequest
+	(*LeaveGuildResponse)(nil),               // 19: guildpb.LeaveGuildResponse
+	(*DisbandGuildRequest)(nil),              // 20: guildpb.DisbandGuildRequest
+	(*DisbandGuildResponse)(nil),             // 21: guildpb.DisbandGuildResponse
+	(*SetAnnouncementRequest)(nil),           // 22: guildpb.SetAnnouncementRequest
+	(*SetAnnouncementResponse)(nil),          // 23: guildpb.SetAnnouncementResponse
+	(*RenameGuildRequest)(nil),               // 24: guildpb.RenameGuildRequest
+	(*RenameGuildResponse)(nil),              // 25: guildpb.RenameGuildResponse
+	(*SetGuildMemberRoleRequest)(nil),        // 26: guildpb.SetGuildMemberRoleRequest
+	(*SetGuildMemberRoleResponse)(nil),       // 27: guildpb.SetGuildMemberRoleResponse
+	(*KickGuildMemberRequest)(nil),           // 28: guildpb.KickGuildMemberRequest
+	(*KickGuildMemberResponse)(nil),          // 29: guildpb.KickGuildMemberResponse
+	(*TransferGuildLeaderRequest)(nil),       // 30: guildpb.TransferGuildLeaderRequest
+	(*TransferGuildLeaderResponse)(nil),      // 31: guildpb.TransferGuildLeaderResponse
+	(*ApplyJoinGuildRequest)(nil),            // 32: guildpb.ApplyJoinGuildRequest
+	(*ApplyJoinGuildResponse)(nil),           // 33: guildpb.ApplyJoinGuildResponse
+	(*CancelGuildApplicationRequest)(nil),    // 34: guildpb.CancelGuildApplicationRequest
+	(*CancelGuildApplicationResponse)(nil),   // 35: guildpb.CancelGuildApplicationResponse
+	(*GuildApplicationView)(nil),             // 36: guildpb.GuildApplicationView
+	(*ListMyGuildApplicationsRequest)(nil),   // 37: guildpb.ListMyGuildApplicationsRequest
+	(*ListMyGuildApplicationsResponse)(nil),  // 38: guildpb.ListMyGuildApplicationsResponse
+	(*GuildApplicantView)(nil),               // 39: guildpb.GuildApplicantView
+	(*ListGuildApplicationsRequest)(nil),     // 40: guildpb.ListGuildApplicationsRequest
+	(*ListGuildApplicationsResponse)(nil),    // 41: guildpb.ListGuildApplicationsResponse
+	(*ReviewGuildApplicationRequest)(nil),    // 42: guildpb.ReviewGuildApplicationRequest
+	(*ReviewGuildApplicationResponse)(nil),   // 43: guildpb.ReviewGuildApplicationResponse
+	(*GuildChangedS2C)(nil),                  // 44: guildpb.GuildChangedS2C
+	(*GuildDonationView)(nil),                // 45: guildpb.GuildDonationView
+	(*GuildDonateOptionView)(nil),            // 46: guildpb.GuildDonateOptionView
+	(*GuildShopGoodsView)(nil),               // 47: guildpb.GuildShopGoodsView
+	(*GuildShopOrderView)(nil),               // 48: guildpb.GuildShopOrderView
+	(*GetGuildDonateOptionsRequest)(nil),     // 49: guildpb.GetGuildDonateOptionsRequest
+	(*GetGuildDonateOptionsResponse)(nil),    // 50: guildpb.GetGuildDonateOptionsResponse
+	(*DonateToGuildRequest)(nil),             // 51: guildpb.DonateToGuildRequest
+	(*DonateToGuildResponse)(nil),            // 52: guildpb.DonateToGuildResponse
+	(*UpgradeGuildRequest)(nil),              // 53: guildpb.UpgradeGuildRequest
+	(*UpgradeGuildResponse)(nil),             // 54: guildpb.UpgradeGuildResponse
+	(*GetGuildShopRequest)(nil),              // 55: guildpb.GetGuildShopRequest
+	(*GetGuildShopResponse)(nil),             // 56: guildpb.GetGuildShopResponse
+	(*BuyGuildShopGoodsRequest)(nil),         // 57: guildpb.BuyGuildShopGoodsRequest
+	(*BuyGuildShopGoodsResponse)(nil),        // 58: guildpb.BuyGuildShopGoodsResponse
+	(*GuildRewardItem)(nil),                  // 59: guildpb.GuildRewardItem
+	(*GuildTrialLobbyView)(nil),              // 60: guildpb.GuildTrialLobbyView
+	(*GuildActivityView)(nil),                // 61: guildpb.GuildActivityView
+	(*GetGuildActivitiesRequest)(nil),        // 62: guildpb.GetGuildActivitiesRequest
+	(*GetGuildActivitiesResponse)(nil),       // 63: guildpb.GetGuildActivitiesResponse
+	(*LightGuildLanternRequest)(nil),         // 64: guildpb.LightGuildLanternRequest
+	(*LightGuildLanternResponse)(nil),        // 65: guildpb.LightGuildLanternResponse
+	(*ClaimGuildReunionRequest)(nil),         // 66: guildpb.ClaimGuildReunionRequest
+	(*ClaimGuildReunionResponse)(nil),        // 67: guildpb.ClaimGuildReunionResponse
+	(*StartGuildTrialRequest)(nil),           // 68: guildpb.StartGuildTrialRequest
+	(*StartGuildTrialResponse)(nil),          // 69: guildpb.StartGuildTrialResponse
+	(*RespondGuildTrialInviteRequest)(nil),   // 70: guildpb.RespondGuildTrialInviteRequest
+	(*RespondGuildTrialInviteResponse)(nil),  // 71: guildpb.RespondGuildTrialInviteResponse
+	(*GuildRankEntry)(nil),                   // 72: guildpb.GuildRankEntry
+	(*UpdateGuildScoreRequest)(nil),          // 73: guildpb.UpdateGuildScoreRequest
+	(*UpdateGuildScoreResponse)(nil),         // 74: guildpb.UpdateGuildScoreResponse
+	(*GetGuildRankRequest)(nil),              // 75: guildpb.GetGuildRankRequest
+	(*GetGuildRankResponse)(nil),             // 76: guildpb.GetGuildRankResponse
+	(*GetGuildRankByGuildRequest)(nil),       // 77: guildpb.GetGuildRankByGuildRequest
+	(*GetGuildRankByGuildResponse)(nil),      // 78: guildpb.GetGuildRankByGuildResponse
+	(*GuildWarStanceView)(nil),               // 79: guildpb.GuildWarStanceView
+	(*GuildWarBannerHonorView)(nil),          // 80: guildpb.GuildWarBannerHonorView
+	(*GuildWarLeylineView)(nil),              // 81: guildpb.GuildWarLeylineView
+	(*GuildWarMilestoneView)(nil),            // 82: guildpb.GuildWarMilestoneView
+	(*GuildWarDividendView)(nil),             // 83: guildpb.GuildWarDividendView
+	(*GuildWarStreakBountyView)(nil),         // 84: guildpb.GuildWarStreakBountyView
+	(*GuildWarLiveTargetView)(nil),           // 85: guildpb.GuildWarLiveTargetView
+	(*GuildWarGarrisonSlotView)(nil),         // 86: guildpb.GuildWarGarrisonSlotView
+	(*GuildWarEnemyView)(nil),                // 87: guildpb.GuildWarEnemyView
+	(*GuildWarBountyView)(nil),               // 88: guildpb.GuildWarBountyView
+	(*GuildWarRecentLogView)(nil),            // 89: guildpb.GuildWarRecentLogView
+	(*GetGuildWarOverviewRequest)(nil),       // 90: guildpb.GetGuildWarOverviewRequest
+	(*GetGuildWarOverviewResponse)(nil),      // 91: guildpb.GetGuildWarOverviewResponse
+	(*SetGuildWarStanceRequest)(nil),         // 92: guildpb.SetGuildWarStanceRequest
+	(*SetGuildWarStanceResponse)(nil),        // 93: guildpb.SetGuildWarStanceResponse
+	(*RegisterGuildWarGarrisonRequest)(nil),  // 94: guildpb.RegisterGuildWarGarrisonRequest
+	(*RegisterGuildWarGarrisonResponse)(nil), // 95: guildpb.RegisterGuildWarGarrisonResponse
+	(*StartGuildWarBattleRequest)(nil),       // 96: guildpb.StartGuildWarBattleRequest
+	(*StartGuildWarBattleResponse)(nil),      // 97: guildpb.StartGuildWarBattleResponse
+	(*ClaimGuildWarMilestoneRequest)(nil),    // 98: guildpb.ClaimGuildWarMilestoneRequest
+	(*ClaimGuildWarMilestoneResponse)(nil),   // 99: guildpb.ClaimGuildWarMilestoneResponse
+	(*ClaimGuildWarDividendRequest)(nil),     // 100: guildpb.ClaimGuildWarDividendRequest
+	(*ClaimGuildWarDividendResponse)(nil),    // 101: guildpb.ClaimGuildWarDividendResponse
+	(*PostGuildWarBountyRequest)(nil),        // 102: guildpb.PostGuildWarBountyRequest
+	(*PostGuildWarBountyResponse)(nil),       // 103: guildpb.PostGuildWarBountyResponse
+	(*TrackGuildWarBountyRequest)(nil),       // 104: guildpb.TrackGuildWarBountyRequest
+	(*TrackGuildWarBountyResponse)(nil),      // 105: guildpb.TrackGuildWarBountyResponse
+	(*GetGuildWarBattleResultRequest)(nil),   // 106: guildpb.GetGuildWarBattleResultRequest
+	(*GetGuildWarBattleResultResponse)(nil),  // 107: guildpb.GetGuildWarBattleResultResponse
+	(*GuildWarAlertS2C)(nil),                 // 108: guildpb.GuildWarAlertS2C
+	(*FieldWarTargetBrief)(nil),              // 109: guildpb.FieldWarTargetBrief
+	(*InspectFieldWarTargetsRequest)(nil),    // 110: guildpb.InspectFieldWarTargetsRequest
+	(*InspectFieldWarTargetsResponse)(nil),   // 111: guildpb.InspectFieldWarTargetsResponse
+	(*base.TipInfoMessage)(nil),              // 112: TipInfoMessage
+	(*base.Empty)(nil),                       // 113: Empty
 }
 var file_proto_guild_guild_proto_depIdxs = []int32{
-	5,  // 0: guildpb.GuildInfo.members:type_name -> guildpb.GuildMember
-	74, // 1: guildpb.CreateGuildResponse.error_message:type_name -> TipInfoMessage
-	6,  // 2: guildpb.CreateGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 3: guildpb.GetGuildResponse.error_message:type_name -> TipInfoMessage
-	6,  // 4: guildpb.GetGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 5: guildpb.GetPlayerGuildResponse.error_message:type_name -> TipInfoMessage
-	6,  // 6: guildpb.GetPlayerGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 7: guildpb.LeaveGuildResponse.error_message:type_name -> TipInfoMessage
-	74, // 8: guildpb.DisbandGuildResponse.error_message:type_name -> TipInfoMessage
-	74, // 9: guildpb.SetAnnouncementResponse.error_message:type_name -> TipInfoMessage
-	6,  // 10: guildpb.SetAnnouncementResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 11: guildpb.RenameGuildResponse.error_message:type_name -> TipInfoMessage
-	6,  // 12: guildpb.RenameGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 13: guildpb.SetGuildMemberRoleResponse.error_message:type_name -> TipInfoMessage
-	6,  // 14: guildpb.SetGuildMemberRoleResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 15: guildpb.KickGuildMemberResponse.error_message:type_name -> TipInfoMessage
-	6,  // 16: guildpb.KickGuildMemberResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 17: guildpb.TransferGuildLeaderResponse.error_message:type_name -> TipInfoMessage
-	6,  // 18: guildpb.TransferGuildLeaderResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 19: guildpb.ApplyJoinGuildResponse.error_message:type_name -> TipInfoMessage
-	74, // 20: guildpb.CancelGuildApplicationResponse.error_message:type_name -> TipInfoMessage
-	74, // 21: guildpb.ListMyGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
-	31, // 22: guildpb.ListMyGuildApplicationsResponse.applications:type_name -> guildpb.GuildApplicationView
-	74, // 23: guildpb.ListGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
-	34, // 24: guildpb.ListGuildApplicationsResponse.applicants:type_name -> guildpb.GuildApplicantView
-	74, // 25: guildpb.ReviewGuildApplicationResponse.error_message:type_name -> TipInfoMessage
-	6,  // 26: guildpb.ReviewGuildApplicationResponse.guild:type_name -> guildpb.GuildInfo
-	0,  // 27: guildpb.GuildChangedS2C.kind:type_name -> guildpb.GuildChangeKind
-	1,  // 28: guildpb.GuildDonationView.status:type_name -> guildpb.GuildAssetOrderStatus
-	1,  // 29: guildpb.GuildShopOrderView.status:type_name -> guildpb.GuildAssetOrderStatus
-	74, // 30: guildpb.GetGuildDonateOptionsResponse.error_message:type_name -> TipInfoMessage
-	41, // 31: guildpb.GetGuildDonateOptionsResponse.options:type_name -> guildpb.GuildDonateOptionView
-	40, // 32: guildpb.GetGuildDonateOptionsResponse.pending_donations:type_name -> guildpb.GuildDonationView
-	40, // 33: guildpb.GetGuildDonateOptionsResponse.recent_results:type_name -> guildpb.GuildDonationView
-	74, // 34: guildpb.DonateToGuildResponse.error_message:type_name -> TipInfoMessage
-	40, // 35: guildpb.DonateToGuildResponse.donation:type_name -> guildpb.GuildDonationView
-	6,  // 36: guildpb.DonateToGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 37: guildpb.UpgradeGuildResponse.error_message:type_name -> TipInfoMessage
-	6,  // 38: guildpb.UpgradeGuildResponse.guild:type_name -> guildpb.GuildInfo
-	74, // 39: guildpb.GetGuildShopResponse.error_message:type_name -> TipInfoMessage
-	42, // 40: guildpb.GetGuildShopResponse.goods:type_name -> guildpb.GuildShopGoodsView
-	43, // 41: guildpb.GetGuildShopResponse.pending_orders:type_name -> guildpb.GuildShopOrderView
-	43, // 42: guildpb.GetGuildShopResponse.recent_orders:type_name -> guildpb.GuildShopOrderView
-	74, // 43: guildpb.BuyGuildShopGoodsResponse.error_message:type_name -> TipInfoMessage
-	43, // 44: guildpb.BuyGuildShopGoodsResponse.order:type_name -> guildpb.GuildShopOrderView
-	4,  // 45: guildpb.GuildTrialLobbyView.state:type_name -> guildpb.GuildTrialLobbyState
-	2,  // 46: guildpb.GuildActivityView.type:type_name -> guildpb.GuildActivityType
-	3,  // 47: guildpb.GuildActivityView.state:type_name -> guildpb.GuildActivityState
-	54, // 48: guildpb.GuildActivityView.reward_items:type_name -> guildpb.GuildRewardItem
-	55, // 49: guildpb.GuildActivityView.trial_lobby:type_name -> guildpb.GuildTrialLobbyView
-	74, // 50: guildpb.GetGuildActivitiesResponse.error_message:type_name -> TipInfoMessage
-	56, // 51: guildpb.GetGuildActivitiesResponse.activities:type_name -> guildpb.GuildActivityView
-	74, // 52: guildpb.LightGuildLanternResponse.error_message:type_name -> TipInfoMessage
-	56, // 53: guildpb.LightGuildLanternResponse.activity:type_name -> guildpb.GuildActivityView
-	74, // 54: guildpb.ClaimGuildReunionResponse.error_message:type_name -> TipInfoMessage
-	56, // 55: guildpb.ClaimGuildReunionResponse.activity:type_name -> guildpb.GuildActivityView
-	74, // 56: guildpb.StartGuildTrialResponse.error_message:type_name -> TipInfoMessage
-	56, // 57: guildpb.StartGuildTrialResponse.activity:type_name -> guildpb.GuildActivityView
-	74, // 58: guildpb.RespondGuildTrialInviteResponse.error_message:type_name -> TipInfoMessage
-	56, // 59: guildpb.RespondGuildTrialInviteResponse.activity:type_name -> guildpb.GuildActivityView
-	74, // 60: guildpb.UpdateGuildScoreResponse.error_message:type_name -> TipInfoMessage
-	74, // 61: guildpb.GetGuildRankResponse.error_message:type_name -> TipInfoMessage
-	67, // 62: guildpb.GetGuildRankResponse.entries:type_name -> guildpb.GuildRankEntry
-	74, // 63: guildpb.GetGuildRankByGuildResponse.error_message:type_name -> TipInfoMessage
-	67, // 64: guildpb.GetGuildRankByGuildResponse.entry:type_name -> guildpb.GuildRankEntry
-	7,  // 65: guildpb.GuildService.CreateGuild:input_type -> guildpb.CreateGuildRequest
-	9,  // 66: guildpb.GuildService.GetGuild:input_type -> guildpb.GetGuildRequest
-	11, // 67: guildpb.GuildService.GetPlayerGuild:input_type -> guildpb.GetPlayerGuildRequest
-	13, // 68: guildpb.GuildService.LeaveGuild:input_type -> guildpb.LeaveGuildRequest
-	15, // 69: guildpb.GuildService.DisbandGuild:input_type -> guildpb.DisbandGuildRequest
-	17, // 70: guildpb.GuildService.SetAnnouncement:input_type -> guildpb.SetAnnouncementRequest
-	19, // 71: guildpb.GuildService.RenameGuild:input_type -> guildpb.RenameGuildRequest
-	21, // 72: guildpb.GuildService.SetGuildMemberRole:input_type -> guildpb.SetGuildMemberRoleRequest
-	23, // 73: guildpb.GuildService.KickGuildMember:input_type -> guildpb.KickGuildMemberRequest
-	25, // 74: guildpb.GuildService.TransferGuildLeader:input_type -> guildpb.TransferGuildLeaderRequest
-	27, // 75: guildpb.GuildService.ApplyJoinGuild:input_type -> guildpb.ApplyJoinGuildRequest
-	29, // 76: guildpb.GuildService.CancelGuildApplication:input_type -> guildpb.CancelGuildApplicationRequest
-	32, // 77: guildpb.GuildService.ListMyGuildApplications:input_type -> guildpb.ListMyGuildApplicationsRequest
-	35, // 78: guildpb.GuildService.ListGuildApplications:input_type -> guildpb.ListGuildApplicationsRequest
-	37, // 79: guildpb.GuildService.ReviewGuildApplication:input_type -> guildpb.ReviewGuildApplicationRequest
-	39, // 80: guildpb.GuildService.NotifyGuildChanged:input_type -> guildpb.GuildChangedS2C
-	68, // 81: guildpb.GuildService.UpdateGuildScore:input_type -> guildpb.UpdateGuildScoreRequest
-	70, // 82: guildpb.GuildService.GetGuildRank:input_type -> guildpb.GetGuildRankRequest
-	72, // 83: guildpb.GuildService.GetGuildRankByGuild:input_type -> guildpb.GetGuildRankByGuildRequest
-	44, // 84: guildpb.GuildService.GetGuildDonateOptions:input_type -> guildpb.GetGuildDonateOptionsRequest
-	46, // 85: guildpb.GuildService.DonateToGuild:input_type -> guildpb.DonateToGuildRequest
-	48, // 86: guildpb.GuildService.UpgradeGuild:input_type -> guildpb.UpgradeGuildRequest
-	50, // 87: guildpb.GuildService.GetGuildShop:input_type -> guildpb.GetGuildShopRequest
-	52, // 88: guildpb.GuildService.BuyGuildShopGoods:input_type -> guildpb.BuyGuildShopGoodsRequest
-	57, // 89: guildpb.GuildService.GetGuildActivities:input_type -> guildpb.GetGuildActivitiesRequest
-	59, // 90: guildpb.GuildService.LightGuildLantern:input_type -> guildpb.LightGuildLanternRequest
-	61, // 91: guildpb.GuildService.ClaimGuildReunion:input_type -> guildpb.ClaimGuildReunionRequest
-	63, // 92: guildpb.GuildService.StartGuildTrial:input_type -> guildpb.StartGuildTrialRequest
-	65, // 93: guildpb.GuildService.RespondGuildTrialInvite:input_type -> guildpb.RespondGuildTrialInviteRequest
-	8,  // 94: guildpb.GuildService.CreateGuild:output_type -> guildpb.CreateGuildResponse
-	10, // 95: guildpb.GuildService.GetGuild:output_type -> guildpb.GetGuildResponse
-	12, // 96: guildpb.GuildService.GetPlayerGuild:output_type -> guildpb.GetPlayerGuildResponse
-	14, // 97: guildpb.GuildService.LeaveGuild:output_type -> guildpb.LeaveGuildResponse
-	16, // 98: guildpb.GuildService.DisbandGuild:output_type -> guildpb.DisbandGuildResponse
-	18, // 99: guildpb.GuildService.SetAnnouncement:output_type -> guildpb.SetAnnouncementResponse
-	20, // 100: guildpb.GuildService.RenameGuild:output_type -> guildpb.RenameGuildResponse
-	22, // 101: guildpb.GuildService.SetGuildMemberRole:output_type -> guildpb.SetGuildMemberRoleResponse
-	24, // 102: guildpb.GuildService.KickGuildMember:output_type -> guildpb.KickGuildMemberResponse
-	26, // 103: guildpb.GuildService.TransferGuildLeader:output_type -> guildpb.TransferGuildLeaderResponse
-	28, // 104: guildpb.GuildService.ApplyJoinGuild:output_type -> guildpb.ApplyJoinGuildResponse
-	30, // 105: guildpb.GuildService.CancelGuildApplication:output_type -> guildpb.CancelGuildApplicationResponse
-	33, // 106: guildpb.GuildService.ListMyGuildApplications:output_type -> guildpb.ListMyGuildApplicationsResponse
-	36, // 107: guildpb.GuildService.ListGuildApplications:output_type -> guildpb.ListGuildApplicationsResponse
-	38, // 108: guildpb.GuildService.ReviewGuildApplication:output_type -> guildpb.ReviewGuildApplicationResponse
-	75, // 109: guildpb.GuildService.NotifyGuildChanged:output_type -> Empty
-	69, // 110: guildpb.GuildService.UpdateGuildScore:output_type -> guildpb.UpdateGuildScoreResponse
-	71, // 111: guildpb.GuildService.GetGuildRank:output_type -> guildpb.GetGuildRankResponse
-	73, // 112: guildpb.GuildService.GetGuildRankByGuild:output_type -> guildpb.GetGuildRankByGuildResponse
-	45, // 113: guildpb.GuildService.GetGuildDonateOptions:output_type -> guildpb.GetGuildDonateOptionsResponse
-	47, // 114: guildpb.GuildService.DonateToGuild:output_type -> guildpb.DonateToGuildResponse
-	49, // 115: guildpb.GuildService.UpgradeGuild:output_type -> guildpb.UpgradeGuildResponse
-	51, // 116: guildpb.GuildService.GetGuildShop:output_type -> guildpb.GetGuildShopResponse
-	53, // 117: guildpb.GuildService.BuyGuildShopGoods:output_type -> guildpb.BuyGuildShopGoodsResponse
-	58, // 118: guildpb.GuildService.GetGuildActivities:output_type -> guildpb.GetGuildActivitiesResponse
-	60, // 119: guildpb.GuildService.LightGuildLantern:output_type -> guildpb.LightGuildLanternResponse
-	62, // 120: guildpb.GuildService.ClaimGuildReunion:output_type -> guildpb.ClaimGuildReunionResponse
-	64, // 121: guildpb.GuildService.StartGuildTrial:output_type -> guildpb.StartGuildTrialResponse
-	66, // 122: guildpb.GuildService.RespondGuildTrialInvite:output_type -> guildpb.RespondGuildTrialInviteResponse
-	94, // [94:123] is the sub-list for method output_type
-	65, // [65:94] is the sub-list for method input_type
-	65, // [65:65] is the sub-list for extension type_name
-	65, // [65:65] is the sub-list for extension extendee
-	0,  // [0:65] is the sub-list for field type_name
+	10,  // 0: guildpb.GuildInfo.members:type_name -> guildpb.GuildMember
+	112, // 1: guildpb.CreateGuildResponse.error_message:type_name -> TipInfoMessage
+	11,  // 2: guildpb.CreateGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 3: guildpb.GetGuildResponse.error_message:type_name -> TipInfoMessage
+	11,  // 4: guildpb.GetGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 5: guildpb.GetPlayerGuildResponse.error_message:type_name -> TipInfoMessage
+	11,  // 6: guildpb.GetPlayerGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 7: guildpb.LeaveGuildResponse.error_message:type_name -> TipInfoMessage
+	112, // 8: guildpb.DisbandGuildResponse.error_message:type_name -> TipInfoMessage
+	112, // 9: guildpb.SetAnnouncementResponse.error_message:type_name -> TipInfoMessage
+	11,  // 10: guildpb.SetAnnouncementResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 11: guildpb.RenameGuildResponse.error_message:type_name -> TipInfoMessage
+	11,  // 12: guildpb.RenameGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 13: guildpb.SetGuildMemberRoleResponse.error_message:type_name -> TipInfoMessage
+	11,  // 14: guildpb.SetGuildMemberRoleResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 15: guildpb.KickGuildMemberResponse.error_message:type_name -> TipInfoMessage
+	11,  // 16: guildpb.KickGuildMemberResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 17: guildpb.TransferGuildLeaderResponse.error_message:type_name -> TipInfoMessage
+	11,  // 18: guildpb.TransferGuildLeaderResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 19: guildpb.ApplyJoinGuildResponse.error_message:type_name -> TipInfoMessage
+	112, // 20: guildpb.CancelGuildApplicationResponse.error_message:type_name -> TipInfoMessage
+	112, // 21: guildpb.ListMyGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
+	36,  // 22: guildpb.ListMyGuildApplicationsResponse.applications:type_name -> guildpb.GuildApplicationView
+	112, // 23: guildpb.ListGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
+	39,  // 24: guildpb.ListGuildApplicationsResponse.applicants:type_name -> guildpb.GuildApplicantView
+	112, // 25: guildpb.ReviewGuildApplicationResponse.error_message:type_name -> TipInfoMessage
+	11,  // 26: guildpb.ReviewGuildApplicationResponse.guild:type_name -> guildpb.GuildInfo
+	0,   // 27: guildpb.GuildChangedS2C.kind:type_name -> guildpb.GuildChangeKind
+	1,   // 28: guildpb.GuildDonationView.status:type_name -> guildpb.GuildAssetOrderStatus
+	1,   // 29: guildpb.GuildShopOrderView.status:type_name -> guildpb.GuildAssetOrderStatus
+	112, // 30: guildpb.GetGuildDonateOptionsResponse.error_message:type_name -> TipInfoMessage
+	46,  // 31: guildpb.GetGuildDonateOptionsResponse.options:type_name -> guildpb.GuildDonateOptionView
+	45,  // 32: guildpb.GetGuildDonateOptionsResponse.pending_donations:type_name -> guildpb.GuildDonationView
+	45,  // 33: guildpb.GetGuildDonateOptionsResponse.recent_results:type_name -> guildpb.GuildDonationView
+	112, // 34: guildpb.DonateToGuildResponse.error_message:type_name -> TipInfoMessage
+	45,  // 35: guildpb.DonateToGuildResponse.donation:type_name -> guildpb.GuildDonationView
+	11,  // 36: guildpb.DonateToGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 37: guildpb.UpgradeGuildResponse.error_message:type_name -> TipInfoMessage
+	11,  // 38: guildpb.UpgradeGuildResponse.guild:type_name -> guildpb.GuildInfo
+	112, // 39: guildpb.GetGuildShopResponse.error_message:type_name -> TipInfoMessage
+	47,  // 40: guildpb.GetGuildShopResponse.goods:type_name -> guildpb.GuildShopGoodsView
+	48,  // 41: guildpb.GetGuildShopResponse.pending_orders:type_name -> guildpb.GuildShopOrderView
+	48,  // 42: guildpb.GetGuildShopResponse.recent_orders:type_name -> guildpb.GuildShopOrderView
+	112, // 43: guildpb.BuyGuildShopGoodsResponse.error_message:type_name -> TipInfoMessage
+	48,  // 44: guildpb.BuyGuildShopGoodsResponse.order:type_name -> guildpb.GuildShopOrderView
+	4,   // 45: guildpb.GuildTrialLobbyView.state:type_name -> guildpb.GuildTrialLobbyState
+	2,   // 46: guildpb.GuildActivityView.type:type_name -> guildpb.GuildActivityType
+	3,   // 47: guildpb.GuildActivityView.state:type_name -> guildpb.GuildActivityState
+	59,  // 48: guildpb.GuildActivityView.reward_items:type_name -> guildpb.GuildRewardItem
+	60,  // 49: guildpb.GuildActivityView.trial_lobby:type_name -> guildpb.GuildTrialLobbyView
+	112, // 50: guildpb.GetGuildActivitiesResponse.error_message:type_name -> TipInfoMessage
+	61,  // 51: guildpb.GetGuildActivitiesResponse.activities:type_name -> guildpb.GuildActivityView
+	112, // 52: guildpb.LightGuildLanternResponse.error_message:type_name -> TipInfoMessage
+	61,  // 53: guildpb.LightGuildLanternResponse.activity:type_name -> guildpb.GuildActivityView
+	112, // 54: guildpb.ClaimGuildReunionResponse.error_message:type_name -> TipInfoMessage
+	61,  // 55: guildpb.ClaimGuildReunionResponse.activity:type_name -> guildpb.GuildActivityView
+	112, // 56: guildpb.StartGuildTrialResponse.error_message:type_name -> TipInfoMessage
+	61,  // 57: guildpb.StartGuildTrialResponse.activity:type_name -> guildpb.GuildActivityView
+	112, // 58: guildpb.RespondGuildTrialInviteResponse.error_message:type_name -> TipInfoMessage
+	61,  // 59: guildpb.RespondGuildTrialInviteResponse.activity:type_name -> guildpb.GuildActivityView
+	112, // 60: guildpb.UpdateGuildScoreResponse.error_message:type_name -> TipInfoMessage
+	112, // 61: guildpb.GetGuildRankResponse.error_message:type_name -> TipInfoMessage
+	72,  // 62: guildpb.GetGuildRankResponse.entries:type_name -> guildpb.GuildRankEntry
+	112, // 63: guildpb.GetGuildRankByGuildResponse.error_message:type_name -> TipInfoMessage
+	72,  // 64: guildpb.GetGuildRankByGuildResponse.entry:type_name -> guildpb.GuildRankEntry
+	59,  // 65: guildpb.GuildWarMilestoneView.reward_items:type_name -> guildpb.GuildRewardItem
+	6,   // 66: guildpb.GuildWarEnemyView.battle_kind:type_name -> guildpb.GuildWarBattleKind
+	7,   // 67: guildpb.GuildWarBountyView.tier:type_name -> guildpb.GuildWarBountyTier
+	8,   // 68: guildpb.GuildWarBountyView.status:type_name -> guildpb.GuildWarBountyStatus
+	6,   // 69: guildpb.GuildWarRecentLogView.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
+	112, // 70: guildpb.GetGuildWarOverviewResponse.error_message:type_name -> TipInfoMessage
+	79,  // 71: guildpb.GetGuildWarOverviewResponse.my_stance:type_name -> guildpb.GuildWarStanceView
+	80,  // 72: guildpb.GetGuildWarOverviewResponse.banner_honor:type_name -> guildpb.GuildWarBannerHonorView
+	81,  // 73: guildpb.GetGuildWarOverviewResponse.leylines:type_name -> guildpb.GuildWarLeylineView
+	82,  // 74: guildpb.GetGuildWarOverviewResponse.milestones:type_name -> guildpb.GuildWarMilestoneView
+	83,  // 75: guildpb.GetGuildWarOverviewResponse.dividend:type_name -> guildpb.GuildWarDividendView
+	84,  // 76: guildpb.GetGuildWarOverviewResponse.streak_bounties:type_name -> guildpb.GuildWarStreakBountyView
+	85,  // 77: guildpb.GetGuildWarOverviewResponse.live_targets:type_name -> guildpb.GuildWarLiveTargetView
+	86,  // 78: guildpb.GetGuildWarOverviewResponse.garrison_slots:type_name -> guildpb.GuildWarGarrisonSlotView
+	87,  // 79: guildpb.GetGuildWarOverviewResponse.enemies:type_name -> guildpb.GuildWarEnemyView
+	88,  // 80: guildpb.GetGuildWarOverviewResponse.bounties:type_name -> guildpb.GuildWarBountyView
+	89,  // 81: guildpb.GetGuildWarOverviewResponse.recent_logs:type_name -> guildpb.GuildWarRecentLogView
+	112, // 82: guildpb.SetGuildWarStanceResponse.error_message:type_name -> TipInfoMessage
+	79,  // 83: guildpb.SetGuildWarStanceResponse.my_stance:type_name -> guildpb.GuildWarStanceView
+	112, // 84: guildpb.RegisterGuildWarGarrisonResponse.error_message:type_name -> TipInfoMessage
+	86,  // 85: guildpb.RegisterGuildWarGarrisonResponse.garrison_slots:type_name -> guildpb.GuildWarGarrisonSlotView
+	5,   // 86: guildpb.StartGuildWarBattleRequest.target_kind:type_name -> guildpb.GuildWarTargetKind
+	112, // 87: guildpb.StartGuildWarBattleResponse.error_message:type_name -> TipInfoMessage
+	6,   // 88: guildpb.StartGuildWarBattleResponse.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
+	112, // 89: guildpb.ClaimGuildWarMilestoneResponse.error_message:type_name -> TipInfoMessage
+	82,  // 90: guildpb.ClaimGuildWarMilestoneResponse.milestone:type_name -> guildpb.GuildWarMilestoneView
+	1,   // 91: guildpb.ClaimGuildWarMilestoneResponse.asset_order_status:type_name -> guildpb.GuildAssetOrderStatus
+	112, // 92: guildpb.ClaimGuildWarDividendResponse.error_message:type_name -> TipInfoMessage
+	83,  // 93: guildpb.ClaimGuildWarDividendResponse.dividend:type_name -> guildpb.GuildWarDividendView
+	1,   // 94: guildpb.ClaimGuildWarDividendResponse.asset_order_status:type_name -> guildpb.GuildAssetOrderStatus
+	7,   // 95: guildpb.PostGuildWarBountyRequest.tier:type_name -> guildpb.GuildWarBountyTier
+	112, // 96: guildpb.PostGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
+	88,  // 97: guildpb.PostGuildWarBountyResponse.bounty:type_name -> guildpb.GuildWarBountyView
+	112, // 98: guildpb.TrackGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
+	112, // 99: guildpb.GetGuildWarBattleResultResponse.error_message:type_name -> TipInfoMessage
+	6,   // 100: guildpb.GetGuildWarBattleResultResponse.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
+	9,   // 101: guildpb.GuildWarAlertS2C.kind:type_name -> guildpb.GuildWarAlertKind
+	7,   // 102: guildpb.FieldWarTargetBrief.active_bounty_tier:type_name -> guildpb.GuildWarBountyTier
+	112, // 103: guildpb.InspectFieldWarTargetsResponse.error_message:type_name -> TipInfoMessage
+	109, // 104: guildpb.InspectFieldWarTargetsResponse.targets:type_name -> guildpb.FieldWarTargetBrief
+	12,  // 105: guildpb.GuildService.CreateGuild:input_type -> guildpb.CreateGuildRequest
+	14,  // 106: guildpb.GuildService.GetGuild:input_type -> guildpb.GetGuildRequest
+	16,  // 107: guildpb.GuildService.GetPlayerGuild:input_type -> guildpb.GetPlayerGuildRequest
+	18,  // 108: guildpb.GuildService.LeaveGuild:input_type -> guildpb.LeaveGuildRequest
+	20,  // 109: guildpb.GuildService.DisbandGuild:input_type -> guildpb.DisbandGuildRequest
+	22,  // 110: guildpb.GuildService.SetAnnouncement:input_type -> guildpb.SetAnnouncementRequest
+	24,  // 111: guildpb.GuildService.RenameGuild:input_type -> guildpb.RenameGuildRequest
+	26,  // 112: guildpb.GuildService.SetGuildMemberRole:input_type -> guildpb.SetGuildMemberRoleRequest
+	28,  // 113: guildpb.GuildService.KickGuildMember:input_type -> guildpb.KickGuildMemberRequest
+	30,  // 114: guildpb.GuildService.TransferGuildLeader:input_type -> guildpb.TransferGuildLeaderRequest
+	32,  // 115: guildpb.GuildService.ApplyJoinGuild:input_type -> guildpb.ApplyJoinGuildRequest
+	34,  // 116: guildpb.GuildService.CancelGuildApplication:input_type -> guildpb.CancelGuildApplicationRequest
+	37,  // 117: guildpb.GuildService.ListMyGuildApplications:input_type -> guildpb.ListMyGuildApplicationsRequest
+	40,  // 118: guildpb.GuildService.ListGuildApplications:input_type -> guildpb.ListGuildApplicationsRequest
+	42,  // 119: guildpb.GuildService.ReviewGuildApplication:input_type -> guildpb.ReviewGuildApplicationRequest
+	44,  // 120: guildpb.GuildService.NotifyGuildChanged:input_type -> guildpb.GuildChangedS2C
+	73,  // 121: guildpb.GuildService.UpdateGuildScore:input_type -> guildpb.UpdateGuildScoreRequest
+	75,  // 122: guildpb.GuildService.GetGuildRank:input_type -> guildpb.GetGuildRankRequest
+	77,  // 123: guildpb.GuildService.GetGuildRankByGuild:input_type -> guildpb.GetGuildRankByGuildRequest
+	49,  // 124: guildpb.GuildService.GetGuildDonateOptions:input_type -> guildpb.GetGuildDonateOptionsRequest
+	51,  // 125: guildpb.GuildService.DonateToGuild:input_type -> guildpb.DonateToGuildRequest
+	53,  // 126: guildpb.GuildService.UpgradeGuild:input_type -> guildpb.UpgradeGuildRequest
+	55,  // 127: guildpb.GuildService.GetGuildShop:input_type -> guildpb.GetGuildShopRequest
+	57,  // 128: guildpb.GuildService.BuyGuildShopGoods:input_type -> guildpb.BuyGuildShopGoodsRequest
+	62,  // 129: guildpb.GuildService.GetGuildActivities:input_type -> guildpb.GetGuildActivitiesRequest
+	64,  // 130: guildpb.GuildService.LightGuildLantern:input_type -> guildpb.LightGuildLanternRequest
+	66,  // 131: guildpb.GuildService.ClaimGuildReunion:input_type -> guildpb.ClaimGuildReunionRequest
+	68,  // 132: guildpb.GuildService.StartGuildTrial:input_type -> guildpb.StartGuildTrialRequest
+	70,  // 133: guildpb.GuildService.RespondGuildTrialInvite:input_type -> guildpb.RespondGuildTrialInviteRequest
+	90,  // 134: guildpb.GuildService.GetGuildWarOverview:input_type -> guildpb.GetGuildWarOverviewRequest
+	92,  // 135: guildpb.GuildService.SetGuildWarStance:input_type -> guildpb.SetGuildWarStanceRequest
+	94,  // 136: guildpb.GuildService.RegisterGuildWarGarrison:input_type -> guildpb.RegisterGuildWarGarrisonRequest
+	96,  // 137: guildpb.GuildService.StartGuildWarBattle:input_type -> guildpb.StartGuildWarBattleRequest
+	98,  // 138: guildpb.GuildService.ClaimGuildWarMilestone:input_type -> guildpb.ClaimGuildWarMilestoneRequest
+	100, // 139: guildpb.GuildService.ClaimGuildWarDividend:input_type -> guildpb.ClaimGuildWarDividendRequest
+	102, // 140: guildpb.GuildService.PostGuildWarBounty:input_type -> guildpb.PostGuildWarBountyRequest
+	104, // 141: guildpb.GuildService.TrackGuildWarBounty:input_type -> guildpb.TrackGuildWarBountyRequest
+	106, // 142: guildpb.GuildService.GetGuildWarBattleResult:input_type -> guildpb.GetGuildWarBattleResultRequest
+	108, // 143: guildpb.GuildService.NotifyGuildWarAlert:input_type -> guildpb.GuildWarAlertS2C
+	110, // 144: guildpb.GuildService.InspectFieldWarTargets:input_type -> guildpb.InspectFieldWarTargetsRequest
+	13,  // 145: guildpb.GuildService.CreateGuild:output_type -> guildpb.CreateGuildResponse
+	15,  // 146: guildpb.GuildService.GetGuild:output_type -> guildpb.GetGuildResponse
+	17,  // 147: guildpb.GuildService.GetPlayerGuild:output_type -> guildpb.GetPlayerGuildResponse
+	19,  // 148: guildpb.GuildService.LeaveGuild:output_type -> guildpb.LeaveGuildResponse
+	21,  // 149: guildpb.GuildService.DisbandGuild:output_type -> guildpb.DisbandGuildResponse
+	23,  // 150: guildpb.GuildService.SetAnnouncement:output_type -> guildpb.SetAnnouncementResponse
+	25,  // 151: guildpb.GuildService.RenameGuild:output_type -> guildpb.RenameGuildResponse
+	27,  // 152: guildpb.GuildService.SetGuildMemberRole:output_type -> guildpb.SetGuildMemberRoleResponse
+	29,  // 153: guildpb.GuildService.KickGuildMember:output_type -> guildpb.KickGuildMemberResponse
+	31,  // 154: guildpb.GuildService.TransferGuildLeader:output_type -> guildpb.TransferGuildLeaderResponse
+	33,  // 155: guildpb.GuildService.ApplyJoinGuild:output_type -> guildpb.ApplyJoinGuildResponse
+	35,  // 156: guildpb.GuildService.CancelGuildApplication:output_type -> guildpb.CancelGuildApplicationResponse
+	38,  // 157: guildpb.GuildService.ListMyGuildApplications:output_type -> guildpb.ListMyGuildApplicationsResponse
+	41,  // 158: guildpb.GuildService.ListGuildApplications:output_type -> guildpb.ListGuildApplicationsResponse
+	43,  // 159: guildpb.GuildService.ReviewGuildApplication:output_type -> guildpb.ReviewGuildApplicationResponse
+	113, // 160: guildpb.GuildService.NotifyGuildChanged:output_type -> Empty
+	74,  // 161: guildpb.GuildService.UpdateGuildScore:output_type -> guildpb.UpdateGuildScoreResponse
+	76,  // 162: guildpb.GuildService.GetGuildRank:output_type -> guildpb.GetGuildRankResponse
+	78,  // 163: guildpb.GuildService.GetGuildRankByGuild:output_type -> guildpb.GetGuildRankByGuildResponse
+	50,  // 164: guildpb.GuildService.GetGuildDonateOptions:output_type -> guildpb.GetGuildDonateOptionsResponse
+	52,  // 165: guildpb.GuildService.DonateToGuild:output_type -> guildpb.DonateToGuildResponse
+	54,  // 166: guildpb.GuildService.UpgradeGuild:output_type -> guildpb.UpgradeGuildResponse
+	56,  // 167: guildpb.GuildService.GetGuildShop:output_type -> guildpb.GetGuildShopResponse
+	58,  // 168: guildpb.GuildService.BuyGuildShopGoods:output_type -> guildpb.BuyGuildShopGoodsResponse
+	63,  // 169: guildpb.GuildService.GetGuildActivities:output_type -> guildpb.GetGuildActivitiesResponse
+	65,  // 170: guildpb.GuildService.LightGuildLantern:output_type -> guildpb.LightGuildLanternResponse
+	67,  // 171: guildpb.GuildService.ClaimGuildReunion:output_type -> guildpb.ClaimGuildReunionResponse
+	69,  // 172: guildpb.GuildService.StartGuildTrial:output_type -> guildpb.StartGuildTrialResponse
+	71,  // 173: guildpb.GuildService.RespondGuildTrialInvite:output_type -> guildpb.RespondGuildTrialInviteResponse
+	91,  // 174: guildpb.GuildService.GetGuildWarOverview:output_type -> guildpb.GetGuildWarOverviewResponse
+	93,  // 175: guildpb.GuildService.SetGuildWarStance:output_type -> guildpb.SetGuildWarStanceResponse
+	95,  // 176: guildpb.GuildService.RegisterGuildWarGarrison:output_type -> guildpb.RegisterGuildWarGarrisonResponse
+	97,  // 177: guildpb.GuildService.StartGuildWarBattle:output_type -> guildpb.StartGuildWarBattleResponse
+	99,  // 178: guildpb.GuildService.ClaimGuildWarMilestone:output_type -> guildpb.ClaimGuildWarMilestoneResponse
+	101, // 179: guildpb.GuildService.ClaimGuildWarDividend:output_type -> guildpb.ClaimGuildWarDividendResponse
+	103, // 180: guildpb.GuildService.PostGuildWarBounty:output_type -> guildpb.PostGuildWarBountyResponse
+	105, // 181: guildpb.GuildService.TrackGuildWarBounty:output_type -> guildpb.TrackGuildWarBountyResponse
+	107, // 182: guildpb.GuildService.GetGuildWarBattleResult:output_type -> guildpb.GetGuildWarBattleResultResponse
+	113, // 183: guildpb.GuildService.NotifyGuildWarAlert:output_type -> Empty
+	111, // 184: guildpb.GuildService.InspectFieldWarTargets:output_type -> guildpb.InspectFieldWarTargetsResponse
+	145, // [145:185] is the sub-list for method output_type
+	105, // [105:145] is the sub-list for method input_type
+	105, // [105:105] is the sub-list for extension type_name
+	105, // [105:105] is the sub-list for extension extendee
+	0,   // [0:105] is the sub-list for field type_name
 }
 
 func init() { file_proto_guild_guild_proto_init() }
@@ -5383,13 +9265,14 @@ func file_proto_guild_guild_proto_init() {
 	if File_proto_guild_guild_proto != nil {
 		return
 	}
+	file_proto_guild_guild_proto_msgTypes[82].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_proto_rawDesc), len(file_proto_guild_guild_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   69,
+			NumEnums:      10,
+			NumMessages:   102,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

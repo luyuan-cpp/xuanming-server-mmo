@@ -24,31 +24,31 @@ class RecordingSink final : public tracing::SpanSink {
 public:
     void Submit(const tracing::SpanRecord& span) noexcept override
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        spans_.push_back(span);
+        std::lock_guard<std::mutex> lock(mutex);
+        spans.push_back(span);
     }
 
     std::vector<tracing::SpanRecord> Spans() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return spans_;
+        std::lock_guard<std::mutex> lock(mutex);
+        return spans;
     }
 
     size_t Count() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return spans_.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        return spans.size();
     }
 
     void Clear()
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        spans_.clear();
+        std::lock_guard<std::mutex> lock(mutex);
+        spans.clear();
     }
 
 private:
-    mutable std::mutex mutex_;
-    std::vector<tracing::SpanRecord> spans_;
+    mutable std::mutex mutex;
+    std::vector<tracing::SpanRecord> spans;
 };
 
 class ScopedSinkInstall {
@@ -56,19 +56,19 @@ public:
     explicit ScopedSinkInstall(tracing::SpanSink* sink)
     {
         if (tracing::SpanSink* previous = tracing::InstalledSpanSink(); previous != nullptr) {
-            previous_ = std::ref(*previous);
+            this->previous = std::ref(*previous);
         }
         tracing::InstallSpanSink(sink);
     }
 
-    ~ScopedSinkInstall() { tracing::InstallSpanSink(previous_ ? &previous_->get() : nullptr); }
+    ~ScopedSinkInstall() { tracing::InstallSpanSink(previous ? &previous->get() : nullptr); }
 
     ScopedSinkInstall(const ScopedSinkInstall&) = delete;
     ScopedSinkInstall& operator=(const ScopedSinkInstall&) = delete;
 
 private:
     // 借用进入前装着的去处(空 = 原来没装);不存裸指针成员(Directory.Build.targets 的门禁)。
-    std::optional<std::reference_wrapper<tracing::SpanSink>> previous_;
+    std::optional<std::reference_wrapper<tracing::SpanSink>> previous;
 };
 
 // 一条可辨认的 span:trace_id 的首字节、span_id 的末字节都是 tag(tag 非零时 id 合法),名字是 "span-<tag>"。

@@ -148,17 +148,17 @@ class FlatLayout : public IContainerLayout
 public:
     // 刻意不给默认容量 —— "背包默认几格"是背包域的常量(bag_system.h 的
     // kDefaultCapacity),布局层不该知道。
-    explicit FlatLayout(std::size_t capacity) : capacity_(capacity) {}
+    explicit FlatLayout(std::size_t capacity) : capacity(capacity) {}
     [[nodiscard]] std::unique_ptr<IContainerLayout> Clone() const override
     {
         assert(typeid(*this) == typeid(FlatLayout) && "FlatLayout 的派生类必须自己覆盖 Clone");
         return std::make_unique<FlatLayout>(*this);
     }
 
-    [[nodiscard]] std::size_t Capacity() const override { return capacity_; }
-    void Resize(std::size_t newCapacity) override { capacity_ = newCapacity; }
+    [[nodiscard]] std::size_t Capacity() const override { return capacity; }
+    void Resize(std::size_t newCapacity) override { capacity = newCapacity; }
 
-    [[nodiscard]] std::size_t OccupiedSlotCount() const override { return slotToGuid_.size(); }
+    [[nodiscard]] std::size_t OccupiedSlotCount() const override { return slotToGuid.size(); }
     [[nodiscard]] std::size_t FreeCells() const override;
     [[nodiscard]] bool CanFit(std::size_t count, Footprint footprint) const override;
 
@@ -169,7 +169,7 @@ public:
 
     [[nodiscard]] SlotId SlotOf(Guid guid) const override;
     [[nodiscard]] Guid At(SlotId slot) const override;
-    [[nodiscard]] const PosMap &Slots() const override { return slotToGuid_; }
+    [[nodiscard]] const PosMap &Slots() const override { return slotToGuid; }
 
     [[nodiscard]] bool SupportsCompaction() const override { return true; }
     // 扁平背包的下标不代表任何东西,first-fit 即可。
@@ -178,9 +178,9 @@ public:
     void ApplyOrder(const std::vector<Guid> &order) override;
 
 protected:
-    PosMap slotToGuid_{};
-    std::unordered_map<Guid, SlotId> guidToSlot_{};
-    std::size_t capacity_{0};
+    PosMap slotToGuid{};
+    std::unordered_map<Guid, SlotId> guidToSlot{};
+    std::size_t capacity{0};
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -261,19 +261,19 @@ public:
         return std::make_unique<GridLayout>(*this);
     }
 
-    [[nodiscard]] uint32_t Width() const { return width_; }
-    [[nodiscard]] uint32_t Height() const { return height_; }
+    [[nodiscard]] uint32_t Width() const { return width; }
+    [[nodiscard]] uint32_t Height() const { return height; }
 
     [[nodiscard]] std::size_t Capacity() const override
     {
-        return static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_);
+        return static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     }
 
     // 按整行增减。缩容只在被砍掉的行完全空着时才执行,否则拒绝并报错 ——
     // 布局层无权决定"哪件东西该被挤掉",那是桥层 / 玩法的事。
     void Resize(std::size_t newCapacity) override;
 
-    [[nodiscard]] std::size_t OccupiedSlotCount() const override { return placed_.size(); }
+    [[nodiscard]] std::size_t OccupiedSlotCount() const override { return placed.size(); }
     [[nodiscard]] std::size_t FreeCells() const override;
     [[nodiscard]] bool CanFit(std::size_t count, Footprint footprint) const override;
 
@@ -284,7 +284,7 @@ public:
 
     [[nodiscard]] SlotId SlotOf(Guid guid) const override;
     [[nodiscard]] Guid At(SlotId slot) const override;
-    [[nodiscard]] const PosMap &Slots() const override { return anchorToGuid_; }
+    [[nodiscard]] const PosMap &Slots() const override { return anchorToGuid; }
 
     // 格子背包不做自动整理:玩家的手摆布局就是布局本身,重排等于把人家
     // 摆好的东西全打乱。桥层看到 false 就只合并堆叠、不动位置。
@@ -306,9 +306,9 @@ private:
     [[nodiscard]] SlotId FindFreeRect(const std::vector<Guid> &cells, Footprint footprint) const;
     void Stamp(std::vector<Guid> &cells, SlotId anchor, Footprint footprint, Guid guid) const;
 
-    uint32_t width_{0};
-    uint32_t height_{0};
-    std::vector<Guid> cells_{};  // 每个单元被谁占,kInvalidGuid = 空
-    std::unordered_map<Guid, Placement> placed_{};
-    PosMap anchorToGuid_{};
+    uint32_t width{0};
+    uint32_t height{0};
+    std::vector<Guid> cells{};  // 每个单元被谁占,kInvalidGuid = 空
+    std::unordered_map<Guid, Placement> placed{};
+    PosMap anchorToGuid{};
 };

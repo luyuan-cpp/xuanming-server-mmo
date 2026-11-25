@@ -47,4 +47,14 @@ enum pet_error {
 
   kPetNotTransferable = 26018;
 
+  kPetTierMaxReached = 26019;
+
+  kPetTierChanged = 26020;
+
+  kPetTierLevelNotEnough = 26021;
+
+  kPetTierMaterialNotEnough = 26022;
+
+  kPetEntryPresetInvalid = 26023;
+
 };

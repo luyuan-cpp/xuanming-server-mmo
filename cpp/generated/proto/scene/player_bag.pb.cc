@@ -1595,11 +1595,11 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1646,7 +1646,10 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentCraftChoice, _impl_.expected_polish_pity_count_), 7>(),
        {72, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.expected_polish_pity_count_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 source_item_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentCraftChoice, _impl_.source_item_id_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.source_item_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1673,6 +1676,8 @@ constexpr EquipmentCraftChoice::ParseTableT_ EquipmentCraftChoice::InternalGener
       {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.proxy_master_player_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // optional uint32 expected_polish_pity_count = 9;
       {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.expected_polish_pity_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 source_item_id = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.source_item_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1693,7 +1698,8 @@ inline constexpr EquipmentCraftChoice::Impl_::Impl_(
         use_guarantee_charm_{false},
         allow_bound_materials_{false},
         expected_polish_pity_count_{0u},
-        proxy_master_player_id_{::uint64_t{0u}} {}
+        proxy_master_player_id_{::uint64_t{0u}},
+        source_item_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr EquipmentCraftChoice::EquipmentCraftChoice(::_pbi::ConstantInitialized,
@@ -2429,11 +2435,11 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      14,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2489,11 +2495,17 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
        {88, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.current_pity_count_)}},
       // bool pity_guaranteed_next = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipEnhancePreview, _impl_.pity_guaranteed_next_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipEnhancePreview, _impl_.pity_guaranteed_next_), 12>(),
+       {96, 12, 0,
         PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool will_bind_on_enhance = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipEnhancePreview, _impl_.will_bind_on_enhance_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.will_bind_on_enhance_)}},
+      // uint64 tradable_material_available = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipEnhancePreview, _impl_.tradable_material_available_), 11>(),
+       {112, 11, 0,
+        PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.tradable_material_available_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -2521,7 +2533,11 @@ constexpr EquipEnhancePreview::ParseTableT_ EquipEnhancePreview::InternalGenerat
       // uint32 current_pity_count = 11;
       {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.current_pity_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool pity_guaranteed_next = 12;
-      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool will_bind_on_enhance = 13;
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.will_bind_on_enhance_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 tradable_material_available = 14;
+      {PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.tradable_material_available_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -2553,7 +2569,9 @@ inline constexpr EquipEnhancePreview::Impl_::Impl_(
         fail_level_loss_{0u},
         pity_limit_{0u},
         current_pity_count_{0u},
-        pity_guaranteed_next_{false} {}
+        tradable_material_available_{::uint64_t{0u}},
+        pity_guaranteed_next_{false},
+        will_bind_on_enhance_{false} {}
 
 template <typename>
 constexpr EquipEnhancePreview::EquipEnhancePreview(::_pbi::ConstantInitialized,
@@ -3263,11 +3281,11 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -3277,10 +3295,7 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
       ::_pbi::TcParser::GetTable<::EnhanceEquipRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // optional uint32 expected_pity_count = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnhanceEquipRequest, _impl_.expected_pity_count_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 item_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnhanceEquipRequest, _impl_.item_id_), 0>(),
        {8, 0, 0,
@@ -3293,6 +3308,16 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EnhanceEquipRequest, _impl_.client_request_id_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.client_request_id_)}},
+      // optional uint32 expected_pity_count = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EnhanceEquipRequest, _impl_.expected_pity_count_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_)}},
+      // bool allow_bound_materials = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EnhanceEquipRequest, _impl_.allow_bound_materials_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.allow_bound_materials_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -3304,6 +3329,8 @@ constexpr EnhanceEquipRequest::ParseTableT_ EnhanceEquipRequest::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // optional uint32 expected_pity_count = 4;
       {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool allow_bound_materials = 5;
+      {PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.allow_bound_materials_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -3319,7 +3346,8 @@ inline constexpr EnhanceEquipRequest::Impl_::Impl_(
         item_id_{::uint64_t{0u}},
         client_request_id_{::uint64_t{0u}},
         expected_level_{0u},
-        expected_pity_count_{0u} {}
+        expected_pity_count_{0u},
+        allow_bound_materials_{false} {}
 
 template <typename>
 constexpr EnhanceEquipRequest::EnhanceEquipRequest(::_pbi::ConstantInitialized,
@@ -8877,7 +8905,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_._has_bits_),
-        15, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.next_level_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.success_rate_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.cost_gold_),
@@ -8890,6 +8918,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.pity_limit_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.current_pity_count_),
         PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.pity_guaranteed_next_),
+        PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.will_bind_on_enhance_),
+        PROTOBUF_FIELD_OFFSET(::EquipEnhancePreview, _impl_.tradable_material_available_),
         2,
         3,
         4,
@@ -8901,6 +8931,8 @@ const ::uint32_t
         1,
         9,
         10,
+        12,
+        13,
         11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagItemInfo, _impl_._has_bits_),
@@ -9073,15 +9105,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.item_id_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.expected_level_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.expected_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::EnhanceEquipRequest, _impl_.allow_bound_materials_),
         0,
         2,
         1,
         3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EnhanceEquipResponse, _impl_._has_bits_),
         11, // hasbit index offset
@@ -9262,7 +9296,7 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.operation_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.item_id_),
@@ -9272,6 +9306,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.allow_bound_materials_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.proxy_master_player_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.expected_polish_pity_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentCraftChoice, _impl_.source_item_id_),
         0,
         1,
         2,
@@ -9281,6 +9316,7 @@ const ::uint32_t
         6,
         8,
         7,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentCraftMaterial, _impl_._has_bits_),
         9, // hasbit index offset
@@ -9501,49 +9537,49 @@ static const ::_pbi::MigrationSchema
         {21, sizeof(::EquipSlotInfo)},
         {30, sizeof(::EquipGemSocketInfo)},
         {47, sizeof(::EquipEnhancePreview)},
-        {74, sizeof(::BagItemInfo)},
-        {131, sizeof(::BagSlotInfo)},
-        {142, sizeof(::BagLayoutInfo)},
-        {155, sizeof(::BagHeldItemInfo)},
-        {162, sizeof(::BagInfo)},
-        {173, sizeof(::GetBagRequest)},
-        {178, sizeof(::GetBagResponse)},
-        {185, sizeof(::SortBagRequest)},
-        {190, sizeof(::SortBagResponse)},
-        {199, sizeof(::EquipItemRequest)},
-        {206, sizeof(::EquipItemResponse)},
-        {215, sizeof(::UnequipItemRequest)},
-        {220, sizeof(::UnequipItemResponse)},
-        {229, sizeof(::GmGrantItemRequest)},
-        {236, sizeof(::GmGrantItemResponse)},
-        {243, sizeof(::EnhanceEquipRequest)},
-        {254, sizeof(::EnhanceEquipResponse)},
-        {273, sizeof(::InlayGemRequest)},
-        {282, sizeof(::InlayGemResponse)},
-        {291, sizeof(::RemoveGemRequest)},
-        {298, sizeof(::RemoveGemResponse)},
-        {307, sizeof(::RetrieveTemporaryItemsRequest)},
-        {314, sizeof(::RetrieveTemporaryItemsResponse)},
-        {323, sizeof(::EquipFixedAffixInfo)},
-        {374, sizeof(::EquipAffixQualityInfo)},
-        {389, sizeof(::CraftMasteryInfo)},
-        {402, sizeof(::EquipFixedAffixSlotInfo)},
-        {411, sizeof(::EquipArtifactInfo)},
-        {432, sizeof(::EquipmentCraftChoice)},
-        {453, sizeof(::EquipmentCraftMaterial)},
-        {468, sizeof(::EquipmentCraftRecipe)},
-        {477, sizeof(::GetEquipmentCraftRulesRequest)},
-        {478, sizeof(::GetEquipmentCraftRulesResponse)},
-        {495, sizeof(::EquipmentCraftPreview)},
-        {522, sizeof(::PreviewEquipmentCraftRequest)},
-        {527, sizeof(::PreviewEquipmentCraftResponse)},
-        {534, sizeof(::CommitEquipmentCraftRequest)},
-        {545, sizeof(::CommitEquipmentCraftResponse)},
-        {576, sizeof(::EquipmentMaterialRewardSnapshot)},
-        {625, sizeof(::GetEquipmentMaterialRewardRequest)},
-        {626, sizeof(::GetEquipmentMaterialRewardResponse)},
-        {633, sizeof(::ClaimEquipmentMaterialRewardRequest)},
-        {644, sizeof(::ClaimEquipmentMaterialRewardResponse)},
+        {78, sizeof(::BagItemInfo)},
+        {135, sizeof(::BagSlotInfo)},
+        {146, sizeof(::BagLayoutInfo)},
+        {159, sizeof(::BagHeldItemInfo)},
+        {166, sizeof(::BagInfo)},
+        {177, sizeof(::GetBagRequest)},
+        {182, sizeof(::GetBagResponse)},
+        {189, sizeof(::SortBagRequest)},
+        {194, sizeof(::SortBagResponse)},
+        {203, sizeof(::EquipItemRequest)},
+        {210, sizeof(::EquipItemResponse)},
+        {219, sizeof(::UnequipItemRequest)},
+        {224, sizeof(::UnequipItemResponse)},
+        {233, sizeof(::GmGrantItemRequest)},
+        {240, sizeof(::GmGrantItemResponse)},
+        {247, sizeof(::EnhanceEquipRequest)},
+        {260, sizeof(::EnhanceEquipResponse)},
+        {279, sizeof(::InlayGemRequest)},
+        {288, sizeof(::InlayGemResponse)},
+        {297, sizeof(::RemoveGemRequest)},
+        {304, sizeof(::RemoveGemResponse)},
+        {313, sizeof(::RetrieveTemporaryItemsRequest)},
+        {320, sizeof(::RetrieveTemporaryItemsResponse)},
+        {329, sizeof(::EquipFixedAffixInfo)},
+        {380, sizeof(::EquipAffixQualityInfo)},
+        {395, sizeof(::CraftMasteryInfo)},
+        {408, sizeof(::EquipFixedAffixSlotInfo)},
+        {417, sizeof(::EquipArtifactInfo)},
+        {438, sizeof(::EquipmentCraftChoice)},
+        {461, sizeof(::EquipmentCraftMaterial)},
+        {476, sizeof(::EquipmentCraftRecipe)},
+        {485, sizeof(::GetEquipmentCraftRulesRequest)},
+        {486, sizeof(::GetEquipmentCraftRulesResponse)},
+        {503, sizeof(::EquipmentCraftPreview)},
+        {530, sizeof(::PreviewEquipmentCraftRequest)},
+        {535, sizeof(::PreviewEquipmentCraftResponse)},
+        {542, sizeof(::CommitEquipmentCraftRequest)},
+        {553, sizeof(::CommitEquipmentCraftResponse)},
+        {584, sizeof(::EquipmentMaterialRewardSnapshot)},
+        {633, sizeof(::GetEquipmentMaterialRewardRequest)},
+        {634, sizeof(::GetEquipmentMaterialRewardResponse)},
+        {641, sizeof(::ClaimEquipmentMaterialRewardRequest)},
+        {652, sizeof(::ClaimEquipmentMaterialRewardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -9610,7 +9646,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "socket\030\001 \001(\r\022\020\n\010gem_type\030\002 \001(\r\022\025\n\rgem_co"
     "nfig_id\030\003 \001(\r\022\020\n\010gem_name\030\004 \001(\t\022\024\n\014gem_i"
     "con_key\030\005 \001(\t\022 \n\004attr\030\006 \001(\0132\022.EquipAttrL"
-    "ineInfo\022\014\n\004name\030\007 \001(\t\"\270\002\n\023EquipEnhancePr"
+    "ineInfo\022\014\n\004name\030\007 \001(\t\"\373\002\n\023EquipEnhancePr"
     "eview\022\022\n\nnext_level\030\001 \001(\r\022\024\n\014success_rat"
     "e\030\002 \001(\r\022\021\n\tcost_gold\030\003 \001(\004\022\032\n\022material_c"
     "onfig_id\030\004 \001(\r\022\025\n\rmaterial_name\030\005 \001(\t\022\026\n"
@@ -9618,223 +9654,227 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "\030\007 \001(\r\022\027\n\017fail_level_loss\030\010 \001(\r\022\031\n\021mater"
     "ial_icon_key\030\t \001(\t\022\022\n\npity_limit\030\n \001(\r\022\032"
     "\n\022current_pity_count\030\013 \001(\r\022\034\n\024pity_guara"
-    "nteed_next\030\014 \001(\010\"\334\005\n\013BagItemInfo\022\017\n\007item"
-    "_id\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\r\n\005count\030\003 "
-    "\001(\r\022\021\n\tmax_stack\030\004 \001(\r\022\022\n\nequip_kind\030\005 \001"
-    "(\r\022\014\n\004name\030\006 \001(\t\022\023\n\013description\030\007 \001(\t\022\020\n"
-    "\010icon_key\030\010 \001(\t\022\023\n\013equip_level\030\t \001(\r\022\023\n\013"
-    "equip_class\030\n \001(\r\022\030\n\020equip_class_name\030\013 "
-    "\001(\t\022&\n\nbase_attrs\030\014 \003(\0132\022.EquipAttrLineI"
-    "nfo\022#\n\007affixes\030\r \003(\0132\022.EquipAttrLineInfo"
-    "\022\025\n\renhance_level\030\016 \001(\r\022\031\n\021enhance_max_l"
-    "evel\030\017 \001(\r\022*\n\014enhance_next\030\020 \001(\0132\024.Equip"
-    "EnhancePreview\022(\n\013gem_sockets\030\021 \003(\0132\023.Eq"
-    "uipGemSocketInfo\022\020\n\010gem_type\030\022 \001(\r\022$\n\010ge"
-    "m_attr\030\023 \001(\0132\022.EquipAttrLineInfo\022\037\n\027enha"
-    "nce_bonus_permyriad\030\024 \001(\r\022\025\n\requip_profi"
-    "le\030\025 \001(\r\0223\n\021fixed_affix_slots\030\026 \003(\0132\030.Eq"
-    "uipFixedAffixSlotInfo\022$\n\010artifact\030\027 \001(\0132"
-    "\022.EquipArtifactInfo\022\032\n\022enhance_pity_coun"
-    "t\030\030 \001(\r\022\r\n\005bound\030\031 \001(\010\022\024\n\014crafter_name\030\032"
-    " \001(\t\022\031\n\021crafter_player_id\030\033 \001(\004\"K\n\013BagSl"
-    "otInfo\022\014\n\004slot\030\001 \001(\r\022\017\n\007item_id\030\002 \001(\004\022\r\n"
-    "\005width\030\003 \001(\r\022\016\n\006height\030\004 \001(\r\"\207\001\n\rBagLayo"
-    "utInfo\022\020\n\010bag_type\030\001 \001(\r\022\020\n\010capacity\030\002 \001"
-    "(\r\022\033\n\005slots\030\003 \003(\0132\014.BagSlotInfo\022\020\n\010can_s"
-    "ort\030\004 \001(\010\022#\n\013equip_slots\030\005 \003(\0132\016.EquipSl"
-    "otInfo\"3\n\017BagHeldItemInfo\022\021\n\tconfig_id\030\001"
-    " \001(\r\022\r\n\005count\030\002 \001(\004\"\215\001\n\007BagInfo\022\033\n\005items"
-    "\030\001 \003(\0132\014.BagItemInfo\022\036\n\006layout\030\002 \001(\0132\016.B"
-    "agLayoutInfo\022\037\n\010currency\030\003 \001(\0132\r.Currenc"
-    "yComp\022$\n\nheld_items\030\004 \003(\0132\020.BagHeldItemI"
-    "nfo\"!\n\rGetBagRequest\022\020\n\010bag_type\030\001 \001(\r\"O"
-    "\n\016GetBagResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\""
-    "\"\n\016SortBagRequest\022\020\n\010bag_type\030\001 \001(\r\"a\n\017S"
-    "ortBagResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n"
-    "\007changed\030\003 \001(\010\"M\n\020EquipItemRequest\022\017\n\007it"
-    "em_id\030\001 \001(\004\022\030\n\013target_slot\030\002 \001(\rH\000\210\001\001B\016\n"
-    "\014_target_slot\"o\n\021EquipItemResponse\022&\n\rer"
-    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003ba"
-    "g\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.B"
-    "agInfo\"%\n\022UnequipItemRequest\022\017\n\007item_id\030"
-    "\001 \001(\004\"q\n\023UnequipItemResponse\022&\n\rerror_me"
-    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001("
-    "\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo"
-    "\"6\n\022GmGrantItemRequest\022\021\n\tconfig_id\030\001 \001("
-    "\r\022\r\n\005count\030\002 \001(\r\"T\n\023GmGrantItemResponse\022"
-    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
-    "\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\223\001\n\023EnhanceEquipR"
-    "equest\022\017\n\007item_id\030\001 \001(\004\022\026\n\016expected_leve"
-    "l\030\002 \001(\r\022\031\n\021client_request_id\030\003 \001(\004\022 \n\023ex"
-    "pected_pity_count\030\004 \001(\rH\000\210\001\001B\026\n\024_expecte"
-    "d_pity_count\"\344\001\n\024EnhanceEquipResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n"
-    "\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132"
-    "\010.BagInfo\022\017\n\007success\030\004 \001(\010\022\025\n\renhance_le"
-    "vel\030\005 \001(\r\022\020\n\010replayed\030\006 \001(\010\022\032\n\022enhance_p"
-    "ity_count\030\007 \001(\r\022\032\n\022enhance_pity_limit\030\010 "
-    "\001(\r\"I\n\017InlayGemRequest\022\017\n\007item_id\030\001 \001(\004\022"
-    "\016\n\006socket\030\002 \001(\r\022\025\n\rgem_config_id\030\003 \001(\r\"n"
-    "\n\020InlayGemResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInf"
-    "o\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"3\n\020Remove"
-    "GemRequest\022\017\n\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 "
-    "\001(\r\"o\n\021RemoveGemResponse\022&\n\rerror_messag"
-    "e\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010."
-    "BagInfo\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"B\n\035"
-    "RetrieveTemporaryItemsRequest\022\017\n\007item_id"
-    "\030\001 \001(\004\022\020\n\010take_all\030\002 \001(\010\"|\n\036RetrieveTemp"
-    "oraryItemsResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInf"
-    "o\022\033\n\ttemporary\030\003 \001(\0132\010.BagInfo\"\321\004\n\023Equip"
-    "FixedAffixInfo\022\020\n\010affix_id\030\001 \001(\r\022\014\n\004pool"
-    "\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001("
-    "\t\022\021\n\tvalue_bps\030\005 \001(\r\022\026\n\016source_cap_bps\030\006"
-    " \001(\r\022\016\n\006effect\030\007 \001(\r\022\024\n\014effect_param\030\010 \001"
-    "(\r\022\014\n\004unit\030\t \001(\r\022\032\n\022material_config_id\030\n"
-    " \001(\r\022\026\n\016material_count\030\013 \001(\r\022\024\n\014quality_"
-    "tier\030\014 \001(\r\022\024\n\014quality_name\030\r \001(\t\022\031\n\021qual"
-    "ity_ratio_pct\030\016 \001(\r\022\025\n\rmax_value_bps\030\017 \001"
-    "(\r\022\031\n\021polish_pity_count\030\020 \001(\r\022\031\n\021polish_"
-    "pity_limit\030\021 \001(\r\022\025\n\rpolish_exempt\030\022 \001(\010\022"
-    "!\n\031polish_material_config_id\030\023 \001(\r\022\035\n\025po"
-    "lish_material_count\030\024 \001(\r\022\030\n\020polish_gold"
-    "_cost\030\025 \001(\004\022\"\n\032reforge_material_config_i"
-    "d\030\026 \001(\r\022\036\n\026reforge_material_count\030\027 \001(\r\022"
-    "\031\n\021reforge_gold_cost\030\030 \001(\004\"\236\001\n\025EquipAffi"
-    "xQualityInfo\022\024\n\014quality_tier\030\001 \001(\r\022\014\n\004na"
-    "me\030\002 \001(\t\022\021\n\tratio_pct\030\003 \001(\r\022\033\n\023apprentic"
-    "e_rate_bps\030\004 \001(\r\022\030\n\020artisan_rate_bps\030\005 \001"
-    "(\r\022\027\n\017master_rate_bps\030\006 \001(\r\"u\n\020CraftMast"
-    "eryInfo\022\014\n\004tier\030\001 \001(\r\022\021\n\ttier_name\030\002 \001(\t"
-    "\022\013\n\003exp\030\003 \001(\r\022\025\n\rnext_tier_exp\030\004 \001(\r\022\034\n\024"
-    "top_quality_rate_bps\030\005 \001(\r\"]\n\027EquipFixed"
-    "AffixSlotInfo\022\014\n\004slot\030\001 \001(\r\022\014\n\004pool\030\002 \001("
-    "\r\022&\n\010selected\030\003 \001(\0132\024.EquipFixedAffixInf"
-    "o\"\321\001\n\021EquipArtifactInfo\022\021\n\teffect_id\030\001 \001"
-    "(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\021\n"
-    "\tbonus_bps\030\004 \001(\r\022\017\n\007cap_bps\030\005 \001(\r\022\027\n\017per"
-    "_round_limit\030\006 \001(\r\022\024\n\014battle_limit\030\007 \001(\r"
-    "\022\025\n\ractive_rounds\030\010 \001(\r\022\034\n\024health_thresh"
-    "old_bps\030\t \001(\r\"\237\003\n\024EquipmentCraftChoice\0222"
-    "\n\toperation\030\001 \001(\0162\037.EquipmentCraftChoice"
-    ".Operation\022\021\n\tconfig_id\030\002 \001(\r\022\017\n\007item_id"
-    "\030\003 \001(\004\022\022\n\naffix_slot\030\004 \001(\r\022\020\n\010affix_id\030\005"
-    " \001(\r\022\033\n\023use_guarantee_charm\030\006 \001(\010\022\035\n\025all"
-    "ow_bound_materials\030\007 \001(\010\022\036\n\026proxy_master"
-    "_player_id\030\010 \001(\004\022\'\n\032expected_polish_pity"
-    "_count\030\t \001(\rH\000\210\001\001\"e\n\tOperation\022\017\n\013UNSPEC"
-    "IFIED\020\000\022\017\n\013CREATE_ITEM\020\001\022\021\n\rINSTALL_AFFI"
-    "X\020\002\022\021\n\rREFORGE_AFFIX\020\003\022\020\n\014POLISH_AFFIX\020\004"
-    "B\035\n\033_expected_polish_pity_count\"|\n\026Equip"
-    "mentCraftMaterial\022\021\n\tconfig_id\030\001 \001(\r\022\014\n\004"
-    "name\030\002 \001(\t\022\020\n\010icon_key\030\003 \001(\t\022\r\n\005count\030\004 "
-    "\001(\r\022\r\n\005owned\030\005 \001(\004\022\021\n\tavailable\030\006 \001(\004\"i\n"
-    "\024EquipmentCraftRecipe\022\035\n\007product\030\001 \001(\0132\014"
-    ".BagItemInfo\022\032\n\022material_config_id\030\002 \001(\r"
-    "\022\026\n\016material_count\030\003 \001(\r\"\037\n\035GetEquipment"
-    "CraftRulesRequest\"\243\002\n\036GetEquipmentCraftR"
-    "ulesResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
-    "pInfoMessage\022\031\n\021rules_fingerprint\030\002 \001(\014\022"
-    "\026\n\016forge_revision\030\003 \001(\004\022&\n\007recipes\030\004 \003(\013"
-    "2\025.EquipmentCraftRecipe\022%\n\007affixes\030\005 \003(\013"
-    "2\024.EquipFixedAffixInfo\022-\n\rquality_tiers\030"
-    "\006 \003(\0132\026.EquipAffixQualityInfo\022(\n\rforge_m"
-    "astery\030\007 \001(\0132\021.CraftMasteryInfo\"\376\002\n\025Equi"
-    "pmentCraftPreview\022%\n\006choice\030\001 \001(\0132\025.Equi"
-    "pmentCraftChoice\022\031\n\021rules_fingerprint\030\002 "
-    "\001(\014\022\037\n\027expected_forge_revision\030\003 \001(\004\022\034\n\006"
-    "result\030\004 \001(\0132\014.BagItemInfo\022)\n\010material\030\005"
-    " \001(\0132\027.EquipmentCraftMaterial\022\021\n\tavailab"
-    "le\030\006 \001(\010\022\027\n\017unavailable_tip\030\007 \001(\r\022\021\n\tgol"
-    "d_cost\030\010 \001(\004\022/\n\016extra_material\030\t \001(\0132\027.E"
-    "quipmentCraftMaterial\022\026\n\016proxy_fee_gold\030"
-    "\n \001(\004\022\031\n\021proxy_master_name\030\013 \001(\t\022\026\n\016will"
-    "_bind_item\030\014 \001(\010\"E\n\034PreviewEquipmentCraf"
-    "tRequest\022%\n\006choice\030\001 \001(\0132\025.EquipmentCraf"
-    "tChoice\"p\n\035PreviewEquipmentCraftResponse"
+    "nteed_next\030\014 \001(\010\022\034\n\024will_bind_on_enhance"
+    "\030\r \001(\010\022#\n\033tradable_material_available\030\016 "
+    "\001(\004\"\334\005\n\013BagItemInfo\022\017\n\007item_id\030\001 \001(\004\022\021\n\t"
+    "config_id\030\002 \001(\r\022\r\n\005count\030\003 \001(\r\022\021\n\tmax_st"
+    "ack\030\004 \001(\r\022\022\n\nequip_kind\030\005 \001(\r\022\014\n\004name\030\006 "
+    "\001(\t\022\023\n\013description\030\007 \001(\t\022\020\n\010icon_key\030\010 \001"
+    "(\t\022\023\n\013equip_level\030\t \001(\r\022\023\n\013equip_class\030\n"
+    " \001(\r\022\030\n\020equip_class_name\030\013 \001(\t\022&\n\nbase_a"
+    "ttrs\030\014 \003(\0132\022.EquipAttrLineInfo\022#\n\007affixe"
+    "s\030\r \003(\0132\022.EquipAttrLineInfo\022\025\n\renhance_l"
+    "evel\030\016 \001(\r\022\031\n\021enhance_max_level\030\017 \001(\r\022*\n"
+    "\014enhance_next\030\020 \001(\0132\024.EquipEnhancePrevie"
+    "w\022(\n\013gem_sockets\030\021 \003(\0132\023.EquipGemSocketI"
+    "nfo\022\020\n\010gem_type\030\022 \001(\r\022$\n\010gem_attr\030\023 \001(\0132"
+    "\022.EquipAttrLineInfo\022\037\n\027enhance_bonus_per"
+    "myriad\030\024 \001(\r\022\025\n\requip_profile\030\025 \001(\r\0223\n\021f"
+    "ixed_affix_slots\030\026 \003(\0132\030.EquipFixedAffix"
+    "SlotInfo\022$\n\010artifact\030\027 \001(\0132\022.EquipArtifa"
+    "ctInfo\022\032\n\022enhance_pity_count\030\030 \001(\r\022\r\n\005bo"
+    "und\030\031 \001(\010\022\024\n\014crafter_name\030\032 \001(\t\022\031\n\021craft"
+    "er_player_id\030\033 \001(\004\"K\n\013BagSlotInfo\022\014\n\004slo"
+    "t\030\001 \001(\r\022\017\n\007item_id\030\002 \001(\004\022\r\n\005width\030\003 \001(\r\022"
+    "\016\n\006height\030\004 \001(\r\"\207\001\n\rBagLayoutInfo\022\020\n\010bag"
+    "_type\030\001 \001(\r\022\020\n\010capacity\030\002 \001(\r\022\033\n\005slots\030\003"
+    " \003(\0132\014.BagSlotInfo\022\020\n\010can_sort\030\004 \001(\010\022#\n\013"
+    "equip_slots\030\005 \003(\0132\016.EquipSlotInfo\"3\n\017Bag"
+    "HeldItemInfo\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005count"
+    "\030\002 \001(\004\"\215\001\n\007BagInfo\022\033\n\005items\030\001 \003(\0132\014.BagI"
+    "temInfo\022\036\n\006layout\030\002 \001(\0132\016.BagLayoutInfo\022"
+    "\037\n\010currency\030\003 \001(\0132\r.CurrencyComp\022$\n\nheld"
+    "_items\030\004 \003(\0132\020.BagHeldItemInfo\"!\n\rGetBag"
+    "Request\022\020\n\010bag_type\030\001 \001(\r\"O\n\016GetBagRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\"\"\n\016SortBagReq"
+    "uest\022\020\n\010bag_type\030\001 \001(\r\"a\n\017SortBagRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\017\n\007changed\030\003 \001("
+    "\010\"M\n\020EquipItemRequest\022\017\n\007item_id\030\001 \001(\004\022\030"
+    "\n\013target_slot\030\002 \001(\rH\000\210\001\001B\016\n\014_target_slot"
+    "\"o\n\021EquipItemResponse\022&\n\rerror_message\030\001"
+    " \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.Bag"
+    "Info\022\033\n\tequipment\030\003 \001(\0132\010.BagInfo\"%\n\022Une"
+    "quipItemRequest\022\017\n\007item_id\030\001 \001(\004\"q\n\023Uneq"
+    "uipItemResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033"
+    "\n\tequipment\030\003 \001(\0132\010.BagInfo\"6\n\022GmGrantIt"
+    "emRequest\022\021\n\tconfig_id\030\001 \001(\r\022\r\n\005count\030\002 "
+    "\001(\r\"T\n\023GmGrantItemResponse\022&\n\rerror_mess"
+    "age\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003bag\030\002 \001(\0132"
+    "\010.BagInfo\"\262\001\n\023EnhanceEquipRequest\022\017\n\007ite"
+    "m_id\030\001 \001(\004\022\026\n\016expected_level\030\002 \001(\r\022\031\n\021cl"
+    "ient_request_id\030\003 \001(\004\022 \n\023expected_pity_c"
+    "ount\030\004 \001(\rH\000\210\001\001\022\035\n\025allow_bound_materials"
+    "\030\005 \001(\010B\026\n\024_expected_pity_count\"\344\001\n\024Enhan"
+    "ceEquipResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033"
+    "\n\tequipment\030\003 \001(\0132\010.BagInfo\022\017\n\007success\030\004"
+    " \001(\010\022\025\n\renhance_level\030\005 \001(\r\022\020\n\010replayed\030"
+    "\006 \001(\010\022\032\n\022enhance_pity_count\030\007 \001(\r\022\032\n\022enh"
+    "ance_pity_limit\030\010 \001(\r\"I\n\017InlayGemRequest"
+    "\022\017\n\007item_id\030\001 \001(\004\022\016\n\006socket\030\002 \001(\r\022\025\n\rgem"
+    "_config_id\030\003 \001(\r\"n\n\020InlayGemResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003"
+    "bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\0132\010"
+    ".BagInfo\"3\n\020RemoveGemRequest\022\017\n\007item_id\030"
+    "\001 \001(\004\022\016\n\006socket\030\002 \001(\r\"o\n\021RemoveGemRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003"
+    " \001(\0132\010.BagInfo\"B\n\035RetrieveTemporaryItems"
+    "Request\022\017\n\007item_id\030\001 \001(\004\022\020\n\010take_all\030\002 \001"
+    "(\010\"|\n\036RetrieveTemporaryItemsResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\003"
+    "bag\030\002 \001(\0132\010.BagInfo\022\033\n\ttemporary\030\003 \001(\0132\010"
+    ".BagInfo\"\321\004\n\023EquipFixedAffixInfo\022\020\n\010affi"
+    "x_id\030\001 \001(\r\022\014\n\004pool\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023"
+    "\n\013description\030\004 \001(\t\022\021\n\tvalue_bps\030\005 \001(\r\022\026"
+    "\n\016source_cap_bps\030\006 \001(\r\022\016\n\006effect\030\007 \001(\r\022\024"
+    "\n\014effect_param\030\010 \001(\r\022\014\n\004unit\030\t \001(\r\022\032\n\022ma"
+    "terial_config_id\030\n \001(\r\022\026\n\016material_count"
+    "\030\013 \001(\r\022\024\n\014quality_tier\030\014 \001(\r\022\024\n\014quality_"
+    "name\030\r \001(\t\022\031\n\021quality_ratio_pct\030\016 \001(\r\022\025\n"
+    "\rmax_value_bps\030\017 \001(\r\022\031\n\021polish_pity_coun"
+    "t\030\020 \001(\r\022\031\n\021polish_pity_limit\030\021 \001(\r\022\025\n\rpo"
+    "lish_exempt\030\022 \001(\010\022!\n\031polish_material_con"
+    "fig_id\030\023 \001(\r\022\035\n\025polish_material_count\030\024 "
+    "\001(\r\022\030\n\020polish_gold_cost\030\025 \001(\004\022\"\n\032reforge"
+    "_material_config_id\030\026 \001(\r\022\036\n\026reforge_mat"
+    "erial_count\030\027 \001(\r\022\031\n\021reforge_gold_cost\030\030"
+    " \001(\004\"\236\001\n\025EquipAffixQualityInfo\022\024\n\014qualit"
+    "y_tier\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\021\n\tratio_pct\030"
+    "\003 \001(\r\022\033\n\023apprentice_rate_bps\030\004 \001(\r\022\030\n\020ar"
+    "tisan_rate_bps\030\005 \001(\r\022\027\n\017master_rate_bps\030"
+    "\006 \001(\r\"u\n\020CraftMasteryInfo\022\014\n\004tier\030\001 \001(\r\022"
+    "\021\n\ttier_name\030\002 \001(\t\022\013\n\003exp\030\003 \001(\r\022\025\n\rnext_"
+    "tier_exp\030\004 \001(\r\022\034\n\024top_quality_rate_bps\030\005"
+    " \001(\r\"]\n\027EquipFixedAffixSlotInfo\022\014\n\004slot\030"
+    "\001 \001(\r\022\014\n\004pool\030\002 \001(\r\022&\n\010selected\030\003 \001(\0132\024."
+    "EquipFixedAffixInfo\"\321\001\n\021EquipArtifactInf"
+    "o\022\021\n\teffect_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013de"
+    "scription\030\003 \001(\t\022\021\n\tbonus_bps\030\004 \001(\r\022\017\n\007ca"
+    "p_bps\030\005 \001(\r\022\027\n\017per_round_limit\030\006 \001(\r\022\024\n\014"
+    "battle_limit\030\007 \001(\r\022\025\n\ractive_rounds\030\010 \001("
+    "\r\022\034\n\024health_threshold_bps\030\t \001(\r\"\345\003\n\024Equi"
+    "pmentCraftChoice\0222\n\toperation\030\001 \001(\0162\037.Eq"
+    "uipmentCraftChoice.Operation\022\021\n\tconfig_i"
+    "d\030\002 \001(\r\022\017\n\007item_id\030\003 \001(\004\022\022\n\naffix_slot\030\004"
+    " \001(\r\022\020\n\010affix_id\030\005 \001(\r\022\033\n\023use_guarantee_"
+    "charm\030\006 \001(\010\022\035\n\025allow_bound_materials\030\007 \001"
+    "(\010\022\036\n\026proxy_master_player_id\030\010 \001(\004\022\'\n\032ex"
+    "pected_polish_pity_count\030\t \001(\rH\000\210\001\001\022\026\n\016s"
+    "ource_item_id\030\n \001(\004\"\222\001\n\tOperation\022\017\n\013UNS"
+    "PECIFIED\020\000\022\017\n\013CREATE_ITEM\020\001\022\021\n\rINSTALL_A"
+    "FFIX\020\002\022\021\n\rREFORGE_AFFIX\020\003\022\020\n\014POLISH_AFFI"
+    "X\020\004\022\026\n\022UNSEAL_TO_TRADABLE\020\005\022\023\n\017INHERIT_E"
+    "NHANCE\020\006B\035\n\033_expected_polish_pity_count\""
+    "|\n\026EquipmentCraftMaterial\022\021\n\tconfig_id\030\001"
+    " \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010icon_key\030\003 \001(\t\022\r\n\005"
+    "count\030\004 \001(\r\022\r\n\005owned\030\005 \001(\004\022\021\n\tavailable\030"
+    "\006 \001(\004\"i\n\024EquipmentCraftRecipe\022\035\n\007product"
+    "\030\001 \001(\0132\014.BagItemInfo\022\032\n\022material_config_"
+    "id\030\002 \001(\r\022\026\n\016material_count\030\003 \001(\r\"\037\n\035GetE"
+    "quipmentCraftRulesRequest\"\243\002\n\036GetEquipme"
+    "ntCraftRulesResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022\031\n\021rules_fingerprin"
+    "t\030\002 \001(\014\022\026\n\016forge_revision\030\003 \001(\004\022&\n\007recip"
+    "es\030\004 \003(\0132\025.EquipmentCraftRecipe\022%\n\007affix"
+    "es\030\005 \003(\0132\024.EquipFixedAffixInfo\022-\n\rqualit"
+    "y_tiers\030\006 \003(\0132\026.EquipAffixQualityInfo\022(\n"
+    "\rforge_mastery\030\007 \001(\0132\021.CraftMasteryInfo\""
+    "\376\002\n\025EquipmentCraftPreview\022%\n\006choice\030\001 \001("
+    "\0132\025.EquipmentCraftChoice\022\031\n\021rules_finger"
+    "print\030\002 \001(\014\022\037\n\027expected_forge_revision\030\003"
+    " \001(\004\022\034\n\006result\030\004 \001(\0132\014.BagItemInfo\022)\n\010ma"
+    "terial\030\005 \001(\0132\027.EquipmentCraftMaterial\022\021\n"
+    "\tavailable\030\006 \001(\010\022\027\n\017unavailable_tip\030\007 \001("
+    "\r\022\021\n\tgold_cost\030\010 \001(\004\022/\n\016extra_material\030\t"
+    " \001(\0132\027.EquipmentCraftMaterial\022\026\n\016proxy_f"
+    "ee_gold\030\n \001(\004\022\031\n\021proxy_master_name\030\013 \001(\t"
+    "\022\026\n\016will_bind_item\030\014 \001(\010\"E\n\034PreviewEquip"
+    "mentCraftRequest\022%\n\006choice\030\001 \001(\0132\025.Equip"
+    "mentCraftChoice\"p\n\035PreviewEquipmentCraft"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\022\'\n\007preview\030\002 \001(\0132\026.EquipmentCra"
+    "ftPreview\"\233\001\n\033CommitEquipmentCraftReques"
+    "t\022%\n\006choice\030\001 \001(\0132\025.EquipmentCraftChoice"
+    "\022\031\n\021rules_fingerprint\030\002 \001(\014\022\037\n\027expected_"
+    "forge_revision\030\003 \001(\004\022\031\n\021client_request_i"
+    "d\030\004 \001(\004\"\370\003\n\034CommitEquipmentCraftResponse"
     "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\'\n\007preview\030\002 \001(\0132\026.EquipmentCraftPrevie"
-    "w\"\233\001\n\033CommitEquipmentCraftRequest\022%\n\006cho"
-    "ice\030\001 \001(\0132\025.EquipmentCraftChoice\022\031\n\021rule"
-    "s_fingerprint\030\002 \001(\014\022\037\n\027expected_forge_re"
-    "vision\030\003 \001(\004\022\031\n\021client_request_id\030\004 \001(\004\""
-    "\370\003\n\034CommitEquipmentCraftResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clie"
-    "nt_request_id\030\002 \001(\004\0226\n\007outcome\030\003 \001(\0162%.C"
-    "ommitEquipmentCraftResponse.Outcome\022\017\n\007d"
-    "urable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\017\n\007item_i"
-    "d\030\006 \001(\004\022\035\n\025result_forge_revision\030\007 \001(\004\022\036"
-    "\n\026current_forge_revision\030\010 \001(\004\022\025\n\003bag\030\t "
-    "\001(\0132\010.BagInfo\022\033\n\tequipment\030\n \001(\0132\010.BagIn"
-    "fo\022\033\n\023result_quality_tier\030\013 \001(\r\022 \n\030resul"
-    "t_polish_pity_count\030\014 \001(\r\022\032\n\022guaranteed_"
-    "by_pity\030\r \001(\010\022(\n\rforge_mastery\030\016 \001(\0132\021.C"
-    "raftMasteryInfo\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022"
-    "\014\n\010REJECTED\020\001\022\013\n\007APPLIED\020\002\"\242\005\n\037Equipment"
-    "MaterialRewardSnapshot\022\021\n\tavailable\030\001 \001("
-    "\010\022\032\n\022unavailable_reason\030\002 \001(\t\022\030\n\020day_sta"
-    "rts_at_ms\030\003 \001(\004\022\030\n\020next_reset_at_ms\030\004 \001("
-    "\004\022\024\n\014earned_today\030\005 \001(\r\022\023\n\013daily_limit\030\006"
-    " \001(\r\022\027\n\017available_units\030\007 \001(\004\022\023\n\013batch_u"
-    "nits\030\010 \001(\r\022\020\n\010revision\030\t \001(\004\0222\n\021crafting"
-    "_material\030\n \001(\0132\027.EquipmentCraftMaterial"
-    "\0222\n\021enhancement_stone\030\013 \001(\0132\027.EquipmentC"
-    "raftMaterial\022\021\n\tcan_claim\030\014 \001(\010\022\027\n\017lifet"
-    "ime_earned\030\r \001(\r\022\026\n\016lifetime_limit\030\016 \001(\r"
-    "\022\035\n\025tradable_earned_total\030\017 \001(\r\022\037\n\027trada"
-    "ble_lifetime_limit\030\020 \001(\r\022 \n\030available_tr"
-    "adable_units\030\021 \001(\004\022\034\n\024batch_tradable_uni"
-    "ts\030\022 \001(\r\022\033\n\023weekly_phase_active\030\023 \001(\010\022\031\n"
-    "\021week_starts_at_ms\030\024 \001(\004\022\035\n\025next_week_re"
-    "set_at_ms\030\025 \001(\004\022\030\n\020earned_this_week\030\026 \001("
-    "\r\022\024\n\014weekly_limit\030\027 \001(\r\"#\n!GetEquipmentM"
-    "aterialRewardRequest\"\200\001\n\"GetEquipmentMat"
-    "erialRewardResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\0222\n\010snapshot\030\002 \001(\0132 ."
-    "EquipmentMaterialRewardSnapshot\"\235\001\n#Clai"
-    "mEquipmentMaterialRewardRequest\022\031\n\021clien"
-    "t_request_id\030\001 \001(\004\022\031\n\021expected_revision\030"
-    "\002 \001(\004\022\037\n\027crafting_material_count\030\003 \001(\r\022\037"
-    "\n\027enhancement_stone_count\030\004 \001(\r\"\375\002\n$Clai"
-    "mEquipmentMaterialRewardResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clie"
-    "nt_request_id\030\002 \001(\004\022>\n\007outcome\030\003 \001(\0162-.C"
-    "laimEquipmentMaterialRewardResponse.Outc"
-    "ome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\027"
-    "\n\017result_revision\030\006 \001(\004\022\030\n\020current_revis"
-    "ion\030\007 \001(\004\022\025\n\003bag\030\010 \001(\0132\010.BagInfo\0222\n\010snap"
-    "shot\030\t \001(\0132 .EquipmentMaterialRewardSnap"
-    "shot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECTED"
-    "\020\001\022\013\n\007APPLIED\020\0022\374\007\n\024SceneBagClientPlayer"
-    "\022)\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRespo"
-    "nse\022,\n\007SortBag\022\017.SortBagRequest\032\020.SortBa"
-    "gResponse\0222\n\tEquipItem\022\021.EquipItemReques"
-    "t\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023.U"
-    "nequipItemRequest\032\024.UnequipItemResponse\022"
-    "8\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024.Gm"
-    "GrantItemResponse\022;\n\014EnhanceEquip\022\024.Enha"
-    "nceEquipRequest\032\025.EnhanceEquipResponse\022/"
-    "\n\010InlayGem\022\020.InlayGemRequest\032\021.InlayGemR"
-    "esponse\0222\n\tRemoveGem\022\021.RemoveGemRequest\032"
-    "\022.RemoveGemResponse\022Y\n\026RetrieveTemporary"
-    "Items\022\036.RetrieveTemporaryItemsRequest\032\037."
-    "RetrieveTemporaryItemsResponse\022Y\n\026GetEqu"
-    "ipmentCraftRules\022\036.GetEquipmentCraftRule"
-    "sRequest\032\037.GetEquipmentCraftRulesRespons"
-    "e\022V\n\025PreviewEquipmentCraft\022\035.PreviewEqui"
-    "pmentCraftRequest\032\036.PreviewEquipmentCraf"
-    "tResponse\022S\n\024CommitEquipmentCraft\022\034.Comm"
-    "itEquipmentCraftRequest\032\035.CommitEquipmen"
-    "tCraftResponse\022e\n\032GetEquipmentMaterialRe"
-    "ward\022\".GetEquipmentMaterialRewardRequest"
-    "\032#.GetEquipmentMaterialRewardResponse\022k\n"
-    "\034ClaimEquipmentMaterialReward\022$.ClaimEqu"
-    "ipmentMaterialRewardRequest\032%.ClaimEquip"
-    "mentMaterialRewardResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016"
-    "Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "\022\031\n\021client_request_id\030\002 \001(\004\0226\n\007outcome\030\003"
+    " \001(\0162%.CommitEquipmentCraftResponse.Outc"
+    "ome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\017"
+    "\n\007item_id\030\006 \001(\004\022\035\n\025result_forge_revision"
+    "\030\007 \001(\004\022\036\n\026current_forge_revision\030\010 \001(\004\022\025"
+    "\n\003bag\030\t \001(\0132\010.BagInfo\022\033\n\tequipment\030\n \001(\013"
+    "2\010.BagInfo\022\033\n\023result_quality_tier\030\013 \001(\r\022"
+    " \n\030result_polish_pity_count\030\014 \001(\r\022\032\n\022gua"
+    "ranteed_by_pity\030\r \001(\010\022(\n\rforge_mastery\030\016"
+    " \001(\0132\021.CraftMasteryInfo\"1\n\007Outcome\022\013\n\007UN"
+    "KNOWN\020\000\022\014\n\010REJECTED\020\001\022\013\n\007APPLIED\020\002\"\242\005\n\037E"
+    "quipmentMaterialRewardSnapshot\022\021\n\tavaila"
+    "ble\030\001 \001(\010\022\032\n\022unavailable_reason\030\002 \001(\t\022\030\n"
+    "\020day_starts_at_ms\030\003 \001(\004\022\030\n\020next_reset_at"
+    "_ms\030\004 \001(\004\022\024\n\014earned_today\030\005 \001(\r\022\023\n\013daily"
+    "_limit\030\006 \001(\r\022\027\n\017available_units\030\007 \001(\004\022\023\n"
+    "\013batch_units\030\010 \001(\r\022\020\n\010revision\030\t \001(\004\0222\n\021"
+    "crafting_material\030\n \001(\0132\027.EquipmentCraft"
+    "Material\0222\n\021enhancement_stone\030\013 \001(\0132\027.Eq"
+    "uipmentCraftMaterial\022\021\n\tcan_claim\030\014 \001(\010\022"
+    "\027\n\017lifetime_earned\030\r \001(\r\022\026\n\016lifetime_lim"
+    "it\030\016 \001(\r\022\035\n\025tradable_earned_total\030\017 \001(\r\022"
+    "\037\n\027tradable_lifetime_limit\030\020 \001(\r\022 \n\030avai"
+    "lable_tradable_units\030\021 \001(\004\022\034\n\024batch_trad"
+    "able_units\030\022 \001(\r\022\033\n\023weekly_phase_active\030"
+    "\023 \001(\010\022\031\n\021week_starts_at_ms\030\024 \001(\004\022\035\n\025next"
+    "_week_reset_at_ms\030\025 \001(\004\022\030\n\020earned_this_w"
+    "eek\030\026 \001(\r\022\024\n\014weekly_limit\030\027 \001(\r\"#\n!GetEq"
+    "uipmentMaterialRewardRequest\"\200\001\n\"GetEqui"
+    "pmentMaterialRewardResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\0222\n\010snapshot\030"
+    "\002 \001(\0132 .EquipmentMaterialRewardSnapshot\""
+    "\235\001\n#ClaimEquipmentMaterialRewardRequest\022"
+    "\031\n\021client_request_id\030\001 \001(\004\022\031\n\021expected_r"
+    "evision\030\002 \001(\004\022\037\n\027crafting_material_count"
+    "\030\003 \001(\r\022\037\n\027enhancement_stone_count\030\004 \001(\r\""
+    "\375\002\n$ClaimEquipmentMaterialRewardResponse"
+    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
+    "\022\031\n\021client_request_id\030\002 \001(\004\022>\n\007outcome\030\003"
+    " \001(\0162-.ClaimEquipmentMaterialRewardRespo"
+    "nse.Outcome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed"
+    "\030\005 \001(\010\022\027\n\017result_revision\030\006 \001(\004\022\030\n\020curre"
+    "nt_revision\030\007 \001(\004\022\025\n\003bag\030\010 \001(\0132\010.BagInfo"
+    "\0222\n\010snapshot\030\t \001(\0132 .EquipmentMaterialRe"
+    "wardSnapshot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010"
+    "REJECTED\020\001\022\013\n\007APPLIED\020\0022\374\007\n\024SceneBagClie"
+    "ntPlayer\022)\n\006GetBag\022\016.GetBagRequest\032\017.Get"
+    "BagResponse\022,\n\007SortBag\022\017.SortBagRequest\032"
+    "\020.SortBagResponse\0222\n\tEquipItem\022\021.EquipIt"
+    "emRequest\032\022.EquipItemResponse\0228\n\013Unequip"
+    "Item\022\023.UnequipItemRequest\032\024.UnequipItemR"
+    "esponse\0228\n\013GmGrantItem\022\023.GmGrantItemRequ"
+    "est\032\024.GmGrantItemResponse\022;\n\014EnhanceEqui"
+    "p\022\024.EnhanceEquipRequest\032\025.EnhanceEquipRe"
+    "sponse\022/\n\010InlayGem\022\020.InlayGemRequest\032\021.I"
+    "nlayGemResponse\0222\n\tRemoveGem\022\021.RemoveGem"
+    "Request\032\022.RemoveGemResponse\022Y\n\026RetrieveT"
+    "emporaryItems\022\036.RetrieveTemporaryItemsRe"
+    "quest\032\037.RetrieveTemporaryItemsResponse\022Y"
+    "\n\026GetEquipmentCraftRules\022\036.GetEquipmentC"
+    "raftRulesRequest\032\037.GetEquipmentCraftRule"
+    "sResponse\022V\n\025PreviewEquipmentCraft\022\035.Pre"
+    "viewEquipmentCraftRequest\032\036.PreviewEquip"
+    "mentCraftResponse\022S\n\024CommitEquipmentCraf"
+    "t\022\034.CommitEquipmentCraftRequest\032\035.Commit"
+    "EquipmentCraftResponse\022e\n\032GetEquipmentMa"
+    "terialReward\022\".GetEquipmentMaterialRewar"
+    "dRequest\032#.GetEquipmentMaterialRewardRes"
+    "ponse\022k\n\034ClaimEquipmentMaterialReward\022$."
+    "ClaimEquipmentMaterialRewardRequest\032%.Cl"
+    "aimEquipmentMaterialRewardResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[3] = {
@@ -9846,7 +9886,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    9502,
+    9670,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
@@ -9865,7 +9905,7 @@ EquipmentCraftChoice_Operation_descriptor() {
   return file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t EquipmentCraftChoice_Operation_internal_data_[] = {
-    327680u, 0u, };
+    458752u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CommitEquipmentCraftResponse_Outcome_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto);
@@ -11014,9 +11054,9 @@ EquipEnhancePreview::EquipEnhancePreview(
                offsetof(Impl_, next_level_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, next_level_),
-           offsetof(Impl_, pity_guaranteed_next_) -
+           offsetof(Impl_, will_bind_on_enhance_) -
                offsetof(Impl_, next_level_) +
-               sizeof(Impl_::pity_guaranteed_next_));
+               sizeof(Impl_::will_bind_on_enhance_));
 
   // @@protoc_insertion_point(copy_constructor:EquipEnhancePreview)
 }
@@ -11032,9 +11072,9 @@ inline void EquipEnhancePreview::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, next_level_),
            0,
-           offsetof(Impl_, pity_guaranteed_next_) -
+           offsetof(Impl_, will_bind_on_enhance_) -
                offsetof(Impl_, next_level_) +
-               sizeof(Impl_::pity_guaranteed_next_));
+               sizeof(Impl_::will_bind_on_enhance_));
 }
 EquipEnhancePreview::~EquipEnhancePreview() {
   // @@protoc_insertion_point(destructor:EquipEnhancePreview)
@@ -11099,10 +11139,10 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
         reinterpret_cast<char*>(&_impl_.bonus_permyriad_) -
         reinterpret_cast<char*>(&_impl_.next_level_)) + sizeof(_impl_.bonus_permyriad_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.fail_level_loss_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.pity_guaranteed_next_) -
-        reinterpret_cast<char*>(&_impl_.fail_level_loss_)) + sizeof(_impl_.pity_guaranteed_next_));
+        reinterpret_cast<char*>(&_impl_.will_bind_on_enhance_) -
+        reinterpret_cast<char*>(&_impl_.fail_level_loss_)) + sizeof(_impl_.will_bind_on_enhance_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -11229,11 +11269,29 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
   }
 
   // bool pity_guaranteed_next = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_pity_guaranteed_next() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           12, this_._internal_pity_guaranteed_next(), target);
+    }
+  }
+
+  // bool will_bind_on_enhance = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_will_bind_on_enhance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          13, this_._internal_will_bind_on_enhance(), target);
+    }
+  }
+
+  // uint64 tradable_material_available = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_tradable_material_available() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          14, this_._internal_tradable_material_available(), target);
     }
   }
 
@@ -11320,7 +11378,7 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 fail_level_loss = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_fail_level_loss() != 0) {
@@ -11342,9 +11400,22 @@ PROTOBUF_NOINLINE void EquipEnhancePreview::Clear() {
             this_._internal_current_pity_count());
       }
     }
-    // bool pity_guaranteed_next = 12;
+    // uint64 tradable_material_available = 14;
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_tradable_material_available() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_tradable_material_available());
+      }
+    }
+    // bool pity_guaranteed_next = 12;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_pity_guaranteed_next() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool will_bind_on_enhance = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_will_bind_on_enhance() != 0) {
         total_size += 2;
       }
     }
@@ -11416,7 +11487,7 @@ void EquipEnhancePreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_fail_level_loss() != 0) {
         _this->_impl_.fail_level_loss_ = from._impl_.fail_level_loss_;
@@ -11433,8 +11504,18 @@ void EquipEnhancePreview::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_tradable_material_available() != 0) {
+        _this->_impl_.tradable_material_available_ = from._impl_.tradable_material_available_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_pity_guaranteed_next() != 0) {
         _this->_impl_.pity_guaranteed_next_ = from._impl_.pity_guaranteed_next_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_will_bind_on_enhance() != 0) {
+        _this->_impl_.will_bind_on_enhance_ = from._impl_.will_bind_on_enhance_;
       }
     }
   }
@@ -11460,8 +11541,8 @@ void EquipEnhancePreview::InternalSwap(EquipEnhancePreview* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.material_name_, &other->_impl_.material_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.material_icon_key_, &other->_impl_.material_icon_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.pity_guaranteed_next_)
-      + sizeof(EquipEnhancePreview::_impl_.pity_guaranteed_next_)
+      PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.will_bind_on_enhance_)
+      + sizeof(EquipEnhancePreview::_impl_.will_bind_on_enhance_)
       - PROTOBUF_FIELD_OFFSET(EquipEnhancePreview, _impl_.next_level_)>(
           reinterpret_cast<char*>(&_impl_.next_level_),
           reinterpret_cast<char*>(&other->_impl_.next_level_));
@@ -16047,9 +16128,9 @@ inline void EnhanceEquipRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_id_),
            0,
-           offsetof(Impl_, expected_pity_count_) -
+           offsetof(Impl_, allow_bound_materials_) -
                offsetof(Impl_, item_id_) +
-               sizeof(Impl_::expected_pity_count_));
+               sizeof(Impl_::allow_bound_materials_));
 }
 EnhanceEquipRequest::~EnhanceEquipRequest() {
   // @@protoc_insertion_point(destructor:EnhanceEquipRequest)
@@ -16099,10 +16180,10 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.expected_pity_count_) -
-        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.expected_pity_count_));
+        reinterpret_cast<char*>(&_impl_.allow_bound_materials_) -
+        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.allow_bound_materials_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -16161,6 +16242,15 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
         4, this_._internal_expected_pity_count(), target);
   }
 
+  // bool allow_bound_materials = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_allow_bound_materials() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_allow_bound_materials(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -16186,7 +16276,7 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // uint64 item_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_item_id() != 0) {
@@ -16213,6 +16303,12 @@ PROTOBUF_NOINLINE void EnhanceEquipRequest::Clear() {
       total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
           this_._internal_expected_pity_count());
     }
+    // bool allow_bound_materials = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_allow_bound_materials() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -16231,7 +16327,7 @@ void EnhanceEquipRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_item_id() != 0) {
         _this->_impl_.item_id_ = from._impl_.item_id_;
@@ -16249,6 +16345,11 @@ void EnhanceEquipRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _this->_impl_.expected_pity_count_ = from._impl_.expected_pity_count_;
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_allow_bound_materials() != 0) {
+        _this->_impl_.allow_bound_materials_ = from._impl_.allow_bound_materials_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -16269,8 +16370,8 @@ void EnhanceEquipRequest::InternalSwap(EnhanceEquipRequest* PROTOBUF_RESTRICT PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.expected_pity_count_)
-      + sizeof(EnhanceEquipRequest::_impl_.expected_pity_count_)
+      PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.allow_bound_materials_)
+      + sizeof(EnhanceEquipRequest::_impl_.allow_bound_materials_)
       - PROTOBUF_FIELD_OFFSET(EnhanceEquipRequest, _impl_.item_id_)>(
           reinterpret_cast<char*>(&_impl_.item_id_),
           reinterpret_cast<char*>(&other->_impl_.item_id_));
@@ -20420,9 +20521,9 @@ inline void EquipmentCraftChoice::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, operation_),
            0,
-           offsetof(Impl_, proxy_master_player_id_) -
+           offsetof(Impl_, source_item_id_) -
                offsetof(Impl_, operation_) +
-               sizeof(Impl_::proxy_master_player_id_));
+               sizeof(Impl_::source_item_id_));
 }
 EquipmentCraftChoice::~EquipmentCraftChoice() {
   // @@protoc_insertion_point(destructor:EquipmentCraftChoice)
@@ -20477,7 +20578,11 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
         reinterpret_cast<char*>(&_impl_.expected_polish_pity_count_) -
         reinterpret_cast<char*>(&_impl_.operation_)) + sizeof(_impl_.expected_polish_pity_count_));
   }
-  _impl_.proxy_master_player_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.proxy_master_player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.source_item_id_) -
+        reinterpret_cast<char*>(&_impl_.proxy_master_player_id_)) + sizeof(_impl_.source_item_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -20580,6 +20685,15 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
         9, this_._internal_expected_polish_pity_count(), target);
   }
 
+  // uint64 source_item_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_source_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_source_item_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -20659,12 +20773,19 @@ PROTOBUF_NOINLINE void EquipmentCraftChoice::Clear() {
           this_._internal_expected_polish_pity_count());
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 proxy_master_player_id = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_proxy_master_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_proxy_master_player_id());
+      }
+    }
+    // uint64 source_item_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_source_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_item_id());
       }
     }
   }
@@ -20725,9 +20846,16 @@ void EquipmentCraftChoice::MergeImpl(::google::protobuf::MessageLite& to_msg,
       _this->_impl_.expected_polish_pity_count_ = from._impl_.expected_polish_pity_count_;
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_proxy_master_player_id() != 0) {
-      _this->_impl_.proxy_master_player_id_ = from._impl_.proxy_master_player_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_proxy_master_player_id() != 0) {
+        _this->_impl_.proxy_master_player_id_ = from._impl_.proxy_master_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_source_item_id() != 0) {
+        _this->_impl_.source_item_id_ = from._impl_.source_item_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -20748,8 +20876,8 @@ void EquipmentCraftChoice::InternalSwap(EquipmentCraftChoice* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.proxy_master_player_id_)
-      + sizeof(EquipmentCraftChoice::_impl_.proxy_master_player_id_)
+      PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.source_item_id_)
+      + sizeof(EquipmentCraftChoice::_impl_.source_item_id_)
       - PROTOBUF_FIELD_OFFSET(EquipmentCraftChoice, _impl_.operation_)>(
           reinterpret_cast<char*>(&_impl_.operation_),
           reinterpret_cast<char*>(&other->_impl_.operation_));

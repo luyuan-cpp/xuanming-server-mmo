@@ -84,19 +84,19 @@ public:
 		{
 			return AdvertiseAction::kNone;
 		}
-		const bool resend = lastSent_ == desired;
-		if (resend && now - lastSentAt_ < kResendAfter)
+		const bool resend = lastSent == desired;
+		if (resend && now - lastSentAt < kResendAfter)
 		{
 			return AdvertiseAction::kNone;
 		}
-		lastSent_ = desired;
-		lastSentAt_ = now;
+		lastSent = desired;
+		lastSentAt = now;
 		return resend ? AdvertiseAction::kResend : AdvertiseAction::kWrite;
 	}
 
 private:
-	std::optional<Advertised> lastSent_;
-	std::chrono::steady_clock::time_point lastSentAt_{};
+	std::optional<Advertised> lastSent;
+	std::chrono::steady_clock::time_point lastSentAt{};
 };
 
 } // namespace node_admission

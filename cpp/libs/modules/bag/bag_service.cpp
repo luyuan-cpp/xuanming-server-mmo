@@ -214,10 +214,10 @@ namespace
     class BorrowedAdmission final : public IAdmissionPolicy
     {
     public:
-        explicit BorrowedAdmission(const IAdmissionPolicy& source) : source_(source) {}
-        bool Accepts(uint32_t config) const override { return source_.Accepts(config); }
+        explicit BorrowedAdmission(const IAdmissionPolicy& source) : source(source) {}
+        bool Accepts(uint32_t config) const override { return source.Accepts(config); }
     private:
-        const IAdmissionPolicy& source_;
+        const IAdmissionPolicy& source;
     };
 
     // 两包都放不下而整批被拒的连续次数(按需状态,docs/design/ecs-component-access-rules.md):
@@ -391,14 +391,14 @@ bool BagService::ReleaseHold(entt::entity playerEntity, const uint64_t holdId)
 
 bool BagService::CloneBagForTransaction(const Bag &source, Bag &candidate)
 {
-    candidate.store_ = source.store_;
-    candidate.layout_ = source.layout_->Clone();
-    if (candidate.layout_ == nullptr)
+    candidate.store = source.store;
+    candidate.layout = source.layout->Clone();
+    if (candidate.layout == nullptr)
     {
         return false;
     }
-    candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
-    candidate.profileId_ = source.profileId_;
+    candidate.admission = std::make_unique<BorrowedAdmission>(source.Admission());
+    candidate.profileId = source.profileId;
     candidate.playerGuid = source.playerGuid;
     return true;
 }
@@ -504,10 +504,10 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     }
     // 原策略不移交，候选从未发布；所有可能拒绝的步骤都已完成。这里不回调、不yield。
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
-    inventory.store_ = std::move(nextInventory.store_); inventory.layout_ = std::move(nextInventory.layout_);
-    ++inventory.mutationVersion_;
-    temporary.store_ = std::move(nextTemporary.store_); temporary.layout_ = std::move(nextTemporary.layout_);
-    ++temporary.mutationVersion_;
+    inventory.store = std::move(nextInventory.store); inventory.layout = std::move(nextInventory.layout);
+    ++inventory.mutationVersion;
+    temporary.store = std::move(nextTemporary.store); temporary.layout = std::move(nextTemporary.layout);
+    ++temporary.mutationVersion;
     // 改投的那一批与两包的发布在同一段:之后不再有失败分支(GrantOverflowRoute::commit 不得失败)。
     if (routed) overflowRoute->commit(gained);
     for (const auto& entry : drained)
@@ -559,7 +559,7 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
     const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
     uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
     const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit,
-    bool tradableOnly, bool* consumedBoundOut)
+    bool tradableOnly, bool* consumedBoundOut, bool bindOutputsIfConsumedBound)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity))
         return kInvalidParameter;
@@ -621,9 +621,24 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
     }
     // 替换的实例不得在同一笔中又被当作材料销毁。
     for (const auto& entry : drained) if (changed.contains(entry.guid)) return kInvalidParameter;
+    if (bindOutputsIfConsumedBound && consumedBound) {
+        for (const auto& edit : replacements) {
+            auto& candidate = edit.bagType == kInventory ? nextInventory : nextEquipment;
+            if (auto* item = candidate.GetItemCompByGuid(edit.expected.item_id()); item != nullptr) {
+                item->set_bound(true);
+            }
+        }
+    }
     std::vector<GuidVector> created;
     if (!gained.empty()) {
-        const auto result = nextInventory.AddItems(gained, &created, InstalledItemInstanceInitializer());
+        std::vector<InitItemParam> adjustedGained;
+        const auto* gainedToApply = &gained;
+        if (bindOutputsIfConsumedBound && consumedBound) {
+            adjustedGained = gained;
+            for (auto& param : adjustedGained) param.itemPBComp.set_bound(true);
+            gainedToApply = &adjustedGained;
+        }
+        const auto result = nextInventory.AddItems(*gainedToApply, &created, InstalledItemInstanceInitializer());
         if (result != kSuccess) return result;
         if (created.size() != gained.size()) return kInvalidParameter;
     }
@@ -634,12 +649,12 @@ uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const Ite
     const auto result = beforeCommit(created);
     if (result != kSuccess) return result;
     static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
-    inventory.store_ = std::move(nextInventory.store_);
-    inventory.layout_ = std::move(nextInventory.layout_);
-    ++inventory.mutationVersion_;
-    equipment.store_ = std::move(nextEquipment.store_);
-    equipment.layout_ = std::move(nextEquipment.layout_);
-    ++equipment.mutationVersion_;
+    inventory.store = std::move(nextInventory.store);
+    inventory.layout = std::move(nextInventory.layout);
+    ++inventory.mutationVersion;
+    equipment.store = std::move(nextEquipment.store);
+    equipment.layout = std::move(nextEquipment.layout);
+    ++equipment.mutationVersion;
     written = std::move(created);
     for (const auto& entry : drained)
         TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
@@ -827,8 +842,13 @@ uint32_t BagService::RemoveItemsExact(
 	TransactionType txType,
 	uint64_t correlationId,
 	const std::string &extra,
-	bool tradableOnly)
+	bool tradableOnly,
+	bool *consumedBoundOut)
 {
+	if (consumedBoundOut != nullptr)
+	{
+		*consumedBoundOut = false;
+	}
 	// ── 参数检查:排在冻结闸之前 ─────────────────────────────────────────
 	// 空表在底层是"什么都不用扣 = 成功",调用方会把一次什么都没扣的调用当成扣过了。
 	if (itemsToRemove.empty())
@@ -896,7 +916,7 @@ uint32_t BagService::RemoveItemsExact(
 	// ── 全或无扣除:任何一种不够就整体失败,一件不扣 ─────────────────────
 	// 不够时 Bag 层已经打过 ERROR 与调用栈;drained 此时保持为空,下面不会落任何流水。
 	std::vector<DrainedInstance> drained;
-	RETURN_ON_ERROR(bag.RemoveItems(itemsToRemove, &drained, tradableOnly));
+	RETURN_ON_ERROR(bag.RemoveItems(itemsToRemove, &drained, tradableOnly, consumedBoundOut));
 
 	// 逐条落流水,理由同 RemoveItemsClamped:一笔消耗可能横跨好几堆,少记一条就是少一条
 	// 追溯线索。注意 LogItemDestroy 的 txType 在**最后**(与 LogItemCreate 的顺序不同),

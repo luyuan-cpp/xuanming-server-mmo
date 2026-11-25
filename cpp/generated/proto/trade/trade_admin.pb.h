@@ -34,6 +34,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/trade/commerce.pb.h"
 #include "proto/trade/jubaozhai.pb.h"
 #include "proto/trade/trade_table.pb.h"
 // @@protoc_insertion_point(includes)
@@ -103,6 +104,38 @@ extern ManualContractPartyGlobalsTypeInternal ManualContractParty_globals_;
 extern const ::google::protobuf::internal::ClassDataFull ManualContractParty_class_data_;
 #else
 extern const ManualContractPartyGlobalsTypeInternal ManualContractParty_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RecordSellerEnvironmentRequest;
+struct RecordSellerEnvironmentRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RecordSellerEnvironmentRequestGlobalsTypeInternal RecordSellerEnvironmentRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RecordSellerEnvironmentRequest_class_data_;
+#else
+extern const RecordSellerEnvironmentRequestGlobalsTypeInternal RecordSellerEnvironmentRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RecordSellerEnvironmentResponse;
+struct RecordSellerEnvironmentResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RecordSellerEnvironmentResponseGlobalsTypeInternal RecordSellerEnvironmentResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RecordSellerEnvironmentResponse_class_data_;
+#else
+extern const RecordSellerEnvironmentResponseGlobalsTypeInternal RecordSellerEnvironmentResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RecordSellerViolationRequest;
+struct RecordSellerViolationRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RecordSellerViolationRequestGlobalsTypeInternal RecordSellerViolationRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RecordSellerViolationRequest_class_data_;
+#else
+extern const RecordSellerViolationRequestGlobalsTypeInternal RecordSellerViolationRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RecordSellerViolationResponse;
+struct RecordSellerViolationResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RecordSellerViolationResponseGlobalsTypeInternal RecordSellerViolationResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RecordSellerViolationResponse_class_data_;
+#else
+extern const RecordSellerViolationResponseGlobalsTypeInternal RecordSellerViolationResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ResolveManualContractRequest;
 struct ResolveManualContractRequestGlobalsTypeInternal;
@@ -1738,6 +1771,1073 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractRequest final 
     ::uint64_t linked_commerce_id_;
     ::uint64_t linked_version_;
     int mode_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2ftrade_5fadmin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RecordSellerViolationResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.RecordSellerViolationResponse) */ {
+ public:
+  inline RecordSellerViolationResponse() : RecordSellerViolationResponse(nullptr) {}
+  ~RecordSellerViolationResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RecordSellerViolationResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RecordSellerViolationResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RecordSellerViolationResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RecordSellerViolationResponse(const RecordSellerViolationResponse& from) : RecordSellerViolationResponse(nullptr, from) {}
+  inline RecordSellerViolationResponse(RecordSellerViolationResponse&& from) noexcept : RecordSellerViolationResponse(nullptr, ::std::move(from)) {}
+  inline RecordSellerViolationResponse& operator=(const RecordSellerViolationResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RecordSellerViolationResponse& operator=(RecordSellerViolationResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RecordSellerViolationResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RecordSellerViolationResponse>(&RecordSellerViolationResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 12;
+  friend void swap(RecordSellerViolationResponse& a, RecordSellerViolationResponse& b) { a.Swap(&b); }
+  inline void Swap(RecordSellerViolationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RecordSellerViolationResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RecordSellerViolationResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RecordSellerViolationResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RecordSellerViolationResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RecordSellerViolationResponse& from) { RecordSellerViolationResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RecordSellerViolationResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.RecordSellerViolationResponse"; }
+
+  explicit RecordSellerViolationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RecordSellerViolationResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RecordSellerViolationResponse& from);
+  RecordSellerViolationResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RecordSellerViolationResponse&& from) noexcept
+      : RecordSellerViolationResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kProfileFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .trade.SellerCreditView profile = 2;
+  [[nodiscard]] bool has_profile()
+      const;
+  void clear_profile() ;
+  [[nodiscard]] const ::trade::SellerCreditView& profile() const;
+  [[nodiscard]] ::trade::SellerCreditView* PROTOBUF_NULLABLE release_profile();
+  ::trade::SellerCreditView* PROTOBUF_NONNULL mutable_profile();
+  void set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value);
+  ::trade::SellerCreditView* PROTOBUF_NULLABLE unsafe_arena_release_profile();
+
+  private:
+  const ::trade::SellerCreditView& _internal_profile() const;
+  ::trade::SellerCreditView* PROTOBUF_NONNULL _internal_mutable_profile();
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.RecordSellerViolationResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RecordSellerViolationResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::trade::SellerCreditView* PROTOBUF_NULLABLE profile_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2ftrade_5fadmin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RecordSellerViolationRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.RecordSellerViolationRequest) */ {
+ public:
+  inline RecordSellerViolationRequest() : RecordSellerViolationRequest(nullptr) {}
+  ~RecordSellerViolationRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RecordSellerViolationRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RecordSellerViolationRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RecordSellerViolationRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RecordSellerViolationRequest(const RecordSellerViolationRequest& from) : RecordSellerViolationRequest(nullptr, from) {}
+  inline RecordSellerViolationRequest(RecordSellerViolationRequest&& from) noexcept : RecordSellerViolationRequest(nullptr, ::std::move(from)) {}
+  inline RecordSellerViolationRequest& operator=(const RecordSellerViolationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RecordSellerViolationRequest& operator=(RecordSellerViolationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RecordSellerViolationRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RecordSellerViolationRequest>(&RecordSellerViolationRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(RecordSellerViolationRequest& a, RecordSellerViolationRequest& b) { a.Swap(&b); }
+  inline void Swap(RecordSellerViolationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RecordSellerViolationRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RecordSellerViolationRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RecordSellerViolationRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RecordSellerViolationRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RecordSellerViolationRequest& from) { RecordSellerViolationRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RecordSellerViolationRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.RecordSellerViolationRequest"; }
+
+  explicit RecordSellerViolationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RecordSellerViolationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RecordSellerViolationRequest& from);
+  RecordSellerViolationRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RecordSellerViolationRequest&& from) noexcept
+      : RecordSellerViolationRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCaseIdFieldNumber = 1,
+    kOrderIdFieldNumber = 2,
+    kSellerAccountFieldNumber = 4,
+    kReasonFieldNumber = 6,
+    kAuthFieldNumber = 8,
+    kSellerPlayerIdFieldNumber = 3,
+    kSellerOwnerRevisionFieldNumber = 5,
+    kRecordedAtMsFieldNumber = 7,
+  };
+  // string case_id = 1;
+  void clear_case_id() ;
+  [[nodiscard]] const ::std::string& case_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_case_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_case_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_case_id();
+  void set_allocated_case_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_case_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_case_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_case_id();
+
+  public:
+  // string order_id = 2;
+  void clear_order_id() ;
+  [[nodiscard]] const ::std::string& order_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_order_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_order_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_order_id();
+  void set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_order_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_order_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_order_id();
+
+  public:
+  // string seller_account = 4;
+  void clear_seller_account() ;
+  [[nodiscard]] const ::std::string& seller_account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_seller_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_seller_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_seller_account();
+  void set_allocated_seller_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_seller_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_seller_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_seller_account();
+
+  public:
+  // string reason = 6;
+  void clear_reason() ;
+  [[nodiscard]] const ::std::string& reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
+  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+
+  public:
+  // .common.base.ServiceCallAuth auth = 8;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 seller_player_id = 3;
+  void clear_seller_player_id() ;
+  [[nodiscard]] ::uint64_t seller_player_id() const;
+  void set_seller_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seller_player_id() const;
+  void _internal_set_seller_player_id(::uint64_t value);
+
+  public:
+  // uint64 seller_owner_revision = 5;
+  void clear_seller_owner_revision() ;
+  [[nodiscard]] ::uint64_t seller_owner_revision() const;
+  void set_seller_owner_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seller_owner_revision() const;
+  void _internal_set_seller_owner_revision(::uint64_t value);
+
+  public:
+  // uint64 recorded_at_ms = 7;
+  void clear_recorded_at_ms() ;
+  [[nodiscard]] ::uint64_t recorded_at_ms() const;
+  void set_recorded_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_recorded_at_ms() const;
+  void _internal_set_recorded_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.RecordSellerViolationRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          1, 86,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RecordSellerViolationRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr case_id_;
+    ::google::protobuf::internal::ArenaStringPtr order_id_;
+    ::google::protobuf::internal::ArenaStringPtr seller_account_;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::uint64_t seller_player_id_;
+    ::uint64_t seller_owner_revision_;
+    ::uint64_t recorded_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2ftrade_5fadmin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RecordSellerEnvironmentResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.RecordSellerEnvironmentResponse) */ {
+ public:
+  inline RecordSellerEnvironmentResponse() : RecordSellerEnvironmentResponse(nullptr) {}
+  ~RecordSellerEnvironmentResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RecordSellerEnvironmentResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RecordSellerEnvironmentResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RecordSellerEnvironmentResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RecordSellerEnvironmentResponse(const RecordSellerEnvironmentResponse& from) : RecordSellerEnvironmentResponse(nullptr, from) {}
+  inline RecordSellerEnvironmentResponse(RecordSellerEnvironmentResponse&& from) noexcept : RecordSellerEnvironmentResponse(nullptr, ::std::move(from)) {}
+  inline RecordSellerEnvironmentResponse& operator=(const RecordSellerEnvironmentResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RecordSellerEnvironmentResponse& operator=(RecordSellerEnvironmentResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RecordSellerEnvironmentResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RecordSellerEnvironmentResponse>(&RecordSellerEnvironmentResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 10;
+  friend void swap(RecordSellerEnvironmentResponse& a, RecordSellerEnvironmentResponse& b) { a.Swap(&b); }
+  inline void Swap(RecordSellerEnvironmentResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RecordSellerEnvironmentResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RecordSellerEnvironmentResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RecordSellerEnvironmentResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RecordSellerEnvironmentResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RecordSellerEnvironmentResponse& from) { RecordSellerEnvironmentResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RecordSellerEnvironmentResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.RecordSellerEnvironmentResponse"; }
+
+  explicit RecordSellerEnvironmentResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RecordSellerEnvironmentResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RecordSellerEnvironmentResponse& from);
+  RecordSellerEnvironmentResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RecordSellerEnvironmentResponse&& from) noexcept
+      : RecordSellerEnvironmentResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kProfileFieldNumber = 3,
+    kEnvCreditClearedFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .trade.SellerCreditView profile = 3;
+  [[nodiscard]] bool has_profile()
+      const;
+  void clear_profile() ;
+  [[nodiscard]] const ::trade::SellerCreditView& profile() const;
+  [[nodiscard]] ::trade::SellerCreditView* PROTOBUF_NULLABLE release_profile();
+  ::trade::SellerCreditView* PROTOBUF_NONNULL mutable_profile();
+  void set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value);
+  ::trade::SellerCreditView* PROTOBUF_NULLABLE unsafe_arena_release_profile();
+
+  private:
+  const ::trade::SellerCreditView& _internal_profile() const;
+  ::trade::SellerCreditView* PROTOBUF_NONNULL _internal_mutable_profile();
+
+  public:
+  // bool env_credit_cleared = 2;
+  void clear_env_credit_cleared() ;
+  [[nodiscard]] bool env_credit_cleared() const;
+  void set_env_credit_cleared(bool value);
+
+  private:
+  bool _internal_env_credit_cleared() const;
+  void _internal_set_env_credit_cleared(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.RecordSellerEnvironmentResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RecordSellerEnvironmentResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::trade::SellerCreditView* PROTOBUF_NULLABLE profile_;
+    bool env_credit_cleared_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2ftrade_5fadmin_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RecordSellerEnvironmentRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.RecordSellerEnvironmentRequest) */ {
+ public:
+  inline RecordSellerEnvironmentRequest() : RecordSellerEnvironmentRequest(nullptr) {}
+  ~RecordSellerEnvironmentRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RecordSellerEnvironmentRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RecordSellerEnvironmentRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RecordSellerEnvironmentRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RecordSellerEnvironmentRequest(const RecordSellerEnvironmentRequest& from) : RecordSellerEnvironmentRequest(nullptr, from) {}
+  inline RecordSellerEnvironmentRequest(RecordSellerEnvironmentRequest&& from) noexcept : RecordSellerEnvironmentRequest(nullptr, ::std::move(from)) {}
+  inline RecordSellerEnvironmentRequest& operator=(const RecordSellerEnvironmentRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RecordSellerEnvironmentRequest& operator=(RecordSellerEnvironmentRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RecordSellerEnvironmentRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RecordSellerEnvironmentRequest>(&RecordSellerEnvironmentRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(RecordSellerEnvironmentRequest& a, RecordSellerEnvironmentRequest& b) { a.Swap(&b); }
+  inline void Swap(RecordSellerEnvironmentRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RecordSellerEnvironmentRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RecordSellerEnvironmentRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RecordSellerEnvironmentRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RecordSellerEnvironmentRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RecordSellerEnvironmentRequest& from) { RecordSellerEnvironmentRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RecordSellerEnvironmentRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.RecordSellerEnvironmentRequest"; }
+
+  explicit RecordSellerEnvironmentRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RecordSellerEnvironmentRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RecordSellerEnvironmentRequest& from);
+  RecordSellerEnvironmentRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RecordSellerEnvironmentRequest&& from) noexcept
+      : RecordSellerEnvironmentRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOwnerAccountFieldNumber = 2,
+    kClientIpFieldNumber = 4,
+    kDeviceIdFieldNumber = 5,
+    kAuthFieldNumber = 7,
+    kSellerPlayerIdFieldNumber = 1,
+    kOwnerRevisionFieldNumber = 3,
+    kObservedAtMsFieldNumber = 6,
+  };
+  // string owner_account = 2;
+  void clear_owner_account() ;
+  [[nodiscard]] const ::std::string& owner_account() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_owner_account(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_owner_account();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_owner_account();
+  void set_allocated_owner_account(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_owner_account() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_owner_account(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_owner_account();
+
+  public:
+  // string client_ip = 4;
+  void clear_client_ip() ;
+  [[nodiscard]] const ::std::string& client_ip() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_ip(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_ip();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_ip();
+  void set_allocated_client_ip(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_ip() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_ip(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_ip();
+
+  public:
+  // string device_id = 5;
+  void clear_device_id() ;
+  [[nodiscard]] const ::std::string& device_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_device_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_device_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_device_id();
+  void set_allocated_device_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_device_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_device_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_device_id();
+
+  public:
+  // .common.base.ServiceCallAuth auth = 7;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 seller_player_id = 1;
+  void clear_seller_player_id() ;
+  [[nodiscard]] ::uint64_t seller_player_id() const;
+  void set_seller_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seller_player_id() const;
+  void _internal_set_seller_player_id(::uint64_t value);
+
+  public:
+  // uint64 owner_revision = 3;
+  void clear_owner_revision() ;
+  [[nodiscard]] ::uint64_t owner_revision() const;
+  void set_owner_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_owner_revision() const;
+  void _internal_set_owner_revision(::uint64_t value);
+
+  public:
+  // uint64 observed_at_ms = 6;
+  void clear_observed_at_ms() ;
+  [[nodiscard]] ::uint64_t observed_at_ms() const;
+  void set_observed_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_observed_at_ms() const;
+  void _internal_set_observed_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.RecordSellerEnvironmentRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          1, 76,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RecordSellerEnvironmentRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr owner_account_;
+    ::google::protobuf::internal::ArenaStringPtr client_ip_;
+    ::google::protobuf::internal::ArenaStringPtr device_id_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::uint64_t seller_player_id_;
+    ::uint64_t owner_revision_;
+    ::uint64_t observed_at_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5922,6 +7022,1196 @@ inline void ResolveManualContractResponse::set_allocated_audit_line(::std::strin
     _impl_.audit_line_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:trade.ResolveManualContractResponse.audit_line)
+}
+
+// -------------------------------------------------------------------
+
+// RecordSellerEnvironmentRequest
+
+// uint64 seller_player_id = 1;
+inline void RecordSellerEnvironmentRequest::clear_seller_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::seller_player_id() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.seller_player_id)
+  return _internal_seller_player_id();
+}
+inline void RecordSellerEnvironmentRequest::set_seller_player_id(::uint64_t value) {
+  _internal_set_seller_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.seller_player_id)
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::_internal_seller_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seller_player_id_;
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_seller_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_player_id_ = value;
+}
+
+// string owner_account = 2;
+inline void RecordSellerEnvironmentRequest::clear_owner_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::owner_account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.owner_account)
+  return _internal_owner_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerEnvironmentRequest::set_owner_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.owner_account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.owner_account)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::mutable_owner_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_owner_account();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentRequest.owner_account)
+  return _s;
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::_internal_owner_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_account_.Get();
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_owner_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::_internal_mutable_owner_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.owner_account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerEnvironmentRequest::release_owner_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentRequest.owner_account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.owner_account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.owner_account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerEnvironmentRequest::set_allocated_owner_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.owner_account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.owner_account_.IsDefault()) {
+    _impl_.owner_account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentRequest.owner_account)
+}
+
+// uint64 owner_revision = 3;
+inline void RecordSellerEnvironmentRequest::clear_owner_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::owner_revision() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.owner_revision)
+  return _internal_owner_revision();
+}
+inline void RecordSellerEnvironmentRequest::set_owner_revision(::uint64_t value) {
+  _internal_set_owner_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.owner_revision)
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::_internal_owner_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_revision_;
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_owner_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_revision_ = value;
+}
+
+// string client_ip = 4;
+inline void RecordSellerEnvironmentRequest::clear_client_ip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_ip_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::client_ip() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.client_ip)
+  return _internal_client_ip();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerEnvironmentRequest::set_client_ip(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.client_ip_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.client_ip)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::mutable_client_ip()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_client_ip();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentRequest.client_ip)
+  return _s;
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::_internal_client_ip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_ip_.Get();
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_client_ip(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_ip_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::_internal_mutable_client_ip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_ip_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerEnvironmentRequest::release_client_ip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentRequest.client_ip)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.client_ip_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_ip_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerEnvironmentRequest::set_allocated_client_ip(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.client_ip_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_ip_.IsDefault()) {
+    _impl_.client_ip_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentRequest.client_ip)
+}
+
+// string device_id = 5;
+inline void RecordSellerEnvironmentRequest::clear_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.device_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::device_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.device_id)
+  return _internal_device_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerEnvironmentRequest::set_device_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.device_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.device_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::mutable_device_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_device_id();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentRequest.device_id)
+  return _s;
+}
+inline const ::std::string& RecordSellerEnvironmentRequest::_internal_device_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.device_id_.Get();
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_device_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.device_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::_internal_mutable_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.device_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerEnvironmentRequest::release_device_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentRequest.device_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.device_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.device_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerEnvironmentRequest::set_allocated_device_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.device_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.device_id_.IsDefault()) {
+    _impl_.device_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentRequest.device_id)
+}
+
+// uint64 observed_at_ms = 6;
+inline void RecordSellerEnvironmentRequest::clear_observed_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.observed_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::observed_at_ms() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.observed_at_ms)
+  return _internal_observed_at_ms();
+}
+inline void RecordSellerEnvironmentRequest::set_observed_at_ms(::uint64_t value) {
+  _internal_set_observed_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentRequest.observed_at_ms)
+}
+inline ::uint64_t RecordSellerEnvironmentRequest::_internal_observed_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.observed_at_ms_;
+}
+inline void RecordSellerEnvironmentRequest::_internal_set_observed_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.observed_at_ms_ = value;
+}
+
+// .common.base.ServiceCallAuth auth = 7;
+inline bool RecordSellerEnvironmentRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& RecordSellerEnvironmentRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& RecordSellerEnvironmentRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentRequest.auth)
+  return _internal_auth();
+}
+inline void RecordSellerEnvironmentRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerEnvironmentRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE RecordSellerEnvironmentRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE RecordSellerEnvironmentRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL RecordSellerEnvironmentRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentRequest.auth)
+  return _msg;
+}
+inline void RecordSellerEnvironmentRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// RecordSellerEnvironmentResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RecordSellerEnvironmentResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RecordSellerEnvironmentResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RecordSellerEnvironmentResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentResponse.error_message)
+  return _internal_error_message();
+}
+inline void RecordSellerEnvironmentResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerEnvironmentResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RecordSellerEnvironmentResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RecordSellerEnvironmentResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RecordSellerEnvironmentResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RecordSellerEnvironmentResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentResponse.error_message)
+  return _msg;
+}
+inline void RecordSellerEnvironmentResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentResponse.error_message)
+}
+
+// bool env_credit_cleared = 2;
+inline void RecordSellerEnvironmentResponse::clear_env_credit_cleared() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.env_credit_cleared_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool RecordSellerEnvironmentResponse::env_credit_cleared() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentResponse.env_credit_cleared)
+  return _internal_env_credit_cleared();
+}
+inline void RecordSellerEnvironmentResponse::set_env_credit_cleared(bool value) {
+  _internal_set_env_credit_cleared(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerEnvironmentResponse.env_credit_cleared)
+}
+inline bool RecordSellerEnvironmentResponse::_internal_env_credit_cleared() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.env_credit_cleared_;
+}
+inline void RecordSellerEnvironmentResponse::_internal_set_env_credit_cleared(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.env_credit_cleared_ = value;
+}
+
+// .trade.SellerCreditView profile = 3;
+inline bool RecordSellerEnvironmentResponse::has_profile() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.profile_ != nullptr);
+  return value;
+}
+inline const ::trade::SellerCreditView& RecordSellerEnvironmentResponse::_internal_profile() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::trade::SellerCreditView* p = _impl_.profile_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::trade::SellerCreditView>(&::trade::SellerCreditView_globals_);
+}
+inline const ::trade::SellerCreditView& RecordSellerEnvironmentResponse::profile() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerEnvironmentResponse.profile)
+  return _internal_profile();
+}
+inline void RecordSellerEnvironmentResponse::unsafe_arena_set_allocated_profile(
+    ::trade::SellerCreditView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+  _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerEnvironmentResponse.profile)
+}
+inline ::trade::SellerCreditView* PROTOBUF_NULLABLE RecordSellerEnvironmentResponse::release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* released = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NULLABLE RecordSellerEnvironmentResponse::unsafe_arena_release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerEnvironmentResponse.profile)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* temp = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  return temp;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NONNULL RecordSellerEnvironmentResponse::_internal_mutable_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.profile_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::trade::SellerCreditView>(GetArena());
+    _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(p);
+  }
+  return _impl_.profile_;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NONNULL RecordSellerEnvironmentResponse::mutable_profile()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* _msg = _internal_mutable_profile();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerEnvironmentResponse.profile)
+  return _msg;
+}
+inline void RecordSellerEnvironmentResponse::set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerEnvironmentResponse.profile)
+}
+
+// -------------------------------------------------------------------
+
+// RecordSellerViolationRequest
+
+// string case_id = 1;
+inline void RecordSellerViolationRequest::clear_case_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.case_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& RecordSellerViolationRequest::case_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.case_id)
+  return _internal_case_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerViolationRequest::set_case_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.case_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.case_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::mutable_case_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_case_id();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationRequest.case_id)
+  return _s;
+}
+inline const ::std::string& RecordSellerViolationRequest::_internal_case_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.case_id_.Get();
+}
+inline void RecordSellerViolationRequest::_internal_set_case_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.case_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::_internal_mutable_case_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.case_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerViolationRequest::release_case_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationRequest.case_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.case_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.case_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerViolationRequest::set_allocated_case_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.case_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.case_id_.IsDefault()) {
+    _impl_.case_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationRequest.case_id)
+}
+
+// string order_id = 2;
+inline void RecordSellerViolationRequest::clear_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& RecordSellerViolationRequest::order_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.order_id)
+  return _internal_order_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerViolationRequest::set_order_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.order_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.order_id)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::mutable_order_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_order_id();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationRequest.order_id)
+  return _s;
+}
+inline const ::std::string& RecordSellerViolationRequest::_internal_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.order_id_.Get();
+}
+inline void RecordSellerViolationRequest::_internal_set_order_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::_internal_mutable_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.order_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerViolationRequest::release_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationRequest.order_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.order_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerViolationRequest::set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.order_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.order_id_.IsDefault()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationRequest.order_id)
+}
+
+// uint64 seller_player_id = 3;
+inline void RecordSellerViolationRequest::clear_seller_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t RecordSellerViolationRequest::seller_player_id() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.seller_player_id)
+  return _internal_seller_player_id();
+}
+inline void RecordSellerViolationRequest::set_seller_player_id(::uint64_t value) {
+  _internal_set_seller_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.seller_player_id)
+}
+inline ::uint64_t RecordSellerViolationRequest::_internal_seller_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seller_player_id_;
+}
+inline void RecordSellerViolationRequest::_internal_set_seller_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_player_id_ = value;
+}
+
+// string seller_account = 4;
+inline void RecordSellerViolationRequest::clear_seller_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_account_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& RecordSellerViolationRequest::seller_account() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.seller_account)
+  return _internal_seller_account();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerViolationRequest::set_seller_account(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.seller_account_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.seller_account)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::mutable_seller_account()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_seller_account();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationRequest.seller_account)
+  return _s;
+}
+inline const ::std::string& RecordSellerViolationRequest::_internal_seller_account() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seller_account_.Get();
+}
+inline void RecordSellerViolationRequest::_internal_set_seller_account(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_account_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::_internal_mutable_seller_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.seller_account_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerViolationRequest::release_seller_account() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationRequest.seller_account)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.seller_account_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.seller_account_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerViolationRequest::set_allocated_seller_account(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.seller_account_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.seller_account_.IsDefault()) {
+    _impl_.seller_account_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationRequest.seller_account)
+}
+
+// uint64 seller_owner_revision = 5;
+inline void RecordSellerViolationRequest::clear_seller_owner_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_owner_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t RecordSellerViolationRequest::seller_owner_revision() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.seller_owner_revision)
+  return _internal_seller_owner_revision();
+}
+inline void RecordSellerViolationRequest::set_seller_owner_revision(::uint64_t value) {
+  _internal_set_seller_owner_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.seller_owner_revision)
+}
+inline ::uint64_t RecordSellerViolationRequest::_internal_seller_owner_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seller_owner_revision_;
+}
+inline void RecordSellerViolationRequest::_internal_set_seller_owner_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_owner_revision_ = value;
+}
+
+// string reason = 6;
+inline void RecordSellerViolationRequest::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& RecordSellerViolationRequest::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RecordSellerViolationRequest::set_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.reason)
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::mutable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationRequest.reason)
+  return _s;
+}
+inline const ::std::string& RecordSellerViolationRequest::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void RecordSellerViolationRequest::_internal_set_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RecordSellerViolationRequest::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RecordSellerViolationRequest::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationRequest.reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RecordSellerViolationRequest::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationRequest.reason)
+}
+
+// uint64 recorded_at_ms = 7;
+inline void RecordSellerViolationRequest::clear_recorded_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recorded_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t RecordSellerViolationRequest::recorded_at_ms() const {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.recorded_at_ms)
+  return _internal_recorded_at_ms();
+}
+inline void RecordSellerViolationRequest::set_recorded_at_ms(::uint64_t value) {
+  _internal_set_recorded_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:trade.RecordSellerViolationRequest.recorded_at_ms)
+}
+inline ::uint64_t RecordSellerViolationRequest::_internal_recorded_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recorded_at_ms_;
+}
+inline void RecordSellerViolationRequest::_internal_set_recorded_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recorded_at_ms_ = value;
+}
+
+// .common.base.ServiceCallAuth auth = 8;
+inline bool RecordSellerViolationRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& RecordSellerViolationRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& RecordSellerViolationRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationRequest.auth)
+  return _internal_auth();
+}
+inline void RecordSellerViolationRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerViolationRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE RecordSellerViolationRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE RecordSellerViolationRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL RecordSellerViolationRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL RecordSellerViolationRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationRequest.auth)
+  return _msg;
+}
+inline void RecordSellerViolationRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// RecordSellerViolationResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RecordSellerViolationResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RecordSellerViolationResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RecordSellerViolationResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationResponse.error_message)
+  return _internal_error_message();
+}
+inline void RecordSellerViolationResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerViolationResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RecordSellerViolationResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RecordSellerViolationResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RecordSellerViolationResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RecordSellerViolationResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationResponse.error_message)
+  return _msg;
+}
+inline void RecordSellerViolationResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationResponse.error_message)
+}
+
+// .trade.SellerCreditView profile = 2;
+inline bool RecordSellerViolationResponse::has_profile() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.profile_ != nullptr);
+  return value;
+}
+inline const ::trade::SellerCreditView& RecordSellerViolationResponse::_internal_profile() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::trade::SellerCreditView* p = _impl_.profile_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::trade::SellerCreditView>(&::trade::SellerCreditView_globals_);
+}
+inline const ::trade::SellerCreditView& RecordSellerViolationResponse::profile() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.RecordSellerViolationResponse.profile)
+  return _internal_profile();
+}
+inline void RecordSellerViolationResponse::unsafe_arena_set_allocated_profile(
+    ::trade::SellerCreditView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+  _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.RecordSellerViolationResponse.profile)
+}
+inline ::trade::SellerCreditView* PROTOBUF_NULLABLE RecordSellerViolationResponse::release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* released = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NULLABLE RecordSellerViolationResponse::unsafe_arena_release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.RecordSellerViolationResponse.profile)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* temp = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  return temp;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NONNULL RecordSellerViolationResponse::_internal_mutable_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.profile_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::trade::SellerCreditView>(GetArena());
+    _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(p);
+  }
+  return _impl_.profile_;
+}
+inline ::trade::SellerCreditView* PROTOBUF_NONNULL RecordSellerViolationResponse::mutable_profile()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::SellerCreditView* _msg = _internal_mutable_profile();
+  // @@protoc_insertion_point(field_mutable:trade.RecordSellerViolationResponse.profile)
+  return _msg;
+}
+inline void RecordSellerViolationResponse::set_allocated_profile(::trade::SellerCreditView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.profile_ = reinterpret_cast<::trade::SellerCreditView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.RecordSellerViolationResponse.profile)
 }
 
 #ifdef __GNUC__

@@ -28,16 +28,17 @@ const (
 type MatchMode int32
 
 const (
-	MatchMode_MATCH_MODE_UNSPECIFIED   MatchMode = 0
-	MatchMode_MATCH_MODE_5V5           MatchMode = 1 // 回合制 PVP 5v5(二期启用):FIFO 凑 10 人,前 5 后 5 各一队
-	MatchMode_MATCH_MODE_3V3           MatchMode = 2 // 6 players total(未开放)
-	MatchMode_MATCH_MODE_1V1           MatchMode = 3 // 2 players total(回合制 PVP,一期启用)
-	MatchMode_MATCH_MODE_PVE_SOLO      MatchMode = 4 // 回合制 PVE 单人,即时开战(伪匹配)
-	MatchMode_MATCH_MODE_PVE_TEAM      MatchMode = 5 // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
-	MatchMode_MATCH_MODE_PVP_CHALLENGE MatchMode = 6 // 场景发起 PK(切磋):点名成局,不入队
-	MatchMode_MATCH_MODE_PVP_TEAM      MatchMode = 7 // 真人人数档PVP：每侧1..5人，整支队伍保持同侧，等待真人对手（真实养成，正式计分）。
-	MatchMode_MATCH_MODE_POLARITY_5V5  MatchMode = 8 // 轮换娱乐场·物法易势 5V5：每侧 5 人、10 人公平团战，使用 6 套免费预设，不计正式评分。
-	// 9 / 10 预留给帮战 V2(docs/design/guild-play-v2.md: GUILD_WAR_PVP / GUILD_WAR_SIEGE)。
+	MatchMode_MATCH_MODE_UNSPECIFIED       MatchMode = 0
+	MatchMode_MATCH_MODE_5V5               MatchMode = 1  // 回合制 PVP 5v5(二期启用):FIFO 凑 10 人,前 5 后 5 各一队
+	MatchMode_MATCH_MODE_3V3               MatchMode = 2  // 6 players total(未开放)
+	MatchMode_MATCH_MODE_1V1               MatchMode = 3  // 2 players total(回合制 PVP,一期启用)
+	MatchMode_MATCH_MODE_PVE_SOLO          MatchMode = 4  // 回合制 PVE 单人,即时开战(伪匹配)
+	MatchMode_MATCH_MODE_PVE_TEAM          MatchMode = 5  // 回合制 PVE 组队:按 JoinQueueRequest.team_size 的人数档 FIFO 凑满(1 人档即时开战)
+	MatchMode_MATCH_MODE_PVP_CHALLENGE     MatchMode = 6  // 场景发起 PK(切磋):点名成局,不入队
+	MatchMode_MATCH_MODE_PVP_TEAM          MatchMode = 7  // 真人人数档PVP：每侧1..5人，整支队伍保持同侧，等待真人对手（真实养成，正式计分）。
+	MatchMode_MATCH_MODE_POLARITY_5V5      MatchMode = 8  // 轮换娱乐场·物法易势 5V5：每侧 5 人、10 人公平团战，使用 6 套免费预设，不计正式评分。
+	MatchMode_MATCH_MODE_GUILD_WAR_PVP     MatchMode = 9  // 帮会全天帮战 V2·真人直打(docs/design/guild-play-v2.md):无匹配池,本人真实养成,公开观战,录回放,胜15/合格负平10。
+	MatchMode_MATCH_MODE_GUILD_WAR_SIEGE   MatchMode = 10 // 帮会全天帮战 V2·守旗阵踢馆/灵脉守卫(docs/design/guild-play-v2.md):无匹配池,守方 AI 快照托管,公开观战,胜10/负0。
 	MatchMode_MATCH_MODE_SEASON_TOURNAMENT MatchMode = 11 // 全服赛季战队锦标赛《群仙问道赛》:本人真实养成、公开 L2 观战、强制录回放、不进常规 Elo 榜。
 )
 
@@ -53,6 +54,8 @@ var (
 		6:  "MATCH_MODE_PVP_CHALLENGE",
 		7:  "MATCH_MODE_PVP_TEAM",
 		8:  "MATCH_MODE_POLARITY_5V5",
+		9:  "MATCH_MODE_GUILD_WAR_PVP",
+		10: "MATCH_MODE_GUILD_WAR_SIEGE",
 		11: "MATCH_MODE_SEASON_TOURNAMENT",
 	}
 	MatchMode_value = map[string]int32{
@@ -65,6 +68,8 @@ var (
 		"MATCH_MODE_PVP_CHALLENGE":     6,
 		"MATCH_MODE_PVP_TEAM":          7,
 		"MATCH_MODE_POLARITY_5V5":      8,
+		"MATCH_MODE_GUILD_WAR_PVP":     9,
+		"MATCH_MODE_GUILD_WAR_SIEGE":   10,
 		"MATCH_MODE_SEASON_TOURNAMENT": 11,
 	}
 )
@@ -7405,7 +7410,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\"\xa1\x01\n" +
 	"\x1dClaimTournamentRewardResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12J\n" +
-	"\x0fclaimed_rewards\x18\x02 \x03(\v2!.match.TournamentPlayerRewardViewR\x0eclaimedRewards*\x8b\x02\n" +
+	"\x0fclaimed_rewards\x18\x02 \x03(\v2!.match.TournamentPlayerRewardViewR\x0eclaimedRewards*\xc9\x02\n" +
 	"\tMatchMode\x12\x1a\n" +
 	"\x16MATCH_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eMATCH_MODE_5V5\x10\x01\x12\x12\n" +
@@ -7415,7 +7420,10 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x13MATCH_MODE_PVE_TEAM\x10\x05\x12\x1c\n" +
 	"\x18MATCH_MODE_PVP_CHALLENGE\x10\x06\x12\x17\n" +
 	"\x13MATCH_MODE_PVP_TEAM\x10\a\x12\x1b\n" +
-	"\x17MATCH_MODE_POLARITY_5V5\x10\b\x12 \n" +
+	"\x17MATCH_MODE_POLARITY_5V5\x10\b\x12\x1c\n" +
+	"\x18MATCH_MODE_GUILD_WAR_PVP\x10\t\x12\x1e\n" +
+	"\x1aMATCH_MODE_GUILD_WAR_SIEGE\x10\n" +
+	"\x12 \n" +
 	"\x1cMATCH_MODE_SEASON_TOURNAMENT\x10\v*\xa7\x01\n" +
 	"\n" +
 	"QueueState\x12\x1b\n" +

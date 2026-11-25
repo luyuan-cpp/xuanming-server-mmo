@@ -88,29 +88,29 @@ void MovementSystem::BroadcastMove(const entt::entity entity, const bool include
 
 void ActorMoveBatch::Add(const entt::entity entity, const bool includeSelf)
 {
-	if (const auto it = std::ranges::find(entries_, entity, &Entry::entity); it != entries_.end())
+	if (const auto it = std::ranges::find(entries, entity, &Entry::entity); it != entries.end())
 	{
 		it->includeSelf = it->includeSelf || includeSelf;
 		return;
 	}
-	if (entries_.size() == kMaxEntities)
+	if (entries.size() == kMaxEntities)
 	{
 		Flush();
 	}
-	entries_.push_back(Entry{entity, includeSelf});
+	entries.push_back(Entry{entity, includeSelf});
 }
 
 void ActorMoveBatch::Flush()
 {
-	if (entries_.empty())
+	if (entries.empty())
 	{
 		return;
 	}
 	// 只有一个实体:就是一次普通广播。
-	if (entries_.size() == 1)
+	if (entries.size() == 1)
 	{
-		const Entry only = entries_.front();
-		entries_.clear();
+		const Entry only = entries.front();
+		entries.clear();
 		if (tlsEcs.actorRegistry.valid(only.entity))
 		{
 			MovementSystem::BroadcastMove(only.entity, only.includeSelf);
@@ -121,9 +121,9 @@ void ActorMoveBatch::Flush()
 	// 每个实体一条移动(内容取此刻),连同各自的接收者;没有接收者或拿不到移动状态的跳过。
 	std::vector<ActorMoveS2C> moves;
 	std::vector<EntityVector> receiversPerMove;
-	moves.reserve(entries_.size());
-	receiversPerMove.reserve(entries_.size());
-	for (const auto& entry : entries_)
+	moves.reserve(entries.size());
+	receiversPerMove.reserve(entries.size());
+	for (const auto& entry : entries)
 	{
 		if (!tlsEcs.actorRegistry.valid(entry.entity))
 		{
@@ -139,7 +139,7 @@ void ActorMoveBatch::Flush()
 		moves.push_back(std::move(move));
 		receiversPerMove.push_back(std::move(receivers));
 	}
-	entries_.clear();
+	entries.clear();
 
 	// 要收同一组移动的接收者共用一条消息:一条时照旧发 ActorMoveS2C,多条时发 ActorMoveListS2C(按登记先后)。
 	for (const auto& group : GroupMoveReceivers(receiversPerMove))

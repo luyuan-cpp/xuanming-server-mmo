@@ -42,38 +42,38 @@ public:
 			return false;
 		}
 		const InflightSteadyTime expiresAt = call.expiresAt;
-		if (!calls_.emplace(id, std::move(call)).second)
+		if (!calls.emplace(id, std::move(call)).second)
 		{
 			return false;
 		}
-		expiry_.emplace(expiresAt, id);
+		expiry.emplace(expiresAt, id);
 		return true;
 	}
 
 	// 认领并注销。找不到(已完成、已过期、已被批量取走,或根本不是本索引登记的)返回 nullopt。
 	std::optional<Call> Extract(InflightCallId id)
 	{
-		auto it = calls_.find(id);
-		if (it == calls_.end())
+		auto it = calls.find(id);
+		if (it == calls.end())
 		{
 			return std::nullopt;
 		}
 		Call call = std::move(it->second);
-		calls_.erase(it);
+		calls.erase(it);
 		return call;
 	}
 
 	// 只注销、不需要返回值的场景。返回是否找到。
-	bool Erase(InflightCallId id) { return calls_.erase(id) > 0; }
+	bool Erase(InflightCallId id) { return calls.erase(id) > 0; }
 
 	// 取出全部 expiresAt <= now 的调用(按截止时刻先后)。堆里已注销的号惰性跳过。
 	std::vector<std::pair<InflightCallId, Call>> ExtractExpired(InflightSteadyTime now)
 	{
 		std::vector<std::pair<InflightCallId, Call>> expired;
-		while (!expiry_.empty() && expiry_.top().first <= now)
+		while (!expiry.empty() && expiry.top().first <= now)
 		{
-			const InflightCallId id = expiry_.top().second;
-			expiry_.pop();
+			const InflightCallId id = expiry.top().second;
+			expiry.pop();
 			auto call = Extract(id);
 			if (call)
 			{
@@ -87,24 +87,24 @@ public:
 	std::vector<std::pair<InflightCallId, Call>> ExtractAll()
 	{
 		std::vector<std::pair<InflightCallId, Call>> all;
-		all.reserve(calls_.size());
-		for (auto &entry : calls_)
+		all.reserve(calls.size());
+		for (auto &entry : calls)
 		{
 			all.emplace_back(entry.first, std::move(entry.second));
 		}
-		calls_.clear();
-		ExpiryHeap{}.swap(expiry_);
+		calls.clear();
+		ExpiryHeap{}.swap(expiry);
 		return all;
 	}
 
-	bool Empty() const { return calls_.empty(); }
-	std::size_t Size() const { return calls_.size(); }
+	bool Empty() const { return calls.empty(); }
+	std::size_t Size() const { return calls.size(); }
 	// 堆里可能残留已注销的号,这个数只用于观测(汇总日志),不参与判定。
-	std::size_t ExpiryHeapSize() const { return expiry_.size(); }
+	std::size_t ExpiryHeapSize() const { return expiry.size(); }
 
 private:
 	using ExpiryEntry = std::pair<InflightSteadyTime, InflightCallId>;
 	using ExpiryHeap = std::priority_queue<ExpiryEntry, std::vector<ExpiryEntry>, std::greater<ExpiryEntry>>;
-	std::unordered_map<InflightCallId, Call> calls_;
-	ExpiryHeap expiry_;
+	std::unordered_map<InflightCallId, Call> calls;
+	ExpiryHeap expiry;
 };

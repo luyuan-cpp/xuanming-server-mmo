@@ -91,10 +91,10 @@ namespace save_seq
 		// 发一个号并推进水位;饱和时返回 nullopt、水位不变。
 		std::optional<uint64_t> Next(uint64_t nowMs)
 		{
-			const auto next = NextSaveSeq(last_, nowMs);
+			const auto next = NextSaveSeq(last, nowMs);
 			if (next)
 			{
-				last_ = *next;
+				last = *next;
 			}
 			return next;
 		}
@@ -107,15 +107,15 @@ namespace save_seq
 			{
 				return ObserveResult::kBeyondBound;
 			}
-			last_ = std::max(last_, seed);
+			last = std::max(last, seed);
 			return ObserveResult::kAdopted;
 		}
 
 		// 当前水位:最近一次发出或采纳的值;0 = 尚未发号也未采纳。只供日志与单测。
-		uint64_t Current() const { return last_; }
+		uint64_t Current() const { return last; }
 
 	private:
-		uint64_t last_{0};
+		uint64_t last{0};
 	};
 } // namespace save_seq
 

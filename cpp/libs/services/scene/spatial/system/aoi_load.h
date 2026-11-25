@@ -23,12 +23,12 @@ public:
     [[nodiscard]] double PressureFactor() const;
 
     // 平滑后的利用率(耗时 / 步长),给日志与指标用。
-    [[nodiscard]] double SmoothedUtilization() const { return smoothedUtilization_; }
+    [[nodiscard]] double SmoothedUtilization() const { return smoothedUtilization; }
 
 private:
-    double smoothedUtilization_ = 0;
-    double secondsSinceDecision_ = 0;
-    int level_ = 0;
+    double smoothedUtilization = 0;
+    double secondsSinceDecision = 0;
+    int level = 0;
 };
 
 // 把压力监控的读数挂到 /metrics(scene_aoi_load_*)。scene 节点启动时调一次。

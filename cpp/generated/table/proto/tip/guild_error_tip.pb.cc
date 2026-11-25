@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guild_error_tip.proto*\336\n\n\013guild_error\022"
+    "\n\025guild_error_tip.proto*\245\020\n\013guild_error\022"
     "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu"
     "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot"
     "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea"
@@ -70,14 +70,31 @@ const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     " \n\033kGuildAnnouncementSensitive\020\334m\022\037\n\032kGu"
     "ildTextCheckUnavailable\020\335m\022\031\n\024kGuildRena"
     "meCooldown\020\336m\022\031\n\024kGuildRenameSameName\020\337m"
-    "B$\n\016com.game.tableZ\022generated/pb/tableb\006"
-    "proto3"
+    "\022\025\n\020kGuildWarNotOpen\020\340m\022\031\n\024kGuildWarLeve"
+    "lTooLow\020\341m\022\027\n\022kGuildWarSameGuild\020\342m\022\035\n\030k"
+    "GuildWarTargetPeaceMode\020\343m\022\033\n\026kGuildWarS"
+    "elfPeaceMode\020\344m\022\033\n\026kGuildWarPeaceCooldow"
+    "n\020\345m\022\035\n\030kGuildWarTargetProtected\020\346m\022\034\n\027k"
+    "GuildWarTargetInBattle\020\347m\022\033\n\026kGuildWarTa"
+    "rgetOffline\020\350m\022\026\n\021kGuildWarSafeZone\020\351m\022\031"
+    "\n\024kGuildWarTeamInvalid\020\352m\022&\n!kGuildWarTe"
+    "amSizeExceedsRoadLimit\020\353m\022\035\n\030kGuildWarLe"
+    "ylineNotFound\020\354m\022\032\n\025kGuildWarGarrisonFul"
+    "l\020\355m\022\036\n\031kGuildWarGarrisonCooldown\020\356m\022\035\n\030"
+    "kGuildWarMilestoneLocked\020\357m\022\036\n\031kGuildWar"
+    "MilestoneClaimed\020\360m\022\033\n\026kGuildWarDividend"
+    "Empty\020\361m\022!\n\034kGuildWarBountyInvalidTarget"
+    "\020\362m\022!\n\034kGuildWarBountyAlreadyActive\020\363m\022\031"
+    "\n\024kGuildWarBountyLimit\020\364m\022\034\n\027kGuildWarBo"
+    "untyNotFound\020\365m\022\033\n\026kGuildWarTrackCooldow"
+    "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367mB$\n\016com.g"
+    "ame.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guild_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guild_5ferror_5ftip_2eproto = {
     false,
     false,
-    1446,
+    2157,
     descriptor_table_protodef_guild_5ferror_5ftip_2eproto,
     "guild_error_tip.proto",
     &descriptor_table_guild_5ferror_5ftip_2eproto_once,
@@ -96,7 +113,7 @@ guild_error_descriptor() {
   return file_level_enum_descriptors_guild_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t guild_error_internal_data_[] = {
-    65536u, 3145728u, 14031u, 14015u, 14040u, 14007u, 14023u, 14036u, 14044u, 14003u, 14011u, 14019u, 14027u, 14034u, 14038u, 14042u, 14046u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14025u, 14029u, 14033u, 14035u, 14037u, 14039u, 14041u, 14043u, 14045u, 14047u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, 14022u, 14024u, 14026u, 14028u, 14030u, 14032u, };
+    65536u, 4718592u, 14040u, 14024u, 14056u, 14015u, 14032u, 14048u, 14064u, 14007u, 14020u, 14028u, 14036u, 14044u, 14052u, 14060u, 14068u, 14003u, 14011u, 14018u, 14022u, 14026u, 14030u, 14034u, 14038u, 14042u, 14046u, 14050u, 14054u, 14058u, 14062u, 14066u, 14070u, 14001u, 14005u, 14009u, 14013u, 14017u, 14019u, 14021u, 14023u, 14025u, 14027u, 14029u, 14031u, 14033u, 14035u, 14037u, 14039u, 14041u, 14043u, 14045u, 14047u, 14049u, 14051u, 14053u, 14055u, 14057u, 14059u, 14061u, 14063u, 14065u, 14067u, 14069u, 14071u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

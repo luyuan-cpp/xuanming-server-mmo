@@ -115,7 +115,7 @@ private:
                           const AnomalyThreshold &threshold);
 
     // 配置仍归当前线程,窗口数据归玩家实体。
-    static thread_local std::unordered_map<uint32_t, AnomalyThreshold> currencyThresholds_;
-    static thread_local std::unordered_map<uint32_t, AnomalyThreshold> itemThresholds_;
-    static thread_local AnomalyThreshold defaultThreshold_;
+    static thread_local std::unordered_map<uint32_t, AnomalyThreshold> currencyThresholds;
+    static thread_local std::unordered_map<uint32_t, AnomalyThreshold> itemThresholds;
+    static thread_local AnomalyThreshold defaultThreshold;
 };

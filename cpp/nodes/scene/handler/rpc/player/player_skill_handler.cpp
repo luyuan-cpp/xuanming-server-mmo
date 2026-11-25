@@ -153,3 +153,21 @@ void SceneSkillClientPlayerHandler::ListCraftProxyStalls(entt::entity player,con
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneSkillClientPlayerHandler::SaveSkillLoadout(entt::entity player,const ::SaveSkillLoadoutRequest* request,
+	::SaveSkillLoadoutResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSkillSystem::SaveLoadout(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::SwitchSkillLoadout(entt::entity player,const ::SwitchSkillLoadoutRequest* request,
+	::SwitchSkillLoadoutResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSkillSystem::SwitchLoadout(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

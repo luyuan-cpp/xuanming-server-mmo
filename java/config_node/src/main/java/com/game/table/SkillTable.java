@@ -961,6 +961,28 @@ private static final long serialVersionUID = 0L;
     return rarityTier_;
   }
 
+  public static final int SECONDARY_TARGET_POLICY_FIELD_NUMBER = 61;
+  private int secondaryTargetPolicy_ = 0;
+  /**
+   * <code>uint32 secondary_target_policy = 61;</code>
+   * @return The secondaryTargetPolicy.
+   */
+  @java.lang.Override
+  public int getSecondaryTargetPolicy() {
+    return secondaryTargetPolicy_;
+  }
+
+  public static final int EXCLUSIVE_GROUP_FIELD_NUMBER = 62;
+  private int exclusiveGroup_ = 0;
+  /**
+   * <code>uint32 exclusive_group = 62;</code>
+   * @return The exclusiveGroup.
+   */
+  @java.lang.Override
+  public int getExclusiveGroup() {
+    return exclusiveGroup_;
+  }
+
   public static final int REQUIRED_ITEM_FIELD_NUMBER = 21;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Skillrequired_item> requiredItem_;
@@ -1295,6 +1317,12 @@ private static final long serialVersionUID = 0L;
     if (rarityTier_ != 0) {
       output.writeUInt32(60, rarityTier_);
     }
+    if (secondaryTargetPolicy_ != 0) {
+      output.writeUInt32(61, secondaryTargetPolicy_);
+    }
+    if (exclusiveGroup_ != 0) {
+      output.writeUInt32(62, exclusiveGroup_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -1591,6 +1619,14 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(60, rarityTier_);
     }
+    if (secondaryTargetPolicy_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(61, secondaryTargetPolicy_);
+    }
+    if (exclusiveGroup_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(62, exclusiveGroup_);
+    }
     return size;
   }
   @java.lang.Override
@@ -1744,6 +1780,10 @@ private static final long serialVersionUID = 0L;
         != other.getScrollId()) return false;
     if (getRarityTier()
         != other.getRarityTier()) return false;
+    if (getSecondaryTargetPolicy()
+        != other.getSecondaryTargetPolicy()) return false;
+    if (getExclusiveGroup()
+        != other.getExclusiveGroup()) return false;
     if (!getRequiredItemList()
         .equals(other.getRequiredItemList())) return false;
     if (!getRequiredResourceList()
@@ -1897,6 +1937,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getScrollId();
     hash = (37 * hash) + RARITY_TIER_FIELD_NUMBER;
     hash = (53 * hash) + getRarityTier();
+    hash = (37 * hash) + SECONDARY_TARGET_POLICY_FIELD_NUMBER;
+    hash = (53 * hash) + getSecondaryTargetPolicy();
+    hash = (37 * hash) + EXCLUSIVE_GROUP_FIELD_NUMBER;
+    hash = (53 * hash) + getExclusiveGroup();
     if (getRequiredItemCount() > 0) {
       hash = (37 * hash) + REQUIRED_ITEM_FIELD_NUMBER;
       hash = (53 * hash) + getRequiredItemList().hashCode();
@@ -2098,27 +2142,29 @@ private static final long serialVersionUID = 0L;
       seasonId_ = 0;
       scrollId_ = 0;
       rarityTier_ = 0;
+      secondaryTargetPolicy_ = 0;
+      exclusiveGroup_ = 0;
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
       } else {
         requiredItem_ = null;
         requiredItemBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x02000000);
+      bitField1_ = (bitField1_ & ~0x08000000);
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
       } else {
         requiredResource_ = null;
         requiredResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x04000000);
+      bitField1_ = (bitField1_ & ~0x10000000);
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
       } else {
         costResource_ = null;
         costResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x08000000);
+      bitField1_ = (bitField1_ & ~0x20000000);
       return this;
     }
 
@@ -2154,27 +2200,27 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.SkillTable result) {
       if (requiredItemBuilder_ == null) {
-        if (((bitField1_ & 0x02000000) != 0)) {
+        if (((bitField1_ & 0x08000000) != 0)) {
           requiredItem_ = java.util.Collections.unmodifiableList(requiredItem_);
-          bitField1_ = (bitField1_ & ~0x02000000);
+          bitField1_ = (bitField1_ & ~0x08000000);
         }
         result.requiredItem_ = requiredItem_;
       } else {
         result.requiredItem_ = requiredItemBuilder_.build();
       }
       if (requiredResourceBuilder_ == null) {
-        if (((bitField1_ & 0x04000000) != 0)) {
+        if (((bitField1_ & 0x10000000) != 0)) {
           requiredResource_ = java.util.Collections.unmodifiableList(requiredResource_);
-          bitField1_ = (bitField1_ & ~0x04000000);
+          bitField1_ = (bitField1_ & ~0x10000000);
         }
         result.requiredResource_ = requiredResource_;
       } else {
         result.requiredResource_ = requiredResourceBuilder_.build();
       }
       if (costResourceBuilder_ == null) {
-        if (((bitField1_ & 0x08000000) != 0)) {
+        if (((bitField1_ & 0x20000000) != 0)) {
           costResource_ = java.util.Collections.unmodifiableList(costResource_);
-          bitField1_ = (bitField1_ & ~0x08000000);
+          bitField1_ = (bitField1_ & ~0x20000000);
         }
         result.costResource_ = costResource_;
       } else {
@@ -2362,6 +2408,12 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField1_ & 0x01000000) != 0)) {
         result.rarityTier_ = rarityTier_;
+      }
+      if (((from_bitField1_ & 0x02000000) != 0)) {
+        result.secondaryTargetPolicy_ = secondaryTargetPolicy_;
+      }
+      if (((from_bitField1_ & 0x04000000) != 0)) {
+        result.exclusiveGroup_ = exclusiveGroup_;
       }
     }
 
@@ -2594,11 +2646,17 @@ private static final long serialVersionUID = 0L;
       if (other.getRarityTier() != 0) {
         setRarityTier(other.getRarityTier());
       }
+      if (other.getSecondaryTargetPolicy() != 0) {
+        setSecondaryTargetPolicy(other.getSecondaryTargetPolicy());
+      }
+      if (other.getExclusiveGroup() != 0) {
+        setExclusiveGroup(other.getExclusiveGroup());
+      }
       if (requiredItemBuilder_ == null) {
         if (!other.requiredItem_.isEmpty()) {
           if (requiredItem_.isEmpty()) {
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x02000000);
+            bitField1_ = (bitField1_ & ~0x08000000);
           } else {
             ensureRequiredItemIsMutable();
             requiredItem_.addAll(other.requiredItem_);
@@ -2611,7 +2669,7 @@ private static final long serialVersionUID = 0L;
             requiredItemBuilder_.dispose();
             requiredItemBuilder_ = null;
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x02000000);
+            bitField1_ = (bitField1_ & ~0x08000000);
             requiredItemBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredItemFieldBuilder() : null;
@@ -2624,7 +2682,7 @@ private static final long serialVersionUID = 0L;
         if (!other.requiredResource_.isEmpty()) {
           if (requiredResource_.isEmpty()) {
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x04000000);
+            bitField1_ = (bitField1_ & ~0x10000000);
           } else {
             ensureRequiredResourceIsMutable();
             requiredResource_.addAll(other.requiredResource_);
@@ -2637,7 +2695,7 @@ private static final long serialVersionUID = 0L;
             requiredResourceBuilder_.dispose();
             requiredResourceBuilder_ = null;
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x04000000);
+            bitField1_ = (bitField1_ & ~0x10000000);
             requiredResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredResourceFieldBuilder() : null;
@@ -2650,7 +2708,7 @@ private static final long serialVersionUID = 0L;
         if (!other.costResource_.isEmpty()) {
           if (costResource_.isEmpty()) {
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x08000000);
+            bitField1_ = (bitField1_ & ~0x20000000);
           } else {
             ensureCostResourceIsMutable();
             costResource_.addAll(other.costResource_);
@@ -2663,7 +2721,7 @@ private static final long serialVersionUID = 0L;
             costResourceBuilder_.dispose();
             costResourceBuilder_ = null;
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x08000000);
+            bitField1_ = (bitField1_ & ~0x20000000);
             costResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetCostResourceFieldBuilder() : null;
@@ -3066,6 +3124,16 @@ private static final long serialVersionUID = 0L;
               bitField1_ |= 0x01000000;
               break;
             } // case 480
+            case 488: {
+              secondaryTargetPolicy_ = input.readUInt32();
+              bitField1_ |= 0x02000000;
+              break;
+            } // case 488
+            case 496: {
+              exclusiveGroup_ = input.readUInt32();
+              bitField1_ |= 0x04000000;
+              break;
+            } // case 496
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -5396,12 +5464,76 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int secondaryTargetPolicy_ ;
+    /**
+     * <code>uint32 secondary_target_policy = 61;</code>
+     * @return The secondaryTargetPolicy.
+     */
+    @java.lang.Override
+    public int getSecondaryTargetPolicy() {
+      return secondaryTargetPolicy_;
+    }
+    /**
+     * <code>uint32 secondary_target_policy = 61;</code>
+     * @param value The secondaryTargetPolicy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecondaryTargetPolicy(int value) {
+
+      secondaryTargetPolicy_ = value;
+      bitField1_ |= 0x02000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 secondary_target_policy = 61;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSecondaryTargetPolicy() {
+      bitField1_ = (bitField1_ & ~0x02000000);
+      secondaryTargetPolicy_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int exclusiveGroup_ ;
+    /**
+     * <code>uint32 exclusive_group = 62;</code>
+     * @return The exclusiveGroup.
+     */
+    @java.lang.Override
+    public int getExclusiveGroup() {
+      return exclusiveGroup_;
+    }
+    /**
+     * <code>uint32 exclusive_group = 62;</code>
+     * @param value The exclusiveGroup to set.
+     * @return This builder for chaining.
+     */
+    public Builder setExclusiveGroup(int value) {
+
+      exclusiveGroup_ = value;
+      bitField1_ |= 0x04000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 exclusive_group = 62;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearExclusiveGroup() {
+      bitField1_ = (bitField1_ & ~0x04000000);
+      exclusiveGroup_ = 0;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Skillrequired_item> requiredItem_ =
       java.util.Collections.emptyList();
     private void ensureRequiredItemIsMutable() {
-      if (!((bitField1_ & 0x02000000) != 0)) {
+      if (!((bitField1_ & 0x08000000) != 0)) {
         requiredItem_ = new java.util.ArrayList<com.game.table.Skillrequired_item>(requiredItem_);
-        bitField1_ |= 0x02000000;
+        bitField1_ |= 0x08000000;
        }
     }
 
@@ -5551,7 +5683,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredItem() {
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x02000000);
+        bitField1_ = (bitField1_ & ~0x08000000);
         onChanged();
       } else {
         requiredItemBuilder_.clear();
@@ -5628,7 +5760,7 @@ private static final long serialVersionUID = 0L;
         requiredItemBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_item, com.game.table.Skillrequired_item.Builder, com.game.table.Skillrequired_itemOrBuilder>(
                 requiredItem_,
-                ((bitField1_ & 0x02000000) != 0),
+                ((bitField1_ & 0x08000000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredItem_ = null;
@@ -5639,9 +5771,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillrequired_resource> requiredResource_ =
       java.util.Collections.emptyList();
     private void ensureRequiredResourceIsMutable() {
-      if (!((bitField1_ & 0x04000000) != 0)) {
+      if (!((bitField1_ & 0x10000000) != 0)) {
         requiredResource_ = new java.util.ArrayList<com.game.table.Skillrequired_resource>(requiredResource_);
-        bitField1_ |= 0x04000000;
+        bitField1_ |= 0x10000000;
        }
     }
 
@@ -5791,7 +5923,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredResource() {
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x04000000);
+        bitField1_ = (bitField1_ & ~0x10000000);
         onChanged();
       } else {
         requiredResourceBuilder_.clear();
@@ -5868,7 +6000,7 @@ private static final long serialVersionUID = 0L;
         requiredResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_resource, com.game.table.Skillrequired_resource.Builder, com.game.table.Skillrequired_resourceOrBuilder>(
                 requiredResource_,
-                ((bitField1_ & 0x04000000) != 0),
+                ((bitField1_ & 0x10000000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredResource_ = null;
@@ -5879,9 +6011,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillcost_resource> costResource_ =
       java.util.Collections.emptyList();
     private void ensureCostResourceIsMutable() {
-      if (!((bitField1_ & 0x08000000) != 0)) {
+      if (!((bitField1_ & 0x20000000) != 0)) {
         costResource_ = new java.util.ArrayList<com.game.table.Skillcost_resource>(costResource_);
-        bitField1_ |= 0x08000000;
+        bitField1_ |= 0x20000000;
        }
     }
 
@@ -6031,7 +6163,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearCostResource() {
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x08000000);
+        bitField1_ = (bitField1_ & ~0x20000000);
         onChanged();
       } else {
         costResourceBuilder_.clear();
@@ -6108,7 +6240,7 @@ private static final long serialVersionUID = 0L;
         costResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillcost_resource, com.game.table.Skillcost_resource.Builder, com.game.table.Skillcost_resourceOrBuilder>(
                 costResource_,
-                ((bitField1_ & 0x08000000) != 0),
+                ((bitField1_ & 0x20000000) != 0),
                 getParentForChildren(),
                 isClean());
         costResource_ = null;

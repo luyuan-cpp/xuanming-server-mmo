@@ -73,6 +73,12 @@
     <ClInclude Include="code\guildshop_table.h" />
     <ClInclude Include="code\guildshop_table_comp.h" />
     <ClInclude Include="code\guildshop_table_fk.h" />
+    <ClInclude Include="code\guildwarmilestone_table.h" />
+    <ClInclude Include="code\guildwarmilestone_table_comp.h" />
+    <ClInclude Include="code\guildwarmilestone_table_fk.h" />
+    <ClInclude Include="code\guildwarrule_table.h" />
+    <ClInclude Include="code\guildwarrule_table_comp.h" />
+    <ClInclude Include="code\guildwarrule_table_fk.h" />
     <ClInclude Include="code\equipslot_table.h" />
     <ClInclude Include="code\item_table.h" />
     <ClInclude Include="code\playmode_table.h" />
@@ -193,6 +199,8 @@
     <ClInclude Include="proto\guildlevel_table.pb.h" />
     <ClInclude Include="proto\guildrule_table.pb.h" />
     <ClInclude Include="proto\guildshop_table.pb.h" />
+    <ClInclude Include="proto\guildwarmilestone_table.pb.h" />
+    <ClInclude Include="proto\guildwarrule_table.pb.h" />
     <ClInclude Include="proto\equipslot_table.pb.h" />
     <ClInclude Include="proto\item_table.pb.h" />
     <ClInclude Include="proto\messagelimiter_table.pb.h" />
@@ -295,6 +303,10 @@
     <ClCompile Include="code\guildrule_table.cpp" />
     <ClCompile Include="code\guildshop_table.cpp" />
     <ClCompile Include="code\guildshop_table_fk.cpp" />
+    <ClCompile Include="code\guildwarmilestone_table.cpp" />
+    <ClCompile Include="code\guildwarmilestone_table_fk.cpp" />
+    <ClCompile Include="code\guildwarrule_table.cpp" />
+    <ClCompile Include="code\guildwarrule_table_fk.cpp" />
     <ClCompile Include="code\equipslot_table.cpp" />
     <ClCompile Include="code\item_table.cpp" />
     <ClCompile Include="code\playmode_table.cpp" />
@@ -373,6 +385,8 @@
     <ClCompile Include="proto\guildlevel_table.pb.cc" />
     <ClCompile Include="proto\guildrule_table.pb.cc" />
     <ClCompile Include="proto\guildshop_table.pb.cc" />
+    <ClCompile Include="proto\guildwarmilestone_table.pb.cc" />
+    <ClCompile Include="proto\guildwarrule_table.pb.cc" />
     <ClCompile Include="proto\equipslot_table.pb.cc" />
     <ClCompile Include="proto\item_table.pb.cc" />
     <ClCompile Include="proto\messagelimiter_table.pb.cc" />

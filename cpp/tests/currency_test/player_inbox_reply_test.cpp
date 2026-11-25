@@ -147,9 +147,9 @@ protected:
 		ASSERT_TRUE(player_inbox_registry::SelfCheck().empty());
 		PlayerInboxSystem::Initialize();
 		CreateLoadedPlayer();
-		PlayerInboxSystem::OnPlayerLanded(player_);
-		ASSERT_TRUE(tlsEcs.actorRegistry.all_of<PlayerInboxRuntimeComp>(player_));
-		const auto &runtime = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player_);
+		PlayerInboxSystem::OnPlayerLanded(player);
+		ASSERT_TRUE(tlsEcs.actorRegistry.all_of<PlayerInboxRuntimeComp>(player));
+		const auto &runtime = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player);
 		ASSERT_TRUE(std::any_of(runtime.domains.begin(), runtime.domains.end(),
 			[](const PlayerInboxDomainState &state) { return state.domain == kDomain; }));
 		PlayerInboxSystem::Tick();
@@ -161,9 +161,9 @@ protected:
 	void TearDown() override
 	{
 		tlsEcs.playerList.erase(kPlayerId);
-		if (tlsEcs.actorRegistry.valid(player_))
+		if (tlsEcs.actorRegistry.valid(player))
 		{
-			tlsEcs.actorRegistry.destroy(player_);
+			tlsEcs.actorRegistry.destroy(player);
 		}
 		PlayerInboxSystem::SetNowFnForTest(nullptr);
 		PlayerInboxSystem::SetPersistFnForTest(nullptr);
@@ -171,36 +171,36 @@ protected:
 		PlayerInboxSystem::SetConsumerConfigForTest(false, false, 0);
 		gFetchRequests.clear();
 		gAckRequests.clear();
-		admission_.reset();
+		admission.reset();
 	}
 
 	void CreateLoadedPlayer()
 	{
-		admission_.reset();
+		admission.reset();
 		RoleAdmissionSystem::Dependencies deps;
 		deps.localNode = [] { return RoleAdmissionSystem::LocalNode{"inbox-reply-test", "4242", 1}; };
 		deps.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gNowMs)); };
 		common::base::RoleAdmissionIdentity identity;
 		identity.set_player_id(kPlayerId); identity.set_owner_epoch(1);
-		identity.set_generation(++generation_); identity.set_owner_revision(1);
+		identity.set_generation(++generation); identity.set_owner_revision(1);
 		identity.set_scene_instance_id("inbox-reply-test");
 		deps.confirmedAdmissions.push_back(identity);
-		admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(deps));
-		player_ = tlsEcs.actorRegistry.create();
-		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_, kPlayerId);
-		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player_).epoch = 1;
-		tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, generation_, std::uint64_t{1});
+		admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(deps));
+		player = tlsEcs.actorRegistry.create();
+		tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kPlayerId);
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 1;
+		tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, generation, std::uint64_t{1});
 		// 持久数据在加载创建点显式挂上;运行时组件由落地入口延迟创建。
-		tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player_);
-		tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
-		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
-		tlsEcs.actorRegistry.emplace<PlayerLastPersistedSnapshotComp>(player_);
-		tlsEcs.playerList[kPlayerId] = player_;
+		tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+		tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
+		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
+		tlsEcs.actorRegistry.emplace<PlayerLastPersistedSnapshotComp>(player);
+		tlsEcs.playerList[kPlayerId] = player;
 	}
 
 	const PlayerInboxDomainState &State() const
 	{
-		const auto &runtime = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player_);
+		const auto &runtime = tlsEcs.actorRegistry.get<PlayerInboxRuntimeComp>(player);
 		return *std::find_if(runtime.domains.begin(), runtime.domains.end(),
 			[](const PlayerInboxDomainState &state) { return state.domain == kDomain; });
 	}
@@ -226,11 +226,11 @@ protected:
 		payload->set_last_save_seq(1);
 		payload->mutable_player_database_data()->set_player_id(kPlayerId);
 		payload->mutable_player_database_data()->mutable_inbox_ledger()->CopyFrom(
-			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player_));
-		auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player_, payload, 1, 1);
+			tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
+		auto committed = RoleAdmissionSystem::CaptureSnapshotCommit(player, payload, 1, 1);
 		ASSERT_TRUE(static_cast<bool>(committed));
 		committed();
-		auto &snapshot = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player_);
+		auto &snapshot = tlsEcs.actorRegistry.get<PlayerLastPersistedSnapshotComp>(player);
 		snapshot.Replace(*payload);
 		PlayerInboxSystem::Tick();
 		ASSERT_EQ(1u, gAckRequests.size());
@@ -242,9 +242,9 @@ protected:
 		return static_cast<uint64_t>(grpc_call_deadline::Get(common::base::PlayerInboxNodeService).count()) + 5000;
 	}
 
-	entt::entity player_{entt::null};
-	uint64_t generation_{0};
-	std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
+	entt::entity player{entt::null};
+	uint64_t generation{0};
+	std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
 };
 
 class PlayerInboxEchoMismatchTest : public PlayerInboxReplyTest, public ::testing::WithParamInterface<EchoField>
@@ -350,9 +350,9 @@ TEST_F(PlayerInboxReplyTest, RecreatedPlayerDiscardsThePreviousEntityCall)
 {
 	const auto oldRequest = gFetchRequests.back();
 	tlsEcs.playerList.erase(kPlayerId);
-	tlsEcs.actorRegistry.destroy(player_);
+	tlsEcs.actorRegistry.destroy(player);
 	CreateLoadedPlayer();
-	PlayerInboxSystem::OnPlayerLanded(player_);
+	PlayerInboxSystem::OnPlayerLanded(player);
 	PlayerInboxSystem::Tick();
 	ASSERT_EQ(2u, gFetchRequests.size());
 	const uint64_t currentId = gFetchRequests.back().correlation_id();

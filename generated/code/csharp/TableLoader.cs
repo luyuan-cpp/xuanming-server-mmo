@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 70;
+        public const int TableCount = 72;
 
         private static Action s_loadSuccessCallback;
 
@@ -77,6 +77,8 @@ namespace MmorpgClient.Table
                 GuildLevelTableManager.FileName(useBinary),
                 GuildRuleTableManager.FileName(useBinary),
                 GuildShopTableManager.FileName(useBinary),
+                GuildWarMilestoneTableManager.FileName(useBinary),
+                GuildWarRuleTableManager.FileName(useBinary),
                 ItemTableManager.FileName(useBinary),
                 MessageLimiterTableManager.FileName(useBinary),
                 MirrorTableManager.FileName(useBinary),
@@ -154,6 +156,8 @@ namespace MmorpgClient.Table
             GuildLevelTableManager.Instance.Load(configDir, useBinary);
             GuildRuleTableManager.Instance.Load(configDir, useBinary);
             GuildShopTableManager.Instance.Load(configDir, useBinary);
+            GuildWarMilestoneTableManager.Instance.Load(configDir, useBinary);
+            GuildWarRuleTableManager.Instance.Load(configDir, useBinary);
             ItemTableManager.Instance.Load(configDir, useBinary);
             MessageLimiterTableManager.Instance.Load(configDir, useBinary);
             MirrorTableManager.Instance.Load(configDir, useBinary);
@@ -287,6 +291,10 @@ namespace MmorpgClient.Table
                 GuildRuleTableManager.Instance.LoadFromBytes, GuildRuleTableManager.Instance.LoadFromJson);
             LoadOne(GuildShopTableManager.FileName(useBinary), byteProvider, useBinary,
                 GuildShopTableManager.Instance.LoadFromBytes, GuildShopTableManager.Instance.LoadFromJson);
+            LoadOne(GuildWarMilestoneTableManager.FileName(useBinary), byteProvider, useBinary,
+                GuildWarMilestoneTableManager.Instance.LoadFromBytes, GuildWarMilestoneTableManager.Instance.LoadFromJson);
+            LoadOne(GuildWarRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                GuildWarRuleTableManager.Instance.LoadFromBytes, GuildWarRuleTableManager.Instance.LoadFromJson);
             LoadOne(ItemTableManager.FileName(useBinary), byteProvider, useBinary,
                 ItemTableManager.Instance.LoadFromBytes, ItemTableManager.Instance.LoadFromJson);
             LoadOne(MessageLimiterTableManager.FileName(useBinary), byteProvider, useBinary,

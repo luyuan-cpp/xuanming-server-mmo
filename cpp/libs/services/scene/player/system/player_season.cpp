@@ -443,6 +443,39 @@ void PlayerSeasonSystem::CollectEffects(entt::entity player, uint64_t nowMs, Equ
     dst->set_name(seal->name());
 }
 
+void PlayerSeasonSystem::CollectAvailableSeals(uint64_t nowMs, std::vector<SeasonSealEffect>& out) {
+    out.clear();
+    const auto* rule = FindActiveSeasonRow(nowMs);
+    if (rule == nullptr) {
+        return;
+    }
+    std::vector<uint32_t> sealIds;
+    for (const auto& seal : SeasonSealTableManager::Instance().FindAll().data()) {
+        if (seal.season_id() == rule->id() && IsValidSealRow(seal)) {
+            sealIds.push_back(seal.id());
+        }
+    }
+    std::sort(sealIds.begin(), sealIds.end());
+    for (const uint32_t sealId : sealIds) {
+        const auto* seal = FindValidSealForSeason(rule->id(), sealId);
+        if (seal == nullptr) {
+            continue;
+        }
+        SeasonSealEffect effect;
+        effect.set_season_id(rule->id());
+        effect.set_seal_id(seal->id());
+        effect.set_effect_id(seal->effect_id());
+        effect.set_bonus_bps(seal->bonus_bps());
+        effect.set_cap_bps(seal->cap_bps());
+        effect.set_per_round_limit(seal->per_round_limit());
+        effect.set_battle_limit(seal->battle_limit());
+        effect.set_active_rounds(seal->active_rounds());
+        effect.set_health_threshold_bps(seal->health_threshold_bps());
+        effect.set_name(seal->name());
+        out.emplace_back(std::move(effect));
+    }
+}
+
 uint32_t PlayerSeasonSystem::GetState(entt::entity player, uint64_t nowMs, GetSeasonStateResponse& response) {
     response.Clear();
     return FillState(player, nowMs, *response.mutable_state());

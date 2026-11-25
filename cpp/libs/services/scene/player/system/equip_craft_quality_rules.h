@@ -18,6 +18,8 @@ inline constexpr uint32_t kGuaranteeCharmConfigId = 3405;
 inline constexpr uint32_t kScrollFragmentConfigId = 3406;
 inline constexpr uint32_t kRareScrollPageConfigId = 3407;
 inline constexpr uint32_t kRareScrollInkConfigId = 3408;
+inline constexpr uint32_t kUnsealTalismanConfigId = 3409;   // 解封剥离符：清空绑定养成，仅恢复纯 T 原胚。
+inline constexpr uint32_t kInheritTalismanConfigId = 3410;  // 流派副套继承符：无损继承强化等级至同部位副套（目标转绑定）。
 
 inline constexpr uint32_t kMinQualityTier = 1;
 inline constexpr uint32_t kMaxQualityTier = 5;

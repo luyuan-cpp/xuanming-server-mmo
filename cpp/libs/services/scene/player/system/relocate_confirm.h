@@ -1066,7 +1066,7 @@ namespace relocate_confirm
 	class Table
 	{
 	public:
-		explicit Table(std::size_t capacity = kMaxTracked) : capacity_(capacity) {}
+		explicit Table(std::size_t capacity = kMaxTracked) : capacity(capacity) {}
 
 		// 登记一条改派,返回它的 seq(>= 1)。初始:kMarkWriting,deadline = now + kMarkWriteBudget,
 		// settleAt = now + budgets.settleWindow。
@@ -1077,25 +1077,25 @@ namespace relocate_confirm
 					 std::optional<Entry> &supersededOut)
 		{
 			supersededOut.reset();
-			const auto existing = entries_.find(registration.playerId);
-			if (existing != entries_.end())
+			const auto existing = entries.find(registration.playerId);
+			if (existing != entries.end())
 			{
 				supersededOut = std::move(existing->second);
-				entries_.erase(existing);
+				entries.erase(existing);
 			}
-			else if (entries_.size() >= capacity_)
+			else if (entries.size() >= capacity)
 			{
 				return 0;
 			}
 			Entry entry;
 			static_cast<Registration &>(entry) = registration;
-			entry.seq = nextSeq_++;
+			entry.seq = nextSeq++;
 			entry.phase = Phase::kMarkWriting;
 			entry.createdAt = now;
 			entry.deadline = now + kMarkWriteBudget;
 			entry.settleAt = now + budgets.settleWindow;
 			const uint64_t seq = entry.seq;
-			entries_.insert_or_assign(registration.playerId, std::move(entry));
+			entries.insert_or_assign(registration.playerId, std::move(entry));
 			return seq;
 		}
 
@@ -1110,30 +1110,30 @@ namespace relocate_confirm
 		// 只按 playerId 找(应答 / 传输失败的认领、进场 Reconcile:它们手里没有 seq)。
 		Entry *FindPlayer(uint64_t playerId)
 		{
-			const auto it = entries_.find(playerId);
-			return it == entries_.end() ? nullptr : &it->second;
+			const auto it = entries.find(playerId);
+			return it == entries.end() ? nullptr : &it->second;
 		}
 
 		// 取走并删除。结清 / 踢线都先 Take 再做副作用,重入时拿不到第二次。
 		std::optional<Entry> Take(uint64_t playerId)
 		{
-			const auto it = entries_.find(playerId);
-			if (it == entries_.end())
+			const auto it = entries.find(playerId);
+			if (it == entries.end())
 			{
 				return std::nullopt;
 			}
 			std::optional<Entry> taken{std::move(it->second)};
-			entries_.erase(it);
+			entries.erase(it);
 			return taken;
 		}
 
-		std::size_t size() const { return entries_.size(); }
+		std::size_t size() const { return entries.size(); }
 
 		// 逐条只读访问(无序)。给每秒的托管在场心跳挑出托管条目用(player-connection-lost-hold.md §4.5);fn 里不许改表。
 		template <typename Fn>
 		void ForEachEntry(Fn &&fn) const
 		{
-			for (const auto &item : entries_)
+			for (const auto &item : entries)
 			{
 				fn(item.second);
 			}
@@ -1142,7 +1142,7 @@ namespace relocate_confirm
 		std::array<std::size_t, kPhaseCount> CountByPhase() const
 		{
 			std::array<std::size_t, kPhaseCount> counts{};
-			for (const auto &item : entries_)
+			for (const auto &item : entries)
 			{
 				const auto index = static_cast<std::size_t>(item.second.phase);
 				if (index < kPhaseCount)
@@ -1157,8 +1157,8 @@ namespace relocate_confirm
 		std::vector<Entry> Snapshot() const
 		{
 			std::vector<Entry> entries;
-			entries.reserve(entries_.size());
-			for (const auto &item : entries_)
+			entries.reserve(this->entries.size());
+			for (const auto &item : this->entries)
 			{
 				entries.push_back(item.second);
 			}
@@ -1320,7 +1320,7 @@ namespace relocate_confirm
 		Due CollectDue(Clock::time_point now)
 		{
 			Due due;
-			for (auto &item : entries_)
+			for (auto &item : entries)
 			{
 				Entry &entry = item.second;
 				switch (entry.phase)
@@ -1363,8 +1363,8 @@ namespace relocate_confirm
 
 	private:
 		// 哈希表:疏散时每个在线玩家一条,认领 / Reconcile / 回调都按 playerId 查。
-		std::unordered_map<uint64_t, Entry> entries_;
-		std::size_t capacity_;
-		uint64_t nextSeq_{1};
+		std::unordered_map<uint64_t, Entry> entries;
+		std::size_t capacity;
+		uint64_t nextSeq{1};
 	};
 } // namespace relocate_confirm

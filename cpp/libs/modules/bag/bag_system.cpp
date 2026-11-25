@@ -38,14 +38,14 @@ void Bag::SetLayout(std::unique_ptr<IContainerLayout> layout)
 	}
 	// 槽位号在不同策略下含义不同(扁平是下标、格子是 y*width+x),带着物品换策略
 	// 等于让所有已持久化的 pos 突然改变意义。fail-closed:只允许空背包换布局。
-	if (store_.Size() > 0)
+	if (store.Size() > 0)
 	{
-		LOG_ERROR << "Bag::SetLayout refused: bag still holds " << store_.Size()
+		LOG_ERROR << "Bag::SetLayout refused: bag still holds " << store.Size()
 			<< " item(s); swap the layout only on an empty bag. player " << PlayerGuid();
 		return;
 	}
-	layout_ = std::move(layout);
-	++mutationVersion_;
+	this->layout = std::move(layout);
+	++mutationVersion;
 }
 
 void Bag::SetAdmission(std::unique_ptr<IAdmissionPolicy> admission)
@@ -59,8 +59,8 @@ void Bag::SetAdmission(std::unique_ptr<IAdmissionPolicy> admission)
 	// 让任何已存物品的 pos 改变含义(换布局会 —— 槽位号在不同策略下解释不同)。
 	// 换成更严的策略后,包里可能留着新策略不接受的存量物品;那是刻意的:
 	// 「入包严格、还原宽容」,不能因为规则变了就丢玩家的东西。
-	admission_ = std::move(admission);
-	++mutationVersion_;
+	this->admission = std::move(admission);
+	++mutationVersion;
 }
 
 void Bag::SetProfile(BagProfile profile)
@@ -69,9 +69,9 @@ void Bag::SetProfile(BagProfile profile)
 	// SetLayout 对非空包会拒绝(槽位号含义会变);若只拦它、放行准入,就得到
 	// "旧布局 + 新准入"这种半套 profile —— 包的规则从此对不上它记下的 profile id,
 	// 还原时按 id 装配出来的是另一套。所以在这里统一把关,不靠两个 setter 各自的守卫。
-	if (store_.Size() > 0)
+	if (store.Size() > 0)
 	{
-		LOG_ERROR << "Bag::SetProfile refused: bag still holds " << store_.Size()
+		LOG_ERROR << "Bag::SetProfile refused: bag still holds " << store.Size()
 			<< " item(s); a profile can only be installed on an empty bag. player " << PlayerGuid();
 		return;
 	}
@@ -83,21 +83,21 @@ void Bag::SetProfile(BagProfile profile)
 	}
 	SetLayout(std::move(profile.layout));
 	SetAdmission(std::move(profile.admission));
-	profileId_ = profile.id;
-	++mutationVersion_;
+	profileId = profile.id;
+	++mutationVersion;
 }
 
 void Bag::SetCapacityForRestore(std::size_t newCapacity)
 {
-	if (newCapacity < layout_->OccupiedSlotCount())
+	if (newCapacity < layout->OccupiedSlotCount())
 	{
 		LOG_ERROR << "Bag::SetCapacityForRestore: refusing to shrink capacity to " << newCapacity
-			<< " below " << layout_->OccupiedSlotCount() << " occupied slot(s); keeping "
-			<< layout_->Capacity() << ". player " << PlayerGuid();
+			<< " below " << layout->OccupiedSlotCount() << " occupied slot(s); keeping "
+			<< layout->Capacity() << ". player " << PlayerGuid();
 		return;
 	}
-	layout_->Resize(newCapacity);
-	++mutationVersion_;
+	layout->Resize(newCapacity);
+	++mutationVersion;
 	AssertLayerConsistency();
 }
 
@@ -105,25 +105,25 @@ void Bag::SetCapacityForRestore(std::size_t newCapacity)
 
 std::size_t Bag::GetTotalItemCount(uint32_t config_id) const
 {
-	return store_.TotalCountOf(config_id);
+	return store.TotalCountOf(config_id);
 }
 
 std::size_t Bag::GetTotalTradableItemCount(uint32_t config_id) const
 {
-	return store_.TotalTradableCountOf(config_id);
+	return store.TotalTradableCountOf(config_id);
 }
 
 ItemComp *Bag::GetItemCompByGuid(Guid guid)
 {
-	return store_.Find(guid);
+	return store.Find(guid);
 }
 
 // ── 按槽位取物:布局层查 guid,实例层查内容 ───────────────────────────────
 
 ItemComp *Bag::GetItemCompByPos(uint32_t pos)
 {
-	const Guid guid = layout_->At(pos);
-	return guid != kInvalidGuid ? store_.Find(guid) : nullptr;
+	const Guid guid = layout->At(pos);
+	return guid != kInvalidGuid ? store.Find(guid) : nullptr;
 }
 
 // ── 容量预检:plan 问实例层,reserve 问布局层 ─────────────────────────────
@@ -138,7 +138,7 @@ uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instan
 	// 现在前者在这里算,后者由 CanReserve 回答。
 	AssertCapacityInvariant();
 
-	const ItemCountMap freeRoomByConfig = store_.MeasureFreeRoomPerConfig(itemsToAdd, bound);
+	const ItemCountMap freeRoomByConfig = store.MeasureFreeRoomPerConfig(itemsToAdd, bound);
 
 	// 逐 config 算出"要为它新建几个实例",顺带按 config 留一份明细 ——
 	// 具名槽的 reserve 要按**部位**汇总,只有一个总数是答不出来的
@@ -157,7 +157,7 @@ uint32_t Bag::PlanInstances(const ItemCountMap &itemsToAdd, ItemCountMap *instan
 
 		// 准入:这个包收不收这种东西。纯 config 判定,与占用无关,所以放在
 		// 算实例数之前 —— 不收就没必要再算了。
-		if (!admission_->Accepts(configId))
+		if (!admission->Accepts(configId))
 		{
 			LOG_ERROR << "Bag::PlanInstances: this bag does not admit config " << configId
 				<< "; refusing the whole request. player " << PlayerGuid();
@@ -238,7 +238,7 @@ uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove,
 	{
 		for (const auto &[configId, count] : itemsToRemove)
 		{
-			if (count > store_.TotalTradableCountOf(configId))
+			if (count > store.TotalTradableCountOf(configId))
 			{
 				return PrintStackAndReturnError(kBagInsufficientItems);
 			}
@@ -355,23 +355,23 @@ void Bag::DrainOneConfig(uint32_t configId, uint32_t count,
         return;
     }
     const ItemStore::DrainRank bySlot = [this](Guid guid)
-        { return static_cast<uint64_t>(layout_->SlotOf(guid)); };
+        { return static_cast<uint64_t>(layout->SlotOf(guid)); };
     std::vector<ItemStore::StackDrain> drains;
-    store_.DrainStacks(configId, count, bySlot, &drains, tradableOnly, consumedBoundOut);
+    store.DrainStacks(configId, count, bySlot, &drains, tradableOnly, consumedBoundOut);
     for (const auto &drain : drains)
     {
         if (drainedOut != nullptr)
         {
             drainedOut->push_back({drain.guid, configId, drain.amount});
         }
-        if (const auto *item = store_.Find(drain.guid); item != nullptr && item->size() == 0)
+        if (const auto *item = store.Find(drain.guid); item != nullptr && item->size() == 0)
         {
             DestroyItem(drain.guid);
         }
     }
     if (!drains.empty())
     {
-        ++mutationVersion_;
+        ++mutationVersion;
     }
 }
 
@@ -389,7 +389,7 @@ uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)
 		return PrintStackAndReturnError(kBagDelItemSize);
 	}
 
-	const Guid guidAtPos = layout_->At(param.pos); // 1) 这个槽位有东西吗(布局层)
+	const Guid guidAtPos = layout->At(param.pos); // 1) 这个槽位有东西吗(布局层)
 	if (guidAtPos == kInvalidGuid)
 	{
 		return PrintStackAndReturnError(kBagDelItemPos);
@@ -400,7 +400,7 @@ uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)
 		return PrintStackAndReturnError(kBagDelItemGuid);
 	}
 
-	auto *item = store_.Find(param.item_guid); // 3) 该实例在仓库里真的存在吗(实例层)
+	auto *item = store.Find(param.item_guid); // 3) 该实例在仓库里真的存在吗(实例层)
 	if (item == nullptr)
 	{
 		return PrintStackAndReturnError(kBagDelItemFindItem);
@@ -421,7 +421,7 @@ uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)
 	{
 		DestroyItem(param.item_guid);
 	}
-	++mutationVersion_;
+	++mutationVersion;
 	AssertLayerConsistency();
 	return kSuccess;
 }
@@ -437,8 +437,8 @@ GuidVector Bag::DesiredOrder() const
 	// 这是**实例层数据**决定的顺序,布局层只负责按它落位 —— 于是"按什么排"
 	// 是一条可以随时改的玩法规则,不必碰任何一层。
 	std::vector<std::pair<Guid, const ItemComp *>> ordered;
-	ordered.reserve(store_.Size());
-	store_.ForEach([&ordered](Guid guid, const ItemComp &item)
+	ordered.reserve(store.Size());
+	store.ForEach([&ordered](Guid guid, const ItemComp &item)
 				   { ordered.emplace_back(guid, &item); });
 
 	std::sort(ordered.begin(), ordered.end(), [](const auto &a, const auto &b)
@@ -470,7 +470,7 @@ bool Bag::IsOrderedByConfigThenSize() const
 	// 刻意用相邻比较,而不是"跟 DesiredOrder() 的结果比对是否相等":
 	// (config, size) 完全相同的两个实例之间顺序本就是任意的,拿排序结果去比会把
 	// 本已整齐的布局判成需要整理,反而把玩家摆好的东西挪走。
-	const auto &slots = layout_->Slots();
+	const auto &slots = layout->Slots();
 
 	bool hasPrev = false;
 	uint32_t prevConfig = 0;
@@ -482,7 +482,7 @@ bool Bag::IsOrderedByConfigThenSize() const
 		{
 			return false; // 不连续(IsCompact 应已挡住,这里双保险)
 		}
-		const auto *item = store_.Find(posIt->second);
+		const auto *item = store.Find(posIt->second);
 		if (item == nullptr)
 		{
 			return false; // 两层对不上 -> 交给整理重建
@@ -517,31 +517,31 @@ bool Bag::MergeAndCompact(std::vector<DestroyedInstance> *destroyedOut, CompactP
 	// 会不会重排,由两件事共同决定:调用方的意图(policy),以及布局策略答不答应
 	// (具名装备槽与格子背包都不允许被重排)。任何一方说不,就只合并不挪位置。
 	const bool willReorder =
-		policy == CompactPolicy::kMergeAndReorder && layout_->SupportsCompaction();
+		policy == CompactPolicy::kMergeAndReorder && layout->SupportsCompaction();
 
 	// 早退(热路径):自动整理的路径每次开背包都会走一遍,绝大多数情况下背包
 	// 早已整理好、无需再动。先做一遍只读检查,若已是最优就直接返回 —— 既省掉
 	// 后面的销毁/重建开销,更关键的是"不打乱玩家已经摆好的布局"。
-	const bool nothingToMerge = !store_.HasMergeablePartials();
-	const bool nothingToReclaim = !store_.HasEmptyInstances();
+	const bool nothingToMerge = !store.HasMergeablePartials();
+	const bool nothingToReclaim = !store.HasEmptyInstances();
 	const bool layoutAlreadyFine =
-		!willReorder || (layout_->IsCompact() && IsOrderedByConfigThenSize());
+		!willReorder || (layout->IsCompact() && IsOrderedByConfigThenSize());
 	if (nothingToMerge && nothingToReclaim && layoutAlreadyFine)
 	{
 		return false;
 	}
 
 	// ① 合并同种未满堆(纯实例层)。被合并空的堆 size 变 0,连同下面②一起回收。
-	store_.MergePartialStacks();
+	store.MergePartialStacks();
 
 	// ② 按实例序回收①刚清空的可叠加堆；扣空已当场释放，加载也跳过旧档零堆。
 	//    销毁前抓拍 (guid, config, size) 交给调用方:整理会退役一批 item_uuid,
 	//    而那是 transaction_log 的关联键。Bag 是纯容器不写流水,只负责报告。
-	for (const Guid guid : store_.CollectEmptyInstances())
+	for (const Guid guid : store.CollectEmptyInstances())
 	{
 		if (destroyedOut != nullptr)
 		{
-			if (const auto *item = store_.Find(guid); item != nullptr)
+			if (const auto *item = store.Find(guid); item != nullptr)
 			{
 				destroyedOut->push_back(
 					DestroyedInstance{guid, item->config_id(), item->size()});
@@ -555,9 +555,9 @@ bool Bag::MergeAndCompact(std::vector<DestroyedInstance> *destroyedOut, CompactP
 	//    "东西还在你离开时摆的地方"这条意图需要的。
 	if (willReorder)
 	{
-		layout_->ApplyOrder(DesiredOrder());
+		layout->ApplyOrder(DesiredOrder());
 	}
-	++mutationVersion_;
+	++mutationVersion;
 	AssertLayerConsistency();
 	return true;
 }
@@ -657,7 +657,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		{
 			return PrintStackAndReturnError(kInvalidTableData);
 		}
-		if (!admission_->Accepts(item.config_id()))
+		if (!admission->Accepts(item.config_id()))
 		{
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}
@@ -676,7 +676,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		units += static_cast<uint32_t>(added);
 		if (maxStack == 1 && item.size() == 1 && !ItemStore::IsInvalidGuid(item))
 		{
-			if (store_.Contains(item.item_id()) || !preassigned.insert(item.item_id()).second)
+			if (store.Contains(item.item_id()) || !preassigned.insert(item.item_id()).second)
 			{
 				return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
 			}
@@ -726,7 +726,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	for (std::size_t i = preassigned.size(); i < newInstanceCount; ++i)
 	{
 		const Guid guid = ItemStore::MintGuid();
-		if (guid == 0 || guid == kInvalidGuid || store_.Contains(guid) || !reserved.insert(guid).second)
+		if (guid == 0 || guid == kInvalidGuid || store.Contains(guid) || !reserved.insert(guid).second)
 		{
 			LOG_ERROR << "Bag::AddItems: item guid reservation failed; batch unchanged. player " << PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
@@ -735,7 +735,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	}
 
 	// 候选仓库隔离合堆、盖章和实例初始化；失败时原仓库及其入包水位保持不变。
-	ItemStore candidate = store_;
+	ItemStore candidate = store;
 	std::vector<std::pair<Guid, uint32_t>> newItems;
 	std::vector<GuidVector> written(itemsToAdd.size());
 	std::size_t nextMint = 0;
@@ -784,7 +784,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 	}
 
 	// 布局与仓库都在候选中完成，试放失败只丢弃副本，不依赖反向恢复或 Debug 断言。
-	auto candidateLayout = layout_->Clone();
+	auto candidateLayout = layout->Clone();
 	if (candidateLayout == nullptr)
 	{
 		LOG_ERROR << "Bag::AddItems: layout could not create a transaction candidate, batch unchanged. player=" << PlayerGuid();
@@ -799,9 +799,9 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 		}
 	}
 	// 单一场景逻辑线程，无回调的提交段同时发布两层候选。
-	store_ = std::move(candidate);
-	layout_ = std::move(candidateLayout);
-	++mutationVersion_;
+	store = std::move(candidate);
+	layout = std::move(candidateLayout);
+	++mutationVersion;
 	if (writtenByEntryOut != nullptr)
 	{
 		writtenByEntryOut->insert(writtenByEntryOut->end(), written.begin(), written.end());
@@ -812,7 +812,7 @@ uint32_t Bag::AddItems(const std::vector<InitItemParam> &itemsToAdd,
 
 uint32_t Bag::RemoveItem(Guid del_guid)
 {
-	if (!store_.Contains(del_guid))
+	if (!store.Contains(del_guid))
 	{
 		return PrintStackAndReturnError(kBagDeleteItemFindGuid);
 	}
@@ -825,10 +825,10 @@ uint32_t Bag::RemoveItem(Guid del_guid)
 void Bag::ExpandCapacity(std::size_t sz)
 {
 	// 容量是布局层的属性,增量语义保持不变。
-	layout_->Resize(layout_->Capacity() + sz);
+	layout->Resize(layout->Capacity() + sz);
 	if (sz > 0)
 	{
-		++mutationVersion_;
+		++mutationVersion;
 	}
 	AssertLayerConsistency();
 }
@@ -889,7 +889,7 @@ static bool IsFreeSlotForEquipKind(const EquipSlotTable &slotRow, uint32_t kind,
 
 SlotId Bag::FindFreeSlotForKind(uint32_t kind, const IContainerLayout *target) const
 {
-    const auto &layout = target != nullptr ? *target : *layout_;
+    const auto &layout = target != nullptr ? *target : *this->layout;
 	// 找的是**第一个空的**接受槽,不是唯一那个 —— 同一部位允许有多个槽
 	// (两个手镯位 = 表里两行 equip_kind 相同)。上一版模型把部位和槽号
 	// 混成了一个字段,根本表达不了这个需求。
@@ -919,7 +919,7 @@ std::size_t Bag::CountFreeSlotsForKind(uint32_t kind) const
 	std::unordered_set<SlotId> counted;
 	for (const auto &slotRow : EquipSlotTableManager::Instance().FindAll().data())
 	{
-		if (IsFreeSlotForEquipKind(slotRow, kind, *layout_))
+		if (IsFreeSlotForEquipKind(slotRow, kind, *layout))
 		{
 			counted.insert(static_cast<SlotId>(slotRow.id()));
 		}
@@ -932,7 +932,7 @@ bool Bag::CanReserve(const ItemCountMap &instancesByConfig, std::size_t totalIns
 	AssertCapacityInvariant();
 
 	// 第一问:格子数够不够。任何布局都要过这一关。
-	if (!layout_->CanFit(totalInstances, kSingleCell))
+	if (!layout->CanFit(totalInstances, kSingleCell))
 	{
 		return false;
 	}
@@ -940,7 +940,7 @@ bool Bag::CanReserve(const ItemCountMap &instancesByConfig, std::size_t totalIns
 	// 自由格布局(人物背包 / 仓库 / 临时格 / 格子背包)到此为止:位置本身不
 	// 表达任何东西,有空格就摆得下。**这个分叉条件与 PlaceInstance 逐字相同**,
 	// 这是本函数的全部要点。
-	if (!layout_->HasSlotSemantics())
+	if (!layout->HasSlotSemantics())
 	{
 		return true;
 	}
@@ -987,7 +987,7 @@ bool Bag::CanReserve(const ItemCountMap &instancesByConfig, std::size_t totalIns
 
 SlotId Bag::PlaceInstance(Guid guid, uint32_t configId, IContainerLayout *target)
 {
-    auto &layout = target != nullptr ? *target : *layout_;
+    auto &layout = target != nullptr ? *target : *this->layout;
 	const Footprint footprint = FootprintFor(configId);
 
 	// 槽位没有语义的布局(人物背包 / 仓库 / 临时格 / 格子背包):位置本身不表达
@@ -1034,9 +1034,9 @@ void Bag::DestroyItem(Guid guid)
 	//             已经没有位置的实例上灌数量,单位就静默丢了。
 	// 拆分前这两半写在同一个函数体里(destroy 实体 + 线扫 posToGuid),
 	// 现在是桥层显式地各调一次 —— 这正是桥层存在的理由。
-	store_.Erase(guid);
-	layout_->Remove(guid);
-	++mutationVersion_;
+	store.Erase(guid);
+	layout->Remove(guid);
+	++mutationVersion;
 }
 
 // ── 搬运原语(同一 guid 换包:穿脱 / 包间移动)─────────────────────────────
@@ -1050,13 +1050,13 @@ std::vector<uint32_t> Bag::SlotsAcceptingKind(uint32_t equipKind) const
 	// 自由格布局(人物背包 / 仓库 / 临时格)的槽位号不表达任何东西,"哪些槽接受部位 N"
 	// 在那里没有答案;把槽位表的行号原样报出去,调用方就会拿装备栏的槽号去指人物背包的格子。
 	// equipKind == 0 = 不是装备,同样没有接受它的槽(与 FindFreeSlotForKind 一致)。
-	if (equipKind == 0 || !layout_->HasSlotSemantics())
+	if (equipKind == 0 || !layout->HasSlotSemantics())
 	{
 		return slots;
 	}
 	for (const auto &slotRow : EquipSlotTableManager::Instance().FindAll().data())
 	{
-		if (SlotRowAcceptsKind(slotRow, equipKind, *layout_))
+		if (SlotRowAcceptsKind(slotRow, equipKind, *layout))
 		{
 			slots.push_back(static_cast<uint32_t>(slotRow.id()));
 		}
@@ -1071,7 +1071,7 @@ std::vector<uint32_t> Bag::SlotsAcceptingKind(uint32_t equipKind) const
 uint32_t Bag::TakeInstance(Guid guid, ItemComp &out)
 {
 	// ── 全部纯校验 ──────────────────────────────────────────────────────
-	const ItemComp *item = store_.Find(guid);
+	const ItemComp *item = store.Find(guid);
 	if (item == nullptr)
 	{
 		return PrintStackAndReturnError(kBagDeleteItemFindGuid); // 与 RemoveItem 同码
@@ -1139,14 +1139,14 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	}
 
 	// 准入照常问:搬运不是绕过"这个包收不收这种东西"的后门(节日包照样不收装备)。
-	if (!admission_->Accepts(configId))
+	if (!admission->Accepts(configId))
 	{
 		LOG_ERROR << "Bag::PutInstance: this bag does not admit config " << configId
 			<< " (guid " << guid << "); refusing. player " << PlayerGuid();
 		return PrintStackAndReturnError(kBagAddItemInvalidParam);
 	}
 
-	if (store_.Contains(guid))
+	if (store.Contains(guid))
 	{
 		LOG_ERROR << "Bag::PutInstance: guid " << guid << " (config " << configId
 			<< ") already exists in this bag; refusing. player " << PlayerGuid();
@@ -1157,23 +1157,23 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	{
 		const SlotId wanted = *slot;
 		// 越界:布局层的 PlaceAt 也会拒,但那已经在实例入库之后了 —— 这里提前问。
-		if (wanted == kInvalidSlot || wanted >= layout_->Capacity())
+		if (wanted == kInvalidSlot || wanted >= layout->Capacity())
 		{
 			LOG_ERROR << "Bag::PutInstance: slot " << wanted << " is out of range (capacity "
-				<< layout_->Capacity() << ") for guid " << guid << ". player " << PlayerGuid();
+				<< layout->Capacity() << ") for guid " << guid << ". player " << PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}
 		// 被占:绝不顶替。"替换"是编排层先把旧的 Take 走、再 Put 新的。
-		if (layout_->At(wanted) != kInvalidGuid)
+		if (layout->At(wanted) != kInvalidGuid)
 		{
 			LOG_ERROR << "Bag::PutInstance: slot " << wanted << " is occupied by guid "
-				<< layout_->At(wanted) << "; refusing to place guid " << guid << ". player "
+				<< layout->At(wanted) << "; refusing to place guid " << guid << ". player "
 				<< PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemBagFull);
 		}
 		// 部位:只有具名槽布局才问,且与 SlotsAcceptingKind 是同一条口径(它报出来的槽
 		// 这里一定认)。自由格布局的格子放什么都行 —— 分叉条件与 PlaceInstance 相同。
-		if (layout_->HasSlotSemantics())
+		if (layout->HasSlotSemantics())
 		{
 			const uint32_t kind = EquipKindFor(configId);
 			const std::vector<uint32_t> accepting = SlotsAcceptingKind(kind);
@@ -1201,7 +1201,7 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	// 水位抬到它之上,带着源包的序号进来,本包的实例序(ItemStore::AcquiredBefore)就按别的包的时间线排了。
 	item.set_acquire_seq(0);
 
-	if (store_.Insert(std::move(item)) == nullptr)
+	if (store.Insert(std::move(item)) == nullptr)
 	{
 		// 上面刚查过 Contains,走到这里只可能是实例层索引与实体不同步(编程错误)。
 		// Insert 失败自己会回滚半建好的实体,两层仍然没动。
@@ -1211,21 +1211,21 @@ uint32_t Bag::PutInstance(ItemComp item, std::optional<uint32_t> slot)
 	}
 
 	const bool placed = slot.has_value()
-							? layout_->PlaceAt(guid, *slot, FootprintFor(configId))
+							? layout->PlaceAt(guid, *slot, FootprintFor(configId))
 							: PlaceInstance(guid, configId) != kInvalidSlot;
 	if (!placed)
 	{
 		// 预检已排除全部数据可触发的原因;到这里说明预检与布局层不一致,是真 bug。
 		// 回滚这一件 —— 绝不留下没有槽位的孤儿实例(同其他入包分支)。
-		store_.Erase(guid);
+		store.Erase(guid);
 		LOG_ERROR << "Bag::PutInstance: layout refused to place guid " << guid << " (config "
-			<< configId << ", capacity " << layout_->Capacity() << ", occupied "
-			<< layout_->OccupiedSlotCount() << ") after the pre-check passed (programming error). "
+			<< configId << ", capacity " << layout->Capacity() << ", occupied "
+			<< layout->OccupiedSlotCount() << ") after the pre-check passed (programming error). "
 			<< "player " << PlayerGuid();
 		return PrintStackAndReturnError(kBagAddItemBagFull);
 	}
 
-	++mutationVersion_;
+	++mutationVersion;
 	AssertLayerConsistency();
 	return kSuccess;
 }
@@ -1253,11 +1253,11 @@ uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
 				<< PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}
-		if (!store_.Contains(guid))
+		if (!store.Contains(guid))
 		{
 			return PrintStackAndReturnError(kBagDeleteItemFindGuid);
 		}
-		if (target.store_.Contains(guid))
+		if (target.store.Contains(guid))
 		{
 			LOG_ERROR << "Bag::MoveInstancesTo: guid " << guid << " already exists in the target bag; nothing moved. player "
 				<< PlayerGuid();
@@ -1266,10 +1266,10 @@ uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
 	}
 
 	// ── 两个包都在候选上改 ──────────────────────────────────────────────
-	ItemStore sourceStore = store_;
-	ItemStore targetStore = target.store_;
-	auto sourceLayout = layout_->Clone();
-	auto targetLayout = target.layout_->Clone();
+	ItemStore sourceStore = store;
+	ItemStore targetStore = target.store;
+	auto sourceLayout = layout->Clone();
+	auto targetLayout = target.layout->Clone();
 	if (sourceLayout == nullptr || targetLayout == nullptr)
 	{
 		LOG_ERROR << "Bag::MoveInstancesTo: a layout could not be cloned into a candidate; nothing moved. player "
@@ -1297,7 +1297,7 @@ uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
 				<< " (max_stack_size=" << maxStack << "); refusing to move corrupted data. player " << PlayerGuid();
 			return PrintStackAndReturnError(kBagItemDeletionSizeMismatch);
 		}
-		if (!target.admission_->Accepts(configId))
+		if (!target.admission->Accepts(configId))
 		{
 			LOG_ERROR << "Bag::MoveInstancesTo: the target bag does not admit config " << configId << " (guid " << guid
 				<< "); nothing moved. player " << PlayerGuid();
@@ -1338,12 +1338,12 @@ uint32_t Bag::MoveInstancesTo(Bag &target, const std::vector<Guid> &guids,
 	}
 
 	// ── 发布:单一场景逻辑线程,中间没有回调;两个包的两层同时换成候选 ──────────
-	store_ = std::move(sourceStore);
-	layout_ = std::move(sourceLayout);
-	++mutationVersion_;
-	target.store_ = std::move(targetStore);
-	target.layout_ = std::move(targetLayout);
-	++target.mutationVersion_;
+	store = std::move(sourceStore);
+	layout = std::move(sourceLayout);
+	++mutationVersion;
+	target.store = std::move(targetStore);
+	target.layout = std::move(targetLayout);
+	++target.mutationVersion;
 	if (absorbedOut != nullptr)
 	{
 		absorbedOut->insert(absorbedOut->end(), absorbed.begin(), absorbed.end());
@@ -1365,9 +1365,9 @@ void Bag::ResetFromSnapshot()
 {
 	// 两层一起清空。容量刻意不动 —— SetCapacityForRestore 会在
 	// InsertItemForRestore 之前从快照里设好。
-	store_.Clear();
-	layout_->Clear();
-	++mutationVersion_;
+	store.Clear();
+	layout->Clear();
+	++mutationVersion;
 	AssertLayerConsistency();
 }
 
@@ -1387,17 +1387,17 @@ void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize,
 
 void Bag::RestoreItems(std::vector<std::pair<ItemComp, uint32_t>> items)
 {
-	const uint64_t seqBefore = store_.NextAcquireSeq();
+	const uint64_t seqBefore = store.NextAcquireSeq();
 	for (const auto &[item, pos] : items)
 	{
 		if (item.size() > 0)
 		{
-			store_.RaiseAcquireSeq(item.acquire_seq());
+			store.RaiseAcquireSeq(item.acquire_seq());
 		}
 	}
-	if (store_.NextAcquireSeq() != seqBefore)
+	if (store.NextAcquireSeq() != seqBefore)
 	{
-		++mutationVersion_;
+		++mutationVersion;
 	}
 	for (auto &[item, pos] : items)
 	{
@@ -1421,7 +1421,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 		LOG_ERROR << "Bag::InsertItemForRestore: refusing invalid guid (configId=" << configId << ")";
 		return;
 	}
-	if (store_.Contains(guid))
+	if (store.Contains(guid))
 	{
 		// Duplicate guid in snapshot — log and skip. Indicates upstream
 		// data corruption; better to drop one copy than crash.
@@ -1435,7 +1435,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 	//     还原时丢了它,这件装备下次经过任何入包路径都会被当成新铸的再掷一次;
 	//   * acquire_seq 为 0 由 Insert 按重放顺序补盖(旧存档),非 0 原样保留并抬高水位;
 	//   * **不调 ItemInstanceInitializer** —— 还原的不是新铸实例。
-	if (store_.Insert(std::move(item)) == nullptr)
+	if (store.Insert(std::move(item)) == nullptr)
 	{
 		LOG_ERROR << "Bag::InsertItemForRestore: duplicate guid=" << guid
 				  << " configId=" << configId << ", skipping";
@@ -1458,13 +1458,13 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 	//    (b) 否则(策划把这件装备从"头"改到了"胸"、槽位表改了、容量缩了、或与另一件
 	//        已还原的撞位)-> 该部位的第一个空槽。老存档落到新槽位,这是"口径在数据里"
 	//        的直接后果。
-	if (layout_->HasSlotSemantics())
+	if (layout->HasSlotSemantics())
 	{
 		// 安静地试:还原路径不该因为配置查不到就刷错误日志,后面还有兜底。
 		// (EquipKindFor 查不到表返回哨兵,下面两问对哨兵都只会答"没有"。)
 		const uint32_t kind = EquipKindFor(configId);
 		SlotId slot = kInvalidSlot;
-		if (layout_->At(pos) == kInvalidGuid)
+		if (layout->At(pos) == kInvalidGuid)
 		{
 			const std::vector<uint32_t> accepting = SlotsAcceptingKind(kind);
 			if (std::find(accepting.begin(), accepting.end(), pos) != accepting.end())
@@ -1478,7 +1478,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 		}
 		if (slot != kInvalidSlot)
 		{
-			placed = layout_->PlaceAt(guid, slot, footprint);
+			placed = layout->PlaceAt(guid, slot, footprint);
 		}
 	}
 
@@ -1494,7 +1494,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 	//    还在他离开时摆的地方。
 	if (!placed && pos != kInvalidU32Id)
 	{
-		placed = layout_->PlaceAt(guid, pos, footprint);
+		placed = layout->PlaceAt(guid, pos, footprint);
 	}
 
 	//    退路二:快照里的 pos 也用不了(没记录、越界、或与另一件已还原的物品
@@ -1503,11 +1503,11 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 	//    为自动选位。
 	if (!placed)
 	{
-		if (const SlotId relocated = layout_->Place(guid, footprint); relocated != kInvalidSlot)
+		if (const SlotId relocated = layout->Place(guid, footprint); relocated != kInvalidSlot)
 		{
 			LOG_ERROR << "Bag::InsertItemForRestore: unusable snapshot pos=" << pos
 					  << " for guid=" << guid << " configId=" << configId
-					  << " (capacity=" << layout_->Capacity() << "); relocated to slot "
+					  << " (capacity=" << layout->Capacity() << "); relocated to slot "
 					  << relocated << ". player " << PlayerGuid();
 			placed = true;
 		}
@@ -1515,7 +1515,7 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 
 	if (placed)
 	{
-		++mutationVersion_;
+		++mutationVersion;
 		AssertLayerConsistency();
 		return;
 	}
@@ -1523,9 +1523,9 @@ void Bag::InsertItemForRestore(ItemComp item, uint32_t pos)
 	// 三条路都走不通 = 快照里的物品比容量还多,属于上游数据损坏。
 	// 宁可丢这一件并大声报错,也不能留下一个没有槽位的实例 —— 那会让实例数与
 	// 槽位数永久对不上,之后每一次容量判定都是错的。
-	store_.Erase(guid);
+	store.Erase(guid);
 	LOG_ERROR << "Bag::InsertItemForRestore: could not place guid=" << guid
-			  << " configId=" << configId << " (capacity=" << layout_->Capacity()
-			  << ", occupied=" << layout_->OccupiedSlotCount()
+			  << " configId=" << configId << " (capacity=" << layout->Capacity()
+			  << ", occupied=" << layout->OccupiedSlotCount()
 			  << "), DROPPING it. player " << PlayerGuid();
 }

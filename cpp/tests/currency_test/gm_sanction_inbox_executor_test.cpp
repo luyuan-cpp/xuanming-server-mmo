@@ -72,37 +72,37 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			player_ = tlsEcs.actorRegistry.create();
-			tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player_, kTestPlayerId);
+			player = tlsEcs.actorRegistry.create();
+			tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, kTestPlayerId);
 			// 两份货币组件都只由加载创建(PlayerDatabaseMessageFieldsUnmarshal);这里在测试创建点显式挂上。
-			tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
-			tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
+			tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
+			tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
 			// 单玩家物品获取封禁表同样是只由加载创建的持久组件。
-			tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player_);
+			tlsEcs.actorRegistry.emplace<PlayerItemGainBlockComp>(player);
 		}
 
 		void TearDown() override
 		{
-			if (tlsEcs.actorRegistry.valid(player_))
+			if (tlsEcs.actorRegistry.valid(player))
 			{
-				tlsEcs.actorRegistry.destroy(player_);
+				tlsEcs.actorRegistry.destroy(player);
 			}
 		}
 
 		const CurrencyDebt *GoldDebt() const
 		{
-			const auto &debts = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts;
+			const auto &debts = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts;
 			const auto it = debts.find(kGold);
 			return it == debts.end() ? nullptr : &it->second;
 		}
 
 		std::vector<uint32_t> BannedItems() const
 		{
-			const auto &ids = tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player_).item_config_ids();
+			const auto &ids = tlsEcs.actorRegistry.get<PlayerItemGainBlockComp>(player).item_config_ids();
 			return {ids.begin(), ids.end()};
 		}
 
-		entt::entity player_{entt::null};
+		entt::entity player{entt::null};
 	};
 } // namespace
 
@@ -110,37 +110,37 @@ namespace
 
 TEST_F(GmSanctionInboxExecutorTest, BlockCurrencyGainAppliesAndIsIdempotent)
 {
-	const auto first = GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(kGold));
+	const auto first = GmSanctionInboxExecutor::BlockCurrencyGain(player, GainPayload(kGold));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, first.kind);
 	EXPECT_EQ(0u, first.reason);
-	EXPECT_TRUE(CurrencySystem::IsCurrencyBlocked(player_, kCurrencyGold));
+	EXPECT_TRUE(CurrencySystem::IsCurrencyBlocked(player, kCurrencyGold));
 
-	const auto again = GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(kGold));
+	const auto again = GmSanctionInboxExecutor::BlockCurrencyGain(player, GainPayload(kGold));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, again.kind) << "已封锁时直接成功(天然幂等)";
-	EXPECT_EQ(1, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size()) << "不重复登记";
+	EXPECT_EQ(1, tlsEcs.actorRegistry.get<CurrencyComp>(player).blocked_types_size()) << "不重复登记";
 }
 
 TEST_F(GmSanctionInboxExecutorTest, UnblockCurrencyGainAppliesWhetherOrNotBlocked)
 {
 	EXPECT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::UnblockCurrencyGain(player_, GainPayload(kGold)).kind)
+			  GmSanctionInboxExecutor::UnblockCurrencyGain(player, GainPayload(kGold)).kind)
 		<< "本来就没封锁:天然幂等,照样 APPLIED";
 
-	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(kGold)).kind);
+	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockCurrencyGain(player, GainPayload(kGold)).kind);
 	EXPECT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::UnblockCurrencyGain(player_, GainPayload(kGold)).kind);
-	EXPECT_FALSE(CurrencySystem::IsCurrencyBlocked(player_, kCurrencyGold));
+			  GmSanctionInboxExecutor::UnblockCurrencyGain(player, GainPayload(kGold)).kind);
+	EXPECT_FALSE(CurrencySystem::IsCurrencyBlocked(player, kCurrencyGold));
 }
 
 TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithGarbageIsRejected)
 {
-	for (const auto &result : {GmSanctionInboxExecutor::BlockCurrencyGain(player_, kTruncatedPayload),
-							   GmSanctionInboxExecutor::UnblockCurrencyGain(player_, kTruncatedPayload)})
+	for (const auto &result : {GmSanctionInboxExecutor::BlockCurrencyGain(player, kTruncatedPayload),
+							   GmSanctionInboxExecutor::UnblockCurrencyGain(player, kTruncatedPayload)})
 	{
 		EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind) << "认识的类型、载荷解不出来:确定性拒绝,记账";
 		EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), result.reason);
 	}
-	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size()) << "拒绝路径不改状态";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player).blocked_types_size()) << "拒绝路径不改状态";
 }
 
 // 载荷币种不在本二进制取值表内:Go 入箱已按同源取值表拒绝写错的值,这里只可能是更新版本加的币种。
@@ -150,15 +150,15 @@ TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithCurrencyUnknownToThisVersionR
 	const uint32_t newer = static_cast<uint32_t>(kCurrencyMax);
 	ASSERT_FALSE(IsKnownCurrencyType(newer));
 
-	const auto block = GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(newer));
+	const auto block = GmSanctionInboxExecutor::BlockCurrencyGain(player, GainPayload(newer));
 	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, block.kind) << "不用 DEFER:本二进制在会话内永远不会认识它";
 	EXPECT_EQ(0u, block.reason);
 
-	const auto unblock = GmSanctionInboxExecutor::UnblockCurrencyGain(player_, GainPayload(newer));
+	const auto unblock = GmSanctionInboxExecutor::UnblockCurrencyGain(player, GainPayload(newer));
 	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, unblock.kind);
 	EXPECT_EQ(0u, unblock.reason);
 
-	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size()) << "版本错位路径不改状态";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player).blocked_types_size()) << "版本错位路径不改状态";
 }
 
 // ── 挂欠款 ──────────────────────────────────────────────────────────────────
@@ -166,7 +166,7 @@ TEST_F(GmSanctionInboxExecutorTest, GainPayloadWithCurrencyUnknownToThisVersionR
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtAppliesWithPayloadMetadata)
 {
 	const auto result =
-		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 100, "dup-grant", "ops-1", 1893456000));
+		GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 100, "dup-grant", "ops-1", 1893456000));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, result.kind);
 
 	const auto *debt = GoldDebt();
@@ -181,37 +181,37 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtIsNotIdempotentByItself)
 {
 	// 这正是收件箱必须靠账本去重的原因(设计 §2.2):同一条载荷执行两次就挂两次。
 	ASSERT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 100)).kind);
+			  GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 100)).kind);
 	ASSERT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 100)).kind);
+			  GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 100)).kind);
 	ASSERT_NE(nullptr, GoldDebt());
 	EXPECT_EQ(200u, GoldDebt()->owed);
 }
 
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtRejectsAmountOutsideInt64Range)
 {
-	const auto zero = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 0));
+	const auto zero = GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 0));
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, zero.kind);
 	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), zero.reason);
 
 	const uint64_t beyondInt64 = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
-	const auto tooLarge = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, beyondInt64));
+	const auto tooLarge = GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, beyondInt64));
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, tooLarge.kind) << "不能靠窄化变成负数";
 	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), tooLarge.reason);
 
-	const auto garbage = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, kTruncatedPayload);
+	const auto garbage = GmSanctionInboxExecutor::AttachCurrencyDebt(player, kTruncatedPayload);
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, garbage.kind);
 
-	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty()) << "拒绝路径不落欠款";
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts.empty()) << "拒绝路径不落欠款";
 }
 
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtWithCurrencyUnknownToThisVersionReportsVersionSkew)
 {
 	const auto result =
-		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 10));
+		GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 10));
 	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, result.kind);
 	EXPECT_EQ(0u, result.reason);
-	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty()) << "版本错位路径不落欠款";
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts.empty()) << "版本错位路径不落欠款";
 }
 
 // 与版本无关的确定性校验排在版本错位之前:金额写错的载荷在任何版本上都不会成功,
@@ -219,18 +219,18 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtWithCurrencyUnknownToThisV
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtRejectsBadAmountBeforeCheckingCurrency)
 {
 	const auto result =
-		GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 0));
+		GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(static_cast<uint32_t>(kCurrencyMax), 0));
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind);
 	EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), result.reason);
-	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts.empty());
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts.empty());
 }
 
 TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtOverflowIsRejectedWithPrimitiveCode)
 {
-	auto &debt = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_).debts[kGold];
+	auto &debt = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player).debts[kGold];
 	debt.owed = std::numeric_limits<uint64_t>::max() - 5;
 
-	const auto result = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 10));
+	const auto result = GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 10));
 	EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind) << "AttachDebt 回的非成功码原样成为拒绝原因";
 	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), result.reason);
 	EXPECT_EQ(std::numeric_limits<uint64_t>::max() - 5, debt.owed);
@@ -250,11 +250,11 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtReportsVersionSkewWhenExis
 	entry->set_currency_type(kGold);
 	entry->set_owed(500);
 	entry->mutable_unknown_fields()->AddVarint(kFutureField, 7);
-	auto &runtime = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player_);
+	auto &runtime = tlsEcs.actorRegistry.get<PlayerCurrencyComp>(player);
 	runtime.LoadFromProto(persisted);
-	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold));
+	ASSERT_TRUE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold));
 
-	const auto skewed = GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 100));
+	const auto skewed = GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 100));
 	EXPECT_EQ(PlayerInboxExecKind::kVersionSkew, skewed.kind) << "版本错位绝不能当成终态的 REJECTED,也不走 DEFER 的本地续做";
 	ASSERT_NE(nullptr, GoldDebt());
 	EXPECT_EQ(500u, GoldDebt()->owed) << "版本错位路径不改欠款";
@@ -267,9 +267,9 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtReportsVersionSkewWhenExis
 	EXPECT_EQ(7u, saved.debts(0).unknown_fields().field(0).varint());
 
 	const uint32_t diamond = static_cast<uint32_t>(kCurrencyDiamond);
-	EXPECT_FALSE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyDiamond));
+	EXPECT_FALSE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyDiamond));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(diamond, 100)).kind)
+			  GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(diamond, 100)).kind)
 		<< "另一币种的欠款没有携带未知字段,照常挂";
 	EXPECT_EQ(100u, runtime.debts.at(diamond).owed);
 }
@@ -278,21 +278,21 @@ TEST_F(GmSanctionInboxExecutorTest, AttachCurrencyDebtReportsVersionSkewWhenExis
 
 TEST_F(GmSanctionInboxExecutorTest, MissingCurrencyComponentsDeferWithoutSideEffects)
 {
-	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerCurrencyComp>(player);
 
-	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::BlockCurrencyGain(player_, GainPayload(kGold)).kind)
+	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::BlockCurrencyGain(player, GainPayload(kGold)).kind)
 		<< "不能把一条 GM 处置因本地缺陷钉成终态 REJECTED";
 	EXPECT_EQ(PlayerInboxExecKind::kDefer,
-			  GmSanctionInboxExecutor::UnblockCurrencyGain(player_, GainPayload(kGold)).kind);
+			  GmSanctionInboxExecutor::UnblockCurrencyGain(player, GainPayload(kGold)).kind);
 	EXPECT_EQ(PlayerInboxExecKind::kDefer,
-			  GmSanctionInboxExecutor::AttachCurrencyDebt(player_, DebtPayload(kGold, 100)).kind);
+			  GmSanctionInboxExecutor::AttachCurrencyDebt(player, DebtPayload(kGold, 100)).kind);
 
-	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player_).blocked_types_size());
-	EXPECT_FALSE(CurrencySystem::DebtCarriesUnknownFields(player_, kCurrencyGold)) << "缺组件时只读谓词返回 false";
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player_)) << "执行器只取不建";
+	EXPECT_EQ(0, tlsEcs.actorRegistry.get<CurrencyComp>(player).blocked_types_size());
+	EXPECT_FALSE(CurrencySystem::DebtCarriesUnknownFields(player, kCurrencyGold)) << "缺组件时只读谓词返回 false";
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerCurrencyComp>(player)) << "执行器只取不建";
 
 	// 载荷本身坏掉时,确定性拒绝优先于"缺组件"(纯校验先跑)。
-	EXPECT_EQ(PlayerInboxExecKind::kRejected, GmSanctionInboxExecutor::AttachCurrencyDebt(player_, kTruncatedPayload).kind);
+	EXPECT_EQ(PlayerInboxExecKind::kRejected, GmSanctionInboxExecutor::AttachCurrencyDebt(player, kTruncatedPayload).kind);
 }
 
 // ── 单玩家物品获取封禁(设计 §2.2)─────────────────────────────────────────
@@ -300,16 +300,16 @@ TEST_F(GmSanctionInboxExecutorTest, MissingCurrencyComponentsDeferWithoutSideEff
 
 TEST_F(GmSanctionInboxExecutorTest, BlockItemGainAppliesOnlyToThisConfigAndIsIdempotent)
 {
-	const auto first = GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kBannedItem));
+	const auto first = GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kBannedItem));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, first.kind);
 	EXPECT_EQ(0u, first.reason);
-	EXPECT_TRUE(GainBlockService::IsPlayerItemGainBlocked(player_, kBannedItem));
-	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player_, kBannedItem)) << "统一判定看得到单人封禁";
-	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kOtherItem)) << "只封这一个配置";
+	EXPECT_TRUE(GainBlockService::IsPlayerItemGainBlocked(player, kBannedItem));
+	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player, kBannedItem)) << "统一判定看得到单人封禁";
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player, kOtherItem)) << "只封这一个配置";
 	EXPECT_FALSE(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, kBannedItem))
 		<< "单人封禁不写全服集合";
 
-	const auto again = GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kBannedItem));
+	const auto again = GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kBannedItem));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, again.kind) << "已封禁时直接成功(天然幂等)";
 	EXPECT_EQ((std::vector<uint32_t>{kBannedItem}), BannedItems()) << "不重复登记";
 }
@@ -317,13 +317,13 @@ TEST_F(GmSanctionInboxExecutorTest, BlockItemGainAppliesOnlyToThisConfigAndIsIde
 TEST_F(GmSanctionInboxExecutorTest, UnblockItemGainAppliesWhetherOrNotBlocked)
 {
 	EXPECT_EQ(PlayerInboxExecKind::kApplied,
-			  GmSanctionInboxExecutor::UnblockItemGain(player_, ItemGainPayload(kBannedItem)).kind)
+			  GmSanctionInboxExecutor::UnblockItemGain(player, ItemGainPayload(kBannedItem)).kind)
 		<< "本来就没封禁:天然幂等,照样 APPLIED";
 
-	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kBannedItem)).kind);
-	EXPECT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player_, ItemGainPayload(kBannedItem)).kind);
-	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player_, kBannedItem));
-	EXPECT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player_, ItemGainPayload(kBannedItem)).kind)
+	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kBannedItem)).kind);
+	EXPECT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player, ItemGainPayload(kBannedItem)).kind);
+	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(player, kBannedItem));
+	EXPECT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player, ItemGainPayload(kBannedItem)).kind)
 		<< "重复解封同样 APPLIED";
 	EXPECT_TRUE(BannedItems().empty());
 }
@@ -333,11 +333,11 @@ TEST_F(GmSanctionInboxExecutorTest, ItemGainBlockListStaysAscendingAndUnique)
 {
 	for (const uint32_t config : {30u, 10u, 20u, 10u, 30u})
 	{
-		ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(config)).kind);
+		ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(config)).kind);
 	}
 	EXPECT_EQ((std::vector<uint32_t>{10u, 20u, 30u}), BannedItems());
 
-	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player_, ItemGainPayload(20)).kind);
+	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::UnblockItemGain(player, ItemGainPayload(20)).kind);
 	EXPECT_EQ((std::vector<uint32_t>{10u, 30u}), BannedItems());
 }
 
@@ -345,8 +345,8 @@ TEST_F(GmSanctionInboxExecutorTest, ItemGainPayloadWithGarbageOrZeroConfigIsReje
 {
 	for (const auto &payload : {kTruncatedPayload, ItemGainPayload(0), std::string{}})
 	{
-		for (const auto &result : {GmSanctionInboxExecutor::BlockItemGain(player_, payload),
-								   GmSanctionInboxExecutor::UnblockItemGain(player_, payload)})
+		for (const auto &result : {GmSanctionInboxExecutor::BlockItemGain(player, payload),
+								   GmSanctionInboxExecutor::UnblockItemGain(player, payload)})
 		{
 			EXPECT_EQ(PlayerInboxExecKind::kRejected, result.kind) << "解不出来或配置号为 0:确定性拒绝,记账";
 			EXPECT_EQ(static_cast<uint32_t>(kPlayerInboxPayloadInvalid), result.reason);
@@ -360,15 +360,15 @@ TEST_F(GmSanctionInboxExecutorTest, ItemGainPayloadWithGarbageOrZeroConfigIsReje
 TEST_F(GmSanctionInboxExecutorTest, ItemGainBanForAConfigUnknownToThisTableIsStillRecorded)
 {
 	constexpr uint32_t kUnknownToAnyTable = 999999999;
-	const auto result = GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kUnknownToAnyTable));
+	const auto result = GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kUnknownToAnyTable));
 	EXPECT_EQ(PlayerInboxExecKind::kApplied, result.kind);
-	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player_, kUnknownToAnyTable));
+	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player, kUnknownToAnyTable));
 }
 
 // 封禁只属于这一名玩家:另一名玩家(自己的封禁表为空)与无效句柄(没有玩家,只判全服)都不受影响。
 TEST_F(GmSanctionInboxExecutorTest, ItemGainBanIsPerPlayer)
 {
-	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kBannedItem)).kind);
+	ASSERT_EQ(PlayerInboxExecKind::kApplied, GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kBannedItem)).kind);
 
 	const auto other = tlsEcs.actorRegistry.create();
 	tlsEcs.actorRegistry.emplace<PlayerGuidComp>(other, kTestPlayerId + 1);
@@ -376,23 +376,23 @@ TEST_F(GmSanctionInboxExecutorTest, ItemGainBanIsPerPlayer)
 	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(other, kBannedItem)) << "另一名玩家照常可得";
 	EXPECT_FALSE(GainBlockService::IsItemGainBlocked(entt::null, kBannedItem)) << "无效句柄只判全服";
 	tlsEcs.actorRegistry.destroy(other);
-	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player_, kBannedItem));
+	EXPECT_TRUE(GainBlockService::IsItemGainBlocked(player, kBannedItem));
 }
 
 // 封禁表是持久组件,缺了是加载不变量被破坏:回 kDefer、不改状态、不补建(与货币组件缺失同口径);
 // 载荷本身坏掉时确定性拒绝优先(纯校验先跑)。
 TEST_F(GmSanctionInboxExecutorTest, MissingItemGainBlockComponentDefersWithoutCreatingIt)
 {
-	tlsEcs.actorRegistry.remove<PlayerItemGainBlockComp>(player_);
+	tlsEcs.actorRegistry.remove<PlayerItemGainBlockComp>(player);
 
-	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::BlockItemGain(player_, ItemGainPayload(kBannedItem)).kind)
+	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::BlockItemGain(player, ItemGainPayload(kBannedItem)).kind)
 		<< "不能把一条 GM 处置因本地缺陷钉成终态 REJECTED";
-	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::UnblockItemGain(player_, ItemGainPayload(kBannedItem)).kind);
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(player_)) << "执行器只取不建";
-	EXPECT_EQ(PlayerInboxExecKind::kRejected, GmSanctionInboxExecutor::BlockItemGain(player_, kTruncatedPayload).kind);
-	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), GainBlockService::BlockPlayerItemGain(player_, kBannedItem))
+	EXPECT_EQ(PlayerInboxExecKind::kDefer, GmSanctionInboxExecutor::UnblockItemGain(player, ItemGainPayload(kBannedItem)).kind);
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(player)) << "执行器只取不建";
+	EXPECT_EQ(PlayerInboxExecKind::kRejected, GmSanctionInboxExecutor::BlockItemGain(player, kTruncatedPayload).kind);
+	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), GainBlockService::BlockPlayerItemGain(player, kBannedItem))
 		<< "原语同样只取不建";
-	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(player_));
+	EXPECT_FALSE(tlsEcs.actorRegistry.all_of<PlayerItemGainBlockComp>(player));
 }
 
 // ── 类型注册表(设计 §3.2)──────────────────────────────────────────────────

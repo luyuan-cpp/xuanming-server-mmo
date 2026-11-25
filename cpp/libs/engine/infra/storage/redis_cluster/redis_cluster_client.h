@@ -147,8 +147,8 @@ private:
 
 	int Submit(std::optional<std::string_view> routingKey, const CommandCallback& cb, const char* fmt, va_list args);
 
-	std::shared_ptr<Impl> impl_;
-	ReconnectCallback reconnectCb_;
+	std::shared_ptr<Impl> impl;
+	ReconnectCallback reconnectCb;
 };
 
 // 两个句柄都只在 scene 上由 RedisSystem 建连;gate、battle 不连 Redis,这里恒未连接(connected() 为假,command() 返回 REDIS_ERR)。

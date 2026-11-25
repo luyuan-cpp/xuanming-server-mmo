@@ -10,6 +10,10 @@ class SkillTable;
 class SkillCatalogEntry;
 class UpgradeSkillRequest;
 class UpgradeSkillResponse;
+class SaveSkillLoadoutRequest;
+class SaveSkillLoadoutResponse;
+class SwitchSkillLoadoutRequest;
+class SwitchSkillLoadoutResponse;
 
 // 角色技能(docs/design/class-skills.md)。PlayerSkillListComp 的唯一写入口。
 //
@@ -69,8 +73,15 @@ public:
 	// 人物/宝宝共用的目录投影；身份与持有状态由各自唯一写入口校验。
 	static void FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
 		uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view,
-		bool craftUnlockRequired = false, bool unlockedByBook = false);
+		bool craftUnlockRequired = false, bool unlockedByBook = false, bool equipped = true);
 	static bool IsFreeSkillFor(const SkillTable& row, uint32_t casterMask);
+
+	// 人物战法构筑装配（3 套流派方案，每套 3 被动 + 1 追击 + 1 开场，主动技全量可用，同 exclusive_group 互斥）。
+	static bool IsSkillEquipped(entt::entity player, uint32_t skillTableId);
+	static void SaveLoadout(entt::entity player, const SaveSkillLoadoutRequest& request,
+		SaveSkillLoadoutResponse& response);
+	static void SwitchLoadout(entt::entity player, const SwitchSkillLoadoutRequest& request,
+		SwitchSkillLoadoutResponse& response);
 
 	// 修习(学习 = 0 → 1;rank 0 的已有条目原地复用)。整笔拒绝时填 error_message 且不扣钱、不改等级;
 	// 部分成功时 upgraded_count < count、stop_tip_id 说明停在哪。无论成败 state 都是处理之后的完整技能书。

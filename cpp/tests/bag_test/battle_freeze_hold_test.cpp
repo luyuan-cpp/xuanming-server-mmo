@@ -157,11 +157,11 @@ protected:
         // 续冻时锁跟着续(ConfirmBattleLockIfMatch → 协程任务):需要当前线程的 loop 与任务作用域。
         if (muduo::net::EventLoop::getEventLoopOfCurrentThread() == nullptr)
         {
-            loop_ = std::make_unique<muduo::net::EventLoop>();
+            loop = std::make_unique<muduo::net::EventLoop>();
         }
         if (!SceneTaskScope::IsAccepting())
         {
-            tasks_ = std::make_unique<SceneTaskScope>(*muduo::net::EventLoop::getEventLoopOfCurrentThread());
+            tasks = std::make_unique<SceneTaskScope>(*muduo::net::EventLoop::getEventLoopOfCurrentThread());
         }
         gTerminalQueries.clear();
         gTerminalQuerySendable = true;
@@ -197,11 +197,11 @@ protected:
         {
             tlsEcs.actorRegistry.destroy(player);
         }
-        tasks_.reset();
-        if (loop_)
+        tasks.reset();
+        if (this->loop)
         {
-            loop_->queueInLoop([loop = loop_.get()] { loop->quit(); });
-            loop_->loop();
+            this->loop->queueInLoop([loop = this->loop.get()] { loop->quit(); });
+            this->loop->loop();
         }
         gTerminalQueries.clear();
         gLockReleases.clear();
@@ -270,8 +270,8 @@ protected:
     entt::entity player{entt::null};
 
 private:
-    std::unique_ptr<muduo::net::EventLoop> loop_;
-    std::unique_ptr<SceneTaskScope> tasks_;
+    std::unique_ptr<muduo::net::EventLoop> loop;
+    std::unique_ptr<SceneTaskScope> tasks;
 };
 
 // ── 纯判定 ──────────────────────────────────────────────────────────────────────────────

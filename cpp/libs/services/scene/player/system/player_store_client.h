@@ -313,16 +313,16 @@ private:
     static boost::cobalt::task<void> RunClaimAttempt(std::weak_ptr<Lifetime> original, Guid playerId,
         uint64_t attemptGen, playerstore::LoadAndClaimRequest request);
 
-    std::shared_ptr<Lifetime> lifetime_;
-    Options options_;
+    std::shared_ptr<Lifetime> lifetime;
+    Options options;
     // 提交了带审计记录的一笔、go/db 却没写发件箱的次数,只给日志节流用。
-    uint64_t auditNotWrittenCount_{0};
+    uint64_t auditNotWrittenCount{0};
     // 认领到本二进制不认识的内容(行里的未知顶层字段、更新版本才有的行)的次数,只给日志节流用。
-    uint64_t carriedClaimCount_{0};
-    std::unordered_map<Guid, State> states_;
-    std::unordered_set<Guid> detachedInFlight_;
-    std::unordered_map<Guid, Claim> claims_;
-    std::unordered_map<Guid, std::vector<std::function<void()>>> settledWaiters_;
+    uint64_t carriedClaimCount{0};
+    std::unordered_map<Guid, State> states;
+    std::unordered_set<Guid> detachedInFlight;
+    std::unordered_map<Guid, Claim> claims;
+    std::unordered_map<Guid, std::vector<std::function<void()>>> settledWaiters;
 };
 
 // 传输与定时器:生产用 gRPC 和事件循环,单测换成假的,其余接线不变。

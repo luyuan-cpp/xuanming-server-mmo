@@ -97,7 +97,7 @@ struct PlayerBagsComp
     // key = event id / pet guid (whatever owns the transient bag).
     // 动态背包沿用 Bag 的默认布局(FlatLayout / kDefaultCapacity),
     // 容量由创建方或快照还原决定 —— 它们没有固定的类型语义。
-    std::unordered_map<uint64_t, Bag> dynamicBags_;
+    std::unordered_map<uint64_t, Bag> dynamicBags;
 
     // 本版本不认识的固定包类型的存档记录:BagAllData 里 bag_type ≥ kBagTypeCount 的条目,以及
     // capacities 下标 ≥ kBagTypeCount 的容量。新版本加了包类型、旧版本(或回滚后的版本)接手这名玩家时,
@@ -125,7 +125,7 @@ struct PlayerBagsComp
                 return true;
             }
         }
-        for (const auto &dynamicBag : dynamicBags_)
+        for (const auto &dynamicBag : dynamicBags)
         {
             if (dynamicBag.second.ContainsGuid(guid))
             {

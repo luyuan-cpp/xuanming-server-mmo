@@ -5,7 +5,7 @@
 {{- end }}
 
 {{ .Service }}Impl::{{ .Service }}Impl(muduo::net::EventLoop& loop)
-    : loop_(loop)
+    : loop(loop)
 {
 }
 {{ range .Methods }}
@@ -18,7 +18,7 @@ void {{ $.Service }}Impl::Handle{{ .HandlerName }}(const {{ .CppRequest }}* requ
 {{- range .Methods }}
 void {{ $.Service }}Impl::{{ .HandlerName }}(const std::shared_ptr<{{ .HandlerName }}Call>& call)
 {
-    [[maybe_unused]] const {{ .CppRequest }}* request = &call->request();
+    [[maybe_unused]] const {{ .CppRequest }}* request = &call->Request();
 {{ .GuardCode }}
     call->Proceed();
 }

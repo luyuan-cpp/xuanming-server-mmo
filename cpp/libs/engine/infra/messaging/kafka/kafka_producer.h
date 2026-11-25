@@ -103,10 +103,10 @@ public:
 	// compatibility path or lazily on first send().
 	bool init(const std::string& brokers);
 
-	bool initialized() const { return producer_ != nullptr; }
+	bool initialized() const { return producer != nullptr; }
 
 	// 已登记 broker(句柄可能尚未惰性创建)。单测与诊断用。
-	bool brokersConfigured() const { return producer_ != nullptr || !pendingBrokers_.empty(); }
+	bool brokersConfigured() const { return producer != nullptr || !pendingBrokers.empty(); }
 
 	static KafkaProducer& Instance() {
 		thread_local KafkaProducer instance;
@@ -124,7 +124,7 @@ public:
 	RdKafka::ErrorCode send(const std::string& topic, const std::string& message, const std::string& key = "", int32_t partition = RdKafka::Topic::PARTITION_UA);
 
 	// 包含普通send；UNKNOWN永久保留到该boot结束，调用者仍须先封准入和join全部producer线程。
-	bool publicationsSettled() const { return publicationRegistry_->OwnerSettled(publicationOwner_); }
+	bool publicationsSettled() const { return publicationRegistry->OwnerSettled(publicationOwner); }
 
 	void poll();
 	// 驱动投递回调,直到 producer 队列为空或超时;只有 librdkafka
@@ -148,19 +148,19 @@ private:
 	// 补报「有 n 条失败日志被限流压掉」,并带上进程级累计数。
 	void logSuppressedSummary(std::uint64_t suppressed);
 
-	std::unique_ptr<RdKafka::Producer> producer_;
-	std::unique_ptr<RdKafka::Conf> conf_;
-	std::string pendingBrokers_;
+	std::unique_ptr<RdKafka::Producer> producer;
+	std::unique_ptr<RdKafka::Conf> conf;
+	std::string pendingBrokers;
 	// 当前实例所用的 brokers,重建时沿用。
-	std::string brokers_;
+	std::string brokers;
 	// 投递回执报告了 fatal(librdkafka 2.14 下不会发生,见类注释;为未来版本保留)。
 	// 回执是在 poll() 的调用栈里回调的,不能就地销毁实例,只置位,由下一次 send() 在发送之前处理。
-	bool fatalPending_ = false;
+	bool fatalPending = false;
 	// 正在 purge 旧实例:此时涌出来的失败回执不代表新的 fatal。
-	bool rebuilding_ = false;
-	kafka_producer_policy::RebuildGate rebuildGate_{std::chrono::seconds(5)};
-	kafka_producer_policy::FailureLogThrottle failureLogThrottle_{20, std::chrono::seconds(10)};
-	std::shared_ptr<kafka_producer_policy::PublicationRegistry> publicationRegistry_;
-	kafka_producer_policy::PublicationRegistry::OwnerPtr publicationOwner_;
-	bool publicationClosed_ = false;
+	bool rebuilding = false;
+	kafka_producer_policy::RebuildGate rebuildGate{std::chrono::seconds(5)};
+	kafka_producer_policy::FailureLogThrottle failureLogThrottle{20, std::chrono::seconds(10)};
+	std::shared_ptr<kafka_producer_policy::PublicationRegistry> publicationRegistry;
+	kafka_producer_policy::PublicationRegistry::OwnerPtr publicationOwner;
+	bool publicationClosed = false;
 };

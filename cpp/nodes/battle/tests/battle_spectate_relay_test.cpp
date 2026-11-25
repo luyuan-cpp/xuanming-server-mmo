@@ -36,8 +36,8 @@ contracts::kafka::SpectateFrameEvent ParseFrame(const FrameRecord& record) {
 
 class BattleSpectateRelay : public testing::Test {
 protected:
-    void SetUp() override { saved_ = tlsNodeConfigManager; }
-    void TearDown() override { tlsNodeConfigManager = saved_; }
+    void SetUp() override { saved = tlsNodeConfigManager; }
+    void TearDown() override { tlsNodeConfigManager = saved; }
 
     void ConfigureCommandTopics(const uint32_t generation, const uint32_t partitions) {
         auto& kafka = *tlsNodeConfigManager.GetBaseDeployConfig().mutable_kafka();
@@ -45,12 +45,12 @@ protected:
         kafka.set_command_topic_partitions(partitions);
     }
 
-    NodeConfigManager saved_;
-    std::vector<FrameRecord> records_;
-    bool accepts_ = true;
-    SpectateFramePublisher publisher_{[this](const FrameRecord& record) {
-        records_.push_back(record);
-        return accepts_;
+    NodeConfigManager saved;
+    std::vector<FrameRecord> records;
+    bool accepts = true;
+    SpectateFramePublisher publisher{[this](const FrameRecord& record) {
+        records.push_back(record);
+        return accepts;
     }};
 };
 
@@ -58,13 +58,13 @@ protected:
 TEST_F(BattleSpectateRelay, RelayRecordAddressesTargetGateOverConfiguredRoute) {
     ConfigureCommandTopics(3, 8);
     auto frame = SampleFrame();
-    publisher_.PublishToRelayGate(frame, 21, "gate-instance");
+    publisher.PublishToRelayGate(frame, 21, "gate-instance");
 
-    ASSERT_EQ(1u, records_.size());
-    EXPECT_EQ("gate-spectate_g3", records_[0].topic);
-    EXPECT_EQ(21 % 8, records_[0].partition);
-    EXPECT_EQ(std::to_string(kBattleId), records_[0].key);
-    const auto sent = ParseFrame(records_[0]);
+    ASSERT_EQ(1u, records.size());
+    EXPECT_EQ("gate-spectate_g3", records[0].topic);
+    EXPECT_EQ(21 % 8, records[0].partition);
+    EXPECT_EQ(std::to_string(kBattleId), records[0].key);
+    const auto sent = ParseFrame(records[0]);
     EXPECT_EQ(21u, sent.target_gate_id());
     EXPECT_EQ("gate-instance", sent.target_instance_id());
     EXPECT_EQ(kBattleId, sent.battle_id());
@@ -79,13 +79,13 @@ TEST_F(BattleSpectateRelay, RelayRecordAddressesTargetGateOverConfiguredRoute) {
 TEST_F(BattleSpectateRelay, UnconfiguredRouteFallsBackToCommandTopicDefaults) {
     ConfigureCommandTopics(0, 0);
     auto frame = SampleFrame();
-    publisher_.PublishToRelayGate(frame, 300, "gate-instance");
-    publisher_.PublishToBroadcast(frame);
+    publisher.PublishToRelayGate(frame, 300, "gate-instance");
+    publisher.PublishToBroadcast(frame);
 
-    ASSERT_EQ(2u, records_.size());
-    EXPECT_EQ("gate-spectate_g1", records_[0].topic);
-    EXPECT_EQ(300 % 256, records_[0].partition);
-    EXPECT_EQ("spectate-bcast_g1", records_[1].topic);
+    ASSERT_EQ(2u, records.size());
+    EXPECT_EQ("gate-spectate_g1", records[0].topic);
+    EXPECT_EQ(300 % 256, records[0].partition);
+    EXPECT_EQ("spectate-bcast_g1", records[1].topic);
 }
 
 // 广播:固定 16 分区,按 battle_id 定分区,不随命令 topic 的分区数变;目标字段一律清掉,否则每台 gate 都会按目标过滤
@@ -94,14 +94,14 @@ TEST_F(BattleSpectateRelay, UnconfiguredRouteFallsBackToCommandTopicDefaults) {
 TEST_F(BattleSpectateRelay, BroadcastRecordClearsTargetsAndPartitionsByBattle) {
     ConfigureCommandTopics(3, 8);
     auto frame = SampleFrame();
-    publisher_.PublishToRelayGate(frame, 21, "gate-instance");
-    publisher_.PublishToBroadcast(frame);
+    publisher.PublishToRelayGate(frame, 21, "gate-instance");
+    publisher.PublishToBroadcast(frame);
 
-    ASSERT_EQ(2u, records_.size());
-    EXPECT_EQ("spectate-bcast_g3", records_[1].topic);
-    EXPECT_EQ(static_cast<int32_t>(kBattleId % 16), records_[1].partition);
-    EXPECT_EQ(std::to_string(kBattleId), records_[1].key);
-    const auto sent = ParseFrame(records_[1]);
+    ASSERT_EQ(2u, records.size());
+    EXPECT_EQ("spectate-bcast_g3", records[1].topic);
+    EXPECT_EQ(static_cast<int32_t>(kBattleId % 16), records[1].partition);
+    EXPECT_EQ(std::to_string(kBattleId), records[1].key);
+    const auto sent = ParseFrame(records[1]);
     EXPECT_EQ(0u, sent.target_gate_id());
     EXPECT_TRUE(sent.target_instance_id().empty());
     EXPECT_EQ(kClientFrame, sent.client_frame());
@@ -110,28 +110,28 @@ TEST_F(BattleSpectateRelay, BroadcastRecordClearsTargetsAndPartitionsByBattle) {
 // 同一帧逐台发:每条记录的目标是各自的 gate,前一台的目标不残留。
 TEST_F(BattleSpectateRelay, ReusedFrameCarriesEachGatesOwnTarget) {
     auto frame = SampleFrame();
-    publisher_.PublishToRelayGate(frame, 21, "first-gate");
-    publisher_.PublishToRelayGate(frame, 22, "second-gate");
+    publisher.PublishToRelayGate(frame, 21, "first-gate");
+    publisher.PublishToRelayGate(frame, 22, "second-gate");
 
-    ASSERT_EQ(2u, records_.size());
-    EXPECT_EQ(21u, ParseFrame(records_[0]).target_gate_id());
-    EXPECT_EQ("first-gate", ParseFrame(records_[0]).target_instance_id());
-    EXPECT_EQ(22u, ParseFrame(records_[1]).target_gate_id());
-    EXPECT_EQ("second-gate", ParseFrame(records_[1]).target_instance_id());
+    ASSERT_EQ(2u, records.size());
+    EXPECT_EQ(21u, ParseFrame(records[0]).target_gate_id());
+    EXPECT_EQ("first-gate", ParseFrame(records[0]).target_instance_id());
+    EXPECT_EQ(22u, ParseFrame(records[1]).target_gate_id());
+    EXPECT_EQ("second-gate", ParseFrame(records[1]).target_instance_id());
 }
 
 // 出口没接住只计数,不重试:每帧只调一次出口;接住的帧不计数。
 TEST_F(BattleSpectateRelay, RefusedSendIsCountedWithoutRetry) {
     auto frame = SampleFrame();
-    accepts_ = false;
-    publisher_.PublishToBroadcast(frame);
-    publisher_.PublishToRelayGate(frame, 21, "gate-instance");
-    EXPECT_EQ(2u, records_.size());
-    EXPECT_EQ(2u, publisher_.SendFailures());
+    accepts = false;
+    publisher.PublishToBroadcast(frame);
+    publisher.PublishToRelayGate(frame, 21, "gate-instance");
+    EXPECT_EQ(2u, records.size());
+    EXPECT_EQ(2u, publisher.SendFailures());
 
-    accepts_ = true;
-    publisher_.PublishToBroadcast(frame);
-    EXPECT_EQ(3u, records_.size());
-    EXPECT_EQ(2u, publisher_.SendFailures());
+    accepts = true;
+    publisher.PublishToBroadcast(frame);
+    EXPECT_EQ(3u, records.size());
+    EXPECT_EQ(2u, publisher.SendFailures());
 }
 } // namespace

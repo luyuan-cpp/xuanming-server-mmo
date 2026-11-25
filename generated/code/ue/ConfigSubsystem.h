@@ -68,6 +68,8 @@
 #include "GuildLevelTable.h"
 #include "GuildRuleTable.h"
 #include "GuildShopTable.h"
+#include "GuildWarMilestoneTable.h"
+#include "GuildWarRuleTable.h"
 #include "ItemTable.h"
 #include "MessageLimiterTable.h"
 #include "MirrorTable.h"
@@ -137,7 +139,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 70;
+	static constexpr int32 TableCount = 72;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -304,6 +306,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UGuildShopTable* GetGuildShopTable() const { return GuildShopTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildWarMilestoneTable* GetGuildWarMilestoneTable() const { return GuildWarMilestoneTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildWarRuleTable* GetGuildWarRuleTable() const { return GuildWarRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UItemTable* GetItemTable() const { return ItemTable; }
@@ -477,6 +485,10 @@ private:
 	TObjectPtr<UGuildRuleTable> GuildRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UGuildShopTable> GuildShopTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UGuildWarMilestoneTable> GuildWarMilestoneTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UGuildWarRuleTable> GuildWarRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UItemTable> ItemTable;
 	UPROPERTY(Transient)

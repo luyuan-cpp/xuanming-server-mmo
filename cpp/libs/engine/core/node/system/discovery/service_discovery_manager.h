@@ -39,11 +39,11 @@ public:
 	void HandleServiceNodeStart(const std::string& key, const std::string& value);
 
 	// 返回的快照及其借用列表只在所属 loop 线程访问。
-	const ServiceNodeSnapshot &ServiceNodes() const { return serviceNodes_; }
+	const ServiceNodeSnapshot &ServiceNodes() const { return serviceNodes; }
 	// 仅供 Node 的 etcd DELETE / 宽限期收尾移除快照,仍在所属 loop 线程执行。
 	int RemoveServiceNode(uint32_t nodeType, const std::string &nodeUuid)
 	{
-		return serviceNodes_.Remove(nodeType, nodeUuid);
+		return serviceNodes.Remove(nodeType, nodeUuid);
 	}
 
 	EtcdService etcdService;
@@ -52,10 +52,10 @@ private:
 	// 排下一次兜底全量 Range(discovery_resync_policy.h)。定时器捕获 this,见类头的禁止复制 / 移动。
 	void ScheduleNextResync();
 
-	ServiceNodeSnapshot serviceNodes_;
+	ServiceNodeSnapshot serviceNodes;
 	// 自身类型不在发现集合里时本节点自己的发现键(精确键);空 = 自身类型按前缀看,或 node_id 还没定。
-	std::string ownRegistrationKey_;
-	TimerTaskComp serviceNodeSyncTimer_;
+	std::string ownRegistrationKey;
+	TimerTaskComp serviceNodeSyncTimer;
 	// 抖动的随机源,只在 loop 线程用。
-	std::mt19937 resyncJitter_{std::random_device{}()};
+	std::mt19937 resyncJitter{std::random_device{}()};
 };

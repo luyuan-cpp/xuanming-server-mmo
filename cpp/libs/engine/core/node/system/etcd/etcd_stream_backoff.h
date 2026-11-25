@@ -24,14 +24,14 @@ public:
     {
         if (lived >= kStableAfter)
         {
-            next_ = kInitial;
+            next = kInitial;
         }
-        const std::chrono::milliseconds delay = next_;
-        next_ = std::min(next_ * kMultiplier, kMax);
+        const std::chrono::milliseconds delay = next;
+        next = std::min(next * kMultiplier, kMax);
         return delay;
     }
 
 private:
-    std::chrono::milliseconds next_{kInitial};
+    std::chrono::milliseconds next{kInitial};
 };
 } // namespace etcd_transport

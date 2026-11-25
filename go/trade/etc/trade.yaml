@@ -194,6 +194,18 @@ Commerce:
   PetConfigs: []
   CurrencyTypes: []
   AllowInstances: false
+  # 游戏内当面交易防骗默认采用方案 A（低价耗材白名单 + 单日小额银两互助限额），贵重装备与大宗材料走公开集市/指定买家托管单。
+  PlayerTrade:
+    Mode: "strict_consumables"
+    ConsumableItems: []
+    MaxDailyCurrencyAmount: 10000
+  # 卖家店铺信用评分与 4 层防刷分策略（7 日评价窗口、同买卖双方 7 日最多 1 次计分、极小额不计分、异地换机后 7 日冷静期）。
+  SellerCredit:
+    ReviewWindowMs: 604800000
+    PairScoreWindowMs: 604800000
+    MaxScoredReviewsPerPairInWindow: 1
+    MinScoreAmountMinor: 100
+    PostEnvChangeScoreCooldownMs: 604800000
   # 人工处置入口(commercefix 调 TradeAdmin.ListManualContracts / ResolveManualContract),缺省关闭。
   # 开启:密钥(≥32 字节)放进 Secret 注入这个变量名,再写本部署的环境名;手册 docs/ops/trade-commerce-quarantine-runbook.md §4.2。
   ManualResolutionSecretEnv: ""

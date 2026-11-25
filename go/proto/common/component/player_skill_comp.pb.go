@@ -86,16 +86,99 @@ func (x *PlayerSkillComp) GetRank() uint32 {
 	return 0
 }
 
+// 人物战法构筑装配方案（布局层：与 skill_list 实例层解耦，不靠下标承载槽位语义）。
+type SkillLoadoutScheme struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..3 显式流派方案号
+	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                  // 0默认 / 1输出 / 2控场 / 3辅助
+	PassiveSkillIds []uint32               `protobuf:"varint,3,rep,packed,name=passive_skill_ids,json=passiveSkillIds,proto3" json:"passive_skill_ids,omitempty"` // 最多 3 个被动战法（同 exclusive_group 互斥）
+	PursuitSkillIds []uint32               `protobuf:"varint,4,rep,packed,name=pursuit_skill_ids,json=pursuitSkillIds,proto3" json:"pursuit_skill_ids,omitempty"` // 最多 1 个追击战法
+	OpeningSkillIds []uint32               `protobuf:"varint,5,rep,packed,name=opening_skill_ids,json=openingSkillIds,proto3" json:"opening_skill_ids,omitempty"` // 最多 1 个开场战法
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SkillLoadoutScheme) Reset() {
+	*x = SkillLoadoutScheme{}
+	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillLoadoutScheme) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillLoadoutScheme) ProtoMessage() {}
+
+func (x *SkillLoadoutScheme) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillLoadoutScheme.ProtoReflect.Descriptor instead.
+func (*SkillLoadoutScheme) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_skill_comp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SkillLoadoutScheme) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SkillLoadoutScheme) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+func (x *SkillLoadoutScheme) GetPassiveSkillIds() []uint32 {
+	if x != nil {
+		return x.PassiveSkillIds
+	}
+	return nil
+}
+
+func (x *SkillLoadoutScheme) GetPursuitSkillIds() []uint32 {
+	if x != nil {
+		return x.PursuitSkillIds
+	}
+	return nil
+}
+
+func (x *SkillLoadoutScheme) GetOpeningSkillIds() []uint32 {
+	if x != nil {
+		return x.OpeningSkillIds
+	}
+	return nil
+}
+
 type PlayerSkillListComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SkillList     []*PlayerSkillComp     `protobuf:"bytes,1,rep,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	SkillList              []*PlayerSkillComp     `protobuf:"bytes,1,rep,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`
+	ActiveLoadoutSchemeId  uint32                 `protobuf:"varint,2,opt,name=active_loadout_scheme_id,json=activeLoadoutSchemeId,proto3" json:"active_loadout_scheme_id,omitempty"` // 0 = 未启用自定义装配（全量非互斥兼容态）；1..3 = 启用对应方案
+	LoadoutSchemes         []*SkillLoadoutScheme  `protobuf:"bytes,3,rep,name=loadout_schemes,json=loadoutSchemes,proto3" json:"loadout_schemes,omitempty"`
+	LoadoutStateVersion    uint64                 `protobuf:"varint,4,opt,name=loadout_state_version,json=loadoutStateVersion,proto3" json:"loadout_state_version,omitempty"`            // 战法装配乐观锁版本号（0 按 1 计）
+	LoadoutLastRequestId   string                 `protobuf:"bytes,5,opt,name=loadout_last_request_id,json=loadoutLastRequestId,proto3" json:"loadout_last_request_id,omitempty"`        // 最近一次战法装配/切换幂等键
+	LoadoutLastBaseVersion uint64                 `protobuf:"varint,6,opt,name=loadout_last_base_version,json=loadoutLastBaseVersion,proto3" json:"loadout_last_base_version,omitempty"` // 最近一次战法装配/切换请求的期望版本
+	LoadoutLastSchemeId    uint32                 `protobuf:"varint,7,opt,name=loadout_last_scheme_id,json=loadoutLastSchemeId,proto3" json:"loadout_last_scheme_id,omitempty"`          // 最近一次战法装配/切换的目标方案号
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PlayerSkillListComp) Reset() {
 	*x = PlayerSkillListComp{}
-	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -107,7 +190,7 @@ func (x *PlayerSkillListComp) String() string {
 func (*PlayerSkillListComp) ProtoMessage() {}
 
 func (x *PlayerSkillListComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_skill_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -120,7 +203,7 @@ func (x *PlayerSkillListComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerSkillListComp.ProtoReflect.Descriptor instead.
 func (*PlayerSkillListComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_skill_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_player_skill_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlayerSkillListComp) GetSkillList() []*PlayerSkillComp {
@@ -128,6 +211,48 @@ func (x *PlayerSkillListComp) GetSkillList() []*PlayerSkillComp {
 		return x.SkillList
 	}
 	return nil
+}
+
+func (x *PlayerSkillListComp) GetActiveLoadoutSchemeId() uint32 {
+	if x != nil {
+		return x.ActiveLoadoutSchemeId
+	}
+	return 0
+}
+
+func (x *PlayerSkillListComp) GetLoadoutSchemes() []*SkillLoadoutScheme {
+	if x != nil {
+		return x.LoadoutSchemes
+	}
+	return nil
+}
+
+func (x *PlayerSkillListComp) GetLoadoutStateVersion() uint64 {
+	if x != nil {
+		return x.LoadoutStateVersion
+	}
+	return 0
+}
+
+func (x *PlayerSkillListComp) GetLoadoutLastRequestId() string {
+	if x != nil {
+		return x.LoadoutLastRequestId
+	}
+	return ""
+}
+
+func (x *PlayerSkillListComp) GetLoadoutLastBaseVersion() uint64 {
+	if x != nil {
+		return x.LoadoutLastBaseVersion
+	}
+	return 0
+}
+
+func (x *PlayerSkillListComp) GetLoadoutLastSchemeId() uint32 {
+	if x != nil {
+		return x.LoadoutLastSchemeId
+	}
+	return 0
 }
 
 var File_proto_common_component_player_skill_comp_proto protoreflect.FileDescriptor
@@ -138,10 +263,22 @@ const file_proto_common_component_player_skill_comp_proto_rawDesc = "" +
 	"\x0fPlayerSkillComp\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x12\n" +
-	"\x04rank\x18\x03 \x01(\rR\x04rank\"F\n" +
+	"\x04rank\x18\x03 \x01(\rR\x04rank\"\xd0\x01\n" +
+	"\x12SkillLoadoutScheme\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x19\n" +
+	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +
+	"\x11passive_skill_ids\x18\x03 \x03(\rR\x0fpassiveSkillIds\x12*\n" +
+	"\x11pursuit_skill_ids\x18\x04 \x03(\rR\x0fpursuitSkillIds\x12*\n" +
+	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\"\x98\x03\n" +
 	"\x13PlayerSkillListComp\x12/\n" +
 	"\n" +
-	"skill_list\x18\x01 \x03(\v2\x10.PlayerSkillCompR\tskillListB\x18Z\x16proto/common/componentb\x06proto3"
+	"skill_list\x18\x01 \x03(\v2\x10.PlayerSkillCompR\tskillList\x127\n" +
+	"\x18active_loadout_scheme_id\x18\x02 \x01(\rR\x15activeLoadoutSchemeId\x12<\n" +
+	"\x0floadout_schemes\x18\x03 \x03(\v2\x13.SkillLoadoutSchemeR\x0eloadoutSchemes\x122\n" +
+	"\x15loadout_state_version\x18\x04 \x01(\x04R\x13loadoutStateVersion\x125\n" +
+	"\x17loadout_last_request_id\x18\x05 \x01(\tR\x14loadoutLastRequestId\x129\n" +
+	"\x19loadout_last_base_version\x18\x06 \x01(\x04R\x16loadoutLastBaseVersion\x123\n" +
+	"\x16loadout_last_scheme_id\x18\a \x01(\rR\x13loadoutLastSchemeIdB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_skill_comp_proto_rawDescOnce sync.Once
@@ -155,18 +292,20 @@ func file_proto_common_component_player_skill_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_skill_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_skill_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_common_component_player_skill_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_common_component_player_skill_comp_proto_goTypes = []any{
 	(*PlayerSkillComp)(nil),     // 0: PlayerSkillComp
-	(*PlayerSkillListComp)(nil), // 1: PlayerSkillListComp
+	(*SkillLoadoutScheme)(nil),  // 1: SkillLoadoutScheme
+	(*PlayerSkillListComp)(nil), // 2: PlayerSkillListComp
 }
 var file_proto_common_component_player_skill_comp_proto_depIdxs = []int32{
 	0, // 0: PlayerSkillListComp.skill_list:type_name -> PlayerSkillComp
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: PlayerSkillListComp.loadout_schemes:type_name -> SkillLoadoutScheme
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_skill_comp_proto_init() }
@@ -180,7 +319,7 @@ func file_proto_common_component_player_skill_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_skill_comp_proto_rawDesc), len(file_proto_common_component_player_skill_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

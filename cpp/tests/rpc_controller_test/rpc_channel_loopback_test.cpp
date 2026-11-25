@@ -285,10 +285,10 @@ public:
     void Push(Completion completion)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            entries_.push_back(std::move(completion));
+            std::lock_guard<std::mutex> lock(mutex);
+            entries.push_back(std::move(completion));
         }
-        cv_.notify_all();
+        cv.notify_all();
     }
 
     // 往同一序列里插一个非调用的标记(用于断言 functor 与回调的先后)。
@@ -302,33 +302,33 @@ public:
 
     bool WaitForCount(std::size_t count) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return entries_.size() >= count; });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return entries.size() >= count; });
     }
 
     std::size_t Count() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return entries_.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        return entries.size();
     }
 
     std::size_t CountOf(const std::string& tag) const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(mutex);
         return static_cast<std::size_t>(
-            std::count_if(entries_.begin(), entries_.end(), [&](const Completion& c) { return c.tag == tag; }));
+            std::count_if(entries.begin(), entries.end(), [&](const Completion& c) { return c.tag == tag; }));
     }
 
     std::vector<Completion> Entries() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return entries_;
+        std::lock_guard<std::mutex> lock(mutex);
+        return entries;
     }
 
     std::optional<Completion> Find(const std::string& tag) const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        for (const auto& entry : entries_)
+        std::lock_guard<std::mutex> lock(mutex);
+        for (const auto& entry : entries)
         {
             if (entry.tag == tag)
             {
@@ -339,9 +339,9 @@ public:
     }
 
 private:
-    mutable std::mutex mutex_;
-    mutable std::condition_variable cv_;
-    std::vector<Completion> entries_;
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
+    std::vector<Completion> entries;
 };
 
 // 一个记录进 log 的 done。returned 由发起方在 CallMethod 返回之后置 true(loop 线程上读写)。
@@ -419,7 +419,7 @@ class FrameRecorder
 {
 public:
     FrameRecorder()
-        : codec_([this](const TcpConnectionPtr&, const RpcMessagePtr& frame, muduo::Timestamp) { Push(*frame); })
+        : codec([this](const TcpConnectionPtr&, const RpcMessagePtr& frame, muduo::Timestamp) { Push(*frame); })
     {
     }
 
@@ -429,64 +429,64 @@ public:
     // loop 线程:作为连接的消息回调,直接消费输入。
     void OnMessage(const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
     {
-        codec_.onMessage(conn, buffer, receiveTime);
+        codec.onMessage(conn, buffer, receiveTime);
     }
 
     // loop 线程:旁路记录,不消费 buffer(字节拷进自持缓冲,半帧留到下次)。
     void Tee(const TcpConnectionPtr& conn, const muduo::net::Buffer& buffer, muduo::Timestamp receiveTime)
     {
-        teeBuffer_.append(buffer.peek(), buffer.readableBytes());
-        codec_.onMessage(conn, &teeBuffer_, receiveTime);
+        teeBuffer.append(buffer.peek(), buffer.readableBytes());
+        codec.onMessage(conn, &teeBuffer, receiveTime);
     }
 
     // loop 线程:按线上格式发一帧。
-    void Send(const TcpConnectionPtr& conn, const GameRpcMessage& frame) { codec_.send(conn, frame); }
+    void Send(const TcpConnectionPtr& conn, const GameRpcMessage& frame) { codec.send(conn, frame); }
 
     std::size_t Count() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return frames_.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        return frames.size();
     }
 
     std::vector<GameRpcMessage> Since(std::size_t from) const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (from >= frames_.size())
+        std::lock_guard<std::mutex> lock(mutex);
+        if (from >= frames.size())
         {
             return {};
         }
-        return std::vector<GameRpcMessage>(frames_.begin() + static_cast<std::ptrdiff_t>(from), frames_.end());
+        return std::vector<GameRpcMessage>(frames.begin() + static_cast<std::ptrdiff_t>(from), frames.end());
     }
 
     bool WaitForCount(std::size_t count) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return frames_.size() >= count; });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return frames.size() >= count; });
     }
 
     // pred(const std::vector<GameRpcMessage>&) 在锁内求值。
     template <typename Pred>
     bool WaitUntil(Pred pred) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return pred(frames_); });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return pred(frames); });
     }
 
 private:
     void Push(const GameRpcMessage& frame)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            frames_.push_back(frame);
+            std::lock_guard<std::mutex> lock(mutex);
+            frames.push_back(frame);
         }
-        cv_.notify_all();
+        cv.notify_all();
     }
 
-    mutable std::mutex mutex_;
-    mutable std::condition_variable cv_;
-    std::vector<GameRpcMessage> frames_;
-    muduo::net::Buffer teeBuffer_;   // 只在 loop 线程上用
-    RpcCodec codec_;                 // 解码回调绑 this:codec_ 是本对象的成员,寿命相同
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
+    std::vector<GameRpcMessage> frames;
+    muduo::net::Buffer teeBuffer;   // 只在 loop 线程上用
+    RpcCodec codec;                 // 解码回调绑 this:codec_ 是本对象的成员,寿命相同
 };
 
 // ---------------------------------------------------------------------------
@@ -629,19 +629,19 @@ protected:
 
     void SetUp() override
     {
-        loop_.emplace(*loopThread_.startLoop());
+        loop.emplace(*loopThread.startLoop());
         const uint16_t port = FindFreeLoopbackPort();
         ASSERT_NE(port, 0);
-        serverAddr_ = muduo::net::InetAddress("127.0.0.1", port);
+        serverAddr = muduo::net::InetAddress("127.0.0.1", port);
         ASSERT_TRUE(IsDispatchableMessageId(kProcessId))
             << "gRpcMethodRegistry is empty: the global RpcRegistryEnvironment did not run";
 
         RunInLoopAndWait([this, port] {
-            server_ = std::make_unique<muduo::net::TcpServer>(
+            server = std::make_unique<muduo::net::TcpServer>(
                 &Loop(), muduo::net::InetAddress(port, /*loopbackOnly=*/true), "rpc_channel_loopback_server");
             // 回调捕获夹具 this:server_ 在 TearDown 里先于夹具销毁(AGENTS §11.7 允许的同寿命例外)。
-            server_->setConnectionCallback([this](const TcpConnectionPtr& conn) { OnServerConnection(conn); });
-            server_->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
+            server->setConnectionCallback([this](const TcpConnectionPtr& conn) { OnServerConnection(conn); });
+            server->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
         });
     }
 
@@ -650,29 +650,29 @@ protected:
         // 顺序同 rpc_controller_test:先拆客户端(各自连接的唯一持有者 → forceClose → 对端 DOWN),
         // 等服务端每条连接都报过 DOWN,再在 loop 线程销毁 TcpServer(它的析构函数断言 in-loop)。
         RunInLoopAndWait([this] {
-            downProbe_->enabled = false;
-            if (ownerBox_)
+            downProbe->enabled = false;
+            if (ownerBox)
             {
-                ownerBox_->reset();   // 用例中途失败时 owner 还在盒子里:也在 loop 线程上销毁
+                ownerBox->reset();   // 用例中途失败时 owner 还在盒子里:也在 loop 线程上销毁
             }
-            client_.reset();
-            probe_.reset();
+            client.reset();
+            probe.reset();
         });
         PumpLoop(3);
-        EXPECT_TRUE(WaitUntil([this] { return serverDowns_.load() == serverUps_.load(); }))
-            << "server side did not see DOWN for every connection: ups=" << serverUps_.load()
-            << " downs=" << serverDowns_.load();
+        EXPECT_TRUE(WaitUntil([this] { return serverDowns.load() == serverUps.load(); }))
+            << "server side did not see DOWN for every connection: ups=" << serverUps.load()
+            << " downs=" << serverDowns.load();
         RunInLoopAndWait([this] {
-            probeChannel_.reset();
+            probeChannel.reset();
             // 暂存的回复在 loop 线程上释放:连接已断,只计 reply_channel_gone,不发任何帧。
-            service_.parked.clear();
-            server_.reset();
+            service.parked.clear();
+            server.reset();
         });
         PumpLoop(2);
         // loopThread_ 析构 = quit + join;排队的 connectDestroyed 早已跑完。
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& fn)
@@ -720,10 +720,10 @@ protected:
     {
         if (conn->connected())
         {
-            serverConn_ = conn;
-            if (serverMode_ == ServerMode::kChannel)
+            serverConn = conn;
+            if (serverMode == ServerMode::kChannel)
             {
-                RpcChannelPtr channel = RpcChannel::Create(Loop(), conn, serverServices_, serverMaintenance_);
+                RpcChannelPtr channel = RpcChannel::Create(Loop(), conn, serverServices, serverMaintenance);
                 std::weak_ptr<RpcChannel> weakChannel = channel;
                 conn->setMessageCallback(
                     [weakChannel](const TcpConnectionPtr& c, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
@@ -736,17 +736,17 @@ protected:
                         buffer->retrieveAll();
                     });
                 conn->setContext(channel);
-                serverChannel_ = channel;
+                serverChannel = channel;
             }
             else
             {
                 conn->setMessageCallback(
                     [this](const TcpConnectionPtr& c, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
                     {
-                        serverRecorder_.OnMessage(c, buffer, receiveTime);
+                        serverRecorder.OnMessage(c, buffer, receiveTime);
                     });
             }
-            ++serverUps_;
+            ++serverUps;
             return;
         }
         if (const auto* channel = boost::any_cast<RpcChannelPtr>(&conn->getContext()); channel != nullptr && *channel)
@@ -754,22 +754,22 @@ protected:
             (*channel)->OnDisconnect();
         }
         conn->setContext(RpcChannelPtr());
-        ++serverDowns_;
+        ++serverDowns;
     }
 
     void ConnectRpcClient()
     {
         RunInLoopAndWait([this] {
-            client_ = std::make_shared<RpcClient>(&Loop(), serverAddr_);
-            client_->setConnectionObserver([weakProbe = std::weak_ptr<DownProbe>(downProbe_)](const TcpConnectionPtr& conn) {
+            client = std::make_shared<RpcClient>(&Loop(), serverAddr);
+            client->setConnectionObserver([weakProbe = std::weak_ptr<DownProbe>(downProbe)](const TcpConnectionPtr& conn) {
                 if (const auto probe = weakProbe.lock(); probe && probe->enabled)
                 {
                     probe->OnEvent(conn);
                 }
             });
-            client_->connect();
+            client->connect();
         });
-        ASSERT_TRUE(WaitUntil([this] { return client_->connected() && !serverConn_.expired(); }))
+        ASSERT_TRUE(WaitUntil([this] { return client->connected() && !serverConn.expired(); }))
             << "RpcClient never connected";
     }
 
@@ -777,9 +777,9 @@ protected:
     void WatchClientDown(std::shared_ptr<CallLog> log)
     {
         RunInLoopAndWait([this, log = std::move(log)]() mutable {
-            downProbe_->log = std::move(log);
-            downProbe_->completionsAtFirstDown.reset();
-            downProbe_->enabled = true;
+            downProbe->log = std::move(log);
+            downProbe->completionsAtFirstDown.reset();
+            downProbe->enabled = true;
         });
     }
 
@@ -787,26 +787,26 @@ protected:
     // 回调只捕获盒子的 weak:不形成 client → channel → 在途 done → 盒子 → client 的环。
     std::weak_ptr<RpcClientPtr> HandClientToOwnerBox()
     {
-        RunInLoopAndWait([this] { ownerBox_ = std::make_shared<RpcClientPtr>(std::move(client_)); });
-        return ownerBox_;
+        RunInLoopAndWait([this] { ownerBox = std::make_shared<RpcClientPtr>(std::move(client)); });
+        return ownerBox;
     }
 
     // 只配 kChannel 模式:被测的是服务端。
     void ConnectProbe()
     {
         RunInLoopAndWait([this] {
-            probe_ = std::make_unique<muduo::net::TcpClient>(&Loop(), serverAddr_, "rpc_channel_loopback_probe");
+            probe = std::make_unique<muduo::net::TcpClient>(&Loop(), serverAddr, "rpc_channel_loopback_probe");
             // 同寿命例外:probe_ 在 TearDown 里先于夹具销毁,之后的 DOWN 回调也在 TearDown 转 loop 时跑完。
-            probe_->setConnectionCallback([this](const TcpConnectionPtr& conn) { OnProbeConnection(conn); });
-            probe_->setMessageCallback(
+            probe->setConnectionCallback([this](const TcpConnectionPtr& conn) { OnProbeConnection(conn); });
+            probe->setMessageCallback(
                 [this](const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
                 {
                     OnProbeMessage(conn, buffer, receiveTime);
                 });
-            probe_->connect();
+            probe->connect();
         });
         ASSERT_TRUE(WaitUntil([this] {
-            return probeChannel_ && probeChannel_->IsConnected() && !serverChannel_.expired();
+            return probeChannel && probeChannel->IsConnected() && !serverChannel.expired();
         })) << "probe never connected to the channel server";
     }
 
@@ -815,22 +815,22 @@ protected:
     {
         if (conn->connected())
         {
-            probeChannel_ = RpcChannel::Create(Loop(), conn, RpcServiceMap{}, probeMaintenance_);
+            probeChannel = RpcChannel::Create(Loop(), conn, RpcServiceMap{}, probeMaintenance);
             return;
         }
-        if (probeChannel_ && probeChannel_->IsBoundTo(conn))
+        if (probeChannel && probeChannel->IsBoundTo(conn))
         {
-            probeChannel_->OnDisconnect();
-            probeChannel_.reset();
+            probeChannel->OnDisconnect();
+            probeChannel.reset();
         }
     }
 
     void OnProbeMessage(const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
     {
-        probeRecorder_.Tee(conn, *buffer, receiveTime);
-        if (probeChannel_ && probeChannel_->IsBoundTo(conn))
+        probeRecorder.Tee(conn, *buffer, receiveTime);
+        if (probeChannel && probeChannel->IsBoundTo(conn))
         {
-            probeChannel_->OnMessage(conn, buffer, receiveTime);
+            probeChannel->OnMessage(conn, buffer, receiveTime);
             return;
         }
         buffer->retrieveAll();
@@ -839,25 +839,25 @@ protected:
     // loop 线程:kRecorder 模式下由服务端回一帧。
     void SendFromServer(const GameRpcMessage& frame)
     {
-        const auto conn = serverConn_.lock();
+        const auto conn = serverConn.lock();
         if (!conn)
         {
             ADD_FAILURE() << "server connection is gone";
             return;
         }
-        serverRecorder_.Send(conn, frame);
+        serverRecorder.Send(conn, frame);
     }
 
     // loop 线程:经 probe 连接发一帧手工构造的请求。
     void SendFromProbe(const GameRpcMessage& frame)
     {
-        const TcpConnectionPtr conn = probe_ ? probe_->connection() : TcpConnectionPtr{};
+        const TcpConnectionPtr conn = probe ? probe->connection() : TcpConnectionPtr{};
         if (!conn)
         {
             ADD_FAILURE() << "probe connection is gone";
             return;
         }
-        probeRecorder_.Send(conn, frame);
+        probeRecorder.Send(conn, frame);
     }
 
     // 测试线程:经 probe 发一个 id≠0 的同步请求作屏障,等到它的回包,返回 probe 从 from 起、屏障回包之前收到的所有帧。
@@ -869,7 +869,7 @@ protected:
         });
         std::vector<GameRpcMessage> before;
         std::optional<GameRpcMessage> barrier;
-        const bool seen = probeRecorder_.WaitUntil([&](const std::vector<GameRpcMessage>& frames) {
+        const bool seen = probeRecorder.WaitUntil([&](const std::vector<GameRpcMessage>& frames) {
             for (std::size_t i = from; i < frames.size(); ++i)
             {
                 if (frames[i].id() == barrierId)
@@ -891,32 +891,32 @@ protected:
     }
 
     // loopThread_ 排第一:最后析构,保证其余成员析构时 loop 仍在。
-    muduo::net::EventLoopThread loopThread_;
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    muduo::net::InetAddress serverAddr_;
+    muduo::net::EventLoopThread loopThread;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    muduo::net::InetAddress serverAddr;
 
     // 测试服务声明在服务器之前:server 侧 channel 的服务表借用它,它必须后析构。
-    LoopbackSceneService service_;
-    ServerMode serverMode_{ServerMode::kRecorder};   // 连接前设好;UP 时在 loop 线程读取
-    RpcServiceMap serverServices_{{"Scene", &service_}};
-    std::unique_ptr<muduo::net::TcpServer> server_;
-    FrameRecorder serverRecorder_;
+    LoopbackSceneService service;
+    ServerMode serverMode{ServerMode::kRecorder};   // 连接前设好;UP 时在 loop 线程读取
+    RpcServiceMap serverServices{{"Scene", &service}};
+    std::unique_ptr<muduo::net::TcpServer> server;
+    FrameRecorder serverRecorder;
     // 以下两个 weak 只在 loop 线程上读写。
-    std::weak_ptr<muduo::net::TcpConnection> serverConn_;
-    std::weak_ptr<RpcChannel> serverChannel_;
-    std::atomic<int> serverUps_{0};
-    std::atomic<int> serverDowns_{0};
+    std::weak_ptr<muduo::net::TcpConnection> serverConn;
+    std::weak_ptr<RpcChannel> serverChannel;
+    std::atomic<int> serverUps{0};
+    std::atomic<int> serverDowns{0};
 
-    RpcClientPtr client_;
+    RpcClientPtr client;
     // 以下状态只在 loop 线程上读写。
-    std::shared_ptr<RpcClientPtr> ownerBox_;
-    std::shared_ptr<DownProbe> downProbe_{std::make_shared<DownProbe>()};
+    std::shared_ptr<RpcClientPtr> ownerBox;
+    std::shared_ptr<DownProbe> downProbe{std::make_shared<DownProbe>()};
 
-    std::unique_ptr<muduo::net::TcpClient> probe_;
-    RpcChannelPtr probeChannel_;   // 只在 loop 线程上读写
-    FrameRecorder probeRecorder_;
-    std::shared_ptr<RpcMaintenanceState> serverMaintenance_{std::make_shared<RpcMaintenanceState>()};
-    std::shared_ptr<RpcMaintenanceState> probeMaintenance_{std::make_shared<RpcMaintenanceState>()};
+    std::unique_ptr<muduo::net::TcpClient> probe;
+    RpcChannelPtr probeChannel;   // 只在 loop 线程上读写
+    FrameRecorder probeRecorder;
+    std::shared_ptr<RpcMaintenanceState> serverMaintenance{std::make_shared<RpcMaintenanceState>()};
+    std::shared_ptr<RpcMaintenanceState> probeMaintenance{std::make_shared<RpcMaintenanceState>()};
 };
 
 } // namespace
@@ -927,7 +927,7 @@ protected:
 
 TEST_F(RpcChannelLoopback, RoundTripCompletesExactlyOnceAfterCallMethodReturned)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto& stats = GetRpcChannelStats();
     const auto startedBefore = Load(stats.started);
@@ -935,12 +935,12 @@ TEST_F(RpcChannelLoopback, RoundTripCompletesExactlyOnceAfterCallMethodReturned)
     auto log = std::make_shared<CallLog>();
 
     std::size_t synchronousRuns = 99;
-    RunInLoopAndWait([&] { synchronousRuns = Issue(*client_, log, "call", kProcessId, ProcessRequest(7)); });
+    RunInLoopAndWait([&] { synchronousRuns = Issue(*client, log, "call", kProcessId, ProcessRequest(7)); });
     EXPECT_EQ(synchronousRuns, 0u) << "done ran inside CallMethod";
     ASSERT_TRUE(log->WaitForCount(1));
 
     // 屏障:同一连接上再走一次往返。第一次调用若被重复完成,必然出现在屏障之前。
-    RunInLoopAndWait([&] { Issue(*client_, log, "barrier", kProcessId, ProcessRequest(8)); });
+    RunInLoopAndWait([&] { Issue(*client, log, "barrier", kProcessId, ProcessRequest(8)); });
     ASSERT_TRUE(log->WaitForCount(2));
 
     const auto entries = log->Entries();
@@ -961,8 +961,8 @@ TEST_F(RpcChannelLoopback, RoundTripCompletesExactlyOnceAfterCallMethodReturned)
     std::size_t outstanding = 99;
     int handlerCalls = -1;
     RunInLoopAndWait([&] {
-        outstanding = client_->channel() ? client_->channel()->OutstandingCount() : 99;
-        handlerCalls = service_.processCalls;
+        outstanding = client->Channel() ? client->Channel()->OutstandingCount() : 99;
+        handlerCalls = service.processCalls;
     });
     EXPECT_EQ(outstanding, 0u);
     EXPECT_EQ(handlerCalls, 2);
@@ -973,31 +973,31 @@ TEST_F(RpcChannelLoopback, HandshakePeerRecordedOnTheInboundChannelReachesEveryL
     // 入站侧握手成功时 NodeHandshakeManager::OnNodeHandshake 经 RecordHandshakePeer 记下对端进程;之后这条连接上每次派发的
     // ctx 都带着它(docs/design/muduo-rpc-channel.md §8.3)。scene 按它认 gate 实例、不信消息体自报
     // (docs/design/scene-enter-chain-residuals.md §14)。宿主不构造 Node,这里直接调记录入口,与 OnNodeHandshake 同一个。
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto log = std::make_shared<CallLog>();
     constexpr const char kPeer[] = "gate-node3-new-process";
 
-    RunInLoopAndWait([&] { Issue(*client_, log, "before", kProcessId, ProcessRequest(11)); });
+    RunInLoopAndWait([&] { Issue(*client, log, "before", kProcessId, ProcessRequest(11)); });
     ASSERT_TRUE(log->WaitForCount(1));
 
     bool recorded = false;
     bool recordedWithoutConnection = true;
     RunInLoopAndWait([&] {
-        recorded = RpcChannel::RecordHandshakePeer(serverConn_.lock(), kPeer);
+        recorded = RpcChannel::RecordHandshakePeer(serverConn.lock(), kPeer);
         recordedWithoutConnection = RpcChannel::RecordHandshakePeer(TcpConnectionPtr{}, "ignored");
     });
     EXPECT_TRUE(recorded) << "服务端连接的 context 里放着本连接的 channel";
     EXPECT_FALSE(recordedWithoutConnection) << "空连接什么都不做";
 
-    RunInLoopAndWait([&] { Issue(*client_, log, "after", kProcessId, ProcessRequest(12)); });
+    RunInLoopAndWait([&] { Issue(*client, log, "after", kProcessId, ProcessRequest(12)); });
     ASSERT_TRUE(log->WaitForCount(2));
 
     std::vector<std::pair<uint32_t, std::string>> peers;
     std::string clientSidePeer = "unread";
     RunInLoopAndWait([&] {
-        peers = service_.processPeers;
-        clientSidePeer = client_->channel() ? client_->channel()->HandshakePeerUuid() : std::string("no channel");
+        peers = service.processPeers;
+        clientSidePeer = client->Channel() ? client->Channel()->HandshakePeerUuid() : std::string("no channel");
     });
     ASSERT_EQ(peers.size(), 2u);
     EXPECT_EQ(peers[0].first, 11u);
@@ -1009,15 +1009,15 @@ TEST_F(RpcChannelLoopback, HandshakePeerRecordedOnTheInboundChannelReachesEveryL
 
 TEST_F(RpcChannelLoopback, TypedCallMethodChecksTheResponseTypeAgainstTheRegistry)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
-        client_->CallMethod<TestProcessClientPlayerMessageRpc>(
+        client->CallMethod<TestProcessClientPlayerMessageRpc>(
             ProcessRequest(9), TypedRecorder<ProcessClientPlayerMessageResponse>(log, "typed"),
             RpcCallOptions{kLongTimeout});
-        client_->CallMethod<TestMismatchedResponseRpc>(
+        client->CallMethod<TestMismatchedResponseRpc>(
             ProcessRequest(10), TypedRecorder<CreateSceneResponse>(log, "mismatched"), RpcCallOptions{kLongTimeout});
     });
     ASSERT_TRUE(log->WaitForCount(2));
@@ -1031,26 +1031,26 @@ TEST_F(RpcChannelLoopback, TypedCallMethodChecksTheResponseTypeAgainstTheRegistr
 
     const auto mismatched = log->Find("mismatched");
     ASSERT_TRUE(mismatched.has_value());
-    EXPECT_EQ(mismatched->status.code(), RpcStatusCode::kNotSent) << mismatched->status.name();
+    EXPECT_EQ(mismatched->status.Code(), RpcStatusCode::kNotSent) << mismatched->status.name();
     EXPECT_FALSE(mismatched->hasResponse);
 
     int handlerCalls = -1;
-    RunInLoopAndWait([&] { handlerCalls = service_.processCalls; });
+    RunInLoopAndWait([&] { handlerCalls = service.processCalls; });
     EXPECT_EQ(handlerCalls, 1) << "the mismatched call must not reach the wire";
 }
 
 TEST_F(RpcChannelLoopback, EmptyResponseAndEarlyReturnStillReply)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "empty", kEnterId, PlayerEnterGameNodeRequest{});
-        Issue(*client_, log, "early_return", kCreateId, CreateSceneRequest{});
+        Issue(*client, log, "empty", kEnterId, PlayerEnterGameNodeRequest{});
+        Issue(*client, log, "early_return", kCreateId, CreateSceneRequest{});
         CreateSceneRequest filled;
         filled.set_config_id(1);
-        Issue(*client_, log, "filled", kCreateId, filled);
+        Issue(*client, log, "filled", kCreateId, filled);
     });
     ASSERT_TRUE(log->WaitForCount(3));
 
@@ -1073,14 +1073,14 @@ TEST_F(RpcChannelLoopback, EmptyResponseAndEarlyReturnStillReply)
 
 TEST_F(RpcChannelLoopback, HandlerFailureMapsToRemoteFailed)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto log = std::make_shared<CallLog>();
     const auto failedBefore = Load(GetRpcChannelStats().remoteFailed);
 
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "set_failed", kCancelId, CancelBattlePrepareRequest{});
-        Issue(*client_, log, "unimplemented", kHandshakeId, NodeHandshakeRequest{});
+        Issue(*client, log, "set_failed", kCancelId, CancelBattlePrepareRequest{});
+        Issue(*client, log, "unimplemented", kHandshakeId, NodeHandshakeRequest{});
     });
     ASSERT_TRUE(log->WaitForCount(2));
 
@@ -1088,8 +1088,8 @@ TEST_F(RpcChannelLoopback, HandlerFailureMapsToRemoteFailed)
     {
         const auto entry = log->Find(tag);
         ASSERT_TRUE(entry.has_value()) << tag;
-        EXPECT_EQ(entry->status.code(), RpcStatusCode::kRemoteFailed) << tag << ": " << entry->status.name();
-        EXPECT_EQ(entry->status.remoteError(), HANDLER_FAILED) << tag;
+        EXPECT_EQ(entry->status.Code(), RpcStatusCode::kRemoteFailed) << tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.RemoteError(), HANDLER_FAILED) << tag;
         EXPECT_FALSE(entry->status.DefinitelyNotExecuted()) << tag << ": handler 已经运行过";
         EXPECT_FALSE(entry->status.OutcomeUnknown()) << tag;
         EXPECT_FALSE(entry->hasResponse) << tag;
@@ -1101,7 +1101,7 @@ TEST_F(RpcChannelLoopback, HandlerFailureMapsToRemoteFailed)
 // 多个副本共享一个完成标记:最后一个副本释放时只兜底一次。
 TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunFailsTheCallerWithReplyDropped)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto& stats = GetRpcChannelStats();
     const auto lateBefore = Load(stats.lateReply);
@@ -1110,27 +1110,27 @@ TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunFailsTheCallerWithReply
     RunInLoopAndWait([&] {
         PrepareBattleRequest drop;
         drop.set_battle_id(kDropAdoptedReply);
-        Issue(*client_, log, "dropped_in_handler", kPrepareId, drop);
+        Issue(*client, log, "dropped_in_handler", kPrepareId, drop);
         PrepareBattleRequest park;
         park.set_battle_node_id(2);   // 存两个副本
-        Issue(*client_, log, "released_later", kPrepareId, park);
+        Issue(*client, log, "released_later", kPrepareId, park);
     });
     ASSERT_TRUE(log->WaitForCount(1));
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 2; }));
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 2; }));
     EXPECT_EQ(log->CountOf("released_later"), 0u) << "still parked: must not complete yet";
 
-    RunInLoopAndWait([this] { service_.parked.clear(); });
+    RunInLoopAndWait([this] { service.parked.clear(); });
     ASSERT_TRUE(log->WaitForCount(2));
     // 屏障:若两个副本各回了一次 REPLY_DROPPED,第二帧会作为迟到回包出现在屏障之前。
-    RunInLoopAndWait([&] { Issue(*client_, log, "barrier", kProcessId, ProcessRequest(1)); });
+    RunInLoopAndWait([&] { Issue(*client, log, "barrier", kProcessId, ProcessRequest(1)); });
     ASSERT_TRUE(log->WaitForCount(3));
 
     for (const char* tag : {"dropped_in_handler", "released_later"})
     {
         const auto entry = log->Find(tag);
         ASSERT_TRUE(entry.has_value()) << tag;
-        EXPECT_EQ(entry->status.code(), RpcStatusCode::kReplyDropped) << tag << ": " << entry->status.name();
-        EXPECT_EQ(entry->status.remoteError(), REPLY_DROPPED) << tag;
+        EXPECT_EQ(entry->status.Code(), RpcStatusCode::kReplyDropped) << tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.RemoteError(), REPLY_DROPPED) << tag;
         EXPECT_TRUE(entry->status.OutcomeUnknown()) << tag;
         EXPECT_EQ(log->CountOf(tag), 1u) << tag;
     }
@@ -1139,14 +1139,14 @@ TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunFailsTheCallerWithReply
 
 TEST_F(RpcChannelLoopback, ReentrantCallMethodFromResponseDone)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
         // done 只捕获值与 weak(契约 b):weak_ptr<RpcClient>,执行时重新 lock。
-        std::weak_ptr<RpcClient> weakClient = client_;
-        client_->CallMethod(
+        std::weak_ptr<RpcClient> weakClient = this->client;
+        this->client->CallMethod(
             kProcessId, ProcessRequest(1),
             [log, weakClient](const RpcStatus& status, const MessagePtr&)
             {
@@ -1184,11 +1184,11 @@ TEST_F(RpcChannelLoopback, ConcurrentCallsWithTheSameMessageIdAreMatchedByCallId
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "first", kProcessId, ProcessRequest(1));
-        Issue(*client_, log, "second", kProcessId, ProcessRequest(2));
+        Issue(*client, log, "first", kProcessId, ProcessRequest(1));
+        Issue(*client, log, "second", kProcessId, ProcessRequest(2));
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(2));
-    const auto frames = serverRecorder_.Since(0);
+    ASSERT_TRUE(serverRecorder.WaitForCount(2));
+    const auto frames = serverRecorder.Since(0);
     ASSERT_EQ(frames.size(), 2u);
     for (const auto& frame : frames)
     {
@@ -1233,14 +1233,14 @@ TEST_F(RpcChannelLoopback, TimeoutCompletesOnceAndTheLateReplyIsDropped)
     std::size_t afterSweep = 99;
     std::size_t outstandingAfterSweep = 99;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
             return;
         }
         const auto t0 = RpcChannel::Clock::now();
-        Issue(*client_, log, "slow", kProcessId, ProcessRequest(1), kLongTimeout);
+        Issue(*client, log, "slow", kProcessId, ProcessRequest(1), kLongTimeout);
         const auto t1 = RpcChannel::Clock::now();
         // 真实截止时刻必在 [t0+T, t1+T]:t0+T-1ns 必不过期,t1+T 必过期。不依赖墙钟。
         channel->SweepTimeouts(t0 + kLongTimeout - std::chrono::nanoseconds(1));
@@ -1257,20 +1257,20 @@ TEST_F(RpcChannelLoopback, TimeoutCompletesOnceAndTheLateReplyIsDropped)
 
     const auto slow = log->Find("slow");
     ASSERT_TRUE(slow.has_value());
-    EXPECT_EQ(slow->status.code(), RpcStatusCode::kTimeout) << slow->status.name();
+    EXPECT_EQ(slow->status.Code(), RpcStatusCode::kTimeout) << slow->status.name();
     EXPECT_TRUE(slow->status.OutcomeUnknown());
     EXPECT_FALSE(slow->hasResponse);
     EXPECT_EQ(Load(stats.timeout) - timeoutBefore, 1u);
 
     // 对端此时才回包:同 id 的迟到回包必须被丢弃并计数,不得再次完成。屏障调用的回包排在它之后(同连接 FIFO)。
-    ASSERT_TRUE(serverRecorder_.WaitForCount(1));
-    const auto slowFrame = serverRecorder_.Since(0).front();
+    ASSERT_TRUE(serverRecorder.WaitForCount(1));
+    const auto slowFrame = serverRecorder.Since(0).front();
     RunInLoopAndWait([&] {
         SendFromServer(MakeResponseFrame(slowFrame.id(), kProcessId, ProcessResponse(1)));
-        Issue(*client_, log, "barrier", kProcessId, ProcessRequest(2));
+        Issue(*client, log, "barrier", kProcessId, ProcessRequest(2));
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(2));
-    const auto barrierFrame = serverRecorder_.Since(1).front();
+    ASSERT_TRUE(serverRecorder.WaitForCount(2));
+    const auto barrierFrame = serverRecorder.Since(1).front();
     RunInLoopAndWait([&] { SendFromServer(MakeResponseFrame(barrierFrame.id(), kProcessId, ProcessResponse(2))); });
     ASSERT_TRUE(log->WaitForCount(2));
 
@@ -1288,9 +1288,9 @@ TEST_F(RpcChannelLoopback, UnknownIdAndId0RepliesAreDroppedAndCounted)
     const auto unknownTypeBefore = Load(stats.unknownType);
     auto log = std::make_shared<CallLog>();
 
-    RunInLoopAndWait([&] { Issue(*client_, log, "real", kProcessId, ProcessRequest(1)); });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(1));
-    const uint64_t id = serverRecorder_.Since(0).front().id();
+    RunInLoopAndWait([&] { Issue(*client, log, "real", kProcessId, ProcessRequest(1)); });
+    ASSERT_TRUE(serverRecorder.WaitForCount(1));
+    const uint64_t id = serverRecorder.Since(0).front().id();
 
     RunInLoopAndWait([&] {
         SendFromServer(MakeResponseFrame(id + 1000, kProcessId, ProcessResponse(0)));   // 未知 id 的 RESPONSE
@@ -1314,7 +1314,7 @@ TEST_F(RpcChannelLoopback, UnknownIdAndId0RepliesAreDroppedAndCounted)
     EXPECT_EQ(Load(stats.legacyId0Reply) - legacyBefore, 2u);
     EXPECT_EQ(Load(stats.unknownType) - unknownTypeBefore, 1u);
     bool stillConnected = false;
-    RunInLoopAndWait([&] { stillConnected = client_->connected(); });
+    RunInLoopAndWait([&] { stillConnected = client->connected(); });
     EXPECT_TRUE(stillConnected) << "dropped frames must not tear the link down";
 }
 
@@ -1343,11 +1343,11 @@ TEST_F(RpcChannelLoopback, RemoteErrorsMapToTheCallerStatus)
         uint32_t session = 1;
         for (const auto& e : expected)
         {
-            Issue(*client_, log, e.tag, kProcessId, ProcessRequest(session++));
+            Issue(*client, log, e.tag, kProcessId, ProcessRequest(session++));
         }
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(expected.size()));
-    const auto frames = serverRecorder_.Since(0);
+    ASSERT_TRUE(serverRecorder.WaitForCount(expected.size()));
+    const auto frames = serverRecorder.Since(0);
     ASSERT_EQ(frames.size(), expected.size());
     RunInLoopAndWait([&] {
         for (std::size_t i = 0; i < expected.size(); ++i)
@@ -1361,8 +1361,8 @@ TEST_F(RpcChannelLoopback, RemoteErrorsMapToTheCallerStatus)
     {
         const auto entry = log->Find(e.tag);
         ASSERT_TRUE(entry.has_value()) << e.tag;
-        EXPECT_EQ(entry->status.code(), e.status) << e.tag << ": " << entry->status.name();
-        EXPECT_EQ(entry->status.remoteError(), e.wireError) << e.tag;
+        EXPECT_EQ(entry->status.Code(), e.status) << e.tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.RemoteError(), e.wireError) << e.tag;
         EXPECT_EQ(entry->status.DefinitelyNotExecuted(), e.definitelyNotExecuted) << e.tag;
         EXPECT_EQ(entry->status.OutcomeUnknown(), e.outcomeUnknown) << e.tag;
         EXPECT_FALSE(entry->hasResponse) << e.tag;
@@ -1376,11 +1376,11 @@ TEST_F(RpcChannelLoopback, UnparsableOrMismatchedReplyIsAnInvalidResponse)
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "garbled", kProcessId, ProcessRequest(1));
-        Issue(*client_, log, "mismatched", kProcessId, ProcessRequest(2));
+        Issue(*client, log, "garbled", kProcessId, ProcessRequest(1));
+        Issue(*client, log, "mismatched", kProcessId, ProcessRequest(2));
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(2));
-    const auto frames = serverRecorder_.Since(0);
+    ASSERT_TRUE(serverRecorder.WaitForCount(2));
+    const auto frames = serverRecorder.Since(0);
     RunInLoopAndWait([&] {
         SendFromServer(MakeRawResponseFrame(frames[0].id(), kProcessId, kTruncatedBody));
         // id 对得上、message_id 对不上:纵深防御,按「结果未知」完成。
@@ -1392,7 +1392,7 @@ TEST_F(RpcChannelLoopback, UnparsableOrMismatchedReplyIsAnInvalidResponse)
     {
         const auto entry = log->Find(tag);
         ASSERT_TRUE(entry.has_value()) << tag;
-        EXPECT_EQ(entry->status.code(), RpcStatusCode::kInvalidResponse) << tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.Code(), RpcStatusCode::kInvalidResponse) << tag << ": " << entry->status.name();
         EXPECT_TRUE(entry->status.OutcomeUnknown()) << tag;
         EXPECT_FALSE(entry->hasResponse) << tag;
     }
@@ -1410,17 +1410,17 @@ TEST_F(RpcChannelLoopback, DisconnectFailsOutstandingCallsAfterTheDownCallbackRe
     std::weak_ptr<RpcChannel> oldChannel;
 
     RunInLoopAndWait([&] {
-        oldChannel = client_->channel();
+        oldChannel = client->Channel();
         for (uint32_t i = 1; i <= 3; ++i)
         {
-            Issue(*client_, log, "call" + std::to_string(i), kProcessId, ProcessRequest(i));
+            Issue(*client, log, "call" + std::to_string(i), kProcessId, ProcessRequest(i));
         }
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(3)) << "the calls must really be on the wire (in flight)";
+    ASSERT_TRUE(serverRecorder.WaitForCount(3)) << "the calls must really be on the wire (in flight)";
     const auto disconnectedBefore = Load(stats.disconnected);
 
     RunInLoopAndWait([&] {
-        if (const auto conn = serverConn_.lock())
+        if (const auto conn = serverConn.lock())
         {
             conn->forceClose();
         }
@@ -1430,7 +1430,7 @@ TEST_F(RpcChannelLoopback, DisconnectFailsOutstandingCallsAfterTheDownCallbackRe
     std::optional<std::size_t> completionsAtDown;
     bool oldChannelExpired = false;
     RunInLoopAndWait([&] {
-        completionsAtDown = downProbe_->completionsAtFirstDown;
+        completionsAtDown = downProbe->completionsAtFirstDown;
         oldChannelExpired = oldChannel.expired();
     });
     ASSERT_TRUE(completionsAtDown.has_value()) << "RpcClient never reported DOWN";
@@ -1440,7 +1440,7 @@ TEST_F(RpcChannelLoopback, DisconnectFailsOutstandingCallsAfterTheDownCallbackRe
         const auto tag = "call" + std::to_string(i);
         const auto entry = log->Find(tag);
         ASSERT_TRUE(entry.has_value()) << tag;
-        EXPECT_EQ(entry->status.code(), RpcStatusCode::kDisconnected) << tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.Code(), RpcStatusCode::kDisconnected) << tag << ": " << entry->status.name();
         EXPECT_TRUE(entry->status.OutcomeUnknown()) << tag;
         EXPECT_EQ(log->CountOf(tag), 1u) << tag;
     }
@@ -1448,12 +1448,12 @@ TEST_F(RpcChannelLoopback, DisconnectFailsOutstandingCallsAfterTheDownCallbackRe
     EXPECT_TRUE(oldChannelExpired) << "the outbound channel must be dropped on DOWN";
 
     // 自动重连:新连接上是新 channel。
-    ASSERT_TRUE(WaitUntil([this] { return client_->connected() && serverUps_.load() >= 2; }))
+    ASSERT_TRUE(WaitUntil([this] { return client->connected() && serverUps.load() >= 2; }))
         << "RpcClient did not reconnect";
-    const auto framesBefore = serverRecorder_.Count();
-    RunInLoopAndWait([&] { Issue(*client_, log, "after_reconnect", kProcessId, ProcessRequest(9)); });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(framesBefore + 1));
-    const auto frame = serverRecorder_.Since(framesBefore).front();
+    const auto framesBefore = serverRecorder.Count();
+    RunInLoopAndWait([&] { Issue(*client, log, "after_reconnect", kProcessId, ProcessRequest(9)); });
+    ASSERT_TRUE(serverRecorder.WaitForCount(framesBefore + 1));
+    const auto frame = serverRecorder.Since(framesBefore).front();
     EXPECT_EQ(frame.id(), 1u) << "a fresh channel per connection starts its call ids at 1";
     RunInLoopAndWait([&] { SendFromServer(MakeResponseFrame(frame.id(), kProcessId, ProcessResponse(9))); });
     ASSERT_TRUE(log->WaitForCount(4));
@@ -1471,17 +1471,17 @@ TEST_F(RpcChannelLoopback, DestroyingTheLastRpcClientExpiresItsChannelAndFailsCa
     RunInLoopAndWait([&] {
         for (uint32_t i = 1; i <= 3; ++i)
         {
-            Issue(*client_, log, "call" + std::to_string(i), kProcessId, ProcessRequest(i));
+            Issue(*client, log, "call" + std::to_string(i), kProcessId, ProcessRequest(i));
         }
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(3));
-    const auto frames = serverRecorder_.Since(0);
+    ASSERT_TRUE(serverRecorder.WaitForCount(3));
+    const auto frames = serverRecorder.Since(0);
 
     bool expiredAtOnce = false;
     std::size_t completionsAtReset = 99;
     RunInLoopAndWait([&] {
-        std::weak_ptr<RpcChannel> weakChannel = client_->channel();
-        client_.reset();   // 唯一持有者:~RpcClient → ~RpcChannel(仍在 loop 线程)→ 在途批量入队
+        std::weak_ptr<RpcChannel> weakChannel = client->Channel();
+        client.reset();   // 唯一持有者:~RpcClient → ~RpcChannel(仍在 loop 线程)→ 在途批量入队
         expiredAtOnce = weakChannel.expired();
         completionsAtReset = log->Count();
     });
@@ -1490,18 +1490,18 @@ TEST_F(RpcChannelLoopback, DestroyingTheLastRpcClientExpiresItsChannelAndFailsCa
     ASSERT_TRUE(log->WaitForCount(3));
     for (const auto& entry : log->Entries())
     {
-        EXPECT_EQ(entry.status.code(), RpcStatusCode::kChannelClosed) << entry.tag << ": " << entry.status.name();
+        EXPECT_EQ(entry.status.Code(), RpcStatusCode::kChannelClosed) << entry.tag << ": " << entry.status.name();
         EXPECT_EQ(log->CountOf(entry.tag), 1u) << entry.tag;
     }
     EXPECT_EQ(Load(GetRpcChannelStats().channelClosed) - closedBefore, 3u);
 
     // 对端此后才回包(连接若还没被拆完):不得再进任何回调。
     RunInLoopAndWait([&] {
-        if (const auto conn = serverConn_.lock(); conn && conn->connected())
+        if (const auto conn = serverConn.lock(); conn && conn->connected())
         {
             for (const auto& frame : frames)
             {
-                serverRecorder_.Send(conn, MakeResponseFrame(frame.id(), kProcessId, ProcessResponse(0)));
+                serverRecorder.Send(conn, MakeResponseFrame(frame.id(), kProcessId, ProcessResponse(0)));
             }
         }
     });
@@ -1526,22 +1526,22 @@ TEST_F(RpcChannelLoopback, LocalFailuresAreDeliveredThroughTheQueue)
     RpcClientPtr idle;
     RunInLoopAndWait([&] {
         // 1. RpcClient 还没连上(没调 connect):没有 channel。
-        idle = std::make_shared<RpcClient>(&Loop(), serverAddr_);
+        idle = std::make_shared<RpcClient>(&Loop(), serverAddr);
         synchronousRuns += Issue(*idle, log, "not_connected", kProcessId, ProcessRequest(1));
         // 2. 消息号越界 / 注册表空槽。
-        synchronousRuns += Issue(*client_, log, "out_of_range", kMaxRpcMethodCount, ProcessRequest(2));
+        synchronousRuns += Issue(*client, log, "out_of_range", kMaxRpcMethodCount, ProcessRequest(2));
         if (emptySlot)
         {
-            synchronousRuns += Issue(*client_, log, "empty_slot", *emptySlot, ProcessRequest(3));
+            synchronousRuns += Issue(*client, log, "empty_slot", *emptySlot, ProcessRequest(3));
         }
         // 3. 请求类型与注册表不符。
-        synchronousRuns += Issue(*client_, log, "wrong_request_type", kProcessId, CreateSceneRequest{});
+        synchronousRuns += Issue(*client, log, "wrong_request_type", kProcessId, CreateSceneRequest{});
         // 4. 超时必须 > 0(没有「不限时」)。
-        synchronousRuns += Issue(*client_, log, "zero_timeout", kProcessId, ProcessRequest(4),
+        synchronousRuns += Issue(*client, log, "zero_timeout", kProcessId, ProcessRequest(4),
                                  std::chrono::milliseconds::zero());
         // 单向的本地拒绝:同步返回 false,不发任何帧。
-        onewayOutOfRange = client_->SendRequest(kMaxRpcMethodCount, ProcessRequest(5));
-        onewayWrongType = client_->SendRequest(kProcessId, CreateSceneRequest{});
+        onewayOutOfRange = client->SendRequest(kMaxRpcMethodCount, ProcessRequest(5));
+        onewayWrongType = client->SendRequest(kProcessId, CreateSceneRequest{});
         completionsAtReturn = log->Count();
     });
     EXPECT_EQ(synchronousRuns, 0u);
@@ -1551,7 +1551,7 @@ TEST_F(RpcChannelLoopback, LocalFailuresAreDeliveredThroughTheQueue)
     ASSERT_TRUE(log->WaitForCount(expectedFailures));
     for (const auto& entry : log->Entries())
     {
-        EXPECT_EQ(entry.status.code(), RpcStatusCode::kNotSent) << entry.tag << ": " << entry.status.name();
+        EXPECT_EQ(entry.status.Code(), RpcStatusCode::kNotSent) << entry.tag << ": " << entry.status.name();
         EXPECT_TRUE(entry.status.DefinitelyNotExecuted()) << entry.tag;
         EXPECT_TRUE(entry.callMethodReturned) << entry.tag;
         EXPECT_FALSE(entry.hasResponse) << entry.tag;
@@ -1564,11 +1564,11 @@ TEST_F(RpcChannelLoopback, LocalFailuresAreDeliveredThroughTheQueue)
 
     // 本地失败什么都没发:对端收到的第一帧就是随后这次正常调用。
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "sent", kProcessId, ProcessRequest(6));
+        Issue(*client, log, "sent", kProcessId, ProcessRequest(6));
         idle.reset();
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(1));
-    const auto first = serverRecorder_.Since(0).front();
+    ASSERT_TRUE(serverRecorder.WaitForCount(1));
+    const auto first = serverRecorder.Since(0).front();
     EXPECT_EQ(first.message_id(), kProcessId) << Describe(first);
     EXPECT_EQ(RequestSessionOf(first), 6u);
 }
@@ -1581,18 +1581,18 @@ TEST_F(RpcChannelLoopback, CloseFailsOutstandingCallsBeforeLaterQueuedFunctors)
     auto log = std::make_shared<CallLog>();
 
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "a", kProcessId, ProcessRequest(1));
-        Issue(*client_, log, "b", kProcessId, ProcessRequest(2));
+        Issue(*client, log, "a", kProcessId, ProcessRequest(1));
+        Issue(*client, log, "b", kProcessId, ProcessRequest(2));
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(2));
+    ASSERT_TRUE(serverRecorder.WaitForCount(2));
 
     std::size_t completionsAtClose = 99;
     std::size_t synchronousAfterClose = 99;
     RunInLoopAndWait([&] {
-        client_->CloseChannel();
+        client->CloseChannel();
         completionsAtClose = log->Count();
         Loop().queueInLoop([log] { log->Mark("marker"); });
-        synchronousAfterClose = Issue(*client_, log, "after_close", kProcessId, ProcessRequest(3));
+        synchronousAfterClose = Issue(*client, log, "after_close", kProcessId, ProcessRequest(3));
     });
     EXPECT_EQ(completionsAtClose, 0u);
     EXPECT_EQ(synchronousAfterClose, 0u);
@@ -1602,11 +1602,11 @@ TEST_F(RpcChannelLoopback, CloseFailsOutstandingCallsBeforeLaterQueuedFunctors)
     ASSERT_EQ(entries.size(), 4u);
     const std::set<std::string> closedTags{entries[0].tag, entries[1].tag};
     EXPECT_EQ(closedTags, (std::set<std::string>{"a", "b"})) << "the close batch must run before the marker";
-    EXPECT_EQ(entries[0].status.code(), RpcStatusCode::kChannelClosed) << entries[0].status.name();
-    EXPECT_EQ(entries[1].status.code(), RpcStatusCode::kChannelClosed) << entries[1].status.name();
+    EXPECT_EQ(entries[0].status.Code(), RpcStatusCode::kChannelClosed) << entries[0].status.name();
+    EXPECT_EQ(entries[1].status.Code(), RpcStatusCode::kChannelClosed) << entries[1].status.name();
     EXPECT_EQ(entries[2].tag, "marker");
     EXPECT_EQ(entries[3].tag, "after_close");
-    EXPECT_EQ(entries[3].status.code(), RpcStatusCode::kNotSent) << entries[3].status.name();
+    EXPECT_EQ(entries[3].status.Code(), RpcStatusCode::kNotSent) << entries[3].status.name();
 }
 
 TEST_F(RpcChannelLoopback, ReentrantCallMethodFromTimeoutDone)
@@ -1617,14 +1617,14 @@ TEST_F(RpcChannelLoopback, ReentrantCallMethodFromTimeoutDone)
     std::size_t completionsAfterSweep = 99;
     std::size_t outstandingAfterSweep = 99;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = this->client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
             return;
         }
-        std::weak_ptr<RpcClient> weakClient = client_;
-        client_->CallMethod(
+        std::weak_ptr<RpcClient> weakClient = this->client;
+        this->client->CallMethod(
             kProcessId, ProcessRequest(1),
             [log, weakClient](const RpcStatus& status, const MessagePtr&)
             {
@@ -1648,8 +1648,8 @@ TEST_F(RpcChannelLoopback, ReentrantCallMethodFromTimeoutDone)
     EXPECT_EQ(completionsAfterSweep, 1u);
     EXPECT_EQ(outstandingAfterSweep, 1u) << "the call issued from the timeout callback must stay registered";
 
-    ASSERT_TRUE(serverRecorder_.WaitForCount(2));
-    const auto second = serverRecorder_.Since(1).front();
+    ASSERT_TRUE(serverRecorder.WaitForCount(2));
+    const auto second = serverRecorder.Since(1).front();
     EXPECT_EQ(RequestSessionOf(second), 2u);
     RunInLoopAndWait([&] { SendFromServer(MakeResponseFrame(second.id(), kProcessId, ProcessResponse(2))); });
     ASSERT_TRUE(log->WaitForCount(2));
@@ -1657,7 +1657,7 @@ TEST_F(RpcChannelLoopback, ReentrantCallMethodFromTimeoutDone)
     const auto entries = log->Entries();
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_EQ(entries[0].tag, "first");
-    EXPECT_EQ(entries[0].status.code(), RpcStatusCode::kTimeout) << entries[0].status.name();
+    EXPECT_EQ(entries[0].status.Code(), RpcStatusCode::kTimeout) << entries[0].status.name();
     EXPECT_EQ(entries[1].tag, "second");
     EXPECT_TRUE(entries[1].status.ok()) << entries[1].status.name();
 }
@@ -1676,7 +1676,7 @@ TEST_F(RpcChannelLoopback, TimeoutDoneMayDestroyTheOwnerWithoutLosingTheRestOfTh
     std::weak_ptr<RpcChannel> weakChannel;
     RunInLoopAndWait([&] {
         const auto box = weakBox.lock();
-        const RpcChannelPtr channel = (box && *box) ? (*box)->channel() : RpcChannelPtr{};
+        const RpcChannelPtr channel = (box && *box) ? (*box)->Channel() : RpcChannelPtr{};
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -1715,7 +1715,7 @@ TEST_F(RpcChannelLoopback, TimeoutDoneMayDestroyTheOwnerWithoutLosingTheRestOfTh
     {
         const auto entry = log->Find(tag);
         ASSERT_TRUE(entry.has_value()) << tag;
-        EXPECT_EQ(entry->status.code(), RpcStatusCode::kTimeout) << tag << ": " << entry->status.name();
+        EXPECT_EQ(entry->status.Code(), RpcStatusCode::kTimeout) << tag << ": " << entry->status.name();
         EXPECT_FALSE(entry->hasResponse) << tag;
         EXPECT_EQ(log->CountOf(tag), 1u) << tag;
     }
@@ -1783,12 +1783,12 @@ TEST_F(RpcChannelLoopback, QueuedFailureDoneMayReenterAndDestroyTheOwner)
     const auto entries = log->Entries();
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_EQ(entries[0].tag, "first");
-    EXPECT_EQ(entries[0].status.code(), RpcStatusCode::kChannelClosed) << entries[0].status.name();
+    EXPECT_EQ(entries[0].status.Code(), RpcStatusCode::kChannelClosed) << entries[0].status.name();
     EXPECT_EQ(entries[1].tag, "second");
-    EXPECT_EQ(entries[1].status.code(), RpcStatusCode::kNotSent) << entries[1].status.name();
+    EXPECT_EQ(entries[1].status.Code(), RpcStatusCode::kNotSent) << entries[1].status.name();
     EXPECT_TRUE(entries[1].callMethodReturned) << "the re-entrant call completed inside its own CallMethod";
     EXPECT_TRUE(WaitUntil([&] { return weakClient.expired(); })) << "destroying the owner from the queued callback failed";
-    EXPECT_TRUE(WaitUntil([this] { return serverDowns_.load() == serverUps_.load(); }))
+    EXPECT_TRUE(WaitUntil([this] { return serverDowns.load() == serverUps.load(); }))
         << "the destroyed owner did not close its connection";
     PumpLoop(3);
     EXPECT_EQ(log->Count(), 2u);
@@ -1804,11 +1804,11 @@ TEST_F(RpcChannelLoopback, ChannelReleasedOffItsLoopDropsCallsWithoutTouchingThe
 
     RpcChannelPtr held;   // 测试线程持有最后一个强引用(生产代码不得这样做)
     RunInLoopAndWait([&] {
-        Issue(*client_, log, "a", kProcessId, ProcessRequest(1));
-        Issue(*client_, log, "b", kProcessId, ProcessRequest(2));
-        held = client_->channel();
+        Issue(*client, log, "a", kProcessId, ProcessRequest(1));
+        Issue(*client, log, "b", kProcessId, ProcessRequest(2));
+        held = client->Channel();
         // ~RpcClient:连接 forceClose;它的 DOWN 回调只绑 weak_ptr<RpcClient>,lock 失败,channel 收不到 OnDisconnect。
-        client_.reset();
+        client.reset();
     });
     ASSERT_NE(held, nullptr);
     PumpLoop(3);
@@ -1838,20 +1838,20 @@ TEST_F(RpcChannelLoopback, ChannelReleasedOffItsLoopDropsCallsWithoutTouchingThe
 
 TEST_F(RpcChannelLoopback, OneWayRequestsNeverGetAReply)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
     const auto onewayBefore = Load(GetRpcChannelStats().onewaySent);
 
     bool sentEmpty = false;
     bool sentFilled = false;
     bool sentFailing = false;
     RunInLoopAndWait([&] {
-        sentEmpty = probeChannel_->SendRequest(kEnterId, PlayerEnterGameNodeRequest{});
+        sentEmpty = probeChannel->SendRequest(kEnterId, PlayerEnterGameNodeRequest{});
         CreateSceneRequest filled;
         filled.set_config_id(1);   // 响应非空:以前「非空就回」的规则下这里会回包
-        sentFilled = probeChannel_->SendRequest(kCreateId, filled);
-        sentFailing = probeChannel_->SendRequest(kCancelId, CancelBattlePrepareRequest{});   // SetFailed:也不回 RPC_ERROR
+        sentFilled = probeChannel->SendRequest(kCreateId, filled);
+        sentFailing = probeChannel->SendRequest(kCancelId, CancelBattlePrepareRequest{});   // SetFailed:也不回 RPC_ERROR
         // 框架拒绝的单向请求同样不回;SendRequest 本地就会拒不可派发的号,所以手工构造这一帧。
         SendFromProbe(MakeRawRequestFrame(kNoInflightCallId, kMaxRpcMethodCount, {}));
     });
@@ -1868,9 +1868,9 @@ TEST_F(RpcChannelLoopback, OneWayRequestsNeverGetAReply)
     int createCalls = -1;
     int cancelCalls = -1;
     RunInLoopAndWait([&] {
-        enterCalls = service_.enterCalls;
-        createCalls = service_.createCalls;
-        cancelCalls = service_.cancelCalls;
+        enterCalls = service.enterCalls;
+        createCalls = service.createCalls;
+        cancelCalls = service.cancelCalls;
     });
     EXPECT_EQ(enterCalls, 1);
     EXPECT_EQ(createCalls, 1);
@@ -1879,12 +1879,12 @@ TEST_F(RpcChannelLoopback, OneWayRequestsNeverGetAReply)
 
 TEST_F(RpcChannelLoopback, ServerRejectionsEchoTheCallId)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     // "Gate" 故意指向 Scene 服务对象:Gate 的方法名在 Scene 的描述符里找不到 → NO_METHOD。SceneScene 不注册 → NO_SERVICE。
-    serverServices_ = {{"Scene", &service_}, {"Gate", &service_}};
+    serverServices = {{"Scene", &service}, {"Gate", &service}};
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     const auto rejectedBefore = Load(GetRpcChannelStats().requestsRejected);
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     struct ExpectedRejection
     {
@@ -1921,7 +1921,7 @@ TEST_F(RpcChannelLoopback, ServerRejectionsEchoTheCallId)
     }
     EXPECT_EQ(Load(GetRpcChannelStats().requestsRejected) - rejectedBefore, expected.size());
     int processCalls = -1;
-    RunInLoopAndWait([&] { processCalls = service_.processCalls; });
+    RunInLoopAndWait([&] { processCalls = service.processCalls; });
     EXPECT_EQ(processCalls, 1) << "only the barrier may reach the handler";
 }
 
@@ -1929,10 +1929,10 @@ TEST_F(RpcChannelLoopback, ServerRejectionsEchoTheCallId)
 // handler 同步 done->Run() 后框架不再回(调两次也只有一帧)。
 TEST_F(RpcChannelLoopback, ServerRepliesExactlyOncePerCallId)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     const auto runTwiceBefore = Load(GetRpcChannelStats().replyRunTwice);
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     CreateSceneRequest filled;
     filled.set_config_id(1);
@@ -1977,10 +1977,10 @@ TEST_F(RpcChannelLoopback, ServerRepliesExactlyOncePerCallId)
 // 接管后不完成:最后一个副本释放时回 RPC_ERROR(REPLY_DROPPED)同 id,恰好一帧(多个副本共享一个完成标记)。
 TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunRepliesReplyDroppedOnce)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     const auto abandonedBefore = Load(GetRpcChannelStats().replyAbandoned);
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     PrepareBattleRequest park;
     park.set_battle_node_id(2);   // 存两个副本
@@ -2000,11 +2000,11 @@ TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunRepliesReplyDroppedOnce
 
     // 起点必须在释放副本之前取:释放即发帧,帧可能在测试线程再读 Count() 之前就已到达并被记录。
     // 此刻第一道屏障的回包已到,之前的帧都已记录完,没有在途的帧。
-    const auto secondFrom = probeRecorder_.Count();
+    const auto secondFrom = probeRecorder.Count();
     std::size_t parked = 0;
     RunInLoopAndWait([&] {
-        parked = service_.parked.size();
-        service_.parked.clear();   // 在 loop 线程上释放全部副本
+        parked = service.parked.size();
+        service.parked.clear();   // 在 loop 线程上释放全部副本
     });
     EXPECT_EQ(parked, 2u);
     const auto second = FramesBeforeBarrier(secondFrom, kCraftedIdBase + 24);
@@ -2017,12 +2017,12 @@ TEST_F(RpcChannelLoopback, AdoptedReplyReleasedWithoutRunRepliesReplyDroppedOnce
 
 TEST_F(RpcChannelLoopback, AdoptedReplyRunTwiceSendsOneFrame)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     RunInLoopAndWait([&] { SendFromProbe(MakeRequestFrame(kCraftedIdBase + 31, kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
 
     auto& stats = GetRpcChannelStats();
     const auto runTwiceBefore = Load(stats.replyRunTwice);
@@ -2031,8 +2031,8 @@ TEST_F(RpcChannelLoopback, AdoptedReplyRunTwiceSendsOneFrame)
     bool completedAfter = false;
     uint64_t runTwiceAfterSecondRun = 0;
     RunInLoopAndWait([&] {
-        const RpcDoneCallback reply = service_.parked.front();
-        service_.parked.clear();
+        const RpcDoneCallback reply = service.parked.front();
+        service.parked.clear();
         // 延后完成路径直接写响应里的字段(不经全局 tip)。
         reply.response<PrepareBattleResponse>().set_table_fingerprint("deferred");
         completedBefore = reply.IsCompleted();
@@ -2060,31 +2060,31 @@ TEST_F(RpcChannelLoopback, AdoptedReplyRunTwiceSendsOneFrame)
 // 请求进来的那条连接已断、其 channel 已析构:Run 静默丢弃(计 reply_channel_gone),不崩、不出帧。
 TEST_F(RpcChannelLoopback, RunAfterTheCallerChannelIsGoneIsHarmless)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     RunInLoopAndWait([&] { SendFromProbe(MakeRequestFrame(kCraftedIdBase + 41, kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
 
     bool connectedBefore = false;
     RunInLoopAndWait([&] {
-        connectedBefore = service_.parked.front().IsCallerConnected();
-        if (const auto conn = serverConn_.lock())
+        connectedBefore = service.parked.front().IsCallerConnected();
+        if (const auto conn = serverConn.lock())
         {
             conn->forceClose();
         }
     });
     EXPECT_TRUE(connectedBefore);
-    ASSERT_TRUE(WaitUntil([this] { return serverChannel_.expired(); }))
+    ASSERT_TRUE(WaitUntil([this] { return serverChannel.expired(); }))
         << "the server-side channel survived DOWN (who still holds it strongly?)";
 
     const auto goneBefore = Load(GetRpcChannelStats().replyChannelGone);
     bool connectedAfter = true;
     bool completed = false;
     RunInLoopAndWait([&] {
-        const RpcDoneCallback reply = service_.parked.front();
-        service_.parked.clear();
+        const RpcDoneCallback reply = service.parked.front();
+        service.parked.clear();
         connectedAfter = reply.IsCallerConnected();
         reply.Run();
         completed = reply.IsCompleted();
@@ -2093,8 +2093,8 @@ TEST_F(RpcChannelLoopback, RunAfterTheCallerChannelIsGoneIsHarmless)
     EXPECT_TRUE(completed);
     EXPECT_EQ(Load(GetRpcChannelStats().replyChannelGone) - goneBefore, 1u);
 
-    ASSERT_TRUE(WaitUntil([this] { return probeChannel_ == nullptr; })) << "probe never saw DOWN";
-    for (const auto& frame : probeRecorder_.Since(from))
+    ASSERT_TRUE(WaitUntil([this] { return probeChannel == nullptr; })) << "probe never saw DOWN";
+    for (const auto& frame : probeRecorder.Since(from))
     {
         EXPECT_NE(frame.id(), kCraftedIdBase + 41) << "a reply went out after the caller's channel was gone";
     }
@@ -2104,20 +2104,20 @@ TEST_F(RpcChannelLoopback, RunAfterTheCallerChannelIsGoneIsHarmless)
 // 不发 REPLY_DROPPED、不碰 loop,只计 reply_channel_gone。连接仍在,所以「没有回包」用屏障证明。
 TEST_F(RpcChannelLoopback, AdoptedReplyReleasedOffTheLoopSendsNothing)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    const auto from = probeRecorder_.Count();
+    const auto from = probeRecorder.Count();
 
     RunInLoopAndWait([&] { SendFromProbe(MakeRequestFrame(kCraftedIdBase + 61, kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
 
     auto& stats = GetRpcChannelStats();
     const auto goneBefore = Load(stats.replyChannelGone);
     const auto abandonedBefore = Load(stats.replyAbandoned);
     std::optional<RpcDoneCallback> held;   // RpcDoneCallback 没有默认构造,用 optional 把副本带出 loop 线程
     RunInLoopAndWait([&] {
-        held.emplace(service_.parked.front());
-        service_.parked.clear();
+        held.emplace(service.parked.front());
+        service.parked.clear();
     });
     ASSERT_TRUE(held.has_value());
     held.reset();   // 测试线程:最后一个副本在 loop 之外析构
@@ -2131,15 +2131,15 @@ TEST_F(RpcChannelLoopback, AdoptedReplyReleasedOffTheLoopSendsNothing)
 // 接管(Adopt)的共享状态只持 weak_ptr<RpcChannel>:派发返回后,连接的引用计数必须回到派发前(AGENTS §11.7)。
 TEST_F(RpcChannelLoopback, AdoptKeepsNoStrongConnectionReference)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
 
     long before = -1;
     long after = -1;
     std::size_t parked = 0;
     RunInLoopAndWait([&] {
-        const auto conn = serverConn_.lock();
-        const auto channel = serverChannel_.lock();
+        const auto conn = serverConn.lock();
+        const auto channel = serverChannel.lock();
         if (!conn || !channel)
         {
             ADD_FAILURE() << "server side is not connected";
@@ -2151,7 +2151,7 @@ TEST_F(RpcChannelLoopback, AdoptKeepsNoStrongConnectionReference)
         before = conn.use_count();
         channel->OnMessage(conn, &buffer, muduo::Timestamp::now());
         after = conn.use_count();
-        parked = service_.parked.size();
+        parked = service.parked.size();
     });
     EXPECT_EQ(parked, 1u);
     EXPECT_EQ(before, after) << "an adopted reply retained " << (after - before) << " strong connection reference(s)";
@@ -2200,37 +2200,37 @@ TEST(RpcDoneCallbackDeathTest, AdoptRejectsNullAndForeignClosures)
 // 维护关闭不能把本机回调退出与远端确定结果混为一谈；使用每夹具独立账本避免用例顺序污染。
 TEST_F(RpcChannelLoopback, MaintenanceSourceWaitsForAdoptedReplyAndRejectsNewDispatch)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     auto log = std::make_shared<CallLog>();
-    RunInLoopAndWait([&] { Issue(*probeChannel_, log, "accepted", kPrepareId, PrepareBattleRequest{}); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] { Issue(*probeChannel, log, "accepted", kPrepareId, PrepareBattleRequest{}); });
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     RunInLoopAndWait([&] {
-        serverMaintenance_->CloseSources();
+        serverMaintenance->CloseSources();
         std::string frontier;
-        EXPECT_FALSE(serverMaintenance_->Frontier(true, frontier));
-        EXPECT_FALSE(serverMaintenance_->LocalCallbacksJoined());
-        Issue(*probeChannel_, log, "rejected", kProcessId, ProcessRequest(9));
-        service_.parked.front().Run();
-        EXPECT_TRUE(serverMaintenance_->LocalCallbacksJoined());
-        EXPECT_TRUE(serverMaintenance_->Frontier(true, frontier));
+        EXPECT_FALSE(serverMaintenance->Frontier(true, frontier));
+        EXPECT_FALSE(serverMaintenance->LocalCallbacksJoined());
+        Issue(*probeChannel, log, "rejected", kProcessId, ProcessRequest(9));
+        service.parked.front().Run();
+        EXPECT_TRUE(serverMaintenance->LocalCallbacksJoined());
+        EXPECT_TRUE(serverMaintenance->Frontier(true, frontier));
     });
     ASSERT_TRUE(log->WaitForCount(2));
     ASSERT_TRUE(log->Find("accepted").has_value());
     EXPECT_TRUE(log->Find("accepted")->status.ok());
     ASSERT_TRUE(log->Find("rejected").has_value());
     EXPECT_TRUE(log->Find("rejected")->status.DefinitelyNotExecuted());
-    RunInLoopAndWait([&] { EXPECT_EQ(service_.processCalls, 0); });
+    RunInLoopAndWait([&] { EXPECT_EQ(service.processCalls, 0); });
 }
 
 TEST_F(RpcChannelLoopback, MaintenanceOutputDoesNotJoinInsideTheBusinessCallback)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     std::atomic<bool> callbackReturned{false};
     RunInLoopAndWait([&] {
-        probeChannel_->CallMethod(kProcessId, ProcessRequest(3),
-            [state = probeMaintenance_, &callbackReturned](const RpcStatus& status, const MessagePtr&) {
+        probeChannel->CallMethod(kProcessId, ProcessRequest(3),
+            [state = probeMaintenance, &callbackReturned](const RpcStatus& status, const MessagePtr&) {
                 EXPECT_TRUE(status.ok());
                 state->CloseSources();
                 state->ClosePublications();
@@ -2240,112 +2240,112 @@ TEST_F(RpcChannelLoopback, MaintenanceOutputDoesNotJoinInsideTheBusinessCallback
                 callbackReturned = true;
             });
     });
-    ASSERT_TRUE(WaitUntil([&] { return callbackReturned.load() && probeMaintenance_->LocalCallbacksJoined(); }));
+    ASSERT_TRUE(WaitUntil([&] { return callbackReturned.load() && probeMaintenance->LocalCallbacksJoined(); }));
     std::string frontier;
-    EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+    EXPECT_TRUE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, MaintenanceTimeoutJoinsLocallyButKeepsStickyUnknown)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     auto log = std::make_shared<CallLog>();
-    RunInLoopAndWait([&] { Issue(*probeChannel_, log, "unknown", kPrepareId, PrepareBattleRequest{}); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] { Issue(*probeChannel, log, "unknown", kPrepareId, PrepareBattleRequest{}); });
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     RunInLoopAndWait([&] {
-        probeMaintenance_->CloseSources();
-        probeMaintenance_->ClosePublications();
-        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
-        probeChannel_->SweepTimeouts(RpcChannel::Clock::now() + kLongTimeout + 1s);
+        probeMaintenance->CloseSources();
+        probeMaintenance->ClosePublications();
+        EXPECT_FALSE(probeMaintenance->LocalCallbacksJoined());
+        probeChannel->SweepTimeouts(RpcChannel::Clock::now() + kLongTimeout + 1s);
     });
     ASSERT_TRUE(log->WaitForCount(1));
     ASSERT_TRUE(log->Find("unknown").has_value());
     EXPECT_TRUE(log->Find("unknown")->status.OutcomeUnknown());
-    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance->LocalCallbacksJoined(); }));
     std::string frontier;
-    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
     // 已关闭后的本地拒绝仍有排队回调；不能在它返回前拆业务对象。
     RunInLoopAndWait([&] {
-        Issue(*probeChannel_, log, "local_rejection", kProcessId, ProcessRequest(4));
-        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
+        Issue(*probeChannel, log, "local_rejection", kProcessId, ProcessRequest(4));
+        EXPECT_FALSE(probeMaintenance->LocalCallbacksJoined());
     });
     ASSERT_TRUE(log->WaitForCount(2));
-    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
-    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance->LocalCallbacksJoined(); }));
+    EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
 }
 
 
 TEST_F(RpcChannelLoopback, AcknowledgedSendWaitsForActualAdoptedServerCompletion)
 {
-    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
-    serverMode_ = ServerMode::kChannel;
+    ASSERT_TRUE(probeMaintenance->EnableAcknowledgedSends());
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     RunInLoopAndWait([&] {
-        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
-        EXPECT_FALSE(probeMaintenance_->LocalCallbacksJoined());
-        std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
-        service_.parked.front().Run();
+        probeMaintenance->CloseSources(); probeMaintenance->ClosePublications();
+        EXPECT_FALSE(probeMaintenance->LocalCallbacksJoined());
+        std::string frontier; EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
+        service.parked.front().Run();
     });
-    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
-    std::string frontier; EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_TRUE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, AcknowledgedSendRetainsServerFailureAsUnknown)
 {
-    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
-    serverMode_ = ServerMode::kChannel;
+    ASSERT_TRUE(probeMaintenance->EnableAcknowledgedSends());
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     RunInLoopAndWait([&] {
-        EXPECT_TRUE(probeChannel_->SendRequest(kCancelId, CancelBattlePrepareRequest{}));
-        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
+        EXPECT_TRUE(probeChannel->SendRequest(kCancelId, CancelBattlePrepareRequest{}));
+        probeMaintenance->CloseSources(); probeMaintenance->ClosePublications();
     });
-    ASSERT_TRUE(WaitUntil([this] { return service_.cancelCalls == 1 && probeMaintenance_->LocalCallbacksJoined(); }));
-    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    ASSERT_TRUE(WaitUntil([this] { return service.cancelCalls == 1 && probeMaintenance->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, AcknowledgedSendDisconnectDoesNotForgeRemoteCompletion)
 {
-    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
-    serverMode_ = ServerMode::kChannel;
+    ASSERT_TRUE(probeMaintenance->EnableAcknowledgedSends());
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     RunInLoopAndWait([&] {
-        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
-        probe_->connection()->forceClose();
+        probeMaintenance->CloseSources(); probeMaintenance->ClosePublications();
+        probe->connection()->forceClose();
     });
-    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
-    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, AcknowledgedSendTimeoutDoesNotForgetAnAcceptedRequest)
 {
-    ASSERT_TRUE(probeMaintenance_->EnableAcknowledgedSends());
-    serverMode_ = ServerMode::kChannel;
+    ASSERT_TRUE(probeMaintenance->EnableAcknowledgedSends());
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
-    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel_->SendRequest(kPrepareId, PrepareBattleRequest{})); });
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    RunInLoopAndWait([&] { EXPECT_TRUE(probeChannel->SendRequest(kPrepareId, PrepareBattleRequest{})); });
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     RunInLoopAndWait([&] {
-        probeMaintenance_->CloseSources(); probeMaintenance_->ClosePublications();
-        probeChannel_->SweepTimeouts(RpcChannel::Clock::now() + kDefaultRpcCallTimeout + 1s);
+        probeMaintenance->CloseSources(); probeMaintenance->ClosePublications();
+        probeChannel->SweepTimeouts(RpcChannel::Clock::now() + kDefaultRpcCallTimeout + 1s);
     });
-    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance_->LocalCallbacksJoined(); }));
-    std::string frontier; EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
-    RunInLoopAndWait([&] { service_.parked.front().Run(); });
+    ASSERT_TRUE(WaitUntil([this] { return probeMaintenance->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
+    RunInLoopAndWait([&] { service.parked.front().Run(); });
     PumpLoop(3);
-    EXPECT_FALSE(probeMaintenance_->Frontier(false, frontier));
+    EXPECT_FALSE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, MaintenanceJoinIncludesCallbackTargetDestructionAndDerivedRejection)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     auto callbacks = std::make_shared<std::atomic<int>>(0);
     RunInLoopAndWait([&] {
-        const auto state = probeMaintenance_;
-        const std::weak_ptr<RpcChannel> weak = probeChannel_;
+        const auto state = probeMaintenance;
+        const std::weak_ptr<RpcChannel> weak = probeChannel;
         state->CloseSources(); state->ClosePublications();
         auto target = std::shared_ptr<int>(new int(0), [state, weak, callbacks](int* value) {
             delete value;
@@ -2354,36 +2354,36 @@ TEST_F(RpcChannelLoopback, MaintenanceJoinIncludesCallbackTargetDestructionAndDe
                 EXPECT_TRUE(status.DefinitelyNotExecuted()); EXPECT_FALSE(state->LocalCallbacksJoined()); ++*callbacks;
             });
         });
-        probeChannel_->CallMethod(kProcessId, ProcessRequest(8), [target, callbacks](const RpcStatus& status, const MessagePtr&) {
+        probeChannel->CallMethod(kProcessId, ProcessRequest(8), [target, callbacks](const RpcStatus& status, const MessagePtr&) {
             EXPECT_TRUE(status.DefinitelyNotExecuted()); ++*callbacks;
         });
     });
-    ASSERT_TRUE(WaitUntil([&] { return callbacks->load() == 2 && probeMaintenance_->LocalCallbacksJoined(); }));
-    std::string frontier; EXPECT_TRUE(probeMaintenance_->Frontier(false, frontier));
+    ASSERT_TRUE(WaitUntil([&] { return callbacks->load() == 2 && probeMaintenance->LocalCallbacksJoined(); }));
+    std::string frontier; EXPECT_TRUE(probeMaintenance->Frontier(false, frontier));
 }
 
 TEST_F(RpcChannelLoopback, MaintenanceSettledSnapshotKeepsExplicitRelayDispatchOpenUntilP3)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     auto log=std::make_shared<CallLog>();
-    RunInLoopAndWait([&]{std::string frontier;EXPECT_TRUE(serverMaintenance_->SettledFrontier(frontier));Issue(*probeChannel_,log,"relay-after-P1",kProcessId,ProcessRequest(1));});
+    RunInLoopAndWait([&]{std::string frontier;EXPECT_TRUE(serverMaintenance->SettledFrontier(frontier));Issue(*probeChannel,log,"relay-after-P1",kProcessId,ProcessRequest(1));});
     ASSERT_TRUE(log->WaitForCount(1)); ASSERT_TRUE(log->Find("relay-after-P1").has_value()); EXPECT_TRUE(log->Find("relay-after-P1")->status.ok());
-    RunInLoopAndWait([&]{serverMaintenance_->CloseSources();Issue(*probeChannel_,log,"after-P3",kProcessId,ProcessRequest(2));});
+    RunInLoopAndWait([&]{serverMaintenance->CloseSources();Issue(*probeChannel,log,"after-P3",kProcessId,ProcessRequest(2));});
     ASSERT_TRUE(log->WaitForCount(2)); ASSERT_TRUE(log->Find("after-P3").has_value()); EXPECT_TRUE(log->Find("after-P3")->status.DefinitelyNotExecuted());
-    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,1);});
+    RunInLoopAndWait([&]{EXPECT_EQ(service.processCalls,1);});
 }
 
 TEST_F(RpcChannelLoopback, PreparedBootRejectsWireDispatchUntilAtomicOpenAndCannotReopen)
 {
-    ASSERT_TRUE(serverMaintenance_->PrepareSources());
-    serverMode_=ServerMode::kChannel;ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    ASSERT_TRUE(serverMaintenance->PrepareSources());
+    serverMode=ServerMode::kChannel;ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     auto log=std::make_shared<CallLog>();
-    RunInLoopAndWait([&]{Issue(*probeChannel_,log,"prepared",kProcessId,ProcessRequest(1));});
+    RunInLoopAndWait([&]{Issue(*probeChannel,log,"prepared",kProcessId,ProcessRequest(1));});
     ASSERT_TRUE(log->WaitForCount(1));ASSERT_TRUE(log->Find("prepared").has_value());EXPECT_TRUE(log->Find("prepared")->status.DefinitelyNotExecuted());
-    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,0);EXPECT_TRUE(serverMaintenance_->OpenPreparedSources());EXPECT_FALSE(serverMaintenance_->OpenPreparedSources());Issue(*probeChannel_,log,"opened",kProcessId,ProcessRequest(2));});
+    RunInLoopAndWait([&]{EXPECT_EQ(service.processCalls,0);EXPECT_TRUE(serverMaintenance->OpenPreparedSources());EXPECT_FALSE(serverMaintenance->OpenPreparedSources());Issue(*probeChannel,log,"opened",kProcessId,ProcessRequest(2));});
     ASSERT_TRUE(log->WaitForCount(2));ASSERT_TRUE(log->Find("opened").has_value());EXPECT_TRUE(log->Find("opened")->status.ok());
-    RunInLoopAndWait([&]{EXPECT_EQ(service_.processCalls,1);serverMaintenance_->CloseSources();EXPECT_FALSE(serverMaintenance_->PrepareSources());EXPECT_FALSE(serverMaintenance_->OpenPreparedSources());Issue(*probeChannel_,log,"closed",kProcessId,ProcessRequest(3));});
+    RunInLoopAndWait([&]{EXPECT_EQ(service.processCalls,1);serverMaintenance->CloseSources();EXPECT_FALSE(serverMaintenance->PrepareSources());EXPECT_FALSE(serverMaintenance->OpenPreparedSources());Issue(*probeChannel,log,"closed",kProcessId,ProcessRequest(3));});
     ASSERT_TRUE(log->WaitForCount(3));ASSERT_TRUE(log->Find("closed").has_value());EXPECT_TRUE(log->Find("closed")->status.DefinitelyNotExecuted());
 }
 
@@ -2399,26 +2399,26 @@ TEST_F(RpcChannelLoopback, RequestFramesCarryTheCallerTrace)
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
     auto log = std::make_shared<CallLog>();
-    const std::size_t from = serverRecorder_.Count();
+    const std::size_t from = serverRecorder.Count();
     tracing::TraceContext tracedCall;
     tracing::TraceContext tracedOneWay;
     RunInLoopAndWait([&] {
         {
             tracing::ScopedSpan span;
             tracedCall = tracing::Current();
-            Issue(*client_, log, "traced", kProcessId, ProcessRequest(1));
+            Issue(*client, log, "traced", kProcessId, ProcessRequest(1));
         }
         EXPECT_FALSE(tracing::Current().IsValid()) << "loop thread leaked a trace";
-        Issue(*client_, log, "untraced", kProcessId, ProcessRequest(2));
+        Issue(*client, log, "untraced", kProcessId, ProcessRequest(2));
         {
             tracing::ScopedSpan span;
             tracedOneWay = tracing::Current();
-            EXPECT_TRUE(client_->SendRequest(kProcessId, ProcessRequest(3)));
+            EXPECT_TRUE(client->SendRequest(kProcessId, ProcessRequest(3)));
         }
     });
-    ASSERT_TRUE(serverRecorder_.WaitForCount(from + 3));
+    ASSERT_TRUE(serverRecorder.WaitForCount(from + 3));
 
-    const auto frames = serverRecorder_.Since(from);
+    const auto frames = serverRecorder.Since(from);
     ASSERT_EQ(frames.size(), 3u) << Describe(frames);
     tracing::TraceContext seen;
     ASSERT_TRUE(ReadTraceFromRpcEnvelope(frames[0], seen)) << Describe(frames[0]);
@@ -2451,7 +2451,7 @@ TEST_F(RpcChannelLoopback, RequestFramesCarryTheCallerTrace)
 // 回包回调原样回到发起方的上下文(§4.2、§10.3)。
 TEST_F(RpcChannelLoopback, ClientAndServerSpansFormOneTreeAcrossTheConnection)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
@@ -2460,7 +2460,7 @@ TEST_F(RpcChannelLoopback, ClientAndServerSpansFormOneTreeAcrossTheConnection)
     RunInLoopAndWait([&] {
         tracing::ScopedSpan span;
         caller = tracing::Current();
-        client_->CallMethod(
+        this->client->CallMethod(
             kProcessId, ProcessRequest(12),
             [replyTrace](const RpcStatus& status, const MessagePtr&)
             {
@@ -2498,7 +2498,7 @@ TEST_F(RpcChannelLoopback, ClientAndServerSpansFormOneTreeAcrossTheConnection)
 // 派发前的拒绝把这次派发的 server span 标成错误,说明是错误码名(§10.3)。
 TEST_F(RpcChannelLoopback, RejectedDispatchMarksTheServerSpanAsAnError)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
@@ -2507,7 +2507,7 @@ TEST_F(RpcChannelLoopback, RejectedDispatchMarksTheServerSpanAsAnError)
     const tracing::TraceContext upstream = tracing::NewRoot();
     GameRpcMessage rejected = MakeRequestFrame(kCraftedIdBase + 31, *emptySlot, ProcessRequest(31));
     WriteTraceToRpcEnvelope(upstream, rejected);
-    const std::size_t from = probeRecorder_.Count();
+    const std::size_t from = probeRecorder.Count();
     RunInLoopAndWait([&] { SendFromProbe(rejected); });
     const auto replies = FramesBeforeBarrier(from, kCraftedIdBase + 32);
     ASSERT_EQ(replies.size(), 1u) << Describe(replies);
@@ -2527,7 +2527,7 @@ TEST_F(RpcChannelLoopback, RejectedDispatchMarksTheServerSpanAsAnError)
 // 没 Run / Fail 就被丢掉的句柄同样结束 server span,标 REPLY_DROPPED。
 TEST_F(RpcChannelLoopback, AdoptedReplyEndsTheServerSpanWhenTheReplyIsSent)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
@@ -2536,10 +2536,10 @@ TEST_F(RpcChannelLoopback, AdoptedReplyEndsTheServerSpanWhenTheReplyIsSent)
     RunInLoopAndWait([&] {
         tracing::ScopedSpan span;
         caller = tracing::Current();
-        Issue(*client_, log, "parked", kPrepareId, PrepareBattleRequest{});   // battle_node_id 为 0:存一个副本
+        Issue(*client, log, "parked", kPrepareId, PrepareBattleRequest{});   // battle_node_id 为 0:存一个副本
         PrepareBattleRequest drop;
         drop.set_battle_id(kDropAdoptedReply);
-        Issue(*client_, log, "dropped", kPrepareId, drop);
+        Issue(*client, log, "dropped", kPrepareId, drop);
     });
     const auto serverSpans = [&] {
         std::vector<tracing::SpanRecord> found;
@@ -2553,7 +2553,7 @@ TEST_F(RpcChannelLoopback, AdoptedReplyEndsTheServerSpanWhenTheReplyIsSent)
         return found;
     };
     ASSERT_TRUE(log->WaitForCount(1));
-    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    ASSERT_TRUE(WaitUntil([this] { return service.parked.size() == 1; }));
     ASSERT_TRUE(WaitUntil([&] { return serverSpans().size() == 1; }));
     {
         const auto spans = serverSpans();
@@ -2564,8 +2564,8 @@ TEST_F(RpcChannelLoopback, AdoptedReplyEndsTheServerSpanWhenTheReplyIsSent)
     EXPECT_EQ(serverSpans().size(), 1u) << "存着的那一个还没回复,它的 server span 不该结束";
 
     RunInLoopAndWait([this] {
-        service_.parked.front().Run();
-        service_.parked.clear();
+        service.parked.front().Run();
+        service.parked.clear();
     });
     ASSERT_TRUE(log->WaitForCount(2));
     ASSERT_TRUE(WaitUntil([&] { return serverSpans().size() == 2; }));
@@ -2596,10 +2596,10 @@ TEST_F(RpcChannelLoopback, LocalFailuresRecordAnErrorClientSpan)
     RunInLoopAndWait([&] {
         tracing::ScopedSpan span;
         caller = tracing::Current();
-        idle = std::make_shared<RpcClient>(&Loop(), serverAddr_);   // 没调 connect:没有 channel
+        idle = std::make_shared<RpcClient>(&Loop(), serverAddr);   // 没调 connect:没有 channel
         Issue(*idle, log, "not_connected", kProcessId, ProcessRequest(1));
-        Issue(*client_, log, "zero_timeout", kProcessId, ProcessRequest(2), std::chrono::milliseconds::zero());
-        onewayAccepted = client_->SendRequest(kProcessId, CreateSceneRequest{});
+        Issue(*client, log, "zero_timeout", kProcessId, ProcessRequest(2), std::chrono::milliseconds::zero());
+        onewayAccepted = client->SendRequest(kProcessId, CreateSceneRequest{});
     });
     ASSERT_TRUE(log->WaitForCount(2));
     EXPECT_FALSE(onewayAccepted);
@@ -2626,14 +2626,14 @@ TEST_F(RpcChannelLoopback, LocalFailuresRecordAnErrorClientSpan)
 // 端到端:对端 handler 接上同一条 trace(子 span),回包回调回到发起方的 trace。
 TEST_F(RpcChannelLoopback, ServerHandlerAndReplyCallbackStayOnTheCallerTrace)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
     auto replyTrace = std::make_shared<std::optional<tracing::TraceContext>>();   // 只在 loop 线程上读写
     tracing::TraceContext caller;
     RunInLoopAndWait([&] {
         tracing::ScopedSpan span;
         caller = tracing::Current();
-        client_->CallMethod(
+        client->CallMethod(
             kProcessId, ProcessRequest(11),
             [replyTrace](const RpcStatus& status, const MessagePtr&)
             {
@@ -2647,7 +2647,7 @@ TEST_F(RpcChannelLoopback, ServerHandlerAndReplyCallbackStayOnTheCallerTrace)
     std::optional<tracing::TraceContext> handlerTrace;
     tracing::TraceContext callbackTrace;
     RunInLoopAndWait([&] {
-        handlerTrace = service_.ProcessTraceOf(11);
+        handlerTrace = service.ProcessTraceOf(11);
         callbackTrace = **replyTrace;
     });
     ASSERT_TRUE(handlerTrace.has_value());
@@ -2660,7 +2660,7 @@ TEST_F(RpcChannelLoopback, ServerHandlerAndReplyCallbackStayOnTheCallerTrace)
 // RESPONSE 与 RPC_ERROR 都不带 trace 字段。
 TEST_F(RpcChannelLoopback, ServerContinuesAValidEnvelopeTraceAndRootsAnInvalidOne)
 {
-    serverMode_ = ServerMode::kChannel;
+    serverMode = ServerMode::kChannel;
     ASSERT_NO_FATAL_FAILURE(ConnectProbe());
     const auto emptySlot = FindEmptyRegistrySlot();
     ASSERT_TRUE(emptySlot.has_value()) << "registry has no empty slot to craft a rejected request";
@@ -2675,7 +2675,7 @@ TEST_F(RpcChannelLoopback, ServerContinuesAValidEnvelopeTraceAndRootsAnInvalidOn
     GameRpcMessage rejected = MakeRequestFrame(kCraftedIdBase + 3, *emptySlot, ProcessRequest(23));
     WriteTraceToRpcEnvelope(upstream, rejected);
 
-    const std::size_t from = probeRecorder_.Count();
+    const std::size_t from = probeRecorder.Count();
     RunInLoopAndWait([&] {
         SendFromProbe(valid);
         SendFromProbe(spanless);
@@ -2694,8 +2694,8 @@ TEST_F(RpcChannelLoopback, ServerContinuesAValidEnvelopeTraceAndRootsAnInvalidOn
     std::optional<tracing::TraceContext> continued;
     std::optional<tracing::TraceContext> rooted;
     RunInLoopAndWait([&] {
-        continued = service_.ProcessTraceOf(21);
-        rooted = service_.ProcessTraceOf(22);
+        continued = service.ProcessTraceOf(21);
+        rooted = service.ProcessTraceOf(22);
     });
     ASSERT_TRUE(continued.has_value());
     ASSERT_TRUE(rooted.has_value());

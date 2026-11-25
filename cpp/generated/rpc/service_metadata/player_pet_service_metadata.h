@@ -58,3 +58,11 @@ constexpr uint32_t ScenePetClientPlayerPreviewPetEntriesIndex = 12;
 constexpr uint32_t ScenePetClientPlayerSavePetEntriesMessageId = 412;
 constexpr uint32_t ScenePetClientPlayerSavePetEntriesIndex = 13;
 #define ScenePetClientPlayerSavePetEntriesMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(13)
+
+constexpr uint32_t ScenePetClientPlayerSwitchPetEntryPresetMessageId = 500;
+constexpr uint32_t ScenePetClientPlayerSwitchPetEntryPresetIndex = 14;
+#define ScenePetClientPlayerSwitchPetEntryPresetMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(14)
+
+constexpr uint32_t ScenePetClientPlayerAscendPetTierMessageId = 501;
+constexpr uint32_t ScenePetClientPlayerAscendPetTierIndex = 15;
+#define ScenePetClientPlayerAscendPetTierMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(15)

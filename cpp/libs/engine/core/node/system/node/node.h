@@ -108,15 +108,15 @@ public:
     NodeId GetNodeId() const { return GetNodeInfo().node_id(); }
     uint32_t GetNodeType() const { return GetNodeInfo().node_type(); }
     // 身份由本节点独占持有;读写均限所属 loop 线程,不能跨线程借用引用。
-    const NodeInfo &GetNodeInfo() const { return localNodeInfo_; }
+    const NodeInfo &GetNodeInfo() const { return localNodeInfo; }
     // 仅供启动、注册链路与 gate 人数上报写入;不会向 ECS 补默认组件。
     NodeInfo &MutableNodeInfo();
     KafkaManager &GetKafkaManager() { return kafkaManager; }
-    virtual google::protobuf::Service *GetNodeRpcService() { return rpcService_ ? &rpcService_->get() : nullptr; }
+    virtual google::protobuf::Service *GetNodeRpcService() { return rpcService ? &rpcService->get() : nullptr; }
     muduo::AsyncLogging &Log() { return logSystem; }
     CanConnectNodeTypeList &GetTargetNodeTypeWhitelist() { return targetNodeTypeWhitelist; }
-    const DiscoveryNodeTypeList &GetDiscoveryNodeTypes() const { return discoveryNodeTypes_; }
-    bool DiscoversNodeType(uint32_t nodeType) const { return discoveryNodeTypes_.contains(nodeType); }
+    const DiscoveryNodeTypeList &GetDiscoveryNodeTypes() const { return discoveryNodeTypes; }
+    bool DiscoversNodeType(uint32_t nodeType) const { return discoveryNodeTypes.contains(nodeType); }
 
     // 连接与发现的三处接缝(docs/design/connection-fanout-subsetting-20261106.md §3.2),都只在 loop 线程用。
     //
@@ -147,22 +147,22 @@ public:
     // Go-style: register hooks before start instead of subclassing.
     Node &SetAfterStart(AfterStartFn fn)
     {
-        afterStartFn_ = std::move(fn);
+        afterStartFn = std::move(fn);
         return *this;
     }
     Node &SetKafkaHandlers(KafkaHandlersFn fn)
     {
-        kafkaHandlersFn_ = std::move(fn);
+        kafkaHandlersFn = std::move(fn);
         return *this;
     }
     Node &SetBeforeShutdown(BeforeShutdownFn fn)
     {
-        beforeShutdownFn_ = std::move(fn);
+        beforeShutdownFn = std::move(fn);
         return *this;
     }
     Node &SetShutdownDrainComplete(ShutdownDrainCompleteFn fn)
     {
-        shutdownDrainCompleteFn_ = std::move(fn);
+        shutdownDrainCompleteFn = std::move(fn);
         return *this;
     }
     // 拆除前钩子:普通停机与身份冲突停机(含 loop 异常退出后 ~Node 的兜底排空)都会经 FinalizeTeardownInLoop 调用它,
@@ -173,17 +173,17 @@ public:
     // 钩子里不得再发起需要等待的异步工作(之后只剩拆除),也不得同步阻塞。
     Node &SetBeforeTeardown(BeforeTeardownFn fn)
     {
-        beforeTeardownFn_ = std::move(fn);
+        beforeTeardownFn = std::move(fn);
         return *this;
     }
     Node &SetOnConflictShutdown(OnConflictShutdownFn fn)
     {
-        onConflictShutdownFn_ = std::move(fn);
+        onConflictShutdownFn = std::move(fn);
         return *this;
     }
     Node &SetConflictDrainComplete(ConflictDrainCompleteFn fn)
     {
-        conflictDrainCompleteFn_ = std::move(fn);
+        conflictDrainCompleteFn = std::move(fn);
         return *this;
     }
 
@@ -199,9 +199,9 @@ public:
     // 进入计划排空。任意线程可调(投递到 loop)。没登记、预算为 0、已在停机、维护流程已关源时退回普通停机;重复调用幂等。
     void RequestPlannedStop();
     // 计划排空是否已开始。只在 loop 线程读。
-    bool PlannedDrainStarted() const { return plannedDrainStarted_; }
+    bool PlannedDrainStarted() const { return plannedDrainStarted; }
     // 生效的计划排空预算(SetPlannedDrain 之后才有意义;0 = 关闭)。业务据此安排排空内部的时刻(scene 的自疏散时刻)。
-    std::chrono::seconds PlannedDrainBudget() const { return plannedDrainBudget_; }
+    std::chrono::seconds PlannedDrainBudget() const { return plannedDrainBudget; }
 
     bool HasDiscoveredServiceNode(uint32_t nodeType) const
     {
@@ -252,7 +252,7 @@ public:
     // 服务由调用者拥有,必须活过 Node:生成的方法表闭包捕获服务的 this,muduo_grpc::Server 在 Node 析构前
     // (OnGrpcServerDrained / 收尾的防御销毁)已经销毁。服务端整个跑在本节点 EventLoop 上,不创建线程。
     void RegisterGrpcService(muduo_grpc::Service &service);
-    bool HasGrpcServices() const { return !grpcServices_.empty(); }
+    bool HasGrpcServices() const { return !grpcServices.empty(); }
 
     // 本节点的 etcd 身份(node_id 租约)已经失效时调用。
     //
@@ -272,14 +272,14 @@ public:
     void Shutdown();
 
     // 仅报告已观察到的失败；false 不代表完整 P1/P3 资格，不能代替各传输 owner 的正式收据。
-    bool HasKnownShutdownFailure() const { return shutdownFailure_.load(std::memory_order_acquire); }
+    bool HasKnownShutdownFailure() const { return shutdownFailure.load(std::memory_order_acquire); }
 
     // P1 仅封根；P3 才停止中继。装配方复用真实业务钩子，不能用进程存活或 pid 代替排空。
     // 由真实启动owner声明整个内部RPC/gRPC为relay；不按method名称推断。
-    Node& SetMaintenanceInboundRelay() { maintenanceInboundRelay_=true; return *this; }
-    bool RequiresMaintenanceTargetIdentity() const { return maintenancePrepareBoot_; }
-    Node& SetMaintenanceSourceClose(BeforeShutdownFn fn) { maintenanceSourceClose_ = std::move(fn); return *this; }
-    Node& SetMaintenanceRelayStop(BeforeTeardownFn fn) { maintenanceRelayStop_ = std::move(fn); return *this; }
+    Node& SetMaintenanceInboundRelay() { maintenanceInboundRelay=true; return *this; }
+    bool RequiresMaintenanceTargetIdentity() const { return maintenancePrepareBoot; }
+    Node& SetMaintenanceSourceClose(BeforeShutdownFn fn) { maintenanceSourceClose = std::move(fn); return *this; }
+    Node& SetMaintenanceRelayStop(BeforeTeardownFn fn) { maintenanceRelayStop = std::move(fn); return *this; }
 
     // Utility and state queries
     bool IsCurrentNode(const NodeInfo &candidateNode) const;
@@ -292,7 +292,7 @@ public:
     // 配套的 NodeInfo 由 Node 持有,只在 loop 线程写;跨线程读取不会与写入同步。
     // 所以 ClientFacing 的 node 实参必须取自 loop 线程上的
     // gNode->GetNodeInfo()(例如 battle 在 loop 线程上执行的 BuildAssignment / 预签)。
-    bool ClientEndpointRequired() const { return clientEndpointRequired_; }
+    bool ClientEndpointRequired() const { return clientEndpointRequired; }
 
 protected:
     // Initialization
@@ -307,7 +307,7 @@ protected:
     void SetupTimeZone();
     void InitKafka();
     void StartKafkaPolling();
-    virtual bool RegisterKafkaHandlers() { return kafkaHandlersFn_ ? kafkaHandlersFn_(*this) : true; }
+    virtual bool RegisterKafkaHandlers() { return kafkaHandlersFn ? kafkaHandlersFn(*this) : true; }
     void InitEtcdService();
     // 热关停(docs/design/rpc-kill-switch.md):登记本进程身份(节点类型、uuid),开独立的 etcd 同步。
     // 只在 Initialize 里、InitRpcServer 定下身份之后调一次。
@@ -356,19 +356,19 @@ protected:
 
     // Member variables
     // 本节点身份的唯一所有者,最先构造、最后析构;ECS Clear 不影响身份。
-    NodeInfo localNodeInfo_;
+    NodeInfo localNodeInfo;
     // 入口拥有 EventLoop，必须活过 Node 析构中的全部排空与网络资源释放。
     muduo::net::EventLoop &eventLoop;
     muduo::AsyncLogging logSystem;
     RpcServerPtr rpcServer;
     // /metrics 出口:在 loop 线程创建,FinalizeTeardownInLoop 里随出站连接一起释放(TcpServer 必须在 loop 活着时析构)。
-    std::unique_ptr<MetricsHttpExporter> metricsExporter_;
-    std::unique_ptr<tracing::OtlpSpanExporter> spanExporter_;
+    std::unique_ptr<MetricsHttpExporter> metricsExporter;
+    std::unique_ptr<tracing::OtlpSpanExporter> spanExporter;
     // 热关停的独立 etcd 连接:InitKillSwitch 创建,CloseTransportOwnersInLoop 里与注册那条传输一起 Shutdown(loop 仍在运行)。
-    std::unique_ptr<KillSwitchEtcdSync> killSwitchSync_;
+    std::unique_ptr<KillSwitchEtcdSync> killSwitchSync;
     // 配置表表包加载与运行期热更管理器(docs/design/config-table-hot-reload.md §8.2):
     // 随 Node 存活,FinalizeShutdownInLoop 时 Stop(),FinalizeTeardownInLoop 时释放。
-    std::shared_ptr<table_bundle::TableBundleManager> tableBundleManager_;
+    std::shared_ptr<table_bundle::TableBundleManager> tableBundleManager;
     TimerTaskComp serviceHealthMonitorTimer;
     // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——
@@ -376,26 +376,26 @@ protected:
     TimerTaskComp conflictDrainTimer;
     TimerTaskComp shutdownDrainTimer;
     // 计划排空(SetPlannedDrain):登记的业务钩子、生效的预算、阶段是否已开始与截止时刻、每拍检查的定时器。
-    PlannedDrainBeginFn plannedDrainBeginFn_;
-    PlannedDrainCompleteFn plannedDrainCompleteFn_;
-    std::chrono::seconds plannedDrainBudget_{0};
-    bool plannedDrainStarted_{false};
-    std::chrono::steady_clock::time_point plannedDrainDeadline_{};
+    PlannedDrainBeginFn plannedDrainBeginFn;
+    PlannedDrainCompleteFn plannedDrainCompleteFn;
+    std::chrono::seconds plannedDrainBudget{0};
+    bool plannedDrainStarted{false};
+    std::chrono::steady_clock::time_point plannedDrainDeadline{};
     TimerTaskComp plannedDrainTimer;
-    TimerTaskComp maintenanceControlTimer_;
-    std::unique_ptr<NodeMaintenanceControl> maintenanceControl_;
-    BeforeShutdownFn maintenanceSourceClose_;
-    BeforeTeardownFn maintenanceRelayStop_;
+    TimerTaskComp maintenanceControlTimer;
+    std::unique_ptr<NodeMaintenanceControl> maintenanceControl;
+    BeforeShutdownFn maintenanceSourceClose;
+    BeforeTeardownFn maintenanceRelayStop;
     // Kafka consumption is driven by KafkaConsumer::startBackgroundPolling
     // (a dedicated thread that queueInLoop's callbacks back into eventLoop).
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
     // No EventLoop timer is required for either path.
     CanConnectNodeTypeList targetNodeTypeWhitelist;
     // 构造时给定,之后不变(构造里 InitEtcdService 就按它 Range)。
-    DiscoveryNodeTypeList discoveryNodeTypes_;
+    DiscoveryNodeTypeList discoveryNodeTypes;
     // 按节点类型的建连准入与发现观察者(SetConnectionAdmission / SetDiscoveryObserver),空 = 没装。
-    std::array<ConnectionAdmissionFn, eNodeType_ARRAYSIZE> connectionAdmission_;
-    std::array<DiscoveryObserverFn, eNodeType_ARRAYSIZE> discoveryObservers_;
+    std::array<ConnectionAdmissionFn, eNodeType_ARRAYSIZE> connectionAdmission;
+    std::array<DiscoveryObserverFn, eNodeType_ARRAYSIZE> discoveryObservers;
     std::unordered_map<std::string, int64_t> revision;
     bool hasSentRange{false};
     bool hasSentWatch{false};
@@ -405,51 +405,51 @@ protected:
     NodeHandshakeManager nodeHandshakeManager;
     ServiceDiscoveryManager serviceDiscoveryManager;
     std::atomic<bool> shutdownStarted{false};
-    std::mutex shutdownCompletionMutex_;
-    std::condition_variable shutdownCompletionCv_;
-    bool shutdownComplete_{false};
-    bool shutdownGrpcDrainComplete_{false};
-    std::atomic<bool> shutdownFailure_{false};
-    bool shutdownFinalizationStarted_{false};
+    std::mutex shutdownCompletionMutex;
+    std::condition_variable shutdownCompletionCv;
+    bool shutdownComplete{false};
+    bool shutdownGrpcDrainComplete{false};
+    std::atomic<bool> shutdownFailure{false};
+    bool shutdownFinalizationStarted{false};
     bool kafkaPollingStarted{false};
     // 见 ClientEndpointRequired();由 InitClientEndpoint 在构造期写一次。
-    bool clientEndpointRequired_{false};
+    bool clientEndpointRequired{false};
 
     // Grace-period pending removals: node_uuid -> pending removal state.
     // When etcd fires DELETE, removal is deferred; a subsequent PUT cancels it.
-    std::unordered_map<std::string, std::unique_ptr<PendingNodeRemoval>> pendingNodeRemovals_;
+    std::unordered_map<std::string, std::unique_ptr<PendingNodeRemoval>> pendingNodeRemovals;
 
     // 调用者拥有服务，必须活过 Node 及其注册通道；空值表示不额外注册该服务。
-    std::optional<std::reference_wrapper<::google::protobuf::Service>> rpcService_;
-    AfterStartFn afterStartFn_;
-    KafkaHandlersFn kafkaHandlersFn_;
-    BeforeShutdownFn beforeShutdownFn_;
-    ShutdownDrainCompleteFn shutdownDrainCompleteFn_;
-    BeforeTeardownFn beforeTeardownFn_;
+    std::optional<std::reference_wrapper<::google::protobuf::Service>> rpcService;
+    AfterStartFn afterStartFn;
+    KafkaHandlersFn kafkaHandlersFn;
+    BeforeShutdownFn beforeShutdownFn;
+    ShutdownDrainCompleteFn shutdownDrainCompleteFn;
+    BeforeTeardownFn beforeTeardownFn;
     // FinalizeTeardownInLoop 会因 gRPC 本地延后完成未排空而重入;钩子只在第一次进入时调用。
-    bool beforeTeardownRan_{false};
-    bool sourceBusinessClosed_{false};
-    bool maintenanceInboundRelay_{false};
-    bool maintenancePrepareBoot_{false}, maintenancePreparedStart_{false}, maintenanceSourceOpened_{false};
+    bool beforeTeardownRan{false};
+    bool sourceBusinessClosed{false};
+    bool maintenanceInboundRelay{false};
+    bool maintenancePrepareBoot{false}, maintenancePreparedStart{false}, maintenanceSourceOpened{false};
     void StartPreparedSourceInLoop();
-    bool transportCloseStarted_{false};
-    bool rpcNativeJoined_{false};
-    bool localOwnerReleaseStarted_{false};
-    OnConflictShutdownFn onConflictShutdownFn_;
-    ConflictDrainCompleteFn conflictDrainCompleteFn_;
-    bool conflictShutdownStarted_{false};
-    std::chrono::steady_clock::time_point conflictDrainDeadline_{};
-    std::chrono::steady_clock::time_point shutdownDrainDeadline_{};
+    bool transportCloseStarted{false};
+    bool rpcNativeJoined{false};
+    bool localOwnerReleaseStarted{false};
+    OnConflictShutdownFn onConflictShutdownFn;
+    ConflictDrainCompleteFn conflictDrainCompleteFn;
+    bool conflictShutdownStarted{false};
+    std::chrono::steady_clock::time_point conflictDrainDeadline{};
+    std::chrono::steady_clock::time_point shutdownDrainDeadline{};
 
     // gRPC server (optional, started only when services are registered via RegisterGrpcService).
     // 服务由调用者拥有(见 RegisterGrpcService),这里只存引用。
-    std::vector<std::reference_wrapper<muduo_grpc::Service>> grpcServices_;
+    std::vector<std::reference_wrapper<muduo_grpc::Service>> grpcServices;
     // muduo_grpc::Server 是连接的唯一强持有者(TcpServer 的等价物,AGENTS §11.7),自己的定时器 / 闭包只绑 weak;
     // Node 是它唯一的所有者。全部在本节点 EventLoop 上运行,不创建线程(第 4 批起没有 poller / 关机线程)。
     // 只在排队任务里或 loop 外销毁:OnGrpcServerDrained 里 reset;收尾时若仍在,经 queueInLoop 防御销毁。
-    std::shared_ptr<muduo_grpc::Server> grpcServer_;
+    std::shared_ptr<muduo_grpc::Server> grpcServer;
     // 排空起点(BeginShutdown 时刻),只用于 "gRPC server drained. drain_ms=" 日志。
-    std::chrono::steady_clock::time_point grpcDrainStart_{};
+    std::chrono::steady_clock::time_point grpcDrainStart{};
 };
 
 // DependencyGate — polls for required service-discovery dependencies before

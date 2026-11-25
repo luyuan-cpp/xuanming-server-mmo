@@ -335,6 +335,18 @@ public final class SkillTableComp {
         }
     }
 
+    public record Secondary_target_policy(int value) {
+        public static Secondary_target_policy from(SkillTable row) {
+            return new Secondary_target_policy(row.getSecondaryTargetPolicy());
+        }
+    }
+
+    public record Exclusive_group(int value) {
+        public static Exclusive_group from(SkillTable row) {
+            return new Exclusive_group(row.getExclusiveGroup());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());

@@ -41,28 +41,28 @@ public:
 
     void put(const T& x)
     {
-        muduo::MutexLockGuard lock(mutex_);
-        buffers_[writeIndex_].push_back(x);
+        muduo::MutexLockGuard lock(mutex);
+        buffers[writeIndex].push_back(x);
     }
 
     void put(T&& x)
     {
-        muduo::MutexLockGuard lock(mutex_);
-        buffers_[writeIndex_].push_back(std::move(x));
+        muduo::MutexLockGuard lock(mutex);
+        buffers[writeIndex].push_back(std::move(x));
     }
 
     template <typename... Args>
     void emplace(Args&&... args)
     {
-        muduo::MutexLockGuard lock(mutex_);
-        buffers_[writeIndex_].emplace_back(std::forward<Args>(args)...);
+        muduo::MutexLockGuard lock(mutex);
+        buffers[writeIndex].emplace_back(std::forward<Args>(args)...);
     }
 
     // Non-blocking. Returns false immediately when no item is available.
     // Single-consumer only.  Zero atomic ops in the steady-state hot path.
     bool take(T& out)
     {
-        if (readPos_ >= readEnd_)
+        if (readPos >= readEnd)
         {
             if (!swapReadBuffer())
             {
@@ -70,37 +70,37 @@ public:
             }
         }
 
-        out = std::move(buffers_[readIndex_][readPos_]);
-        ++readPos_;
+        out = std::move(buffers[readIndex][readPos]);
+        ++readPos;
         return true;
     }
 
 private:
     bool swapReadBuffer()
     {
-        buffers_[readIndex_].clear();
-        readPos_ = 0;
-        readEnd_ = 0;
+        buffers[readIndex].clear();
+        readPos = 0;
+        readEnd = 0;
 
-        muduo::MutexLockGuard lock(mutex_);
-        if (buffers_[writeIndex_].empty())
+        muduo::MutexLockGuard lock(mutex);
+        if (buffers[writeIndex].empty())
         {
             return false;
         }
 
-        std::swap(readIndex_, writeIndex_);
-        readEnd_ = buffers_[readIndex_].size();
+        std::swap(readIndex, writeIndex);
+        readEnd = buffers[readIndex].size();
         return true;
     }
 
 private:
     // -- Producer-side (written under mutex) --
-    alignas(std::hardware_destructive_interference_size) mutable muduo::MutexLock mutex_;
-    queue_type buffers_[2];
-    int writeIndex_ GUARDED_BY(mutex_) = 0;
+    alignas(std::hardware_destructive_interference_size) mutable muduo::MutexLock mutex;
+    queue_type buffers[2];
+    int writeIndex GUARDED_BY(mutex) = 0;
 
     // -- Consumer-side (single-thread, no lock) --
-    alignas(std::hardware_destructive_interference_size) int readIndex_ = 1;
-    size_t readPos_ = 0;
-    size_t readEnd_ = 0;
+    alignas(std::hardware_destructive_interference_size) int readIndex = 1;
+    size_t readPos = 0;
+    size_t readEnd = 0;
 };

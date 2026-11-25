@@ -23,24 +23,24 @@ void BagProfileRegistry::Register(uint32_t profileId, BagProfileFactory factory)
 		LOG_ERROR << "BagProfileRegistry::Register: null factory for profile " << profileId;
 		return;
 	}
-	if (const auto it = factories_.find(profileId); it != factories_.end())
+	if (const auto it = factories.find(profileId); it != factories.end())
 	{
 		// 覆盖是合法的(活动改版 / 热更),但必须留痕 —— 否则"这个包的规则怎么变了"
 		// 会变成一个查不到的问题。
 		LOG_WARN << "BagProfileRegistry::Register: overwriting existing factory for profile "
 				 << profileId;
 	}
-	factories_[profileId] = std::move(factory);
+	factories[profileId] = std::move(factory);
 }
 
 bool BagProfileRegistry::Contains(uint32_t profileId) const
 {
-	return factories_.contains(profileId);
+	return factories.contains(profileId);
 }
 
 BagProfile BagProfileRegistry::Make(uint32_t profileId, std::size_t capacity) const
 {
-	if (const auto it = factories_.find(profileId); it != factories_.end())
+	if (const auto it = factories.find(profileId); it != factories.end())
 	{
 		BagProfile profile = it->second(capacity);
 		// 工厂忘了填 id 是常见笔误(它自己不必知道自己的 id)。这里统一补上,
@@ -64,5 +64,5 @@ BagProfile BagProfileRegistry::Make(uint32_t profileId, std::size_t capacity) co
 
 void BagProfileRegistry::ClearForTest()
 {
-	factories_.clear();
+	factories.clear();
 }

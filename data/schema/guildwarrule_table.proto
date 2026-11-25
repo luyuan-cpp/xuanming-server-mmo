@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+// GuildWarRule 表的权威 schema。源表 data/GuildWarRule.xlsx。
+// 帮会全天帮战 V2 全局单行规则(固定 id=1,docs/design/guild-play-v2.md)。
+// 本文件不参与 protoc 编译,由导表器文本解析。字段号只增不改。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildWarRuleTable {
+  option (cfg_sheet)       = "GuildWarRule";
+  option (cfg_source_file) = "GuildWarRule.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 参与帮战与被挂追杀令的最低角色等级
+  uint32 min_level = 2;
+  // 从战意切回和平免战所需脱战冷却秒数
+  uint32 peace_cooldown_sec = 3;
+  // 战败后不可被强制点战保护秒数
+  uint32 post_battle_protect_sec = 4;
+  // 灵脉旗势上限
+  uint32 leyline_max_banner_hp = 5;
+  // 易主后初始旗势值
+  uint32 leyline_capture_init_hp = 6;
+  // 易主整备护盾秒数(护盾内打真人正常给奖但旗势不掉)
+  uint32 leyline_shield_sec = 7;
+  // 攻方真人胜扣减旗势
+  uint32 pvp_win_banner_damage = 8;
+  // 守方真人胜恢复旗势
+  uint32 pvp_defend_banner_heal = 9;
+  // 攻方踢守旗阵胜扣减旗势
+  uint32 siege_win_banner_damage = 10;
+  // 本帮守旗阵槽位上限
+  uint32 garrison_max_slots = 11;
+  // 单人刷新守旗快照冷却秒数
+  uint32 garrison_refresh_cooldown_sec = 12;
+  // 帮战第几回合起启用决胜煞气(复接 escalation_stacks)
+  uint32 frenzy_start_round = 13;
+  // 普通追杀令发布银两
+  uint64 bounty_normal_silver = 14;
+  // 重金追杀令发布银两
+  uint64 bounty_heavy_silver = 15;
+  // 追杀令银两系统销毁税率(万分比,1000=10%)
+  uint32 bounty_tax_bps = 16;
+  // 帮会公费追杀令消耗帮会资金
+  uint64 bounty_public_funds = 17;
+  // 帮会每日公费追杀令上限
+  uint32 bounty_public_daily_limit = 18;
+  // 追杀令有效期秒数(默认 86400=24h)
+  uint32 bounty_ttl_sec = 19;
+  // 被追杀销单后免再挂保护秒数(默认 1800=30m)
+  uint32 bounty_protect_sec = 20;
+  // 目标累计反杀不同追兵几次撕毁追杀令(默认 2)
+  uint32 bounty_counter_kill_tear = 21;
+  // 每角色每日领取追杀/反杀银两赏金上限(默认 5)
+  uint32 bounty_daily_payout_limit = 22;
+  // 追杀追踪行踪节流冷却秒数(默认 15)
+  uint32 track_cooldown_sec = 23;
+  // 同对手收益递减窗口秒数(默认 1800=30m)
+  uint32 diminish_window_sec = 24;
+  // 灵脉占领周期分红间隔秒数(默认 3600=1h)
+  uint32 dividend_interval_sec = 25;
+  // 每帮每周灵脉分红上限(默认 24)
+  uint32 dividend_guild_weekly_cap = 26;
+  // 每角色每周可领灵脉分红上限(默认 12)
+  uint32 dividend_player_weekly_cap = 27;
+  // 领取周战功宝箱与灵脉分红的最低个人周战功(默认 30)
+  uint64 dividend_min_personal_merit = 28;
+  // 帮战真人/守旗复用对战模板(Dungeon.id)
+  uint32 battle_config_id = 29 [(cfg_fk) = "Dungeon"];
+  // 当小时金脉(1.5x)帮贡/战功/旗势万分比倍率(默认 15000=1.5x)
+  uint32 gold_leyline_multiplier_bps = 30;
+  // 本周宿敌额外加成万分比(默认 2000=+20%)
+  uint32 rivalry_bonus_bps = 31;
+}

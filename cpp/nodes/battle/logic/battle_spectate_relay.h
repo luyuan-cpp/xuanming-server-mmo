@@ -61,14 +61,14 @@ public:
     void PublishToBroadcast(::contracts::kafka::SpectateFrameEvent &frame);
 
     // 累计没发出去的帧数(出口返回 false 的次数)。已入队、后来投递失败的不在内,那部分归 kafka_producer_stats。
-    uint64_t SendFailures() const { return sendFailures_; }
+    uint64_t SendFailures() const { return sendFailures; }
 
 private:
     void Send(const char *channel, const ::contracts::kafka::SpectateFrameEvent &frame, std::string topic,
               int32_t partition);
 
-    FrameSink sink_;
-    uint64_t sendFailures_ = 0;
+    FrameSink sink;
+    uint64_t sendFailures = 0;
 };
 
 } // namespace battle_spectate_relay

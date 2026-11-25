@@ -39,7 +39,7 @@ std::shared_ptr<kafka_producer_policy::PublicationRegistry> ProcessPublicationRe
 }
 
 KafkaProducer::KafkaProducer()
-    : publicationRegistry_(ProcessPublicationRegistry()), publicationOwner_(publicationRegistry_->Register()) {}
+    : publicationRegistry(ProcessPublicationRegistry()), publicationOwner(publicationRegistry->Register()) {}
 
 void KafkaProducer::CloseProcessAdmission() { ProcessPublicationRegistry()->CloseAdmission(); }
 kafka_producer_policy::PublicationRegistry::Snapshot KafkaProducer::ProcessPublicationFrontier() {
@@ -47,38 +47,38 @@ kafka_producer_policy::PublicationRegistry::Snapshot KafkaProducer::ProcessPubli
 }
 
 bool KafkaProducer::StopAndJoin(std::chrono::milliseconds timeout) {
-    publicationClosed_ = true;
-    publicationRegistry_->CloseOwner(publicationOwner_);
-    if(publicationRegistry_->OwnerCallbacksActive(publicationOwner_)){publicationRegistry_->MarkUnknown(publicationOwner_);return false;}
+    publicationClosed = true;
+    publicationRegistry->CloseOwner(publicationOwner);
+    if(publicationRegistry->OwnerCallbacksActive(publicationOwner)){publicationRegistry->MarkUnknown(publicationOwner);return false;}
     const bool confirmed = flush(timeout) && publicationsSettled();
-    if (!confirmed) { publicationRegistry_->MarkUnknown(publicationOwner_); }
+    if (!confirmed) { publicationRegistry->MarkUnknown(publicationOwner); }
     // reset 必须在原线程；其内部线程真正 join 返回后才更新共享账本。
-    producer_.reset();
-    conf_.reset();
-    publicationRegistry_->HandleJoined(publicationOwner_);
+    producer.reset();
+    conf.reset();
+    publicationRegistry->HandleJoined(publicationOwner);
     return confirmed;
 }
 
 void KafkaProducer::setBrokers(const std::string& brokers) {
-	if (producer_) return; // already created
-	pendingBrokers_ = brokers;
+	if (producer) return; // already created
+	pendingBrokers = brokers;
 	LOG_INFO << "KafkaProducer: brokers stored for lazy init: " << brokers;
 }
 
 bool KafkaProducer::init(const std::string& brokers) {
-	if (publicationClosed_ || !publicationRegistry_->BeginSend(publicationOwner_)) { return false; }
+	if (publicationClosed || !publicationRegistry->BeginSend(publicationOwner)) { return false; }
 	struct InitFinished {
 		std::shared_ptr<kafka_producer_policy::PublicationRegistry> registry;
 		kafka_producer_policy::PublicationRegistry::OwnerPtr owner;
 		~InitFinished() { registry->EndSend(owner); }
-	} initFinished{publicationRegistry_, publicationOwner_};
-	if (producer_) return true; // idempotent
+	} initFinished{publicationRegistry, publicationOwner};
+	if (producer) return true; // idempotent
 
 	if (!createProducer(brokers)) {
 		return false;
 	}
 
-	pendingBrokers_.clear();
+	pendingBrokers.clear();
 	LOG_INFO << "KafkaProducer initialized for brokers: " << brokers;
 	return true;
 }
@@ -140,17 +140,17 @@ bool KafkaProducer::createProducer(const std::string& brokers) {
 		return false;
 	}
 
-	conf_ = std::move(conf);
-	producer_ = std::move(producer);
-	brokers_ = brokers;
-	publicationRegistry_->HandleOpened(publicationOwner_);
+	this->conf = std::move(conf);
+	this->producer = std::move(producer);
+	this->brokers = brokers;
+	publicationRegistry->HandleOpened(publicationOwner);
 	return true;
 }
 
 bool KafkaProducer::ensureInitialized() {
-	if (producer_) return true;
-	if (pendingBrokers_.empty()) return false;
-	return init(pendingBrokers_);
+	if (producer) return true;
+	if (pendingBrokers.empty()) return false;
+	return init(pendingBrokers);
 }
 
 KafkaProducer::~KafkaProducer() {
@@ -158,14 +158,14 @@ KafkaProducer::~KafkaProducer() {
 	// KafkaManager 也复用同一条有界 flush 路径。
 	StopAndJoin(std::chrono::seconds(5));
 	// 收尾:本线程再也不会有 send() 来驱动补报了。析构里的 flush() 本来就会打日志,这里再打一行是安全的。
-	if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {
+	if (const std::uint64_t suppressed = failureLogThrottle.TakeSuppressed(); suppressed > 0) {
 		logSuppressedSummary(suppressed);
 	}
 }
 
 RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const std::string& message,
 	const std::string& key, int32_t partition, const std::string& traceparent) {
-	if (!producer_) {
+	if (!producer) {
 		return RdKafka::ERR__STATE;
 	}
 
@@ -175,7 +175,7 @@ RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const st
 		headers.reset(RdKafka::Headers::create());
 		headers->add(std::string(kafka_trace::kTraceparentHeader), traceparent);
 	}
-	const RdKafka::ErrorCode resp = producer_->produce(
+	const RdKafka::ErrorCode resp = producer->produce(
 		topic,
 		partition,
 		RdKafka::Producer::RK_MSG_COPY,
@@ -195,15 +195,15 @@ RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const st
 RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::string& message,
 	const std::string& key, int32_t partition) {
 	using kafka_producer_policy::ProduceAction;
-	if (publicationClosed_ || !publicationRegistry_->BeginSend(publicationOwner_)) { return RdKafka::ERR__STATE; }
+	if (publicationClosed || !publicationRegistry->BeginSend(publicationOwner)) { return RdKafka::ERR__STATE; }
 	struct SendFinished {
 		std::shared_ptr<kafka_producer_policy::PublicationRegistry> registry;
 		kafka_producer_policy::PublicationRegistry::OwnerPtr owner;
 		~SendFinished() { registry->EndSend(owner); }
-	} sendFinished{publicationRegistry_, publicationOwner_};
+	} sendFinished{publicationRegistry, publicationOwner};
 
 	// 上一次 poll() 里的投递回执报告了 fatal:先把作废的实例换掉再发,别把这一条也搭进去。
-	if (fatalPending_) {
+	if (fatalPending) {
 		rebuildAfterFatal("delivery report");
 	}
 
@@ -230,7 +230,7 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 	case ProduceAction::kRetryAfterPoll:
 		// 队列满:非阻塞地取走已有结果的回执腾位置,再原样重试一次(见 kafka_producer_policy.h)。
 		// 这次 poll 派发的是**别的**消息的回执:本条还没入队。
-		producer_->poll(0);
+		producer->poll(0);
 		resp = produceOnce(topic, message, key, partition, traceparent);
 		break;
 	case ProduceAction::kRebuildProducer:
@@ -255,7 +255,7 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 			+ " bytes=" + std::to_string(message.size()) + " err=" + RdKafka::err2str(resp));
 	}
 	else {
-		publicationRegistry_->Accepted(publicationOwner_);
+		publicationRegistry->Accepted(publicationOwner);
 		// Producer ack per message — fires at steady-state Kafka write rate
 		// (stress-1zone-45k saw 200+/s, which would burn ~17M INFO lines/day
 		// on dev hosts). Keep the breadcrumb at DEBUG so it's available when
@@ -267,9 +267,9 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 
 	// 限流压掉的条数,在「窗口过期、之后不再失败」时靠这里补报:send() 是唯一的补报驱动点。放在 poll() 之后,
 	// 让本次派发的回执先计完数。先用 PendingSuppressed() 预检,无失败时不必每条消息取一次时钟。
-	if (failureLogThrottle_.PendingSuppressed() > 0) {
+	if (failureLogThrottle.PendingSuppressed() > 0) {
 		const std::uint64_t suppressed =
-			failureLogThrottle_.TakeExpiredSuppressed(std::chrono::steady_clock::now());
+			failureLogThrottle.TakeExpiredSuppressed(std::chrono::steady_clock::now());
 		if (suppressed > 0) {
 			logSuppressedSummary(suppressed);
 		}
@@ -279,16 +279,16 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 }
 
 bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
-	if (!rebuildGate_.TryAcquire(std::chrono::steady_clock::now())) {
+	if (!rebuildGate.TryAcquire(std::chrono::steady_clock::now())) {
 		// 冷却期内不重建:fatal 的成因若还在,新实例会立刻再次 fatal,每次 send() 都销毁、
 		// 重建一整套 librdkafka 线程只会雪上加霜。fatalPending_ 保持原值,冷却期过后再来。
 		return false;
 	}
 
 	std::string reason = "unknown";
-	if (producer_) {
+	if (producer) {
 		std::string errstr;
-		const RdKafka::ErrorCode code = producer_->fatal_error(errstr);
+		const RdKafka::ErrorCode code = producer->fatal_error(errstr);
 		reason = RdKafka::err2str(code) + ": " + errstr;
 	}
 	kafka_producer_stats::IncFatalRebuilds();
@@ -309,37 +309,37 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 	long long drainMs = 0;
 	long long destroyMs = 0;
 
-	const std::string brokers = brokers_;
-	if (producer_) {
+	const std::string brokers = this->brokers;
+	if (producer) {
 		// purge 让旧实例队列里的消息立刻以失败回执收场(计入 DeliveryFailed、带 key 记日志),
 		// 而不是陪着析构一起等到超时;rebuilding_ 期间涌出来的失败回执不代表新的 fatal。
-		rebuilding_ = true;
+		rebuilding = true;
 		const auto purgeStart = RebuildClock::now();
-		if (pendingMessageCount() != 0) { publicationRegistry_->MarkUnknown(publicationOwner_); }
-		producer_->purge(RdKafka::Producer::PURGE_QUEUE | RdKafka::Producer::PURGE_INFLIGHT);
+		if (pendingMessageCount() != 0) { publicationRegistry->MarkUnknown(publicationOwner); }
+		producer->purge(RdKafka::Producer::PURGE_QUEUE | RdKafka::Producer::PURGE_INFLIGHT);
 		const auto drainStart = RebuildClock::now();
-		producer_->flush(kPurgeDrainTimeoutMs);
+		producer->flush(kPurgeDrainTimeoutMs);
 		const auto drainEnd = RebuildClock::now();
-		rebuilding_ = false;
+		rebuilding = false;
 		purgeMs = elapsedMs(purgeStart, drainStart);
 		drainMs = elapsedMs(drainStart, drainEnd);
 		// flush 到点仍未派发完的回执:这些消息同样丢了,只是没机会逐条经过 dr_cb。一次性补记,
 		// 让 DeliveryFailed 仍然等于「确定没送到的条数」。
-		if (const int abandoned = producer_->outq_len(); abandoned > 0) {
+		if (const int abandoned = producer->outq_len(); abandoned > 0) {
 			kafka_producer_stats::AddDeliveryFailed(static_cast<std::uint64_t>(abandoned));
 			LOG_ERROR << "[Kafka] " << abandoned << " messages were still queued in the fatal producer instance when the "
 				<< kPurgeDrainTimeoutMs << "ms drain budget ran out; counted as delivery failures without per-message logs.";
 		}
 		// purge 吐出来的失败回执绝大多数会被限流压掉;紧跟着重建日志把条数报出来,
 		// 不要让「这次重建丢了多少条」等到十几秒后的下一次 send() 才出现。
-		if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {
+		if (const std::uint64_t suppressed = failureLogThrottle.TakeSuppressed(); suppressed > 0) {
 			logSuppressedSummary(suppressed);
 		}
 		const auto destroyStart = RebuildClock::now();
-		producer_.reset();
+		producer.reset();
 		destroyMs = elapsedMs(destroyStart, RebuildClock::now());
 	}
-	fatalPending_ = false;
+	fatalPending = false;
 
 	const auto createStart = RebuildClock::now();
 	const bool created = createProducer(brokers);
@@ -349,7 +349,7 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 
 	if (!created) {
 		// 留给下一次 send() 经 ensureInitialized() 惰性重试。
-		pendingBrokers_ = brokers;
+		pendingBrokers = brokers;
 		LOG_ERROR << "[Kafka] Producer rebuild failed; will retry lazily on the next send()"
 			<< " (caller thread stalled " << stallMs << "ms: purge=" << purgeMs << " drain=" << drainMs
 			<< " destroy=" << destroyMs << " create=" << createMs << ")";
@@ -371,7 +371,7 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 }
 
 void KafkaProducer::logFailure(const std::string& line) {
-	const auto decision = failureLogThrottle_.OnFailure(std::chrono::steady_clock::now());
+	const auto decision = failureLogThrottle.OnFailure(std::chrono::steady_clock::now());
 	if (decision.suppressedBeforeThis > 0) {
 		logSuppressedSummary(decision.suppressedBeforeThis);
 	}
@@ -390,9 +390,9 @@ void KafkaProducer::logSuppressedSummary(std::uint64_t suppressed) {
 }
 
 void KafkaProducer::dr_cb(RdKafka::Message& message) {
-    kafka_producer_policy::PublicationCallbackScope phase(publicationRegistry_,publicationOwner_);
+    kafka_producer_policy::PublicationCallbackScope phase(publicationRegistry,publicationOwner);
 	const RdKafka::ErrorCode err = message.err();
-	publicationRegistry_->Delivered(publicationOwner_, err == RdKafka::ERR_NO_ERROR);
+	publicationRegistry->Delivered(publicationOwner, err == RdKafka::ERR_NO_ERROR);
 	if (err == RdKafka::ERR_NO_ERROR) {
 		// Per-message delivery breadcrumb — same volume as send() success.
 		// Demote to DEBUG; failures surface at ERROR below.
@@ -409,8 +409,8 @@ void KafkaProducer::dr_cb(RdKafka::Message& message) {
 	// 对未来版本的防御:librdkafka 2.14 不会给投递回执填 ERR__FATAL(fatal 时库自己 purge 队列,
 	// 排队中的消息以 ERR__PURGE_QUEUE 收场),实际的识别点是 send() 里 produce() 的返回码。
 	// 回执是在 poll() / flush() 的调用栈里回调的,此刻不能销毁实例:只置位,下一次 send() 处理。
-	if (kafka_producer_policy::IsFatalDeliveryError(err) && !rebuilding_) {
-		fatalPending_ = true;
+	if (kafka_producer_policy::IsFatalDeliveryError(err) && !rebuilding) {
+		fatalPending = true;
 	}
 
 	// key 要带上:对存档类消息它就是玩家 id,出了事要能知道是谁的存档没落库。
@@ -425,23 +425,23 @@ void KafkaProducer::dr_cb(RdKafka::Message& message) {
 }
 
 void KafkaProducer::poll() {
-	if (!producer_) {
+	if (!producer) {
 		return;
 	}
 
-	producer_->poll(0); // 0 = non-blocking
+	producer->poll(0); // 0 = non-blocking
 	// 其他 producer 线程只在自己的 poll 点协作 join；主线程绝不代为调用线程局部句柄。
-	if (publicationRegistry_->Closed() && pendingMessageCount() == 0) { StopAndJoin(std::chrono::milliseconds(0)); }
+	if (publicationRegistry->Closed() && pendingMessageCount() == 0) { StopAndJoin(std::chrono::milliseconds(0)); }
 }
 
 bool KafkaProducer::flush(std::chrono::milliseconds timeout) {
-	if (!producer_) {
+	if (!producer) {
 		return true;
 	}
 
 	const auto timeoutCount = std::clamp<std::int64_t>(
 		static_cast<std::int64_t>(timeout.count()), 0, std::numeric_limits<int>::max());
-	const RdKafka::ErrorCode error = producer_->flush(static_cast<int>(timeoutCount));
+	const RdKafka::ErrorCode error = producer->flush(static_cast<int>(timeoutCount));
 	const std::size_t pending = pendingMessageCount();
 	const bool complete = error == RdKafka::ERR_NO_ERROR && pending == 0 && publicationsSettled();
 
@@ -455,9 +455,9 @@ bool KafkaProducer::flush(std::chrono::milliseconds timeout) {
 }
 
 std::size_t KafkaProducer::pendingMessageCount() const {
-	if (!producer_) {
+	if (!producer) {
 		return 0;
 	}
-	const int pending = producer_->outq_len();
+	const int pending = producer->outq_len();
 	return pending > 0 ? static_cast<std::size_t>(pending) : 0;
 }

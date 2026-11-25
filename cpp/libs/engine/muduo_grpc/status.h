@@ -44,22 +44,22 @@ class Status
 {
 public:
     Status() = default;
-    Status(StatusCode code, std::string message) : code_(code), message_(std::move(message)) {}
+    Status(StatusCode code, std::string message) : code(code), detailMessage(std::move(message)) {}
 
     static Status Ok() { return Status(); }
 
-    bool ok() const { return code_ == StatusCode::kOk; }
-    StatusCode code() const { return code_; }
+    bool ok() const { return code == StatusCode::kOk; }
+    StatusCode Code() const { return code; }
     // 日志与对照用:与 grpc::Status::error_code() 的整数值相同。
-    uint32_t code_value() const { return static_cast<uint32_t>(code_); }
-    const std::string &message() const { return message_; }
+    uint32_t code_value() const { return static_cast<uint32_t>(code); }
+    const std::string &message() const { return detailMessage; }
 
     // "UNAVAILABLE(14): connection lost" 形式,只用于日志。
     std::string ToString() const;
 
 private:
-    StatusCode code_{StatusCode::kOk};
-    std::string message_;
+    StatusCode code{StatusCode::kOk};
+    std::string detailMessage;
 };
 
 // HTTP 状态码 → gRPC 状态码(gRPC doc/http-grpc-status-mapping.md)。

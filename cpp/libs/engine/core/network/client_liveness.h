@@ -189,25 +189,25 @@ inline IdleCheck DecideIdleCheck(const ClientLiveness &liveness, const SteadyTim
 class LoopStallWatch
 {
 public:
-	explicit LoopStallWatch(const std::chrono::milliseconds checkPeriod) : checkPeriod_(checkPeriod) {}
+	explicit LoopStallWatch(const std::chrono::milliseconds checkPeriod) : checkPeriod(checkPeriod) {}
 
 	// 距上一拍多久;还没有过一拍时为空。
 	std::optional<SteadyTime::duration> GapSinceLastTick(const SteadyTime now) const
 	{
-		if (!lastTickAt_)
+		if (!lastTickAt)
 		{
 			return std::nullopt;
 		}
-		return now - *lastTickAt_;
+		return now - *lastTickAt;
 	}
 
 	// 记一拍,返回这一拍是否迟到:距上一拍超过两个节拍。首拍没有参照,不算迟到。
 	bool Tick(const SteadyTime now)
 	{
 		const std::optional<SteadyTime::duration> gap = GapSinceLastTick(now);
-		lastTickLate_ = gap && *gap > 2 * checkPeriod_;
-		lastTickAt_ = now;
-		return lastTickLate_;
+		lastTickLate = gap && *gap > 2 * checkPeriod;
+		lastTickAt = now;
+		return lastTickLate;
 	}
 
 	// 现在按时长关连接是否不安全:还没有过一拍;上一拍本身迟到(刚恢复,积压的输入可能还没读完);
@@ -215,13 +215,13 @@ public:
 	bool RecentlyStalled(const SteadyTime now) const
 	{
 		const std::optional<SteadyTime::duration> gap = GapSinceLastTick(now);
-		return !gap || lastTickLate_ || *gap > 2 * checkPeriod_;
+		return !gap || lastTickLate || *gap > 2 * checkPeriod;
 	}
 
 private:
-	std::chrono::milliseconds checkPeriod_;
-	std::optional<SteadyTime> lastTickAt_;
-	bool lastTickLate_{false};
+	std::chrono::milliseconds checkPeriod;
+	std::optional<SteadyTime> lastTickAt;
+	bool lastTickLate{false};
 };
 
 // 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。一条连接至多同时有两个检查点:
@@ -259,19 +259,19 @@ public:
 		uint64_t idleClosed{0};        // 跟踪中、静默满 idleTimeout,已回调 onIdle
 	};
 
-	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy_(policy), stall_(policy.checkPeriod) {}
+	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy(policy), stall(policy.checkPeriod) {}
 
 	// 建连时调用(会话还没验签时):建连 + handshakeTimeout 到期仍未验签就关。
 	void ExpectHandshake(const uint32_t sessionId, const uint64_t incarnation, const SteadyTime connectedAt)
 	{
-		Schedule(connectedAt + policy_.handshakeTimeout, sessionId, incarnation, CheckKind::kHandshake);
+		Schedule(connectedAt + policy.handshakeTimeout, sessionId, incarnation, CheckKind::kHandshake);
 	}
 
 	// 开始跟踪一条连接,第一个空闲检查点在 lastInboundAt + idleTimeout。每条连接只调一次:
 	// ClientLiveness::StartTracking 返回 true 的时候。
 	void Track(const uint32_t sessionId, const uint64_t incarnation, const SteadyTime lastInboundAt)
 	{
-		Schedule(lastInboundAt + policy_.idleTimeout, sessionId, incarnation, CheckKind::kIdle);
+		Schedule(lastInboundAt + policy.idleTimeout, sessionId, incarnation, CheckKind::kIdle);
 	}
 
 	// 取出全部到期(due <= now)的检查点逐个判定。
@@ -285,16 +285,16 @@ public:
 		// 距上一次扫描超过两个节拍,说明本端 loop 卡过:客户端的帧可能还在接收缓冲里没读
 		// (Linux muduo 的 timerfd 与连接 fd 在同一次 epoll_wait 里返回、先后不定)。这一轮不关任何连接,
 		// 改在约一个节拍后、积压的输入已经读过时再判。首轮扫描没有参照,不算迟到。判定口径在 LoopStallWatch。
-		if (const std::optional<Duration> gap = stall_.GapSinceLastTick(now))
+		if (const std::optional<Duration> gap = stall.GapSinceLastTick(now))
 		{
 			result.checkGap = *gap;
 		}
-		result.late = stall_.Tick(now);
+		result.late = stall.Tick(now);
 		// 新登记的检查点到期时刻都晚于 now,本轮不会再被取出。
-		while (!checkpoints_.empty() && checkpoints_.top().due <= now)
+		while (!checkpoints.empty() && checkpoints.top().due <= now)
 		{
-			const Checkpoint checkpoint = checkpoints_.top();
-			checkpoints_.pop();
+			const Checkpoint checkpoint = checkpoints.top();
+			checkpoints.pop();
 			const std::optional<SessionView> view = lookup(checkpoint.sessionId, checkpoint.incarnation);
 			if (!view)
 			{
@@ -311,7 +311,7 @@ public:
 				if (result.late)
 				{
 					++result.deferred;
-					Schedule(now + policy_.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kHandshake);
+					Schedule(now + policy.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kHandshake);
 					continue;
 				}
 				++result.handshakeTimeouts;
@@ -324,15 +324,15 @@ public:
 				++result.stale;
 				continue;
 			}
-			switch (JudgeIdle(liveness.lastInboundAt, now, result.late, policy_.idleTimeout))
+			switch (JudgeIdle(liveness.lastInboundAt, now, result.late, policy.idleTimeout))
 			{
 			case IdleVerdict::kAlive:
-				Schedule(liveness.lastInboundAt + policy_.idleTimeout, checkpoint.sessionId, checkpoint.incarnation,
+				Schedule(liveness.lastInboundAt + policy.idleTimeout, checkpoint.sessionId, checkpoint.incarnation,
 						 CheckKind::kIdle);
 				break;
 			case IdleVerdict::kDeferred:
 				++result.deferred;
-				Schedule(now + policy_.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kIdle);
+				Schedule(now + policy.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kIdle);
 				break;
 			case IdleVerdict::kDead:
 				++result.idleClosed;
@@ -344,12 +344,12 @@ public:
 	}
 
 	// 堆里的检查点数,含已关闭会话、已验签连接尚未到期的那些。只用于观测(汇总日志),不参与判定。
-	std::size_t PendingChecks() const { return checkpoints_.size(); }
+	std::size_t PendingChecks() const { return checkpoints.size(); }
 
 	// 本端 loop 是否刚卡过(口径见 LoopStallWatch::RecentlyStalled;节拍就是本类的扫描)。
-	bool LoopRecentlyStalled(const SteadyTime now) const { return stall_.RecentlyStalled(now); }
+	bool LoopRecentlyStalled(const SteadyTime now) const { return stall.RecentlyStalled(now); }
 
-	const ClientLivenessPolicy &policy() const { return policy_; }
+	const ClientLivenessPolicy &Policy() const { return policy; }
 
 private:
 	struct Checkpoint
@@ -367,12 +367,12 @@ private:
 
 	void Schedule(const SteadyTime due, const uint32_t sessionId, const uint64_t incarnation, const CheckKind kind)
 	{
-		checkpoints_.push(Checkpoint{due, sessionId, incarnation, kind});
+		checkpoints.push(Checkpoint{due, sessionId, incarnation, kind});
 	}
 
-	ClientLivenessPolicy policy_;
-	std::priority_queue<Checkpoint, std::vector<Checkpoint>, DueLater> checkpoints_;
-	LoopStallWatch stall_;
+	ClientLivenessPolicy policy;
+	std::priority_queue<Checkpoint, std::vector<Checkpoint>, DueLater> checkpoints;
+	LoopStallWatch stall;
 };
 
 } // namespace client_liveness

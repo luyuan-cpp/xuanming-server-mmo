@@ -20,7 +20,7 @@ TrafficStatsCollector::TrafficStatsCollector()
         int val = std::atoi(env);
         if (val > 0 && val <= 3600)
         {
-            reportIntervalSeconds_ = static_cast<uint32_t>(val);
+            reportIntervalSeconds = static_cast<uint32_t>(val);
         }
     }
 
@@ -40,7 +40,7 @@ TrafficStatsCollector::TrafficStatsCollector()
 
 void TrafficStatsCollector::RecordSend(uint32_t messageId, uint32_t byteSize)
 {
-    if (!enabled_.load(std::memory_order_relaxed))
+    if (!enabled.load(std::memory_order_relaxed))
         return;
     if (messageId >= kMaxRpcMethodCount)
     {
@@ -49,7 +49,7 @@ void TrafficStatsCollector::RecordSend(uint32_t messageId, uint32_t byteSize)
         return;
     }
 
-    auto &c = counters_[messageId];
+    auto &c = counters[messageId];
     c.sendCount.fetch_add(1, std::memory_order_relaxed);
     c.sendBytes.fetch_add(byteSize, std::memory_order_relaxed);
     UpdateMaxSize(c.maxMessageSize, byteSize);
@@ -57,7 +57,7 @@ void TrafficStatsCollector::RecordSend(uint32_t messageId, uint32_t byteSize)
 
 void TrafficStatsCollector::RecordRecv(uint32_t messageId, uint32_t byteSize)
 {
-    if (!enabled_.load(std::memory_order_relaxed))
+    if (!enabled.load(std::memory_order_relaxed))
         return;
     if (messageId >= kMaxRpcMethodCount)
     {
@@ -66,7 +66,7 @@ void TrafficStatsCollector::RecordRecv(uint32_t messageId, uint32_t byteSize)
         return;
     }
 
-    auto &c = counters_[messageId];
+    auto &c = counters[messageId];
     c.recvCount.fetch_add(1, std::memory_order_relaxed);
     c.recvBytes.fetch_add(byteSize, std::memory_order_relaxed);
     UpdateMaxSize(c.maxMessageSize, byteSize);
@@ -86,29 +86,29 @@ void TrafficStatsCollector::UpdateMaxSize(std::atomic<uint32_t> &current, uint32
 
 void TrafficStatsCollector::Enable(uint32_t autoDisableMinutes)
 {
-    for (auto &c : counters_)
+    for (auto &c : counters)
     {
         c.Reset();
     }
-    windowStart_ = std::chrono::steady_clock::now();
+    windowStart = std::chrono::steady_clock::now();
 
     if (autoDisableMinutes > 0)
     {
-        autoDisableTime_ = windowStart_ + std::chrono::minutes(autoDisableMinutes);
+        autoDisableTime = windowStart + std::chrono::minutes(autoDisableMinutes);
     }
     else
     {
-        autoDisableTime_ = std::chrono::steady_clock::time_point{};
+        autoDisableTime = std::chrono::steady_clock::time_point{};
     }
 
-    enabled_.store(true, std::memory_order_release);
-    LOG_INFO << "[TrafficStats] Enabled. report_interval=" << reportIntervalSeconds_ << "s"
+    enabled.store(true, std::memory_order_release);
+    LOG_INFO << "[TrafficStats] Enabled. report_interval=" << reportIntervalSeconds << "s"
              << (autoDisableMinutes > 0 ? " auto_disable_in=" + std::to_string(autoDisableMinutes) + "min" : "");
 }
 
 void TrafficStatsCollector::Disable()
 {
-    enabled_.store(false, std::memory_order_release);
+    enabled.store(false, std::memory_order_release);
     ReportAndReset();
     LOG_INFO << "[TrafficStats] Disabled.";
 }
@@ -116,14 +116,14 @@ void TrafficStatsCollector::Disable()
 void TrafficStatsCollector::ReportAndReset()
 {
     auto now = std::chrono::steady_clock::now();
-    double windowSeconds = std::chrono::duration<double>(now - windowStart_).count();
+    double windowSeconds = std::chrono::duration<double>(now - windowStart).count();
     if (windowSeconds <= 0)
         windowSeconds = 1.0;
 
     // Check auto-disable
-    if (autoDisableTime_.time_since_epoch().count() > 0 && now >= autoDisableTime_)
+    if (autoDisableTime.time_since_epoch().count() > 0 && now >= autoDisableTime)
     {
-        enabled_.store(false, std::memory_order_release);
+        enabled.store(false, std::memory_order_release);
         LOG_INFO << "[TrafficStats] Auto-disabled after timeout.";
     }
 
@@ -133,7 +133,7 @@ void TrafficStatsCollector::ReportAndReset()
 
     for (uint32_t i = 0; i < kMaxRpcMethodCount; ++i)
     {
-        auto &c = counters_[i];
+        auto &c = counters[i];
         MessageTrafficSnapshot s;
         s.messageId = i;
         s.sendCount = c.sendCount.exchange(0, std::memory_order_relaxed);
@@ -148,7 +148,7 @@ void TrafficStatsCollector::ReportAndReset()
         }
     }
 
-    windowStart_ = now;
+    windowStart = now;
 
     if (snapshots.empty())
     {

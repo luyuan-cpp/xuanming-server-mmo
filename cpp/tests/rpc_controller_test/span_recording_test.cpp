@@ -34,7 +34,7 @@ protected:
     void SetUp() override { tracing::Set(tracing::TraceContext{}); }
     void TearDown() override { tracing::Set(tracing::TraceContext{}); }
 
-    span_test::RecordingSink sink_;
+    span_test::RecordingSink sink;
 };
 
 } // namespace
@@ -51,19 +51,19 @@ TEST_F(SpanRecordingTest, NothingIsRecordedWithoutAnInstalledSink)
         EXPECT_FALSE(client.Recording());
         client.End();
     }
-    EXPECT_EQ(sink_.Count(), 0u);
+    EXPECT_EQ(sink.Count(), 0u);
 }
 
 TEST_F(SpanRecordingTest, ScopedRootRecordsAServerRootSpan)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     tracing::TraceContext inside;
     {
         tracing::ScopedRoot root(SpanSystem::kGateClient, SpanName{"ClientPlayerLogin", "EnterGame"});
         inside = tracing::Current();
     }
-    ASSERT_EQ(sink_.Count(), 1u);
-    const tracing::SpanRecord span = sink_.Spans()[0];
+    ASSERT_EQ(sink.Count(), 1u);
+    const tracing::SpanRecord span = sink.Spans()[0];
     EXPECT_EQ(span.trace_id.bytes, inside.trace_id.bytes);
     EXPECT_EQ(span.span_id.bytes, inside.span_id.bytes);
     EXPECT_FALSE(span.parent_span_id.IsValid()) << "根 span 没有父";
@@ -80,7 +80,7 @@ TEST_F(SpanRecordingTest, ScopedRootRecordsAServerRootSpan)
 
 TEST_F(SpanRecordingTest, ScopedIncomingContinuesARemoteParentAndRootsAnInvalidOne)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     const tracing::TraceContext upstream = tracing::NewRoot();
     {
         tracing::ScopedIncoming incoming(upstream, SpanKind::kServer, SpanSystem::kRpc0, SpanName{"Scene", "Process"});
@@ -89,7 +89,7 @@ TEST_F(SpanRecordingTest, ScopedIncomingContinuesARemoteParentAndRootsAnInvalidO
         tracing::ScopedIncoming incoming(tracing::TraceContext{}, SpanKind::kConsumer, SpanSystem::kKafka,
                                          SpanName{"gate-cmd_g1"});
     }
-    const auto spans = sink_.Spans();
+    const auto spans = sink.Spans();
     ASSERT_EQ(spans.size(), 2u);
     EXPECT_EQ(spans[0].trace_id.bytes, upstream.trace_id.bytes);
     EXPECT_EQ(spans[0].parent_span_id.bytes, upstream.span_id.bytes);
@@ -106,7 +106,7 @@ TEST_F(SpanRecordingTest, ScopedIncomingContinuesARemoteParentAndRootsAnInvalidO
 
 TEST_F(SpanRecordingTest, UnsampledContextIsContinuedButNotRecorded)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     tracing::TraceContext upstream = tracing::NewRoot();
     upstream.flags = 0x00;   // 上游显式不采:按 ParentBased 不记录
     {
@@ -118,23 +118,23 @@ TEST_F(SpanRecordingTest, UnsampledContextIsContinuedButNotRecorded)
         EXPECT_FALSE(client.Recording());
         client.End();
     }
-    EXPECT_EQ(sink_.Count(), 0u);
+    EXPECT_EQ(sink.Count(), 0u);
 }
 
 TEST_F(SpanRecordingTest, UnnamedScopesDoNotRecord)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     {
         tracing::ScopedRoot root;
         tracing::ScopedIncoming incoming(tracing::NewRoot());
         tracing::ScopedSpan child;
     }
-    EXPECT_EQ(sink_.Count(), 0u);
+    EXPECT_EQ(sink.Count(), 0u);
 }
 
 TEST_F(SpanRecordingTest, PendingSpanIsAChildOfTheCallerAndEndsExactlyOnce)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     tracing::TraceContext caller;
     tracing::TraceContext onWire;
     {
@@ -154,7 +154,7 @@ TEST_F(SpanRecordingTest, PendingSpanIsAChildOfTheCallerAndEndsExactlyOnce)
         moved.End();
         moved.End();    // 只生效一次
     }
-    const auto spans = sink_.Spans();
+    const auto spans = sink.Spans();
     ASSERT_EQ(spans.size(), 2u) << "client span 一条 + 根 span 一条";
     const tracing::SpanRecord& client = spans[0];
     EXPECT_EQ(client.kind, SpanKind::kClient);
@@ -169,24 +169,24 @@ TEST_F(SpanRecordingTest, PendingSpanIsAChildOfTheCallerAndEndsExactlyOnce)
 
 TEST_F(SpanRecordingTest, PendingSpanWithoutAParentIsEmpty)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     auto client = tracing::PendingSpan::StartChildOf(tracing::TraceContext{}, SpanKind::kProducer, SpanSystem::kKafka,
                                                      SpanName{"topic"});
     EXPECT_FALSE(client.Context().IsValid()) << "不在 trace 里的发送不凭空开根";
     EXPECT_FALSE(client.Recording());
     client.End();
-    EXPECT_EQ(sink_.Count(), 0u);
+    EXPECT_EQ(sink.Count(), 0u);
 }
 
 TEST_F(SpanRecordingTest, RestoreInstallsTheCapturedSpanSoChildrenAttachToAnExportedParent)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     tracing::TraceContext captured;
     {
         tracing::ScopedRoot root(SpanSystem::kGateClient, SpanName{"root"});
         captured = tracing::Current();
     }
-    sink_.Clear();
+    sink.Clear();
     {
         const tracing::ScopedSpan restore(captured);
         EXPECT_EQ(tracing::Current().trace_id.bytes, captured.trace_id.bytes);
@@ -214,7 +214,7 @@ TEST_F(SpanRecordingTest, RestoreInstallsTheCapturedSpanSoChildrenAttachToAnExpo
     tracing::Set(tracing::TraceContext{});
     boundUnderCaptured();
 
-    const auto spans = sink_.Spans();
+    const auto spans = sink.Spans();
     ASSERT_EQ(spans.size(), 2u) << "没有 trace 的那次续跑不产生 span";
     for (const auto& span : spans) {
         EXPECT_EQ(span.trace_id.bytes, captured.trace_id.bytes);
@@ -224,7 +224,7 @@ TEST_F(SpanRecordingTest, RestoreInstallsTheCapturedSpanSoChildrenAttachToAnExpo
 
 TEST_F(SpanRecordingTest, MarkCurrentSpanErrorMarksOnlyTheInnermostRecordingSpan)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     tracing::TraceContext captured;
     {
         tracing::ScopedRoot root(SpanSystem::kGateClient, SpanName{"outer"});
@@ -242,7 +242,7 @@ TEST_F(SpanRecordingTest, MarkCurrentSpanErrorMarksOnlyTheInnermostRecordingSpan
             tracing::MarkCurrentSpanError("ignored");
         }
     }
-    const auto spans = sink_.Spans();
+    const auto spans = sink.Spans();
     ASSERT_EQ(spans.size(), 2u);
     EXPECT_EQ(spans[0].Name(), "inner");
     EXPECT_EQ(spans[0].status, tracing::SpanStatus::kError);
@@ -251,12 +251,12 @@ TEST_F(SpanRecordingTest, MarkCurrentSpanErrorMarksOnlyTheInnermostRecordingSpan
     EXPECT_EQ(spans[1].status, tracing::SpanStatus::kUnset);
 
     tracing::MarkCurrentSpanError("no span");   // 作用域都退出了:什么都不做
-    EXPECT_EQ(sink_.Count(), 2u);
+    EXPECT_EQ(sink.Count(), 2u);
 }
 
 TEST_F(SpanRecordingTest, TakenServerSpanOutlivesItsDispatchScopeAndEndsWhereTheReplyIsSent)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     const tracing::TraceContext upstream = tracing::NewRoot();
     tracing::TraceContext dispatched;
     tracing::PendingSpan reply;
@@ -269,12 +269,12 @@ TEST_F(SpanRecordingTest, TakenServerSpanOutlivesItsDispatchScopeAndEndsWhereThe
         EXPECT_EQ(tracing::Current().span_id.bytes, dispatched.span_id.bytes) << "作用域照旧装着它的上下文";
         tracing::MarkCurrentSpanError("ignored");   // 接走之后当前线程上没有在录的 span
     }
-    EXPECT_EQ(sink_.Count(), 0u) << "派发作用域退出时不结束接走的 span";
+    EXPECT_EQ(sink.Count(), 0u) << "派发作用域退出时不结束接走的 span";
 
     reply.SetError("HANDLER_FAILED");
     reply.End();
-    ASSERT_EQ(sink_.Count(), 1u);
-    const tracing::SpanRecord span = sink_.Spans()[0];
+    ASSERT_EQ(sink.Count(), 1u);
+    const tracing::SpanRecord span = sink.Spans()[0];
     EXPECT_EQ(span.span_id.bytes, dispatched.span_id.bytes);
     EXPECT_EQ(span.parent_span_id.bytes, upstream.span_id.bytes);
     EXPECT_TRUE(span.parent_is_remote);
@@ -286,7 +286,7 @@ TEST_F(SpanRecordingTest, TakenServerSpanOutlivesItsDispatchScopeAndEndsWhereThe
 
 TEST_F(SpanRecordingTest, TakeCurrentServerSpanTakesOnlyAMatchingInnermostRecordingServerSpan)
 {
-    const span_test::ScopedSinkInstall install(&sink_);
+    const span_test::ScopedSinkInstall install(&sink);
     {
         tracing::ScopedIncoming grpc(tracing::NewRoot(), SpanKind::kServer, SpanSystem::kGrpc, SpanName{"pkg.Svc/M"});
         EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kRpc0).Recording()) << "来源不对";
@@ -300,7 +300,7 @@ TEST_F(SpanRecordingTest, TakeCurrentServerSpanTakesOnlyAMatchingInnermostRecord
         EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kKafka).Recording()) << "consumer 不是 server";
     }
     EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kGrpc).Recording()) << "作用域外什么都没有";
-    EXPECT_EQ(sink_.Count(), 2u) << "没被接走的照旧在作用域退出时结束";
+    EXPECT_EQ(sink.Count(), 2u) << "没被接走的照旧在作用域退出时结束";
 }
 
 TEST_F(SpanRecordingTest, SpanRecordJoinsAndTruncatesNames)

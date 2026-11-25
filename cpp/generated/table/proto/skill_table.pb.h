@@ -951,6 +951,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     kSeasonIdFieldNumber = 58,
     kScrollIdFieldNumber = 59,
     kRarityTierFieldNumber = 60,
+    kSecondaryTargetPolicyFieldNumber = 61,
+    kExclusiveGroupFieldNumber = 62,
   };
   // repeated uint32 skill_type = 2;
   [[nodiscard]] int skill_type_size()
@@ -1660,11 +1662,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
   void _internal_set_rarity_tier(::uint32_t value);
 
   public:
+  // uint32 secondary_target_policy = 61;
+  void clear_secondary_target_policy() ;
+  [[nodiscard]] ::uint32_t secondary_target_policy() const;
+  void set_secondary_target_policy(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_secondary_target_policy() const;
+  void _internal_set_secondary_target_policy(::uint32_t value);
+
+  public:
+  // uint32 exclusive_group = 62;
+  void clear_exclusive_group() ;
+  [[nodiscard]] ::uint32_t exclusive_group() const;
+  void set_exclusive_group(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_exclusive_group() const;
+  void _internal_set_exclusive_group(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 60,
+      ::google::protobuf::internal::TcParseTable<5, 62,
                           3, 138,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1757,6 +1779,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     ::uint32_t season_id_;
     ::uint32_t scroll_id_;
     ::uint32_t rarity_tier_;
+    ::uint32_t secondary_target_policy_;
+    ::uint32_t exclusive_group_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3901,6 +3925,54 @@ inline ::uint32_t SkillTable::_internal_rarity_tier() const {
 inline void SkillTable::_internal_set_rarity_tier(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rarity_tier_ = value;
+}
+
+// uint32 secondary_target_policy = 61;
+inline void SkillTable::clear_secondary_target_policy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.secondary_target_policy_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x10000000U);
+}
+inline ::uint32_t SkillTable::secondary_target_policy() const {
+  // @@protoc_insertion_point(field_get:SkillTable.secondary_target_policy)
+  return _internal_secondary_target_policy();
+}
+inline void SkillTable::set_secondary_target_policy(::uint32_t value) {
+  _internal_set_secondary_target_policy(value);
+  SetHasBit(_impl_._has_bits_[1], 0x10000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.secondary_target_policy)
+}
+inline ::uint32_t SkillTable::_internal_secondary_target_policy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.secondary_target_policy_;
+}
+inline void SkillTable::_internal_set_secondary_target_policy(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.secondary_target_policy_ = value;
+}
+
+// uint32 exclusive_group = 62;
+inline void SkillTable::clear_exclusive_group() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exclusive_group_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x20000000U);
+}
+inline ::uint32_t SkillTable::exclusive_group() const {
+  // @@protoc_insertion_point(field_get:SkillTable.exclusive_group)
+  return _internal_exclusive_group();
+}
+inline void SkillTable::set_exclusive_group(::uint32_t value) {
+  _internal_set_exclusive_group(value);
+  SetHasBit(_impl_._has_bits_[1], 0x20000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.exclusive_group)
+}
+inline ::uint32_t SkillTable::_internal_exclusive_group() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exclusive_group_;
+}
+inline void SkillTable::_internal_set_exclusive_group(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exclusive_group_ = value;
 }
 
 // repeated .Skillrequired_item required_item = 21;

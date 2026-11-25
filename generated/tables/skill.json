@@ -4693,7 +4693,7 @@
    "mana_percent": 0.08,
    "max_rank": 10,
    "max_targets": 7,
-   "name": "独立护盾（名称待定）",
+   "name": "太清灵盾",
    "pet_max_targets": 1,
    "prototype_code": "A40",
    "rarity_tier": 0,
@@ -5856,6 +5856,836 @@
    "scroll_id": 3,
    "season_id": 0,
    "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "手选主目标，其余按敌方物攻最高补选（至多3名），削弱目标下一次物理攻击伤害25%，持续2回合、触发消耗。",
+   "effect": [
+    101010
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10101,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "截锋令",
+   "pet_max_targets": 1,
+   "prototype_code": "S01",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "手选主目标，其余按敌方法攻最高补选（至多3名），削弱目标下一次法术攻击伤害25%，持续2回合、触发消耗。",
+   "effect": [
+    101020
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10102,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "遏灵令",
+   "pet_max_targets": 1,
+   "prototype_code": "S02",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "手选主目标，副目标按敌方物攻最高补选（至多2名），尝试封锁物理攻击2回合。",
+   "effect": [
+    101030
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10103,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "断刃锁心",
+   "pet_max_targets": 1,
+   "prototype_code": "S03",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "手选主目标，副目标按敌方法攻最高补选（至多2名），尝试封锁法术攻击2回合。",
+   "effect": [
+    101040
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10104,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "缚咒锁灵",
+   "pet_max_targets": 1,
+   "prototype_code": "S04",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "手选主目标，其余按敌方当前气血数值最低补选（至多3名），造成物理伤害。",
+   "effect": [
+    101050
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10105,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "逐命斩",
+   "pet_max_targets": 1,
+   "prototype_code": "S05",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 3,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "手选主目标，其余按敌方当前气血数值最低补选（至多3名），造成法术伤害。",
+   "effect": [
+    101060
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10106,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "追魄雷",
+   "pet_max_targets": 1,
+   "prototype_code": "S06",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 3,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "description": "手选主目标，其余按友方气血比例最低补选（至多4名），立即恢复气血（不复活）。",
+   "effect": [
+    101070
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10107,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 4,
+   "name": "扶危甘霖",
+   "pet_max_targets": 1,
+   "prototype_code": "S07",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 4,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "手选主目标，其余按友方气血比例最低补选（至多3名），赋予独立伤害吸收护盾，持续2回合。",
+   "effect": [
+    101080
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10108,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "护命灵障",
+   "pet_max_targets": 1,
+   "prototype_code": "S08",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 4,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "手选主目标，其余按友方物攻最高补选（至多3名），强化目标下一次物理攻击伤害30%，持续2回合、触发消耗。",
+   "effect": [
+    101090
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10109,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "授锋战印",
+   "pet_max_targets": 1,
+   "prototype_code": "S09",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "手选主目标，其余按友方法攻最高补选（至多3名），强化目标下一次法术攻击伤害30%，持续2回合、触发消耗。",
+   "effect": [
+    101100
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10110,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "聚灵法印",
+   "pet_max_targets": 1,
+   "prototype_code": "S10",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.05,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "手选主目标，副目标按敌方物防最低补选（至多2名），造成物理伤害。",
+   "effect": [
+    101110
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10111,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "寻隙破阵",
+   "pet_max_targets": 1,
+   "prototype_code": "S11",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 5,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 1.05,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "手选主目标，副目标按敌方法防最低补选（至多2名），造成法术伤害。",
+   "effect": [
+    101120
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10112,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "穿隙灵雷",
+   "pet_max_targets": 1,
+   "prototype_code": "S12",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 6,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "手选主目标，其余按本回合敌方排速最低补选（至多3名），造成物理伤害。",
+   "effect": [
+    101130
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10113,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "掠影追锋",
+   "pet_max_targets": 1,
+   "prototype_code": "S13",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 7,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "手选主目标，其余按本回合敌方排速最低补选（至多3名），造成法术伤害。",
+   "effect": [
+    101140
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 10114,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "流光落星",
+   "pet_max_targets": 1,
+   "prototype_code": "S14",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 7,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.9,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "宝宝专属：手选主目标，副目标按敌方当前气血数值最低补选（至多2名），造成物理伤害。",
+   "effect": [
+    111010
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 11101,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "猎血撕咬",
+   "pet_max_targets": 2,
+   "prototype_code": "SP01",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 3,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.9,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "宝宝专属：手选主目标，副目标按敌方当前气血数值最低补选（至多2名），造成法术伤害。",
+   "effect": [
+    111020
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 11102,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "追魂灵弹",
+   "pet_max_targets": 2,
+   "prototype_code": "SP02",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 4,
+   "season_id": 0,
+   "secondary_target_policy": 3,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 2.15,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "本回合进入蓄力准备（公开可见、可被驱散或控制打断），下回合正常行动自动释放高额物理群攻（至多5名敌人）；不可复制。",
+   "effect": [
+    101150
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 1,
+   "id": 10115,
+   "mana_percent": 0.14,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "蓄锋破阵",
+   "pet_max_targets": 1,
+   "prototype_code": "E01",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 2.15,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "本回合进入蓄力准备（公开可见、可被驱散或控制打断），下回合正常行动自动释放高额法术群攻（至多5名敌人）；不可复制。",
+   "effect": [
+    101160
+   ],
+   "exclusive_group": 0,
+   "forbid_copy": 1,
+   "id": 10116,
+   "mana_percent": 0.14,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "蓄雷天刑",
+   "pet_max_targets": 1,
+   "prototype_code": "E02",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "被动专精（与兵锋专修互斥）：放弃普通攻击、物理主动及物理反击能力，换取自身法术伤害提高22%（不影响治疗与辅助）。",
+   "exclusive_group": 1,
+   "forbid_copy": 0,
+   "id": 12101,
+   "init_effect": [
+    121010,
+    121011
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵法专修",
+   "pet_max_targets": 1,
+   "prototype_code": "E03",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "被动专精（与灵法专修互斥）：放弃法术主动及法术反击能力，换取自身物理伤害提高22%（不影响治疗与辅助）。",
+   "exclusive_group": 1,
+   "forbid_copy": 0,
+   "id": 12102,
+   "init_effect": [
+    121020,
+    121021
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "兵锋专修",
+   "pet_max_targets": 1,
+   "prototype_code": "E04",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "追击战法：普通攻击命中后45%概率触发（每回合至多1次），按条目判定尝试封锁目标法术攻击1回合。",
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 13101,
+   "init_effect": [
+    131010
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "截灵追击",
+   "pet_max_targets": 1,
+   "prototype_code": "E05",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "追击战法：法术主动命中后45%概率触发（每回合至多1次），按条目判定尝试封锁主目标物理攻击1回合。",
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 13102,
+   "init_effect": [
+    131020
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "封锋追击",
+   "pet_max_targets": 1,
+   "prototype_code": "E06",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 5,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "开场绝学：开场为敌方至多5名目标附加可驱散弱点（持续4回合）；此后每次直接攻击或追击命中叠1层（同行动每目标至多1层，上限5层），每层使目标承受伤害提高6%。",
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 14101,
+   "init_effect": [
+    141010
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "连击破绽",
+   "pet_max_targets": 1,
+   "prototype_code": "E07",
+   "rarity_tier": 1,
+   "require_target": 1,
+   "scroll_id": 6,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "开场绝学：开场为友方至多7名目标附加2回合护阵（可被驱散），自动抵挡首次行动控制（封主动/封法/封物/混乱/昏睡/冰冻）后消耗。",
+   "exclusive_group": 0,
+   "forbid_copy": 0,
+   "id": 14102,
+   "init_effect": [
+    141020
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "净心护阵",
+   "pet_max_targets": 1,
+   "prototype_code": "E08",
+   "rarity_tier": 1,
+   "require_target": 1,
+   "scroll_id": 6,
+   "season_id": 0,
+   "secondary_target_policy": 0,
+   "target_team": 2,
    "targeting_mode": [
     1
    ],

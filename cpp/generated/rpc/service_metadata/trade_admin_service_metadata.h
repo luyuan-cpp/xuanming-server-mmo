@@ -14,3 +14,11 @@ constexpr uint32_t TradeAdminListManualContractsIndex = 1;
 constexpr uint32_t TradeAdminResolveManualContractMessageId = 401;
 constexpr uint32_t TradeAdminResolveManualContractIndex = 2;
 #define TradeAdminResolveManualContractMethod  ::TradeAdmin_Stub::descriptor()->method(2)
+
+constexpr uint32_t TradeAdminRecordSellerEnvironmentMessageId = 496;
+constexpr uint32_t TradeAdminRecordSellerEnvironmentIndex = 3;
+#define TradeAdminRecordSellerEnvironmentMethod  ::TradeAdmin_Stub::descriptor()->method(3)
+
+constexpr uint32_t TradeAdminRecordSellerViolationMessageId = 497;
+constexpr uint32_t TradeAdminRecordSellerViolationIndex = 4;
+#define TradeAdminRecordSellerViolationMethod  ::TradeAdmin_Stub::descriptor()->method(4)

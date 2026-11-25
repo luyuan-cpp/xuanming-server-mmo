@@ -2665,6 +2665,1007 @@ void SendGuildServiceRespondGuildTrialInviteErased(entt::registry& registry, ent
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::RespondGuildTrialInviteResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region GuildServiceGetGuildWarOverview
+namespace {
+void QueueLocalGuildServiceGetGuildWarOverviewFailure(GrpcDone<::guildpb::GetGuildWarOverviewResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarOverviewGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceGetGuildWarOverviewCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarOverviewRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::GetGuildWarOverviewResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.GetGuildWarOverview requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceGetGuildWarOverviewGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceGetGuildWarOverviewFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceGetGuildWarOverviewFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::GetGuildWarOverviewResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.GetGuildWarOverview response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceGetGuildWarOverview(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarOverviewRequest& request,
+                                            GrpcDone<::guildpb::GetGuildWarOverviewResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceGetGuildWarOverviewCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceGetGuildWarOverviewErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.GetGuildWarOverview requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::GetGuildWarOverviewRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.GetGuildWarOverview: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarOverviewGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildWarOverviewRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.GetGuildWarOverview: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarOverviewGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceGetGuildWarOverviewCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::GetGuildWarOverviewResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceSetGuildWarStance
+namespace {
+void QueueLocalGuildServiceSetGuildWarStanceFailure(GrpcDone<::guildpb::SetGuildWarStanceResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceSetGuildWarStanceGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceSetGuildWarStanceCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildWarStanceRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::SetGuildWarStanceResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.SetGuildWarStance requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceSetGuildWarStanceGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceSetGuildWarStanceFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceSetGuildWarStanceFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::SetGuildWarStanceResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.SetGuildWarStance response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceSetGuildWarStance(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildWarStanceRequest& request,
+                                            GrpcDone<::guildpb::SetGuildWarStanceResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceSetGuildWarStanceCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceSetGuildWarStanceErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.SetGuildWarStance requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::SetGuildWarStanceRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.SetGuildWarStance: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetGuildWarStanceGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::SetGuildWarStanceRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.SetGuildWarStance: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetGuildWarStanceGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceSetGuildWarStanceCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::SetGuildWarStanceResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceRegisterGuildWarGarrison
+namespace {
+void QueueLocalGuildServiceRegisterGuildWarGarrisonFailure(GrpcDone<::guildpb::RegisterGuildWarGarrisonResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceRegisterGuildWarGarrisonGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceRegisterGuildWarGarrisonCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RegisterGuildWarGarrisonRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::RegisterGuildWarGarrisonResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.RegisterGuildWarGarrison requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceRegisterGuildWarGarrisonGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceRegisterGuildWarGarrisonFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceRegisterGuildWarGarrisonFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::RegisterGuildWarGarrisonResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.RegisterGuildWarGarrison response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceRegisterGuildWarGarrison(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RegisterGuildWarGarrisonRequest& request,
+                                            GrpcDone<::guildpb::RegisterGuildWarGarrisonResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceRegisterGuildWarGarrisonCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceRegisterGuildWarGarrisonErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.RegisterGuildWarGarrison requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::RegisterGuildWarGarrisonRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.RegisterGuildWarGarrison: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceRegisterGuildWarGarrisonGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::RegisterGuildWarGarrisonRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.RegisterGuildWarGarrison: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceRegisterGuildWarGarrisonGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceRegisterGuildWarGarrisonCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::RegisterGuildWarGarrisonResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceStartGuildWarBattle
+namespace {
+void QueueLocalGuildServiceStartGuildWarBattleFailure(GrpcDone<::guildpb::StartGuildWarBattleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceStartGuildWarBattleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceStartGuildWarBattleCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildWarBattleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::StartGuildWarBattleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.StartGuildWarBattle requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceStartGuildWarBattleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceStartGuildWarBattleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceStartGuildWarBattleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::StartGuildWarBattleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.StartGuildWarBattle response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceStartGuildWarBattle(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildWarBattleRequest& request,
+                                            GrpcDone<::guildpb::StartGuildWarBattleResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceStartGuildWarBattleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceStartGuildWarBattleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.StartGuildWarBattle requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::StartGuildWarBattleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.StartGuildWarBattle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceStartGuildWarBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::StartGuildWarBattleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.StartGuildWarBattle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceStartGuildWarBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceStartGuildWarBattleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::StartGuildWarBattleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceClaimGuildWarMilestone
+namespace {
+void QueueLocalGuildServiceClaimGuildWarMilestoneFailure(GrpcDone<::guildpb::ClaimGuildWarMilestoneResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarMilestoneGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceClaimGuildWarMilestoneCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarMilestoneRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::ClaimGuildWarMilestoneResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.ClaimGuildWarMilestone requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceClaimGuildWarMilestoneGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceClaimGuildWarMilestoneFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceClaimGuildWarMilestoneFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::ClaimGuildWarMilestoneResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.ClaimGuildWarMilestone response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceClaimGuildWarMilestone(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarMilestoneRequest& request,
+                                            GrpcDone<::guildpb::ClaimGuildWarMilestoneResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceClaimGuildWarMilestoneCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceClaimGuildWarMilestoneErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.ClaimGuildWarMilestone requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::ClaimGuildWarMilestoneRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.ClaimGuildWarMilestone: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarMilestoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::ClaimGuildWarMilestoneRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.ClaimGuildWarMilestone: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarMilestoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceClaimGuildWarMilestoneCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::ClaimGuildWarMilestoneResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceClaimGuildWarDividend
+namespace {
+void QueueLocalGuildServiceClaimGuildWarDividendFailure(GrpcDone<::guildpb::ClaimGuildWarDividendResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarDividendGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceClaimGuildWarDividendCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarDividendRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::ClaimGuildWarDividendResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.ClaimGuildWarDividend requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceClaimGuildWarDividendGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceClaimGuildWarDividendFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceClaimGuildWarDividendFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::ClaimGuildWarDividendResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.ClaimGuildWarDividend response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceClaimGuildWarDividend(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarDividendRequest& request,
+                                            GrpcDone<::guildpb::ClaimGuildWarDividendResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceClaimGuildWarDividendCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceClaimGuildWarDividendErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.ClaimGuildWarDividend requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::ClaimGuildWarDividendRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.ClaimGuildWarDividend: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarDividendGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::ClaimGuildWarDividendRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.ClaimGuildWarDividend: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildWarDividendGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceClaimGuildWarDividendCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::ClaimGuildWarDividendResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServicePostGuildWarBounty
+namespace {
+void QueueLocalGuildServicePostGuildWarBountyFailure(GrpcDone<::guildpb::PostGuildWarBountyResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServicePostGuildWarBountyGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServicePostGuildWarBountyCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::PostGuildWarBountyRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::PostGuildWarBountyResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.PostGuildWarBounty requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServicePostGuildWarBountyGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServicePostGuildWarBountyFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServicePostGuildWarBountyFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::PostGuildWarBountyResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.PostGuildWarBounty response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServicePostGuildWarBounty(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::PostGuildWarBountyRequest& request,
+                                            GrpcDone<::guildpb::PostGuildWarBountyResponse> done, const GrpcCallOptions& options) {
+    StartGuildServicePostGuildWarBountyCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServicePostGuildWarBountyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.PostGuildWarBounty requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::PostGuildWarBountyRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.PostGuildWarBounty: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServicePostGuildWarBountyGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::PostGuildWarBountyRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.PostGuildWarBounty: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServicePostGuildWarBountyGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServicePostGuildWarBountyCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::PostGuildWarBountyResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceTrackGuildWarBounty
+namespace {
+void QueueLocalGuildServiceTrackGuildWarBountyFailure(GrpcDone<::guildpb::TrackGuildWarBountyResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceTrackGuildWarBountyGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceTrackGuildWarBountyCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TrackGuildWarBountyRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::TrackGuildWarBountyResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.TrackGuildWarBounty requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceTrackGuildWarBountyGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceTrackGuildWarBountyFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceTrackGuildWarBountyFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::TrackGuildWarBountyResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.TrackGuildWarBounty response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceTrackGuildWarBounty(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TrackGuildWarBountyRequest& request,
+                                            GrpcDone<::guildpb::TrackGuildWarBountyResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceTrackGuildWarBountyCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceTrackGuildWarBountyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.TrackGuildWarBounty requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::TrackGuildWarBountyRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.TrackGuildWarBounty: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceTrackGuildWarBountyGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::TrackGuildWarBountyRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.TrackGuildWarBounty: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceTrackGuildWarBountyGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceTrackGuildWarBountyCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::TrackGuildWarBountyResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceGetGuildWarBattleResult
+namespace {
+void QueueLocalGuildServiceGetGuildWarBattleResultFailure(GrpcDone<::guildpb::GetGuildWarBattleResultResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarBattleResultGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceGetGuildWarBattleResultCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarBattleResultRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::GetGuildWarBattleResultResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.GetGuildWarBattleResult requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceGetGuildWarBattleResultGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceGetGuildWarBattleResultFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceGetGuildWarBattleResultFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::GetGuildWarBattleResultResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.GetGuildWarBattleResult response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceGetGuildWarBattleResult(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarBattleResultRequest& request,
+                                            GrpcDone<::guildpb::GetGuildWarBattleResultResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceGetGuildWarBattleResultCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceGetGuildWarBattleResultErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.GetGuildWarBattleResult requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::GetGuildWarBattleResultRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.GetGuildWarBattleResult: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarBattleResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildWarBattleResultRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.GetGuildWarBattleResult: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildWarBattleResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceGetGuildWarBattleResultCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::GetGuildWarBattleResultResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceNotifyGuildWarAlert
+namespace {
+void QueueLocalGuildServiceNotifyGuildWarAlertFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildWarAlertGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceNotifyGuildWarAlertCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildWarAlertS2C& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::Empty> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.NotifyGuildWarAlert requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceNotifyGuildWarAlertGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceNotifyGuildWarAlertFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceNotifyGuildWarAlertFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::Empty reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.NotifyGuildWarAlert response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceNotifyGuildWarAlert(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildWarAlertS2C& request,
+                                            GrpcDone<::Empty> done, const GrpcCallOptions& options) {
+    StartGuildServiceNotifyGuildWarAlertCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceNotifyGuildWarAlertErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.NotifyGuildWarAlert requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::GuildWarAlertS2C::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.NotifyGuildWarAlert: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildWarAlertGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::GuildWarAlertS2C*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.NotifyGuildWarAlert: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildWarAlertGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceNotifyGuildWarAlertCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region GuildServiceInspectFieldWarTargets
+namespace {
+void QueueLocalGuildServiceInspectFieldWarTargetsFailure(GrpcDone<::guildpb::InspectFieldWarTargetsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceInspectFieldWarTargetsGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartGuildServiceInspectFieldWarTargetsCall(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::InspectFieldWarTargetsRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::guildpb::InspectFieldWarTargetsResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.InspectFieldWarTargets requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kGuildServiceInspectFieldWarTargetsGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalGuildServiceInspectFieldWarTargetsFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalGuildServiceInspectFieldWarTargetsFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::guildpb::InspectFieldWarTargetsResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the GuildService.InspectFieldWarTargets response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendGuildServiceInspectFieldWarTargets(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::InspectFieldWarTargetsRequest& request,
+                                            GrpcDone<::guildpb::InspectFieldWarTargetsResponse> done, const GrpcCallOptions& options) {
+    StartGuildServiceInspectFieldWarTargetsCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC GuildService.InspectFieldWarTargets requires a done callback";
+    }
+    if (message.GetDescriptor() != ::guildpb::InspectFieldWarTargetsRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC GuildService.InspectFieldWarTargets: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceInspectFieldWarTargetsGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::guildpb::InspectFieldWarTargetsRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC GuildService.InspectFieldWarTargets: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceInspectFieldWarTargetsGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartGuildServiceInspectFieldWarTargetsCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::guildpb::InspectFieldWarTargetsResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetGuildCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

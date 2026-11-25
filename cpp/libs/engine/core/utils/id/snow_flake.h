@@ -52,12 +52,12 @@ public:
 			LOG_FATAL << "Node ID overflow: max allowed is " << kNodeMask;
 			return;
 		}
-		node_id_ = node_id;
+		nodeId = node_id;
 	}
 
-	inline uint64_t node_id() const { return node_id_; }
+	inline uint64_t NodeId() const { return nodeId; }
 
-	inline void set_epoch(uint64_t epoch) { epoch_ = epoch; }
+	inline void set_epoch(uint64_t epoch) { this->epoch = epoch; }
 
 	// 防止与上一个持有同一 node_id 的进程撞号:把 last_time_ 抬到 guard 秒并把该秒的
 	// step 池标记为耗尽,于是下一次 Generate() 一定落在 guard 之后的某一秒。
@@ -67,18 +67,18 @@ public:
 	// 这里 fail-closed:非法 guard 直接忽略并打 ERROR,而不是写坏发号器状态。
 	inline void SetGuardTime(uint64_t guardUtcSeconds)
 	{
-		if (guardUtcSeconds < epoch_) {
+		if (guardUtcSeconds < epoch) {
 			LOG_ERROR << "SnowFlake guard time " << guardUtcSeconds
-				<< " is before epoch " << epoch_ << "; ignoring guard";
+				<< " is before epoch " << epoch << "; ignoring guard";
 			return;
 		}
-		uint64_t guardEpoch = guardUtcSeconds - epoch_;
-		if (guardEpoch > last_time_) {
-			last_time_ = guardEpoch;
-			step_ = kStepMask; // 耗尽这一秒,Generate() 只能推进到下一秒
+		uint64_t guardEpoch = guardUtcSeconds - epoch;
+		if (guardEpoch > lastTime) {
+			lastTime = guardEpoch;
+			step = kStepMask; // 耗尽这一秒,Generate() 只能推进到下一秒
 			// 这次"耗尽"是 guard 有意预置的,不是撞到容量墙。标记一下,
 			// 让紧随其后的第一次 Generate() 不要误报成容量告警(见 Generate 的耗尽分支)。
-			guardPending_ = true;
+			guardPending = true;
 		}
 	}
 
@@ -92,30 +92,30 @@ public:
 		// guard 预置只影响**紧随其后的第一次**发号,所以标记由第一次 Generate 无条件消化 ——
 		// 不能只在耗尽分支里清:若时钟在首次发号前就已跨秒,这里走的是"换新秒"分支,
 		// 标记会一直留着,把之后一次**真实**的容量耗尽静音掉。
-		const bool guardPending = guardPending_;
-		guardPending_ = false;
+		const bool guardPending = this->guardPending;
+		this->guardPending = false;
 
-		if (now > last_time_) {
-			clockRollbackLogged_ = false;
-			last_time_ = now;
-			step_ = 0;
-			return ComposeID(last_time_, step_);
+		if (now > lastTime) {
+			clockRollbackLogged = false;
+			lastTime = now;
+			step = 0;
+			return ComposeID(lastTime, step);
 		}
 
 		// now <= last_time_:同一秒,或者时钟回拨。两种情况都继续消费 last_time_ 这一秒
 		// 剩下的 step 池。回拨时**不**自旋等待:旧实现会把整个 EventLoop 卡住整个回拨
 		// 幅度(最坏 3 秒后 LOG_FATAL 直接 abort 掉整个 scene/gate 进程),一次 NTP 回跳
 		// 就能把全服 C++ 节点一起打死。
-		if (now < last_time_ && !clockRollbackLogged_) {
-			clockRollbackLogged_ = true;
-			LOG_ERROR << "System clock moved backwards: high-water=" << last_time_
-				<< " now=" << now << " (behind by " << (last_time_ - now)
+		if (now < lastTime && !clockRollbackLogged) {
+			clockRollbackLogged = true;
+			LOG_ERROR << "System clock moved backwards: high-water=" << lastTime
+				<< " now=" << now << " (behind by " << (lastTime - now)
 				<< "s); minting from the high-water second, IDs stay unique and monotonic";
 		}
 
-		if (step_ < kStepMask) {
-			step_ += 1;
-			return ComposeID(last_time_, step_);
+		if (step < kStepMask) {
+			step += 1;
+			return ComposeID(lastTime, step);
 		}
 
 		// 高水位这一秒的 32768 个 step 用完了,必须等真实时钟越过它。
@@ -140,18 +140,18 @@ public:
 		// 也是墙钟口径)同样罩不住它。代价只是"激活同一秒内就有人发号"时那一次
 		// <1s 的等待,现实中几乎不可达(首个 item/tx/snapshot 发号远晚于节点激活)。
 		if (!guardPending) {
-			LOG_ERROR << "Snowflake step pool exhausted: node_id=" << node_id_
-				<< " logical_second=" << last_time_
+			LOG_ERROR << "Snowflake step pool exhausted: node_id=" << nodeId
+				<< " logical_second=" << lastTime
 				<< " cap=" << (kStepMask + 1)
-				<< " clock_behind=" << (now < last_time_ ? last_time_ - now : 0) << "s"
+				<< " clock_behind=" << (now < lastTime ? lastTime - now : 0) << "s"
 				<< "; waiting up to " << kWaitBudget.count()
 				<< "s for the clock, then borrowing the next logical second";
 		}
 
-		const uint64_t advanced = WaitNextTime(last_time_);
-		last_time_ = (advanced > last_time_) ? advanced : (last_time_ + 1);
-		step_ = 0;
-		return ComposeID(last_time_, step_);
+		const uint64_t advanced = WaitNextTime(lastTime);
+		lastTime = (advanced > lastTime) ? advanced : (lastTime + 1);
+		step = 0;
+		return ComposeID(lastTime, step);
 	}
 
 	// 逐个调用 Generate()。旧实现自己维护了一套 step 推进逻辑,而且与 Generate() 对
@@ -172,17 +172,17 @@ public:
 #ifdef ENABLE_SNOWFLAKE_TESTING
 	void set_mock_now(uint64_t mock_now)
 	{
-		mock_now_ = mock_now;
-		use_mock_time_ = true;
+		mockNow = mock_now;
+		useMockTime = true;
 	}
 
 	// 冻结虚拟时钟(每次读都返回同一个值),用于验证"时钟停摆 / 回拨"路径。
 	// 与 SnowFlakeAtomic::set_mock_static_time 对应。
 	void set_mock_static_time(uint64_t mock_now)
 	{
-		mock_now_ = mock_now;
-		use_mock_time_ = true;
-		static_mock_mode_ = true;
+		mockNow = mock_now;
+		useMockTime = true;
+		staticMockMode = true;
 	}
 #endif
 
@@ -190,7 +190,7 @@ private:
 	uint64_t ComposeID(uint64_t time, uint64_t step)
 	{
 		return (time << kTimeShift) |
-			(static_cast<uint64_t>(node_id_) << kNodeShift) |
+			(static_cast<uint64_t>(nodeId) << kNodeShift) |
 			step;
 	}
 
@@ -216,11 +216,11 @@ private:
 	uint64_t NowEpoch()
 	{
 #ifdef ENABLE_SNOWFLAKE_TESTING
-		if (use_mock_time_) {
-			if (static_mock_mode_) {
-				return mock_now_ - epoch_;
+		if (useMockTime) {
+			if (staticMockMode) {
+				return mockNow - epoch;
 			}
-			auto now_epoch = mock_now_++ - epoch_;
+			auto now_epoch = mockNow++ - epoch;
 			return now_epoch;
 		}
 #endif
@@ -233,28 +233,28 @@ private:
 		// 系统时钟早于 epoch(容器时钟没同步、回到 1970)时,uint64 减法会下溢成一个
 		// 天文数字,把 ID 的时间段顶到远未来且再也不会推进。钳到 0,让 Generate()
 		// 走"回拨"分支从高水位继续发号。
-		if (nowSeconds < static_cast<int64_t>(epoch_)) {
-			LOG_ERROR << "System clock " << nowSeconds << " is before snowflake epoch " << epoch_
+		if (nowSeconds < static_cast<int64_t>(epoch)) {
+			LOG_ERROR << "System clock " << nowSeconds << " is before snowflake epoch " << epoch
 				<< "; clamping to epoch";
 			return 0;
 		}
 
-		return static_cast<uint64_t>(nowSeconds) - epoch_;
+		return static_cast<uint64_t>(nowSeconds) - epoch;
 	}
 
 private:
-	uint64_t epoch_ = kEpoch;
-	uint32_t node_id_ = 0;
-	uint64_t last_time_ = 0;
-	uint64_t step_ = 0;
-	bool clockRollbackLogged_ = false;
+	uint64_t epoch = kEpoch;
+	uint32_t nodeId = 0;
+	uint64_t lastTime = 0;
+	uint64_t step = 0;
+	bool clockRollbackLogged = false;
 	// SetGuardTime 刚把 step 池预置满、且那一次预置尚未被首个 Generate() 消化。
 	// 只用来抑制"guard 造成的首次耗尽"的误报,不影响发号语义。
-	bool guardPending_ = false;
+	bool guardPending = false;
 #ifdef ENABLE_SNOWFLAKE_TESTING
-	uint64_t mock_now_ = 0;
-	bool use_mock_time_ = false;
-	bool static_mock_mode_ = false;
+	uint64_t mockNow = 0;
+	bool useMockTime = false;
+	bool staticMockMode = false;
 #endif
 
 };
@@ -266,17 +266,17 @@ public:
 			LOG_FATAL << "Node ID overflow: max allowed is " << kNodeMask;
 			return;
 		}
-		node_id_ = node_id;
+		nodeId = node_id;
 	}
 
-	inline void set_epoch(uint64_t epoch) { epoch_ = epoch; }
+	inline void set_epoch(uint64_t epoch) { this->epoch = epoch; }
 
 #ifdef ENABLE_SNOWFLAKE_TESTING
 public:
 	void set_mock_static_time(uint64_t t) {
-		mock_now_.store(t, std::memory_order_relaxed);
-		static_mock_mode_.store(true, std::memory_order_relaxed);
-		use_mock_time_.store(true, std::memory_order_relaxed);
+		mockNow.store(t, std::memory_order_relaxed);
+		staticMockMode.store(true, std::memory_order_relaxed);
+		useMockTime.store(true, std::memory_order_relaxed);
 	}
 #endif
 
@@ -287,7 +287,7 @@ public:
 		while (true) {
 			const uint64_t now = NowEpoch();
 
-			uint64_t current = time_step_.load(std::memory_order_relaxed);
+			uint64_t current = timeStep.load(std::memory_order_relaxed);
 			const uint64_t last_time = (current >> kStepBits);
 			const uint64_t last_step = (current & kStepMask);
 
@@ -313,7 +313,7 @@ public:
 			}
 
 			const uint64_t next = (mint_time << kStepBits) | step_to_use;
-			if (time_step_.compare_exchange_weak(current, next, std::memory_order_acq_rel)) {
+			if (timeStep.compare_exchange_weak(current, next, std::memory_order_acq_rel)) {
 				return ComposeID(mint_time, step_to_use);
 			}
 		}
@@ -326,7 +326,7 @@ public:
 		while (count > 0) {
 			const uint64_t now = NowEpoch();
 
-			uint64_t current = time_step_.load(std::memory_order_relaxed);
+			uint64_t current = timeStep.load(std::memory_order_relaxed);
 			const uint64_t last_time = (current >> kStepBits);
 			const uint64_t last_step = (current & kStepMask);
 
@@ -353,7 +353,7 @@ public:
 			}
 
 			const uint64_t next = (mint_time << kStepBits) | (step_start + step_count - 1);
-			if (time_step_.compare_exchange_weak(current, next, std::memory_order_acq_rel)) {
+			if (timeStep.compare_exchange_weak(current, next, std::memory_order_acq_rel)) {
 				for (uint64_t i = 0; i < step_count; ++i) {
 					ids.push_back(ComposeID(mint_time, step_start + i));
 				}
@@ -367,7 +367,7 @@ public:
 private:
 	Guid ComposeID(uint64_t time, uint64_t step) {
 		return (time << kTimeShift) |
-			(static_cast<uint64_t>(node_id_) << kNodeShift) |
+			(static_cast<uint64_t>(nodeId) << kNodeShift) |
 			step;
 	}
 
@@ -379,10 +379,10 @@ private:
 	// 的唯一记录者,其余线程静默。+1 是为了让"逻辑秒 0"也能被正常记录一次。
 	void LogStepPoolExhausted(uint64_t last_time, uint64_t now) {
 		const uint64_t token = last_time + 1;
-		if (exhaust_logged_sec_.exchange(token, std::memory_order_relaxed) == token) {
+		if (exhaustLoggedSec.exchange(token, std::memory_order_relaxed) == token) {
 			return;
 		}
-		LOG_ERROR << "Snowflake step pool exhausted: node_id=" << node_id_
+		LOG_ERROR << "Snowflake step pool exhausted: node_id=" << nodeId
 			<< " logical_second=" << last_time
 			<< " cap=" << (kStepMask + 1)
 			<< " clock_behind=" << (now < last_time ? last_time - now : 0) << "s"
@@ -392,11 +392,11 @@ private:
 
 	uint64_t NowEpoch() {
 #ifdef ENABLE_SNOWFLAKE_TESTING
-		if (use_mock_time_.load(std::memory_order_relaxed)) {
-			if (static_mock_mode_.load(std::memory_order_relaxed)) {
-				return mock_now_.load(std::memory_order_relaxed) - epoch_;
+		if (useMockTime.load(std::memory_order_relaxed)) {
+			if (staticMockMode.load(std::memory_order_relaxed)) {
+				return mockNow.load(std::memory_order_relaxed) - epoch;
 			}
-			return mock_now_.fetch_add(1, std::memory_order_relaxed) - epoch_;
+			return mockNow.fetch_add(1, std::memory_order_relaxed) - epoch;
 		}
 #endif
 		const int64_t nowSeconds = static_cast<int64_t>(
@@ -405,12 +405,12 @@ private:
 			.count());
 
 		// 见 SnowFlake::NowEpoch:早于 epoch 的时钟会下溢成天文数字,钳到 0。
-		if (nowSeconds < static_cast<int64_t>(epoch_)) {
-			LOG_ERROR << "System clock " << nowSeconds << " is before snowflake epoch " << epoch_
+		if (nowSeconds < static_cast<int64_t>(epoch)) {
+			LOG_ERROR << "System clock " << nowSeconds << " is before snowflake epoch " << epoch
 				<< "; clamping to epoch";
 			return 0;
 		}
-		return static_cast<uint64_t>(nowSeconds) - epoch_;
+		return static_cast<uint64_t>(nowSeconds) - epoch;
 	}
 
 
@@ -431,17 +431,17 @@ private:
 	}
 
 private:
-	uint64_t epoch_ = kEpoch;
+	uint64_t epoch = kEpoch;
 
-	uint32_t node_id_{ 0 };
-	std::atomic<uint64_t> time_step_{ 0 };
+	uint32_t nodeId{ 0 };
+	std::atomic<uint64_t> timeStep{ 0 };
 	// 已为哪个逻辑秒打过耗尽日志(存的是 logical_second+1,0 表示还没打过)。
-	std::atomic<uint64_t> exhaust_logged_sec_{ 0 };
+	std::atomic<uint64_t> exhaustLoggedSec{ 0 };
 
 #ifdef ENABLE_SNOWFLAKE_TESTING
-	std::atomic<uint64_t> mock_now_{ 0 };
-	std::atomic<bool> use_mock_time_{ false };
-	std::atomic<bool> static_mock_mode_{ false };
+	std::atomic<uint64_t> mockNow{ 0 };
+	std::atomic<bool> useMockTime{ false };
+	std::atomic<bool> staticMockMode{ false };
 #endif
 
 };

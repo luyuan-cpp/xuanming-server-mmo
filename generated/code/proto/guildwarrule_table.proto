@@ -1,0 +1,47 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildWarRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildWarRuleTable {
+	uint32 id = 1;
+	uint32 min_level = 2;
+	uint32 peace_cooldown_sec = 3;
+	uint32 post_battle_protect_sec = 4;
+	uint32 leyline_max_banner_hp = 5;
+	uint32 leyline_capture_init_hp = 6;
+	uint32 leyline_shield_sec = 7;
+	uint32 pvp_win_banner_damage = 8;
+	uint32 pvp_defend_banner_heal = 9;
+	uint32 siege_win_banner_damage = 10;
+	uint32 garrison_max_slots = 11;
+	uint32 garrison_refresh_cooldown_sec = 12;
+	uint32 frenzy_start_round = 13;
+	uint64 bounty_normal_silver = 14;
+	uint64 bounty_heavy_silver = 15;
+	uint32 bounty_tax_bps = 16;
+	uint64 bounty_public_funds = 17;
+	uint32 bounty_public_daily_limit = 18;
+	uint32 bounty_ttl_sec = 19;
+	uint32 bounty_protect_sec = 20;
+	uint32 bounty_counter_kill_tear = 21;
+	uint32 bounty_daily_payout_limit = 22;
+	uint32 track_cooldown_sec = 23;
+	uint32 diminish_window_sec = 24;
+	uint32 dividend_interval_sec = 25;
+	uint32 dividend_guild_weekly_cap = 26;
+	uint32 dividend_player_weekly_cap = 27;
+	uint64 dividend_min_personal_merit = 28;
+	uint32 battle_config_id = 29;
+	uint32 gold_leyline_multiplier_bps = 30;
+	uint32 rivalry_bonus_bps = 31;
+}
+
+message GuildWarRuleTableData {
+	repeated GuildWarRuleTable data = 1;
+}

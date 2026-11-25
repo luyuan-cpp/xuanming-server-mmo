@@ -39,18 +39,18 @@ template <typename Room>
 class RoomTable
 {
 public:
-	void SetHooks(Hooks hooks) { hooks_ = std::move(hooks); }
+	void SetHooks(Hooks hooks) { this->hooks = std::move(hooks); }
 
 	Room *Find(const uint64_t roomId)
 	{
-		const auto it = rooms_.find(roomId);
-		return it == rooms_.end() ? nullptr : it->second.get();
+		const auto it = rooms.find(roomId);
+		return it == rooms.end() ? nullptr : it->second.get();
 	}
 
 	const Room *Find(const uint64_t roomId) const
 	{
-		const auto it = rooms_.find(roomId);
-		return it == rooms_.end() ? nullptr : it->second.get();
+		const auto it = rooms.find(roomId);
+		return it == rooms.end() ? nullptr : it->second.get();
 	}
 
 	// 插入并恰好触发一次 onCreated,返回表内对象。
@@ -64,14 +64,14 @@ public:
 		{
 			return nullptr;
 		}
-		const auto [it, inserted] = rooms_.try_emplace(roomId, std::move(room));
+		const auto [it, inserted] = rooms.try_emplace(roomId, std::move(room));
 		if (!inserted)
 		{
 			return nullptr;
 		}
-		if (hooks_.onCreated)
+		if (hooks.onCreated)
 		{
-			hooks_.onCreated(roomId);
+			hooks.onCreated(roomId);
 		}
 		return it->second.get();
 	}
@@ -80,13 +80,13 @@ public:
 	// 房间不存在时 no-op、不触发回调,返回 false。调用之后该房间的指针 / 引用全部悬空。
 	bool Erase(const uint64_t roomId)
 	{
-		if (rooms_.erase(roomId) == 0)
+		if (rooms.erase(roomId) == 0)
 		{
 			return false;
 		}
-		if (hooks_.onRemoved)
+		if (hooks.onRemoved)
 		{
-			hooks_.onRemoved(roomId);
+			hooks.onRemoved(roomId);
 		}
 		return true;
 	}
@@ -95,20 +95,20 @@ public:
 	std::vector<uint64_t> Ids() const
 	{
 		std::vector<uint64_t> ids;
-		ids.reserve(rooms_.size());
-		for (const auto &entry : rooms_)
+		ids.reserve(rooms.size());
+		for (const auto &entry : rooms)
 		{
 			ids.push_back(entry.first);
 		}
 		return ids;
 	}
 
-	bool Empty() const { return rooms_.empty(); }
-	std::size_t Size() const { return rooms_.size(); }
+	bool Empty() const { return rooms.empty(); }
+	std::size_t Size() const { return rooms.size(); }
 
 private:
-	Hooks hooks_;
-	std::unordered_map<uint64_t, std::unique_ptr<Room>> rooms_;
+	Hooks hooks;
+	std::unordered_map<uint64_t, std::unique_ptr<Room>> rooms;
 };
 
 } // namespace battle_room_table

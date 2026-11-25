@@ -42,7 +42,7 @@ boost::cobalt::task<void> CreateBattleWithPermit(muduo::net::EventLoop& loop,
             return true;
         }, nullptr);
     // 三种拒绝都回 UNAVAILABLE battle_not_allocatable(match 换节点重试一次),日志按原因分开记,与改造前的回调一致。
-    const auto battleId = call->request().battle_id();
+    const auto battleId = call->Request().battle_id();
     if (!permit || (co_await boost::cobalt::this_coro::cancelled) != boost::asio::cancellation_type::none)
     {
         // CloseAdmission 关闸时停掉了等许可的任务:停机已开始。
@@ -78,16 +78,16 @@ boost::cobalt::task<void> CreateBattleWithPermit(muduo::net::EventLoop& loop,
 
 bool BattleNodeImpl::OpenAdmission()
 {
-    const bool opened = admission_->Open();
+    const bool opened = admission->Open();
     LOG_INFO << "battle room admission gate: " << (opened ? "opened" : "not opened(shutdown started or repeated call)")
-             << " phase=" << battle_admission::ToString(admission_->Phase());
+             << " phase=" << battle_admission::ToString(admission->Phase());
     return opened;
 }
 
 void BattleNodeImpl::CloseAdmission()
 {
-    admission_->Close();
-    creationTasks_.Stop();
+    admission->Close();
+    creationTasks.Stop();
     LOG_INFO << "battle room admission gate closed: subsequent CreateBattle calls return UNAVAILABLE " << kBattleNotAllocatableMessage;
 }
 
@@ -117,7 +117,7 @@ bool BattleNodeImpl::LifecycleGrantsPermits()
 ///<<< END WRITING YOUR CODE
 
 BattleNodeImpl::BattleNodeImpl(muduo::net::EventLoop& loop)
-    : loop_(loop)
+    : loop(loop)
 {
 }
 
@@ -215,7 +215,7 @@ void BattleNodeImpl::HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroad
 
 void BattleNodeImpl::QueryObserver(const std::shared_ptr<QueryObserverCall>& call)
 {
-    [[maybe_unused]] const ::QueryObserverRequest* request = &call->request();
+    [[maybe_unused]] const ::QueryObserverRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.QueryObserver.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -223,7 +223,7 @@ void BattleNodeImpl::QueryObserver(const std::shared_ptr<QueryObserverCall>& cal
 
 void BattleNodeImpl::QueryBattleCreation(const std::shared_ptr<QueryBattleCreationCall>& call)
 {
-    [[maybe_unused]] const ::QueryBattleCreationRequest* request = &call->request();
+    [[maybe_unused]] const ::QueryBattleCreationRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.QueryBattleCreation.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -231,14 +231,14 @@ void BattleNodeImpl::QueryBattleCreation(const std::shared_ptr<QueryBattleCreati
 
 void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
 {
-    [[maybe_unused]] const ::CreateBattleRequest* request = &call->request();
+    [[maybe_unused]] const ::CreateBattleRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.CreateBattle.guard
     // 节点级准入分三道,全部在任何副作用之前;任一道不过即回 UNAVAILABLE battle_not_allocatable,
     // match 据此跳过 DestroyBattle、换节点重试一次。
     // 顺序:准入闸 → 分配许可(异步:HTTP 在 lifecycle worker,结果经 queueInLoop 回 loop)→ 许可回到 loop 后复核准入闸
     // → 预签票据(HandleCreateBattle 内 BuildAssignment)→ 插表(EmplaceRoom)。全部在 loop 线程。
     // 1) 建房准入闸(battle_admission_gate.h):启动完成之前与停机开始之后都不接新房间。闸没开就连许可都不取。
-    if (const auto phase = admission_->Phase(); phase != battle_admission::AdmissionPhase::kOpen)
+    if (const auto phase = admission->Phase(); phase != battle_admission::AdmissionPhase::kOpen)
     {
         LOG_WARN << "CreateBattle rejected: this node is not accepting new rooms, battle_id=" << request->battle_id()
                  << " admission=" << battle_admission::ToString(phase)
@@ -249,7 +249,7 @@ void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
     // 2) 分配许可(集群外入口 D82)。拿不到(排空标签在、allocate 未确认、lifecycle 已停 / 仍在 Starting、等待超时)即拒绝:
     //    此刻还没进 Handle*,房间、定时器、推送、Kafka 事件一概没有发生。非 Agones 环境许可恒放行(启停窗口由第 1、3 道兜住)。
     //    回调只捕获 call 与 weak 闸,不捕获 this(AGENTS §11.7)。
-    if (!creationTasks_.Start(CreateBattleWithPermit(loop_, call, admission_), "BattleCreationPermit"))
+    if (!creationTasks.Start(CreateBattleWithPermit(loop, call, admission), "BattleCreationPermit"))
     {
         LOG_WARN << "CreateBattle rejected: admission closed before awaiting allocation permission, battle_id="
                  << request->battle_id() << ",returning UNAVAILABLE " << kBattleNotAllocatableMessage;
@@ -262,7 +262,7 @@ void BattleNodeImpl::CreateBattle(const std::shared_ptr<CreateBattleCall>& call)
 
 void BattleNodeImpl::DestroyBattle(const std::shared_ptr<DestroyBattleCall>& call)
 {
-    [[maybe_unused]] const ::DestroyBattleRequest* request = &call->request();
+    [[maybe_unused]] const ::DestroyBattleRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.DestroyBattle.guard
     if(!BattleRoomManager::Instance().AcceptsPlacementOperation(request->battle_id(),request->placement_operation_id(),request->target_instance_id()))
     {
@@ -275,7 +275,7 @@ void BattleNodeImpl::DestroyBattle(const std::shared_ptr<DestroyBattleCall>& cal
 
 void BattleNodeImpl::AddObserver(const std::shared_ptr<AddObserverCall>& call)
 {
-    [[maybe_unused]] const ::AddObserverRequest* request = &call->request();
+    [[maybe_unused]] const ::AddObserverRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AddObserver.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -283,7 +283,7 @@ void BattleNodeImpl::AddObserver(const std::shared_ptr<AddObserverCall>& call)
 
 void BattleNodeImpl::RemoveObserver(const std::shared_ptr<RemoveObserverCall>& call)
 {
-    [[maybe_unused]] const ::RemoveObserverRequest* request = &call->request();
+    [[maybe_unused]] const ::RemoveObserverRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.RemoveObserver.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -291,7 +291,7 @@ void BattleNodeImpl::RemoveObserver(const std::shared_ptr<RemoveObserverCall>& c
 
 void BattleNodeImpl::IssueBattleTicket(const std::shared_ptr<IssueBattleTicketCall>& call)
 {
-    [[maybe_unused]] const ::IssueBattleTicketRequest* request = &call->request();
+    [[maybe_unused]] const ::IssueBattleTicketRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.IssueBattleTicket.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -299,7 +299,7 @@ void BattleNodeImpl::IssueBattleTicket(const std::shared_ptr<IssueBattleTicketCa
 
 void BattleNodeImpl::AttachRelayGate(const std::shared_ptr<AttachRelayGateCall>& call)
 {
-    [[maybe_unused]] const ::AttachRelayGateRequest* request = &call->request();
+    [[maybe_unused]] const ::AttachRelayGateRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.AttachRelayGate.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();
@@ -307,7 +307,7 @@ void BattleNodeImpl::AttachRelayGate(const std::shared_ptr<AttachRelayGateCall>&
 
 void BattleNodeImpl::PromoteSpectateBroadcast(const std::shared_ptr<PromoteSpectateBroadcastCall>& call)
 {
-    [[maybe_unused]] const ::PromoteSpectateBroadcastRequest* request = &call->request();
+    [[maybe_unused]] const ::PromoteSpectateBroadcastRequest* request = &call->Request();
     ///<<< BEGIN WRITING YOUR CODE: grpc.PromoteSpectateBroadcast.guard
     ///<<< END WRITING YOUR CODE
     call->Proceed();

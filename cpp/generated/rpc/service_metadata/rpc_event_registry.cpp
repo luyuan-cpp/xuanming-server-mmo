@@ -128,6 +128,8 @@ void SendBattleClientPlayerNotifySpectateEndErased(entt::registry& , entt::entit
 void SendBattleClientPlayerNotifyBattleAssignedErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerSurrenderBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleClientPlayerNotifySurrenderVoteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerUpdateBattlePrepErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
+void SendBattleClientPlayerNotifyBattlePrepUpdateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryObserverErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeQueryBattleCreationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
 void SendBattleNodeCreateBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );
@@ -195,6 +197,7 @@ namespace data_service{void SendDataServiceGetPlayerAssetOpLedgerErased(entt::re
 namespace data_service{void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceUpdateRoleAppearanceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceSyncAccountStage1TradableErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVPutErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVDeleteRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -244,6 +247,17 @@ namespace guildpb{void SendGuildServiceLightGuildLanternErased(entt::registry& ,
 namespace guildpb{void SendGuildServiceClaimGuildReunionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceStartGuildTrialErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceRespondGuildTrialInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceGetGuildWarOverviewErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceSetGuildWarStanceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceRegisterGuildWarGarrisonErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceStartGuildWarBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceClaimGuildWarMilestoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceClaimGuildWarDividendErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServicePostGuildWarBountyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceTrackGuildWarBountyErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceGetGuildWarBattleResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceNotifyGuildWarAlertErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginLoginErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginCreatePlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -285,6 +299,7 @@ namespace match{void SendMatchInternalListStrandedFormationsErased(entt::registr
 namespace match{void SendMatchInternalResolveStrandedFormationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalListPendingBattleScriptsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchInternalReviewBattleScriptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchInternalStartGuildWarBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetNetworkProbePlanErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCommitNetworkProbeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceJoinQueueErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -423,11 +438,13 @@ namespace trade{void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::re
 namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminListManualContractsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendTradeAdminRecordSellerEnvironmentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 485,
+static_assert(kMaxRpcMethodCount == 506,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -504,6 +521,16 @@ void InitMessageInfo()
         std::make_unique<::SurrenderVoteS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifySurrenderVoteErased, "/BattleClientPlayer/NotifySurrenderVote"};
+    gRpcMethodRegistry[BattleClientPlayerUpdateBattlePrepMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "UpdateBattlePrep",
+        std::make_unique<::UpdateBattlePrepRequest>(),
+        std::make_unique<::UpdateBattlePrepResponse>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerUpdateBattlePrepErased, "/BattleClientPlayer/UpdateBattlePrep"};
+    gRpcMethodRegistry[BattleClientPlayerNotifyBattlePrepUpdateMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifyBattlePrepUpdate",
+        std::make_unique<::BattlePrepUpdateS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifyBattlePrepUpdateErased, "/BattleClientPlayer/NotifyBattlePrepUpdate"};
 
     // --- BattleNode ---
     gRpcMethodRegistry[BattleNodeQueryObserverMessageId] = RpcMethodMeta{
@@ -849,6 +876,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::UpdateRoleAppearanceRequest>(),
         std::make_unique<::data_service::UpdateRoleAppearanceResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceUpdateRoleAppearanceErased, "/data_service.DataService/UpdateRoleAppearance"};
+    gRpcMethodRegistry[DataServiceSyncAccountStage1TradableMessageId] = RpcMethodMeta{
+        "DataService", "SyncAccountStage1Tradable",
+        std::make_unique<::data_service::SyncAccountStage1TradableRequest>(),
+        std::make_unique<::data_service::SyncAccountStage1TradableResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceSyncAccountStage1TradableErased, "/data_service.DataService/SyncAccountStage1Tradable"};
 
     // --- KV ---
     gRpcMethodRegistry[KVRangeMessageId] = RpcMethodMeta{
@@ -1158,6 +1190,61 @@ void InitMessageInfo()
         std::make_unique<::guildpb::RespondGuildTrialInviteRequest>(),
         std::make_unique<::guildpb::RespondGuildTrialInviteResponse>(),
         1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceRespondGuildTrialInviteErased, "/guildpb.GuildService/RespondGuildTrialInvite"};
+    gRpcMethodRegistry[GuildServiceGetGuildWarOverviewMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildWarOverview",
+        std::make_unique<::guildpb::GetGuildWarOverviewRequest>(),
+        std::make_unique<::guildpb::GetGuildWarOverviewResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildWarOverviewErased, "/guildpb.GuildService/GetGuildWarOverview"};
+    gRpcMethodRegistry[GuildServiceSetGuildWarStanceMessageId] = RpcMethodMeta{
+        "GuildService", "SetGuildWarStance",
+        std::make_unique<::guildpb::SetGuildWarStanceRequest>(),
+        std::make_unique<::guildpb::SetGuildWarStanceResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetGuildWarStanceErased, "/guildpb.GuildService/SetGuildWarStance"};
+    gRpcMethodRegistry[GuildServiceRegisterGuildWarGarrisonMessageId] = RpcMethodMeta{
+        "GuildService", "RegisterGuildWarGarrison",
+        std::make_unique<::guildpb::RegisterGuildWarGarrisonRequest>(),
+        std::make_unique<::guildpb::RegisterGuildWarGarrisonResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceRegisterGuildWarGarrisonErased, "/guildpb.GuildService/RegisterGuildWarGarrison"};
+    gRpcMethodRegistry[GuildServiceStartGuildWarBattleMessageId] = RpcMethodMeta{
+        "GuildService", "StartGuildWarBattle",
+        std::make_unique<::guildpb::StartGuildWarBattleRequest>(),
+        std::make_unique<::guildpb::StartGuildWarBattleResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceStartGuildWarBattleErased, "/guildpb.GuildService/StartGuildWarBattle"};
+    gRpcMethodRegistry[GuildServiceClaimGuildWarMilestoneMessageId] = RpcMethodMeta{
+        "GuildService", "ClaimGuildWarMilestone",
+        std::make_unique<::guildpb::ClaimGuildWarMilestoneRequest>(),
+        std::make_unique<::guildpb::ClaimGuildWarMilestoneResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceClaimGuildWarMilestoneErased, "/guildpb.GuildService/ClaimGuildWarMilestone"};
+    gRpcMethodRegistry[GuildServiceClaimGuildWarDividendMessageId] = RpcMethodMeta{
+        "GuildService", "ClaimGuildWarDividend",
+        std::make_unique<::guildpb::ClaimGuildWarDividendRequest>(),
+        std::make_unique<::guildpb::ClaimGuildWarDividendResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceClaimGuildWarDividendErased, "/guildpb.GuildService/ClaimGuildWarDividend"};
+    gRpcMethodRegistry[GuildServicePostGuildWarBountyMessageId] = RpcMethodMeta{
+        "GuildService", "PostGuildWarBounty",
+        std::make_unique<::guildpb::PostGuildWarBountyRequest>(),
+        std::make_unique<::guildpb::PostGuildWarBountyResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServicePostGuildWarBountyErased, "/guildpb.GuildService/PostGuildWarBounty"};
+    gRpcMethodRegistry[GuildServiceTrackGuildWarBountyMessageId] = RpcMethodMeta{
+        "GuildService", "TrackGuildWarBounty",
+        std::make_unique<::guildpb::TrackGuildWarBountyRequest>(),
+        std::make_unique<::guildpb::TrackGuildWarBountyResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceTrackGuildWarBountyErased, "/guildpb.GuildService/TrackGuildWarBounty"};
+    gRpcMethodRegistry[GuildServiceGetGuildWarBattleResultMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildWarBattleResult",
+        std::make_unique<::guildpb::GetGuildWarBattleResultRequest>(),
+        std::make_unique<::guildpb::GetGuildWarBattleResultResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildWarBattleResultErased, "/guildpb.GuildService/GetGuildWarBattleResult"};
+    gRpcMethodRegistry[GuildServiceNotifyGuildWarAlertMessageId] = RpcMethodMeta{
+        "GuildService", "NotifyGuildWarAlert",
+        std::make_unique<::guildpb::GuildWarAlertS2C>(),
+        std::make_unique<::Empty>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceNotifyGuildWarAlertErased, "/guildpb.GuildService/NotifyGuildWarAlert"};
+    gRpcMethodRegistry[GuildServiceInspectFieldWarTargetsMessageId] = RpcMethodMeta{
+        "GuildService", "InspectFieldWarTargets",
+        std::make_unique<::guildpb::InspectFieldWarTargetsRequest>(),
+        std::make_unique<::guildpb::InspectFieldWarTargetsResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceInspectFieldWarTargetsErased, "/guildpb.GuildService/InspectFieldWarTargets"};
 
     // --- GuildInternal ---
     gRpcMethodRegistry[GuildInternalListAppliedAssetOpsSinceMessageId] = RpcMethodMeta{
@@ -1377,6 +1464,11 @@ void InitMessageInfo()
         std::make_unique<::match::ReviewBattleScriptRequest>(),
         std::make_unique<::match::ReviewBattleScriptResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalReviewBattleScriptErased, "/match.MatchInternal/ReviewBattleScript"};
+    gRpcMethodRegistry[MatchInternalStartGuildWarBattleMessageId] = RpcMethodMeta{
+        "MatchInternal", "StartGuildWarBattle",
+        std::make_unique<::match::StartGuildWarBattleRequest>(),
+        std::make_unique<::match::StartGuildWarBattleResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchInternalStartGuildWarBattleErased, "/match.MatchInternal/StartGuildWarBattle"};
 
     // --- MatchService ---
     gRpcMethodRegistry[MatchServiceGetNetworkProbePlanMessageId] = RpcMethodMeta{
@@ -2149,6 +2241,16 @@ void InitMessageInfo()
         std::make_unique<::SavePetEntriesRequest>(),
         std::make_unique<::SavePetEntriesResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerSwitchPetEntryPresetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "SwitchPetEntryPreset",
+        std::make_unique<::SwitchPetEntryPresetRequest>(),
+        std::make_unique<::SwitchPetEntryPresetResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerAscendPetTierMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "AscendPetTier",
+        std::make_unique<::AscendPetTierRequest>(),
+        std::make_unique<::AscendPetTierResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSceneClientPlayer ---
     gRpcMethodRegistry[SceneSceneClientPlayerEnterSceneMessageId] = RpcMethodMeta{
@@ -2279,6 +2381,16 @@ void InitMessageInfo()
         "SceneSkillClientPlayer", "ListCraftProxyStalls",
         std::make_unique<::ListCraftProxyStallsRequest>(),
         std::make_unique<::ListCraftProxyStallsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerSaveSkillLoadoutMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "SaveSkillLoadout",
+        std::make_unique<::SaveSkillLoadoutRequest>(),
+        std::make_unique<::SaveSkillLoadoutResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerSwitchSkillLoadoutMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "SwitchSkillLoadout",
+        std::make_unique<::SwitchSkillLoadoutRequest>(),
+        std::make_unique<::SwitchSkillLoadoutResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- ScenePlayerSync ---
@@ -2787,6 +2899,16 @@ void InitMessageInfo()
         std::make_unique<::trade::ResolveManualContractRequest>(),
         std::make_unique<::trade::ResolveManualContractResponse>(),
         1, common::base::eNodeType::TradeNodeService, trade::SendTradeAdminResolveManualContractErased, "/trade.TradeAdmin/ResolveManualContract"};
+    gRpcMethodRegistry[TradeAdminRecordSellerEnvironmentMessageId] = RpcMethodMeta{
+        "TradeAdmin", "RecordSellerEnvironment",
+        std::make_unique<::trade::RecordSellerEnvironmentRequest>(),
+        std::make_unique<::trade::RecordSellerEnvironmentResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendTradeAdminRecordSellerEnvironmentErased, "/trade.TradeAdmin/RecordSellerEnvironment"};
+    gRpcMethodRegistry[TradeAdminRecordSellerViolationMessageId] = RpcMethodMeta{
+        "TradeAdmin", "RecordSellerViolation",
+        std::make_unique<::trade::RecordSellerViolationRequest>(),
+        std::make_unique<::trade::RecordSellerViolationResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendTradeAdminRecordSellerViolationErased, "/trade.TradeAdmin/RecordSellerViolation"};
 }
 
 bool IsClientMessageId(uint32_t messageId)
@@ -2797,6 +2919,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerStopWatchBattleMessageId:
 	case BattleClientPlayerSetAutoBattleMessageId:
 	case BattleClientPlayerSurrenderBattleMessageId:
+	case BattleClientPlayerUpdateBattlePrepMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
 	case ClientPlayerChatReportChatMessageId:
@@ -2839,6 +2962,16 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceClaimGuildReunionMessageId:
 	case GuildServiceStartGuildTrialMessageId:
 	case GuildServiceRespondGuildTrialInviteMessageId:
+	case GuildServiceGetGuildWarOverviewMessageId:
+	case GuildServiceSetGuildWarStanceMessageId:
+	case GuildServiceRegisterGuildWarGarrisonMessageId:
+	case GuildServiceStartGuildWarBattleMessageId:
+	case GuildServiceClaimGuildWarMilestoneMessageId:
+	case GuildServiceClaimGuildWarDividendMessageId:
+	case GuildServicePostGuildWarBountyMessageId:
+	case GuildServiceTrackGuildWarBountyMessageId:
+	case GuildServiceGetGuildWarBattleResultMessageId:
+	case GuildServiceInspectFieldWarTargetsMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:
@@ -2951,6 +3084,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerGetPetEntriesMessageId:
 	case ScenePetClientPlayerPreviewPetEntriesMessageId:
 	case ScenePetClientPlayerSavePetEntriesMessageId:
+	case ScenePetClientPlayerSwitchPetEntryPresetMessageId:
+	case ScenePetClientPlayerAscendPetTierMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:
@@ -2967,6 +3102,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerDismantleSkillBookMessageId:
 	case SceneSkillClientPlayerSetCraftProxyStallMessageId:
 	case SceneSkillClientPlayerListCraftProxyStallsMessageId:
+	case SceneSkillClientPlayerSaveSkillLoadoutMessageId:
+	case SceneSkillClientPlayerSwitchSkillLoadoutMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:
 	case SceneTrialJournalClientPlayerClaimTrialJournalMilestoneMessageId:
 	case SceneTrialJournalClientPlayerRedeemBoundArtifactVoucherMessageId:

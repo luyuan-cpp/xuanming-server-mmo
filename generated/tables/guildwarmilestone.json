@@ -1,0 +1,48 @@
+{
+ "data": [
+  {
+   "id": 1,
+   "required_guild_merit": 300,
+   "reward_contribution": 80,
+   "reward_item1_count": 2,
+   "reward_item1_id": 3403,
+   "reward_item2_count": 0,
+   "reward_item2_id": 0,
+   "reward_preview": "重铸砂×2 + 银两×5000 + 帮贡×80",
+   "reward_silver": 5000
+  },
+  {
+   "id": 2,
+   "required_guild_merit": 1200,
+   "reward_contribution": 120,
+   "reward_item1_count": 4,
+   "reward_item1_id": 3406,
+   "reward_item2_count": 3,
+   "reward_item2_id": 3403,
+   "reward_preview": "悟道残页×4 + 重铸砂×3 + 银两×8000",
+   "reward_silver": 8000
+  },
+  {
+   "id": 3,
+   "required_guild_merit": 3000,
+   "reward_contribution": 180,
+   "reward_item1_count": 6,
+   "reward_item1_id": 3406,
+   "reward_item2_count": 20,
+   "reward_item2_id": 20,
+   "reward_preview": "悟道残页×6 + 灵兽口粮×20 + 银两×12000",
+   "reward_silver": 12000
+  },
+  {
+   "id": 4,
+   "required_guild_merit": 6000,
+   "reward_contribution": 300,
+   "reward_item1_count": 5,
+   "reward_item1_id": 3403,
+   "reward_item2_count": 8,
+   "reward_item2_id": 3406,
+   "reward_preview": "重铸砂×5 + 悟道残页×8 + 帮贡×300",
+   "reward_silver": 20000
+  }
+ ]
+}

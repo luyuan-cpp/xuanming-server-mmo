@@ -494,6 +494,7 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
 	const auto effectiveLevel = PetEffectiveLevel(pet, row);
 	info.set_pet_id(pet.pet_id());
     PetSystem::FillCultivationTier(pet, info);
+    PetSystem::FillTierAscension(player, pet, effectiveLevel, info);
     if (PetSystem::BuildEntriesInfo(pet, *info.mutable_entries()) != kSuccess) info.clear_entries();
 	info.set_pet_table_id(pet.pet_table_id());
 	info.set_level(effectiveLevel);
@@ -1491,6 +1492,54 @@ uint32_t PetSystem::RestorePetFromSnapshot(entt::entity player, const PetInstanc
 	return kSuccess;
 }
 
+namespace {
+bool BuildSinglePetBattleSnapshot(entt::entity player, const PetInstance& pet, uint32_t ownerLevel,
+	const AttributePoolTable& pool, bool fullResources, ::BattlePetSnapshot& snapshot) {
+	const auto* row = PetRow(pet.pet_table_id());
+	if (row == nullptr || ownerLevel < PetEffectiveLevel(pet, row)) {
+		if (row == nullptr) {
+			LOG_WARN << "[PlayerPet] Pet has no table row; excluded from battle snapshot: player_id="
+					 << tlsEcs.GetPlayerId(player) << " pet_id=" << pet.pet_id()
+					 << " pet_table_id=" << pet.pet_table_id();
+		}
+		return false;
+	}
+	if (!fullResources && pet.health() == 0) {
+		return false;
+	}
+	const auto derived = ComputeDerived(pet, *row, pool);
+	PetEntriesInfo entries;
+	if (BuildEntriesInfo(pet, entries) == kSuccess) *snapshot.mutable_pet_cultivation() = entries.effects();
+	else snapshot.clear_pet_cultivation();
+	snapshot.set_pet_id(pet.pet_id());
+	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
+	snapshot.set_pet_name(!pet.name().empty() ? pet.name() : row->name());
+	snapshot.set_pet_table_id(pet.pet_table_id());
+	snapshot.set_level(PetEffectiveLevel(pet, row));
+	snapshot.set_max_health(derived.maxHealth);
+	snapshot.set_max_mana(derived.maxMana);
+	snapshot.set_physical_attack(derived.physicalAttack);
+	snapshot.set_magic_attack(derived.magicAttack);
+	snapshot.set_defense(derived.defense);
+
+	auto* attributes = snapshot.mutable_base_attributes();
+	attributes->set_health(fullResources ? derived.maxHealth : std::min(pet.health(), derived.maxHealth));
+	attributes->set_mana(fullResources ? derived.maxMana
+		: (derived.maxMana > 0 ? std::min(pet.mana(), derived.maxMana) : pet.mana()));
+	attributes->set_speed(derived.speed);
+	for (const auto skillTableId : ResolveSkills(pet, *row)) {
+		const auto* skill = SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
+		if (skill == nullptr) continue;
+		if (PlayerSkillSystem::IsTurnBattleCastable(*skill)) snapshot.add_skill_table_ids(skillTableId);
+		if (skill->battle_model() == 1) {
+			(*snapshot.mutable_skill_ranks())[skillTableId] = classskill::EffectiveRank(
+				StoredSkillRank(pet, *row, skillTableId), PetEffectiveLevel(pet, row), skill->unlock_level(), skill->max_rank());
+		}
+	}
+	return true;
+}
+} // namespace
+
 bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& snapshot) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return false;
@@ -1509,51 +1558,38 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 	if (pet == nullptr) {
 		return false;
 	}
-	const auto* row = PetRow(pet->pet_table_id());
 	const auto ownerLevel = OwnerLevel(player);
-	if (!ownerLevel.has_value() || *ownerLevel < PetEffectiveLevel(*pet, row)) return false;
 	const auto* pool = PetPool();
-	if (row == nullptr || pool == nullptr) {
-		LOG_WARN << "[PlayerPet] Deployed pet has no table row;pet excluded from this battle: player_id=" << tlsEcs.GetPlayerId(player)
-				 << " pet_id=" << pet->pet_id() << " pet_table_id=" << pet->pet_table_id();
+	if (!ownerLevel.has_value() || pool == nullptr) {
 		return false;
 	}
-	// 死宝宝不参战(结算会把它回满,但当前这一局它躺着):带进去就是开局即倒的空单位
-	if (pet->health() == 0) {
-		return false;
+	return BuildSinglePetBattleSnapshot(player, *pet, *ownerLevel, *pool, /*fullResources=*/false, snapshot);
+}
+
+void PetSystem::BuildStandbyBattleSnapshots(entt::entity player, uint64_t excludePetId,
+	std::size_t maxCount, bool fullResources, std::vector<::BattlePetSnapshot>& out) {
+	out.clear();
+	if (maxCount == 0 || !tlsEcs.actorRegistry.valid(player)) {
+		return;
 	}
-
-	// 快照里的数值与列表同一个来源(ComputeDerived 已按生效加点过门):不生效的加点、未知键都带不进战斗。
-	const auto derived = ComputeDerived(*pet, *row, *pool);
-	PetEntriesInfo entries;
-    if (BuildEntriesInfo(*pet, entries) == kSuccess) *snapshot.mutable_pet_cultivation() = entries.effects();
-    else snapshot.clear_pet_cultivation(); // 旧表配置未接条目时不阻断原有宝宝参战。
-    snapshot.set_pet_id(pet->pet_id());
-	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
-	snapshot.set_pet_name(!pet->name().empty() ? pet->name() : row->name());
-	snapshot.set_pet_table_id(pet->pet_table_id());
-	snapshot.set_level(PetEffectiveLevel(*pet, row));
-	snapshot.set_max_health(derived.maxHealth);
-	snapshot.set_max_mana(derived.maxMana);
-	snapshot.set_physical_attack(derived.physicalAttack);
-	snapshot.set_magic_attack(derived.magicAttack);
-	snapshot.set_defense(derived.defense);
-
-	auto* attributes = snapshot.mutable_base_attributes();
-	attributes->set_health(std::min(pet->health(), derived.maxHealth));
-	attributes->set_mana(derived.maxMana > 0 ? std::min(pet->mana(), derived.maxMana) : pet->mana());
-	// speed 直接用二级属性:回合引擎的出手序与逃跑判定只读 BaseAttributesComp.speed
-	attributes->set_speed(derived.speed);
-	for (const auto skillTableId : ResolveSkills(*pet, *row)) {
-		const auto* skill = SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
-		if (skill == nullptr) continue;
-		if (PlayerSkillSystem::IsTurnBattleCastable(*skill)) snapshot.add_skill_table_ids(skillTableId);
-		if (skill->battle_model() == 1) {
-			(*snapshot.mutable_skill_ranks())[skillTableId] = classskill::EffectiveRank(
-				StoredSkillRank(*pet, *row, skillTableId), PetEffectiveLevel(*pet, row), skill->unlock_level(), skill->max_rank());
+	const auto* petComp = FindComp(player);
+	const auto ownerLevel = OwnerLevel(player);
+	const auto* pool = PetPool();
+	if (petComp == nullptr || !ownerLevel.has_value() || pool == nullptr) {
+		return;
+	}
+	for (const auto& pet : petComp->pets()) {
+		if (out.size() >= maxCount) {
+			break;
+		}
+		if (pet.pet_id() == 0 || pet.pet_id() == excludePetId) {
+			continue;
+		}
+		::BattlePetSnapshot snap;
+		if (BuildSinglePetBattleSnapshot(player, pet, *ownerLevel, *pool, fullResources, snap)) {
+			out.emplace_back(std::move(snap));
 		}
 	}
-	return true;
 }
 
 void PetSystem::ApplyBattleSettlement(entt::entity player, const ::BattlePetSettlementData& settlement) {

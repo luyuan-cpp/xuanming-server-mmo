@@ -73,10 +73,10 @@ public:
     // context 是这个 span 自己的上下文(trace_id、本 span 的 span_id、flags);parent 全零 = 根 span。
     void Begin(const TraceContext& context, const SpanId& parent, bool parentIsRemote, SpanKind kind, SpanSystem system,
                SpanName name) noexcept;
-    bool Active() const { return active_; }
+    bool Active() const { return active; }
     // 在录时这个 span 的类型与来源(没在录时无意义)。
-    SpanKind Kind() const { return record_.kind; }
-    SpanSystem System() const { return record_.system; }
+    SpanKind Kind() const { return record.kind; }
+    SpanSystem System() const { return record.system; }
     // 标成错误;说明按字节截断。没在记录时什么都不做。
     void SetError(std::string_view description) noexcept;
     void SetGrpcStatusCode(uint32_t code) noexcept;
@@ -84,9 +84,9 @@ public:
     void End() noexcept;
 
 private:
-    SpanRecord record_{};
-    int64_t startSteadyNanos_{0};
-    bool active_{false};
+    SpanRecord record{};
+    int64_t startSteadyNanos{0};
+    bool active{false};
 };
 
 // 把当前线程上最内层的在录 span 标成错误(例如 RPC0 派发前的拒绝)。只在确知「当前在录的就是这次调用的 span」的
@@ -115,15 +115,15 @@ public:
     // 最内层没有在录的、或不是这一类的,返回空 span,作用域照旧在退出时结束它自己的。
     static PendingSpan TakeCurrentServerSpan(SpanSystem system) noexcept;
 
-    const TraceContext& Context() const { return context_; }
-    bool Recording() const { return recorder_.Active(); }
-    void SetError(std::string_view description) noexcept { recorder_.SetError(description); }
-    void SetGrpcStatusCode(uint32_t code) noexcept { recorder_.SetGrpcStatusCode(code); }
-    void End() noexcept { recorder_.End(); }
+    const TraceContext& Context() const { return context; }
+    bool Recording() const { return recorder.Active(); }
+    void SetError(std::string_view description) noexcept { recorder.SetError(description); }
+    void SetGrpcStatusCode(uint32_t code) noexcept { recorder.SetGrpcStatusCode(code); }
+    void End() noexcept { recorder.End(); }
 
 private:
-    TraceContext context_;
-    SpanRecorder recorder_;
+    TraceContext context;
+    SpanRecorder recorder;
 };
 
 // 作用域内装上一个上下文,退出时恢复进入前的 trace。
@@ -138,16 +138,16 @@ private:
 class ScopedSpan {
 public:
     ScopedSpan()
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
-        detail::tlsTrace = previous_.IsValid() ? ChildSpan(previous_) : NewRoot();
+        detail::tlsTrace = previous.IsValid() ? ChildSpan(previous) : NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     explicit ScopedSpan(const TraceContext& captured)
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = captured;
         detail::tlsRecorder = nullptr;
@@ -155,8 +155,8 @@ public:
 
     ~ScopedSpan()
     {
-        detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
+        detail::tlsTrace = previous;
+        detail::tlsRecorder = previousRecorder ? &previousRecorder->get() : nullptr;
     }
 
     ScopedSpan(const ScopedSpan&) = delete;
@@ -165,8 +165,8 @@ public:
     ScopedSpan& operator=(ScopedSpan&&) = delete;
 
 private:
-    TraceContext previous_;
-    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
+    TraceContext previous;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder;
 };
 
 // 作用域内开一条新根(不看当前有没有 trace),退出时恢复进入前的值。只给「本进程就是起点」的入口用:
@@ -176,30 +176,30 @@ private:
 class ScopedRoot {
 public:
     ScopedRoot()
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     ScopedRoot(SpanSystem system, SpanName name)
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = NewRoot();
-        recorder_.Begin(detail::tlsTrace, SpanId{}, false, SpanKind::kServer, system, name);
-        detail::tlsRecorder = recorder_.Active() ? &recorder_ : nullptr;
+        recorder.Begin(detail::tlsTrace, SpanId{}, false, SpanKind::kServer, system, name);
+        detail::tlsRecorder = recorder.Active() ? &recorder : nullptr;
     }
 
     ~ScopedRoot()
     {
-        recorder_.End();
-        detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
+        recorder.End();
+        detail::tlsTrace = previous;
+        detail::tlsRecorder = previousRecorder ? &previousRecorder->get() : nullptr;
     }
 
-    void SetError(std::string_view description) noexcept { recorder_.SetError(description); }
+    void SetError(std::string_view description) noexcept { recorder.SetError(description); }
 
     ScopedRoot(const ScopedRoot&) = delete;
     ScopedRoot& operator=(const ScopedRoot&) = delete;
@@ -207,9 +207,9 @@ public:
     ScopedRoot& operator=(ScopedRoot&&) = delete;
 
 private:
-    TraceContext previous_;
-    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
-    SpanRecorder recorder_;
+    TraceContext previous;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder;
+    SpanRecorder recorder;
 };
 
 // 作用域内接续收到的上下文:incoming 合法就在它下面建子 span,不合法就开新根;退出时恢复进入前的值。
@@ -222,31 +222,31 @@ private:
 class ScopedIncoming {
 public:
     explicit ScopedIncoming(const TraceContext& incoming)
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = incoming.IsValid() ? ChildSpan(incoming) : NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     ScopedIncoming(const TraceContext& incoming, SpanKind kind, SpanSystem system, SpanName name)
-        : previous_(detail::tlsTrace),
-          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
+        : previous(detail::tlsTrace),
+          previousRecorder(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         const bool continued = incoming.IsValid();
         detail::tlsTrace = continued ? ChildSpan(incoming) : NewRoot();
-        recorder_.Begin(detail::tlsTrace, continued ? incoming.span_id : SpanId{}, continued, kind, system, name);
-        detail::tlsRecorder = recorder_.Active() ? &recorder_ : nullptr;
+        recorder.Begin(detail::tlsTrace, continued ? incoming.span_id : SpanId{}, continued, kind, system, name);
+        detail::tlsRecorder = recorder.Active() ? &recorder : nullptr;
     }
 
     ~ScopedIncoming()
     {
-        recorder_.End();
-        detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
+        recorder.End();
+        detail::tlsTrace = previous;
+        detail::tlsRecorder = previousRecorder ? &previousRecorder->get() : nullptr;
     }
 
-    void SetError(std::string_view description) noexcept { recorder_.SetError(description); }
+    void SetError(std::string_view description) noexcept { recorder.SetError(description); }
 
     ScopedIncoming(const ScopedIncoming&) = delete;
     ScopedIncoming& operator=(const ScopedIncoming&) = delete;
@@ -254,21 +254,21 @@ public:
     ScopedIncoming& operator=(ScopedIncoming&&) = delete;
 
 private:
-    TraceContext previous_;
-    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
-    SpanRecorder recorder_;
+    TraceContext previous;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder;
+    SpanRecorder recorder;
 };
 
 // 作用域内把当前玩家设成 playerId(0 表示没有玩家),退出时恢复进入前的值。
 class ScopedPlayerId {
 public:
     explicit ScopedPlayerId(uint64_t playerId)
-        : previous_(detail::tlsPlayerId)
+        : previous(detail::tlsPlayerId)
     {
         detail::tlsPlayerId = playerId;
     }
 
-    ~ScopedPlayerId() { detail::tlsPlayerId = previous_; }
+    ~ScopedPlayerId() { detail::tlsPlayerId = previous; }
 
     ScopedPlayerId(const ScopedPlayerId&) = delete;
     ScopedPlayerId& operator=(const ScopedPlayerId&) = delete;
@@ -276,7 +276,7 @@ public:
     ScopedPlayerId& operator=(ScopedPlayerId&&) = delete;
 
 private:
-    uint64_t previous_;
+    uint64_t previous;
 };
 
 // 把一次性回调包一层:记下此刻的 trace,执行时用 ScopedSpan(captured) 原样装回,执行完恢复(设计 §4.3)。

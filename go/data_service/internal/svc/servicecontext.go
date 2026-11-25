@@ -178,6 +178,8 @@ type ServiceContext struct {
 	RoleRenames RoleRenamer
 	// RoleAppearances 是角色永久外观目录同步(UpdateRoleAppearance RPC),只认 scene 的调用证明(RoleAdmissionAuth)。
 	RoleAppearances RoleAppearanceUpdater
+	// AccountTradableQuota 是阶段一账号级可交易装备材料配额同步(SyncAccountStage1Tradable RPC),只认 scene 的调用证明。
+	AccountTradableQuota AccountTradableQuotaStore
 	PlayerRouteAuth        *serviceauth.Verifier // GetPlayerRoute 的调用证明,缺席时回 Unavailable
 	roleFenceCoordinator   io.Closer
 	stopRemovalResumer     func(context.Context) error

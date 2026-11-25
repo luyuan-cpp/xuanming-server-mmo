@@ -329,6 +329,28 @@ service MatchInternal {
   // serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
   rpc ListPendingBattleScripts(ListPendingBattleScriptsRequest) returns (ListPendingBattleScriptsResponse);
   rpc ReviewBattleScript(ReviewBattleScriptRequest) returns (ReviewBattleScriptResponse);
+  // 帮会全天帮战 V2 无匹配池直打入口(docs/design/guild-play-v2.md):支持真人双侧直打与攻方打守旗 AI 快照。
+  rpc StartGuildWarBattle(StartGuildWarBattleRequest) returns (StartGuildWarBattleResponse);
+}
+
+// ---- 帮会全天帮战 V2 无匹配池直打(MatchInternal.StartGuildWarBattle) ----
+message StartGuildWarBattleRequest {
+  uint32 battle_config_id = 1;                        // DungeonTable id(PVP 竞技或守卫副本模板)
+  uint32 match_mode = 2;                              // MatchMode: 9=GUILD_WAR_PVP / 10=GUILD_WAR_SIEGE
+  repeated uint64 attacker_player_ids = 3;            // team_index=0 真人角色 ID(1..5)
+  repeated uint64 defender_player_ids = 4;            // team_index=1 真人角色 ID(LIVE_PVP 时 1..5;SIEGE 时为空)
+  repeated BattlePlayerSnapshot ai_defender_snapshots = 5; // SIEGE 守旗阵快照(强制置 team_index=1, ai_controlled=true)
+  BattleActivityContext activity_context = 6;         // kind 必须为 BATTLE_ACTIVITY_KIND_GUILD_WAR
+  uint64 request_id = 7;                              // 调用方幂等请求号
+  common.base.ServiceCallAuth auth = 8;
+}
+
+message StartGuildWarBattleResponse {
+  ActivityBattleReject reject = 1;
+  uint64 offender_player_id = 2;                      // 被占或离线角色 ID
+  uint64 offender_battle_id = 3;                      // offender 正处于战斗中时返回其 battle_id(客户端直转一键观战)
+  uint64 battle_id = 4;                               // reject == NONE 时非 0
+  uint32 formation_state = 5;
 }
 
 // ---- 战斗剧本审核(运营入口) ----

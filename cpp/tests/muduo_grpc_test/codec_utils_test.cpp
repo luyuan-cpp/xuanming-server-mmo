@@ -114,21 +114,21 @@ TEST(MuduoGrpcStatus, RstStreamMapping)
 {
     // RFC 9113 §7 错误码按数值写,不借实现库的枚举。
     const Status refused = muduo_grpc::StatusFromRstStreamError(0x7);
-    EXPECT_EQ(refused.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(refused.Code(), StatusCode::kUnavailable);
     EXPECT_NE(refused.message().find("REFUSED_STREAM"), std::string::npos) << refused.message();
 
     const Status cancel = muduo_grpc::StatusFromRstStreamError(0x8);
-    EXPECT_EQ(cancel.code(), StatusCode::kCancelled);
+    EXPECT_EQ(cancel.Code(), StatusCode::kCancelled);
     EXPECT_NE(cancel.message().find("CANCEL"), std::string::npos) << cancel.message();
 
-    EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(0xb).code(), StatusCode::kResourceExhausted); // ENHANCE_YOUR_CALM
-    EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(0xc).code(), StatusCode::kPermissionDenied); // INADEQUATE_SECURITY
+    EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(0xb).Code(), StatusCode::kResourceExhausted); // ENHANCE_YOUR_CALM
+    EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(0xc).Code(), StatusCode::kPermissionDenied); // INADEQUATE_SECURITY
 
     // NO_ERROR / PROTOCOL / INTERNAL / FLOW_CONTROL / SETTINGS_TIMEOUT / STREAM_CLOSED / FRAME_SIZE /
     // COMPRESSION / CONNECT / 未定义值:全部 INTERNAL。
     for (const uint32_t other : {0x0u, 0x1u, 0x2u, 0x3u, 0x4u, 0x5u, 0x6u, 0x9u, 0xau, 0xdu, 0xffu, 0xffffffffu})
     {
-        EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(other).code(), StatusCode::kInternal) << other;
+        EXPECT_EQ(muduo_grpc::StatusFromRstStreamError(other).Code(), StatusCode::kInternal) << other;
     }
 }
 

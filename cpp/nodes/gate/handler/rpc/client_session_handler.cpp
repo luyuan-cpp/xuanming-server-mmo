@@ -537,7 +537,7 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 	// 自由函数,不绑 this;状态在 client_heartbeat.cpp 的 thread_local 里。
 	messageDispatcher.registerMessageCallback<ClientHeartbeatRequest>(&gate_client_heartbeat::OnHeartbeatRequest);
 
-	nodeRemovedSubscription_ = tlsEcs.dispatcher.sink<OnNodeRemoveEvent>().connect<&GateClientSessionHandler::OnNodeRemoveEventHandler>(*this);
+	nodeRemovedSubscription = tlsEcs.dispatcher.sink<OnNodeRemoveEvent>().connect<&GateClientSessionHandler::OnNodeRemoveEventHandler>(*this);
 }
 
 // Scene node binding must be set explicitly by scene manager (e.g. EnterScene).

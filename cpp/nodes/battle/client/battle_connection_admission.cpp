@@ -32,33 +32,33 @@ Verdict Admission::Admit(const muduo::net::InetAddress &peer, const size_t curre
                          const std::optional<SteadyTime::duration> oldestUnauthenticatedAge, const SteadyTime now)
 {
     // 按来源限速:开启且承压时才问这条直连所在前缀的桶;非公网来源(代理、边缘 nginx、集群内)认不出真实玩家,不按来源限。
-    sourceRateActive_ = sourceRate_.has_value() &&
-                        accept_admission::SourceRateUnderPressure(unauthenticated, preAuthBudget_, lastAcceptRateRejectAt_, now);
+    sourceRateActive = sourceRate.has_value() &&
+                        accept_admission::SourceRateUnderPressure(unauthenticated, preAuthBudget, lastAcceptRateRejectAt, now);
     const std::optional<SourcePrefix> source =
-        sourceRateActive_ ? accept_admission::RateLimitedSourceOf(peer) : std::nullopt;
+        sourceRateActive ? accept_admission::RateLimitedSourceOf(peer) : std::nullopt;
     const AdmissionState state{
-        .sourceClosed = sourceClosed_,
+        .sourceClosed = sourceClosed,
         .currentConnections = currentConnections,
         .maxConnections = maxConnections,
         .unauthenticated = unauthenticated,
         .oldestUnauthenticatedAge = oldestUnauthenticatedAge,
-        .preAuthBudget = preAuthBudget_,
-        .sourceOverRate = source && !sourceRate_->WouldAdmit(*source, now),
+        .preAuthBudget = preAuthBudget,
+        .sourceOverRate = source && !sourceRate->WouldAdmit(*source, now),
     };
-    Verdict verdict = Decide(state, rateGate_, now, tlsUniformBelow);
+    Verdict verdict = Decide(state, rateGate, now, tlsUniformBelow);
     if (verdict.rejected)
     {
         if (*verdict.rejected == RejectReason::kAcceptRate)
         {
-            lastAcceptRateRejectAt_ = now;
+            lastAcceptRateRejectAt = now;
         }
-        ++counters_.rejected[static_cast<size_t>(*verdict.rejected)];
+        ++counters.rejected[static_cast<size_t>(*verdict.rejected)];
         return verdict;
     }
     // 所有闸都放行了,这时才给来源前缀记一笔:被别的闸拒掉的直连不消耗这个前缀的名额。
-    if (source && !sourceRate_->Take(*source, now))
+    if (source && !sourceRate->Take(*source, now))
     {
-        ++counters_.sourceUntracked;
+        ++counters.sourceUntracked;
         verdict.sourceUntracked = true;
     }
     return verdict;
@@ -66,35 +66,35 @@ Verdict Admission::Admit(const muduo::net::InetAddress &peer, const size_t curre
 
 void Admission::NotePreAuthEvicted()
 {
-    ++counters_.preAuthEvicted;
+    ++counters.preAuthEvicted;
 }
 
 void Admission::NoteRejectedAfterAccept(const RejectReason reason)
 {
-    ++counters_.rejected[static_cast<size_t>(reason)];
+    ++counters.rejected[static_cast<size_t>(reason)];
 }
 
 void Admission::NoteAccepted()
 {
-    ++counters_.accepted;
+    ++counters.accepted;
 }
 
 void Admission::NoteHandshake(const SteadyTime openedAt, const SteadyTime verifiedAt)
 {
-    handshake_.Observe(openedAt, verifiedAt);
-    ++counters_.handshakes;
+    handshake.Observe(openedAt, verifiedAt);
+    ++counters.handshakes;
 }
 
 void Admission::NoteHandshakeTimeout()
 {
-    ++counters_.handshakeTimeouts;
+    ++counters.handshakeTimeouts;
 }
 
 void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t currentConnections,
                                const size_t maxConnections, const size_t unauthenticatedConnections) const
 {
     using prometheus_text::MetricType;
-    const RateLimit &limit = rateGate_.Limit();
+    const RateLimit &limit = rateGate.Limit();
 
     writer.BeginFamily("battle_connections_current",
                        "Client direct-connection sessions currently held by this battle node, one per admitted connection.",
@@ -116,7 +116,7 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
                        "Direct connections admitted since process start (a session was created). "
                        "rate() of this series is the accept rate.",
                        MetricType::kCounter);
-    writer.Sample({}, counters_.accepted);
+    writer.Sample({}, counters.accepted);
 
     writer.BeginFamily("battle_rejected_total",
                        "Direct connections refused since process start. capacity / accept_rate / shutting_down / "
@@ -125,7 +125,7 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
                        MetricType::kCounter);
     for (size_t reason = 0; reason < kRejectReasonCount; ++reason)
     {
-        writer.Sample({{"reason", kRejectReasonNames[reason]}}, counters_.rejected[reason]);
+        writer.Sample({{"reason", kRejectReasonNames[reason]}}, counters.rejected[reason]);
     }
 
     writer.BeginFamily("battle_accept_rate_limit_per_second",
@@ -139,35 +139,35 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
     writer.BeginFamily("battle_handshake_duration_ms",
                        "Time from connection accept to a successful battle ticket handshake, in milliseconds.",
                        MetricType::kHistogram);
-    writer.Histogram({}, accept_admission::kHandshakeUpperBoundsMs, handshake_.buckets, handshake_.sumMs);
+    writer.Histogram({}, accept_admission::kHandshakeUpperBoundsMs, handshake.buckets, handshake.sumMs);
 
     writer.BeginFamily("battle_preauth_reaped_total",
                        "Direct connections closed because they had not completed the ticket handshake when the handshake "
                        "deadline expired.",
                        MetricType::kCounter);
-    writer.Sample({}, counters_.handshakeTimeouts);
+    writer.Sample({}, counters.handshakeTimeouts);
 
     writer.BeginFamily("battle_preauth_evicted_total",
                        "Unauthenticated direct connections closed to admit a new one while the unauthenticated pool was "
                        "under pressure (the oldest goes first, and only once it has been open for the minimum evictable age).",
                        MetricType::kCounter);
-    writer.Sample({}, counters_.preAuthEvicted);
+    writer.Sample({}, counters.preAuthEvicted);
 
     writer.BeginFamily("battle_preauth_budget",
                        "Unauthenticated direct connections allowed at most when none of them is old enough to be evicted.",
                        MetricType::kGauge);
-    writer.Sample({}, preAuthBudget_.full);
+    writer.Sample({}, preAuthBudget.full);
 
     writer.BeginFamily("battle_preauth_early_drop_start",
                        "Unauthenticated direct connections at which the pool counts as under pressure: the oldest are "
                        "evicted for newcomers, or newcomers are refused with a probability rising linearly to 1 at the budget.",
                        MetricType::kGauge);
-    writer.Sample({}, preAuthBudget_.earlyDropStart);
+    writer.Sample({}, preAuthBudget.earlyDropStart);
 
     writer.BeginFamily("battle_preauth_evictable_age_ms",
                        "How long an unauthenticated direct connection must have been open before it can be evicted.",
                        MetricType::kGauge);
-    writer.Sample({}, static_cast<uint64_t>(preAuthBudget_.minEvictableAge.count()));
+    writer.Sample({}, static_cast<uint64_t>(preAuthBudget.minEvictableAge.count()));
 
     const std::optional<RateLimit> sourceLimit = CurrentSourceRateLimit();
     writer.BeginFamily("battle_source_rate_limit_per_second",
@@ -185,16 +185,16 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
                        "1 when per-source limiting applied to the most recent admission decision (enabled and under "
                        "pressure), else 0.",
                        MetricType::kGauge);
-    writer.Sample({}, sourceRateActive_ ? 1 : 0);
+    writer.Sample({}, sourceRateActive ? 1 : 0);
 
     writer.BeginFamily("battle_source_tracked", "Source prefixes currently tracked by the per-source rate gate.",
                        MetricType::kGauge);
-    writer.Sample({}, sourceRate_ ? sourceRate_->Tracked() : 0);
+    writer.Sample({}, sourceRate ? sourceRate->Tracked() : 0);
 
     writer.BeginFamily("battle_source_untracked_total",
                        "Direct connections admitted without per-source accounting because the source prefix table was full.",
                        MetricType::kCounter);
-    writer.Sample({}, counters_.sourceUntracked);
+    writer.Sample({}, counters.sourceUntracked);
 
     // 小游戏直连(WebSocket)的握手与协议错误(network/codec/websocket.h),与 gate 的两族同义。计数是本线程累计的,
     // 直连都在 battle 主 loop 上;连接数已经算在上面的 battle_connections_current 里。

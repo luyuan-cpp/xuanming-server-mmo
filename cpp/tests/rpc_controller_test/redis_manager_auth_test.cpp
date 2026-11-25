@@ -368,46 +368,46 @@ protected:
     {
         // 日志级别与输出函数都是 muduo 的普通全局变量:在 loop 线程启动前改、在它 join 之后改回,
         // 线程创建与 join 提供 happens-before,不与 loop 线程竞争。
-        savedLogLevel_ = muduo::Logger::logLevel();
+        savedLogLevel = muduo::Logger::logLevel();
         muduo::Logger::setLogLevel(muduo::Logger::INFO);   // "Redis AUTH ok to" 是 INFO
         ClearCapturedLog();
         muduo::Logger::setOutput(&CaptureLogOutput);
 
-        loopThread_ = std::make_unique<muduo::net::EventLoopThread>();
-        loop_.emplace(*loopThread_->startLoop());
-        port_ = FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0);
+        loopThread = std::make_unique<muduo::net::EventLoopThread>();
+        loop.emplace(*loopThread->startLoop());
+        port = FindFreeLoopbackPort();
+        ASSERT_NE(port, 0);
 
         RunInLoopAndWait([this] {
-            server_ = std::make_unique<muduo::net::TcpServer>(
-                &Loop(), muduo::net::InetAddress(port_, /*loopbackOnly=*/true), "fake_redis");
+            server = std::make_unique<muduo::net::TcpServer>(
+                &Loop(), muduo::net::InetAddress(port, /*loopbackOnly=*/true), "fake_redis");
             // 回调只捕获夹具 this:server_ 在 TearDown 里先于夹具销毁,属于 AGENTS.md §11.7 的同寿命例外。
             // 服务端不保存任何 TcpConnectionPtr,按连接名索引自己的记录。
-            server_->setConnectionCallback([this](const muduo::net::TcpConnectionPtr& conn) {
+            server->setConnectionCallback([this](const muduo::net::TcpConnectionPtr& conn) {
                 OnServerConnection(conn);
             });
-            server_->setMessageCallback(
+            server->setMessageCallback(
                 [this](const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf, muduo::Timestamp) {
                     OnServerMessage(conn, buf);
                 });
-            server_->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
+            server->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
         });
     }
 
     void TearDown() override
     {
-        if (loop_)
+        if (loop)
         {
             RunInLoopAndWait([this] {
-                if (manager_)
+                if (manager)
                 {
-                    manager_->Shutdown();
-                    manager_.reset();
+                    manager->Shutdown();
+                    manager.reset();
                 }
             });
             // 客户端释放 socket 后,先让服务端处理 EOF 并报告 DOWN。AUTH 后主动半关的连接仍是
             // kDisconnecting,在同一闭包内立刻析构 server 会抢在读事件之前移除仍启用的 Channel。
-            if (!WaitUntil([this] { return static_cast<std::size_t>(serverDowns_) == connections_.size(); },
+            if (!WaitUntil([this] { return static_cast<std::size_t>(serverDowns) == connections.size(); },
                            kSettleTimeout))
             {
                 const Snapshot snap = TakeSnapshot();
@@ -417,18 +417,18 @@ protected:
                 std::fflush(stdout);
                 std::abort();
             }
-            RunInLoopAndWait([this] { server_.reset(); });
+            RunInLoopAndWait([this] { server.reset(); });
             // 再转一圈:让 removeChannel 排队的 dummy(持有 Channel)等 functor 在 loop 停下前跑完,
             // 而不是留给 ~EventLoop 随 pendingFunctors_ 一起丢弃(同 hiredis_command_lifecycle_test)。
             RunInLoopAndWait([] {});
         }
-        loopThread_.reset();   // quit + join:此后不再有线程写日志
-        loop_.reset();
+        loopThread.reset();   // quit + join:此后不再有线程写日志
+        loop.reset();
         muduo::Logger::setOutput(&StdoutLogOutput);
-        muduo::Logger::setLogLevel(savedLogLevel_);
+        muduo::Logger::setLogLevel(savedLogLevel);
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& fn)
@@ -491,15 +491,15 @@ protected:
     void ConfigureServer(AuthReplyMode mode, bool disconnectAfterFirstAuthOk)
     {
         RunInLoopAndWait([this, mode, disconnectAfterFirstAuthOk] {
-            authMode_ = mode;
-            disconnectAfterFirstAuthOk_ = disconnectAfterFirstAuthOk;
+            authMode = mode;
+            this->disconnectAfterFirstAuthOk = disconnectAfterFirstAuthOk;
         });
     }
 
     // 此后假 Redis 对 PING 的应答一律推迟这么多秒(0 = 立即回)。只影响 PING,AUTH 照常立即回。
     void SetPingReplyDelay(double delaySec)
     {
-        RunInLoopAndWait([this, delaySec] { pingReplyDelaySec_ = delaySec; });
+        RunInLoopAndWait([this, delaySec] { pingReplyDelaySec = delaySec; });
     }
 
     // 在 loop 线程上建被测的 RedisManager 并发起首次连接。
@@ -509,15 +509,15 @@ protected:
                       double livenessTimeoutSec = kLongLivenessTimeoutSec)
     {
         RunInLoopAndWait([this, password, reconnectIntervalSec, livenessProbeIntervalSec, livenessTimeoutSec] {
-            manager_ = std::make_unique<RedisManager>();
-            manager_->SetReconnectCallback([this] { OnManagerReconnected(); });
+            manager = std::make_unique<RedisManager>();
+            manager->SetReconnectCallback([this] { OnManagerReconnected(); });
             RedisConnectOptions options;
             options.password = password;
             options.reconnectIntervalSec = reconnectIntervalSec;
             options.reconnectJitterSec = 0.0;   // 握手截止与重连时序按 reconnectIntervalSec 断言,不加抖动
             options.livenessProbeIntervalSec = livenessProbeIntervalSec;
             options.livenessTimeoutSec = livenessTimeoutSec;
-            manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+            manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
         });
     }
 
@@ -525,16 +525,16 @@ protected:
     {
         Snapshot snap;
         RunInLoopAndWait([this, &snap] {
-            snap.connections = connections_;
-            snap.serverDowns = serverDowns_;
-            snap.malformedFrames = malformedFrames_;
-            snap.reconnectCalls = reconnectCalls_;
-            snap.pingReplies = pingReplies_;
-            snap.pingNullReplies = pingNullReplies_;
-            snap.pingSendFailures = pingSendFailures_;
-            snap.businessReplies = businessReplies_;
-            snap.businessNullReplies = businessNullReplies_;
-            snap.businessSendFailures = businessSendFailures_;
+            snap.connections = connections;
+            snap.serverDowns = serverDowns;
+            snap.malformedFrames = malformedFrames;
+            snap.reconnectCalls = reconnectCalls;
+            snap.pingReplies = pingReplies;
+            snap.pingNullReplies = pingNullReplies;
+            snap.pingSendFailures = pingSendFailures;
+            snap.businessReplies = businessReplies;
+            snap.businessNullReplies = businessNullReplies;
+            snap.businessSendFailures = businessSendFailures;
             snap.zoneRedisPresent = ZoneRedisPresent();
             snap.zoneRedisConnected = ZoneRedisConnected();
         });
@@ -545,19 +545,19 @@ protected:
 
     bool ZoneRedisPresent() const
     {
-        return manager_ && manager_->GetConnection();
+        return manager && manager->GetConnection();
     }
 
     bool ZoneRedisConnected() const
     {
-        return ZoneRedisPresent() && manager_->GetConnection()->connected();
+        return ZoneRedisPresent() && manager->GetConnection()->connected();
     }
 
     // 收到过至少一条命令的连接数:被截止定时器拆掉的半成品连接(建连都没完成)不计。
     std::size_t ConnectionsWithCommands() const
     {
         std::size_t count = 0;
-        for (const FakeConnection& connection : connections_)
+        for (const FakeConnection& connection : connections)
         {
             if (!connection.commands.empty())
             {
@@ -570,9 +570,9 @@ protected:
     // 收到过 PING 的最后一条连接:只有移交给业务的连接上才会出现 PING(重连回调发的或存活探测发的)。
     std::optional<std::size_t> LastPromotedConnection() const
     {
-        for (std::size_t i = connections_.size(); i > 0; --i)
+        for (std::size_t i = connections.size(); i > 0; --i)
         {
-            for (const RespCommand& cmd : connections_[i - 1].commands)
+            for (const RespCommand& cmd : connections[i - 1].commands)
             {
                 if (VerbOf(cmd) == "PING")
                 {
@@ -586,55 +586,55 @@ protected:
     // 照业务用法往 GetConnection() 上发一条命令,记下它最后拿到的是非空应答、空应答,还是根本没发出去。
     void SendBusinessCommand()
     {
-        const RedisManager::HiredisPtr& redis = manager_->GetConnection();
+        const RedisManager::HiredisPtr& redis = manager->GetConnection();
         if (!redis)
         {
-            ++businessSendFailures_;
+            ++businessSendFailures;
             return;
         }
         const int ret = redis->command(
             [this](hiredis::Hiredis*, redisReply* reply) {
                 if (reply != nullptr)
                 {
-                    ++businessReplies_;
+                    ++businessReplies;
                 }
                 else
                 {
-                    ++businessNullReplies_;
+                    ++businessNullReplies;
                 }
             },
             "GET %s", "liveness:test");
         if (ret != REDIS_OK)
         {
-            ++businessSendFailures_;
+            ++businessSendFailures;
         }
     }
 
     // RedisManager 的重连回调。照生产用法(scene 在回调里补发积压),回调里立刻往新连接上发一条命令。
     void OnManagerReconnected()
     {
-        ++reconnectCalls_;
-        const RedisManager::HiredisPtr& redis = manager_->GetConnection();
+        ++reconnectCalls;
+        const RedisManager::HiredisPtr& redis = manager->GetConnection();
         if (!redis)
         {
-            ++pingSendFailures_;
+            ++pingSendFailures;
             return;
         }
         const int ret = redis->command(
             [this](hiredis::Hiredis*, redisReply* reply) {
                 if (reply != nullptr)
                 {
-                    ++pingReplies_;
+                    ++pingReplies;
                 }
                 else
                 {
-                    ++pingNullReplies_;
+                    ++pingNullReplies;
                 }
             },
             "PING");
         if (ret != REDIS_OK)
         {
-            ++pingSendFailures_;
+            ++pingSendFailures;
         }
     }
 
@@ -642,23 +642,23 @@ protected:
     {
         if (conn->connected())
         {
-            connectionIndexByName_[conn->name()] = connections_.size();
-            connections_.emplace_back();
+            connectionIndexByName[conn->name()] = connections.size();
+            connections.emplace_back();
             return;
         }
-        ++serverDowns_;
-        if (const auto it = connectionIndexByName_.find(conn->name()); it != connectionIndexByName_.end())
+        ++serverDowns;
+        if (const auto it = connectionIndexByName.find(conn->name()); it != connectionIndexByName.end())
         {
-            connections_[it->second].down = true;
+            connections[it->second].down = true;
         }
     }
 
     void OnServerMessage(const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buf)
     {
-        const auto it = connectionIndexByName_.find(conn->name());
-        if (it == connectionIndexByName_.end())
+        const auto it = connectionIndexByName.find(conn->name());
+        if (it == connectionIndexByName.end())
         {
-            ++malformedFrames_;
+            ++malformedFrames;
             buf->retrieveAll();
             return;
         }
@@ -675,19 +675,19 @@ protected:
             }
             if (result == ParseResult::kMalformed)
             {
-                ++malformedFrames_;
+                ++malformedFrames;
                 buf->retrieveAll();
                 return;
             }
             buf->retrieve(consumed);
-            connections_[index].commands.push_back(cmd);
+            connections[index].commands.push_back(cmd);
             ReplyTo(conn, index, cmd);
         }
     }
 
     void ReplyTo(const muduo::net::TcpConnectionPtr& conn, std::size_t index, const RespCommand& cmd)
     {
-        FakeConnection& fake = connections_[index];
+        FakeConnection& fake = connections[index];
         if (fake.stalled)
         {
             return;
@@ -695,13 +695,13 @@ protected:
         const std::string verb = VerbOf(cmd);
         if (verb == "AUTH")
         {
-            switch (authMode_)
+            switch (authMode)
             {
             case AuthReplyMode::kOk:
                 conn->send("+OK\r\n");
-                if (disconnectAfterFirstAuthOk_ && !disconnectDone_)
+                if (disconnectAfterFirstAuthOk && !disconnectDone)
                 {
-                    disconnectDone_ = true;
+                    disconnectDone = true;
                     // 半关写端:+OK 发完后才发 FIN,客户端先处理应答、再读到 EOF 视为断线。
                     // 此后 send 一律被 muduo 丢弃(state 已是 kDisconnecting)。
                     conn->shutdown();
@@ -731,10 +731,10 @@ protected:
         }
         if (verb == "PING")
         {
-            if (pingReplyDelaySec_ > 0)
+            if (pingReplyDelaySec > 0)
             {
                 // 定时器闭包只捕获 weak 连接(AGENTS.md §11.7):连接或 server 先没了,推迟的应答就丢掉。
-                Loop().runAfter(pingReplyDelaySec_,
+                Loop().runAfter(pingReplyDelaySec,
                                 [weak = std::weak_ptr<muduo::net::TcpConnection>(conn)] {
                                     if (const muduo::net::TcpConnectionPtr locked = weak.lock())
                                     {
@@ -750,30 +750,30 @@ protected:
     }
 
     // loopThread_ 排第一:最后析构。TearDown 已显式 reset 它,这里只是兜底顺序。
-    std::unique_ptr<muduo::net::EventLoopThread> loopThread_;
+    std::unique_ptr<muduo::net::EventLoopThread> loopThread;
     // 引用而非裸指针成员(裸指针成员门禁覆盖测试工程);SetUp 里绑定,TearDown 在 join 之后清空。
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    uint16_t port_ = 0;
-    muduo::Logger::LogLevel savedLogLevel_ = muduo::Logger::WARN;
-    std::unique_ptr<muduo::net::TcpServer> server_;
-    std::unique_ptr<RedisManager> manager_;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    uint16_t port = 0;
+    muduo::Logger::LogLevel savedLogLevel = muduo::Logger::WARN;
+    std::unique_ptr<muduo::net::TcpServer> server;
+    std::unique_ptr<RedisManager> manager;
 
     // 以下只在 loop 线程上读写;测试线程经 RunInLoopAndWait 读取(promise/future 提供 happens-before)。
-    AuthReplyMode authMode_ = AuthReplyMode::kOk;
-    bool disconnectAfterFirstAuthOk_ = false;   // 只对第一次 AUTH 成功生效
-    bool disconnectDone_ = false;
-    double pingReplyDelaySec_ = 0;   // 见 SetPingReplyDelay
-    std::map<std::string, std::size_t> connectionIndexByName_;   // TcpServer 生成的连接名在本 server 内唯一
-    std::vector<FakeConnection> connections_;
-    int serverDowns_ = 0;
-    int malformedFrames_ = 0;
-    int reconnectCalls_ = 0;      // RedisManager 重连回调被调用的次数
-    int pingReplies_ = 0;         // 回调里发出的 PING 拿到非空应答的次数
-    int pingNullReplies_ = 0;     // 回调里发出的 PING 以空应答释放的次数(连接断开或被释放)
-    int pingSendFailures_ = 0;    // 回调里拿不到连接或 command() 返回非 OK 的次数
-    int businessReplies_ = 0;       // SendBusinessCommand 发出的命令拿到非空应答的次数
-    int businessNullReplies_ = 0;   // 同上,以空应答结束(连接断开或被释放)的次数
-    int businessSendFailures_ = 0;  // 同上,拿不到连接或 command() 返回非 OK 的次数
+    AuthReplyMode authMode = AuthReplyMode::kOk;
+    bool disconnectAfterFirstAuthOk = false;   // 只对第一次 AUTH 成功生效
+    bool disconnectDone = false;
+    double pingReplyDelaySec = 0;   // 见 SetPingReplyDelay
+    std::map<std::string, std::size_t> connectionIndexByName;   // TcpServer 生成的连接名在本 server 内唯一
+    std::vector<FakeConnection> connections;
+    int serverDowns = 0;
+    int malformedFrames = 0;
+    int reconnectCalls = 0;      // RedisManager 重连回调被调用的次数
+    int pingReplies = 0;         // 回调里发出的 PING 拿到非空应答的次数
+    int pingNullReplies = 0;     // 回调里发出的 PING 以空应答释放的次数(连接断开或被释放)
+    int pingSendFailures = 0;    // 回调里拿不到连接或 command() 返回非 OK 的次数
+    int businessReplies = 0;       // SendBusinessCommand 发出的命令拿到非空应答的次数
+    int businessNullReplies = 0;   // 同上,以空应答结束(连接断开或被释放)的次数
+    int businessSendFailures = 0;  // 同上,拿不到连接或 command() 返回非 OK 的次数
 };
 
 // 存活契约的用例沿用同一个假 Redis 与夹具,只换一个测试套件名,便于单独过滤(--gtest_filter=RedisManagerLiveness.*)。
@@ -790,7 +790,7 @@ class RedisManagerLiveness : public RedisManagerAuth
 TEST_F(RedisManagerAuth, EmptyPasswordSendsNoAuth)
 {
     StartManager("", kLongReconnectIntervalSec);
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the PING sent from the reconnect callback never got a reply";
 
     const Snapshot snap = TakeSnapshot();
@@ -818,7 +818,7 @@ TEST_F(RedisManagerAuth, EmptyPasswordSendsNoAuth)
 TEST_F(RedisManagerAuth, AuthIsFirstCommandAndCallbackFollows)
 {
     StartManager(kTestPassword, kLongReconnectIntervalSec);
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the PING sent from the reconnect callback never got a reply";
 
     const Snapshot snap = TakeSnapshot();
@@ -843,22 +843,22 @@ TEST_F(RedisManagerAuth, ReconnectCallbackCanDestroyManagerDuringConnectAndAuthR
         std::weak_ptr<int> callbackCapture;
         int calls = 0;
         RunInLoopAndWait([&] {
-            manager_ = std::make_unique<RedisManager>();
+            manager = std::make_unique<RedisManager>();
             auto sentinel = std::make_shared<int>(0);
             callbackCapture = sentinel;
-            manager_->SetReconnectCallback([&, sentinel] {
+            manager->SetReconnectCallback([&, sentinel] {
                 ++calls;
-                manager_.reset();
+                manager.reset();
                 EXPECT_FALSE(callbackCapture.expired()) << "清空管理器成员不得销毁正在执行的回调";
             });
             RedisConnectOptions options;
             options.password = password;
             options.reconnectIntervalSec = kLongReconnectIntervalSec;
-            manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+            manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
         });
         ASSERT_TRUE(WaitUntil([&] {
-            return calls == 1 && !manager_ && callbackCapture.expired() &&
-                static_cast<std::size_t>(serverDowns_) == connections_.size();
+            return calls == 1 && !manager && callbackCapture.expired() &&
+                static_cast<std::size_t>(serverDowns) == connections.size();
         }, kSettleTimeout)) << "管理器销毁后旧连接和回调必须完成清理";
         RunInLoopAndWait([] {});
         EXPECT_EQ(calls, 1);
@@ -870,34 +870,34 @@ TEST_F(RedisManagerAuth, ReconnectCallbackCanStartNewAuthenticatedConnection)
     int promotions = 0;
     int replies = 0;
     RunInLoopAndWait([&] {
-        manager_ = std::make_unique<RedisManager>();
-        manager_->SetReconnectCallback([&] {
+        manager = std::make_unique<RedisManager>();
+        manager->SetReconnectCallback([&] {
             ++promotions;
             if (promotions == 1)
             {
                 RedisConnectOptions options;
                 options.password = kTestPassword;
                 options.reconnectIntervalSec = kLongReconnectIntervalSec;
-                manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+                manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
                 return;
             }
             ASSERT_EQ(promotions, 2);
-            ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
+            ASSERT_EQ(manager->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
                 if (reply) ++replies;
             }, "PING"), REDIS_OK);
         });
         RedisConnectOptions options;
         options.password = kTestPassword;
         options.reconnectIntervalSec = kLongReconnectIntervalSec;
-        manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+        manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
     });
     ASSERT_TRUE(WaitUntil([&] { return replies == 1; }, kSettleTimeout));
     RunInLoopAndWait([&] {
         EXPECT_EQ(promotions, 2);
-        ASSERT_EQ(connections_.size(), 2u);
-        EXPECT_EQ(DescribeCommands(connections_[0].commands), "AUTH <pw>");
-        EXPECT_EQ(DescribeCommands(connections_[1].commands), "AUTH <pw> | PING");
-        manager_->Shutdown();
+        ASSERT_EQ(connections.size(), 2u);
+        EXPECT_EQ(DescribeCommands(connections[0].commands), "AUTH <pw>");
+        EXPECT_EQ(DescribeCommands(connections[1].commands), "AUTH <pw> | PING");
+        manager->Shutdown();
     });
 }
 
@@ -906,32 +906,32 @@ TEST_F(RedisManagerAuth, PendingNullReplyCanDestroyManagerDuringShutdownOrNewCon
     for (const bool reconnect : {false, true})
     {
         int expectedReplies = 0;
-        RunInLoopAndWait([&] { expectedReplies = pingReplies_ + 1; });
+        RunInLoopAndWait([&] { expectedReplies = pingReplies + 1; });
         StartManager("", kLongReconnectIntervalSec);
-        ASSERT_TRUE(WaitUntil([&] { return pingReplies_ == expectedReplies; }, kSettleTimeout));
+        ASSERT_TRUE(WaitUntil([&] { return pingReplies == expectedReplies; }, kSettleTimeout));
         int nullReplies = 0;
         RunInLoopAndWait([&] {
-            connections_.back().stalled = true;
-            ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
+            connections.back().stalled = true;
+            ASSERT_EQ(manager->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
                 EXPECT_EQ(reply, nullptr);
                 if (!reply) ++nullReplies;
-                manager_.reset();
+                manager.reset();
             }, "PING"), REDIS_OK);
             if (reconnect)
             {
                 RedisConnectOptions options;
                 options.reconnectIntervalSec = kLongReconnectIntervalSec;
-                manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
+                manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
             }
             else
             {
-                manager_->Shutdown();
+                manager->Shutdown();
             }
-            EXPECT_EQ(manager_, nullptr);
+            EXPECT_EQ(manager, nullptr);
             EXPECT_EQ(nullReplies, 1);
         });
         ASSERT_TRUE(WaitUntil([&] {
-            return static_cast<std::size_t>(serverDowns_) == connections_.size();
+            return static_cast<std::size_t>(serverDowns) == connections.size();
         }, kSettleTimeout));
     }
 }
@@ -939,18 +939,18 @@ TEST_F(RedisManagerAuth, PendingNullReplyCanDestroyManagerDuringShutdownOrNewCon
 TEST_F(RedisManagerLiveness, DroppedConnectionNullReplyCanDestroyManager)
 {
     StartManager("", kLongReconnectIntervalSec, 0.02, 0.04);
-    ASSERT_TRUE(WaitUntil([&] { return pingReplies_ >= 1; }, kSettleTimeout));
+    ASSERT_TRUE(WaitUntil([&] { return pingReplies >= 1; }, kSettleTimeout));
     int nullReplies = 0;
     RunInLoopAndWait([&] {
-        connections_.back().stalled = true;
-        ASSERT_EQ(manager_->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
+        connections.back().stalled = true;
+        ASSERT_EQ(manager->GetConnection()->command([&](hiredis::Hiredis*, redisReply* reply) {
             EXPECT_EQ(reply, nullptr);
             if (!reply) ++nullReplies;
-            manager_.reset();
+            manager.reset();
         }, "PING"), REDIS_OK);
     });
     ASSERT_TRUE(WaitUntil([&] {
-        return nullReplies == 1 && !manager_ && static_cast<std::size_t>(serverDowns_) == connections_.size();
+        return nullReplies == 1 && !manager && static_cast<std::size_t>(serverDowns) == connections.size();
     }, kSettleTimeout));
     RunInLoopAndWait([] {});
     EXPECT_EQ(nullReplies, 1);
@@ -1032,7 +1032,7 @@ TEST_F(RedisManagerAuth, ReauthenticatesAfterServerDisconnect)
     ConfigureServer(AuthReplyMode::kOk, /*disconnectAfterFirstAuthOk=*/true);
     StartManager(kTestPassword, kReconnectIntervalSec);
     // 第 1 条连接上的 PING 撞上服务端半关,只会以空应答释放;所以非空的 PING 应答只可能来自重连后的连接。
-    ASSERT_TRUE(WaitUntil([this] { return reconnectCalls_ >= 2 && pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return reconnectCalls >= 2 && pingReplies >= 1; }, kSettleTimeout))
         << "no successful reconnect within the deadline\n" << MaskPassword(CapturedLog());
 
     const Snapshot snap = TakeSnapshot();
@@ -1086,7 +1086,7 @@ TEST_F(RedisManagerAuth, ShutdownDuringHandshakeIsQuiet)
     // 长间隔:截止定时器在整个用例期间不会到点,握手停在「AUTH 已发、没有应答」。
     StartManager(kTestPassword, kLongReconnectIntervalSec);
     ASSERT_TRUE(WaitUntil(
-        [this] { return connections_.size() == 1 && !connections_[0].commands.empty(); },
+        [this] { return connections.size() == 1 && !connections[0].commands.empty(); },
         kSettleTimeout))
         << "AUTH never reached the fake server";
 
@@ -1096,8 +1096,8 @@ TEST_F(RedisManagerAuth, ShutdownDuringHandshakeIsQuiet)
     RunInLoopAndWait([this, &presentDuringHandshake, &connectedDuringHandshake, &connectionsAtShutdown] {
         presentDuringHandshake = ZoneRedisPresent();
         connectedDuringHandshake = ZoneRedisConnected();
-        manager_->Shutdown();
-        connectionsAtShutdown = connections_.size();
+        manager->Shutdown();
+        connectionsAtShutdown = connections.size();
     });
     EXPECT_TRUE(presentDuringHandshake) << "GetConnection() must stay non-null while the handshake is in flight";
     EXPECT_FALSE(connectedDuringHandshake) << "the connection must not be usable before AUTH succeeds";
@@ -1110,10 +1110,10 @@ TEST_F(RedisManagerAuth, ShutdownDuringHandshakeIsQuiet)
     EXPECT_EQ(snap.pingNullReplies, 0);
     EXPECT_FALSE(snap.zoneRedisPresent) << "Shutdown must release the zone Redis object";
 
-    EXPECT_TRUE(WaitUntil([this] { return serverDowns_ >= 1; }, kSettleTimeout))
+    EXPECT_TRUE(WaitUntil([this] { return serverDowns >= 1; }, kSettleTimeout))
         << "Shutdown did not close the handshake connection";
     EXPECT_TRUE(HoldsFor(
-        [this, connectionsAtShutdown] { return connections_.size() == connectionsAtShutdown && reconnectCalls_ == 0; },
+        [this, connectionsAtShutdown] { return connections.size() == connectionsAtShutdown && reconnectCalls == 0; },
         kQuietWindow))
         << "no new connection and no reconnect callback are allowed after Shutdown";
 
@@ -1174,7 +1174,7 @@ TEST_F(RedisManagerAuth, NonPositiveReconnectIntervalFallsBackToDefault)
     StartManager("", 0.0);
     // WARN 在 Connect 里同步写出,StartManager 返回时已在截获的日志里。
     EXPECT_TRUE(Contains(CapturedLog(), "Redis reconnect interval 0s is not positive, using 3s")) << CapturedLog();
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the connection did not come up with the fallback interval";
 
     const Snapshot snap = TakeSnapshot();
@@ -1202,10 +1202,10 @@ TEST_F(RedisManagerAuth, ReconnectPeriodIsBaseIntervalPlusJitterDrawnAtConnect)
 {
     // StartManager 关掉了抖动:周期恰是基础间隔。
     StartManager("", kLongReconnectIntervalSec);
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the first connection did not come up";
     double withoutJitter = 0;
-    RunInLoopAndWait([&] { withoutJitter = manager_->ReconnectPeriodSec(); });
+    RunInLoopAndWait([&] { withoutJitter = manager->ReconnectPeriodSec(); });
     EXPECT_DOUBLE_EQ(withoutJitter, kLongReconnectIntervalSec);
 
     // 生产不设 reconnectJitterSec:默认就带抖动。同一个管理器再 Connect 一次,周期重新抽,
@@ -1214,10 +1214,10 @@ TEST_F(RedisManagerAuth, ReconnectPeriodIsBaseIntervalPlusJitterDrawnAtConnect)
     RunInLoopAndWait([&] {
         RedisConnectOptions options;
         options.reconnectIntervalSec = kLongReconnectIntervalSec;
-        manager_->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port_), std::move(options));
-        byDefault = manager_->ReconnectPeriodSec();
+        manager->Connect(&Loop(), muduo::net::InetAddress("127.0.0.1", port), std::move(options));
+        byDefault = manager->ReconnectPeriodSec();
     });
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 2; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 2; }, kSettleTimeout))
         << "the second connection did not come up";
     EXPECT_GE(byDefault, kLongReconnectIntervalSec);
     EXPECT_LT(byDefault, kLongReconnectIntervalSec + RedisConnectOptions::kDefaultReconnectJitterSec);
@@ -1312,7 +1312,7 @@ TEST_F(RedisManagerAuth, ServerClosingAfterRejectedAuthIsRetried)
 TEST_F(RedisManagerLiveness, SilentPeerIsDroppedAndReconnected)
 {
     StartManager(kTestPassword, kReconnectIntervalSec, kLivenessProbeIntervalSec, kLivenessTimeoutSec);
-    ASSERT_TRUE(WaitUntil([this] { return reconnectCalls_ >= 1 && pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return reconnectCalls >= 1 && pingReplies >= 1; }, kSettleTimeout))
         << "the first connection never came up";
 
     // 同一个 loop 任务里:让移交给业务的那条连接「消失」(此后照收命令,但什么都不回、也不断开),记下此刻它已收到的
@@ -1327,18 +1327,18 @@ TEST_F(RedisManagerLiveness, SilentPeerIsDroppedAndReconnected)
             return;
         }
         connectedBeforeSilence = ZoneRedisConnected();
-        connections_[*silentIndex].stalled = true;
-        commandsBeforeSilence = connections_[*silentIndex].commands.size();
+        connections[*silentIndex].stalled = true;
+        commandsBeforeSilence = connections[*silentIndex].commands.size();
         SendBusinessCommand();
     });
     ASSERT_TRUE(silentIndex.has_value()) << "precondition: a promoted connection must exist";
     ASSERT_TRUE(connectedBeforeSilence) << "precondition: the promoted connection must be usable";
 
     ASSERT_TRUE(WaitUntil(
-        [this] { return reconnectCalls_ >= 2 && pingReplies_ >= 2 && businessNullReplies_ >= 1; }, kSettleTimeout))
+        [this] { return reconnectCalls >= 2 && pingReplies >= 2 && businessNullReplies >= 1; }, kSettleTimeout))
         << "the silent connection was not dropped and replaced within the deadline: " << MaskPassword(CapturedLog());
     const std::size_t silent = *silentIndex;
-    EXPECT_TRUE(WaitUntil([this, silent] { return connections_[silent].down; }, kSettleTimeout))
+    EXPECT_TRUE(WaitUntil([this, silent] { return connections[silent].down; }, kSettleTimeout))
         << "the dropped connection was never closed towards the server";
 
     const Snapshot snap = TakeSnapshot();
@@ -1412,15 +1412,15 @@ TEST_F(RedisManagerLiveness, SilentPeerIsDroppedAndReconnected)
 TEST_F(RedisManagerLiveness, HealthyConnectionIsProbedButNeverDropped)
 {
     StartManager("", kLongReconnectIntervalSec, kLivenessProbeIntervalSec, kLivenessTimeoutSec);
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the PING sent from the reconnect callback never got a reply";
     // 重连回调的那 1 条 PING 之外至少再看到 3 条:探测确实在周期地发。
     ASSERT_TRUE(WaitUntil(
-        [this] { return connections_.size() == 1 && connections_[0].commands.size() >= 4; }, kSettleTimeout))
+        [this] { return connections.size() == 1 && connections[0].commands.size() >= 4; }, kSettleTimeout))
         << "the liveness probe is not sending periodic PINGs";
     EXPECT_TRUE(HoldsFor(
         [this] {
-            return reconnectCalls_ == 1 && connections_.size() == 1 && serverDowns_ == 0 && ZoneRedisConnected();
+            return reconnectCalls == 1 && connections.size() == 1 && serverDowns == 0 && ZoneRedisConnected();
         },
         kLivenessQuietWindow))
         << "a healthy connection must never be dropped by the liveness probe: " << CapturedLog();
@@ -1445,15 +1445,15 @@ TEST_F(RedisManagerLiveness, SlowRepliesWithinTimeoutAreNotDropped)
 {
     SetPingReplyDelay(kLivenessTimeoutSec / 2);
     StartManager("", kLongReconnectIntervalSec, kLivenessProbeIntervalSec, kLivenessTimeoutSec);
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the delayed reply to the reconnect callback's PING never arrived";
     // 至少两条探测 PING:第二条只能在第一条拿到(推迟的)应答之后才发,说明慢应答被正确地算作「活着」。
     ASSERT_TRUE(WaitUntil(
-        [this] { return connections_.size() == 1 && connections_[0].commands.size() >= 3; }, kSettleTimeout))
+        [this] { return connections.size() == 1 && connections[0].commands.size() >= 3; }, kSettleTimeout))
         << "the liveness probe stopped after a slow reply";
     EXPECT_TRUE(HoldsFor(
         [this] {
-            return reconnectCalls_ == 1 && connections_.size() == 1 && serverDowns_ == 0 && ZoneRedisConnected();
+            return reconnectCalls == 1 && connections.size() == 1 && serverDowns == 0 && ZoneRedisConnected();
         },
         kLivenessQuietWindow))
         << "a reply that arrives within the timeout must not get the connection dropped: " << CapturedLog();
@@ -1471,10 +1471,10 @@ TEST_F(RedisManagerLiveness, HandshakeConnectionIsNeverProbed)
     // 长重连间隔:AUTH 截止在整个用例期间不会到点,握手停在「AUTH 已发、没有应答」。
     StartManager(kTestPassword, kLongReconnectIntervalSec, kLivenessProbeIntervalSec, kLivenessTimeoutSec);
     ASSERT_TRUE(WaitUntil(
-        [this] { return connections_.size() == 1 && !connections_[0].commands.empty(); }, kSettleTimeout))
+        [this] { return connections.size() == 1 && !connections[0].commands.empty(); }, kSettleTimeout))
         << "AUTH never reached the fake server";
     EXPECT_TRUE(HoldsFor(
-        [this] { return connections_.size() == 1 && connections_[0].commands.size() == 1 && reconnectCalls_ == 0; },
+        [this] { return connections.size() == 1 && connections[0].commands.size() == 1 && reconnectCalls == 0; },
         kLivenessQuietWindow))
         << "nothing but AUTH may be sent on a handshake connection, and the probe must not rebuild it";
 
@@ -1499,7 +1499,7 @@ TEST_F(RedisManagerLiveness, NonPositiveLivenessSettingsFallBackToDefaults)
     const std::string log = CapturedLog();
     EXPECT_TRUE(Contains(log, "Redis liveness probe interval 0s is not positive, using 5s")) << log;
     EXPECT_TRUE(Contains(log, "Redis liveness timeout -1s is not positive, using 15s")) << log;
-    ASSERT_TRUE(WaitUntil([this] { return pingReplies_ >= 1; }, kSettleTimeout))
+    ASSERT_TRUE(WaitUntil([this] { return pingReplies >= 1; }, kSettleTimeout))
         << "the connection did not come up with the fallback settings";
 
     const Snapshot snap = TakeSnapshot();

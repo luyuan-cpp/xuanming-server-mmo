@@ -62,7 +62,7 @@ namespace handoff_mark_withdraw
 		bool Add(uint64_t playerId, std::string markValue, Clock::time_point now, std::string holderFence = {},
                  std::string publishedFence = {}, std::string revokedFence = {})
 		{
-			for (const auto &entry : entries_)
+			for (const auto &entry : entries)
 			{
 				if (entry.playerId == playerId && entry.markValue == markValue && entry.holderFence == holderFence)
 				{
@@ -76,13 +76,13 @@ namespace handoff_mark_withdraw
             entry.publishedFence = std::move(publishedFence);
             entry.revokedFence = std::move(revokedFence);
 			entry.nextAttemptAt = now; // 立刻到期:调用方登记后紧接着 CollectDue 取走并发出第一次撤回
-			entries_.push_back(std::move(entry));
+			entries.push_back(std::move(entry));
 			return true;
 		}
 
 		bool HasPlayer(uint64_t playerId) const
 		{
-			return std::any_of(entries_.begin(), entries_.end(),
+			return std::any_of(entries.begin(), entries.end(),
 							   [playerId](const Entry &entry) { return entry.playerId == playerId; });
 		}
 
@@ -90,7 +90,7 @@ namespace handoff_mark_withdraw
 		std::vector<Entry> CollectDue(Clock::time_point now)
 		{
 			std::vector<Entry> due;
-			for (auto &entry : entries_)
+			for (auto &entry : entries)
 			{
 				if (entry.nextAttemptAt > now)
 				{
@@ -106,21 +106,21 @@ namespace handoff_mark_withdraw
 		// 销账:只删精确匹配的那一条。返回 false = 表里没有这一条(已被另一次应答销过,或从未登记)。
 		bool Confirm(uint64_t playerId, const std::string &markValue, const std::string& holderFence = {})
 		{
-			const auto it = std::find_if(entries_.begin(), entries_.end(),
+			const auto it = std::find_if(entries.begin(), entries.end(),
 										 [&](const Entry &entry)
 										 { return entry.playerId == playerId && entry.markValue == markValue && entry.holderFence == holderFence; });
-			if (it == entries_.end())
+			if (it == entries.end())
 			{
 				return false;
 			}
-			entries_.erase(it);
+			entries.erase(it);
 			return true;
 		}
 
-		std::size_t size() const { return entries_.size(); }
+		std::size_t size() const { return entries.size(); }
 
 	private:
 		// 线性表:平时为空,只有 Redis 不通时才有条目;查找点(IsSceneChangeBusy)不是 per-tick 路径。
-		std::vector<Entry> entries_;
+		std::vector<Entry> entries;
 	};
 } // namespace handoff_mark_withdraw

@@ -27,74 +27,74 @@ void ClearLiveOnlyFields(::BattleStateS2C& state)
 
 BattleReplayRecorder::BattleReplayRecorder(const BattleReplayHeader& header, const ::BattleStateS2C& spectatorStartState)
 {
-    replay_.set_battle_id(header.battleId);
-    replay_.set_match_mode(header.matchMode);
-    replay_.set_battle_config_id(header.battleConfigId);
-    replay_.set_started_at_ms(header.startedAtMs);
-    replay_.set_table_fingerprint(header.tableFingerprint);
-    auto* start = replay_.mutable_start_state();
+    replay.set_battle_id(header.battleId);
+    replay.set_match_mode(header.matchMode);
+    replay.set_battle_config_id(header.battleConfigId);
+    replay.set_started_at_ms(header.startedAtMs);
+    replay.set_table_fingerprint(header.tableFingerprint);
+    auto* start = replay.mutable_start_state();
     *start = spectatorStartState;
     ClearLiveOnlyFields(*start);
-    recordedBytes_ = start->ByteSizeLong();
+    recordedBytes = start->ByteSizeLong();
 }
 
 void BattleReplayRecorder::AddRound(const ::TurnResultS2C& spectatorTurn)
 {
-    if (frozen_ || replay_.truncated())
+    if (frozen || replay.truncated())
     {
         return;
     }
     ::TurnResultS2C round = spectatorTurn;
     ClearLiveOnlyFields(*round.mutable_state());
     const std::size_t bytes = round.ByteSizeLong();
-    if (recordedBytes_ + bytes > kBattleReplayRecordBudgetBytes)
+    if (recordedBytes + bytes > kBattleReplayRecordBudgetBytes)
     {
         // 截断只影响极长、单位极多的局:后面的回合不录,结局照 outcome 显示(设计 BR-5)。
-        replay_.set_truncated(true);
-        LOG_WARN << "metric=battle_replay_truncated battle_id=" << replay_.battle_id()
-                 << " recorded_rounds=" << replay_.rounds_size() << " recorded_bytes=" << recordedBytes_
+        replay.set_truncated(true);
+        LOG_WARN << "metric=battle_replay_truncated battle_id=" << replay.battle_id()
+                 << " recorded_rounds=" << replay.rounds_size() << " recorded_bytes=" << recordedBytes
                  << " next_round_bytes=" << bytes;
         return;
     }
-    *replay_.add_rounds() = std::move(round);
-    recordedBytes_ += bytes;
+    *replay.add_rounds() = std::move(round);
+    recordedBytes += bytes;
 }
 
 void BattleReplayRecorder::MarkDeadlineDraw(const ::BattleStateS2C& spectatorState)
 {
-    if (frozen_)
+    if (frozen)
     {
         return;
     }
-    auto* finalState = replay_.mutable_final_state();
+    auto* finalState = replay.mutable_final_state();
     *finalState = spectatorState;
     ClearLiveOnlyFields(*finalState);
-    replay_.set_end_reason(::BATTLE_REPLAY_END_DEADLINE_DRAW);
+    replay.set_end_reason(::BATTLE_REPLAY_END_DEADLINE_DRAW);
 }
 
 std::optional<::BattleReplayEnvelope> BattleReplayRecorder::Freeze(const ::eBattleOutcome outcome, const uint32_t totalRounds,
                                                                    const uint64_t finishedAtMs)
 {
-    if (frozen_)
+    if (frozen)
     {
         return std::nullopt;
     }
-    frozen_ = true;
-    replay_.set_outcome(outcome);
-    replay_.set_total_rounds(totalRounds);
-    replay_.set_finished_at_ms(finishedAtMs);
-    if (replay_.end_reason() == ::BATTLE_REPLAY_END_UNSPECIFIED)
+    frozen = true;
+    replay.set_outcome(outcome);
+    replay.set_total_rounds(totalRounds);
+    replay.set_finished_at_ms(finishedAtMs);
+    if (replay.end_reason() == ::BATTLE_REPLAY_END_UNSPECIFIED)
     {
-        replay_.set_end_reason(::BATTLE_REPLAY_END_FINISHED);
+        replay.set_end_reason(::BATTLE_REPLAY_END_FINISHED);
     }
-    const uint64_t battleId = replay_.battle_id();
-    const int rounds = replay_.rounds_size();
-    const bool truncated = replay_.truncated();
+    const uint64_t battleId = replay.battle_id();
+    const int rounds = replay.rounds_size();
+    const bool truncated = replay.truncated();
 
     std::string raw;
-    const bool serialized = replay_.SerializeToString(&raw);
-    replay_.Clear(); // 不论成败都释放已录的帧:房间之后还要等 match 的持久决定,不再需要它们
-    recordedBytes_ = 0;
+    const bool serialized = replay.SerializeToString(&raw);
+    replay.Clear(); // 不论成败都释放已录的帧:房间之后还要等 match 的持久决定,不再需要它们
+    recordedBytes = 0;
     if (!serialized || raw.empty())
     {
         LOG_ERROR << "metric=battle_replay_dropped reason=serialize_failed battle_id=" << battleId;

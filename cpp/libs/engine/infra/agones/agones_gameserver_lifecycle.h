@@ -145,14 +145,14 @@ namespace agones
 			AllocationPermit(AllocationPermit&& other) noexcept;
 			AllocationPermit& operator=(AllocationPermit&&) = delete;
 
-			explicit operator bool() const { return granted_; }
+			explicit operator bool() const { return granted; }
 
 		private:
 			friend class GameServerLifecycle;
-			AllocationPermit(GameServerLifecycle& owner, bool granted) : owner_(owner), granted_(granted) {}
+			AllocationPermit(GameServerLifecycle& owner, bool granted) : owner(owner), granted(granted) {}
 
-			GameServerLifecycle& owner_;
-			bool granted_ = false;
+			GameServerLifecycle& owner;
+			bool granted = false;
 		};
 
 		// 异步许可的结果回调。permit 不可拷贝,按值移交给回调;回调不保留它时随回调返回析构。
@@ -332,21 +332,21 @@ namespace agones
 		// 可被 Stop() 打断的睡眠。
 		bool SleepInterruptible(std::chrono::milliseconds duration);
 
-		mutable std::mutex mutex_;
-		std::condition_variable cv_;
+		mutable std::mutex mutex;
+		std::condition_variable cv;
 
-		LifecycleState state_ = LifecycleState::Disabled;
-		std::unordered_set<std::uint64_t> activeUnits_;
-		std::size_t pendingPermits_ = 0;
+		LifecycleState state = LifecycleState::Disabled;
+		std::unordered_set<std::uint64_t> activeUnits;
+		std::size_t pendingPermits = 0;
 
-		bool allocateRequested_ = false;
-		bool readyRequested_ = false;
-		bool shutdownRequested_ = false;
-		bool stopRequested_ = false;
-		bool draining_ = false;
+		bool allocateRequested = false;
+		bool readyRequested = false;
+		bool shutdownRequested = false;
+		bool stopRequested = false;
+		bool draining = false;
 
 		// 每次 allocate 出结果就 +1,让等待方能区分"还没结果"和"失败了"。
-		std::uint64_t allocateResultGeneration_ = 0;
+		std::uint64_t allocateResultGeneration = 0;
 
 		// 晚到分配收口(DoAllocate)要区分"还有人要这次结果"和"发起者都走了":
 		//  - allocateWaiters_:正在有界等待 allocate 结果的调用方数(EnsureAllocatedBlockingImpl 里的阻塞等待方
@@ -361,33 +361,33 @@ namespace agones
 		//    "快照 || 成员"判定并清零成员,失败结果只丢快照(成员对应的挂起 allocate 还会再跑一次);
 		//    worker 丢弃挂起 allocate(ShuttingDown / Starting / 排空 / 已 Allocated)时一并清零。
 		//    残留的旧标记会让之后某次"阻塞等待方全部超时、allocate 晚到成功"被误判为有人重试而跳过收口。
-		std::size_t allocateWaiters_ = 0;
-		bool nonBlockingAllocateKicked_ = false;
+		std::size_t allocateWaiters = 0;
+		bool nonBlockingAllocateKicked = false;
 
 		// 异步许可等待者(AcquireAllocationPermitAsync)。出表即裁决,每个等待者只会被摘下一次:
 		// worker 结算点、loop 超时定时器、Stop() 谁先在 mutex_ 内摘下谁裁决。
-		std::unordered_map<std::uint64_t, AsyncPermitWaiter> asyncWaiters_;
-		std::uint64_t nextAsyncWaiterId_ = 1;
+		std::unordered_map<std::uint64_t, AsyncPermitWaiter> asyncWaiters;
+		std::uint64_t nextAsyncWaiterId = 1;
 		// 超时定时器只弱持有它:lifecycle 析构后到点的定时器 lock 失败即返回,不碰已析构的对象。
-		std::shared_ptr<int> aliveToken_ = std::make_shared<int>(0);
+		std::shared_ptr<int> aliveToken = std::make_shared<int>(0);
 
 		// EventLoop 最近一次心跳(steady_clock 纪元起的纳秒数)。EventLoop 写、worker 读,
 		// 用原子量避免 EventLoop 线程去抢 mutex_。
-		std::atomic<std::int64_t> lastLoopHeartbeatNs_{ 0 };
+		std::atomic<std::int64_t> lastLoopHeartbeatNs{ 0 };
 		// 只由 worker 线程读写:心跳过期日志只在状态翻转时打一次。
-		bool loopStaleReported_ = false;
+		bool loopStaleReported = false;
 
-		LifecycleOptions options_{};
-		std::unique_ptr<HttpTransport> transport_;
-		std::unique_ptr<AgonesRestClient> client_;
-		std::thread worker_;
+		LifecycleOptions options{};
+		std::unique_ptr<HttpTransport> transport;
+		std::unique_ptr<AgonesRestClient> client;
+		std::thread worker;
 
 		// Stop() 的取消源。worker 发出的可放弃请求(/ready、/health、/allocate、GET /gameserver)都带
 		// workerStopToken_,Stop() 置位即中止在途请求,让 join 有界、快速;/shutdown 刻意不带(见 DoShutdown)。
 		// stop_source 单次有效,Start() 在创建 worker 之前换新并取出令牌;worker 只读 workerStopToken_,
 		// 与 stopRequested_ 并存:后者是锁内谓词(等待 / 退避 / 主循环),令牌只管锁外的在途 HTTP。
-		std::stop_source workerStopSource_;
-		std::stop_token workerStopToken_;
+		std::stop_source workerStopSource;
+		std::stop_token workerStopToken;
 	};
 
 } // namespace agones

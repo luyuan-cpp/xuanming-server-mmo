@@ -12,6 +12,13 @@ option go_package = "robot/proto/common/component";
 // 宝宝等级不独立成长:经验系统未接入前,宝宝等级 = min(主人等级, PetTable.level_cap),
 // 由 PetSystem 在每次重算时同步。这样全仓只有"主人等级"一个等级真相。
 
+// 宝宝条目预设方案（布局层：槽位 1..3 + 枚举用途标签，避免自由文本 UGC 风险）
+message PetEntryPreset {
+  uint32 slot_id = 1;                  // 1..3 显式方案槽位号
+  uint32 tag = 2;                      // 0默认 / 1输出 / 2控场 / 3辅助
+  map<uint32, uint32> allocated = 3;   // entry_id -> 已分配点
+}
+
 // 一只宝宝
 message PetInstance {
   uint64 pet_id = 1;          // scene 从发号器 item 号段领号(宝宝沿用 item 身份域,PetSystem::GrantPet 铸),只当身份用,不能解析
@@ -35,6 +42,13 @@ message PetInstance {
   uint32 entry_last_config_version = 16;
   map<uint32, uint32> entry_last_target = 17;
   uint32 cultivation_tier = 18; // 独立五阶身份，非 quality/acquisition_tier。
+  uint32 active_entry_preset_slot = 19;      // 当前启用的条目方案槽位（0 兼容按 1 处理；有效范围 1..3）。
+  repeated PetEntryPreset entry_presets = 20; // 3 套条目预设方案；当前生效槽位与 entry_allocated 原子同步。
+  uint64 tier_last_request_id = 21;          // 最近一次成功的灵阶突破幂等键（0 表示未突破过）。
+  uint32 tier_last_expected_tier = 22;       // 最近一次灵阶突破请求的期望前阶（防复用不同参数重放）。
+  uint32 tier_last_result_tier = 23;         // 最近一次灵阶突破后的结果阶位。
+  uint32 entry_last_preset_slot = 24;        // 最近一次条目方案切换的目标槽位（0 表示最近请求是 SaveEntries）。
+  uint32 entry_last_preset_tag = 25;         // 最近一次条目方案切换的目标用途标签。
 }
 
 // 玩家宝宝数据(持久化到 player_database.pet_component)

@@ -148,6 +148,11 @@ service DataService {
   // scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
   // 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
   rpc UpdateRoleAppearance(UpdateRoleAppearanceRequest) returns (UpdateRoleAppearanceResponse) {}
+
+  // ── 账号级阶段一可交易材料配额同步 ─────────────────────────────
+  // 单角色累计阶段一可交易装备材料时，在账号分片单事务内幂等确认归属份数并更新 account_directory.stage1_tradable_material_used（跨角色/删角共享终身 60 份上限）。
+  // 只认 scene 调用证明(RoleAdmissionAuth)。
+  rpc SyncAccountStage1Tradable(SyncAccountStage1TradableRequest) returns (SyncAccountStage1TradableResponse) {}
 }
 
 message AccountDirectoryResponse {
@@ -909,4 +914,17 @@ message UpdateRoleAppearanceRequest {
 
 message UpdateRoleAppearanceResponse {
   bool updated = 1;
+}
+
+// ── 账号级阶段一可交易材料配额同步(docs/design/equipment-economy-charter.md §2.2)──
+message SyncAccountStage1TradableRequest {
+  uint64 player_id = 1;
+  uint32 desired_char_total = 2; // 本角色当前已累计阶段一可交易份数（0..60）；0 表示仅查询账号已用总额
+  common.base.ServiceCallAuth auth = 3;
+}
+
+message SyncAccountStage1TradableResponse {
+  bool found = 1;                  // false = 角色已删除或不存在
+  uint32 confirmed_char_total = 2; // 账号目录已确认归属本角色的阶段一可交易份数（0..60）
+  uint32 account_used_total = 3;   // 所属账号跨角色历史累计已用阶段一可交易份数（0..60）
 }

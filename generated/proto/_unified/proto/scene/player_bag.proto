@@ -59,6 +59,8 @@ message EquipEnhancePreview {
   uint32 pity_limit = 10;         // 保底必成上限次数（0 = 无保底；>0 时满 pity_limit 次必成，客户端须精确公示）
   uint32 current_pity_count = 11; // 当前已累计失败次数（0..pity_limit-1）
   bool pity_guaranteed_next = 12; // true = 本次点击已达保底（100% 必成）
+  bool will_bind_on_enhance = 13; // true = 当前装备可交易但可交易强化石不足，需长按确认混用绑定石（强化后装备转为绑定）
+  uint64 tradable_material_available = 14; // 当前背包中可用的可交易强化石数量（不含战斗预留）
 }
 
 // 实例与布局分离；显示信息不写入玩家持久化记录。
@@ -195,6 +197,8 @@ message EnhanceEquipRequest {
   // 乐观比较当前保底累计次数（+11 等概率保底行使用）：客户端显式携带时须与服务器一致，否则拒回 kEquipEnhanceLevelChanged，
   // 配合 client_request_id 杜绝概率失败不改等级场景下的弱网重复扣料。
   optional uint32 expected_pity_count = 4;
+  // 防染毒确认：可交易装备强化默认仅消耗可交易强化石；可交易石不足时须玩家长按 2 秒确认并传 true 才允许混用绑定石并转为绑定。
+  bool allow_bound_materials = 5;
 }
 message EnhanceEquipResponse {
   TipInfoMessage error_message = 1;
@@ -320,16 +324,19 @@ message EquipmentCraftChoice {
     INSTALL_AFFIX = 2;
     REFORGE_AFFIX = 3; // 同槽重铸换词条（1重铸砂+20银两，100%无损保留当前品相与保底进度）。
     POLISH_AFFIX = 4;  // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
+    UNSEAL_TO_TRADABLE = 5; // 解封剥离符(3409)：清空绑定装备全部绑定养成（强化/保底/词条/署名），仅恢复纯可交易原胚，不洗白B材料。
+    INHERIT_ENHANCE = 6;    // 流派副套继承符(3410)：将同部位同等级段源装备的强化等级与保底无损继承给目标副套装备（目标转为仅自用绑定）。
   }
   Operation operation = 1;
   uint32 config_id = 2; // CREATE_ITEM使用；其余操作必须为0。
-  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX使用；CREATE_ITEM必须为0。
+  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE目标使用；CREATE_ITEM必须为0。
   uint32 affix_slot = 4;
-  uint32 affix_id = 5;  // INSTALL_AFFIX / REFORGE_AFFIX使用；POLISH_AFFIX为0。
+  uint32 affix_id = 5;  // INSTALL_AFFIX / REFORGE_AFFIX使用；其余为0。
   bool use_guarantee_charm = 6;        // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。
   bool allow_bound_materials = 7;      // 防染毒确认：可交易装备默认仅耗可交易材料，需玩家二次确认后传true才可混扣绑定材料。
   uint64 proxy_master_player_id = 8;   // 主城宗师原子代打摊位摊主ID（0=本人打造）。
   optional uint32 expected_polish_pity_count = 9; // POLISH_AFFIX可选乐观保底计数校验，配合client_request_id防重放。
+  uint64 source_item_id = 10;          // INHERIT_ENHANCE源装备实例ID（须与item_id同部位同等级段且强化等级更高）。
 }
 message EquipmentCraftMaterial {
   uint32 config_id = 1;

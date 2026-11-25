@@ -68,8 +68,9 @@ message EquipmentMaterialRewardLedger {
   uint32 tradable_earned_total = 6;     // 阶段一累计已获可交易份数（上限 60）。
   uint64 available_tradable_units = 7;  // 当前未领余额中可交易子集（不变量：<= available_units）。
   uint64 week_starts_at_ms = 8;         // 阶段二当前游戏周起点（UTC+8 周一 05:00）。
-  uint32 earned_this_week = 9;          // 阶段二本周已获绑定份数（上限 100）。
+  uint32 earned_this_week = 9;          // 阶段二本周已获份数（上限 150）。
   bool migrated_to_v2 = 10;             // 标记已进入两阶段新账（旧档历史余额全额保留为自用，不抵扣新 660）。
+  uint32 stage1_tradable_confirmed = 11; // 已由 data_service 账号目录确认的本角色阶段一可交易份数（<= tradable_earned_total）。
 }
 
 message ClientRequestLedgerComp {

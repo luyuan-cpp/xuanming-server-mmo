@@ -1,0 +1,37 @@
+{
+ "data": [
+  {
+   "battle_config_id": 1,
+   "bounty_counter_kill_tear": 2,
+   "bounty_daily_payout_limit": 5,
+   "bounty_heavy_silver": 15000,
+   "bounty_normal_silver": 5000,
+   "bounty_protect_sec": 1800,
+   "bounty_public_daily_limit": 2,
+   "bounty_public_funds": 2000,
+   "bounty_tax_bps": 1000,
+   "bounty_ttl_sec": 86400,
+   "diminish_window_sec": 1800,
+   "dividend_guild_weekly_cap": 24,
+   "dividend_interval_sec": 3600,
+   "dividend_min_personal_merit": 30,
+   "dividend_player_weekly_cap": 12,
+   "frenzy_start_round": 12,
+   "garrison_max_slots": 5,
+   "garrison_refresh_cooldown_sec": 60,
+   "gold_leyline_multiplier_bps": 15000,
+   "id": 1,
+   "leyline_capture_init_hp": 600,
+   "leyline_max_banner_hp": 1000,
+   "leyline_shield_sec": 900,
+   "min_level": 15,
+   "peace_cooldown_sec": 60,
+   "post_battle_protect_sec": 10,
+   "pvp_defend_banner_heal": 60,
+   "pvp_win_banner_damage": 100,
+   "rivalry_bonus_bps": 2000,
+   "siege_win_banner_damage": 35,
+   "track_cooldown_sec": 15
+  }
+ ]
+}

@@ -239,6 +239,94 @@ void SendGuildServiceRespondGuildTrialInvite(entt::registry& registry, entt::ent
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendGuildServiceRespondGuildTrialInviteErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region GuildServiceGetGuildWarOverview
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceGetGuildWarOverviewGrpcPath = "/guildpb.GuildService/GetGuildWarOverview";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceGetGuildWarOverview(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarOverviewRequest& request, GrpcDone<::guildpb::GetGuildWarOverviewResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceGetGuildWarOverviewErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceSetGuildWarStance
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceSetGuildWarStanceGrpcPath = "/guildpb.GuildService/SetGuildWarStance";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceSetGuildWarStance(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildWarStanceRequest& request, GrpcDone<::guildpb::SetGuildWarStanceResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceSetGuildWarStanceErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceRegisterGuildWarGarrison
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceRegisterGuildWarGarrisonGrpcPath = "/guildpb.GuildService/RegisterGuildWarGarrison";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceRegisterGuildWarGarrison(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RegisterGuildWarGarrisonRequest& request, GrpcDone<::guildpb::RegisterGuildWarGarrisonResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceRegisterGuildWarGarrisonErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceStartGuildWarBattle
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceStartGuildWarBattleGrpcPath = "/guildpb.GuildService/StartGuildWarBattle";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceStartGuildWarBattle(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::StartGuildWarBattleRequest& request, GrpcDone<::guildpb::StartGuildWarBattleResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceStartGuildWarBattleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceClaimGuildWarMilestone
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceClaimGuildWarMilestoneGrpcPath = "/guildpb.GuildService/ClaimGuildWarMilestone";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceClaimGuildWarMilestone(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarMilestoneRequest& request, GrpcDone<::guildpb::ClaimGuildWarMilestoneResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceClaimGuildWarMilestoneErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceClaimGuildWarDividend
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceClaimGuildWarDividendGrpcPath = "/guildpb.GuildService/ClaimGuildWarDividend";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceClaimGuildWarDividend(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ClaimGuildWarDividendRequest& request, GrpcDone<::guildpb::ClaimGuildWarDividendResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceClaimGuildWarDividendErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServicePostGuildWarBounty
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServicePostGuildWarBountyGrpcPath = "/guildpb.GuildService/PostGuildWarBounty";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServicePostGuildWarBounty(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::PostGuildWarBountyRequest& request, GrpcDone<::guildpb::PostGuildWarBountyResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServicePostGuildWarBountyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceTrackGuildWarBounty
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceTrackGuildWarBountyGrpcPath = "/guildpb.GuildService/TrackGuildWarBounty";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceTrackGuildWarBounty(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TrackGuildWarBountyRequest& request, GrpcDone<::guildpb::TrackGuildWarBountyResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceTrackGuildWarBountyErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceGetGuildWarBattleResult
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceGetGuildWarBattleResultGrpcPath = "/guildpb.GuildService/GetGuildWarBattleResult";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceGetGuildWarBattleResult(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildWarBattleResultRequest& request, GrpcDone<::guildpb::GetGuildWarBattleResultResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceGetGuildWarBattleResultErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceNotifyGuildWarAlert
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceNotifyGuildWarAlertGrpcPath = "/guildpb.GuildService/NotifyGuildWarAlert";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceNotifyGuildWarAlert(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildWarAlertS2C& request, GrpcDone<::Empty> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceNotifyGuildWarAlertErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceInspectFieldWarTargets
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceInspectFieldWarTargetsGrpcPath = "/guildpb.GuildService/InspectFieldWarTargets";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceInspectFieldWarTargets(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::InspectFieldWarTargetsRequest& request, GrpcDone<::guildpb::InspectFieldWarTargetsResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetGuildCallDeadline(std::chrono::milliseconds deadline);
 

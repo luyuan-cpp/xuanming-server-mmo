@@ -146,3 +146,26 @@ func (battleClientPlayerRpc) decodeSurrenderBattle(reply *base.MessageContent, e
 	}
 	return resp, nil
 }
+
+// UpdateBattlePrep 异步调用 BattleClientPlayer.UpdateBattlePrep(REQUEST),done 的契约见 BattleClientPlayer。
+func (r battleClientPlayerRpc) UpdateBattlePrep(c *pkg.GameClient, req *battle.UpdateBattlePrepRequest, timeout time.Duration, done func(*battle.UpdateBattlePrepResponse, error)) {
+	c.Call(game.BattleClientPlayerUpdateBattlePrepMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUpdateBattlePrep(reply, err))
+	})
+}
+
+// UpdateBattlePrepSync 同步调用 BattleClientPlayer.UpdateBattlePrep(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r battleClientPlayerRpc) UpdateBattlePrepSync(ctx context.Context, c *pkg.GameClient, req *battle.UpdateBattlePrepRequest, timeout time.Duration) (*battle.UpdateBattlePrepResponse, error) {
+	return r.decodeUpdateBattlePrep(c.CallSync(ctx, game.BattleClientPlayerUpdateBattlePrepMessageId, req, timeout))
+}
+
+func (battleClientPlayerRpc) decodeUpdateBattlePrep(reply *base.MessageContent, err error) (*battle.UpdateBattlePrepResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &battle.UpdateBattlePrepResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode BattleClientPlayer.UpdateBattlePrep reply: %w", err)
+	}
+	return resp, nil
+}

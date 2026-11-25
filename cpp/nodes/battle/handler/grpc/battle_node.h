@@ -34,7 +34,7 @@ public:
     // ---- 可分配状态发布(R6,battle_admission_advertise.h;main.cpp 的对账定时器与关闸当场用) ----
 
     // 准入闸的只读弱引用。定时器回调只弱持有它、不捕获 this(AGENTS §11.7),本对象销毁后 lock 失败即停止对账。
-    std::weak_ptr<const battle_admission::AdmissionGate> AdmissionGateView() const { return admission_; }
+    std::weak_ptr<const battle_admission::AdmissionGate> AdmissionGateView() const { return admission; }
 
     // Agones 侧此刻会不会放行分配许可的粗判,与 GameServerLifecycle 拒绝许可的条件同口径:排空中、Starting(/ready 未成功)、
     // ShuttingDown、Stopped 都不放行;Disabled(本地 / 非 Agones)恒放行。只用于对外表态,不代替 CreateBattle 守护段里真正的许可。
@@ -83,11 +83,11 @@ private:
     static void HandleIssueBattleTicket(const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response);
     static void HandleAttachRelayGate(const ::AttachRelayGateRequest* request, ::AttachRelayGateResponse* response);
     static void HandlePromoteSpectateBroadcast(const ::PromoteSpectateBroadcastRequest* request, ::PromoteSpectateBroadcastResponse* response);
-    muduo::net::EventLoop& loop_;
+    muduo::net::EventLoop& loop;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
-    LoopTaskScope creationTasks_{loop_};
+    LoopTaskScope creationTasks{loop};
     // 建房准入闸。用 shared_ptr 持有:grpc.CreateBattle.guard 的许可回调只弱持有它、不捕获 this(AGENTS §11.7),
     // 回调晚于本对象执行时 lock 失败即按「不接新房间」拒绝。
-    std::shared_ptr<battle_admission::AdmissionGate> admission_ = std::make_shared<battle_admission::AdmissionGate>();
+    std::shared_ptr<battle_admission::AdmissionGate> admission = std::make_shared<battle_admission::AdmissionGate>();
     ///<<< END WRITING YOUR CODE
 };

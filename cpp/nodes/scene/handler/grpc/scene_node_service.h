@@ -20,7 +20,7 @@ class SceneNodeGrpcImpl final : public muduo_grpc::Service
 public:
     explicit SceneNodeGrpcImpl(muduo::net::EventLoop& loop);
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.public
-    void CloseCreationAdmission() { creationTasks_.Stop(); }
+    void CloseCreationAdmission() { creationTasks.Stop(); }
     ///<<< END WRITING YOUR CODE
 
     // 方法表(按 :path 精确路由)。处理函数捕获 this:本对象必须活过注册它的 Node。
@@ -72,8 +72,8 @@ private:
     static void HandleAssetCredit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleAssetAckReceipt(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleGmExecutePlayerCommand(const ::scene_node::GmExecutePlayerCommandRequest* request, ::scene_node::GmExecutePlayerCommandResponse* response);
-    muduo::net::EventLoop& loop_;
+    muduo::net::EventLoop& loop;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
-    LoopTaskScope creationTasks_{loop_};
+    LoopTaskScope creationTasks{loop};
     ///<<< END WRITING YOUR CODE
 };

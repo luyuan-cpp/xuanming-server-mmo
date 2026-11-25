@@ -84,7 +84,7 @@ namespace
 			return false;
 		}
 		const auto boundScene = BoundSceneInstance(sessionIt->second);
-		const auto senderScene = SenderSceneInstance(RpcController::From(controller).conn());
+		const auto senderScene = SenderSceneInstance(RpcController::From(controller).Conn());
 		if (gate_session_fence::ClassifySceneKickSource(boundScene, senderScene) !=
 			gate_session_fence::SceneKickSourceVerdict::kDropNotBoundScene)
 		{
@@ -144,7 +144,7 @@ void GateHandler::BroadcastToScene(::google::protobuf::RpcController* controller
 	// 认得出发送方 scene 时只推会话当前指向它的那些:计划排空窗口里同一个 scene_id 在新旧两台各有一份实例
 	// (docs/design/scene-node-planned-drain.md §4.3),只按 scene_id 匹配会串到另一份实例的玩家。
 	gate_push::DeliverToScene(gate_push::Path::kRpc, request->scene_id(), gate_push::ContentOf(*request),
-							  SenderSceneNode(RpcController::From(controller).conn()));
+							  SenderSceneNode(RpcController::From(controller).Conn()));
 	///<<< END WRITING YOUR CODE
 
 }

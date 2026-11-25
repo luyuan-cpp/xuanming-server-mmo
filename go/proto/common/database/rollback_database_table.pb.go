@@ -188,7 +188,7 @@ func (x SqlWriterRegistry_State) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterRegistry_State.Descriptor instead.
 func (SqlWriterRegistry_State) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28, 0}
 }
 
 type SqlWriterLifecycleReceipt_Kind int32
@@ -237,7 +237,7 @@ func (x SqlWriterLifecycleReceipt_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterLifecycleReceipt_Kind.Descriptor instead.
 func (SqlWriterLifecycleReceipt_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{29, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{30, 0}
 }
 
 type SqlWriterBootGrant_LockPrimitive int32
@@ -286,7 +286,7 @@ func (x SqlWriterBootGrant_LockPrimitive) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterBootGrant_LockPrimitive.Descriptor instead.
 func (SqlWriterBootGrant_LockPrimitive) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{30, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{31, 0}
 }
 
 type SqlWriterDrainRun_Phase int32
@@ -362,7 +362,7 @@ func (x SqlWriterDrainRun_Phase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterDrainRun_Phase.Descriptor instead.
 func (SqlWriterDrainRun_Phase) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{32, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{33, 0}
 }
 
 type SqlWriterFreezeTicket_State int32
@@ -414,7 +414,7 @@ func (x SqlWriterFreezeTicket_State) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterFreezeTicket_State.Descriptor instead.
 func (SqlWriterFreezeTicket_State) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{33, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 0}
 }
 
 type SqlWriterFreezeTicket_AuthorizationKind int32
@@ -463,7 +463,7 @@ func (x SqlWriterFreezeTicket_AuthorizationKind) Number() protoreflect.EnumNumbe
 
 // Deprecated: Use SqlWriterFreezeTicket_AuthorizationKind.Descriptor instead.
 func (SqlWriterFreezeTicket_AuthorizationKind) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{33, 1}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 1}
 }
 
 type SqlWriterMaintenanceReceipt_Phase int32
@@ -512,7 +512,7 @@ func (x SqlWriterMaintenanceReceipt_Phase) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_Phase.Descriptor instead.
 func (SqlWriterMaintenanceReceipt_Phase) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 0}
 }
 
 type SqlWriterMaintenanceReceipt_Kind int32
@@ -579,7 +579,7 @@ func (x SqlWriterMaintenanceReceipt_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_Kind.Descriptor instead.
 func (SqlWriterMaintenanceReceipt_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 1}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 1}
 }
 
 // ============================================================================
@@ -2601,9 +2601,11 @@ type AccountDirectory struct {
 	DeletionSource         uint32 `protobuf:"varint,7,opt,name=deletion_source,json=deletionSource,proto3" json:"deletion_source,omitempty"`                             // 1 本人申请、2 运维代办(LoginAdmin.ScheduleAccountDeletion)
 	// 国家防沉迷实名认证系统给的用户唯一标识 pi(38 位,前 6 位是出生日期);空串 = 游戏方没给这个账号做过实名。
 	// 只写一次,不存姓名和身份证号(docs/design/real-name-anti-addiction.md §5.1)。
-	RealNamePi    string `protobuf:"bytes,8,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RealNamePi string `protobuf:"bytes,8,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"`
+	// 阶段一装备材料自选跨角色终身可交易已用总额（0..60），删角不重置，仅在账号注销完成时随账号行删除。
+	Stage1TradableMaterialUsed uint32 `protobuf:"varint,9,opt,name=stage1_tradable_material_used,json=stage1TradableMaterialUsed,proto3" json:"stage1_tradable_material_used,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *AccountDirectory) Reset() {
@@ -2692,6 +2694,82 @@ func (x *AccountDirectory) GetRealNamePi() string {
 	return ""
 }
 
+func (x *AccountDirectory) GetStage1TradableMaterialUsed() uint32 {
+	if x != nil {
+		return x.Stage1TradableMaterialUsed
+	}
+	return 0
+}
+
+// 账号级阶段一可交易装备材料按角色高水位确认表（与 account_directory 同在账号分片，单片事务幂等同步，防删角/多开刷 60 份可交易料）。
+type AccountRoleTradableQuota struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Account        string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	PlayerId       uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ConfirmedUnits uint32                 `protobuf:"varint,3,opt,name=confirmed_units,json=confirmedUnits,proto3" json:"confirmed_units,omitempty"` // 已记入 account_directory.stage1_tradable_material_used 的本角色确认份数（0..60）
+	UpdatedMs      uint64                 `protobuf:"varint,4,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AccountRoleTradableQuota) Reset() {
+	*x = AccountRoleTradableQuota{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountRoleTradableQuota) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountRoleTradableQuota) ProtoMessage() {}
+
+func (x *AccountRoleTradableQuota) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountRoleTradableQuota.ProtoReflect.Descriptor instead.
+func (*AccountRoleTradableQuota) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *AccountRoleTradableQuota) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *AccountRoleTradableQuota) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *AccountRoleTradableQuota) GetConfirmedUnits() uint32 {
+	if x != nil {
+		return x.ConfirmedUnits
+	}
+	return 0
+}
+
+func (x *AccountRoleTradableQuota) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 // 账号注销完成的回执(docs/design/account-deletion.md §4.5),在账号所在分片,和删账号行同一个事务写。
 // 只存账号原字节的 SHA-256,不存原账号:合规留档;同一身份以后再登录建新行时,据此提示一次「之前的账号已注销完成」。
 type AccountDeletionReceipt struct {
@@ -2706,7 +2784,7 @@ type AccountDeletionReceipt struct {
 
 func (x *AccountDeletionReceipt) Reset() {
 	*x = AccountDeletionReceipt{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[17]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2718,7 +2796,7 @@ func (x *AccountDeletionReceipt) String() string {
 func (*AccountDeletionReceipt) ProtoMessage() {}
 
 func (x *AccountDeletionReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[17]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2731,7 +2809,7 @@ func (x *AccountDeletionReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountDeletionReceipt.ProtoReflect.Descriptor instead.
 func (*AccountDeletionReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{17}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AccountDeletionReceipt) GetAccountDigest() []byte {
@@ -2785,7 +2863,7 @@ type AccountRoleRef struct {
 
 func (x *AccountRoleRef) Reset() {
 	*x = AccountRoleRef{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[18]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2797,7 +2875,7 @@ func (x *AccountRoleRef) String() string {
 func (*AccountRoleRef) ProtoMessage() {}
 
 func (x *AccountRoleRef) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[18]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2810,7 +2888,7 @@ func (x *AccountRoleRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleRef.ProtoReflect.Descriptor instead.
 func (*AccountRoleRef) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{18}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AccountRoleRef) GetAccount() string {
@@ -2904,7 +2982,7 @@ type AccountRole struct {
 
 func (x *AccountRole) Reset() {
 	*x = AccountRole{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2916,7 +2994,7 @@ func (x *AccountRole) String() string {
 func (*AccountRole) ProtoMessage() {}
 
 func (x *AccountRole) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[19]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2929,7 +3007,7 @@ func (x *AccountRole) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRole.ProtoReflect.Descriptor instead.
 func (*AccountRole) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{19}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AccountRole) GetPlayerId() uint64 {
@@ -3008,7 +3086,7 @@ type AccountRoleRemoval struct {
 
 func (x *AccountRoleRemoval) Reset() {
 	*x = AccountRoleRemoval{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3020,7 +3098,7 @@ func (x *AccountRoleRemoval) String() string {
 func (*AccountRoleRemoval) ProtoMessage() {}
 
 func (x *AccountRoleRemoval) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[20]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3033,7 +3111,7 @@ func (x *AccountRoleRemoval) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleRemoval.ProtoReflect.Descriptor instead.
 func (*AccountRoleRemoval) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{20}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AccountRoleRemoval) GetPlayerId() uint64 {
@@ -3091,7 +3169,7 @@ type AccountRoleRename struct {
 
 func (x *AccountRoleRename) Reset() {
 	*x = AccountRoleRename{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3103,7 +3181,7 @@ func (x *AccountRoleRename) String() string {
 func (*AccountRoleRename) ProtoMessage() {}
 
 func (x *AccountRoleRename) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[21]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3116,7 +3194,7 @@ func (x *AccountRoleRename) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleRename.ProtoReflect.Descriptor instead.
 func (*AccountRoleRename) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{21}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AccountRoleRename) GetPlayerId() uint64 {
@@ -3203,7 +3281,7 @@ type AccountChannelIdentity struct {
 
 func (x *AccountChannelIdentity) Reset() {
 	*x = AccountChannelIdentity{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3215,7 +3293,7 @@ func (x *AccountChannelIdentity) String() string {
 func (*AccountChannelIdentity) ProtoMessage() {}
 
 func (x *AccountChannelIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[22]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3228,7 +3306,7 @@ func (x *AccountChannelIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountChannelIdentity.ProtoReflect.Descriptor instead.
 func (*AccountChannelIdentity) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{22}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *AccountChannelIdentity) GetAccount() string {
@@ -3279,7 +3357,7 @@ type AccountRoleTrade struct {
 
 func (x *AccountRoleTrade) Reset() {
 	*x = AccountRoleTrade{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3291,7 +3369,7 @@ func (x *AccountRoleTrade) String() string {
 func (*AccountRoleTrade) ProtoMessage() {}
 
 func (x *AccountRoleTrade) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[23]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3304,7 +3382,7 @@ func (x *AccountRoleTrade) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTrade.ProtoReflect.Descriptor instead.
 func (*AccountRoleTrade) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{23}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *AccountRoleTrade) GetListingId() uint64 {
@@ -3403,7 +3481,7 @@ type AccountRoleTransferReceipt struct {
 
 func (x *AccountRoleTransferReceipt) Reset() {
 	*x = AccountRoleTransferReceipt{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3415,7 +3493,7 @@ func (x *AccountRoleTransferReceipt) String() string {
 func (*AccountRoleTransferReceipt) ProtoMessage() {}
 
 func (x *AccountRoleTransferReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[24]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3428,7 +3506,7 @@ func (x *AccountRoleTransferReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTransferReceipt.ProtoReflect.Descriptor instead.
 func (*AccountRoleTransferReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{24}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AccountRoleTransferReceipt) GetTxId() uint64 {
@@ -3520,7 +3598,7 @@ type AccountRoleAdmission struct {
 
 func (x *AccountRoleAdmission) Reset() {
 	*x = AccountRoleAdmission{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3532,7 +3610,7 @@ func (x *AccountRoleAdmission) String() string {
 func (*AccountRoleAdmission) ProtoMessage() {}
 
 func (x *AccountRoleAdmission) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[25]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3545,7 +3623,7 @@ func (x *AccountRoleAdmission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleAdmission.ProtoReflect.Descriptor instead.
 func (*AccountRoleAdmission) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{25}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AccountRoleAdmission) GetPlayerId() uint64 {
@@ -3633,7 +3711,7 @@ type AccountRoleTradeHolder struct {
 
 func (x *AccountRoleTradeHolder) Reset() {
 	*x = AccountRoleTradeHolder{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3645,7 +3723,7 @@ func (x *AccountRoleTradeHolder) String() string {
 func (*AccountRoleTradeHolder) ProtoMessage() {}
 
 func (x *AccountRoleTradeHolder) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[26]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3658,7 +3736,7 @@ func (x *AccountRoleTradeHolder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTradeHolder.ProtoReflect.Descriptor instead.
 func (*AccountRoleTradeHolder) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{26}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AccountRoleTradeHolder) GetListingId() uint64 {
@@ -3725,7 +3803,7 @@ type SqlWriterRegistry struct {
 
 func (x *SqlWriterRegistry) Reset() {
 	*x = SqlWriterRegistry{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3737,7 +3815,7 @@ func (x *SqlWriterRegistry) String() string {
 func (*SqlWriterRegistry) ProtoMessage() {}
 
 func (x *SqlWriterRegistry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[27]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3750,7 +3828,7 @@ func (x *SqlWriterRegistry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterRegistry.ProtoReflect.Descriptor instead.
 func (*SqlWriterRegistry) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{27}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SqlWriterRegistry) GetWriterKey() []byte {
@@ -3844,7 +3922,7 @@ type SqlWriterSlot struct {
 
 func (x *SqlWriterSlot) Reset() {
 	*x = SqlWriterSlot{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3856,7 +3934,7 @@ func (x *SqlWriterSlot) String() string {
 func (*SqlWriterSlot) ProtoMessage() {}
 
 func (x *SqlWriterSlot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[28]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3869,7 +3947,7 @@ func (x *SqlWriterSlot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterSlot.ProtoReflect.Descriptor instead.
 func (*SqlWriterSlot) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{28}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *SqlWriterSlot) GetWriterKey() []byte {
@@ -3930,7 +4008,7 @@ type SqlWriterLifecycleReceipt struct {
 
 func (x *SqlWriterLifecycleReceipt) Reset() {
 	*x = SqlWriterLifecycleReceipt{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3942,7 +4020,7 @@ func (x *SqlWriterLifecycleReceipt) String() string {
 func (*SqlWriterLifecycleReceipt) ProtoMessage() {}
 
 func (x *SqlWriterLifecycleReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[29]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3955,7 +4033,7 @@ func (x *SqlWriterLifecycleReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterLifecycleReceipt.ProtoReflect.Descriptor instead.
 func (*SqlWriterLifecycleReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{29}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *SqlWriterLifecycleReceipt) GetRequestId() []byte {
@@ -4040,7 +4118,7 @@ type SqlWriterBootGrant struct {
 
 func (x *SqlWriterBootGrant) Reset() {
 	*x = SqlWriterBootGrant{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4052,7 +4130,7 @@ func (x *SqlWriterBootGrant) String() string {
 func (*SqlWriterBootGrant) ProtoMessage() {}
 
 func (x *SqlWriterBootGrant) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[30]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4065,7 +4143,7 @@ func (x *SqlWriterBootGrant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterBootGrant.ProtoReflect.Descriptor instead.
 func (*SqlWriterBootGrant) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{30}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *SqlWriterBootGrant) GetFormat() string {
@@ -4194,7 +4272,7 @@ type SqlWriterBootGrantSet struct {
 
 func (x *SqlWriterBootGrantSet) Reset() {
 	*x = SqlWriterBootGrantSet{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4206,7 +4284,7 @@ func (x *SqlWriterBootGrantSet) String() string {
 func (*SqlWriterBootGrantSet) ProtoMessage() {}
 
 func (x *SqlWriterBootGrantSet) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[31]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4219,7 +4297,7 @@ func (x *SqlWriterBootGrantSet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterBootGrantSet.ProtoReflect.Descriptor instead.
 func (*SqlWriterBootGrantSet) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{31}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *SqlWriterBootGrantSet) GetFormat() string {
@@ -4255,7 +4333,7 @@ type SqlWriterDrainRun struct {
 
 func (x *SqlWriterDrainRun) Reset() {
 	*x = SqlWriterDrainRun{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4267,7 +4345,7 @@ func (x *SqlWriterDrainRun) String() string {
 func (*SqlWriterDrainRun) ProtoMessage() {}
 
 func (x *SqlWriterDrainRun) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[32]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4280,7 +4358,7 @@ func (x *SqlWriterDrainRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterDrainRun.ProtoReflect.Descriptor instead.
 func (*SqlWriterDrainRun) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{32}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SqlWriterDrainRun) GetOperationId() []byte {
@@ -4385,7 +4463,7 @@ type SqlWriterFreezeTicket struct {
 
 func (x *SqlWriterFreezeTicket) Reset() {
 	*x = SqlWriterFreezeTicket{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4397,7 +4475,7 @@ func (x *SqlWriterFreezeTicket) String() string {
 func (*SqlWriterFreezeTicket) ProtoMessage() {}
 
 func (x *SqlWriterFreezeTicket) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[33]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4410,7 +4488,7 @@ func (x *SqlWriterFreezeTicket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterFreezeTicket.ProtoReflect.Descriptor instead.
 func (*SqlWriterFreezeTicket) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{33}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SqlWriterFreezeTicket) GetTicketId() []byte {
@@ -4559,7 +4637,7 @@ type SqlWriterMaintenanceReceipt struct {
 
 func (x *SqlWriterMaintenanceReceipt) Reset() {
 	*x = SqlWriterMaintenanceReceipt{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4571,7 +4649,7 @@ func (x *SqlWriterMaintenanceReceipt) String() string {
 func (*SqlWriterMaintenanceReceipt) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[34]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4584,7 +4662,7 @@ func (x *SqlWriterMaintenanceReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterMaintenanceReceipt.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *SqlWriterMaintenanceReceipt) GetRequestId() []byte {
@@ -4719,7 +4797,7 @@ type SqlWriterBootRoster struct {
 
 func (x *SqlWriterBootRoster) Reset() {
 	*x = SqlWriterBootRoster{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4731,7 +4809,7 @@ func (x *SqlWriterBootRoster) String() string {
 func (*SqlWriterBootRoster) ProtoMessage() {}
 
 func (x *SqlWriterBootRoster) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[35]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4744,7 +4822,7 @@ func (x *SqlWriterBootRoster) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterBootRoster.ProtoReflect.Descriptor instead.
 func (*SqlWriterBootRoster) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *SqlWriterBootRoster) GetFormat() string {
@@ -4789,7 +4867,7 @@ type SqlWriterLifecycleReceipt_Request struct {
 
 func (x *SqlWriterLifecycleReceipt_Request) Reset() {
 	*x = SqlWriterLifecycleReceipt_Request{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4801,7 +4879,7 @@ func (x *SqlWriterLifecycleReceipt_Request) String() string {
 func (*SqlWriterLifecycleReceipt_Request) ProtoMessage() {}
 
 func (x *SqlWriterLifecycleReceipt_Request) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[36]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4814,7 +4892,7 @@ func (x *SqlWriterLifecycleReceipt_Request) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use SqlWriterLifecycleReceipt_Request.ProtoReflect.Descriptor instead.
 func (*SqlWriterLifecycleReceipt_Request) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{29, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{30, 0}
 }
 
 func (x *SqlWriterLifecycleReceipt_Request) GetRequestId() []byte {
@@ -4940,7 +5018,7 @@ type SqlWriterMaintenanceReceipt_Plan struct {
 
 func (x *SqlWriterMaintenanceReceipt_Plan) Reset() {
 	*x = SqlWriterMaintenanceReceipt_Plan{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4952,7 +5030,7 @@ func (x *SqlWriterMaintenanceReceipt_Plan) String() string {
 func (*SqlWriterMaintenanceReceipt_Plan) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_Plan) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[37]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4965,7 +5043,7 @@ func (x *SqlWriterMaintenanceReceipt_Plan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_Plan.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_Plan) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 0}
 }
 
 func (x *SqlWriterMaintenanceReceipt_Plan) GetPhysicalClusterIdentity() []byte {
@@ -5091,7 +5169,7 @@ type SqlWriterMaintenanceReceipt_LaunchClosure struct {
 
 func (x *SqlWriterMaintenanceReceipt_LaunchClosure) Reset() {
 	*x = SqlWriterMaintenanceReceipt_LaunchClosure{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5103,7 +5181,7 @@ func (x *SqlWriterMaintenanceReceipt_LaunchClosure) String() string {
 func (*SqlWriterMaintenanceReceipt_LaunchClosure) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_LaunchClosure) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[38]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5116,7 +5194,7 @@ func (x *SqlWriterMaintenanceReceipt_LaunchClosure) ProtoReflect() protoreflect.
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_LaunchClosure.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_LaunchClosure) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 1}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 1}
 }
 
 func (x *SqlWriterMaintenanceReceipt_LaunchClosure) GetLauncherId() []byte {
@@ -5150,7 +5228,7 @@ type SqlWriterMaintenanceReceipt_SourcePin struct {
 
 func (x *SqlWriterMaintenanceReceipt_SourcePin) Reset() {
 	*x = SqlWriterMaintenanceReceipt_SourcePin{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5162,7 +5240,7 @@ func (x *SqlWriterMaintenanceReceipt_SourcePin) String() string {
 func (*SqlWriterMaintenanceReceipt_SourcePin) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_SourcePin) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[39]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5175,7 +5253,7 @@ func (x *SqlWriterMaintenanceReceipt_SourcePin) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_SourcePin.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_SourcePin) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 2}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 2}
 }
 
 func (x *SqlWriterMaintenanceReceipt_SourcePin) GetAbsolutePath() string {
@@ -5210,7 +5288,7 @@ type SqlWriterMaintenanceReceipt_IssuerClosure struct {
 
 func (x *SqlWriterMaintenanceReceipt_IssuerClosure) Reset() {
 	*x = SqlWriterMaintenanceReceipt_IssuerClosure{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5222,7 +5300,7 @@ func (x *SqlWriterMaintenanceReceipt_IssuerClosure) String() string {
 func (*SqlWriterMaintenanceReceipt_IssuerClosure) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_IssuerClosure) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[40]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5235,7 +5313,7 @@ func (x *SqlWriterMaintenanceReceipt_IssuerClosure) ProtoReflect() protoreflect.
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_IssuerClosure.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_IssuerClosure) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 3}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 3}
 }
 
 func (x *SqlWriterMaintenanceReceipt_IssuerClosure) GetIssuerId() []byte {
@@ -5326,7 +5404,7 @@ type SqlWriterMaintenanceReceipt_KafkaPartitionClosure struct {
 
 func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) Reset() {
 	*x = SqlWriterMaintenanceReceipt_KafkaPartitionClosure{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5338,7 +5416,7 @@ func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) String() string {
 func (*SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[41]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5351,7 +5429,7 @@ func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) ProtoReflect() proto
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_KafkaPartitionClosure.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_KafkaPartitionClosure) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 4}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 4}
 }
 
 func (x *SqlWriterMaintenanceReceipt_KafkaPartitionClosure) GetClusterId() []byte {
@@ -5441,7 +5519,7 @@ type SqlWriterMaintenanceReceipt_RedisKeyClosure struct {
 
 func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) Reset() {
 	*x = SqlWriterMaintenanceReceipt_RedisKeyClosure{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5453,7 +5531,7 @@ func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) String() string {
 func (*SqlWriterMaintenanceReceipt_RedisKeyClosure) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[42]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5466,7 +5544,7 @@ func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) ProtoReflect() protoreflec
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_RedisKeyClosure.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_RedisKeyClosure) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 5}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 5}
 }
 
 func (x *SqlWriterMaintenanceReceipt_RedisKeyClosure) GetKey() string {
@@ -5548,7 +5626,7 @@ type SqlWriterMaintenanceReceipt_RedisTargetClosure struct {
 
 func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) Reset() {
 	*x = SqlWriterMaintenanceReceipt_RedisTargetClosure{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5560,7 +5638,7 @@ func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) String() string {
 func (*SqlWriterMaintenanceReceipt_RedisTargetClosure) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[43]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5573,7 +5651,7 @@ func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) ProtoReflect() protoref
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_RedisTargetClosure.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_RedisTargetClosure) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 6}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 6}
 }
 
 func (x *SqlWriterMaintenanceReceipt_RedisTargetClosure) GetRole() string {
@@ -5643,7 +5721,7 @@ type SqlWriterMaintenanceReceipt_PublicationEvidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_PublicationEvidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5655,7 +5733,7 @@ func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) String() string {
 func (*SqlWriterMaintenanceReceipt_PublicationEvidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[44]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5668,7 +5746,7 @@ func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) ProtoReflect() protore
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_PublicationEvidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_PublicationEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 7}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 7}
 }
 
 func (x *SqlWriterMaintenanceReceipt_PublicationEvidence) GetLogicalRoles() []*SqlWriterMaintenanceReceipt_IssuerClosure {
@@ -5712,7 +5790,7 @@ type SqlWriterMaintenanceReceipt_NonSqlClosureEvidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_NonSqlClosureEvidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5724,7 +5802,7 @@ func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) String() string {
 func (*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[45]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5737,7 +5815,7 @@ func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) ProtoReflect() proto
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_NonSqlClosureEvidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 8}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 8}
 }
 
 func (x *SqlWriterMaintenanceReceipt_NonSqlClosureEvidence) GetQueueMutators() []*SqlWriterMaintenanceReceipt_IssuerClosure {
@@ -5837,7 +5915,7 @@ type SqlWriterMaintenanceReceipt_TicketEvidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_TicketEvidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_TicketEvidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5849,7 +5927,7 @@ func (x *SqlWriterMaintenanceReceipt_TicketEvidence) String() string {
 func (*SqlWriterMaintenanceReceipt_TicketEvidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_TicketEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[46]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5862,7 +5940,7 @@ func (x *SqlWriterMaintenanceReceipt_TicketEvidence) ProtoReflect() protoreflect
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_TicketEvidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_TicketEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 9}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 9}
 }
 
 func (x *SqlWriterMaintenanceReceipt_TicketEvidence) GetTicketId() []byte {
@@ -5913,7 +5991,7 @@ type SqlWriterMaintenanceReceipt_EmergencyEvidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_EmergencyEvidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5925,7 +6003,7 @@ func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) String() string {
 func (*SqlWriterMaintenanceReceipt_EmergencyEvidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[47]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5938,7 +6016,7 @@ func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) ProtoReflect() protorefl
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_EmergencyEvidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_EmergencyEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 10}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 10}
 }
 
 func (x *SqlWriterMaintenanceReceipt_EmergencyEvidence) GetReason() string {
@@ -5990,7 +6068,7 @@ type SqlWriterMaintenanceReceipt_ReleaseReadiness struct {
 
 func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) Reset() {
 	*x = SqlWriterMaintenanceReceipt_ReleaseReadiness{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6002,7 +6080,7 @@ func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) String() string {
 func (*SqlWriterMaintenanceReceipt_ReleaseReadiness) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[48]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6015,7 +6093,7 @@ func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) ProtoReflect() protorefle
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_ReleaseReadiness.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_ReleaseReadiness) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 11}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 11}
 }
 
 func (x *SqlWriterMaintenanceReceipt_ReleaseReadiness) GetOriginalFreezeReceiptId() []byte {
@@ -6072,7 +6150,7 @@ type SqlWriterMaintenanceReceipt_ConsumerGroupReadiness struct {
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) Reset() {
 	*x = SqlWriterMaintenanceReceipt_ConsumerGroupReadiness{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6084,7 +6162,7 @@ func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) String() string {
 func (*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[49]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6097,7 +6175,7 @@ func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) ProtoReflect() prot
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_ConsumerGroupReadiness.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 12}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 12}
 }
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerGroupReadiness) GetOperationId() []byte {
@@ -6188,7 +6266,7 @@ type SqlWriterMaintenanceReceipt_ManualConsumerAssignment struct {
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) Reset() {
 	*x = SqlWriterMaintenanceReceipt_ManualConsumerAssignment{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6200,7 +6278,7 @@ func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) String() string {
 func (*SqlWriterMaintenanceReceipt_ManualConsumerAssignment) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[50]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6213,7 +6291,7 @@ func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) ProtoReflect() pr
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_ManualConsumerAssignment.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_ManualConsumerAssignment) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 13}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 13}
 }
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerAssignment) GetIssuerId() []byte {
@@ -6345,7 +6423,7 @@ type SqlWriterMaintenanceReceipt_ManualConsumerEvidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_ManualConsumerEvidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6357,7 +6435,7 @@ func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) String() string {
 func (*SqlWriterMaintenanceReceipt_ManualConsumerEvidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[51]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6370,7 +6448,7 @@ func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) ProtoReflect() prot
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_ManualConsumerEvidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_ManualConsumerEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 14}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 14}
 }
 
 func (x *SqlWriterMaintenanceReceipt_ManualConsumerEvidence) GetOperationId() []byte {
@@ -6446,7 +6524,7 @@ type SqlWriterMaintenanceReceipt_ConsumerReadiness struct {
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) Reset() {
 	*x = SqlWriterMaintenanceReceipt_ConsumerReadiness{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6458,7 +6536,7 @@ func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) String() string {
 func (*SqlWriterMaintenanceReceipt_ConsumerReadiness) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[52]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6471,7 +6549,7 @@ func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) ProtoReflect() protorefl
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_ConsumerReadiness.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_ConsumerReadiness) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 15}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 15}
 }
 
 func (x *SqlWriterMaintenanceReceipt_ConsumerReadiness) GetGroups() []*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness {
@@ -6505,7 +6583,7 @@ type SqlWriterMaintenanceReceipt_IssuerReadiness struct {
 
 func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) Reset() {
 	*x = SqlWriterMaintenanceReceipt_IssuerReadiness{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6517,7 +6595,7 @@ func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) String() string {
 func (*SqlWriterMaintenanceReceipt_IssuerReadiness) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[53]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6530,7 +6608,7 @@ func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) ProtoReflect() protoreflec
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_IssuerReadiness.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_IssuerReadiness) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 16}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 16}
 }
 
 func (x *SqlWriterMaintenanceReceipt_IssuerReadiness) GetIssuerId() []byte {
@@ -6617,7 +6695,7 @@ type SqlWriterMaintenanceReceipt_SourceOpenAck struct {
 
 func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) Reset() {
 	*x = SqlWriterMaintenanceReceipt_SourceOpenAck{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6629,7 +6707,7 @@ func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) String() string {
 func (*SqlWriterMaintenanceReceipt_SourceOpenAck) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[54]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6642,7 +6720,7 @@ func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) ProtoReflect() protoreflect.
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_SourceOpenAck.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_SourceOpenAck) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 17}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 17}
 }
 
 func (x *SqlWriterMaintenanceReceipt_SourceOpenAck) GetIssuerId() []byte {
@@ -6741,7 +6819,7 @@ type SqlWriterMaintenanceReceipt_PublicationReadiness struct {
 
 func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) Reset() {
 	*x = SqlWriterMaintenanceReceipt_PublicationReadiness{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6753,7 +6831,7 @@ func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) String() string {
 func (*SqlWriterMaintenanceReceipt_PublicationReadiness) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[55]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6766,7 +6844,7 @@ func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) ProtoReflect() protor
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_PublicationReadiness.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_PublicationReadiness) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 18}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 18}
 }
 
 func (x *SqlWriterMaintenanceReceipt_PublicationReadiness) GetReleaseReceiptId() []byte {
@@ -6816,7 +6894,7 @@ type SqlWriterMaintenanceReceipt_Evidence struct {
 
 func (x *SqlWriterMaintenanceReceipt_Evidence) Reset() {
 	*x = SqlWriterMaintenanceReceipt_Evidence{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6828,7 +6906,7 @@ func (x *SqlWriterMaintenanceReceipt_Evidence) String() string {
 func (*SqlWriterMaintenanceReceipt_Evidence) ProtoMessage() {}
 
 func (x *SqlWriterMaintenanceReceipt_Evidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[56]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6841,7 +6919,7 @@ func (x *SqlWriterMaintenanceReceipt_Evidence) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use SqlWriterMaintenanceReceipt_Evidence.ProtoReflect.Descriptor instead.
 func (*SqlWriterMaintenanceReceipt_Evidence) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{34, 19}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 19}
 }
 
 func (x *SqlWriterMaintenanceReceipt_Evidence) GetOperationId() []byte {
@@ -6978,7 +7056,7 @@ type SqlWriterBootRoster_Entry struct {
 
 func (x *SqlWriterBootRoster_Entry) Reset() {
 	*x = SqlWriterBootRoster_Entry{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6990,7 +7068,7 @@ func (x *SqlWriterBootRoster_Entry) String() string {
 func (*SqlWriterBootRoster_Entry) ProtoMessage() {}
 
 func (x *SqlWriterBootRoster_Entry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[57]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7003,7 +7081,7 @@ func (x *SqlWriterBootRoster_Entry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SqlWriterBootRoster_Entry.ProtoReflect.Descriptor instead.
 func (*SqlWriterBootRoster_Entry) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 0}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{36, 0}
 }
 
 func (x *SqlWriterBootRoster_Entry) GetRequests() []*SqlWriterLifecycleReceipt_Request {
@@ -7045,7 +7123,7 @@ type SqlWriterBootRoster_RuntimeEnvironment struct {
 
 func (x *SqlWriterBootRoster_RuntimeEnvironment) Reset() {
 	*x = SqlWriterBootRoster_RuntimeEnvironment{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7057,7 +7135,7 @@ func (x *SqlWriterBootRoster_RuntimeEnvironment) String() string {
 func (*SqlWriterBootRoster_RuntimeEnvironment) ProtoMessage() {}
 
 func (x *SqlWriterBootRoster_RuntimeEnvironment) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[58]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7070,7 +7148,7 @@ func (x *SqlWriterBootRoster_RuntimeEnvironment) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use SqlWriterBootRoster_RuntimeEnvironment.ProtoReflect.Descriptor instead.
 func (*SqlWriterBootRoster_RuntimeEnvironment) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{35, 1}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{36, 1}
 }
 
 func (x *SqlWriterBootRoster_RuntimeEnvironment) GetName() string {
@@ -7334,7 +7412,7 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\fwriter_epoch\x18\x04 \x01(\x04R\vwriterEpoch\x12)\n" +
 	"\x10catalog_revision\x18\x05 \x01(\x04R\x0fcatalogRevision\x12\"\n" +
 	"\rfreeze_run_id\x18\x06 \x01(\fR\vfreezeRunId:\x16\x8a\x92\xf4\x01\n" +
-	"route_meta\x92\x92\xf4\x01\x02id\"\x88\x03\n" +
+	"route_meta\x92\x92\xf4\x01\x02id\"\xcb\x03\n" +
 	"\x11account_directory\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1d\n" +
 	"\n" +
@@ -7345,7 +7423,14 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x17deletion_lease_until_ms\x18\x06 \x01(\x04R\x14deletionLeaseUntilMs\x12'\n" +
 	"\x0fdeletion_source\x18\a \x01(\rR\x0edeletionSource\x12 \n" +
 	"\freal_name_pi\x18\b \x01(\tR\n" +
-	"realNamePi:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\xcd\x01\n" +
+	"realNamePi\x12A\n" +
+	"\x1dstage1_tradable_material_used\x18\t \x01(\rR\x1astage1TradableMaterialUsed:\"\x8a\x92\xf4\x01\x11account_directory\x92\x92\xf4\x01\aaccount\"\xd4\x01\n" +
+	"\x1baccount_role_tradable_quota\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12'\n" +
+	"\x0fconfirmed_units\x18\x03 \x01(\rR\x0econfirmedUnits\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x04 \x01(\x04R\tupdatedMs:6\x8a\x92\xf4\x01\x1baccount_role_tradable_quota\x92\x92\xf4\x01\x11account,player_id\"\xcd\x01\n" +
 	"\x18account_deletion_receipt\x12%\n" +
 	"\x0eaccount_digest\x18\x01 \x01(\fR\raccountDigest\x12!\n" +
 	"\frequested_ms\x18\x02 \x01(\x04R\vrequestedMs\x12\x1d\n" +
@@ -7915,7 +8000,7 @@ func file_proto_common_database_rollback_database_table_proto_rawDescGZIP() []by
 }
 
 var file_proto_common_database_rollback_database_table_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 59)
+var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
 	(GmRecallBatchState)(0),                                      // 0: GmRecallBatchState
 	(GmRecallOpStatus)(0),                                        // 1: GmRecallOpStatus
@@ -7944,106 +8029,107 @@ var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
 	(*ZoneMergeHistory)(nil),                                     // 24: zone_merge_history
 	(*RouteMeta)(nil),                                            // 25: route_meta
 	(*AccountDirectory)(nil),                                     // 26: account_directory
-	(*AccountDeletionReceipt)(nil),                               // 27: account_deletion_receipt
-	(*AccountRoleRef)(nil),                                       // 28: account_role_ref
-	(*AccountRole)(nil),                                          // 29: account_role
-	(*AccountRoleRemoval)(nil),                                   // 30: account_role_removal
-	(*AccountRoleRename)(nil),                                    // 31: account_role_rename
-	(*AccountChannelIdentity)(nil),                               // 32: account_channel_identity
-	(*AccountRoleTrade)(nil),                                     // 33: account_role_trade
-	(*AccountRoleTransferReceipt)(nil),                           // 34: account_role_transfer_receipt
-	(*AccountRoleAdmission)(nil),                                 // 35: account_role_admission
-	(*AccountRoleTradeHolder)(nil),                               // 36: account_role_trade_holder
-	(*SqlWriterRegistry)(nil),                                    // 37: sql_writer_registry
-	(*SqlWriterSlot)(nil),                                        // 38: sql_writer_slot
-	(*SqlWriterLifecycleReceipt)(nil),                            // 39: sql_writer_lifecycle_receipt
-	(*SqlWriterBootGrant)(nil),                                   // 40: sql_writer_boot_grant
-	(*SqlWriterBootGrantSet)(nil),                                // 41: sql_writer_boot_grant_set
-	(*SqlWriterDrainRun)(nil),                                    // 42: sql_writer_drain_run
-	(*SqlWriterFreezeTicket)(nil),                                // 43: sql_writer_freeze_ticket
-	(*SqlWriterMaintenanceReceipt)(nil),                          // 44: sql_writer_maintenance_receipt
-	(*SqlWriterBootRoster)(nil),                                  // 45: sql_writer_boot_roster
-	(*SqlWriterLifecycleReceipt_Request)(nil),                    // 46: sql_writer_lifecycle_receipt.Request
-	(*SqlWriterMaintenanceReceipt_Plan)(nil),                     // 47: sql_writer_maintenance_receipt.Plan
-	(*SqlWriterMaintenanceReceipt_LaunchClosure)(nil),            // 48: sql_writer_maintenance_receipt.LaunchClosure
-	(*SqlWriterMaintenanceReceipt_SourcePin)(nil),                // 49: sql_writer_maintenance_receipt.SourcePin
-	(*SqlWriterMaintenanceReceipt_IssuerClosure)(nil),            // 50: sql_writer_maintenance_receipt.IssuerClosure
-	(*SqlWriterMaintenanceReceipt_KafkaPartitionClosure)(nil),    // 51: sql_writer_maintenance_receipt.KafkaPartitionClosure
-	(*SqlWriterMaintenanceReceipt_RedisKeyClosure)(nil),          // 52: sql_writer_maintenance_receipt.RedisKeyClosure
-	(*SqlWriterMaintenanceReceipt_RedisTargetClosure)(nil),       // 53: sql_writer_maintenance_receipt.RedisTargetClosure
-	(*SqlWriterMaintenanceReceipt_PublicationEvidence)(nil),      // 54: sql_writer_maintenance_receipt.PublicationEvidence
-	(*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence)(nil),    // 55: sql_writer_maintenance_receipt.NonSqlClosureEvidence
-	(*SqlWriterMaintenanceReceipt_TicketEvidence)(nil),           // 56: sql_writer_maintenance_receipt.TicketEvidence
-	(*SqlWriterMaintenanceReceipt_EmergencyEvidence)(nil),        // 57: sql_writer_maintenance_receipt.EmergencyEvidence
-	(*SqlWriterMaintenanceReceipt_ReleaseReadiness)(nil),         // 58: sql_writer_maintenance_receipt.ReleaseReadiness
-	(*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness)(nil),   // 59: sql_writer_maintenance_receipt.ConsumerGroupReadiness
-	(*SqlWriterMaintenanceReceipt_ManualConsumerAssignment)(nil), // 60: sql_writer_maintenance_receipt.ManualConsumerAssignment
-	(*SqlWriterMaintenanceReceipt_ManualConsumerEvidence)(nil),   // 61: sql_writer_maintenance_receipt.ManualConsumerEvidence
-	(*SqlWriterMaintenanceReceipt_ConsumerReadiness)(nil),        // 62: sql_writer_maintenance_receipt.ConsumerReadiness
-	(*SqlWriterMaintenanceReceipt_IssuerReadiness)(nil),          // 63: sql_writer_maintenance_receipt.IssuerReadiness
-	(*SqlWriterMaintenanceReceipt_SourceOpenAck)(nil),            // 64: sql_writer_maintenance_receipt.SourceOpenAck
-	(*SqlWriterMaintenanceReceipt_PublicationReadiness)(nil),     // 65: sql_writer_maintenance_receipt.PublicationReadiness
-	(*SqlWriterMaintenanceReceipt_Evidence)(nil),                 // 66: sql_writer_maintenance_receipt.Evidence
-	(*SqlWriterBootRoster_Entry)(nil),                            // 67: sql_writer_boot_roster.Entry
-	(*SqlWriterBootRoster_RuntimeEnvironment)(nil),               // 68: sql_writer_boot_roster.RuntimeEnvironment
+	(*AccountRoleTradableQuota)(nil),                             // 27: account_role_tradable_quota
+	(*AccountDeletionReceipt)(nil),                               // 28: account_deletion_receipt
+	(*AccountRoleRef)(nil),                                       // 29: account_role_ref
+	(*AccountRole)(nil),                                          // 30: account_role
+	(*AccountRoleRemoval)(nil),                                   // 31: account_role_removal
+	(*AccountRoleRename)(nil),                                    // 32: account_role_rename
+	(*AccountChannelIdentity)(nil),                               // 33: account_channel_identity
+	(*AccountRoleTrade)(nil),                                     // 34: account_role_trade
+	(*AccountRoleTransferReceipt)(nil),                           // 35: account_role_transfer_receipt
+	(*AccountRoleAdmission)(nil),                                 // 36: account_role_admission
+	(*AccountRoleTradeHolder)(nil),                               // 37: account_role_trade_holder
+	(*SqlWriterRegistry)(nil),                                    // 38: sql_writer_registry
+	(*SqlWriterSlot)(nil),                                        // 39: sql_writer_slot
+	(*SqlWriterLifecycleReceipt)(nil),                            // 40: sql_writer_lifecycle_receipt
+	(*SqlWriterBootGrant)(nil),                                   // 41: sql_writer_boot_grant
+	(*SqlWriterBootGrantSet)(nil),                                // 42: sql_writer_boot_grant_set
+	(*SqlWriterDrainRun)(nil),                                    // 43: sql_writer_drain_run
+	(*SqlWriterFreezeTicket)(nil),                                // 44: sql_writer_freeze_ticket
+	(*SqlWriterMaintenanceReceipt)(nil),                          // 45: sql_writer_maintenance_receipt
+	(*SqlWriterBootRoster)(nil),                                  // 46: sql_writer_boot_roster
+	(*SqlWriterLifecycleReceipt_Request)(nil),                    // 47: sql_writer_lifecycle_receipt.Request
+	(*SqlWriterMaintenanceReceipt_Plan)(nil),                     // 48: sql_writer_maintenance_receipt.Plan
+	(*SqlWriterMaintenanceReceipt_LaunchClosure)(nil),            // 49: sql_writer_maintenance_receipt.LaunchClosure
+	(*SqlWriterMaintenanceReceipt_SourcePin)(nil),                // 50: sql_writer_maintenance_receipt.SourcePin
+	(*SqlWriterMaintenanceReceipt_IssuerClosure)(nil),            // 51: sql_writer_maintenance_receipt.IssuerClosure
+	(*SqlWriterMaintenanceReceipt_KafkaPartitionClosure)(nil),    // 52: sql_writer_maintenance_receipt.KafkaPartitionClosure
+	(*SqlWriterMaintenanceReceipt_RedisKeyClosure)(nil),          // 53: sql_writer_maintenance_receipt.RedisKeyClosure
+	(*SqlWriterMaintenanceReceipt_RedisTargetClosure)(nil),       // 54: sql_writer_maintenance_receipt.RedisTargetClosure
+	(*SqlWriterMaintenanceReceipt_PublicationEvidence)(nil),      // 55: sql_writer_maintenance_receipt.PublicationEvidence
+	(*SqlWriterMaintenanceReceipt_NonSqlClosureEvidence)(nil),    // 56: sql_writer_maintenance_receipt.NonSqlClosureEvidence
+	(*SqlWriterMaintenanceReceipt_TicketEvidence)(nil),           // 57: sql_writer_maintenance_receipt.TicketEvidence
+	(*SqlWriterMaintenanceReceipt_EmergencyEvidence)(nil),        // 58: sql_writer_maintenance_receipt.EmergencyEvidence
+	(*SqlWriterMaintenanceReceipt_ReleaseReadiness)(nil),         // 59: sql_writer_maintenance_receipt.ReleaseReadiness
+	(*SqlWriterMaintenanceReceipt_ConsumerGroupReadiness)(nil),   // 60: sql_writer_maintenance_receipt.ConsumerGroupReadiness
+	(*SqlWriterMaintenanceReceipt_ManualConsumerAssignment)(nil), // 61: sql_writer_maintenance_receipt.ManualConsumerAssignment
+	(*SqlWriterMaintenanceReceipt_ManualConsumerEvidence)(nil),   // 62: sql_writer_maintenance_receipt.ManualConsumerEvidence
+	(*SqlWriterMaintenanceReceipt_ConsumerReadiness)(nil),        // 63: sql_writer_maintenance_receipt.ConsumerReadiness
+	(*SqlWriterMaintenanceReceipt_IssuerReadiness)(nil),          // 64: sql_writer_maintenance_receipt.IssuerReadiness
+	(*SqlWriterMaintenanceReceipt_SourceOpenAck)(nil),            // 65: sql_writer_maintenance_receipt.SourceOpenAck
+	(*SqlWriterMaintenanceReceipt_PublicationReadiness)(nil),     // 66: sql_writer_maintenance_receipt.PublicationReadiness
+	(*SqlWriterMaintenanceReceipt_Evidence)(nil),                 // 67: sql_writer_maintenance_receipt.Evidence
+	(*SqlWriterBootRoster_Entry)(nil),                            // 68: sql_writer_boot_roster.Entry
+	(*SqlWriterBootRoster_RuntimeEnvironment)(nil),               // 69: sql_writer_boot_roster.RuntimeEnvironment
 }
 var file_proto_common_database_rollback_database_table_proto_depIdxs = []int32{
 	2,  // 0: sql_writer_registry.state:type_name -> sql_writer_registry.State
 	2,  // 1: sql_writer_slot.state:type_name -> sql_writer_registry.State
 	3,  // 2: sql_writer_lifecycle_receipt.kind:type_name -> sql_writer_lifecycle_receipt.Kind
 	4,  // 3: sql_writer_boot_grant.lock_primitive:type_name -> sql_writer_boot_grant.LockPrimitive
-	40, // 4: sql_writer_boot_grant_set.grants:type_name -> sql_writer_boot_grant
+	41, // 4: sql_writer_boot_grant_set.grants:type_name -> sql_writer_boot_grant
 	5,  // 5: sql_writer_drain_run.phase:type_name -> sql_writer_drain_run.Phase
 	6,  // 6: sql_writer_freeze_ticket.state:type_name -> sql_writer_freeze_ticket.State
 	7,  // 7: sql_writer_freeze_ticket.authorization_kind:type_name -> sql_writer_freeze_ticket.AuthorizationKind
 	8,  // 8: sql_writer_maintenance_receipt.phase:type_name -> sql_writer_maintenance_receipt.Phase
 	9,  // 9: sql_writer_maintenance_receipt.kind:type_name -> sql_writer_maintenance_receipt.Kind
 	5,  // 10: sql_writer_maintenance_receipt.run_phase:type_name -> sql_writer_drain_run.Phase
-	66, // 11: sql_writer_maintenance_receipt.evidence:type_name -> sql_writer_maintenance_receipt.Evidence
-	67, // 12: sql_writer_boot_roster.entries:type_name -> sql_writer_boot_roster.Entry
+	67, // 11: sql_writer_maintenance_receipt.evidence:type_name -> sql_writer_maintenance_receipt.Evidence
+	68, // 12: sql_writer_boot_roster.entries:type_name -> sql_writer_boot_roster.Entry
 	3,  // 13: sql_writer_lifecycle_receipt.Request.kind:type_name -> sql_writer_lifecycle_receipt.Kind
-	37, // 14: sql_writer_lifecycle_receipt.Request.writer:type_name -> sql_writer_registry
+	38, // 14: sql_writer_lifecycle_receipt.Request.writer:type_name -> sql_writer_registry
 	4,  // 15: sql_writer_lifecycle_receipt.Request.lock_primitive:type_name -> sql_writer_boot_grant.LockPrimitive
-	50, // 16: sql_writer_maintenance_receipt.Plan.root_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
-	50, // 17: sql_writer_maintenance_receipt.Plan.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
-	51, // 18: sql_writer_maintenance_receipt.Plan.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
-	53, // 19: sql_writer_maintenance_receipt.Plan.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
-	49, // 20: sql_writer_maintenance_receipt.Plan.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
-	48, // 21: sql_writer_maintenance_receipt.Plan.launchers:type_name -> sql_writer_maintenance_receipt.LaunchClosure
-	50, // 22: sql_writer_maintenance_receipt.Plan.maintenance_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
-	60, // 23: sql_writer_maintenance_receipt.Plan.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
-	49, // 24: sql_writer_maintenance_receipt.LaunchClosure.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
-	49, // 25: sql_writer_maintenance_receipt.IssuerClosure.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
-	52, // 26: sql_writer_maintenance_receipt.RedisTargetClosure.observations:type_name -> sql_writer_maintenance_receipt.RedisKeyClosure
-	49, // 27: sql_writer_maintenance_receipt.RedisTargetClosure.scan_source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
-	50, // 28: sql_writer_maintenance_receipt.PublicationEvidence.logical_roles:type_name -> sql_writer_maintenance_receipt.IssuerClosure
-	49, // 29: sql_writer_maintenance_receipt.PublicationEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
-	50, // 30: sql_writer_maintenance_receipt.NonSqlClosureEvidence.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
-	51, // 31: sql_writer_maintenance_receipt.NonSqlClosureEvidence.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
-	53, // 32: sql_writer_maintenance_receipt.NonSqlClosureEvidence.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
-	49, // 33: sql_writer_maintenance_receipt.NonSqlClosureEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
-	61, // 34: sql_writer_maintenance_receipt.NonSqlClosureEvidence.manual_consumers:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
-	49, // 35: sql_writer_maintenance_receipt.EmergencyEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
-	56, // 36: sql_writer_maintenance_receipt.EmergencyEvidence.authorization:type_name -> sql_writer_maintenance_receipt.TicketEvidence
-	54, // 37: sql_writer_maintenance_receipt.ReleaseReadiness.maintenance_publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
-	51, // 38: sql_writer_maintenance_receipt.ConsumerGroupReadiness.expected_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
-	51, // 39: sql_writer_maintenance_receipt.ConsumerGroupReadiness.assigned_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
-	60, // 40: sql_writer_maintenance_receipt.ManualConsumerEvidence.assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
-	49, // 41: sql_writer_maintenance_receipt.ManualConsumerEvidence.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
-	59, // 42: sql_writer_maintenance_receipt.ConsumerReadiness.groups:type_name -> sql_writer_maintenance_receipt.ConsumerGroupReadiness
-	61, // 43: sql_writer_maintenance_receipt.ConsumerReadiness.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
-	49, // 44: sql_writer_maintenance_receipt.IssuerReadiness.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
-	49, // 45: sql_writer_maintenance_receipt.SourceOpenAck.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
-	63, // 46: sql_writer_maintenance_receipt.PublicationReadiness.prepared_boots:type_name -> sql_writer_maintenance_receipt.IssuerReadiness
-	49, // 47: sql_writer_maintenance_receipt.PublicationReadiness.source_open_acks:type_name -> sql_writer_maintenance_receipt.SourcePin
-	54, // 48: sql_writer_maintenance_receipt.Evidence.publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
-	55, // 49: sql_writer_maintenance_receipt.Evidence.non_sql_closure:type_name -> sql_writer_maintenance_receipt.NonSqlClosureEvidence
-	56, // 50: sql_writer_maintenance_receipt.Evidence.ticket:type_name -> sql_writer_maintenance_receipt.TicketEvidence
-	57, // 51: sql_writer_maintenance_receipt.Evidence.emergency:type_name -> sql_writer_maintenance_receipt.EmergencyEvidence
-	58, // 52: sql_writer_maintenance_receipt.Evidence.release_readiness:type_name -> sql_writer_maintenance_receipt.ReleaseReadiness
-	65, // 53: sql_writer_maintenance_receipt.Evidence.publication_readiness:type_name -> sql_writer_maintenance_receipt.PublicationReadiness
-	46, // 54: sql_writer_boot_roster.Entry.requests:type_name -> sql_writer_lifecycle_receipt.Request
-	68, // 55: sql_writer_boot_roster.Entry.runtime_environment:type_name -> sql_writer_boot_roster.RuntimeEnvironment
+	51, // 16: sql_writer_maintenance_receipt.Plan.root_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	51, // 17: sql_writer_maintenance_receipt.Plan.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	52, // 18: sql_writer_maintenance_receipt.Plan.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	54, // 19: sql_writer_maintenance_receipt.Plan.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
+	50, // 20: sql_writer_maintenance_receipt.Plan.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	49, // 21: sql_writer_maintenance_receipt.Plan.launchers:type_name -> sql_writer_maintenance_receipt.LaunchClosure
+	51, // 22: sql_writer_maintenance_receipt.Plan.maintenance_issuers:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	61, // 23: sql_writer_maintenance_receipt.Plan.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
+	50, // 24: sql_writer_maintenance_receipt.LaunchClosure.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	50, // 25: sql_writer_maintenance_receipt.IssuerClosure.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	53, // 26: sql_writer_maintenance_receipt.RedisTargetClosure.observations:type_name -> sql_writer_maintenance_receipt.RedisKeyClosure
+	50, // 27: sql_writer_maintenance_receipt.RedisTargetClosure.scan_source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	51, // 28: sql_writer_maintenance_receipt.PublicationEvidence.logical_roles:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	50, // 29: sql_writer_maintenance_receipt.PublicationEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	51, // 30: sql_writer_maintenance_receipt.NonSqlClosureEvidence.queue_mutators:type_name -> sql_writer_maintenance_receipt.IssuerClosure
+	52, // 31: sql_writer_maintenance_receipt.NonSqlClosureEvidence.kafka_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	54, // 32: sql_writer_maintenance_receipt.NonSqlClosureEvidence.redis_targets:type_name -> sql_writer_maintenance_receipt.RedisTargetClosure
+	50, // 33: sql_writer_maintenance_receipt.NonSqlClosureEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	62, // 34: sql_writer_maintenance_receipt.NonSqlClosureEvidence.manual_consumers:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
+	50, // 35: sql_writer_maintenance_receipt.EmergencyEvidence.source_evidence:type_name -> sql_writer_maintenance_receipt.SourcePin
+	57, // 36: sql_writer_maintenance_receipt.EmergencyEvidence.authorization:type_name -> sql_writer_maintenance_receipt.TicketEvidence
+	55, // 37: sql_writer_maintenance_receipt.ReleaseReadiness.maintenance_publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	52, // 38: sql_writer_maintenance_receipt.ConsumerGroupReadiness.expected_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	52, // 39: sql_writer_maintenance_receipt.ConsumerGroupReadiness.assigned_partitions:type_name -> sql_writer_maintenance_receipt.KafkaPartitionClosure
+	61, // 40: sql_writer_maintenance_receipt.ManualConsumerEvidence.assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerAssignment
+	50, // 41: sql_writer_maintenance_receipt.ManualConsumerEvidence.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	60, // 42: sql_writer_maintenance_receipt.ConsumerReadiness.groups:type_name -> sql_writer_maintenance_receipt.ConsumerGroupReadiness
+	62, // 43: sql_writer_maintenance_receipt.ConsumerReadiness.manual_assignments:type_name -> sql_writer_maintenance_receipt.ManualConsumerEvidence
+	50, // 44: sql_writer_maintenance_receipt.IssuerReadiness.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	50, // 45: sql_writer_maintenance_receipt.SourceOpenAck.source_pins:type_name -> sql_writer_maintenance_receipt.SourcePin
+	64, // 46: sql_writer_maintenance_receipt.PublicationReadiness.prepared_boots:type_name -> sql_writer_maintenance_receipt.IssuerReadiness
+	50, // 47: sql_writer_maintenance_receipt.PublicationReadiness.source_open_acks:type_name -> sql_writer_maintenance_receipt.SourcePin
+	55, // 48: sql_writer_maintenance_receipt.Evidence.publication:type_name -> sql_writer_maintenance_receipt.PublicationEvidence
+	56, // 49: sql_writer_maintenance_receipt.Evidence.non_sql_closure:type_name -> sql_writer_maintenance_receipt.NonSqlClosureEvidence
+	57, // 50: sql_writer_maintenance_receipt.Evidence.ticket:type_name -> sql_writer_maintenance_receipt.TicketEvidence
+	58, // 51: sql_writer_maintenance_receipt.Evidence.emergency:type_name -> sql_writer_maintenance_receipt.EmergencyEvidence
+	59, // 52: sql_writer_maintenance_receipt.Evidence.release_readiness:type_name -> sql_writer_maintenance_receipt.ReleaseReadiness
+	66, // 53: sql_writer_maintenance_receipt.Evidence.publication_readiness:type_name -> sql_writer_maintenance_receipt.PublicationReadiness
+	47, // 54: sql_writer_boot_roster.Entry.requests:type_name -> sql_writer_lifecycle_receipt.Request
+	69, // 55: sql_writer_boot_roster.Entry.runtime_environment:type_name -> sql_writer_boot_roster.RuntimeEnvironment
 	56, // [56:56] is the sub-list for method output_type
 	56, // [56:56] is the sub-list for method input_type
 	56, // [56:56] is the sub-list for extension type_name
@@ -8056,7 +8142,7 @@ func file_proto_common_database_rollback_database_table_proto_init() {
 	if File_proto_common_database_rollback_database_table_proto != nil {
 		return
 	}
-	file_proto_common_database_rollback_database_table_proto_msgTypes[56].OneofWrappers = []any{
+	file_proto_common_database_rollback_database_table_proto_msgTypes[57].OneofWrappers = []any{
 		(*SqlWriterMaintenanceReceipt_Evidence_Publication)(nil),
 		(*SqlWriterMaintenanceReceipt_Evidence_NonSqlClosure)(nil),
 		(*SqlWriterMaintenanceReceipt_Evidence_Ticket)(nil),
@@ -8070,7 +8156,7 @@ func file_proto_common_database_rollback_database_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_rollback_database_table_proto_rawDesc), len(file_proto_common_database_rollback_database_table_proto_rawDesc)),
 			NumEnums:      10,
-			NumMessages:   59,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

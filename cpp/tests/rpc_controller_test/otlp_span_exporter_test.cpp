@@ -166,17 +166,17 @@ class OtlpSpanExporterLoopbackTest : public ::testing::Test {
 protected:
     void SetUp() override
     {
-        loop_ = std::ref(*loopThread_.startLoop());
-        port_ = FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0);
-        queue_ = std::make_unique<tracing::SpanExportQueue>(64, 512);
+        loop = std::ref(*loopThread.startLoop());
+        port = FindFreeLoopbackPort();
+        ASSERT_NE(port, 0);
+        queue = std::make_unique<tracing::SpanExportQueue>(64, 512);
     }
 
     void TearDown() override
     {
         RunInLoopAndWait([this] {
-            exporter_.reset();
-            server_.reset();
+            exporter.reset();
+            server.reset();
         });
         // 排空 ~TcpServer / 连接释放排进队列的收尾(连接对象析构、forceCloseInLoop、connectDestroyed)。
         RunInLoopAndWait([] {});
@@ -184,7 +184,7 @@ protected:
         RunInLoopAndWait([] {});
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& work)
@@ -211,30 +211,30 @@ protected:
 
     void StartCollector(CollectorState::Mode mode)
     {
-        collector_->mode = mode;
+        collector->mode = mode;
         RunInLoopAndWait([this] {
-            server_ = std::make_unique<muduo::net::TcpServer>(&Loop(), muduo::net::InetAddress("127.0.0.1", port_),
+            server = std::make_unique<muduo::net::TcpServer>(&Loop(), muduo::net::InetAddress("127.0.0.1", port),
                                                               "fake-otlp-collector");
-            const std::shared_ptr<CollectorState> state = collector_;
-            server_->setConnectionCallback([state](const muduo::net::TcpConnectionPtr& conn) {
+            const std::shared_ptr<CollectorState> state = collector;
+            server->setConnectionCallback([state](const muduo::net::TcpConnectionPtr& conn) {
                 if (conn->connected()) {
                     ++state->accepted;
                 } else {
                     ++state->closed;
                 }
             });
-            server_->setMessageCallback(
+            server->setMessageCallback(
                 [state](const muduo::net::TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp) {
                     ServeRequests(state, conn, buffer);
                 });
-            server_->start();
+            server->start();
         });
     }
 
     void StartExporter(const std::function<void(tracing::OtlpSpanExporterOptions&)>& tweak = {})
     {
         tracing::OtlpSpanExporterOptions options;
-        const auto endpoint = tracing::ParseOtlpTracesEndpoint("http://127.0.0.1:" + std::to_string(port_) + "/v1/traces");
+        const auto endpoint = tracing::ParseOtlpTracesEndpoint("http://127.0.0.1:" + std::to_string(port) + "/v1/traces");
         ASSERT_TRUE(endpoint.has_value());
         options.endpoint = *endpoint;
         const auto address = tracing::ResolveOtlpEndpoint(options.endpoint);   // IPv4 字面量:不做 DNS
@@ -251,22 +251,22 @@ protected:
         }
         // 导出器只在 loop 线程上构造与使用,与节点里挂在主 loop 上一样。
         RunInLoopAndWait([&] {
-            exporter_ = std::make_unique<tracing::OtlpSpanExporter>(Loop(), *queue_, stats_, std::move(options));
-            exporter_->Start();
+            exporter = std::make_unique<tracing::OtlpSpanExporter>(Loop(), *queue, stats, std::move(options));
+            exporter->Start();
         });
     }
 
     void Submit(uint8_t firstTag, int count)
     {
         for (int i = 0; i < count; ++i) {
-            queue_->Submit(span_test::MakeSpanRecord(static_cast<uint8_t>(firstTag + i)));
+            queue->Submit(span_test::MakeSpanRecord(static_cast<uint8_t>(firstTag + i)));
         }
     }
 
     bool ExporterFinished()
     {
         bool finished = false;
-        RunInLoopAndWait([&] { finished = exporter_->Finished(); });
+        RunInLoopAndWait([&] { finished = exporter->Finished(); });
         return finished;
     }
 
@@ -287,18 +287,18 @@ protected:
         return names;
     }
 
-    uint64_t Exported() const { return stats_.exportedSpans.load(); }
-    uint64_t Failed() const { return stats_.failedSpans.load(); }
+    uint64_t Exported() const { return stats.exportedSpans.load(); }
+    uint64_t Failed() const { return stats.failedSpans.load(); }
 
     // loopThread_ 排第一:最后析构,其余成员析构时 loop 仍在。
-    muduo::net::EventLoopThread loopThread_;
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;   // 借用 loopThread_ 的 loop
-    uint16_t port_{0};
-    std::shared_ptr<CollectorState> collector_{std::make_shared<CollectorState>()};
-    std::unique_ptr<muduo::net::TcpServer> server_;
-    std::unique_ptr<tracing::SpanExportQueue> queue_;
-    tracing::SpanExportStats stats_;
-    std::unique_ptr<tracing::OtlpSpanExporter> exporter_;
+    muduo::net::EventLoopThread loopThread;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;   // 借用 loopThread_ 的 loop
+    uint16_t port{0};
+    std::shared_ptr<CollectorState> collector{std::make_shared<CollectorState>()};
+    std::unique_ptr<muduo::net::TcpServer> server;
+    std::unique_ptr<tracing::SpanExportQueue> queue;
+    tracing::SpanExportStats stats;
+    std::unique_ptr<tracing::OtlpSpanExporter> exporter;
 };
 
 } // namespace
@@ -309,20 +309,20 @@ TEST_F(OtlpSpanExporterLoopbackTest, ExportsOnTheScheduleWithTheOtlpHttpContract
     StartExporter();
     Submit(1, 3);
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 3; })) << "exported=" << Exported() << " failed=" << Failed();
-    EXPECT_EQ(stats_.exportedBatches.load(), 1u);
+    EXPECT_EQ(stats.exportedBatches.load(), 1u);
 
-    const auto requests = collector_->Requests();
+    const auto requests = collector->Requests();
     ASSERT_EQ(requests.size(), 1u);
     EXPECT_EQ(requests[0].head.rfind("POST /v1/traces HTTP/1.1\r\n", 0), 0u) << requests[0].head;
     EXPECT_NE(requests[0].head.find("\r\nContent-Type: application/x-protobuf"), std::string::npos);
-    EXPECT_NE(requests[0].head.find("\r\nHost: 127.0.0.1:" + std::to_string(port_)), std::string::npos);
+    EXPECT_NE(requests[0].head.find("\r\nHost: 127.0.0.1:" + std::to_string(port)), std::string::npos);
     EXPECT_EQ(SpanNamesOf(requests[0]), (std::vector<std::string>{"span-1", "span-2", "span-3"}));
-    EXPECT_EQ(queue_->Size(), 0u);
+    EXPECT_EQ(queue->Size(), 0u);
 }
 
 TEST_F(OtlpSpanExporterLoopbackTest, ExportsEarlyWhenABatchIsFullWithoutWaitingForTheSchedule)
 {
-    queue_ = std::make_unique<tracing::SpanExportQueue>(64, 4);
+    queue = std::make_unique<tracing::SpanExportQueue>(64, 4);
     StartCollector(CollectorState::Mode::kOk);
     StartExporter([](tracing::OtlpSpanExporterOptions& options) {
         options.scheduleDelay = 60000ms;   // 周期到不了:只能靠攒够一批的提前发
@@ -332,7 +332,7 @@ TEST_F(OtlpSpanExporterLoopbackTest, ExportsEarlyWhenABatchIsFullWithoutWaitingF
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 4; }));
     Submit(5, 8);   // 发完一批还够一批:接着发,不等周期
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 12; })) << "exported=" << Exported();
-    const auto requests = collector_->Requests();
+    const auto requests = collector->Requests();
     ASSERT_EQ(requests.size(), 3u);
     for (const auto& request : requests) {
         EXPECT_EQ(SpanNamesOf(request).size(), 4u);
@@ -347,8 +347,8 @@ TEST_F(OtlpSpanExporterLoopbackTest, ReusesOneConnectionAcrossBatches)
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 2; }));
     Submit(3, 2);
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 4; }));
-    EXPECT_EQ(collector_->RequestCount(), 2u);
-    EXPECT_EQ(collector_->accepted.load(), 1) << "HTTP/1.1 长连接,两批同一条连接";
+    EXPECT_EQ(collector->RequestCount(), 2u);
+    EXPECT_EQ(collector->accepted.load(), 1) << "HTTP/1.1 长连接,两批同一条连接";
 }
 
 TEST_F(OtlpSpanExporterLoopbackTest, ChunkedResponseWithConnectionCloseSucceedsAndTheNextBatchReconnects)
@@ -359,7 +359,7 @@ TEST_F(OtlpSpanExporterLoopbackTest, ChunkedResponseWithConnectionCloseSucceedsA
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 1; }));
     Submit(2, 1);
     ASSERT_TRUE(WaitUntil([&] { return Exported() == 2; }));
-    EXPECT_EQ(collector_->accepted.load(), 2);
+    EXPECT_EQ(collector->accepted.load(), 2);
     EXPECT_EQ(Failed(), 0u);
 }
 
@@ -369,11 +369,11 @@ TEST_F(OtlpSpanExporterLoopbackTest, CollectorRejectionDropsTheBatchWithoutRetry
     StartExporter();
     Submit(1, 3);
     ASSERT_TRUE(WaitUntil([&] { return Failed() == 3; }));
-    EXPECT_EQ(stats_.failedBatches.load(), 1u);
+    EXPECT_EQ(stats.failedBatches.load(), 1u);
     std::this_thread::sleep_for(300ms);   // 好几个周期过去,也不重发这一批
-    EXPECT_EQ(collector_->RequestCount(), 1u);
+    EXPECT_EQ(collector->RequestCount(), 1u);
     Submit(4, 2);   // 对端是通的,不退避:下一批照常发
-    ASSERT_TRUE(WaitUntil([&] { return collector_->RequestCount() == 2; }));
+    ASSERT_TRUE(WaitUntil([&] { return collector->RequestCount() == 2; }));
     ASSERT_TRUE(WaitUntil([&] { return Failed() == 5; }));
     EXPECT_EQ(Exported(), 0u);
 }
@@ -383,11 +383,11 @@ TEST_F(OtlpSpanExporterLoopbackTest, UnreachableCollectorDropsTheBatchAndBacksOf
     StartExporter();   // 没起采集器:端口上没人监听
     Submit(1, 3);
     ASSERT_TRUE(WaitUntil([&] { return Failed() == 3; }));
-    EXPECT_EQ(stats_.failedBatches.load(), 1u);
+    EXPECT_EQ(stats.failedBatches.load(), 1u);
     Submit(4, 3);   // 退避 2 秒内:到点丢一批最旧的,不再尝试连接
     ASSERT_TRUE(WaitUntil([&] { return Failed() == 6; }, 1000ms));
-    EXPECT_EQ(stats_.failedBatches.load(), 1u) << "退避期间的丢弃只算 span,不算导出批次";
-    EXPECT_EQ(queue_->Size(), 0u) << "队列不会顶满";
+    EXPECT_EQ(stats.failedBatches.load(), 1u) << "退避期间的丢弃只算 span,不算导出批次";
+    EXPECT_EQ(queue->Size(), 0u) << "队列不会顶满";
 }
 
 TEST_F(OtlpSpanExporterLoopbackTest, ExportTimeoutDropsTheBatchAndClosesTheConnection)
@@ -396,8 +396,8 @@ TEST_F(OtlpSpanExporterLoopbackTest, ExportTimeoutDropsTheBatchAndClosesTheConne
     StartExporter([](tracing::OtlpSpanExporterOptions& options) { options.exportTimeout = 200ms; });
     Submit(1, 2);
     ASSERT_TRUE(WaitUntil([&] { return Failed() == 2; }));
-    EXPECT_EQ(stats_.failedBatches.load(), 1u);
-    ASSERT_TRUE(WaitUntil([&] { return collector_->closed.load() >= 1; })) << "超时的连接要关掉,不再复用";
+    EXPECT_EQ(stats.failedBatches.load(), 1u);
+    ASSERT_TRUE(WaitUntil([&] { return collector->closed.load() >= 1; })) << "超时的连接要关掉,不再复用";
 }
 
 TEST_F(OtlpSpanExporterLoopbackTest, ShutdownFlushesWhatIsLeft)
@@ -405,11 +405,11 @@ TEST_F(OtlpSpanExporterLoopbackTest, ShutdownFlushesWhatIsLeft)
     StartCollector(CollectorState::Mode::kOk);
     StartExporter([](tracing::OtlpSpanExporterOptions& options) { options.scheduleDelay = 60000ms; });
     Submit(1, 5);
-    RunInLoopAndWait([this] { exporter_->BeginShutdown(); });
+    RunInLoopAndWait([this] { exporter->BeginShutdown(); });
     ASSERT_TRUE(WaitUntil([&] { return ExporterFinished(); }));
     EXPECT_EQ(Exported(), 5u);
-    EXPECT_EQ(collector_->RequestCount(), 1u);
-    EXPECT_EQ(queue_->DroppedOnShutdown(), 0u);
+    EXPECT_EQ(collector->RequestCount(), 1u);
+    EXPECT_EQ(queue->DroppedOnShutdown(), 0u);
 }
 
 TEST_F(OtlpSpanExporterLoopbackTest, ShutdownEndsAtItsTimeoutWhenTheCollectorNeverAnswers)
@@ -422,7 +422,7 @@ TEST_F(OtlpSpanExporterLoopbackTest, ShutdownEndsAtItsTimeoutWhenTheCollectorNev
     });
     Submit(1, 2);
     const auto started = std::chrono::steady_clock::now();
-    RunInLoopAndWait([this] { exporter_->BeginShutdown(); });
+    RunInLoopAndWait([this] { exporter->BeginShutdown(); });
     ASSERT_TRUE(WaitUntil([&] { return ExporterFinished(); }, 3000ms));
     EXPECT_LT(std::chrono::steady_clock::now() - started, 2000ms) << "停机冲刷以 shutdownTimeout 为限";
     EXPECT_EQ(Failed(), 2u);
@@ -433,9 +433,9 @@ TEST_F(OtlpSpanExporterLoopbackTest, DestroyingBeforeTheFlushCountsLeftoversAsSh
     StartCollector(CollectorState::Mode::kOk);
     StartExporter([](tracing::OtlpSpanExporterOptions& options) { options.scheduleDelay = 60000ms; });
     Submit(1, 3);
-    RunInLoopAndWait([this] { exporter_.reset(); });
-    EXPECT_EQ(queue_->DroppedOnShutdown(), 3u);
+    RunInLoopAndWait([this] { exporter.reset(); });
+    EXPECT_EQ(queue->DroppedOnShutdown(), 3u);
     EXPECT_EQ(Exported(), 0u);
     Submit(4, 1);   // 导出器没了:回调已摘,放进来的只留在队列里
-    EXPECT_EQ(queue_->Size(), 1u);
+    EXPECT_EQ(queue->Size(), 1u);
 }

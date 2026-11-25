@@ -1038,12 +1038,12 @@ void ApplyCurrencyRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerCom
 std::vector<Bag*> RecallBagOrder(PlayerBagsComp& bags)
 {
 	std::vector<uint64_t> dynamicIds;
-	dynamicIds.reserve(bags.dynamicBags_.size());
-	for (const auto& entry : bags.dynamicBags_) dynamicIds.push_back(entry.first);
+	dynamicIds.reserve(bags.dynamicBags.size());
+	for (const auto& entry : bags.dynamicBags) dynamicIds.push_back(entry.first);
 	std::sort(dynamicIds.begin(), dynamicIds.end());
 
 	std::vector<Bag*> order{&bags.bags[kInventory], &bags.bags[kWarehouse], &bags.bags[kTemporary]};
-	for (const auto id : dynamicIds) order.push_back(&bags.dynamicBags_.at(id));
+	for (const auto id : dynamicIds) order.push_back(&bags.dynamicBags.at(id));
 	order.push_back(&bags.bags[kEquipment]);
 	return order;
 }
@@ -1316,7 +1316,7 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 			{
 				LOG_ERROR << "[AssetOp] metric=asset_credit_exceeds_guid_segment_max_step player_id=" << request.player_id()
 						  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq()
-						  << " needed=" << guidsNeeded << " max_step=" << segment.options().maxStep
+						  << " needed=" << guidsNeeded << " max_step=" << segment.GetOptions().maxStep
 						  << ";credit needs more new item instances than one guid segment can ever hold, rejected as an invalid bundle";
 				RejectAndRecord(player, ledgerComp, request, kAssetInvalidBundle, nowMs, response);
 				return;

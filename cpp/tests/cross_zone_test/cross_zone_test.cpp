@@ -69,10 +69,10 @@ class LocalNodeInfoResetListener : public ::testing::EmptyTestEventListener
             identity.set_owner_revision(kFixtureOwnerRevision);
             identity.set_scene_instance_id("explicit-test-scene");
         }
-        admission_ = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
+        admission = std::make_unique<RoleAdmissionSystem::ScopedDependencies>(std::move(dependencies));
     }
-    void OnTestEnd(const ::testing::TestInfo &) override { admission_.reset(); }
-    std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission_;
+    void OnTestEnd(const ::testing::TestInfo &) override { admission.reset(); }
+    std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
 };
 }
 
@@ -1306,16 +1306,16 @@ bool VelocityDirty(entt::entity entity)
 class ScopedSimulationFrame
 {
 public:
-    explicit ScopedSimulationFrame(uint32_t frame) : saved_(tlsFrameTimeManager.frameTime.current_frame())
+    explicit ScopedSimulationFrame(uint32_t frame) : saved(tlsFrameTimeManager.frameTime.current_frame())
     {
         tlsFrameTimeManager.frameTime.set_current_frame(frame);
     }
-    ~ScopedSimulationFrame() { tlsFrameTimeManager.frameTime.set_current_frame(saved_); }
+    ~ScopedSimulationFrame() { tlsFrameTimeManager.frameTime.set_current_frame(saved); }
     ScopedSimulationFrame(const ScopedSimulationFrame&) = delete;
     ScopedSimulationFrame& operator=(const ScopedSimulationFrame&) = delete;
 
 private:
-    decltype(tlsFrameTimeManager.frameTime.current_frame()) saved_;
+    decltype(tlsFrameTimeManager.frameTime.current_frame()) saved;
 };
 } // namespace
 
@@ -3594,44 +3594,44 @@ public:
     ScopedFakeSceneManagerNode()
     {
         auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-        entity_ = registry.create();
-        auto channel = muduo_grpc::Channel::Create(loop_, "127.0.0.1", 1);
+        entity = registry.create();
+        auto channel = muduo_grpc::Channel::Create(loop, "127.0.0.1", 1);
         EXPECT_NE(channel, nullptr);
-        registry.emplace<MuduoGrpcChannelPtr>(entity_, std::move(channel));
-        registry.emplace<NodeInfo>(entity_);
+        registry.emplace<MuduoGrpcChannelPtr>(entity, std::move(channel));
+        registry.emplace<NodeInfo>(entity);
     }
     ~ScopedFakeSceneManagerNode()
     {
-        if (entity_ != entt::null)
+        if (entity != entt::null)
         {
             auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-            const auto* channel = registry.try_get<MuduoGrpcChannelPtr>(entity_);
+            const auto* channel = registry.try_get<MuduoGrpcChannelPtr>(entity);
             EXPECT_TRUE(channel != nullptr && *channel != nullptr && (*channel)->outstandingCalls() == 0)
                 << "夹具不得发起真实 RPC";
-            registry.destroy(entity_);
+            registry.destroy(entity);
         }
-        loop_.queueInLoop([&loop = loop_] { loop.queueInLoop([&loop] { loop.quit(); }); });
-        loop_.wakeup();
-        loop_.loop();
+        this->loop.queueInLoop([&loop = this->loop] { loop.queueInLoop([&loop] { loop.quit(); }); });
+        this->loop.wakeup();
+        this->loop.loop();
     }
     ScopedFakeSceneManagerNode(const ScopedFakeSceneManagerNode&) = delete;
     ScopedFakeSceneManagerNode& operator=(const ScopedFakeSceneManagerNode&) = delete;
 
-    muduo::net::EventLoop& Loop() { return loop_; }
+    muduo::net::EventLoop& Loop() { return loop; }
 
     void Disconnect()
     {
-        if (entity_ != entt::null)
+        if (entity != entt::null)
         {
             auto& registry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-            registry.destroy(std::exchange(entity_, entt::null));
+            registry.destroy(std::exchange(entity, entt::null));
         }
     }
 
 private:
     // 先于实体构造、最后析构:通道与它排进队列的拆除都要在 loop 还在时处理掉。
-    muduo::net::EventLoop loop_;
-    entt::entity entity_{entt::null};
+    muduo::net::EventLoop loop;
+    entt::entity entity{entt::null};
 };
 
 ::scene_manager::EnterSceneResponse MakeReply(Guid playerId, uint32_t errorCode, uint64_t correlationId,
@@ -8430,7 +8430,7 @@ bool HasMirrorCreate(entt::entity player)
 
 class MirrorCreateFixture
 {
-    std::deque<GrpcDone<::scene_manager::CreateSceneResponse>> pending_;
+    std::deque<GrpcDone<::scene_manager::CreateSceneResponse>> pending;
 
 public:
     static constexpr uint64_t kSourceScene = 1001;
@@ -8446,7 +8446,7 @@ public:
     bool Start(entt::entity player)
     {
         return PlayerSceneSystem::RequestEnterMirrorScene(player, kMirrorConfig,
-            [player = player, &pending = pending_](entt::entity sceneManager,
+            [player = player, &pending = this->pending](entt::entity sceneManager,
                 const ::scene_manager::CreateSceneRequest& request,
                 GrpcDone<::scene_manager::CreateSceneResponse> done)
             {
@@ -8465,13 +8465,13 @@ public:
 
     void Reply(const GrpcCallOutcome& outcome, const ::scene_manager::CreateSceneResponse* reply)
     {
-        ASSERT_FALSE(pending_.empty());
-        auto done = std::move(pending_.front());
-        pending_.pop_front();
+        ASSERT_FALSE(pending.empty());
+        auto done = std::move(pending.front());
+        pending.pop_front();
         done(outcome, reply);
     }
 
-    std::size_t PendingCount() const { return pending_.size(); }
+    std::size_t PendingCount() const { return pending.size(); }
 
     ScopedFakeSceneManagerNode sceneManager;
     std::optional<SceneTaskScope> tasks{std::in_place, sceneManager.Loop()};
@@ -8943,32 +8943,32 @@ class HeldPlayerRedis final : public std::enable_shared_from_this<HeldPlayerRedi
 {
 public:
     HeldPlayerRedis(muduo::net::EventLoop& loop, uint16_t port)
-        : server_(&loop, muduo::net::InetAddress("127.0.0.1", port), "lifecycle-redis-test") {}
+        : server(&loop, muduo::net::InetAddress("127.0.0.1", port), "lifecycle-redis-test") {}
 
     void Start()
     {
-        server_.setConnectionCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr& conn)
+        server.setConnectionCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr& conn)
         {
-            if (const auto self = weak.lock(); self && conn->connected()) self->connection_ = conn;
+            if (const auto self = weak.lock(); self && conn->connected()) self->connection = conn;
         });
-        server_.setMessageCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr&,
+        server.setMessageCallback([weak = weak_from_this()](const muduo::net::TcpConnectionPtr&,
             muduo::net::Buffer* bytes, muduo::Timestamp)
         {
             if (const auto self = weak.lock()) self->Read(*bytes);
         });
-        server_.start();
+        server.start();
     }
 
     void Reply(const std::string& wire)
     {
-        const auto connection = connection_.lock();
+        const auto connection = this->connection.lock();
         ASSERT_NE(connection, nullptr);
         connection->send(wire);
     }
 
     void Disconnect()
     {
-        const auto connection = connection_.lock();
+        const auto connection = this->connection.lock();
         ASSERT_NE(connection, nullptr);
         connection->forceClose();
     }
@@ -8978,13 +8978,13 @@ public:
 private:
     void Read(muduo::net::Buffer& bytes)
     {
-        ASSERT_NE(reader_, nullptr);
-        ASSERT_EQ(redisReaderFeed(reader_.get(), bytes.peek(), bytes.readableBytes()), REDIS_OK);
+        ASSERT_NE(reader, nullptr);
+        ASSERT_EQ(redisReaderFeed(reader.get(), bytes.peek(), bytes.readableBytes()), REDIS_OK);
         bytes.retrieveAll();
         for (;;)
         {
             void* decoded = nullptr;
-            ASSERT_EQ(redisReaderGetReply(reader_.get(), &decoded), REDIS_OK);
+            ASSERT_EQ(redisReaderGetReply(reader.get(), &decoded), REDIS_OK);
             if (decoded == nullptr) return;
             const std::unique_ptr<redisReply, decltype(&freeReplyObject)> command(static_cast<redisReply*>(decoded), freeReplyObject);
             ASSERT_EQ(command->type, REDIS_REPLY_ARRAY);
@@ -8998,9 +8998,9 @@ private:
         }
     }
 
-    muduo::net::TcpServer server_;
-    std::weak_ptr<muduo::net::TcpConnection> connection_;
-    std::unique_ptr<redisReader, decltype(&redisReaderFree)> reader_{redisReaderCreate(), redisReaderFree};
+    muduo::net::TcpServer server;
+    std::weak_ptr<muduo::net::TcpConnection> connection;
+    std::unique_ptr<redisReader, decltype(&redisReaderFree)> reader{redisReaderCreate(), redisReaderFree};
 };
 
 class HeldLifecycleSceneManager final : public muduo_grpc::Service

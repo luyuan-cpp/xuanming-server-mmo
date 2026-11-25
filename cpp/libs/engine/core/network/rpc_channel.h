@@ -112,13 +112,13 @@ public:
     // P1只读取已知终局，不封仍承接上游accepted工作的RELAY。
     bool SettledFrontier(std::string& value) const;
 private:
-    mutable std::mutex mutex_;
-    std::uint64_t sourceAccepted_ = 0, sourceCompleted_ = 0;
-    std::uint64_t outputAccepted_ = 0, outputCompleted_ = 0;
-    bool sourcesClosed_ = false, publicationsClosed_ = false;
-    bool acknowledgedSends_ = false, sourcesPrepared_ = false, preparedOpened_ = false;
-    bool sourceUnknown_ = false, outputUnknown_ = false;
-    std::uint64_t localAccepted_ = 0, localCompleted_ = 0;
+    mutable std::mutex mutex;
+    std::uint64_t sourceAccepted = 0, sourceCompleted = 0;
+    std::uint64_t outputAccepted = 0, outputCompleted = 0;
+    bool sourcesClosed = false, publicationsClosed = false;
+    bool acknowledgedSends = false, sourcesPrepared = false, preparedOpened = false;
+    bool sourceUnknown = false, outputUnknown = false;
+    std::uint64_t localAccepted = 0, localCompleted = 0;
 };
 
 class RpcChannel final : public std::enable_shared_from_this<RpcChannel>
@@ -194,12 +194,12 @@ public:
     // 节点关机阶段 0 调用(NodeUtils::CloseAllRpcChannels)。关闭不影响服务端:延后的回复仍可在连接存活时发出。
     void Close();
 
-    bool IsClosed() const { return closed_; }
+    bool IsClosed() const { return closed; }
     // 所绑连接仍处于已连接态。
     bool IsConnected() const;
     bool IsBoundTo(const TcpConnectionPtr& connection) const;
-    std::size_t OutstandingCount() const { return outstandings_.Size(); }
-    muduo::net::EventLoop& GetLoop() const { return loop_; }
+    std::size_t OutstandingCount() const { return outstandings.Size(); }
+    muduo::net::EventLoop& GetLoop() const { return loop; }
 
     // ---- 入站链路的握手身份(docs/design/muduo-rpc-channel.md §8.3) ----
 
@@ -207,7 +207,7 @@ public:
     // 此后本连接上派发的每次调用都经 RpcController::HandshakePeerUuid 读到它。空 = 这条连接还没握手成功(出站 channel 恒为空)。
     // 它是连接的属性、不随消息体变:scene 据此按 (gate 实例, session_id) 认会话,不信消息自报的实例号
     // (docs/design/scene-enter-chain-residuals.md §14)。只在 loop 线程读写。
-    const std::string& HandshakePeerUuid() const { return handshakePeerUuid_; }
+    const std::string& HandshakePeerUuid() const { return handshakePeerUuid; }
 
     // 给 connection 上 RpcServer 放进 context 的那个 channel 记下握手身份,返回是否记下。context 里没有 channel
     // (不是 RpcServer 的入站连接)时什么都不做。一条连接只属于一个进程,再记一次即覆盖。只在 loop 线程调用。
@@ -220,7 +220,7 @@ public:
     // 以 kDisconnected 失败,出站随后由 enableRetry 重连并重新握手。写空闲满 interval 时发一帧 HEARTBEAT。
     // 检查节拍每 checkPeriod 调一次;也是单测接缝(合成时刻,同 SweepTimeouts)。没开心跳或连接已不在时什么都不做,返回空 Verdict。
     RpcLinkLiveness::Verdict CheckLinkLiveness(Clock::time_point now);
-    bool HasLinkHeartbeat() const { return liveness_.has_value(); }
+    bool HasLinkHeartbeat() const { return liveness.has_value(); }
 
     // 一次「本地确定没发出」的调用:计入 started、采样记录原因,在 loop 上以 kNotSent 投递给 done
     // (恰好一次、不同步执行)。RpcClient / RpcSession 当前没有可用 channel 时也走这里。
@@ -283,21 +283,21 @@ private:
     void SendFrame(const TcpConnectionPtr& connection, const GameRpcMessage& message);
     TcpConnectionPtr LockConnectedConnection() const;
 
-    std::shared_ptr<RpcMaintenanceState> maintenance_;
-    muduo::net::EventLoop& loop_;
-    std::weak_ptr<muduo::net::TcpConnection> connection_;
-    RpcServiceMap services_;
+    std::shared_ptr<RpcMaintenanceState> maintenance;
+    muduo::net::EventLoop& loop;
+    std::weak_ptr<muduo::net::TcpConnection> connection;
+    RpcServiceMap services;
     // 解码回调绑 this:codec_ 是本对象的成员,寿命相同(§11.7 允许的例外)。
-    RpcCodec codec_;
-    InflightCallId id_{kNoInflightCallId};
-    InflightIndex<OutstandingCall> outstandings_;
-    bool timeoutTickArmed_{false};
-    bool closed_{false};
+    RpcCodec codec;
+    InflightCallId id{kNoInflightCallId};
+    InflightIndex<OutstandingCall> outstandings;
+    bool timeoutTickArmed{false};
+    bool closed{false};
     // 没开链路心跳时为空。
-    std::optional<RpcLinkLiveness> liveness_;
-    bool linkCheckArmed_{false};
+    std::optional<RpcLinkLiveness> liveness;
+    bool linkCheckArmed{false};
     // 见 HandshakePeerUuid。
-    std::string handshakePeerUuid_;
+    std::string handshakePeerUuid;
 };
 
 using RpcChannelPtr = std::shared_ptr<RpcChannel>;

@@ -226,6 +226,14 @@ struct SkillRarity_tierComp {
     uint32_t value;
 };
 
+struct SkillSecondary_target_policyComp {
+    uint32_t value;
+};
+
+struct SkillExclusive_groupComp {
+    uint32_t value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -405,6 +413,12 @@ inline SkillScroll_idComp MakeSkillScroll_idComp(const SkillTable& row) {
 }
 inline SkillRarity_tierComp MakeSkillRarity_tierComp(const SkillTable& row) {
     return { row.rarity_tier() };
+}
+inline SkillSecondary_target_policyComp MakeSkillSecondary_target_policyComp(const SkillTable& row) {
+    return { row.secondary_target_policy() };
+}
+inline SkillExclusive_groupComp MakeSkillExclusive_groupComp(const SkillTable& row) {
+    return { row.exclusive_group() };
 }
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();

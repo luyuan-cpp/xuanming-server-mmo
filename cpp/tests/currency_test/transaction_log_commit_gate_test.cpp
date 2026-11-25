@@ -86,18 +86,18 @@ namespace
         // 一次 AttachDue 的全部产出:两类记录。
         struct Attached
         {
-            google::protobuf::RepeatedPtrField<TransactionLogEntry> logs_;
-            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> snapshots_;
+            google::protobuf::RepeatedPtrField<TransactionLogEntry> logs;
+            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> snapshots;
 
-            int logs_size() const { return logs_.size(); }
-            const TransactionLogEntry &logs(int index) const { return logs_.Get(index); }
-            int snapshots_size() const { return snapshots_.size(); }
-            const PlayerSnapshotEntry &snapshots(int index) const { return snapshots_.Get(index); }
+            int logs_size() const { return logs.size(); }
+            const TransactionLogEntry &Logs(int index) const { return logs.Get(index); }
+            int snapshots_size() const { return snapshots.size(); }
+            const PlayerSnapshotEntry &Snapshots(int index) const { return snapshots.Get(index); }
 
             std::vector<uint64_t> TxIds() const
             {
                 std::vector<uint64_t> ids;
-                for (const auto &entry : logs_)
+                for (const auto &entry : logs)
                 {
                     ids.push_back(entry.tx_id());
                 }
@@ -107,7 +107,7 @@ namespace
             std::size_t LogBytes() const
             {
                 std::size_t bytes = 0;
-                for (const auto &entry : logs_)
+                for (const auto &entry : logs)
                 {
                     bytes += entry.ByteSizeLong();
                 }
@@ -118,7 +118,7 @@ namespace
         static Attached Attach(uint64_t player, uint64_t mark)
         {
             Attached out;
-            AuditOutbox::AttachDue(player, mark, out.logs_, out.snapshots_);
+            AuditOutbox::AttachDue(player, mark, out.logs, out.snapshots);
             return out;
         }
     };
@@ -269,7 +269,7 @@ namespace
         const auto attached = Attach(kPlayerA, mark);
         EXPECT_EQ(attached.TxIds(), (std::vector<uint64_t>{1}));
         ASSERT_EQ(attached.snapshots_size(), 1);
-        EXPECT_EQ(attached.snapshots(0).snapshot_id(), 77u);
+        EXPECT_EQ(attached.Snapshots(0).snapshot_id(), 77u);
 
         AuditOutbox::AckThrough(kPlayerA, mark);
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 1u);
@@ -335,8 +335,8 @@ namespace
         // 丢的是最旧的两条:从第 3 条带起,最后一条是最新的;排满的队列也是一笔带完。
         const auto attached = Attach(kPlayerA, AuditOutbox::Mark());
         ASSERT_EQ(static_cast<uint64_t>(attached.logs_size()), kCap);
-        EXPECT_EQ(attached.logs(0).tx_id(), 3u);
-        EXPECT_EQ(attached.logs(attached.logs_size() - 1).tx_id(), kCap + 2) << "最新的一条还在";
+        EXPECT_EQ(attached.Logs(0).tx_id(), 3u);
+        EXPECT_EQ(attached.Logs(attached.logs_size() - 1).tx_id(), kCap + 2) << "最新的一条还在";
     }
 
     // 字节上限同样封住内存:到了才丢最旧的,留下的仍是一笔带完。
@@ -356,7 +356,7 @@ namespace
         EXPECT_EQ(Dropped(DropReason::kOverflow) - before, kRecords - kept) << "挤掉几条计几次";
         const auto attached = Attach(kPlayerA, AuditOutbox::Mark());
         ASSERT_EQ(static_cast<std::size_t>(attached.logs_size()), kept) << "排满的队列也是一笔带完";
-        EXPECT_EQ(attached.logs(0).tx_id(), kRecords - kept + 1) << "丢的是最旧的,留下的从这条开始";
+        EXPECT_EQ(attached.Logs(0).tx_id(), kRecords - kept + 1) << "丢的是最旧的,留下的从这条开始";
     }
 
     TEST_F(AuditOutboxTest, OversizedRecordIsRefused)

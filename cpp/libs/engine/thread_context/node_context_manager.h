@@ -28,20 +28,20 @@ public:
     // 来自对端请求、etcd、Kafka 等外部输入的 nodeType 不要走这里,先用 TryGetRegistry 显式拒绝。
     entt::registry& GetRegistry(uint32_t nodeType) {
         RequireValidNodeType("GetRegistry", nodeType);
-        return registries_[nodeType];
+        return registries[nodeType];
     }
 
     // 给拿外部输入选 registry 的入口用:越界返回 nullptr,由调用方 LOG_ERROR 并拒绝本次请求。
     [[nodiscard]] entt::registry* TryGetRegistry(uint32_t nodeType) {
-        return IsValidNodeType(nodeType) ? &registries_[nodeType] : nullptr;
+        return IsValidNodeType(nodeType) ? &registries[nodeType] : nullptr;
     }
 
     NodeRegistries& GetAllRegistries() {
-        return registries_;
+        return registries;
     }
 
     void Clear() {
-        for (auto& registry : registries_) {
+        for (auto& registry : registries) {
             registry.clear();
         }
     }
@@ -56,7 +56,7 @@ private:
     // 终止逻辑放在 .cpp 里:本头文件被大量工程包含,不在这里引入 muduo 日志。
     [[noreturn]] static void FailOutOfRange(const char* caller, uint32_t nodeType);
 
-    NodeRegistries registries_;
+    NodeRegistries registries;
 };
 
 extern thread_local NodeContextManager tlsNodeContextManager;

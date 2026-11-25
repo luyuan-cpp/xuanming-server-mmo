@@ -72,7 +72,7 @@ using InteropStatePtr = std::shared_ptr<InteropState>;
 class InteropService : public muduo_grpc::Service
 {
 public:
-    InteropService(InteropStatePtr state, muduo::net::EventLoop &loop) : state_(std::move(state)), loop_(loop) {}
+    InteropService(InteropStatePtr state, muduo::net::EventLoop &loop) : state(std::move(state)), loop(loop) {}
 
     void RegisterMethods(muduo_grpc::MethodTable &table) override
     {
@@ -94,7 +94,7 @@ public:
             }
             call.FinishError(Status(static_cast<StatusCode>(*code), std::string(request.substr(bar + 1)))); });
 
-        muduo::net::EventLoop &loop = loop_;
+        muduo::net::EventLoop &loop = this->loop;
         table.AddUnary("/interop.Interop/Defer", [&loop](ServerCall call, std::string_view request)
                        {
             const auto delayMs = ParseUnsigned(request);
@@ -123,7 +123,7 @@ public:
             }
             call.FinishOk(std::move(body)); });
 
-        const InteropStatePtr state = state_;
+        const InteropStatePtr state = this->state;
         table.AddUnary("/interop.Interop/Shutdown", [state](ServerCall call, std::string_view)
                        {
             call.FinishOk("bye");
@@ -143,8 +143,8 @@ public:
     }
 
 private:
-    InteropStatePtr state_;
-    muduo::net::EventLoop &loop_;
+    InteropStatePtr state;
+    muduo::net::EventLoop &loop;
 };
 
 TEST(ServerInterop, ServesGrpcGoClientUntilShutdown)
@@ -178,7 +178,7 @@ TEST(ServerInterop, ServesGrpcGoClientUntilShutdown)
     ASSERT_TRUE(server->RegisterService(service));
     state->server = server;
     server->Start();
-    std::cout << "[ServerInterop] serving on " << server->listenAddress() << " until the Go client calls Shutdown"
+    std::cout << "[ServerInterop] serving on " << server->ListenAddress() << " until the Go client calls Shutdown"
               << std::endl;
 
     const bool drained = muduo_grpc_test::RunLoopUntil(loop, [&] { return state->drained; },

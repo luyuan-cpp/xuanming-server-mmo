@@ -55,13 +55,13 @@ public:
 		{
 			return AdmitResult::kRejectedFull;
 		}
-		queued_.push_back(std::move(item));
+		queued.push_back(std::move(item));
 		return AdmitResult::kQueued;
 	}
 
 	// 刚到的单向消息能不能不排队、马上发出:前面没有还没发出的请求(队列为空;在途那一条已经在连接上排在它前面),
 	// 或者队头那条请求在等重投(理由见 HoldForRetry)。
-	bool OneWayMaySkipQueue() const { return queued_.empty() || Holding(); }
+	bool OneWayMaySkipQueue() const { return queued.empty() || Holding(); }
 
 	// 取出下一条可以发出的消息,没有返回 nullopt:
 	//   - 队头是单向消息:可以发(它前面的请求都已发出);
@@ -69,24 +69,24 @@ public:
 	// 取出之后调用方必须处置这一条:请求发出成功就 MarkSent;其余情形(单向消息已发出、已回执)再次调用本函数继续取下一条。
 	std::optional<Item> TakeNextIfReady(SteadyTime now)
 	{
-		if (queued_.empty())
+		if (queued.empty())
 		{
 			return std::nullopt;
 		}
-		if (!queued_.front().oneWay)
+		if (!queued.front().oneWay)
 		{
-			if (inFlight_ != kNoCallSeq)
+			if (inFlight != kNoCallSeq)
 			{
 				return std::nullopt;
 			}
-			if (retryAt_.has_value() && now < *retryAt_)
+			if (retryAt.has_value() && now < *retryAt)
 			{
 				return std::nullopt;
 			}
-			retryAt_.reset();
+			retryAt.reset();
 		}
-		Item item = std::move(queued_.front());
-		queued_.pop_front();
+		Item item = std::move(queued.front());
+		queued.pop_front();
 		return item;
 	}
 
@@ -94,12 +94,12 @@ public:
 	// 前置条件:当前没有在途,且 seq 不为 kNoCallSeq。违反前置条件返回 false、不改状态(item 被丢弃)。
 	bool MarkSent(Item item, CallSeq seq)
 	{
-		if (inFlight_ != kNoCallSeq || seq == kNoCallSeq)
+		if (inFlight != kNoCallSeq || seq == kNoCallSeq)
 		{
 			return false;
 		}
-		inFlight_ = seq;
-		inFlightItem_ = std::move(item);
+		inFlight = seq;
+		inFlightItem = std::move(item);
 		return true;
 	}
 
@@ -107,12 +107,12 @@ public:
 	// 其他序号(迟到、重复、串号)返回 nullopt,保证每个请求恰好一个回执。
 	std::optional<Item> Complete(CallSeq seq)
 	{
-		if (seq == kNoCallSeq || seq != inFlight_)
+		if (seq == kNoCallSeq || seq != inFlight)
 		{
 			return std::nullopt;
 		}
-		inFlight_ = kNoCallSeq;
-		return std::exchange(inFlightItem_, std::nullopt);
+		inFlight = kNoCallSeq;
+		return std::exchange(inFlightItem, std::nullopt);
 	}
 
 	// 这一条请求没被受理、确定未执行:放回队头,retryAt 之前不再发出任何请求。前置条件:当前没有在途(item 来自 Complete)。
@@ -126,7 +126,7 @@ public:
 	{
 		std::vector<Item> oneWay;
 		std::deque<Item> requests;
-		for (auto &queued : queued_)
+		for (auto &queued : this->queued)
 		{
 			if (queued.oneWay)
 			{
@@ -137,9 +137,9 @@ public:
 				requests.push_back(std::move(queued));
 			}
 		}
-		queued_ = std::move(requests);
-		queued_.push_front(std::move(item));
-		retryAt_ = retryAt;
+		this->queued = std::move(requests);
+		this->queued.push_front(std::move(item));
+		this->retryAt = retryAt;
 		return oneWay;
 	}
 
@@ -147,23 +147,23 @@ public:
 	// 会话转去别的 gate 时用:这些消息都没有发出(或没有被受理),调用方逐条处置。
 	[[nodiscard]] std::deque<Item> TakeAllQueued()
 	{
-		retryAt_.reset();
-		return std::exchange(queued_, std::deque<Item>{});
+		retryAt.reset();
+		return std::exchange(queued, std::deque<Item>{});
 	}
 
 	// 队头是否在等重投。
-	bool Holding() const { return retryAt_.has_value(); }
+	bool Holding() const { return retryAt.has_value(); }
 	// 没有在途、没有排队(因而也不在等重投)。
-	bool Empty() const { return inFlight_ == kNoCallSeq && queued_.empty(); }
-	CallSeq InFlightSeq() const { return inFlight_; }
-	std::size_t QueuedCount() const { return queued_.size(); }
-	std::size_t Depth() const { return queued_.size() + (inFlight_ == kNoCallSeq ? 0 : 1); }
+	bool Empty() const { return inFlight == kNoCallSeq && queued.empty(); }
+	CallSeq InFlightSeq() const { return inFlight; }
+	std::size_t QueuedCount() const { return queued.size(); }
+	std::size_t Depth() const { return queued.size() + (inFlight == kNoCallSeq ? 0 : 1); }
 
 private:
-	std::deque<Item> queued_;
-	CallSeq inFlight_{kNoCallSeq};
-	std::optional<Item> inFlightItem_;
-	std::optional<SteadyTime> retryAt_;
+	std::deque<Item> queued;
+	CallSeq inFlight{kNoCallSeq};
+	std::optional<Item> inFlightItem;
+	std::optional<SteadyTime> retryAt;
 };
 
 // 从收包起等待是否已超过上限:超过就不再发出(或不再重投)。请求回带请求 id 的 1003,明确「没有执行」,客户端重试安全;

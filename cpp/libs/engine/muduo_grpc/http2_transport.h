@@ -92,11 +92,11 @@ public:
     Http2Transport(const Http2Transport &) = delete;
     Http2Transport &operator=(const Http2Transport &) = delete;
 
-    uint64_t id() const { return id_; }
-    bool ready() const { return ready_ && !closed_; }
-    bool draining() const { return draining_; }
-    bool closed() const { return closed_; }
-    size_t ActiveStreamCount() const { return session_ ? session_->ActiveStreamCount() : 0; }
+    uint64_t Id() const { return id; }
+    bool Ready() const { return ready && !closed; }
+    bool Draining() const { return draining; }
+    bool Closed() const { return closed; }
+    size_t ActiveStreamCount() const { return session ? session->ActiveStreamCount() : 0; }
 
     // 开始连接;每个对象只调用一次。
     void Connect();
@@ -123,7 +123,7 @@ public:
     void OnCallDeadlineExpired(std::chrono::steady_clock::time_point callStartedAt);
 
     // 不再在这条连接上开新流(stream id 用尽等)。
-    void MarkDraining() { draining_ = true; }
+    void MarkDraining() { draining = true; }
 
     // 通道主动放弃这条连接:不再回调 listener,关闭 TCP。幂等。
     void Shutdown();
@@ -156,44 +156,44 @@ private:
     // 发一个存活 PING 并上弦 ACK 超时;调用方已判断过放行条件。
     bool SendProbePing(std::chrono::steady_clock::time_point now);
 
-    muduo::net::EventLoop &loop_;
-    muduo::net::TcpClient client_;
-    const std::string target_;
-    const Http2TransportOptions options_;
-    std::weak_ptr<Http2TransportListener> listener_;
-    const uint64_t id_;
+    muduo::net::EventLoop &loop;
+    muduo::net::TcpClient client;
+    const std::string target;
+    const Http2TransportOptions options;
+    std::weak_ptr<Http2TransportListener> listener;
+    const uint64_t id;
 
-    std::weak_ptr<muduo::net::TcpConnection> connection_;
-    std::unique_ptr<ClientSession> session_;
+    std::weak_ptr<muduo::net::TcpConnection> connection;
+    std::unique_ptr<ClientSession> session;
 
-    bool connectStarted_{false};
-    bool ready_{false};
-    bool draining_{false};
-    bool closed_{false};
+    bool connectStarted{false};
+    bool ready{false};
+    bool draining{false};
+    bool closed{false};
     // >0 表示正处在 session_ 的 Receive / DrainOutput / FailAllStreams 调用栈里:此时不重入 nghttp2。
-    int sessionDepth_{0};
-    bool flushDeferred_{false};
+    int sessionDepth{0};
+    bool flushDeferred{false};
 
     // muduo 定时器已按单调时钟到期;截止点仍另记一份 steady_clock,到点复核,未到就按剩余时间重新上弦
     // (兜住秒→微秒截断造成的微秒级早到)。
-    muduo::net::TimerId connectTimer_;
-    bool connectTimerArmed_{false};
-    std::chrono::steady_clock::time_point connectDeadline_{};
-    muduo::net::TimerId probeTimer_;
-    bool probeTimerArmed_{false};
-    uint64_t probeGeneration_{0};
-    std::chrono::steady_clock::time_point probeDeadline_{};
-    muduo::net::TimerId keepaliveTimer_;
-    bool keepaliveTimerArmed_{false};
+    muduo::net::TimerId connectTimer;
+    bool connectTimerArmed{false};
+    std::chrono::steady_clock::time_point connectDeadline{};
+    muduo::net::TimerId probeTimer;
+    bool probeTimerArmed{false};
+    uint64_t probeGeneration{0};
+    std::chrono::steady_clock::time_point probeDeadline{};
+    muduo::net::TimerId keepaliveTimer;
+    bool keepaliveTimerArmed{false};
 
     // 存活探测(§4.4)
-    std::chrono::steady_clock::time_point lastFrameReceivedAt_{};
-    std::chrono::steady_clock::time_point lastPingSentAt_{};
-    bool pingEverSent_{false};
-    bool probeOutstanding_{false};
-    bool headersOrDataAfterLastPingAck_{false};
+    std::chrono::steady_clock::time_point lastFrameReceivedAt{};
+    std::chrono::steady_clock::time_point lastPingSentAt{};
+    bool pingEverSent{false};
+    bool probeOutstanding{false};
+    bool headersOrDataAfterLastPingAck{false};
     // 发出时无法确认 grpc-go 会清零 strike 的探测已连续发了几个;至多 1 个。
-    int unconfirmedProbes_{0};
+    int unconfirmedProbes{0};
 };
 
 } // namespace muduo_grpc

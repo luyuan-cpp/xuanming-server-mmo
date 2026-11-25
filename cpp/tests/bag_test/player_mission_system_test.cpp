@@ -38,18 +38,18 @@ namespace {
 class ScopedGlobalItemBlock {
 public:
     explicit ScopedGlobalItemBlock(uint32_t configId)
-        : configId_(configId), wasBlocked_(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId)) {
-        GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId_);
+        : configId(configId), wasBlocked(GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kItem, configId)) {
+        GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, this->configId);
     }
     ~ScopedGlobalItemBlock() {
-        if (wasBlocked_) GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId_);
-        else GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId_);
+        if (wasBlocked) GainBlockService::BlockGlobal(GainBlockService::GainType::kItem, configId);
+        else GainBlockService::UnblockGlobal(GainBlockService::GainType::kItem, configId);
     }
     ScopedGlobalItemBlock(const ScopedGlobalItemBlock&) = delete;
     ScopedGlobalItemBlock& operator=(const ScopedGlobalItemBlock&) = delete;
 private:
-    uint32_t configId_;
-    bool wasBlocked_;
+    uint32_t configId;
+    bool wasBlocked;
 };
 
 // Tests temporarily alter already-owned snapshot rows/maps only; no table files are written.

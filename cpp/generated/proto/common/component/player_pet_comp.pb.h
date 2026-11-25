@@ -57,6 +57,22 @@ struct TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto;
 }  // extern "C"
+class PetEntryPreset;
+struct PetEntryPresetGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PetEntryPresetGlobalsTypeInternal PetEntryPreset_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PetEntryPreset_class_data_;
+#else
+extern const PetEntryPresetGlobalsTypeInternal PetEntryPreset_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PetEntryPreset_AllocatedEntry_DoNotUse;
+struct PetEntryPreset_AllocatedEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PetEntryPreset_AllocatedEntry_DoNotUseGlobalsTypeInternal PetEntryPreset_AllocatedEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PetEntryPreset_AllocatedEntry_DoNotUse_class_data_;
+#else
+extern const PetEntryPreset_AllocatedEntry_DoNotUseGlobalsTypeInternal PetEntryPreset_AllocatedEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PetInstance;
 struct PetInstanceGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -369,6 +385,286 @@ class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance_AllocatedEntry_DoNotUse 
 };
 // -------------------------------------------------------------------
 
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetEntryPreset_AllocatedEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  PetEntryPreset_AllocatedEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr PetEntryPreset_AllocatedEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit PetEntryPreset_AllocatedEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &PetEntryPreset_AllocatedEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend PetEntryPreset_AllocatedEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetEntryPreset final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PetEntryPreset) */ {
+ public:
+  inline PetEntryPreset() : PetEntryPreset(nullptr) {}
+  ~PetEntryPreset() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PetEntryPreset* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PetEntryPreset));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PetEntryPreset(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PetEntryPreset(const PetEntryPreset& from) : PetEntryPreset(nullptr, from) {}
+  inline PetEntryPreset(PetEntryPreset&& from) noexcept : PetEntryPreset(nullptr, ::std::move(from)) {}
+  inline PetEntryPreset& operator=(const PetEntryPreset& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PetEntryPreset& operator=(PetEntryPreset&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PetEntryPreset& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetEntryPreset>(&PetEntryPreset_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(PetEntryPreset& a, PetEntryPreset& b) { a.Swap(&b); }
+  inline void Swap(PetEntryPreset* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PetEntryPreset* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PetEntryPreset* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PetEntryPreset>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PetEntryPreset& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PetEntryPreset& from) { PetEntryPreset::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PetEntryPreset* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PetEntryPreset"; }
+
+  explicit PetEntryPreset(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PetEntryPreset(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PetEntryPreset& from);
+  PetEntryPreset(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PetEntryPreset&& from) noexcept
+      : PetEntryPreset(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSlotIdFieldNumber = 1,
+    kTagFieldNumber = 2,
+    kAllocatedFieldNumber = 3,
+  };
+  // uint32 slot_id = 1;
+  void clear_slot_id() ;
+  [[nodiscard]] ::uint32_t slot_id() const;
+  void set_slot_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_slot_id() const;
+  void _internal_set_slot_id(::uint32_t value);
+
+  public:
+  // uint32 tag = 2;
+  void clear_tag() ;
+  [[nodiscard]] ::uint32_t tag() const;
+  void set_tag(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tag() const;
+  void _internal_set_tag(::uint32_t value);
+
+  public:
+  // map<uint32, uint32> allocated = 3;
+  [[nodiscard]] int allocated_size()
+      const;
+  private:
+  int _internal_allocated_size() const;
+
+  public:
+  void clear_allocated() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& allocated() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_allocated();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_allocated() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_allocated();
+
+  public:
+  // @@protoc_insertion_point(class_scope:PetEntryPreset)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PetEntryPreset& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t slot_id_;
+    ::uint32_t tag_;
+    ::google::protobuf::internal::MapField<PetEntryPreset_AllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> allocated_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:PetInstance) */ {
  public:
@@ -425,7 +721,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   [[nodiscard]] static const PetInstance& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetInstance>(&PetInstance_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(PetInstance& a, PetInstance& b) { a.Swap(&b); }
   inline void Swap(PetInstance* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -518,6 +814,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   // accessors -------------------------------------------------------
   enum : int {
     kSkillTableIdsFieldNumber = 10,
+    kEntryPresetsFieldNumber = 20,
     kNameFieldNumber = 3,
     kEntryLastRequestIdFieldNumber = 14,
     kPetIdFieldNumber = 1,
@@ -530,6 +827,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
     kEntryLastBaseVersionFieldNumber = 15,
     kEntryLastConfigVersionFieldNumber = 16,
     kCultivationTierFieldNumber = 18,
+    kActiveEntryPresetSlotFieldNumber = 19,
+    kTierLastExpectedTierFieldNumber = 22,
+    kTierLastRequestIdFieldNumber = 21,
+    kTierLastResultTierFieldNumber = 23,
+    kEntryLastPresetSlotFieldNumber = 24,
+    kEntryLastPresetTagFieldNumber = 25,
     kAllocatedFieldNumber = 5,
     kAptitudeFieldNumber = 6,
     kSkillRanksFieldNumber = 11,
@@ -554,6 +857,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   private:
   const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
+
+  public:
+  // repeated .PetEntryPreset entry_presets = 20;
+  [[nodiscard]] int entry_presets_size()
+      const;
+  private:
+  int _internal_entry_presets_size() const;
+
+  public:
+  void clear_entry_presets() ;
+  [[nodiscard]] const ::PetEntryPreset& entry_presets(int index) const;
+  [[nodiscard]] ::PetEntryPreset* PROTOBUF_NONNULL mutable_entry_presets(int index);
+  ::PetEntryPreset* PROTOBUF_NONNULL add_entry_presets();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::PetEntryPreset>&
+  entry_presets() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::PetEntryPreset>* PROTOBUF_NONNULL
+  mutable_entry_presets();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::PetEntryPreset>& _internal_entry_presets() const;
+  ::google::protobuf::RepeatedPtrField<::PetEntryPreset>* PROTOBUF_NONNULL _internal_mutable_entry_presets();
 
   public:
   // string name = 3;
@@ -686,6 +1010,66 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   void _internal_set_cultivation_tier(::uint32_t value);
 
   public:
+  // uint32 active_entry_preset_slot = 19;
+  void clear_active_entry_preset_slot() ;
+  [[nodiscard]] ::uint32_t active_entry_preset_slot() const;
+  void set_active_entry_preset_slot(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_entry_preset_slot() const;
+  void _internal_set_active_entry_preset_slot(::uint32_t value);
+
+  public:
+  // uint32 tier_last_expected_tier = 22;
+  void clear_tier_last_expected_tier() ;
+  [[nodiscard]] ::uint32_t tier_last_expected_tier() const;
+  void set_tier_last_expected_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_last_expected_tier() const;
+  void _internal_set_tier_last_expected_tier(::uint32_t value);
+
+  public:
+  // uint64 tier_last_request_id = 21;
+  void clear_tier_last_request_id() ;
+  [[nodiscard]] ::uint64_t tier_last_request_id() const;
+  void set_tier_last_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_tier_last_request_id() const;
+  void _internal_set_tier_last_request_id(::uint64_t value);
+
+  public:
+  // uint32 tier_last_result_tier = 23;
+  void clear_tier_last_result_tier() ;
+  [[nodiscard]] ::uint32_t tier_last_result_tier() const;
+  void set_tier_last_result_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tier_last_result_tier() const;
+  void _internal_set_tier_last_result_tier(::uint32_t value);
+
+  public:
+  // uint32 entry_last_preset_slot = 24;
+  void clear_entry_last_preset_slot() ;
+  [[nodiscard]] ::uint32_t entry_last_preset_slot() const;
+  void set_entry_last_preset_slot(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entry_last_preset_slot() const;
+  void _internal_set_entry_last_preset_slot(::uint32_t value);
+
+  public:
+  // uint32 entry_last_preset_tag = 25;
+  void clear_entry_last_preset_tag() ;
+  [[nodiscard]] ::uint32_t entry_last_preset_tag() const;
+  void set_entry_last_preset_tag(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entry_last_preset_tag() const;
+  void _internal_set_entry_last_preset_tag(::uint32_t value);
+
+  public:
   // map<uint32, uint32> allocated = 5;
   [[nodiscard]] int allocated_size()
       const;
@@ -770,8 +1154,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
-                          5, 61,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          6, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -801,6 +1185,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
     ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField< ::PetEntryPreset > entry_presets_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr entry_last_request_id_;
     ::uint64_t pet_id_;
@@ -813,6 +1198,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
     ::uint64_t entry_last_base_version_;
     ::uint32_t entry_last_config_version_;
     ::uint32_t cultivation_tier_;
+    ::uint32_t active_entry_preset_slot_;
+    ::uint32_t tier_last_expected_tier_;
+    ::uint64_t tier_last_request_id_;
+    ::uint32_t tier_last_result_tier_;
+    ::uint32_t entry_last_preset_slot_;
+    ::uint32_t entry_last_preset_tag_;
     ::google::protobuf::internal::MapField<PetInstance_AllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> allocated_;
     ::google::protobuf::internal::MapField<PetInstance_AptitudeEntry_DoNotUse, ::uint32_t, ::uint32_t> aptitude_;
     ::google::protobuf::internal::MapField<PetInstance_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
@@ -881,7 +1272,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
   [[nodiscard]] static const PlayerPetComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerPetComp>(&PlayerPetComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(PlayerPetComp& a, PlayerPetComp& b) { a.Swap(&b); }
   inline void Swap(PlayerPetComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1124,6 +1515,91 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
 
 // -------------------------------------------------------------------
 
+// PetEntryPreset
+
+// uint32 slot_id = 1;
+inline void PetEntryPreset::clear_slot_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t PetEntryPreset::slot_id() const {
+  // @@protoc_insertion_point(field_get:PetEntryPreset.slot_id)
+  return _internal_slot_id();
+}
+inline void PetEntryPreset::set_slot_id(::uint32_t value) {
+  _internal_set_slot_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:PetEntryPreset.slot_id)
+}
+inline ::uint32_t PetEntryPreset::_internal_slot_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.slot_id_;
+}
+inline void PetEntryPreset::_internal_set_slot_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.slot_id_ = value;
+}
+
+// uint32 tag = 2;
+inline void PetEntryPreset::clear_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t PetEntryPreset::tag() const {
+  // @@protoc_insertion_point(field_get:PetEntryPreset.tag)
+  return _internal_tag();
+}
+inline void PetEntryPreset::set_tag(::uint32_t value) {
+  _internal_set_tag(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:PetEntryPreset.tag)
+}
+inline ::uint32_t PetEntryPreset::_internal_tag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tag_;
+}
+inline void PetEntryPreset::_internal_set_tag(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_ = value;
+}
+
+// map<uint32, uint32> allocated = 3;
+inline int PetEntryPreset::_internal_allocated_size() const {
+  return _internal_allocated().size();
+}
+inline int PetEntryPreset::allocated_size() const {
+  return _internal_allocated_size();
+}
+inline void PetEntryPreset::clear_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocated_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetEntryPreset::_internal_allocated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocated_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetEntryPreset::allocated() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:PetEntryPreset.allocated)
+  return _internal_allocated();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetEntryPreset::_internal_mutable_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.allocated_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetEntryPreset::mutable_allocated()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_map:PetEntryPreset.allocated)
+  return _internal_mutable_allocated();
+}
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -1138,7 +1614,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
 inline void PetInstance::clear_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t PetInstance::pet_id() const {
   // @@protoc_insertion_point(field_get:PetInstance.pet_id)
@@ -1146,7 +1622,7 @@ inline ::uint64_t PetInstance::pet_id() const {
 }
 inline void PetInstance::set_pet_id(::uint64_t value) {
   _internal_set_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PetInstance.pet_id)
 }
 inline ::uint64_t PetInstance::_internal_pet_id() const {
@@ -1162,7 +1638,7 @@ inline void PetInstance::_internal_set_pet_id(::uint64_t value) {
 inline void PetInstance::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t PetInstance::pet_table_id() const {
   // @@protoc_insertion_point(field_get:PetInstance.pet_table_id)
@@ -1170,7 +1646,7 @@ inline ::uint32_t PetInstance::pet_table_id() const {
 }
 inline void PetInstance::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PetInstance.pet_table_id)
 }
 inline ::uint32_t PetInstance::_internal_pet_table_id() const {
@@ -1186,7 +1662,7 @@ inline void PetInstance::_internal_set_pet_table_id(::uint32_t value) {
 inline void PetInstance::clear_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.name_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& PetInstance::name() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1196,13 +1672,13 @@ inline const ::std::string& PetInstance::name() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PetInstance::set_name(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PetInstance.name)
 }
 inline ::std::string* PROTOBUF_NONNULL PetInstance::mutable_name()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_name();
   // @@protoc_insertion_point(field_mutable:PetInstance.name)
   return _s;
@@ -1222,10 +1698,10 @@ inline ::std::string* PROTOBUF_NONNULL PetInstance::_internal_mutable_name() {
 inline ::std::string* PROTOBUF_NULLABLE PetInstance::release_name() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInstance.name)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.name_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.name_.Set("", GetArena());
@@ -1235,9 +1711,9 @@ inline ::std::string* PROTOBUF_NULLABLE PetInstance::release_name() {
 inline void PetInstance::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.name_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
@@ -1250,7 +1726,7 @@ inline void PetInstance::set_allocated_name(::std::string* PROTOBUF_NULLABLE val
 inline void PetInstance::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t PetInstance::level() const {
   // @@protoc_insertion_point(field_get:PetInstance.level)
@@ -1258,7 +1734,7 @@ inline ::uint32_t PetInstance::level() const {
 }
 inline void PetInstance::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PetInstance.level)
 }
 inline ::uint32_t PetInstance::_internal_level() const {
@@ -1280,7 +1756,7 @@ inline int PetInstance::allocated_size() const {
 inline void PetInstance::clear_allocated() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allocated_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_allocated() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1296,7 +1772,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_allocated()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_mutable_map:PetInstance.allocated)
   return _internal_mutable_allocated();
 }
@@ -1311,7 +1787,7 @@ inline int PetInstance::aptitude_size() const {
 inline void PetInstance::clear_aptitude() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.aptitude_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_aptitude() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1327,7 +1803,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_aptitude()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_mutable_map:PetInstance.aptitude)
   return _internal_mutable_aptitude();
 }
@@ -1336,7 +1812,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 inline void PetInstance::clear_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PetInstance::health() const {
   // @@protoc_insertion_point(field_get:PetInstance.health)
@@ -1344,7 +1820,7 @@ inline ::uint64_t PetInstance::health() const {
 }
 inline void PetInstance::set_health(::uint64_t value) {
   _internal_set_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PetInstance.health)
 }
 inline ::uint64_t PetInstance::_internal_health() const {
@@ -1360,7 +1836,7 @@ inline void PetInstance::_internal_set_health(::uint64_t value) {
 inline void PetInstance::clear_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t PetInstance::mana() const {
   // @@protoc_insertion_point(field_get:PetInstance.mana)
@@ -1368,7 +1844,7 @@ inline ::uint64_t PetInstance::mana() const {
 }
 inline void PetInstance::set_mana(::uint64_t value) {
   _internal_set_mana(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:PetInstance.mana)
 }
 inline ::uint64_t PetInstance::_internal_mana() const {
@@ -1384,7 +1860,7 @@ inline void PetInstance::_internal_set_mana(::uint64_t value) {
 inline void PetInstance::clear_created_at() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t PetInstance::created_at() const {
   // @@protoc_insertion_point(field_get:PetInstance.created_at)
@@ -1392,7 +1868,7 @@ inline ::uint64_t PetInstance::created_at() const {
 }
 inline void PetInstance::set_created_at(::uint64_t value) {
   _internal_set_created_at(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PetInstance.created_at)
 }
 inline ::uint64_t PetInstance::_internal_created_at() const {
@@ -1465,7 +1941,7 @@ inline int PetInstance::skill_ranks_size() const {
 inline void PetInstance::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1481,7 +1957,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_mutable_map:PetInstance.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -1496,7 +1972,7 @@ inline int PetInstance::entry_allocated_size() const {
 inline void PetInstance::clear_entry_allocated() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_allocated_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_entry_allocated() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1512,7 +1988,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_entry_allocated()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_mutable_map:PetInstance.entry_allocated)
   return _internal_mutable_entry_allocated();
 }
@@ -1521,7 +1997,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 inline void PetInstance::clear_entry_state_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_state_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t PetInstance::entry_state_version() const {
   // @@protoc_insertion_point(field_get:PetInstance.entry_state_version)
@@ -1529,7 +2005,7 @@ inline ::uint64_t PetInstance::entry_state_version() const {
 }
 inline void PetInstance::set_entry_state_version(::uint64_t value) {
   _internal_set_entry_state_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PetInstance.entry_state_version)
 }
 inline ::uint64_t PetInstance::_internal_entry_state_version() const {
@@ -1545,7 +2021,7 @@ inline void PetInstance::_internal_set_entry_state_version(::uint64_t value) {
 inline void PetInstance::clear_entry_last_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_last_request_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& PetInstance::entry_last_request_id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1555,13 +2031,13 @@ inline const ::std::string& PetInstance::entry_last_request_id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PetInstance::set_entry_last_request_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.entry_last_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PetInstance.entry_last_request_id)
 }
 inline ::std::string* PROTOBUF_NONNULL PetInstance::mutable_entry_last_request_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_entry_last_request_id();
   // @@protoc_insertion_point(field_mutable:PetInstance.entry_last_request_id)
   return _s;
@@ -1581,10 +2057,10 @@ inline ::std::string* PROTOBUF_NONNULL PetInstance::_internal_mutable_entry_last
 inline ::std::string* PROTOBUF_NULLABLE PetInstance::release_entry_last_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInstance.entry_last_request_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.entry_last_request_id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.entry_last_request_id_.Set("", GetArena());
@@ -1594,9 +2070,9 @@ inline ::std::string* PROTOBUF_NULLABLE PetInstance::release_entry_last_request_
 inline void PetInstance::set_allocated_entry_last_request_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.entry_last_request_id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.entry_last_request_id_.IsDefault()) {
@@ -1609,7 +2085,7 @@ inline void PetInstance::set_allocated_entry_last_request_id(::std::string* PROT
 inline void PetInstance::clear_entry_last_base_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_last_base_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t PetInstance::entry_last_base_version() const {
   // @@protoc_insertion_point(field_get:PetInstance.entry_last_base_version)
@@ -1617,7 +2093,7 @@ inline ::uint64_t PetInstance::entry_last_base_version() const {
 }
 inline void PetInstance::set_entry_last_base_version(::uint64_t value) {
   _internal_set_entry_last_base_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PetInstance.entry_last_base_version)
 }
 inline ::uint64_t PetInstance::_internal_entry_last_base_version() const {
@@ -1633,7 +2109,7 @@ inline void PetInstance::_internal_set_entry_last_base_version(::uint64_t value)
 inline void PetInstance::clear_entry_last_config_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_last_config_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PetInstance::entry_last_config_version() const {
   // @@protoc_insertion_point(field_get:PetInstance.entry_last_config_version)
@@ -1641,7 +2117,7 @@ inline ::uint32_t PetInstance::entry_last_config_version() const {
 }
 inline void PetInstance::set_entry_last_config_version(::uint32_t value) {
   _internal_set_entry_last_config_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PetInstance.entry_last_config_version)
 }
 inline ::uint32_t PetInstance::_internal_entry_last_config_version() const {
@@ -1663,7 +2139,7 @@ inline int PetInstance::entry_last_target_size() const {
 inline void PetInstance::clear_entry_last_target() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_last_target_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_entry_last_target() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1679,7 +2155,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_entry_last_target()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_mutable_map:PetInstance.entry_last_target)
   return _internal_mutable_entry_last_target();
 }
@@ -1688,7 +2164,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInst
 inline void PetInstance::clear_cultivation_tier() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cultivation_tier_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t PetInstance::cultivation_tier() const {
   // @@protoc_insertion_point(field_get:PetInstance.cultivation_tier)
@@ -1696,7 +2172,7 @@ inline ::uint32_t PetInstance::cultivation_tier() const {
 }
 inline void PetInstance::set_cultivation_tier(::uint32_t value) {
   _internal_set_cultivation_tier(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PetInstance.cultivation_tier)
 }
 inline ::uint32_t PetInstance::_internal_cultivation_tier() const {
@@ -1706,6 +2182,205 @@ inline ::uint32_t PetInstance::_internal_cultivation_tier() const {
 inline void PetInstance::_internal_set_cultivation_tier(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cultivation_tier_ = value;
+}
+
+// uint32 active_entry_preset_slot = 19;
+inline void PetInstance::clear_active_entry_preset_slot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_entry_preset_slot_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t PetInstance::active_entry_preset_slot() const {
+  // @@protoc_insertion_point(field_get:PetInstance.active_entry_preset_slot)
+  return _internal_active_entry_preset_slot();
+}
+inline void PetInstance::set_active_entry_preset_slot(::uint32_t value) {
+  _internal_set_active_entry_preset_slot(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:PetInstance.active_entry_preset_slot)
+}
+inline ::uint32_t PetInstance::_internal_active_entry_preset_slot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_entry_preset_slot_;
+}
+inline void PetInstance::_internal_set_active_entry_preset_slot(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_entry_preset_slot_ = value;
+}
+
+// repeated .PetEntryPreset entry_presets = 20;
+inline int PetInstance::_internal_entry_presets_size() const {
+  return _internal_entry_presets().size();
+}
+inline int PetInstance::entry_presets_size() const {
+  return _internal_entry_presets_size();
+}
+inline void PetInstance::clear_entry_presets() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_presets_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::PetEntryPreset& PetInstance::entry_presets(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetInstance.entry_presets)
+  return _internal_entry_presets().Get(index);
+}
+inline ::PetEntryPreset* PROTOBUF_NONNULL PetInstance::mutable_entry_presets(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:PetInstance.entry_presets)
+  return _internal_mutable_entry_presets()->Mutable(index);
+}
+inline ::PetEntryPreset* PROTOBUF_NONNULL PetInstance::add_entry_presets()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::PetEntryPreset* _add =
+      _internal_mutable_entry_presets()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:PetInstance.entry_presets)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::PetEntryPreset>& PetInstance::entry_presets() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PetInstance.entry_presets)
+  return _internal_entry_presets();
+}
+inline ::google::protobuf::RepeatedPtrField<::PetEntryPreset>* PROTOBUF_NONNULL
+PetInstance::mutable_entry_presets() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:PetInstance.entry_presets)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_entry_presets();
+}
+inline const ::google::protobuf::RepeatedPtrField<::PetEntryPreset>&
+PetInstance::_internal_entry_presets() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_presets_;
+}
+inline ::google::protobuf::RepeatedPtrField<::PetEntryPreset>* PROTOBUF_NONNULL
+PetInstance::_internal_mutable_entry_presets() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.entry_presets_;
+}
+
+// uint64 tier_last_request_id = 21;
+inline void PetInstance::clear_tier_last_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t PetInstance::tier_last_request_id() const {
+  // @@protoc_insertion_point(field_get:PetInstance.tier_last_request_id)
+  return _internal_tier_last_request_id();
+}
+inline void PetInstance::set_tier_last_request_id(::uint64_t value) {
+  _internal_set_tier_last_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:PetInstance.tier_last_request_id)
+}
+inline ::uint64_t PetInstance::_internal_tier_last_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_last_request_id_;
+}
+inline void PetInstance::_internal_set_tier_last_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_request_id_ = value;
+}
+
+// uint32 tier_last_expected_tier = 22;
+inline void PetInstance::clear_tier_last_expected_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_expected_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t PetInstance::tier_last_expected_tier() const {
+  // @@protoc_insertion_point(field_get:PetInstance.tier_last_expected_tier)
+  return _internal_tier_last_expected_tier();
+}
+inline void PetInstance::set_tier_last_expected_tier(::uint32_t value) {
+  _internal_set_tier_last_expected_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:PetInstance.tier_last_expected_tier)
+}
+inline ::uint32_t PetInstance::_internal_tier_last_expected_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_last_expected_tier_;
+}
+inline void PetInstance::_internal_set_tier_last_expected_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_expected_tier_ = value;
+}
+
+// uint32 tier_last_result_tier = 23;
+inline void PetInstance::clear_tier_last_result_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_result_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t PetInstance::tier_last_result_tier() const {
+  // @@protoc_insertion_point(field_get:PetInstance.tier_last_result_tier)
+  return _internal_tier_last_result_tier();
+}
+inline void PetInstance::set_tier_last_result_tier(::uint32_t value) {
+  _internal_set_tier_last_result_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:PetInstance.tier_last_result_tier)
+}
+inline ::uint32_t PetInstance::_internal_tier_last_result_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tier_last_result_tier_;
+}
+inline void PetInstance::_internal_set_tier_last_result_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tier_last_result_tier_ = value;
+}
+
+// uint32 entry_last_preset_slot = 24;
+inline void PetInstance::clear_entry_last_preset_slot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_last_preset_slot_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t PetInstance::entry_last_preset_slot() const {
+  // @@protoc_insertion_point(field_get:PetInstance.entry_last_preset_slot)
+  return _internal_entry_last_preset_slot();
+}
+inline void PetInstance::set_entry_last_preset_slot(::uint32_t value) {
+  _internal_set_entry_last_preset_slot(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:PetInstance.entry_last_preset_slot)
+}
+inline ::uint32_t PetInstance::_internal_entry_last_preset_slot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_last_preset_slot_;
+}
+inline void PetInstance::_internal_set_entry_last_preset_slot(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_last_preset_slot_ = value;
+}
+
+// uint32 entry_last_preset_tag = 25;
+inline void PetInstance::clear_entry_last_preset_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_last_preset_tag_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t PetInstance::entry_last_preset_tag() const {
+  // @@protoc_insertion_point(field_get:PetInstance.entry_last_preset_tag)
+  return _internal_entry_last_preset_tag();
+}
+inline void PetInstance::set_entry_last_preset_tag(::uint32_t value) {
+  _internal_set_entry_last_preset_tag(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:PetInstance.entry_last_preset_tag)
+}
+inline ::uint32_t PetInstance::_internal_entry_last_preset_tag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_last_preset_tag_;
+}
+inline void PetInstance::_internal_set_entry_last_preset_tag(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_last_preset_tag_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -34,7 +34,7 @@ public:
     void Shutdown();
 
     // EtcdHelper 的唯一出口。Init 之前 / Shutdown 之后返回 nullptr(调用方丢弃请求)。
-    EtcdTransport* Transport() { return transport_.get(); }
+    EtcdTransport* Transport() { return transport.get(); }
 
     // 发现范围(scope)默认是前缀;登记成精确键之后,这个范围的 Range 与 watch 都只覆盖这一个键(range_end 为空)。
     // 本节点自身类型不在发现集合里时,只看自己那一条发现键(ServiceDiscoveryManager::WatchOwnRegistrationKey,
@@ -53,7 +53,7 @@ public:
     // 身份冲突收尾期间必须调用:这台节点已经不是 node_id 的合法持有者了,
     // 再去重抢端口 / 重占 node_id 只会干扰正在接手的那个进程。
     void StopRegistrationRetries();
-    [[nodiscard]] bool RegistrationInFlight() const { return registrationRunning_; }
+    [[nodiscard]] bool RegistrationInFlight() const { return registrationRunning; }
     // Node::StartGrpcServer 的就绪通知。初次引导或维护预备态还未开放监听时，注册任务等在发布之前。
     void PublishDiscoveryAfterGrpcReady();
 
@@ -144,33 +144,33 @@ private:
 
 private:
     bool hasSentWatch = false;
-    bool registrationRunning_ = false;
-    bool registrationStopped_ = false;
-    bool restartRegistration_ = false;
-    bool rpcPrepared_ = false;
-    bool grpcReady_ = false;
-    std::function<void(bool)> grpcReadyCompletion_;
-    RegistrationMode registrationMode_ = RegistrationMode::kInitialBoot;
+    bool registrationRunning = false;
+    bool registrationStopped = false;
+    bool restartRegistration = false;
+    bool rpcPrepared = false;
+    bool grpcReady = false;
+    std::function<void(bool)> grpcReadyCompletion;
+    RegistrationMode registrationMode = RegistrationMode::kInitialBoot;
     int64_t leaseId = 0;
-    int64_t leaseTtlSeconds_ = 0;
-    std::chrono::steady_clock::time_point lastKeepAliveAckTime_{};
+    int64_t leaseTtlSeconds = 0;
+    std::chrono::steady_clock::time_point lastKeepAliveAckTime{};
     // 新传输专用(§13.5):前缀 → watch 状态;已发 create、等 created 应答的前缀(etcd 按发送顺序回 created);
     // watch_id → 前缀;发现键索引(DELETE 不依赖 prev_kv、对账、丢过时条目)。
-    std::unordered_map<std::string, PrefixWatch> prefixWatches_;
-    std::deque<std::string> pendingWatchCreates_;
-    std::unordered_map<int64_t, std::string> watchIdToPrefix_;
-    DiscoveryKeyIndex discoveryKeys_;
+    std::unordered_map<std::string, PrefixWatch> prefixWatches;
+    std::deque<std::string> pendingWatchCreates;
+    std::unordered_map<int64_t, std::string> watchIdToPrefix;
+    DiscoveryKeyIndex discoveryKeys;
     // 每个前缀已经应用过的最新 Range 快照的 revision:更旧的应答整条丢弃,watch 从它之后建(跨流重建保留)。
-    std::unordered_map<std::string, int64_t> appliedSnapshotRevision_;
+    std::unordered_map<std::string, int64_t> appliedSnapshotRevision;
     // 取消后待重拉的前缀(去重、按到达顺序),与每个前缀当前的退避秒数;建成 watch 时清掉该前缀的退避。
-    std::vector<std::string> canceledPrefixesToRetry_;
-    std::unordered_map<std::string, double> cancelRetryBackoffSeconds_;
+    std::vector<std::string> canceledPrefixesToRetry;
+    std::unordered_map<std::string, double> cancelRetryBackoffSeconds;
     // 按精确键 Range / watch 的发现范围(AddExactDiscoveryKey)。不在这里的范围按前缀。
-    std::unordered_set<std::string> exactDiscoveryKeys_;
-	TimerTaskComp cancelRetryTimer_;
+    std::unordered_set<std::string> exactDiscoveryKeys;
+	TimerTaskComp cancelRetryTimer;
     // 先停止注册等待，再析构传输；传输回调不持有注册任务。
-    std::unique_ptr<EtcdTransport> transport_;
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> registrationLoop_;
-    RegistrationIo registrationIo_;
-    std::optional<LoopTaskScope> registrationTasks_;
+    std::unique_ptr<EtcdTransport> transport;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> registrationLoop;
+    RegistrationIo registrationIo;
+    std::optional<LoopTaskScope> registrationTasks;
 };

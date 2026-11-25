@@ -192,41 +192,41 @@ class GrpcClientLoopbackTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        port_ = FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0) << "no free loopback port";
+        port = FindFreeLoopbackPort();
+        ASSERT_NE(port, 0) << "no free loopback port";
 
         muduo_grpc::ServerOptions options;
         options.name = "grpc_client_loopback";
         options.statsLogInterval = std::chrono::seconds(0);
         muduo_grpc::ChannelOptions channelOptions;
-        if (installTraceHooks_)
+        if (installTraceHooks)
         {
             // 与节点装配一致(node.cpp、node_connector.cpp):服务端装派发钩子,业务通道装出站钩子。
             options.dispatchInterceptor = grpc_tracing::DispatchUnderIncomingTrace;
             channelOptions.unaryInterceptor = grpc_tracing::InjectTraceIntoUnaryCall;
         }
-        server_ = muduo_grpc::Server::Create(loop_, "127.0.0.1", port_, options);
-        ASSERT_NE(server_, nullptr);
-        ASSERT_TRUE(server_->RegisterService(service_));
-        server_->Start();
+        server = muduo_grpc::Server::Create(loop, "127.0.0.1", port, options);
+        ASSERT_NE(server, nullptr);
+        ASSERT_TRUE(server->RegisterService(service));
+        server->Start();
 
-        channel_ = muduo_grpc::Channel::Create(loop_, "127.0.0.1", port_, std::move(channelOptions));
-        ASSERT_NE(channel_, nullptr);
-        nodeEntity_ = registry_.create();
-        registry_.emplace<MuduoGrpcChannelPtr>(nodeEntity_, channel_);
+        channel = muduo_grpc::Channel::Create(loop, "127.0.0.1", port, std::move(channelOptions));
+        ASSERT_NE(channel, nullptr);
+        nodeEntity = registry.create();
+        registry.emplace<MuduoGrpcChannelPtr>(nodeEntity, channel);
     }
 
     void TearDown() override
     {
         // 留着的服务端句柄先放掉(记录已不在时什么都不发;还在时按「句柄全部丢弃」收口),此时 Server 仍活着。
-        service_.heldBeforeBusiness.clear();
-        service_.heldAfterBusinessStarted.clear();
+        service.heldBeforeBusiness.clear();
+        service.heldAfterBusinessStarted.clear();
         // 通道先走:~Channel 把在途调用以 UNAVAILABLE 排进队列,连接断开后服务端摘表。
-        registry_.clear();
-        channel_.reset();
+        registry.clear();
+        channel.reset();
         RunLoopFor(300ms);
         // loop 外析构 Server(server.h 的前置条件),再转 loop 让它排进的 forceClose / connectDestroyed 跑完。
-        server_.reset();
+        server.reset();
         RunLoopFor(200ms);
     }
 
@@ -238,14 +238,14 @@ protected:
             return true;
         }
         const auto deadline = std::chrono::steady_clock::now() + timeout;
-        const muduo::net::TimerId check = loop_.runEvery(0.005, [this, &done, deadline]
+        const muduo::net::TimerId check = loop.runEvery(0.005, [this, &done, deadline]
                                                          {
             if (done() || std::chrono::steady_clock::now() >= deadline)
             {
-                loop_.quit();
+                loop.quit();
             } });
-        loop_.loop();
-        loop_.cancel(check);
+        loop.loop();
+        loop.cancel(check);
         return done();
     }
 
@@ -259,7 +259,7 @@ protected:
     void SendInLoop(const std::shared_ptr<Observed> &observed, uint64_t playerId, std::chrono::milliseconds deadline,
                     GrpcSentMetadata metadata = {}, bool underTrace = false)
     {
-        loop_.queueInLoop([this, observed, playerId, deadline, metadata = std::move(metadata), underTrace]
+        loop.queueInLoop([this, observed, playerId, deadline, metadata = std::move(metadata), underTrace]
         {
             std::optional<tracing::ScopedRoot> requestTrace;
             if (underTrace)
@@ -273,7 +273,7 @@ protected:
             options.deadline = deadline;
             options.metadata = metadata;
             data_service::SendDataServiceGetPlayerHomeZone(
-                registry_, nodeEntity_, request,
+                registry, nodeEntity, request,
                 [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *reply)
                 {
                     ++observed->calls;
@@ -291,21 +291,21 @@ protected:
     }
 
     // 声明顺序 = 析构逆序:EventLoop 最先构造、最后析构;service_ 活过 server_。
-    muduo::net::EventLoop loop_;
-    LoopbackDataService service_;
-    std::shared_ptr<muduo_grpc::Server> server_;
-    entt::registry registry_;
-    MuduoGrpcChannelPtr channel_;
-    entt::entity nodeEntity_{entt::null};
-    uint16_t port_{0};
-    bool installTraceHooks_{false};   // 派生夹具在构造时置位,SetUp 据此装两个链路追踪钩子
+    muduo::net::EventLoop loop;
+    LoopbackDataService service;
+    std::shared_ptr<muduo_grpc::Server> server;
+    entt::registry registry;
+    MuduoGrpcChannelPtr channel;
+    entt::entity nodeEntity{entt::null};
+    uint16_t port{0};
+    bool installTraceHooks{false};   // 派生夹具在构造时置位,SetUp 据此装两个链路追踪钩子
 };
 
 // 两个链路追踪钩子都装上的夹具(docs/design/distributed-tracing.md §5.3)。
 class GrpcTraceLoopbackTest : public GrpcClientLoopbackTest
 {
 public:
-    GrpcTraceLoopbackTest() { installTraceHooks_ = true; }
+    GrpcTraceLoopbackTest() { installTraceHooks = true; }
 };
 
 // ASCII 认证头必须逐字节保留;仅历史 SessionMD 额外应用编码,其他二进制头只走传输编码。
@@ -325,7 +325,7 @@ TEST_F(GrpcClientLoopbackTest, AuthenticationMetadataPreservesWireContract)
              {"x-session-detail-bin", "c2Vzc2lvbg=="},
              {"x-test-bin", std::string("\0\xff", 2)}})
     {
-        const auto* actual = FindGrpcMetadata(service_.receivedMetadata, expected.first);
+        const auto* actual = FindGrpcMetadata(service.receivedMetadata, expected.first);
         ASSERT_NE(actual, nullptr) << expected.first;
         EXPECT_EQ(*actual, expected.second) << expected.first;
     }
@@ -345,22 +345,22 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneSucceedsExactlyOnce)
     EXPECT_TRUE(observed->hadReply);
     EXPECT_EQ(observed->homeZoneId, 43u) << "应答来自服务端业务";
     EXPECT_TRUE(observed->sendHadReturnedAtDone);
-    EXPECT_EQ(service_.dispatched, 1);
-    EXPECT_EQ(service_.businessRuns, 1);
-    EXPECT_EQ(server_->inFlightCalls(), 0u);
+    EXPECT_EQ(service.dispatched, 1);
+    EXPECT_EQ(service.businessRuns, 1);
+    EXPECT_EQ(server->inFlightCalls(), 0u);
 }
 
 // 服务端留着调用不进业务,客户端 deadline 到期:DEADLINE_EXCEEDED 恰好一次;服务端随后把调用收口,
 // 迟到的 Proceed 不进业务(§15.7「已派发、等许可」一行)。
 TEST_F(GrpcClientLoopbackTest, ServerDeferringTheCallYieldsDeadlineExceededExactlyOnce)
 {
-    service_.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
+    service.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
     const auto observed = std::make_shared<Observed>();
     // 500ms 足够回环建连 + 派发到方法体;判据是 DEADLINE_EXCEEDED 本身,不是时长。
     SendInLoop(observed, 7, 500ms);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
-    ASSERT_EQ(service_.heldBeforeBusiness.size(), 1u) << "请求必须已经派发到方法体";
-    const auto held = service_.heldBeforeBusiness.front();
+    ASSERT_EQ(service.heldBeforeBusiness.size(), 1u) << "请求必须已经派发到方法体";
+    const auto held = service.heldBeforeBusiness.front();
     // 服务端的截止定时器(grpc-timeout)或客户端到期发出的 RST 会让这次调用失效。
     ASSERT_TRUE(RunLoopUntil([&] { return !held->IsActive(); }, kLiveness));
     held->Proceed();
@@ -369,18 +369,18 @@ TEST_F(GrpcClientLoopbackTest, ServerDeferringTheCallYieldsDeadlineExceededExact
     EXPECT_EQ(observed->calls, 1) << "恰好一次";
     EXPECT_EQ(observed->code, kGrpcStatusDeadlineExceeded) << observed->message;
     EXPECT_FALSE(observed->hadReply);
-    EXPECT_EQ(service_.businessRuns, 0) << "调用失效后 Proceed 不得进业务";
-    EXPECT_EQ(server_->inFlightCalls(), 0u);
+    EXPECT_EQ(service.businessRuns, 0) << "调用失效后 Proceed 不得进业务";
+    EXPECT_EQ(server->inFlightCalls(), 0u);
 }
 
 // 业务已开始、延后完成的调用遇到服务端关机:排空到期回 UNAVAILABLE "server shutting down"(§15.7「业务已开始」一行),
 // onDrained 恰好一次且不在 BeginShutdown 栈内;迟到的 FinishOk 被吞掉,done 不会再来一次。
 TEST_F(GrpcClientLoopbackTest, ServerShutdownCompletesStartedCallWithUnavailable)
 {
-    service_.mode = LoopbackDataService::Mode::kHoldAfterBusinessStarted;
+    service.mode = LoopbackDataService::Mode::kHoldAfterBusinessStarted;
     const auto observed = std::make_shared<Observed>();
     SendInLoop(observed, 9, kLiveness);
-    ASSERT_TRUE(RunLoopUntil([&] { return service_.heldAfterBusinessStarted.size() == 1; }, kLiveness));
+    ASSERT_TRUE(RunLoopUntil([&] { return service.heldAfterBusinessStarted.size() == 1; }, kLiveness));
     EXPECT_EQ(observed->calls, 0);
 
     const auto drainedCalls = std::make_shared<int>(0);
@@ -388,14 +388,14 @@ TEST_F(GrpcClientLoopbackTest, ServerShutdownCompletesStartedCallWithUnavailable
     shutdownOptions.drainTimeout = 200ms;
     shutdownOptions.goawayPingTimeout = 100ms;
     shutdownOptions.closeGrace = 100ms;
-    server_->BeginShutdown(shutdownOptions, [drainedCalls] { ++*drainedCalls; });
+    server->BeginShutdown(shutdownOptions, [drainedCalls] { ++*drainedCalls; });
     EXPECT_EQ(*drainedCalls, 0) << "onDrained 永不在 BeginShutdown 栈内执行";
-    EXPECT_TRUE(server_->draining());
-    EXPECT_TRUE(service_.heldAfterBusinessStarted.front().ServerDraining());
+    EXPECT_TRUE(server->draining());
+    EXPECT_TRUE(service.heldAfterBusinessStarted.front().ServerDraining());
 
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0 && *drainedCalls > 0; }, kLiveness));
     // 迟到的完成:记录已被排空到期收口,这里必须被吞掉。
-    service_.heldAfterBusinessStarted.front().FinishOk(std::string());
+    service.heldAfterBusinessStarted.front().FinishOk(std::string());
     RunLoopFor(200ms);
 
     EXPECT_EQ(observed->calls, 1) << "恰好一次";
@@ -403,8 +403,8 @@ TEST_F(GrpcClientLoopbackTest, ServerShutdownCompletesStartedCallWithUnavailable
     EXPECT_EQ(observed->message, "server shutting down");
     EXPECT_FALSE(observed->hadReply);
     EXPECT_EQ(*drainedCalls, 1) << "onDrained 恰好一次";
-    EXPECT_EQ(server_->inFlightCalls(), 0u);
-    EXPECT_EQ(server_->connectionCount(), 0u);
+    EXPECT_EQ(server->inFlightCalls(), 0u);
+    EXPECT_EQ(server->connectionCount(), 0u);
 }
 
 
@@ -412,8 +412,8 @@ TEST_F(GrpcClientLoopbackTest, ServerShutdownCompletesStartedCallWithUnavailable
 // 夹具原本另存一份通道,先放掉它,让实体组件成为唯一所有者,才能验证真实析构路径。
 TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLaterCallThroughPerCallDone)
 {
-    const std::weak_ptr<muduo_grpc::Channel> weakChannel = channel_;
-    channel_.reset();
+    const std::weak_ptr<muduo_grpc::Channel> weakChannel = channel;
+    channel.reset();
     const auto failedPlayers = std::make_shared<std::vector<uint64_t>>();
     const auto successfulCalls = std::make_shared<int>(0);
     const auto failedCalls = std::make_shared<int>(0);
@@ -437,7 +437,7 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
     GetPlayerHomeZoneRequest request;
     request.set_player_id(43);
     data_service::SendDataServiceGetPlayerHomeZone(
-        registry_, nodeEntity_, request,
+        registry, nodeEntity, request,
         [onDone, playerId = request.player_id()](const GrpcCallOutcome &outcome,
                                                const GetPlayerHomeZoneResponse *reply)
         {
@@ -445,12 +445,12 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
         });
     ASSERT_FALSE(weakChannel.expired());
     EXPECT_EQ(weakChannel.lock()->outstandingCalls(), 1u);
-    registry_.remove<MuduoGrpcChannelPtr>(nodeEntity_);
+    registry.remove<MuduoGrpcChannelPtr>(nodeEntity);
     EXPECT_TRUE(weakChannel.expired()) << "生成层与调用状态都不得持有通道的强引用";
-    EXPECT_FALSE(HasUsableGrpcClient(registry_, nodeEntity_));
+    EXPECT_FALSE(HasUsableGrpcClient(registry, nodeEntity));
     request.set_player_id(44);
     data_service::SendDataServiceGetPlayerHomeZone(
-        registry_, nodeEntity_, request,
+        registry, nodeEntity, request,
         [onDone, playerId = request.player_id()](const GrpcCallOutcome &outcome,
                                                const GetPlayerHomeZoneResponse *reply)
         {
@@ -473,8 +473,8 @@ TEST_F(GrpcClientLoopbackTest, ChannelRemovalFailsOutstandingCallAndRejectsLater
 // 摘通道后的新调用同样异步拒绝一次,各自计数并区分本次调用的成功与失败。
 TEST_F(GrpcClientLoopbackTest, PerCallDoneCompletesUnavailableAfterChannelIsRemoved)
 {
-    const std::weak_ptr<muduo_grpc::Channel> weakChannel = channel_;
-    channel_.reset();
+    const std::weak_ptr<muduo_grpc::Channel> weakChannel = channel;
+    channel.reset();
     const auto outstanding = std::make_shared<Observed>();
     const auto rejected = std::make_shared<Observed>();
     const auto successfulCalls = std::make_shared<int>(0);
@@ -482,7 +482,7 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneCompletesUnavailableAfterChannelIsRemo
     GetPlayerHomeZoneRequest request;
     request.set_player_id(45);
     data_service::SendDataServiceGetPlayerHomeZone(
-        registry_, nodeEntity_, request,
+        registry, nodeEntity, request,
         [outstanding, weakChannel, successfulCalls, failedCalls](const GrpcCallOutcome &outcome,
                                                               const GetPlayerHomeZoneResponse *reply)
         {
@@ -501,10 +501,10 @@ TEST_F(GrpcClientLoopbackTest, PerCallDoneCompletesUnavailableAfterChannelIsRemo
         });
     ASSERT_FALSE(weakChannel.expired());
     EXPECT_EQ(weakChannel.lock()->outstandingCalls(), 1u);
-    registry_.remove<MuduoGrpcChannelPtr>(nodeEntity_);
+    registry.remove<MuduoGrpcChannelPtr>(nodeEntity);
     EXPECT_TRUE(weakChannel.expired());
     data_service::SendDataServiceGetPlayerHomeZone(
-        registry_, nodeEntity_, request,
+        registry, nodeEntity, request,
         [rejected, successfulCalls, failedCalls](const GrpcCallOutcome &outcome,
                                                 const GetPlayerHomeZoneResponse *reply)
         {
@@ -549,7 +549,7 @@ TEST_F(GrpcClientLoopbackTest, SceneManagerSelectionRejectsSnapshotOnlyAndClosin
     EXPECT_EQ(SelectSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
     const auto connected = registry.create();
     registry.emplace<NodeInfo>(connected).set_node_type(type);
-    registry.emplace<MuduoGrpcChannelPtr>(connected, channel_);
+    registry.emplace<MuduoGrpcChannelPtr>(connected, channel);
     EXPECT_EQ(SelectSceneManagerEntity(77), connected);
     registry.remove<MuduoGrpcChannelPtr>(connected);
     EXPECT_EQ(SelectSceneManagerEntity(77), static_cast<entt::entity>(entt::null));
@@ -569,13 +569,13 @@ TEST_F(GrpcTraceLoopbackTest, TraceparentIsSentContinuedAndRestoredOnCompletion)
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
     ASSERT_TRUE(observed->sentTrace.IsValid());
 
-    const auto *header = FindGrpcMetadata(service_.receivedMetadata, "traceparent");
+    const auto *header = FindGrpcMetadata(service.receivedMetadata, "traceparent");
     ASSERT_NE(header, nullptr);
     tracing::TraceContext onWire;
     ASSERT_TRUE(tracing::ParseTraceparent(*header, onWire)) << *header;
     EXPECT_EQ(onWire.trace_id.bytes, observed->sentTrace.trace_id.bytes);
-    EXPECT_EQ(service_.dispatchTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
-    EXPECT_NE(service_.dispatchTrace.span_id.bytes, onWire.span_id.bytes) << "服务端应在收到的 span 下面建子 span";
+    EXPECT_EQ(service.dispatchTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+    EXPECT_NE(service.dispatchTrace.span_id.bytes, onWire.span_id.bytes) << "服务端应在收到的 span 下面建子 span";
     EXPECT_EQ(observed->doneTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
     EXPECT_FALSE(tracing::Current().IsValid()) << "作用域都已退出,测试线程上不应残留 trace";
 }
@@ -587,8 +587,8 @@ TEST_F(GrpcTraceLoopbackTest, UntracedCallSendsNoTraceparentAndTheServerStartsAR
     SendInLoop(observed, 42, kLiveness);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
-    EXPECT_EQ(FindGrpcMetadata(service_.receivedMetadata, "traceparent"), nullptr);
-    EXPECT_TRUE(service_.dispatchTrace.IsValid());
+    EXPECT_EQ(FindGrpcMetadata(service.receivedMetadata, "traceparent"), nullptr);
+    EXPECT_TRUE(service.dispatchTrace.IsValid());
     EXPECT_FALSE(observed->doneTrace.IsValid());
 }
 
@@ -601,12 +601,12 @@ TEST_F(GrpcTraceLoopbackTest, ExistingTraceparentIsNotDuplicated)
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
     size_t headers = 0;
-    for (const auto &[key, value] : service_.receivedMetadata)
+    for (const auto &[key, value] : service.receivedMetadata)
     {
         headers += key == "traceparent" ? 1 : 0;
     }
     EXPECT_EQ(headers, 1u);
-    EXPECT_EQ(service_.dispatchTrace.trace_id.bytes, forwarded.trace_id.bytes);
+    EXPECT_EQ(service.dispatchTrace.trace_id.bytes, forwarded.trace_id.bytes);
 }
 
 // 阶段三(§10.3):两端各记一个 span 并连成一棵树。client span 的父是发起方的 span,它的上下文就是线上的 traceparent,
@@ -619,7 +619,7 @@ TEST_F(GrpcTraceLoopbackTest, ClientAndServerSpansAreRecordedAndLinked)
     SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
-    const auto *header = FindGrpcMetadata(service_.receivedMetadata, "traceparent");
+    const auto *header = FindGrpcMetadata(service.receivedMetadata, "traceparent");
     ASSERT_NE(header, nullptr);
     tracing::TraceContext onWire;
     ASSERT_TRUE(tracing::ParseTraceparent(*header, onWire)) << *header;
@@ -651,13 +651,13 @@ TEST_F(GrpcTraceLoopbackTest, FailedCallMarksTheClientSpanWithTheGrpcStatus)
 {
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
-    service_.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
+    service.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
     const auto observed = std::make_shared<Observed>();
     SendInLoop(observed, 7, 500ms, {}, /*underTrace=*/true);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     EXPECT_EQ(observed->code, kGrpcStatusDeadlineExceeded) << observed->message;
-    ASSERT_EQ(service_.heldBeforeBusiness.size(), 1u);
-    const auto held = service_.heldBeforeBusiness.front();
+    ASSERT_EQ(service.heldBeforeBusiness.size(), 1u);
+    const auto held = service.heldBeforeBusiness.front();
     ASSERT_TRUE(RunLoopUntil([&] { return !held->IsActive(); }, kLiveness));
     held->Proceed();
     RunLoopFor(100ms);
@@ -684,10 +684,10 @@ TEST_F(GrpcTraceLoopbackTest, DeferredProceedEndsTheServerSpanWhenTheReplyIsSent
 {
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
-    service_.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
+    service.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
     const auto observed = std::make_shared<Observed>();
     SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
-    ASSERT_TRUE(RunLoopUntil([&] { return service_.heldBeforeBusiness.size() == 1; }, kLiveness));
+    ASSERT_TRUE(RunLoopUntil([&] { return service.heldBeforeBusiness.size() == 1; }, kLiveness));
     RunLoopFor(50ms);
     const auto serverSpanCount = [&] {
         const auto spans = sink.Spans();
@@ -696,7 +696,7 @@ TEST_F(GrpcTraceLoopbackTest, DeferredProceedEndsTheServerSpanWhenTheReplyIsSent
     };
     EXPECT_EQ(serverSpanCount(), 0) << "回复还没发,server span 不该结束";
 
-    service_.heldBeforeBusiness.front()->Proceed();
+    service.heldBeforeBusiness.front()->Proceed();
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
     const auto spans = sink.Spans();
@@ -717,7 +717,7 @@ TEST_F(GrpcTraceLoopbackTest, ServerSpanMarksOnlyServerFaultCodesAsErrors)
 {
     span_test::RecordingSink sink;
     const span_test::ScopedSinkInstall install(&sink);
-    service_.mode = LoopbackDataService::Mode::kReject;
+    service.mode = LoopbackDataService::Mode::kReject;
     const auto findServer = [&](uint32_t code) -> std::optional<tracing::SpanRecord> {
         for (const auto &span : sink.Spans())
         {
@@ -731,13 +731,13 @@ TEST_F(GrpcTraceLoopbackTest, ServerSpanMarksOnlyServerFaultCodesAsErrors)
 
     constexpr auto kInvalidArgument = static_cast<uint32_t>(muduo_grpc::StatusCode::kInvalidArgument);
     constexpr auto kUnavailable = static_cast<uint32_t>(muduo_grpc::StatusCode::kUnavailable);
-    service_.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kInvalidArgument, "bad request");
+    service.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kInvalidArgument, "bad request");
     const auto invalid = std::make_shared<Observed>();
     SendInLoop(invalid, 1, kLiveness, {}, /*underTrace=*/true);
     ASSERT_TRUE(RunLoopUntil([&] { return invalid->calls > 0; }, kLiveness));
     EXPECT_EQ(invalid->code, kInvalidArgument);
 
-    service_.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "shutting down");
+    service.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "shutting down");
     const auto unavailable = std::make_shared<Observed>();
     SendInLoop(unavailable, 2, kLiveness, {}, /*underTrace=*/true);
     ASSERT_TRUE(RunLoopUntil([&] { return unavailable->calls > 0; }, kLiveness));
@@ -762,7 +762,7 @@ TEST_F(GrpcTraceLoopbackTest, ServerSpanMarksOnlyServerFaultCodesAsErrors)
 // 实体上没有通道,生成的客户端在本地以失败完成:回调同样回到发起方的 trace(QueueGrpcLocalCompletion 的包装)。
 TEST_F(GrpcTraceLoopbackTest, LocalFailureCompletesUnderTheCallerTrace)
 {
-    registry_.remove<MuduoGrpcChannelPtr>(nodeEntity_);
+    registry.remove<MuduoGrpcChannelPtr>(nodeEntity);
     const auto observed = std::make_shared<Observed>();
     SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
@@ -807,7 +807,7 @@ TEST_F(GrpcClientLoopbackTest, BusinessRunsUnderTheRequestPlayerId)
     SendInLoop(observed, 4611686018427387905ULL, kLiveness);
     ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
     ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
-    EXPECT_EQ(service_.businessPlayerId, 4611686018427387905ULL);
+    EXPECT_EQ(service.businessPlayerId, 4611686018427387905ULL);
     EXPECT_EQ(tracing::CurrentPlayerId(), 0u) << "方法体结束后应恢复,loop 线程上不应残留玩家";
 }
 

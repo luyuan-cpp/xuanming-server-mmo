@@ -59,7 +59,7 @@ namespace gate_spectate
 	} // namespace
 
 	SpectateHub::SpectateHub(HubPorts ports, HubLimits limits)
-		: ports_(std::move(ports)), limits_(limits)
+		: ports(std::move(ports)), limits(limits)
 	{
 	}
 
@@ -88,28 +88,28 @@ namespace gate_spectate
 
 	bool SpectateHub::IsSourceSilent(const Entry &entry, SteadyTime nowSteady, uint64_t nowWallMs) const
 	{
-		if (nowSteady - entry.lastFrameSteady >= limits_.idleTimeout)
+		if (nowSteady - entry.lastFrameSteady >= limits.idleTimeout)
 		{
 			return true;
 		}
-		return entry.deadlineMs != 0 && nowWallMs > entry.deadlineMs + limits_.deadlineGraceMs;
+		return entry.deadlineMs != 0 && nowWallMs > entry.deadlineMs + limits.deadlineGraceMs;
 	}
 
 	void SpectateHub::Subscribe(SessionId sessionId, const SpectateTicketPayload &ticket)
 	{
 		const uint64_t battleId = ticket.battle_id();
-		if (const auto current = battleOfSession_.find(sessionId);
-			current != battleOfSession_.end() && current->second != battleId)
+		if (const auto current = battleOfSession.find(sessionId);
+			current != battleOfSession.end() && current->second != battleId)
 		{
 			DetachSession(sessionId);
 		}
 
-		const auto [it, inserted] = entries_.try_emplace(battleId);
+		const auto [it, inserted] = entries.try_emplace(battleId);
 		Entry &entry = it->second;
 		if (inserted)
 		{
 			entry.battleInstanceId = ticket.battle_instance_id();
-			entry.lastFrameSteady = ports_.steadyNow(); // 空闲计时从订阅开始:一直等不到帧也要能收尾
+			entry.lastFrameSteady = ports.steadyNow(); // 空闲计时从订阅开始:一直等不到帧也要能收尾
 		}
 		else if (entry.battleInstanceId != ticket.battle_instance_id())
 		{
@@ -124,13 +124,13 @@ namespace gate_spectate
 		{
 			// 这一场已经结束。这个会话若还在 END 的扇出名单里(又发了一次订阅),先摘掉,免得收到两帧 166。
 			DetachSession(sessionId);
-			ports_.sendFrame(sessionId, *entry.finalFrame, FrameDelivery::kMustDeliver);
+			ports.sendFrame(sessionId, *entry.finalFrame, FrameDelivery::kMustDeliver);
 			return;
 		}
 
 		Subscriber &subscriber = entry.subscribers[sessionId];
 		subscriber.receivedState = false;
-		battleOfSession_[sessionId] = battleId;
+		battleOfSession[sessionId] = battleId;
 		if (const auto firstFrame = FirstFrameOf(entry))
 		{
 			SendToSubscriber(sessionId, subscriber, *firstFrame, FrameDelivery::kBestEffort);
@@ -139,8 +139,8 @@ namespace gate_spectate
 
 	void SpectateHub::Unsubscribe(SessionId sessionId, uint64_t battleId)
 	{
-		const auto it = battleOfSession_.find(sessionId);
-		if (it != battleOfSession_.end() && it->second == battleId)
+		const auto it = battleOfSession.find(sessionId);
+		if (it != battleOfSession.end() && it->second == battleId)
 		{
 			DetachSession(sessionId);
 		}
@@ -153,16 +153,16 @@ namespace gate_spectate
 
 	void SpectateHub::DetachSession(SessionId sessionId)
 	{
-		const auto it = battleOfSession_.find(sessionId);
-		if (it == battleOfSession_.end())
+		const auto it = battleOfSession.find(sessionId);
+		if (it == battleOfSession.end())
 		{
 			return;
 		}
-		if (const auto entryIt = entries_.find(it->second); entryIt != entries_.end())
+		if (const auto entryIt = entries.find(it->second); entryIt != entries.end())
 		{
 			entryIt->second.subscribers.erase(sessionId);
 		}
-		battleOfSession_.erase(it);
+		battleOfSession.erase(it);
 		// 条目留着:帧还在来(L1 battle 不知道观众走了),缓存留给下一个订阅者;没人订阅且 idleTimeout 没帧时由巡检删除。
 	}
 
@@ -174,7 +174,7 @@ namespace gate_spectate
 		entry.phase = Phase::kLive;
 		entry.lastTurnRound = -1;
 		entry.cachedStateRound = -1;
-		entry.lastFrameSteady = ports_.steadyNow();
+		entry.lastFrameSteady = ports.steadyNow();
 		entry.deadlineMs = 0;
 		entry.latestState.reset();
 		entry.firstFrame.reset();
@@ -194,17 +194,17 @@ namespace gate_spectate
 		auto content = ParseClientFrame(event);
 		if (!content)
 		{
-			++counters_.invalidFrames;
-			if (IsSampled(counters_.invalidFrames))
+			++counters.invalidFrames;
+			if (IsSampled(counters.invalidFrames))
 			{
 				LOG_ERROR << "Spectate frame rejected: invalid frame (sampled), kind=" << static_cast<int>(event.kind())
-						  << " invalid_total=" << counters_.invalidFrames;
+						  << " invalid_total=" << counters.invalidFrames;
 			}
 			return;
 		}
 
 		const uint64_t battleId = event.battle_id();
-		const auto [it, inserted] = entries_.try_emplace(battleId);
+		const auto [it, inserted] = entries.try_emplace(battleId);
 		Entry &entry = it->second;
 		if (inserted)
 		{
@@ -212,7 +212,7 @@ namespace gate_spectate
 		}
 		else if (entry.battleInstanceId != event.battle_instance_id())
 		{
-			++counters_.instanceMismatch;
+			++counters.instanceMismatch;
 			return;
 		}
 		if (entry.phase != Phase::kLive)
@@ -220,7 +220,7 @@ namespace gate_spectate
 			return; // END 只收一次;源站失联的条目正在发收尾帧,发完就删,之后的帧会重建条目
 		}
 
-		entry.lastFrameSteady = ports_.steadyNow();
+		entry.lastFrameSteady = ports.steadyNow();
 		if (event.deadline_ms() != 0)
 		{
 			entry.deadlineMs = event.deadline_ms();
@@ -301,14 +301,14 @@ namespace gate_spectate
 	void SpectateHub::OnEndFrame(uint64_t battleId, Entry &entry, const MessageContent &content)
 	{
 		entry.phase = Phase::kEnded;
-		entry.endedAt = ports_.steadyNow();
+		entry.endedAt = ports.steadyNow();
 		entry.finalFrame = std::make_shared<EncodedFrame>(content);
 		StartFinalFanoutUnlessBusy(battleId, entry);
 	}
 
 	void SpectateHub::CloseAsSourceLost(uint64_t battleId, Entry &entry)
 	{
-		++counters_.sourceLost;
+		++counters.sourceLost;
 
 		SpectateEndS2C end;
 		end.set_battle_id(battleId);
@@ -357,11 +357,11 @@ namespace gate_spectate
 		TurnResultS2C turn;
 		if (!turn.ParseFromString(entry.latestState->serialized_message()) || !turn.has_state())
 		{
-			++counters_.invalidFrames;
-			if (IsSampled(counters_.invalidFrames))
+			++counters.invalidFrames;
+			if (IsSampled(counters.invalidFrames))
 			{
 				LOG_ERROR << "Spectate first frame not synthesized: cached turn frame has no usable state (sampled)"
-						  << " invalid_total=" << counters_.invalidFrames;
+						  << " invalid_total=" << counters.invalidFrames;
 			}
 			return nullptr;
 		}
@@ -378,13 +378,13 @@ namespace gate_spectate
 	void SpectateHub::SendToSubscriber(SessionId sessionId, Subscriber &subscriber, const EncodedFrame &frame,
 									   FrameDelivery delivery)
 	{
-		switch (ports_.sendFrame(sessionId, frame, delivery))
+		switch (ports.sendFrame(sessionId, frame, delivery))
 		{
 		case SendResult::kSent:
 			subscriber.receivedState = true;
 			return;
 		case SendResult::kBufferFull:
-			++counters_.softWatermarkSkips;
+			++counters.softWatermarkSkips;
 			return;
 		case SendResult::kSessionGone:
 			DetachSession(sessionId);
@@ -399,20 +399,20 @@ namespace gate_spectate
 		{
 			return; // 只会来自首帧合成失败,已计数
 		}
-		counters_.coalesced += entry.fanoutTargets.size() - entry.fanoutNext;
+		counters.coalesced += entry.fanoutTargets.size() - entry.fanoutNext;
 		entry.fanoutFrame = std::move(frame);
 		entry.fanoutTargets = std::move(targets);
 		entry.fanoutNext = 0;
 		if (!entry.fanoutTargets.empty())
 		{
-			++counters_.framesFannedOut;
+			++counters.framesFannedOut;
 		}
 		PumpFanout(battleId, entry);
 	}
 
 	void SpectateHub::PumpFanout(uint64_t battleId, Entry &entry)
 	{
-		const std::size_t batchEnd = (std::min)(entry.fanoutNext + limits_.fanoutBatch, entry.fanoutTargets.size());
+		const std::size_t batchEnd = (std::min)(entry.fanoutNext + limits.fanoutBatch, entry.fanoutTargets.size());
 		while (entry.fanoutNext < batchEnd)
 		{
 			DeliverToTarget(entry, entry.fanoutTargets[entry.fanoutNext++]);
@@ -425,8 +425,8 @@ namespace gate_spectate
 		// 新帧取代旧帧时续发可能已经排着,它会接着发新帧,不必再排一个。
 		if (entry.continuationToken == 0)
 		{
-			entry.continuationToken = ++lastContinuationToken_;
-			ports_.defer([weakHub = weak_from_this(), battleId, token = entry.continuationToken]
+			entry.continuationToken = ++lastContinuationToken;
+			ports.defer([weakHub = weak_from_this(), battleId, token = entry.continuationToken]
 						 {
 				if (const auto hub = weakHub.lock())
 				{
@@ -437,8 +437,8 @@ namespace gate_spectate
 
 	void SpectateHub::ContinueFanout(uint64_t battleId, uint64_t token)
 	{
-		const auto it = entries_.find(battleId);
-		if (it == entries_.end() || it->second.continuationToken != token)
+		const auto it = entries.find(battleId);
+		if (it == entries.end() || it->second.continuationToken != token)
 		{
 			return; // 条目已删除或已重建
 		}
@@ -495,19 +495,19 @@ namespace gate_spectate
 		// 终局帧发完,这一场的订阅到此结束。
 		for (const auto &[sessionId, subscriber] : entry.subscribers)
 		{
-			battleOfSession_.erase(sessionId);
+			battleOfSession.erase(sessionId);
 		}
 		entry.subscribers.clear();
 		if (entry.phase == Phase::kSourceLost)
 		{
-			entries_.erase(battleId);
+			entries.erase(battleId);
 		}
 	}
 
 	void SpectateHub::SweepIdle(SteadyTime nowSteady, uint64_t nowWallMs)
 	{
 		std::vector<uint64_t> lostBattles;
-		for (auto it = entries_.begin(); it != entries_.end();)
+		for (auto it = entries.begin(); it != entries.end();)
 		{
 			const Entry &entry = it->second;
 			bool expired = false;
@@ -515,7 +515,7 @@ namespace gate_spectate
 			{
 			case Phase::kEnded:
 				// END 还没发完时条目还有订阅者,等发完(FinishFanout 清空)才算到期,否则订阅者索引会留下悬空记录。
-				expired = entry.subscribers.empty() && nowSteady - entry.endedAt >= limits_.endedRetention;
+				expired = entry.subscribers.empty() && nowSteady - entry.endedAt >= limits.endedRetention;
 				break;
 			case Phase::kSourceLost:
 				break; // 合成的 166 发完就删,不经巡检
@@ -533,13 +533,13 @@ namespace gate_spectate
 				}
 				break;
 			}
-			it = expired ? entries_.erase(it) : std::next(it);
+			it = expired ? entries.erase(it) : std::next(it);
 		}
 
 		// 遍历结束再收尾:CloseAsSourceLost 可能同步删掉条目。
 		for (const uint64_t battleId : lostBattles)
 		{
-			CloseAsSourceLost(battleId, entries_.at(battleId));
+			CloseAsSourceLost(battleId, entries.at(battleId));
 		}
 
 		LogMetricsIfDue(nowSteady);
@@ -547,16 +547,16 @@ namespace gate_spectate
 
 	void SpectateHub::LogMetricsIfDue(SteadyTime now)
 	{
-		if (now - lastMetricAt_ < limits_.metricInterval)
+		if (now - lastMetricAt < limits.metricInterval)
 		{
 			return;
 		}
-		lastMetricAt_ = now;
+		lastMetricAt = now;
 		// 标签只有累计值与当前量,不带 battle_id / player_id(AGENTS.md §9)。
-		LOG_INFO << "metric=gate_spectate subscribers=" << battleOfSession_.size() << " entries=" << entries_.size()
-				 << " frames=" << counters_.framesFannedOut << " soft_watermark_skips=" << counters_.softWatermarkSkips
-				 << " coalesced=" << counters_.coalesced << " ticket_rejects=" << counters_.ticketRejects
-				 << " source_lost=" << counters_.sourceLost << " instance_mismatch=" << counters_.instanceMismatch
-				 << " invalid_frames=" << counters_.invalidFrames;
+		LOG_INFO << "metric=gate_spectate subscribers=" << battleOfSession.size() << " entries=" << entries.size()
+				 << " frames=" << counters.framesFannedOut << " soft_watermark_skips=" << counters.softWatermarkSkips
+				 << " coalesced=" << counters.coalesced << " ticket_rejects=" << counters.ticketRejects
+				 << " source_lost=" << counters.sourceLost << " instance_mismatch=" << counters.instanceMismatch
+				 << " invalid_frames=" << counters.invalidFrames;
 	}
 } // namespace gate_spectate

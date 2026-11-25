@@ -39,8 +39,8 @@ public:
 	// 返回 true 时已记下这个代次;调用方随后必须建成或复用实体,所以要放在参数、许可等其它拒收理由之后调用。
 	[[nodiscard]] bool AdmitCreate(std::uint64_t sceneId, std::uint64_t generation)
 	{
-		const auto it = records_.find(sceneId);
-		if (it != records_.end() && IsDestroyedAt(it->second, generation))
+		const auto it = records.find(sceneId);
+		if (it != records.end() && IsDestroyedAt(it->second, generation))
 		{
 			return false;
 		}
@@ -48,7 +48,7 @@ public:
 		{
 			return true;
 		}
-		Record& record = (it != records_.end()) ? it->second : records_[sceneId];
+		Record& record = (it != records.end()) ? it->second : records[sceneId];
 		record.newestCreate = std::max(record.newestCreate, generation);
 		return true;
 	}
@@ -62,7 +62,7 @@ public:
 		{
 			return true;
 		}
-		Record& record = records_[sceneId];
+		Record& record = records[sceneId];
 		if (record.newestCreate > generation)
 		{
 			return false;
@@ -74,11 +74,11 @@ public:
 	// 这个场景的记录,没有时为 nullptr。供日志与用例。
 	[[nodiscard]] const Record* Find(std::uint64_t sceneId) const
 	{
-		const auto it = records_.find(sceneId);
-		return it == records_.end() ? nullptr : &it->second;
+		const auto it = records.find(sceneId);
+		return it == records.end() ? nullptr : &it->second;
 	}
 
-	[[nodiscard]] std::size_t Size() const { return records_.size(); }
+	[[nodiscard]] std::size_t Size() const { return records.size(); }
 
 private:
 	// 已按 >= generation 的代次拆过。代次 0 的建场景遇到任何一次按代次的拆除记录都算。
@@ -87,5 +87,5 @@ private:
 		return record.destroyedThrough != 0 && generation <= record.destroyedThrough;
 	}
 
-	std::unordered_map<std::uint64_t, Record> records_;
+	std::unordered_map<std::uint64_t, Record> records;
 };

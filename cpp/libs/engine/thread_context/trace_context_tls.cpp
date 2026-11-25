@@ -74,18 +74,18 @@ SpanSink* InstalledSpanSink() noexcept
 }
 
 SpanRecorder::SpanRecorder(SpanRecorder&& other) noexcept
-    : record_(other.record_), startSteadyNanos_(other.startSteadyNanos_), active_(other.active_)
+    : record(other.record), startSteadyNanos(other.startSteadyNanos), active(other.active)
 {
-    other.active_ = false;
+    other.active = false;
 }
 
 SpanRecorder& SpanRecorder::operator=(SpanRecorder&& other) noexcept
 {
     if (this != &other) {
-        record_ = other.record_;
-        startSteadyNanos_ = other.startSteadyNanos_;
-        active_ = other.active_;
-        other.active_ = false;
+        record = other.record;
+        startSteadyNanos = other.startSteadyNanos;
+        active = other.active;
+        other.active = false;
     }
     return *this;
 }
@@ -93,54 +93,54 @@ SpanRecorder& SpanRecorder::operator=(SpanRecorder&& other) noexcept
 void SpanRecorder::Begin(const TraceContext& context, const SpanId& parent, bool parentIsRemote, SpanKind kind,
                          SpanSystem system, SpanName name) noexcept
 {
-    active_ = false;
+    active = false;
     // 头部采样一律采(§3.4);flags 不带 sampled 的上下文(上游显式不采)按 ParentBased 不记录。
     if (!context.IsValid() || (context.flags & 0x01) == 0 || InstalledSpanSink() == nullptr) {
         return;
     }
-    record_ = SpanRecord{};
-    record_.trace_id = context.trace_id;
-    record_.span_id = context.span_id;
-    record_.parent_span_id = parent;
-    record_.trace_flags = context.flags;
-    record_.kind = kind;
-    record_.system = system;
-    record_.parent_is_remote = parentIsRemote && parent.IsValid();
-    record_.SetName(name);
-    record_.start_unix_nano = UnixNanosNow();
-    startSteadyNanos_ = SteadyNanosNow();
-    active_ = true;
+    record = SpanRecord{};
+    record.trace_id = context.trace_id;
+    record.span_id = context.span_id;
+    record.parent_span_id = parent;
+    record.trace_flags = context.flags;
+    record.kind = kind;
+    record.system = system;
+    record.parent_is_remote = parentIsRemote && parent.IsValid();
+    record.SetName(name);
+    record.start_unix_nano = UnixNanosNow();
+    startSteadyNanos = SteadyNanosNow();
+    active = true;
 }
 
 void SpanRecorder::SetError(std::string_view description) noexcept
 {
-    if (!active_) {
+    if (!active) {
         return;
     }
-    record_.status = SpanStatus::kError;
-    record_.SetStatusMessage(description);
+    record.status = SpanStatus::kError;
+    record.SetStatusMessage(description);
 }
 
 void SpanRecorder::SetGrpcStatusCode(uint32_t code) noexcept
 {
-    if (!active_) {
+    if (!active) {
         return;
     }
-    record_.grpc_status_code = code;
-    record_.has_grpc_status = true;
+    record.grpc_status_code = code;
+    record.has_grpc_status = true;
 }
 
 void SpanRecorder::End() noexcept
 {
-    if (!active_) {
+    if (!active) {
         return;
     }
-    active_ = false;
+    active = false;
     // 结束时刻 = 开始的墙钟 + 单调时钟测得的时长:墙钟中途被校准也不会出现负时长或跳变(OTel SDK 的做法)。
-    const int64_t elapsed = SteadyNanosNow() - startSteadyNanos_;
-    record_.end_unix_nano = record_.start_unix_nano + static_cast<uint64_t>(elapsed > 0 ? elapsed : 0);
+    const int64_t elapsed = SteadyNanosNow() - startSteadyNanos;
+    record.end_unix_nano = record.start_unix_nano + static_cast<uint64_t>(elapsed > 0 ? elapsed : 0);
     if (SpanSink* sink = InstalledSpanSink(); sink != nullptr) {
-        sink->Submit(record_);
+        sink->Submit(record);
     }
 }
 
@@ -158,8 +158,8 @@ PendingSpan PendingSpan::StartChildOf(const TraceContext& parent, SpanKind kind,
     if (!parent.IsValid()) {
         return span;
     }
-    span.context_ = ChildSpan(parent);
-    span.recorder_.Begin(span.context_, parent.span_id, false, kind, system, name);
+    span.context = ChildSpan(parent);
+    span.recorder.Begin(span.context, parent.span_id, false, kind, system, name);
     return span;
 }
 
@@ -171,8 +171,8 @@ PendingSpan PendingSpan::TakeCurrentServerSpan(SpanSystem system) noexcept
         return span;
     }
     // 在录的最内层作用域装着的就是这个 span 的上下文:嵌套的作用域都会改写 tlsRecorder(不录的置空)。
-    span.context_ = detail::tlsTrace;
-    span.recorder_ = std::move(*recorder);   // 移走后作用域的记录器不再记录,退出时的 End 是空操作
+    span.context = detail::tlsTrace;
+    span.recorder = std::move(*recorder);   // 移走后作用域的记录器不再记录,退出时的 End 是空操作
     detail::tlsRecorder = nullptr;
     return span;
 }

@@ -33,11 +33,11 @@ public:
 
 	// 开始监听。只调一次。
 	void Start();
-	uint16_t Port() const { return port_; }
+	uint16_t Port() const { return port; }
 
 private:
-	uint16_t port_;
-	muduo::net::HttpServer server_;
+	uint16_t port;
+	muduo::net::HttpServer server;
 };
 
 inline constexpr const char *kMetricsPortEnv = "MMORPG_METRICS_PORT";

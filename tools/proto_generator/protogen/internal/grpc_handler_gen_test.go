@@ -34,7 +34,7 @@ func TestGrpcServiceHandlerCpp_PreservesGuardSection(t *testing.T) {
 	first := GetGrpcServiceHandlerCppStr(dst, methods, "", "")
 	assertGrpcPreservedOnce(t, first, guard, "guard 段")
 	assertGrpcPreservationOrder(t, grpcGuardFunction(t, first, "SceneNodeGrpc", "CreateScene"),
-		"[[maybe_unused]] const ::CreateSceneRequest* request = &call->request();",
+		"[[maybe_unused]] const ::CreateSceneRequest* request = &call->Request();",
 		grpcPreservationBegin("grpc.CreateScene.guard"),
 		guard,
 		_config.Global.Naming.YourCodeEnd,

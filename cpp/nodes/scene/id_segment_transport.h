@@ -52,37 +52,37 @@ public:
 
     void Init(muduo::net::EventLoop& loop, PickFetcher pick, Clock now)
     {
-        loop_ = std::ref(loop);
-        pick_ = std::move(pick);
-        now_ = std::move(now);
-        stopped_ = false;
-        tasks_.emplace(loop);
+        this->loop = std::ref(loop);
+        this->pick = std::move(pick);
+        this->now = std::move(now);
+        stopped = false;
+        tasks.emplace(loop);
     }
 
     void Close()
     {
-        if (tasks_) tasks_->Close();
+        if (tasks) tasks->Close();
     }
 
     void Stop()
     {
-        if (!tasks_) return;
-        stopped_ = true;
-        tasks_->Stop();
-        tasks_.reset();
-        requests_.Clear();
+        if (!tasks) return;
+        stopped = true;
+        tasks->Stop();
+        tasks.reset();
+        requests.Clear();
     }
 
     // GuidSegmentClient 的 SendFn:true = 已发出,结果经 OnResponse / OnTransportFailure 回到发出它的那一种;
     // false = 此刻发不出去(已关闭、共享路径忙或在迟到窗口内、没有可用节点),客户端按退避重试。
     bool Send(GuidKind kind, uint32_t step)
     {
-        if (!tasks_ || !tasks_->IsAccepting()) return false;
-        const double now = now_();
+        if (!tasks || !tasks->IsAccepting()) return false;
+        const double now = this->now();
         using Admission = RequestTable::Admission;
-        const auto activeKind = requests_.InFlightKind();
-        const auto timeout = activeKind ? tlsGuidSegmentRegistry.Get(*activeKind).options().fetchTimeoutSec : 0.0;
-        const auto gate = requests_.BeforeSend(now, timeout);
+        const auto activeKind = requests.InFlightKind();
+        const auto timeout = activeKind ? tlsGuidSegmentRegistry.Get(*activeKind).GetOptions().fetchTimeoutSec : 0.0;
+        const auto gate = requests.BeforeSend(now, timeout);
         if (gate.admission == Admission::kBusy) return false;
         if (gate.admission == Admission::kOpenedLateWindow)
         {
@@ -97,41 +97,41 @@ public:
                      << " kind=" << GuidKindName(gate.affected->kind) << " (window elapsed); resuming sends";
         }
 
-        Fetcher fetcher = pick_();
+        Fetcher fetcher = pick();
         if (!fetcher) return false;
 
         Request request;
-        request.set_biz_tag(tlsGuidSegmentRegistry.Get(kind).options().bizTag);
+        request.set_biz_tag(tlsGuidSegmentRegistry.Get(kind).GetOptions().bizTag);
         request.set_step(step);
-        const uint64_t requestSequence = requests_.Reserve(kind, now);
-        if (tasks_->Start(FetchAsync(std::move(fetcher), std::move(request), requestSequence),
+        const uint64_t requestSequence = requests.Reserve(kind, now);
+        if (tasks->Start(FetchAsync(std::move(fetcher), std::move(request), requestSequence),
             "[idsegment] AllocateIdSegment")) return true;
-        requests_.Take(requestSequence);
+        requests.Take(requestSequence);
         return false;
     }
 
     // 完成时已认领不到请求(迟到窗口过期之后才到)而丢弃的结果数,只用于日志与单测。
-    [[nodiscard]] uint64_t OrphanResponses() const { return orphanResponses_; }
+    [[nodiscard]] uint64_t OrphanResponses() const { return orphanResponses; }
 
 private:
     boost::cobalt::task<void> FetchAsync(Fetcher fetcher, Request request, uint64_t requestSequence)
     {
-        auto result = co_await loop_async::AwaitCallback<FetchResult>(loop_->get(), [&fetcher, &request](auto done) {
+        auto result = co_await loop_async::AwaitCallback<FetchResult>(loop->get(), [&fetcher, &request](auto done) {
             fetcher(request, std::move(done));
             return true; // 发送路径承诺恰好回调一次,本地拒绝也延后交付。
         }, FetchResult{GrpcCallOutcome{kGrpcStatusUnavailable, "idsegment fetch rejected"}, std::nullopt});
         // 结果可能已由适配器认领，之后同一栈才停止传输并清表。
-        if (result && !stopped_) OnCompleted(requestSequence, std::move(*result));
+        if (result && !stopped) OnCompleted(requestSequence, std::move(*result));
     }
 
     void OnCompleted(uint64_t requestSequence, FetchResult result)
     {
-        const auto completed = requests_.Take(requestSequence);
+        const auto completed = requests.Take(requestSequence);
         if (!completed)
         {
-            ++orphanResponses_;
+            ++orphanResponses;
             LOG_WARN << "[idsegment] completion for unknown request seq=" << requestSequence
-                     << " dropped; orphans=" << orphanResponses_;
+                     << " dropped; orphans=" << orphanResponses;
             return;
         }
         const auto kind = completed->kind;
@@ -155,12 +155,12 @@ private:
         tlsGuidSegmentRegistry.Get(kind).OnTransportFailure(why.str());
     }
 
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    PickFetcher pick_;
-    Clock now_;
-    std::optional<LoopTaskScope> tasks_;
-    RequestTable requests_;
-    bool stopped_ = false;
-    uint64_t orphanResponses_{0};
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    PickFetcher pick;
+    Clock now;
+    std::optional<LoopTaskScope> tasks;
+    RequestTable requests;
+    bool stopped = false;
+    uint64_t orphanResponses{0};
 };
 }

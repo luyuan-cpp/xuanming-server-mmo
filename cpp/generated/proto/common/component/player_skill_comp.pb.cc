@@ -31,11 +31,200 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::PlayerSkillComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::SkillLoadoutScheme
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerSkillListComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class SkillLoadoutScheme::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SkillLoadoutScheme>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_._has_bits_);
+};
+
+constexpr SkillLoadoutScheme::ParseTableT_ SkillLoadoutScheme::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SkillLoadoutScheme>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 scheme_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillLoadoutScheme, _impl_.scheme_id_), 3>(),
+       {8, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.scheme_id_)}},
+      // uint32 role_tag = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillLoadoutScheme, _impl_.role_tag_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.role_tag_)}},
+      // repeated uint32 passive_skill_ids = 3;
+      {::_pbi::TcParser::FastV32P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.passive_skill_ids_)}},
+      // repeated uint32 pursuit_skill_ids = 4;
+      {::_pbi::TcParser::FastV32P1,
+       {34, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.pursuit_skill_ids_)}},
+      // repeated uint32 opening_skill_ids = 5;
+      {::_pbi::TcParser::FastV32P1,
+       {42, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.opening_skill_ids_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 scheme_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.scheme_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 role_tag = 2;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.role_tag_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 passive_skill_ids = 3;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.passive_skill_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated uint32 pursuit_skill_ids = 4;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.pursuit_skill_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // repeated uint32 opening_skill_ids = 5;
+      {PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.opening_skill_ids_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SkillLoadoutScheme::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        passive_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.passive_skill_ids_)>()
+         }
+        ,
+        _passive_skill_ids_cached_byte_size_{0},
+        pursuit_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.pursuit_skill_ids_)>()
+         }
+        ,
+        _pursuit_skill_ids_cached_byte_size_{0},
+        opening_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.opening_skill_ids_)>()
+         }
+        ,
+        _opening_skill_ids_cached_byte_size_{0},
+        scheme_id_{0u},
+        role_tag_{0u} {}
+
+template <typename>
+constexpr SkillLoadoutScheme::SkillLoadoutScheme(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SkillLoadoutScheme::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SkillLoadoutScheme(arena);
+}
+constexpr auto SkillLoadoutScheme::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SkillLoadoutScheme), alignof(SkillLoadoutScheme));
+}
+constexpr auto SkillLoadoutScheme::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SkillLoadoutScheme::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SkillLoadoutScheme>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SkillLoadoutScheme::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SkillLoadoutScheme>(), &SkillLoadoutScheme::ByteSizeLong,
+              &SkillLoadoutScheme::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SkillLoadoutSchemeGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SkillLoadoutSchemeGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SkillLoadoutScheme_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SkillLoadoutScheme::InternalGenerateClassData_(
+            _default, &SkillLoadoutScheme_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SkillLoadoutScheme>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SkillLoadoutSchemeGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SkillLoadoutScheme _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SkillLoadoutScheme>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SkillLoadoutSchemeGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SkillLoadoutSchemeGlobalsTypeInternal SkillLoadoutScheme_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SkillLoadoutScheme_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SkillLoadoutScheme_globals_.GetClassData();
+#else
+  return SkillLoadoutScheme_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PlayerSkillComp::_Internal {
  public:
   using HasBits = decltype(::std::declval<PlayerSkillComp>()._impl_._has_bits_);
@@ -204,12 +393,12 @@ constexpr PlayerSkillListComp::ParseTableT_ PlayerSkillListComp::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
+      7,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -218,15 +407,52 @@ constexpr PlayerSkillListComp::ParseTableT_ PlayerSkillListComp::InternalGenerat
       ::_pbi::TcParser::GetTable<::PlayerSkillListComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .PlayerSkillComp skill_list = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.skill_list_)}},
+      // uint32 active_loadout_scheme_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSkillListComp, _impl_.active_loadout_scheme_id_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.active_loadout_scheme_id_)}},
+      // repeated .SkillLoadoutScheme loadout_schemes = 3;
+      {::_pbi::TcParser::FastMtR1,
+       {26, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_schemes_)}},
+      // uint64 loadout_state_version = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSkillListComp, _impl_.loadout_state_version_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_state_version_)}},
+      // string loadout_last_request_id = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_request_id_)}},
+      // uint64 loadout_last_base_version = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSkillListComp, _impl_.loadout_last_base_version_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_base_version_)}},
+      // uint32 loadout_last_scheme_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSkillListComp, _impl_.loadout_last_scheme_id_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_scheme_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .PlayerSkillComp skill_list = 1;
       {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.skill_list_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 active_loadout_scheme_id = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.active_loadout_scheme_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated .SkillLoadoutScheme loadout_schemes = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_schemes_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 loadout_state_version = 4;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_state_version_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string loadout_last_request_id = 5;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 loadout_last_base_version = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_base_version_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 loadout_last_scheme_id = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_scheme_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -234,8 +460,16 @@ constexpr PlayerSkillListComp::ParseTableT_ PlayerSkillListComp::InternalGenerat
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PlayerSkillComp_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SkillLoadoutScheme>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SkillLoadoutScheme_globals_},
+        #endif
     }},
     {{
+      "\23\0\0\0\0\27\0\0"
+      "PlayerSkillListComp"
+      "loadout_last_request_id"
     }},
   };
 }
@@ -249,7 +483,19 @@ inline constexpr PlayerSkillListComp::Impl_::Impl_(
             ::PlayerSkillListComp,
             PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.skill_list_)>()
          }
-     {}
+        ,
+        loadout_schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerSkillListComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_schemes_)>()
+         }
+        ,
+        loadout_last_request_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        loadout_state_version_{::uint64_t{0u}},
+        active_loadout_scheme_id_{0u},
+        loadout_last_scheme_id_{0u},
+        loadout_last_base_version_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr PlayerSkillListComp::PlayerSkillListComp(::_pbi::ConstantInitialized,
@@ -292,7 +538,7 @@ constexpr auto PlayerSkillListComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
@@ -360,42 +606,77 @@ const ::uint32_t
         1,
         2,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.skill_list_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.scheme_id_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.role_tag_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.passive_skill_ids_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.pursuit_skill_ids_),
+        PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.opening_skill_ids_),
+        3,
+        4,
         0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.skill_list_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.active_loadout_scheme_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_schemes_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_state_version_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_last_request_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_last_base_version_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_last_scheme_id_),
+        0,
+        4,
+        1,
+        3,
+        2,
+        6,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayerSkillComp)},
-        {9, sizeof(::PlayerSkillListComp)},
+        {9, sizeof(::SkillLoadoutScheme)},
+        {22, sizeof(::PlayerSkillListComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::PlayerSkillComp_globals_,
+        &::SkillLoadoutScheme_globals_,
         &::PlayerSkillListComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n.proto/common/component/player_skill_co"
     "mp.proto\"C\n\017PlayerSkillComp\022\n\n\002id\030\001 \001(\004\022"
-    "\026\n\016skill_table_id\030\002 \001(\r\022\014\n\004rank\030\003 \001(\r\";\n"
-    "\023PlayerSkillListComp\022$\n\nskill_list\030\001 \003(\013"
-    "2\020.PlayerSkillCompB\022Z\020common/componentb\006"
-    "proto3"
+    "\026\n\016skill_table_id\030\002 \001(\r\022\014\n\004rank\030\003 \001(\r\"\212\001"
+    "\n\022SkillLoadoutScheme\022\021\n\tscheme_id\030\001 \001(\r\022"
+    "\020\n\010role_tag\030\002 \001(\r\022\031\n\021passive_skill_ids\030\003"
+    " \003(\r\022\031\n\021pursuit_skill_ids\030\004 \003(\r\022\031\n\021openi"
+    "ng_skill_ids\030\005 \003(\r\"\216\002\n\023PlayerSkillListCo"
+    "mp\022$\n\nskill_list\030\001 \003(\0132\020.PlayerSkillComp"
+    "\022 \n\030active_loadout_scheme_id\030\002 \001(\r\022,\n\017lo"
+    "adout_schemes\030\003 \003(\0132\023.SkillLoadoutScheme"
+    "\022\035\n\025loadout_state_version\030\004 \001(\004\022\037\n\027loado"
+    "ut_last_request_id\030\005 \001(\t\022!\n\031loadout_last"
+    "_base_version\030\006 \001(\004\022\036\n\026loadout_last_sche"
+    "me_id\030\007 \001(\rB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto = {
     false,
     false,
-    206,
+    559,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
     "proto/common/component/player_skill_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto_once,
     nullptr,
     0,
-    2,
+    3,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto::offsets,
@@ -653,6 +934,373 @@ void PlayerSkillComp::InternalSwap(PlayerSkillComp* PROTOBUF_RESTRICT PROTOBUF_N
 }
 // ===================================================================
 
+SkillLoadoutScheme::SkillLoadoutScheme(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SkillLoadoutScheme_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SkillLoadoutScheme)
+}
+PROTOBUF_NDEBUG_INLINE SkillLoadoutScheme::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SkillLoadoutScheme& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        passive_skill_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SkillLoadoutScheme,
+              PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.passive_skill_ids_)>()
+          , from.passive_skill_ids_
+        }
+        ,
+        _passive_skill_ids_cached_byte_size_{0},
+        pursuit_skill_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SkillLoadoutScheme,
+              PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.pursuit_skill_ids_)>()
+          , from.pursuit_skill_ids_
+        }
+        ,
+        _pursuit_skill_ids_cached_byte_size_{0},
+        opening_skill_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SkillLoadoutScheme,
+              PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.opening_skill_ids_)>()
+          , from.opening_skill_ids_
+        }
+        ,
+        _opening_skill_ids_cached_byte_size_{0} {}
+
+SkillLoadoutScheme::SkillLoadoutScheme(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SkillLoadoutScheme& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SkillLoadoutScheme_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SkillLoadoutScheme* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scheme_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, scheme_id_),
+           offsetof(Impl_, role_tag_) -
+               offsetof(Impl_, scheme_id_) +
+               sizeof(Impl_::role_tag_));
+
+  // @@protoc_insertion_point(copy_constructor:SkillLoadoutScheme)
+}
+PROTOBUF_NDEBUG_INLINE SkillLoadoutScheme::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        passive_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.passive_skill_ids_)>()
+         }
+        ,
+        _passive_skill_ids_cached_byte_size_{0},
+        pursuit_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.pursuit_skill_ids_)>()
+         }
+        ,
+        _pursuit_skill_ids_cached_byte_size_{0},
+        opening_skill_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SkillLoadoutScheme,
+            PROTOBUF_FIELD_OFFSET(::SkillLoadoutScheme, _impl_.opening_skill_ids_)>()
+         }
+        ,
+        _opening_skill_ids_cached_byte_size_{0} {}
+
+inline void SkillLoadoutScheme::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scheme_id_),
+           0,
+           offsetof(Impl_, role_tag_) -
+               offsetof(Impl_, scheme_id_) +
+               sizeof(Impl_::role_tag_));
+}
+SkillLoadoutScheme::~SkillLoadoutScheme() {
+  // @@protoc_insertion_point(destructor:SkillLoadoutScheme)
+  SharedDtor(*this);
+}
+inline void SkillLoadoutScheme::SharedDtor(MessageLite& self) {
+  SkillLoadoutScheme& this_ = static_cast<SkillLoadoutScheme&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SkillLoadoutScheme_class_data_ =
+        SkillLoadoutScheme::InternalGenerateClassData_(SkillLoadoutScheme_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SkillLoadoutScheme::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SkillLoadoutScheme_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SkillLoadoutScheme_class_data_.tc_table);
+  return SkillLoadoutScheme_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SkillLoadoutScheme::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SkillLoadoutScheme_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SkillLoadoutScheme_globals_));
+  return SkillLoadoutScheme_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SkillLoadoutScheme::ParseTableT_
+    SkillLoadoutScheme::_table_ =
+        SkillLoadoutScheme::InternalGenerateParseTable_(SkillLoadoutScheme_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SkillLoadoutScheme::Clear() {
+// @@protoc_insertion_point(message_clear_start:SkillLoadoutScheme)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.passive_skill_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.pursuit_skill_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.opening_skill_ids_.Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+    ::memset(&_impl_.scheme_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.role_tag_) -
+        reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.role_tag_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SkillLoadoutScheme::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SkillLoadoutScheme& this_ = static_cast<const SkillLoadoutScheme&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SkillLoadoutScheme::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SkillLoadoutScheme& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SkillLoadoutScheme)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 scheme_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_scheme_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_scheme_id(), target);
+    }
+  }
+
+  // uint32 role_tag = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_role_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_role_tag(), target);
+    }
+  }
+
+  // repeated uint32 passive_skill_ids = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._passive_skill_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            3, this_._internal_passive_skill_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint32 pursuit_skill_ids = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._pursuit_skill_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            4, this_._internal_pursuit_skill_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // repeated uint32 opening_skill_ids = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    {
+      int byte_size = this_._impl_._opening_skill_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            5, this_._internal_opening_skill_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SkillLoadoutScheme)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SkillLoadoutScheme::ByteSizeLong(const MessageLite& base) {
+  const SkillLoadoutScheme& this_ = static_cast<const SkillLoadoutScheme&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SkillLoadoutScheme::ByteSizeLong() const {
+  const SkillLoadoutScheme& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SkillLoadoutScheme)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated uint32 passive_skill_ids = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_passive_skill_ids(), 1,
+              this_._impl_._passive_skill_ids_cached_byte_size_);
+    }
+    // repeated uint32 pursuit_skill_ids = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_pursuit_skill_ids(), 1,
+              this_._impl_._pursuit_skill_ids_cached_byte_size_);
+    }
+    // repeated uint32 opening_skill_ids = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_opening_skill_ids(), 1,
+              this_._impl_._opening_skill_ids_cached_byte_size_);
+    }
+    // uint32 scheme_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_scheme_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scheme_id());
+      }
+    }
+    // uint32 role_tag = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_role_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_role_tag());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SkillLoadoutScheme::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SkillLoadoutScheme*>(&to_msg);
+  auto& from = static_cast<const SkillLoadoutScheme&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SkillLoadoutScheme)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_passive_skill_ids()->MergeFrom(from._internal_passive_skill_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_pursuit_skill_ids()->MergeFrom(from._internal_pursuit_skill_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_internal_mutable_opening_skill_ids()->MergeFrom(from._internal_opening_skill_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_scheme_id() != 0) {
+        _this->_impl_.scheme_id_ = from._impl_.scheme_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_role_tag() != 0) {
+        _this->_impl_.role_tag_ = from._impl_.role_tag_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SkillLoadoutScheme::CopyFrom(const SkillLoadoutScheme& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SkillLoadoutScheme)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SkillLoadoutScheme::InternalSwap(SkillLoadoutScheme* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.passive_skill_ids_.InternalSwap(&other->_impl_.passive_skill_ids_);
+  _impl_.pursuit_skill_ids_.InternalSwap(&other->_impl_.pursuit_skill_ids_);
+  _impl_.opening_skill_ids_.InternalSwap(&other->_impl_.opening_skill_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.role_tag_)
+      + sizeof(SkillLoadoutScheme::_impl_.role_tag_)
+      - PROTOBUF_FIELD_OFFSET(SkillLoadoutScheme, _impl_.scheme_id_)>(
+          reinterpret_cast<char*>(&_impl_.scheme_id_),
+          reinterpret_cast<char*>(&other->_impl_.scheme_id_));
+}
+
+::google::protobuf::Metadata SkillLoadoutScheme::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 PlayerSkillListComp::PlayerSkillListComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, PlayerSkillListComp_get_class_data()) {
@@ -674,7 +1322,15 @@ PROTOBUF_NDEBUG_INLINE PlayerSkillListComp::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.skill_list_)>()
           , from.skill_list_
         }
-     {}
+        ,
+        loadout_schemes_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayerSkillListComp,
+              PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_schemes_)>()
+          , from.loadout_schemes_
+        }
+        ,
+        loadout_last_request_id_(arena, from.loadout_last_request_id_) {}
 
 PlayerSkillListComp::PlayerSkillListComp(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -690,6 +1346,13 @@ PlayerSkillListComp::PlayerSkillListComp(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, loadout_state_version_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, loadout_state_version_),
+           offsetof(Impl_, loadout_last_base_version_) -
+               offsetof(Impl_, loadout_state_version_) +
+               sizeof(Impl_::loadout_last_base_version_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerSkillListComp)
 }
@@ -701,10 +1364,22 @@ PROTOBUF_NDEBUG_INLINE PlayerSkillListComp::Impl_::Impl_(
             ::PlayerSkillListComp,
             PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.skill_list_)>()
          }
-     {}
+        ,
+        loadout_schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerSkillListComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerSkillListComp, _impl_.loadout_schemes_)>()
+         }
+        ,
+        loadout_last_request_id_(arena) {}
 
 inline void PlayerSkillListComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, loadout_state_version_),
+           0,
+           offsetof(Impl_, loadout_last_base_version_) -
+               offsetof(Impl_, loadout_state_version_) +
+               sizeof(Impl_::loadout_last_base_version_));
 }
 PlayerSkillListComp::~PlayerSkillListComp() {
   // @@protoc_insertion_point(destructor:PlayerSkillListComp)
@@ -717,6 +1392,7 @@ inline void PlayerSkillListComp::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.loadout_last_request_id_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -754,8 +1430,21 @@ PROTOBUF_NOINLINE void PlayerSkillListComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.skill_list_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.skill_list_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.loadout_schemes_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.loadout_last_request_id_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+    ::memset(&_impl_.loadout_state_version_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.loadout_last_base_version_) -
+        reinterpret_cast<char*>(&_impl_.loadout_state_version_)) + sizeof(_impl_.loadout_last_base_version_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -793,6 +1482,65 @@ PROTOBUF_NOINLINE void PlayerSkillListComp::Clear() {
     }
   }
 
+  // uint32 active_loadout_scheme_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_active_loadout_scheme_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_active_loadout_scheme_id(), target);
+    }
+  }
+
+  // repeated .SkillLoadoutScheme loadout_schemes = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_loadout_schemes_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_loadout_schemes().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              3, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 loadout_state_version = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_loadout_state_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_loadout_state_version(), target);
+    }
+  }
+
+  // string loadout_last_request_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_loadout_last_request_id().empty()) {
+      const ::std::string& _s = this_._internal_loadout_last_request_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerSkillListComp.loadout_last_request_id");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // uint64 loadout_last_base_version = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_loadout_last_base_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_loadout_last_base_version(), target);
+    }
+  }
+
+  // uint32 loadout_last_scheme_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_loadout_last_scheme_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_loadout_last_scheme_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -817,13 +1565,55 @@ PROTOBUF_NOINLINE void PlayerSkillListComp::Clear() {
   (void)cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-   {
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // repeated .PlayerSkillComp skill_list = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_skill_list_size();
       for (const auto& msg : this_._internal_skill_list()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .SkillLoadoutScheme loadout_schemes = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_loadout_schemes_size();
+      for (const auto& msg : this_._internal_loadout_schemes()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string loadout_last_request_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_loadout_last_request_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_loadout_last_request_id());
+      }
+    }
+    // uint64 loadout_state_version = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_loadout_state_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_loadout_state_version());
+      }
+    }
+    // uint32 active_loadout_scheme_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_active_loadout_scheme_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_loadout_scheme_id());
+      }
+    }
+    // uint32 loadout_last_scheme_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_loadout_last_scheme_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_loadout_last_scheme_id());
+      }
+    }
+    // uint64 loadout_last_base_version = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_loadout_last_base_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_loadout_last_base_version());
       }
     }
   }
@@ -845,10 +1635,46 @@ void PlayerSkillListComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _this->_internal_mutable_skill_list()->InternalMergeFromWithArena(
-        ::google::protobuf::MessageLite::internal_visibility(), arena,
-        from._internal_skill_list());
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_skill_list()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_skill_list());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_loadout_schemes()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_loadout_schemes());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_loadout_last_request_id().empty()) {
+        _this->_internal_set_loadout_last_request_id(from._internal_loadout_last_request_id());
+      } else {
+        if (_this->_impl_.loadout_last_request_id_.IsDefault()) {
+          _this->_internal_set_loadout_last_request_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_loadout_state_version() != 0) {
+        _this->_impl_.loadout_state_version_ = from._impl_.loadout_state_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_active_loadout_scheme_id() != 0) {
+        _this->_impl_.active_loadout_scheme_id_ = from._impl_.active_loadout_scheme_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_loadout_last_scheme_id() != 0) {
+        _this->_impl_.loadout_last_scheme_id_ = from._impl_.loadout_last_scheme_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_loadout_last_base_version() != 0) {
+        _this->_impl_.loadout_last_base_version_ = from._impl_.loadout_last_base_version_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -865,9 +1691,19 @@ void PlayerSkillListComp::CopyFrom(const PlayerSkillListComp& from) {
 
 void PlayerSkillListComp::InternalSwap(PlayerSkillListComp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.skill_list_.InternalSwap(&other->_impl_.skill_list_);
+  _impl_.loadout_schemes_.InternalSwap(&other->_impl_.loadout_schemes_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.loadout_last_request_id_, &other->_impl_.loadout_last_request_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_last_base_version_)
+      + sizeof(PlayerSkillListComp::_impl_.loadout_last_base_version_)
+      - PROTOBUF_FIELD_OFFSET(PlayerSkillListComp, _impl_.loadout_state_version_)>(
+          reinterpret_cast<char*>(&_impl_.loadout_state_version_),
+          reinterpret_cast<char*>(&other->_impl_.loadout_state_version_));
 }
 
 ::google::protobuf::Metadata PlayerSkillListComp::GetMetadata() const {

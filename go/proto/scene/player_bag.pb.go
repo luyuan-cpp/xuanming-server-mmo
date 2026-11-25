@@ -27,11 +27,13 @@ const (
 type EquipmentCraftChoice_Operation int32
 
 const (
-	EquipmentCraftChoice_UNSPECIFIED   EquipmentCraftChoice_Operation = 0
-	EquipmentCraftChoice_CREATE_ITEM   EquipmentCraftChoice_Operation = 1
-	EquipmentCraftChoice_INSTALL_AFFIX EquipmentCraftChoice_Operation = 2
-	EquipmentCraftChoice_REFORGE_AFFIX EquipmentCraftChoice_Operation = 3 // 同槽重铸换词条（1重铸砂+20银两，100%无损保留当前品相与保底进度）。
-	EquipmentCraftChoice_POLISH_AFFIX  EquipmentCraftChoice_Operation = 4 // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
+	EquipmentCraftChoice_UNSPECIFIED        EquipmentCraftChoice_Operation = 0
+	EquipmentCraftChoice_CREATE_ITEM        EquipmentCraftChoice_Operation = 1
+	EquipmentCraftChoice_INSTALL_AFFIX      EquipmentCraftChoice_Operation = 2
+	EquipmentCraftChoice_REFORGE_AFFIX      EquipmentCraftChoice_Operation = 3 // 同槽重铸换词条（1重铸砂+20银两，100%无损保留当前品相与保底进度）。
+	EquipmentCraftChoice_POLISH_AFFIX       EquipmentCraftChoice_Operation = 4 // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
+	EquipmentCraftChoice_UNSEAL_TO_TRADABLE EquipmentCraftChoice_Operation = 5 // 解封剥离符(3409)：清空绑定装备全部绑定养成（强化/保底/词条/署名），仅恢复纯可交易原胚，不洗白B材料。
+	EquipmentCraftChoice_INHERIT_ENHANCE    EquipmentCraftChoice_Operation = 6 // 流派副套继承符(3410)：将同部位同等级段源装备的强化等级与保底无损继承给目标副套装备（目标转为仅自用绑定）。
 )
 
 // Enum value maps for EquipmentCraftChoice_Operation.
@@ -42,13 +44,17 @@ var (
 		2: "INSTALL_AFFIX",
 		3: "REFORGE_AFFIX",
 		4: "POLISH_AFFIX",
+		5: "UNSEAL_TO_TRADABLE",
+		6: "INHERIT_ENHANCE",
 	}
 	EquipmentCraftChoice_Operation_value = map[string]int32{
-		"UNSPECIFIED":   0,
-		"CREATE_ITEM":   1,
-		"INSTALL_AFFIX": 2,
-		"REFORGE_AFFIX": 3,
-		"POLISH_AFFIX":  4,
+		"UNSPECIFIED":        0,
+		"CREATE_ITEM":        1,
+		"INSTALL_AFFIX":      2,
+		"REFORGE_AFFIX":      3,
+		"POLISH_AFFIX":       4,
+		"UNSEAL_TO_TRADABLE": 5,
+		"INHERIT_ENHANCE":    6,
 	}
 )
 
@@ -448,21 +454,23 @@ func (x *EquipGemSocketInfo) GetName() string {
 
 // 下一次强化的预览(客户端零配表)。金币 / 材料成败都扣。
 type EquipEnhancePreview struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	NextLevel          uint32                 `protobuf:"varint,1,opt,name=next_level,json=nextLevel,proto3" json:"next_level,omitempty"`       // 强化成功后的等级(= 当前等级 + 1)
-	SuccessRate        uint32                 `protobuf:"varint,2,opt,name=success_rate,json=successRate,proto3" json:"success_rate,omitempty"` // 万分比
-	CostGold           uint64                 `protobuf:"varint,3,opt,name=cost_gold,json=costGold,proto3" json:"cost_gold,omitempty"`
-	MaterialConfigId   uint32                 `protobuf:"varint,4,opt,name=material_config_id,json=materialConfigId,proto3" json:"material_config_id,omitempty"` // 0 = 不要材料
-	MaterialName       string                 `protobuf:"bytes,5,opt,name=material_name,json=materialName,proto3" json:"material_name,omitempty"`                // 材料的 Item 行查不到时为空
-	MaterialCount      uint32                 `protobuf:"varint,6,opt,name=material_count,json=materialCount,proto3" json:"material_count,omitempty"`
-	BonusPermyriad     uint32                 `protobuf:"varint,7,opt,name=bonus_permyriad,json=bonusPermyriad,proto3" json:"bonus_permyriad,omitempty"` // 升到 next_level 后基础属性的总加成(万分比)
-	FailLevelLoss      uint32                 `protobuf:"varint,8,opt,name=fail_level_loss,json=failLevelLoss,proto3" json:"fail_level_loss,omitempty"`  // 失败时掉几级,0 = 不掉
-	MaterialIconKey    string                 `protobuf:"bytes,9,opt,name=material_icon_key,json=materialIconKey,proto3" json:"material_icon_key,omitempty"`
-	PityLimit          uint32                 `protobuf:"varint,10,opt,name=pity_limit,json=pityLimit,proto3" json:"pity_limit,omitempty"`                              // 保底必成上限次数（0 = 无保底；>0 时满 pity_limit 次必成，客户端须精确公示）
-	CurrentPityCount   uint32                 `protobuf:"varint,11,opt,name=current_pity_count,json=currentPityCount,proto3" json:"current_pity_count,omitempty"`       // 当前已累计失败次数（0..pity_limit-1）
-	PityGuaranteedNext bool                   `protobuf:"varint,12,opt,name=pity_guaranteed_next,json=pityGuaranteedNext,proto3" json:"pity_guaranteed_next,omitempty"` // true = 本次点击已达保底（100% 必成）
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	NextLevel                 uint32                 `protobuf:"varint,1,opt,name=next_level,json=nextLevel,proto3" json:"next_level,omitempty"`       // 强化成功后的等级(= 当前等级 + 1)
+	SuccessRate               uint32                 `protobuf:"varint,2,opt,name=success_rate,json=successRate,proto3" json:"success_rate,omitempty"` // 万分比
+	CostGold                  uint64                 `protobuf:"varint,3,opt,name=cost_gold,json=costGold,proto3" json:"cost_gold,omitempty"`
+	MaterialConfigId          uint32                 `protobuf:"varint,4,opt,name=material_config_id,json=materialConfigId,proto3" json:"material_config_id,omitempty"` // 0 = 不要材料
+	MaterialName              string                 `protobuf:"bytes,5,opt,name=material_name,json=materialName,proto3" json:"material_name,omitempty"`                // 材料的 Item 行查不到时为空
+	MaterialCount             uint32                 `protobuf:"varint,6,opt,name=material_count,json=materialCount,proto3" json:"material_count,omitempty"`
+	BonusPermyriad            uint32                 `protobuf:"varint,7,opt,name=bonus_permyriad,json=bonusPermyriad,proto3" json:"bonus_permyriad,omitempty"` // 升到 next_level 后基础属性的总加成(万分比)
+	FailLevelLoss             uint32                 `protobuf:"varint,8,opt,name=fail_level_loss,json=failLevelLoss,proto3" json:"fail_level_loss,omitempty"`  // 失败时掉几级,0 = 不掉
+	MaterialIconKey           string                 `protobuf:"bytes,9,opt,name=material_icon_key,json=materialIconKey,proto3" json:"material_icon_key,omitempty"`
+	PityLimit                 uint32                 `protobuf:"varint,10,opt,name=pity_limit,json=pityLimit,proto3" json:"pity_limit,omitempty"`                                                   // 保底必成上限次数（0 = 无保底；>0 时满 pity_limit 次必成，客户端须精确公示）
+	CurrentPityCount          uint32                 `protobuf:"varint,11,opt,name=current_pity_count,json=currentPityCount,proto3" json:"current_pity_count,omitempty"`                            // 当前已累计失败次数（0..pity_limit-1）
+	PityGuaranteedNext        bool                   `protobuf:"varint,12,opt,name=pity_guaranteed_next,json=pityGuaranteedNext,proto3" json:"pity_guaranteed_next,omitempty"`                      // true = 本次点击已达保底（100% 必成）
+	WillBindOnEnhance         bool                   `protobuf:"varint,13,opt,name=will_bind_on_enhance,json=willBindOnEnhance,proto3" json:"will_bind_on_enhance,omitempty"`                       // true = 当前装备可交易但可交易强化石不足，需长按确认混用绑定石（强化后装备转为绑定）
+	TradableMaterialAvailable uint64                 `protobuf:"varint,14,opt,name=tradable_material_available,json=tradableMaterialAvailable,proto3" json:"tradable_material_available,omitempty"` // 当前背包中可用的可交易强化石数量（不含战斗预留）
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *EquipEnhancePreview) Reset() {
@@ -577,6 +585,20 @@ func (x *EquipEnhancePreview) GetPityGuaranteedNext() bool {
 		return x.PityGuaranteedNext
 	}
 	return false
+}
+
+func (x *EquipEnhancePreview) GetWillBindOnEnhance() bool {
+	if x != nil {
+		return x.WillBindOnEnhance
+	}
+	return false
+}
+
+func (x *EquipEnhancePreview) GetTradableMaterialAvailable() uint64 {
+	if x != nil {
+		return x.TradableMaterialAvailable
+	}
+	return 0
 }
 
 // 实例与布局分离；显示信息不写入玩家持久化记录。
@@ -1655,8 +1677,10 @@ type EnhanceEquipRequest struct {
 	// 乐观比较当前保底累计次数（+11 等概率保底行使用）：客户端显式携带时须与服务器一致，否则拒回 kEquipEnhanceLevelChanged，
 	// 配合 client_request_id 杜绝概率失败不改等级场景下的弱网重复扣料。
 	ExpectedPityCount *uint32 `protobuf:"varint,4,opt,name=expected_pity_count,json=expectedPityCount,proto3,oneof" json:"expected_pity_count,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 防染毒确认：可交易装备强化默认仅消耗可交易强化石；可交易石不足时须玩家长按 2 秒确认并传 true 才允许混用绑定石并转为绑定。
+	AllowBoundMaterials bool `protobuf:"varint,5,opt,name=allow_bound_materials,json=allowBoundMaterials,proto3" json:"allow_bound_materials,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *EnhanceEquipRequest) Reset() {
@@ -1715,6 +1739,13 @@ func (x *EnhanceEquipRequest) GetExpectedPityCount() uint32 {
 		return *x.ExpectedPityCount
 	}
 	return 0
+}
+
+func (x *EnhanceEquipRequest) GetAllowBoundMaterials() bool {
+	if x != nil {
+		return x.AllowBoundMaterials
+	}
+	return false
 }
 
 type EnhanceEquipResponse struct {
@@ -2739,13 +2770,14 @@ type EquipmentCraftChoice struct {
 	state                   protoimpl.MessageState         `protogen:"open.v1"`
 	Operation               EquipmentCraftChoice_Operation `protobuf:"varint,1,opt,name=operation,proto3,enum=EquipmentCraftChoice_Operation" json:"operation,omitempty"`
 	ConfigId                uint32                         `protobuf:"varint,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"` // CREATE_ITEM使用；其余操作必须为0。
-	ItemId                  uint64                         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`       // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX使用；CREATE_ITEM必须为0。
+	ItemId                  uint64                         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`       // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE目标使用；CREATE_ITEM必须为0。
 	AffixSlot               uint32                         `protobuf:"varint,4,opt,name=affix_slot,json=affixSlot,proto3" json:"affix_slot,omitempty"`
-	AffixId                 uint32                         `protobuf:"varint,5,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`                                                           // INSTALL_AFFIX / REFORGE_AFFIX使用；POLISH_AFFIX为0。
+	AffixId                 uint32                         `protobuf:"varint,5,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`                                                           // INSTALL_AFFIX / REFORGE_AFFIX使用；其余为0。
 	UseGuaranteeCharm       bool                           `protobuf:"varint,6,opt,name=use_guarantee_charm,json=useGuaranteeCharm,proto3" json:"use_guarantee_charm,omitempty"`                           // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。
 	AllowBoundMaterials     bool                           `protobuf:"varint,7,opt,name=allow_bound_materials,json=allowBoundMaterials,proto3" json:"allow_bound_materials,omitempty"`                     // 防染毒确认：可交易装备默认仅耗可交易材料，需玩家二次确认后传true才可混扣绑定材料。
 	ProxyMasterPlayerId     uint64                         `protobuf:"varint,8,opt,name=proxy_master_player_id,json=proxyMasterPlayerId,proto3" json:"proxy_master_player_id,omitempty"`                   // 主城宗师原子代打摊位摊主ID（0=本人打造）。
 	ExpectedPolishPityCount *uint32                        `protobuf:"varint,9,opt,name=expected_polish_pity_count,json=expectedPolishPityCount,proto3,oneof" json:"expected_polish_pity_count,omitempty"` // POLISH_AFFIX可选乐观保底计数校验，配合client_request_id防重放。
+	SourceItemId            uint64                         `protobuf:"varint,10,opt,name=source_item_id,json=sourceItemId,proto3" json:"source_item_id,omitempty"`                                         // INHERIT_ENHANCE源装备实例ID（须与item_id同部位同等级段且强化等级更高）。
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -2839,6 +2871,13 @@ func (x *EquipmentCraftChoice) GetProxyMasterPlayerId() uint64 {
 func (x *EquipmentCraftChoice) GetExpectedPolishPityCount() uint32 {
 	if x != nil && x.ExpectedPolishPityCount != nil {
 		return *x.ExpectedPolishPityCount
+	}
+	return 0
+}
+
+func (x *EquipmentCraftChoice) GetSourceItemId() uint64 {
+	if x != nil {
+		return x.SourceItemId
 	}
 	return 0
 }
@@ -4075,7 +4114,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\fgem_icon_key\x18\x05 \x01(\tR\n" +
 	"gemIconKey\x12&\n" +
 	"\x04attr\x18\x06 \x01(\v2\x12.EquipAttrLineInfoR\x04attr\x12\x12\n" +
-	"\x04name\x18\a \x01(\tR\x04name\"\xea\x03\n" +
+	"\x04name\x18\a \x01(\tR\x04name\"\xdb\x04\n" +
 	"\x13EquipEnhancePreview\x12\x1d\n" +
 	"\n" +
 	"next_level\x18\x01 \x01(\rR\tnextLevel\x12!\n" +
@@ -4091,7 +4130,9 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"pity_limit\x18\n" +
 	" \x01(\rR\tpityLimit\x12,\n" +
 	"\x12current_pity_count\x18\v \x01(\rR\x10currentPityCount\x120\n" +
-	"\x14pity_guaranteed_next\x18\f \x01(\bR\x12pityGuaranteedNext\"\xa3\b\n" +
+	"\x14pity_guaranteed_next\x18\f \x01(\bR\x12pityGuaranteedNext\x12/\n" +
+	"\x14will_bind_on_enhance\x18\r \x01(\bR\x11willBindOnEnhance\x12>\n" +
+	"\x1btradable_material_available\x18\x0e \x01(\x04R\x19tradableMaterialAvailable\"\xa3\b\n" +
 	"\vBagItemInfo\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x14\n" +
@@ -4178,12 +4219,13 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x05count\x18\x02 \x01(\rR\x05count\"g\n" +
 	"\x13GmGrantItemResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
-	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\"\xce\x01\n" +
+	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\"\x82\x02\n" +
 	"\x13EnhanceEquipRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12%\n" +
 	"\x0eexpected_level\x18\x02 \x01(\rR\rexpectedLevel\x12*\n" +
 	"\x11client_request_id\x18\x03 \x01(\x04R\x0fclientRequestId\x123\n" +
-	"\x13expected_pity_count\x18\x04 \x01(\rH\x00R\x11expectedPityCount\x88\x01\x01B\x16\n" +
+	"\x13expected_pity_count\x18\x04 \x01(\rH\x00R\x11expectedPityCount\x88\x01\x01\x122\n" +
+	"\x15allow_bound_materials\x18\x05 \x01(\bR\x13allowBoundMaterialsB\x16\n" +
 	"\x14_expected_pity_count\"\xc7\x02\n" +
 	"\x14EnhanceEquipResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
@@ -4268,7 +4310,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x0fper_round_limit\x18\x06 \x01(\rR\rperRoundLimit\x12!\n" +
 	"\fbattle_limit\x18\a \x01(\rR\vbattleLimit\x12#\n" +
 	"\ractive_rounds\x18\b \x01(\rR\factiveRounds\x120\n" +
-	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\"\xa6\x04\n" +
+	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\"\xfa\x04\n" +
 	"\x14EquipmentCraftChoice\x12=\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x1f.EquipmentCraftChoice.OperationR\toperation\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x17\n" +
@@ -4279,13 +4321,17 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x13use_guarantee_charm\x18\x06 \x01(\bR\x11useGuaranteeCharm\x122\n" +
 	"\x15allow_bound_materials\x18\a \x01(\bR\x13allowBoundMaterials\x123\n" +
 	"\x16proxy_master_player_id\x18\b \x01(\x04R\x13proxyMasterPlayerId\x12@\n" +
-	"\x1aexpected_polish_pity_count\x18\t \x01(\rH\x00R\x17expectedPolishPityCount\x88\x01\x01\"e\n" +
+	"\x1aexpected_polish_pity_count\x18\t \x01(\rH\x00R\x17expectedPolishPityCount\x88\x01\x01\x12$\n" +
+	"\x0esource_item_id\x18\n" +
+	" \x01(\x04R\fsourceItemId\"\x92\x01\n" +
 	"\tOperation\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCREATE_ITEM\x10\x01\x12\x11\n" +
 	"\rINSTALL_AFFIX\x10\x02\x12\x11\n" +
 	"\rREFORGE_AFFIX\x10\x03\x12\x10\n" +
-	"\fPOLISH_AFFIX\x10\x04B\x1d\n" +
+	"\fPOLISH_AFFIX\x10\x04\x12\x16\n" +
+	"\x12UNSEAL_TO_TRADABLE\x10\x05\x12\x13\n" +
+	"\x0fINHERIT_ENHANCE\x10\x06B\x1d\n" +
 	"\x1b_expected_polish_pity_count\"\xae\x01\n" +
 	"\x16EquipmentCraftMaterial\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x12\n" +

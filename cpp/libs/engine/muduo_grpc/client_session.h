@@ -134,8 +134,8 @@ public:
     // 连接已死:把所有未结束的流以 status 结束,逐个 OnStreamClosed。HEADERS 没交给 socket 的标为 unprocessed。
     void FailAllStreams(const Status &status);
 
-    size_t ActiveStreamCount() const { return streams_.size(); }
-    bool goawayReceived() const { return goawayReceived_; }
+    size_t ActiveStreamCount() const { return streams.size(); }
+    bool GoawayReceived() const { return goawayReceived; }
 
 private:
     struct StreamState
@@ -202,12 +202,12 @@ private:
         void operator()(nghttp2_session *session) const;
     };
 
-    ClientSessionOptions options_;
-    Observer &observer_;
-    std::unique_ptr<nghttp2_session, SessionDeleter> session_;
-    std::unordered_map<int32_t, std::unique_ptr<StreamState>> streams_;
-    bool readySignaled_{false};
-    bool goawayReceived_{false};
+    ClientSessionOptions options;
+    Observer &observer;
+    std::unique_ptr<nghttp2_session, SessionDeleter> session;
+    std::unordered_map<int32_t, std::unique_ptr<StreamState>> streams;
+    bool readySignaled{false};
+    bool goawayReceived{false};
 };
 
 } // namespace muduo_grpc

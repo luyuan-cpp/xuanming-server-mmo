@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildWarMilestoneTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildWarMilestoneTable {
+	uint32 id = 1;
+	uint64 required_guild_merit = 2;
+	uint32 reward_item1_id = 3;
+	uint32 reward_item1_count = 4;
+	uint32 reward_item2_id = 5;
+	uint32 reward_item2_count = 6;
+	uint64 reward_silver = 7;
+	uint64 reward_contribution = 8;
+	string reward_preview = 9;
+}
+
+message GuildWarMilestoneTableData {
+	repeated GuildWarMilestoneTable data = 1;
+}

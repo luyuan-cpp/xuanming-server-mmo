@@ -9,17 +9,17 @@ public:
 
 	[[nodiscard]] ::BaseDeployConfig& GetBaseDeployConfig()
 	{
-		return baseDeployConfig_;
+		return baseDeployConfig;
 	}
 
 	[[nodiscard]] ::GameConfig& GetGameConfig()
 	{
-		return gameConfig_;
+		return gameConfig;
 	}
 
 private:
-	::BaseDeployConfig baseDeployConfig_;
-	::GameConfig gameConfig_;
+	::BaseDeployConfig baseDeployConfig;
+	::GameConfig gameConfig;
 };
 
 extern thread_local NodeConfigManager tlsNodeConfigManager;

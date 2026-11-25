@@ -56,29 +56,29 @@ namespace
 		// 让指定端点的前 n 次调用返回传输失败,模拟 sidecar 还没起来。
 		void FailFirst(const std::string& endpoint, int times)
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			failFirst_[endpoint] = times;
+			std::lock_guard<std::mutex> lock(mutex);
+			failFirst[endpoint] = times;
 		}
 
 		// 让指定端点永远失败。
 		void FailAlways(const std::string& endpoint)
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			failAlways_.insert(endpoint);
+			std::lock_guard<std::mutex> lock(mutex);
+			failAlways.insert(endpoint);
 		}
 
 		int CallCount(const std::string& endpoint) const
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			const auto it = calls_.find(endpoint);
-			return it == calls_.end() ? 0 : it->second;
+			std::lock_guard<std::mutex> lock(mutex);
+			const auto it = calls.find(endpoint);
+			return it == calls.end() ? 0 : it->second;
 		}
 
 		int TotalCalls() const
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
+			std::lock_guard<std::mutex> lock(mutex);
 			int total = 0;
-			for (const auto& entry : calls_)
+			for (const auto& entry : calls)
 			{
 				total += entry.second;
 			}
@@ -87,57 +87,57 @@ namespace
 
 		bool SawNonZeroTimeouts() const
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			return sawConnectTimeout_ && sawTotalTimeout_;
+			std::lock_guard<std::mutex> lock(mutex);
+			return sawConnectTimeout && sawTotalTimeout;
 		}
 
 		// 所有请求里见过的总超时的最大 / 最小值(毫秒);还没有请求时都是 -1。
 		std::chrono::milliseconds::rep MaxTotalTimeoutMs() const
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			return maxTotalTimeoutMs_;
+			std::lock_guard<std::mutex> lock(mutex);
+			return maxTotalTimeoutMs;
 		}
 
 		std::chrono::milliseconds::rep MinTotalTimeoutMs() const
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			return minTotalTimeoutMs_;
+			std::lock_guard<std::mutex> lock(mutex);
+			return minTotalTimeoutMs;
 		}
 
 		// 指定端点成功时的响应体(默认 "{}")。用于脚本化 GET /gameserver。
 		void SetBody(const std::string& endpoint, std::string body)
 		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			bodies_[endpoint] = std::move(body);
+			std::lock_guard<std::mutex> lock(mutex);
+			bodies[endpoint] = std::move(body);
 		}
 
 		agones::HttpResponse Record(const std::string& url, const agones::HttpTimeouts& timeouts)
 		{
 			const std::string endpoint = EndpointOf(url);
 
-			std::lock_guard<std::mutex> lock(mutex_);
-			++calls_[endpoint];
-			sawConnectTimeout_ = sawConnectTimeout_ || timeouts.connect.count() > 0;
-			sawTotalTimeout_ = sawTotalTimeout_ || timeouts.total.count() > 0;
+			std::lock_guard<std::mutex> lock(mutex);
+			++calls[endpoint];
+			sawConnectTimeout = sawConnectTimeout || timeouts.connect.count() > 0;
+			sawTotalTimeout = sawTotalTimeout || timeouts.total.count() > 0;
 			const std::chrono::milliseconds::rep totalMs = timeouts.total.count();
-			if (totalMs > maxTotalTimeoutMs_)
+			if (totalMs > maxTotalTimeoutMs)
 			{
-				maxTotalTimeoutMs_ = totalMs;
+				maxTotalTimeoutMs = totalMs;
 			}
-			if (minTotalTimeoutMs_ < 0 || totalMs < minTotalTimeoutMs_)
+			if (minTotalTimeoutMs < 0 || totalMs < minTotalTimeoutMs)
 			{
-				minTotalTimeoutMs_ = totalMs;
+				minTotalTimeoutMs = totalMs;
 			}
 
 			agones::HttpResponse response;
-			if (failAlways_.count(endpoint) > 0)
+			if (failAlways.count(endpoint) > 0)
 			{
 				response.error = "fake: endpoint always fails";
 				return response;
 			}
 
-			auto it = failFirst_.find(endpoint);
-			if (it != failFirst_.end() && it->second > 0)
+			auto it = failFirst.find(endpoint);
+			if (it != failFirst.end() && it->second > 0)
 			{
 				--it->second;
 				response.error = "fake: sidecar not up yet";
@@ -146,8 +146,8 @@ namespace
 
 			response.transportOk = true;
 			response.statusCode = 200;
-			const auto body = bodies_.find(endpoint);
-			response.body = body == bodies_.end() ? "{}" : body->second;
+			const auto body = bodies.find(endpoint);
+			response.body = body == bodies.end() ? "{}" : body->second;
 			return response;
 		}
 
@@ -158,15 +158,15 @@ namespace
 			return pos == std::string::npos ? url : url.substr(pos);
 		}
 
-		mutable std::mutex mutex_;
-		std::map<std::string, int> calls_;
-		std::map<std::string, int> failFirst_;
-		std::set<std::string> failAlways_;
-		std::map<std::string, std::string> bodies_;
-		bool sawConnectTimeout_ = false;
-		bool sawTotalTimeout_ = false;
-		std::chrono::milliseconds::rep maxTotalTimeoutMs_ = -1;
-		std::chrono::milliseconds::rep minTotalTimeoutMs_ = -1;
+		mutable std::mutex mutex;
+		std::map<std::string, int> calls;
+		std::map<std::string, int> failFirst;
+		std::set<std::string> failAlways;
+		std::map<std::string, std::string> bodies;
+		bool sawConnectTimeout = false;
+		bool sawTotalTimeout = false;
+		std::chrono::milliseconds::rep maxTotalTimeoutMs = -1;
+		std::chrono::milliseconds::rep minTotalTimeoutMs = -1;
 	};
 
 	// 被测对象独占的传输层,所有调用转给共享的 FakeSidecar。
@@ -174,7 +174,7 @@ namespace
 	{
 	public:
 		explicit FakeTransport(std::shared_ptr<FakeSidecar> sidecar)
-			: sidecar_(std::move(sidecar))
+			: sidecar(std::move(sidecar))
 		{
 		}
 
@@ -182,16 +182,16 @@ namespace
 			const std::string& body,
 			const agones::HttpTimeouts& timeouts) override
 		{
-			return sidecar_->Record(url, timeouts);
+			return sidecar->Record(url, timeouts);
 		}
 
 		agones::HttpResponse Get(const std::string& url, const agones::HttpTimeouts& timeouts) override
 		{
-			return sidecar_->Record(url, timeouts);
+			return sidecar->Record(url, timeouts);
 		}
 
 	private:
-		std::shared_ptr<FakeSidecar> sidecar_;
+		std::shared_ptr<FakeSidecar> sidecar;
 	};
 
 	// 测试用的快节奏参数:退避和心跳都压到毫秒级,避免测试跑几十秒。
@@ -470,7 +470,7 @@ TEST(AgonesLifecycleTest, CreateDuringReadyTransitionMustReallocate)
 	{
 	public:
 		explicit BlockingDrainTransport(std::shared_ptr<DrainState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -480,19 +480,19 @@ TEST(AgonesLifecycleTest, CreateDuringReadyTransitionMustReallocate)
 		{
 			if (url.find("/ready") != std::string::npos)
 			{
-				std::unique_lock<std::mutex> lock(state_->mutex);
-				++state_->readyCalls;
-				if (state_->readyCalls == 2)
+				std::unique_lock<std::mutex> lock(state->mutex);
+				++state->readyCalls;
+				if (state->readyCalls == 2)
 				{
-					state_->drainEntered = true;
-					state_->cv.notify_all();
-					state_->cv.wait(lock, [this] { return state_->releaseDrain; });
+					state->drainEntered = true;
+					state->cv.notify_all();
+					state->cv.wait(lock, [this] { return state->releaseDrain; });
 				}
 			}
 			else if (url.find("/allocate") != std::string::npos)
 			{
-				std::lock_guard<std::mutex> lock(state_->mutex);
-				++state_->allocateCalls;
+				std::lock_guard<std::mutex> lock(state->mutex);
+				++state->allocateCalls;
 			}
 
 			agones::HttpResponse response;
@@ -507,7 +507,7 @@ TEST(AgonesLifecycleTest, CreateDuringReadyTransitionMustReallocate)
 		}
 
 	private:
-		std::shared_ptr<DrainState> state_;
+		std::shared_ptr<DrainState> state;
 	};
 
 	auto state = std::make_shared<DrainState>();
@@ -624,7 +624,7 @@ TEST(AgonesLifecycleTest, HealthTicksOnWorkerAndStopsCleanly)
 	{
 	public:
 		explicit HealthCountingTransport(std::shared_ptr<std::atomic<int>> healthCalls)
-			: healthCalls_(std::move(healthCalls))
+			: healthCalls(std::move(healthCalls))
 		{
 		}
 
@@ -634,7 +634,7 @@ TEST(AgonesLifecycleTest, HealthTicksOnWorkerAndStopsCleanly)
 		{
 			if (url.find("/health") != std::string::npos)
 			{
-				++(*healthCalls_);
+				++(*healthCalls);
 			}
 
 			agones::HttpResponse response;
@@ -649,7 +649,7 @@ TEST(AgonesLifecycleTest, HealthTicksOnWorkerAndStopsCleanly)
 		}
 
 	private:
-		std::shared_ptr<std::atomic<int>> healthCalls_;
+		std::shared_ptr<std::atomic<int>> healthCalls;
 	};
 
 	auto healthCalls = std::make_shared<std::atomic<int>>(0);
@@ -1295,7 +1295,7 @@ TEST(AgonesLifecycleDrainTest, DrainStartingWhileWaitingForAllocateRefusesPermit
 	{
 	public:
 		explicit HoldableGetTransport(std::shared_ptr<HeldGetState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -1305,8 +1305,8 @@ TEST(AgonesLifecycleDrainTest, DrainStartingWhileWaitingForAllocateRefusesPermit
 		{
 			if (url.find("/allocate") != std::string::npos)
 			{
-				std::lock_guard<std::mutex> lock(state_->mutex);
-				++state_->allocateCalls;
+				std::lock_guard<std::mutex> lock(state->mutex);
+				++state->allocateCalls;
 			}
 
 			agones::HttpResponse response;
@@ -1317,23 +1317,23 @@ TEST(AgonesLifecycleDrainTest, DrainStartingWhileWaitingForAllocateRefusesPermit
 
 		agones::HttpResponse Get(const std::string&, const agones::HttpTimeouts&) override
 		{
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			if (state_->holdGets)
+			std::unique_lock<std::mutex> lock(state->mutex);
+			if (state->holdGets)
 			{
-				state_->getHeld = true;
-				state_->cv.notify_all();
-				state_->cv.wait(lock, [this] { return !state_->holdGets; });
+				state->getHeld = true;
+				state->cv.notify_all();
+				state->cv.wait(lock, [this] { return !state->holdGets; });
 			}
 
 			agones::HttpResponse response;
 			response.transportOk = true;
 			response.statusCode = 200;
-			response.body = state_->body;
+			response.body = state->body;
 			return response;
 		}
 
 	private:
-		std::shared_ptr<HeldGetState> state_;
+		std::shared_ptr<HeldGetState> state;
 	};
 
 	auto state = std::make_shared<HeldGetState>();
@@ -1501,7 +1501,7 @@ namespace
 	{
 	public:
 		explicit HoldableAllocateTransport(std::shared_ptr<HeldAllocateState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -1509,27 +1509,27 @@ namespace
 			const std::string&,
 			const agones::HttpTimeouts&) override
 		{
-			std::unique_lock<std::mutex> lock(state_->mutex);
+			std::unique_lock<std::mutex> lock(state->mutex);
 			if (url.find("/allocate") != std::string::npos)
 			{
-				++state_->allocateCalls;
-				if (state_->failAllocate > 0)
+				++state->allocateCalls;
+				if (state->failAllocate > 0)
 				{
-					--state_->failAllocate;
+					--state->failAllocate;
 					agones::HttpResponse failed;
 					failed.error = "fake: allocate rejected";
 					return failed;
 				}
-				if (state_->holdAllocate)
+				if (state->holdAllocate)
 				{
-					state_->allocateHeld = true;
-					state_->cv.notify_all();
-					state_->cv.wait(lock, [this] { return !state_->holdAllocate; });
+					state->allocateHeld = true;
+					state->cv.notify_all();
+					state->cv.wait(lock, [this] { return !state->holdAllocate; });
 				}
 			}
 			else if (url.find("/ready") != std::string::npos)
 			{
-				++state_->readyCalls;
+				++state->readyCalls;
 			}
 
 			agones::HttpResponse response;
@@ -1544,7 +1544,7 @@ namespace
 		}
 
 	private:
-		std::shared_ptr<HeldAllocateState> state_;
+		std::shared_ptr<HeldAllocateState> state;
 	};
 
 	// 等 /allocate 卡在 sidecar 里。等不到也会放行,避免断言失败后 worker 卡死、Stop() join 不回来。
@@ -1877,7 +1877,7 @@ namespace
 	{
 	public:
 		explicit HoldableDrainPollTransport(std::shared_ptr<HeldDrainPollState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -1887,8 +1887,8 @@ namespace
 		{
 			if (url.find("/allocate") != std::string::npos)
 			{
-				std::lock_guard<std::mutex> lock(state_->mutex);
-				++state_->allocateCalls;
+				std::lock_guard<std::mutex> lock(state->mutex);
+				++state->allocateCalls;
 			}
 
 			agones::HttpResponse response;
@@ -1899,23 +1899,23 @@ namespace
 
 		agones::HttpResponse Get(const std::string&, const agones::HttpTimeouts&) override
 		{
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			if (state_->holdGets)
+			std::unique_lock<std::mutex> lock(state->mutex);
+			if (state->holdGets)
 			{
-				state_->getHeld = true;
-				state_->cv.notify_all();
-				state_->cv.wait(lock, [this] { return !state_->holdGets; });
+				state->getHeld = true;
+				state->cv.notify_all();
+				state->cv.wait(lock, [this] { return !state->holdGets; });
 			}
 
 			agones::HttpResponse response;
 			response.transportOk = true;
 			response.statusCode = 200;
-			response.body = state_->body;
+			response.body = state->body;
 			return response;
 		}
 
 	private:
-		std::shared_ptr<HeldDrainPollState> state_;
+		std::shared_ptr<HeldDrainPollState> state;
 	};
 
 } // namespace
@@ -2337,7 +2337,7 @@ namespace
 	{
 	public:
 		explicit CancellableTransport(std::shared_ptr<CancellableSidecarState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -2359,17 +2359,17 @@ namespace
 			const agones::HttpTimeouts&,
 			std::stop_token cancel) override
 		{
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			CancellableCounts& counts = state_->counts;
+			std::unique_lock<std::mutex> lock(state->mutex);
+			CancellableCounts& counts = state->counts;
 			if (url.find("/shutdown") != std::string::npos)
 			{
 				++counts.shutdownCalls;
 				counts.shutdownTokenCancellable = counts.shutdownTokenCancellable || cancel.stop_possible();
-				if (state_->holdShutdown)
+				if (state->holdShutdown)
 				{
-					state_->shutdownEntered = true;
-					state_->cv.notify_all();
-					if (!state_->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state_->holdShutdown; }))
+					state->shutdownEntered = true;
+					state->cv.notify_all();
+					if (!state->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state->holdShutdown; }))
 					{
 						return Failed("fake: shutdown aborted");
 					}
@@ -2385,15 +2385,15 @@ namespace
 			if (url.find("/allocate") != std::string::npos)
 			{
 				++counts.allocateCalls;
-				if (state_->failAllocate)
+				if (state->failAllocate)
 				{
 					return Failed("fake: allocate rejected");
 				}
-				if (state_->holdAllocate)
+				if (state->holdAllocate)
 				{
-					state_->allocateEntered = true;
-					state_->cv.notify_all();
-					if (!state_->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state_->holdAllocate; }))
+					state->allocateEntered = true;
+					state->cv.notify_all();
+					if (!state->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state->holdAllocate; }))
 					{
 						if (cancel.stop_requested())
 						{
@@ -2409,10 +2409,10 @@ namespace
 
 		agones::HttpResponse Get(const std::string&, const agones::HttpTimeouts&, std::stop_token cancel) override
 		{
-			std::lock_guard<std::mutex> lock(state_->mutex);
+			std::lock_guard<std::mutex> lock(state->mutex);
 			if (!cancel.stop_possible())
 			{
-				++state_->counts.abandonableWithoutToken;
+				++state->counts.abandonableWithoutToken;
 			}
 			return Failed("fake: no gameserver");
 		}
@@ -2433,7 +2433,7 @@ namespace
 			return response;
 		}
 
-		std::shared_ptr<CancellableSidecarState> state_;
+		std::shared_ptr<CancellableSidecarState> state;
 	};
 
 	CancellableCounts Counts(CancellableSidecarState& state)
@@ -2670,7 +2670,7 @@ namespace
 	{
 	public:
 		explicit StopRaceAllocateTransport(std::shared_ptr<StopRaceState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -2698,8 +2698,8 @@ namespace
 				return Succeeded();
 			}
 			{
-				std::lock_guard<std::mutex> lock(state_->mutex);
-				if (++state_->allocateCalls > 1)
+				std::lock_guard<std::mutex> lock(this->state->mutex);
+				if (++this->state->allocateCalls > 1)
 				{
 					return Succeeded(); // 只卡第一次
 				}
@@ -2707,8 +2707,8 @@ namespace
 
 			// 在 state 锁外登记:令牌若已置位,构造函数会就地调用回调,而回调要拿 state 锁。
 			// 回调只弱持有 state,不与 state 里的 stopHook 成环。
-			state_->stopHook.emplace(cancel,
-				std::function<void()>([weak = std::weak_ptr<StopRaceState>(state_)] {
+			this->state->stopHook.emplace(cancel,
+				std::function<void()>([weak = std::weak_ptr<StopRaceState>(this->state)] {
 					const std::shared_ptr<StopRaceState> state = weak.lock();
 					if (!state)
 					{
@@ -2721,10 +2721,10 @@ namespace
 					state->cv.wait_for(lock, kFakeHoldSafetyCap, [&state] { return state->releaseStop; });
 				}));
 
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			state_->allocateEntered = true;
-			state_->cv.notify_all();
-			if (!state_->cv.wait_for(lock, kFakeHoldSafetyCap, [this] { return state_->stopObserved; }))
+			std::unique_lock<std::mutex> lock(this->state->mutex);
+			this->state->allocateEntered = true;
+			this->state->cv.notify_all();
+			if (!this->state->cv.wait_for(lock, kFakeHoldSafetyCap, [this] { return this->state->stopObserved; }))
 			{
 				agones::HttpResponse failed;
 				failed.error = "fake: hold safety cap reached";
@@ -2742,7 +2742,7 @@ namespace
 			return response;
 		}
 
-		std::shared_ptr<StopRaceState> state_;
+		std::shared_ptr<StopRaceState> state;
 	};
 
 	// 在 state 锁内等 predicate 成立,最多 3s。
@@ -2853,7 +2853,7 @@ namespace
 	{
 	public:
 		explicit ShutdownOrderTransport(std::shared_ptr<ShutdownOrderState> state)
-			: state_(std::move(state))
+			: state(std::move(state))
 		{
 		}
 
@@ -2875,14 +2875,14 @@ namespace
 			std::stop_token) override
 		{
 			const std::string endpoint = url.substr(url.find_last_of('/'));
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			state_->posts.push_back(endpoint);
-			state_->cv.notify_all();
-			if (endpoint == "/shutdown" && state_->holdShutdown)
+			std::unique_lock<std::mutex> lock(state->mutex);
+			state->posts.push_back(endpoint);
+			state->cv.notify_all();
+			if (endpoint == "/shutdown" && state->holdShutdown)
 			{
-				state_->shutdownHeld = true;
-				state_->cv.notify_all();
-				state_->cv.wait_for(lock, kFakeHoldSafetyCap, [this] { return !state_->holdShutdown; });
+				state->shutdownHeld = true;
+				state->cv.notify_all();
+				state->cv.wait_for(lock, kFakeHoldSafetyCap, [this] { return !state->holdShutdown; });
 			}
 			agones::HttpResponse response;
 			response.transportOk = true;
@@ -2892,12 +2892,12 @@ namespace
 
 		agones::HttpResponse Get(const std::string&, const agones::HttpTimeouts&, std::stop_token cancel) override
 		{
-			std::unique_lock<std::mutex> lock(state_->mutex);
-			if (state_->holdGet)
+			std::unique_lock<std::mutex> lock(state->mutex);
+			if (state->holdGet)
 			{
-				state_->getHeld = true;
-				state_->cv.notify_all();
-				state_->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state_->holdGet; });
+				state->getHeld = true;
+				state->cv.notify_all();
+				state->cv.wait_for(lock, cancel, kFakeHoldSafetyCap, [this] { return !state->holdGet; });
 			}
 			// 读失败:排空判定保持初值"未排空",与用例无关。
 			agones::HttpResponse failed;
@@ -2906,7 +2906,7 @@ namespace
 		}
 
 	private:
-		std::shared_ptr<ShutdownOrderState> state_;
+		std::shared_ptr<ShutdownOrderState> state;
 	};
 
 	// 只借排空的那次同步 GET 卡住 worker:轮询间隔远长于用例窗口,之后不再有 GET。

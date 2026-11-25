@@ -51,4 +51,34 @@ public interface PetTierTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 ascend_cost_item_id = 5;</code>
+   * @return The ascendCostItemId.
+   */
+  int getAscendCostItemId();
+
+  /**
+   * <code>uint32 ascend_cost_item_count = 6;</code>
+   * @return The ascendCostItemCount.
+   */
+  int getAscendCostItemCount();
+
+  /**
+   * <code>uint64 ascend_cost_gold = 7;</code>
+   * @return The ascendCostGold.
+   */
+  long getAscendCostGold();
+
+  /**
+   * <code>uint32 ascend_min_pet_level = 8;</code>
+   * @return The ascendMinPetLevel.
+   */
+  int getAscendMinPetLevel();
+
+  /**
+   * <code>uint32 bonus_entry_points = 9;</code>
+   * @return The bonusEntryPoints.
+   */
+  int getBonusEntryPoints();
 }

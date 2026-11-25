@@ -13,6 +13,7 @@
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_appearance.h"
+#include "player/system/player_equipment_material_reward.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_rename.h"
 #include "player/system/player_save_metrics.h" // [SaveTiming] 汇总行
@@ -138,8 +139,8 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 	{
 		LOG_FATAL << "[PlayerStore] refused to start: " << playerStoreError;
 	}
-	shutdownBegun_ = false;
-    loop_ = std::ref(*loop);
+	shutdownBegun = false;
+    this->loop = std::ref(*loop);
 
 	RedisClusterOptions playerRedisOptions;
 	std::string playerRedisError;
@@ -185,7 +186,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 
     // 协调用途的 Redis 写(继承标记清理、handoff 标记撤回、改派核实)的 1s 重试节拍。
     static constexpr double kRetryIntervalSec = 1.0;
-    retryTimerId_ = loop->runEvery(kRetryIntervalSec, []()
+    retryTimerId = loop->runEvery(kRetryIntervalSec, []()
                                    {
         // A2′ 的有上限重发与截止拒绝(单调时钟,见 exit_release_mark.h)搭这个 1s 节拍,时刻在这里取、显式传入。
         // 待入场表为空时直接返回。静态函数,不引入新的绑定。
@@ -207,8 +208,10 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 角色改名瞬时失败的退避重试(表为空时 O(1) 返回)。
         PlayerRenameSystem::Tick(TimeSystem::NowMillisecondsUTC());
         // 角色形象试用到期还原与目录外观同步退避重试(表为空时 O(1) 返回)。
-        PlayerAppearanceSystem::Tick(TimeSystem::NowSecondsUTC(), TimeSystem::NowMillisecondsUTC()); });
-    retryTimerActive_ = true;
+        PlayerAppearanceSystem::Tick(TimeSystem::NowSecondsUTC(), TimeSystem::NowMillisecondsUTC());
+        // 账号级阶段一可交易材料配额同步退避重试(表为空时 O(1) 返回)。
+        PlayerEquipmentMaterialRewardSystem::Tick(TimeSystem::NowMillisecondsUTC()); });
+    retryTimerActive = true;
 
     // 每 30 秒打一轮计数快照。
     static constexpr double kQueueSnapshotIntervalSec = 30.0;
@@ -216,7 +219,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     // lastReleaseFence:上一次打出 [ReleaseFence] 时的计数(同上,只在本定时器里读写)。
     // lastPlayerRedis / lastControlRedis:上一次打出 [PlayerRedis] / [ControlRedis] 时的计数(同上)。
     // lastSaveTiming:上一次打 [SaveTiming] 时的存盘分段耗时累计值(同上),这一行打的是两次之间的窗口值。
-    snapshotTimerId_ = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
+    snapshotTimerId = loop->runEvery(kQueueSnapshotIntervalSec, [lastEnterFence = enter_fence_stats::Snapshot{},
                                                                   lastReleaseFence = release_fence_stats::Snapshot{},
                                                                   lastPlayerRedis = RedisClusterStats{},
                                                                   lastControlRedis = RedisClusterStats{},
@@ -403,7 +406,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 不动上面几行的解析格式。
         LogRedisClusterStatsIfChanged("[PlayerRedis]", tlsPlayerRedis.stats(), lastPlayerRedis);
         LogRedisClusterStatsIfChanged("[ControlRedis]", tlsControlRedis.stats(), lastControlRedis); });
-    snapshotTimerActive_ = true;
+    snapshotTimerActive = true;
 
     // 周期存盘,限定 scene 崩溃时的丢失窗口。缺省 60 秒;
     // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 关闭。
@@ -432,7 +435,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         static constexpr double kPeriodicSaveTickSec = 1.0 / static_cast<double>(kPeriodicSaveTicksPerSecond);
         const uint64_t slotCount = static_cast<uint64_t>(periodicSaveSec) * kPeriodicSaveTicksPerSecond;
         // cycleSaved:本周期已经发起的定时存盘次数,周期最后一个槽打完汇总后清零(只在本定时器里读写)。
-        periodicSaveTimerId_ = loop->runEvery(kPeriodicSaveTickSec, [slotCount, slot = uint64_t{0},
+        periodicSaveTimerId = loop->runEvery(kPeriodicSaveTickSec, [slotCount, slot = uint64_t{0},
                                                                      cycleSaved = std::size_t{0}]() mutable
                                               {
             const uint64_t currentSlot = slot;
@@ -471,7 +474,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                 }
                 cycleSaved = 0;
             } });
-        periodicSaveTimerActive_ = true;
+        periodicSaveTimerActive = true;
         LOG_INFO << "[RedisSystem] Periodic player save enabled, interval=" << periodicSaveSec
                  << "s (" << slotCount << " slots by playerId, one slot every " << kPeriodicSaveTickSec << "s)";
     }
@@ -483,18 +486,18 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 
 void RedisSystem::BeginShutdown()
 {
-	if (shutdownBegun_)
+	if (shutdownBegun)
 	{
 		return;
 	}
-	shutdownBegun_ = true;
+	shutdownBegun = true;
 
 	// 停掉会制造新写入的周期全量存盘。retry timer 与 RedisManager 的重连
 	// 必须继续活到 barrier 结束,否则 Redis 短暂抖动会必然拖到超时。
-	if (loop_.has_value() && periodicSaveTimerActive_)
+	if (loop.has_value() && periodicSaveTimerActive)
 	{
-		loop_->get().cancel(periodicSaveTimerId_);
-		periodicSaveTimerActive_ = false;
+		loop->get().cancel(periodicSaveTimerId);
+		periodicSaveTimerActive = false;
 	}
 }
 
@@ -504,22 +507,22 @@ void RedisSystem::Shutdown()
 
 	// 先取消定时器,再清玩家域句柄的回调。只在 Initialize 跑过、还没 Shutdown 时碰句柄:析构走到这里时
 	// tlsPlayerRedis 可能已先析构(它比 tlsRedisSystem 晚构造)。连接本身由 Node 的收尾与 scene 入口的兜底 Shutdown 释放。
-    if (loop_.has_value())
+    if (this->loop.has_value())
     {
-        muduo::net::EventLoop &loop = loop_->get();
-        if (retryTimerActive_)
+        muduo::net::EventLoop &loop = this->loop->get();
+        if (retryTimerActive)
         {
-            loop.cancel(retryTimerId_);
-            retryTimerActive_ = false;
+            loop.cancel(retryTimerId);
+            retryTimerActive = false;
         }
-        if (snapshotTimerActive_)
+        if (snapshotTimerActive)
         {
-            loop.cancel(snapshotTimerId_);
-            snapshotTimerActive_ = false;
+            loop.cancel(snapshotTimerId);
+            snapshotTimerActive = false;
         }
         tlsPlayerRedis.SetReconnectCallback({});
     }
-	loop_.reset();
+	this->loop.reset();
 }
 
 RedisSystem::~RedisSystem()

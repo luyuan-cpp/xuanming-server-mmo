@@ -181,8 +181,8 @@ class ThreadMonitor
 {
 public:
     explicit ThreadMonitor(ThreadMonitorConfig config = {})
-        : config_(config)
-        , bootTime_(std::chrono::steady_clock::now())
+        : config(config)
+        , bootTime(std::chrono::steady_clock::now())
     {
     }
 
@@ -191,54 +191,54 @@ public:
         ThreadMonitorSnapshot snapshot;
         snapshot.totalThreads = GetCurrentProcessThreadCount();
         snapshot.uptimeSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::steady_clock::now() - bootTime_).count();
+            std::chrono::steady_clock::now() - bootTime).count();
 
-        if (lastThreadCount_ >= 0 && snapshot.totalThreads >= 0) {
-            snapshot.deltaThreads = snapshot.totalThreads - lastThreadCount_;
+        if (lastThreadCount >= 0 && snapshot.totalThreads >= 0) {
+            snapshot.deltaThreads = snapshot.totalThreads - lastThreadCount;
         }
 
-        if (snapshot.totalThreads >= 0 && snapshot.totalThreads > peakThreadCount_) {
-            peakThreadCount_ = snapshot.totalThreads;
+        if (snapshot.totalThreads >= 0 && snapshot.totalThreads > peakThreadCount) {
+            peakThreadCount = snapshot.totalThreads;
         }
-        snapshot.peakThreads = peakThreadCount_;
+        snapshot.peakThreads = peakThreadCount;
 
         if (snapshot.deltaThreads > 0) {
-            ++consecutiveGrowthSamples_;
+            ++consecutiveGrowthSamples;
         } else {
-            consecutiveGrowthSamples_ = 0;
+            consecutiveGrowthSamples = 0;
         }
-        snapshot.consecutiveGrowthSamples = consecutiveGrowthSamples_;
+        snapshot.consecutiveGrowthSamples = consecutiveGrowthSamples;
 
-        if (!baselineReady_ && snapshot.uptimeSeconds >= config_.stableWindowSeconds) {
-            baselineReady_ = true;
-            baselineThreadCount_ = snapshot.totalThreads;
+        if (!baselineReady && snapshot.uptimeSeconds >= config.stableWindowSeconds) {
+            baselineReady = true;
+            baselineThreadCount = snapshot.totalThreads;
             snapshot.baselineJustReady = true;
         }
 
-        snapshot.baselineReady = baselineReady_;
-        snapshot.baselineThreads = baselineThreadCount_;
+        snapshot.baselineReady = baselineReady;
+        snapshot.baselineThreads = baselineThreadCount;
 
-        if (baselineThreadCount_ >= 0 && snapshot.totalThreads >= 0) {
-            snapshot.increaseFromBaseline = snapshot.totalThreads - baselineThreadCount_;
+        if (baselineThreadCount >= 0 && snapshot.totalThreads >= 0) {
+            snapshot.increaseFromBaseline = snapshot.totalThreads - baselineThreadCount;
         }
 
-        snapshot.shouldWarn = baselineReady_
+        snapshot.shouldWarn = baselineReady
             && snapshot.totalThreads >= 0
-            && consecutiveGrowthSamples_ >= config_.growthWarnConsecutiveSamples
-            && snapshot.increaseFromBaseline >= config_.growthWarnAbsoluteIncrease;
+            && consecutiveGrowthSamples >= config.growthWarnConsecutiveSamples
+            && snapshot.increaseFromBaseline >= config.growthWarnAbsoluteIncrease;
 
-        lastThreadCount_ = snapshot.totalThreads;
+        lastThreadCount = snapshot.totalThreads;
         return snapshot;
     }
 
 private:
-    ThreadMonitorConfig config_;
-    std::chrono::steady_clock::time_point bootTime_;
-    int lastThreadCount_ = -1;
-    int peakThreadCount_ = -1;
-    int baselineThreadCount_ = -1;
-    int consecutiveGrowthSamples_ = 0;
-    bool baselineReady_ = false;
+    ThreadMonitorConfig config;
+    std::chrono::steady_clock::time_point bootTime;
+    int lastThreadCount = -1;
+    int peakThreadCount = -1;
+    int baselineThreadCount = -1;
+    int consecutiveGrowthSamples = 0;
+    bool baselineReady = false;
 };
 
 inline void RegisterThreadObservability(muduo::net::EventLoop& loop, const std::string& nodeName)

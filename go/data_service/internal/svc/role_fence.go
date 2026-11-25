@@ -97,6 +97,11 @@ type RoleAppearanceUpdater interface {
 	UpdateRoleAppearance(ctx context.Context, playerID uint64, appearanceID string) (bool, error)
 }
 
+// AccountTradableQuotaStore 同步单角色阶段一可交易装备材料配额到账号目录。*store.AccountDirectoryStore 实现。
+type AccountTradableQuotaStore interface {
+	SyncAccountStage1Tradable(ctx context.Context, playerID uint64, desiredCharTotal uint32) (found bool, confirmedChar uint32, accountUsed uint32, err error)
+}
+
 // 读目录列表连同注销状态走 AccountDirectory(store 的 ReadWithLifecycle),不在这里。
 type AccountDeletionStore interface {
 	AccountDeletionState(ctx context.Context, account string) (dspb.AccountDeletionState, error)
@@ -117,6 +122,7 @@ func (s *ServiceContext) configureRoleFence(c config.Config, directory *store.Ac
 	// 改名不依赖过户、删角的协调者:它只写目录自己的两个逻辑库。
 	s.RoleRenames = directory
 	s.RoleAppearances = directory
+	s.AccountTradableQuota = directory
 	if auth, err := newRoleFenceAuth(getenv); err != nil {
 		logx.Errorf("[role-fence] no caller key usable; GetRoleFenceState disabled: %v", err)
 	} else {

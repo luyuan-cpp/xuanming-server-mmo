@@ -73,6 +73,30 @@ const (
 	GuildError_kGuildTextCheckUnavailable        GuildError = 14045
 	GuildError_kGuildRenameCooldown              GuildError = 14046
 	GuildError_kGuildRenameSameName              GuildError = 14047
+	GuildError_kGuildWarNotOpen                  GuildError = 14048
+	GuildError_kGuildWarLevelTooLow              GuildError = 14049
+	GuildError_kGuildWarSameGuild                GuildError = 14050
+	GuildError_kGuildWarTargetPeaceMode          GuildError = 14051
+	GuildError_kGuildWarSelfPeaceMode            GuildError = 14052
+	GuildError_kGuildWarPeaceCooldown            GuildError = 14053
+	GuildError_kGuildWarTargetProtected          GuildError = 14054
+	GuildError_kGuildWarTargetInBattle           GuildError = 14055
+	GuildError_kGuildWarTargetOffline            GuildError = 14056
+	GuildError_kGuildWarSafeZone                 GuildError = 14057
+	GuildError_kGuildWarTeamInvalid              GuildError = 14058
+	GuildError_kGuildWarTeamSizeExceedsRoadLimit GuildError = 14059
+	GuildError_kGuildWarLeylineNotFound          GuildError = 14060
+	GuildError_kGuildWarGarrisonFull             GuildError = 14061
+	GuildError_kGuildWarGarrisonCooldown         GuildError = 14062
+	GuildError_kGuildWarMilestoneLocked          GuildError = 14063
+	GuildError_kGuildWarMilestoneClaimed         GuildError = 14064
+	GuildError_kGuildWarDividendEmpty            GuildError = 14065
+	GuildError_kGuildWarBountyInvalidTarget      GuildError = 14066
+	GuildError_kGuildWarBountyAlreadyActive      GuildError = 14067
+	GuildError_kGuildWarBountyLimit              GuildError = 14068
+	GuildError_kGuildWarBountyNotFound           GuildError = 14069
+	GuildError_kGuildWarTrackCooldown            GuildError = 14070
+	GuildError_kGuildWarServiceBusy              GuildError = 14071
 )
 
 // Enum value maps for GuildError.
@@ -127,6 +151,30 @@ var (
 		14045: "kGuildTextCheckUnavailable",
 		14046: "kGuildRenameCooldown",
 		14047: "kGuildRenameSameName",
+		14048: "kGuildWarNotOpen",
+		14049: "kGuildWarLevelTooLow",
+		14050: "kGuildWarSameGuild",
+		14051: "kGuildWarTargetPeaceMode",
+		14052: "kGuildWarSelfPeaceMode",
+		14053: "kGuildWarPeaceCooldown",
+		14054: "kGuildWarTargetProtected",
+		14055: "kGuildWarTargetInBattle",
+		14056: "kGuildWarTargetOffline",
+		14057: "kGuildWarSafeZone",
+		14058: "kGuildWarTeamInvalid",
+		14059: "kGuildWarTeamSizeExceedsRoadLimit",
+		14060: "kGuildWarLeylineNotFound",
+		14061: "kGuildWarGarrisonFull",
+		14062: "kGuildWarGarrisonCooldown",
+		14063: "kGuildWarMilestoneLocked",
+		14064: "kGuildWarMilestoneClaimed",
+		14065: "kGuildWarDividendEmpty",
+		14066: "kGuildWarBountyInvalidTarget",
+		14067: "kGuildWarBountyAlreadyActive",
+		14068: "kGuildWarBountyLimit",
+		14069: "kGuildWarBountyNotFound",
+		14070: "kGuildWarTrackCooldown",
+		14071: "kGuildWarServiceBusy",
 	}
 	GuildError_value = map[string]int32{
 		"kGuild_errorOK":                    0,
@@ -178,6 +226,30 @@ var (
 		"kGuildTextCheckUnavailable":        14045,
 		"kGuildRenameCooldown":              14046,
 		"kGuildRenameSameName":              14047,
+		"kGuildWarNotOpen":                  14048,
+		"kGuildWarLevelTooLow":              14049,
+		"kGuildWarSameGuild":                14050,
+		"kGuildWarTargetPeaceMode":          14051,
+		"kGuildWarSelfPeaceMode":            14052,
+		"kGuildWarPeaceCooldown":            14053,
+		"kGuildWarTargetProtected":          14054,
+		"kGuildWarTargetInBattle":           14055,
+		"kGuildWarTargetOffline":            14056,
+		"kGuildWarSafeZone":                 14057,
+		"kGuildWarTeamInvalid":              14058,
+		"kGuildWarTeamSizeExceedsRoadLimit": 14059,
+		"kGuildWarLeylineNotFound":          14060,
+		"kGuildWarGarrisonFull":             14061,
+		"kGuildWarGarrisonCooldown":         14062,
+		"kGuildWarMilestoneLocked":          14063,
+		"kGuildWarMilestoneClaimed":         14064,
+		"kGuildWarDividendEmpty":            14065,
+		"kGuildWarBountyInvalidTarget":      14066,
+		"kGuildWarBountyAlreadyActive":      14067,
+		"kGuildWarBountyLimit":              14068,
+		"kGuildWarBountyNotFound":           14069,
+		"kGuildWarTrackCooldown":            14070,
+		"kGuildWarServiceBusy":              14071,
 	}
 )
 
@@ -212,8 +284,7 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\xde\n" +
-	"\n" +
+	"\x15guild_error_tip.proto*\xa5\x10\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -264,7 +335,31 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x1bkGuildAnnouncementSensitive\x10\xdcm\x12\x1f\n" +
 	"\x1akGuildTextCheckUnavailable\x10\xddm\x12\x19\n" +
 	"\x14kGuildRenameCooldown\x10\xdem\x12\x19\n" +
-	"\x14kGuildRenameSameName\x10\xdfmB$\n" +
+	"\x14kGuildRenameSameName\x10\xdfm\x12\x15\n" +
+	"\x10kGuildWarNotOpen\x10\xe0m\x12\x19\n" +
+	"\x14kGuildWarLevelTooLow\x10\xe1m\x12\x17\n" +
+	"\x12kGuildWarSameGuild\x10\xe2m\x12\x1d\n" +
+	"\x18kGuildWarTargetPeaceMode\x10\xe3m\x12\x1b\n" +
+	"\x16kGuildWarSelfPeaceMode\x10\xe4m\x12\x1b\n" +
+	"\x16kGuildWarPeaceCooldown\x10\xe5m\x12\x1d\n" +
+	"\x18kGuildWarTargetProtected\x10\xe6m\x12\x1c\n" +
+	"\x17kGuildWarTargetInBattle\x10\xe7m\x12\x1b\n" +
+	"\x16kGuildWarTargetOffline\x10\xe8m\x12\x16\n" +
+	"\x11kGuildWarSafeZone\x10\xe9m\x12\x19\n" +
+	"\x14kGuildWarTeamInvalid\x10\xeam\x12&\n" +
+	"!kGuildWarTeamSizeExceedsRoadLimit\x10\xebm\x12\x1d\n" +
+	"\x18kGuildWarLeylineNotFound\x10\xecm\x12\x1a\n" +
+	"\x15kGuildWarGarrisonFull\x10\xedm\x12\x1e\n" +
+	"\x19kGuildWarGarrisonCooldown\x10\xeem\x12\x1d\n" +
+	"\x18kGuildWarMilestoneLocked\x10\xefm\x12\x1e\n" +
+	"\x19kGuildWarMilestoneClaimed\x10\xf0m\x12\x1b\n" +
+	"\x16kGuildWarDividendEmpty\x10\xf1m\x12!\n" +
+	"\x1ckGuildWarBountyInvalidTarget\x10\xf2m\x12!\n" +
+	"\x1ckGuildWarBountyAlreadyActive\x10\xf3m\x12\x19\n" +
+	"\x14kGuildWarBountyLimit\x10\xf4m\x12\x1c\n" +
+	"\x17kGuildWarBountyNotFound\x10\xf5m\x12\x1b\n" +
+	"\x16kGuildWarTrackCooldown\x10\xf6m\x12\x19\n" +
+	"\x14kGuildWarServiceBusy\x10\xf7mB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

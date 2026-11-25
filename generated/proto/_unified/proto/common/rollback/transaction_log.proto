@@ -138,6 +138,12 @@ enum TransactionType
   TX_EQUIP_POLISH_REFORGE = 38;
   TX_SKILL_SCROLL_CRAFT = 39;
   TX_CRAFT_PROXY_FEE = 40;
+
+  // ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ──────────────────────────
+  // correlation_id = guild_asset_op.op_id。只追加,不复用旧编号。
+  TX_GUILD_BOUNTY_ESCROW = 41;  // 发布江湖追杀令预扣银两(ASSET_OP_STREAM_GUILD_DEBIT)
+  TX_GUILD_WAR_REWARD = 42;     // 帮战即时银两、周战功里程碑宝箱与灵脉分红(ASSET_OP_STREAM_GUILD_CREDIT)
+  TX_GUILD_BOUNTY_PAYOUT = 43;  // 追杀赏金、反杀赏金与过期本金退还(ASSET_OP_STREAM_GUILD_CREDIT)
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

@@ -113,6 +113,11 @@ const (
 	TransactionType_TX_EQUIP_POLISH_REFORGE TransactionType = 38
 	TransactionType_TX_SKILL_SCROLL_CRAFT   TransactionType = 39
 	TransactionType_TX_CRAFT_PROXY_FEE      TransactionType = 40
+	// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ──────────────────────────
+	// correlation_id = guild_asset_op.op_id。只追加,不复用旧编号。
+	TransactionType_TX_GUILD_BOUNTY_ESCROW TransactionType = 41 // 发布江湖追杀令预扣银两(ASSET_OP_STREAM_GUILD_DEBIT)
+	TransactionType_TX_GUILD_WAR_REWARD    TransactionType = 42 // 帮战即时银两、周战功里程碑宝箱与灵脉分红(ASSET_OP_STREAM_GUILD_CREDIT)
+	TransactionType_TX_GUILD_BOUNTY_PAYOUT TransactionType = 43 // 追杀赏金、反杀赏金与过期本金退还(ASSET_OP_STREAM_GUILD_CREDIT)
 )
 
 // Enum value maps for TransactionType.
@@ -159,6 +164,9 @@ var (
 		38: "TX_EQUIP_POLISH_REFORGE",
 		39: "TX_SKILL_SCROLL_CRAFT",
 		40: "TX_CRAFT_PROXY_FEE",
+		41: "TX_GUILD_BOUNTY_ESCROW",
+		42: "TX_GUILD_WAR_REWARD",
+		43: "TX_GUILD_BOUNTY_PAYOUT",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":                 0,
@@ -202,6 +210,9 @@ var (
 		"TX_EQUIP_POLISH_REFORGE":    38,
 		"TX_SKILL_SCROLL_CRAFT":      39,
 		"TX_CRAFT_PROXY_FEE":         40,
+		"TX_GUILD_BOUNTY_ESCROW":     41,
+		"TX_GUILD_WAR_REWARD":        42,
+		"TX_GUILD_BOUNTY_PAYOUT":     43,
 	}
 )
 
@@ -473,7 +484,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xa5\a\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xf6\a\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -517,7 +528,10 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x18TX_TRIAL_ARTIFACT_REDEEM\x10%\x12\x1b\n" +
 	"\x17TX_EQUIP_POLISH_REFORGE\x10&\x12\x19\n" +
 	"\x15TX_SKILL_SCROLL_CRAFT\x10'\x12\x16\n" +
-	"\x12TX_CRAFT_PROXY_FEE\x10(B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x12TX_CRAFT_PROXY_FEE\x10(\x12\x1a\n" +
+	"\x16TX_GUILD_BOUNTY_ESCROW\x10)\x12\x17\n" +
+	"\x13TX_GUILD_WAR_REWARD\x10*\x12\x1a\n" +
+	"\x16TX_GUILD_BOUNTY_PAYOUT\x10+B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

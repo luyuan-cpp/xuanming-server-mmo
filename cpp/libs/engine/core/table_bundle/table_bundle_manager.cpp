@@ -567,7 +567,7 @@ std::optional<int> RunValidateTablesCli(int argc,
 }
 
 TableBundleManager::TableBundleManager(muduo::net::EventLoop &loop)
-	: eventLoop_(loop)
+	: eventLoop(loop)
 {
 }
 
@@ -591,12 +591,12 @@ uint64_t TableBundleManager::NowUnixMs()
 
 void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const bool useBinary)
 {
-	eventLoop_.get().assertInLoopThread();
-	imageConfigDir_ = imageConfigDir;
-	useBinary_ = useBinary;
-	bundleRoot_ = NonEmptyEnv(kBundleRootEnv);
-	statusRoot_ = NonEmptyEnv(kStatusRootEnv);
-	bundleMode_ = !bundleRoot_.empty();
+	eventLoop.get().assertInLoopThread();
+	this->imageConfigDir = imageConfigDir;
+	this->useBinary = useBinary;
+	bundleRoot = NonEmptyEnv(kBundleRootEnv);
+	statusRoot = NonEmptyEnv(kStatusRootEnv);
+	bundleMode = !bundleRoot.empty();
 
 	const auto selfWeak = weak_from_this();
 	GlobalMetricsRegistry().Register("table_bundle", [selfWeak](prometheus_text::Writer &writer)
@@ -607,17 +607,17 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 										 }
 									 });
 
-	std::string loadDir = imageConfigDir_;
+	std::string loadDir = this->imageConfigDir;
 	std::string source = "image";
 	std::optional<PointerLine> initialLine;
 
-	if (bundleMode_)
+	if (bundleMode)
 	{
-		const std::string pointerPath = (std::filesystem::path(bundleRoot_) / kPointerFilename).string();
+		const std::string pointerPath = (std::filesystem::path(bundleRoot) / kPointerFilename).string();
 		std::string err;
 		if (!ReadPointerLine(pointerPath, kTableSchemaDigest, initialLine, err))
 		{
-			LOG_FATAL << "Table bundle mode enabled (" << kBundleRootEnv << "=" << bundleRoot_
+			LOG_FATAL << "Table bundle mode enabled (" << kBundleRootEnv << "=" << bundleRoot
 					  << ") but failed to read " << pointerPath << ": " << err;
 		}
 		if (initialLine)
@@ -634,36 +634,36 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 			}
 			if (effective)
 			{
-				loadDir = (std::filesystem::path(bundleRoot_) / "bundles" / effective->contentDigest).string();
+				loadDir = (std::filesystem::path(bundleRoot) / "bundles" / effective->contentDigest).string();
 				source = "bundle";
 			}
 		}
 	}
 
 	const std::filesystem::path manifestPath = std::filesystem::path(loadDir) / kManifestFilename;
-	if (bundleMode_ || std::filesystem::exists(manifestPath))
+	if (bundleMode || std::filesystem::exists(manifestPath))
 	{
 		std::string err;
 		BundleManifest manifest;
-		if (!VerifyTableDirManifest(loadDir, useBinary_, kTableSchemaDigest, manifest, err))
+		if (!VerifyTableDirManifest(loadDir, this->useBinary, kTableSchemaDigest, manifest, err))
 		{
 			LOG_FATAL << "Startup table manifest verification failed dir=" << loadDir << ": " << err;
 		}
-		hasActiveManifest_ = true;
-		activeManifest_ = std::move(manifest);
+		hasActiveManifest = true;
+		activeManifest = std::move(manifest);
 	}
 
 	if (source == "bundle")
 	{
 		std::shared_ptr<TableSet> loaded;
 		std::string err;
-		if (!PrepareTableSetSync(loadDir, useBinary_, loaded, err))
+		if (!PrepareTableSetSync(loadDir, this->useBinary, loaded, err))
 		{
 			LOG_FATAL << "Startup bundle table load failed dir=" << loadDir << ": " << err;
 		}
-		loaded->identity.schemaDigest = activeManifest_.schemaDigest;
-		loaded->identity.contentDigest = activeManifest_.contentDigest;
-		loaded->identity.version = activeManifest_.version;
+		loaded->identity.schemaDigest = activeManifest.schemaDigest;
+		loaded->identity.contentDigest = activeManifest.contentDigest;
+		loaded->identity.version = activeManifest.version;
 		loaded->identity.source = "bundle";
 		CommitTableSet(std::move(loaded));
 		// 启动路径与 LoadTablesAsync 一致:首次加载完成触发单表 LoadSuccess 与节点 OnLoaded 启动钩子。
@@ -672,31 +672,31 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 	else
 	{
 		LoadTablesAsync();
-		if (hasActiveManifest_)
+		if (hasActiveManifest)
 		{
 			TableBundleIdentity id;
-			id.schemaDigest = activeManifest_.schemaDigest;
-			id.contentDigest = activeManifest_.contentDigest;
-			id.version = activeManifest_.version;
+			id.schemaDigest = activeManifest.schemaDigest;
+			id.contentDigest = activeManifest.contentDigest;
+			id.version = activeManifest.version;
 			id.source = "image";
 			SetCurrentTableBundleIdentity(id);
 		}
 	}
 
-	activeIdentity_ = CurrentTableSet()->identity;
-	if (activeIdentity_.schemaDigest.empty())
+	activeIdentity = CurrentTableSet()->identity;
+	if (activeIdentity.schemaDigest.empty())
 	{
-		activeIdentity_.schemaDigest = std::string(kTableSchemaDigest);
+		activeIdentity.schemaDigest = std::string(kTableSchemaDigest);
 	}
-	if (activeIdentity_.source.empty())
+	if (activeIdentity.source.empty())
 	{
-		activeIdentity_.source = source;
+		activeIdentity.source = source;
 	}
 
-	LOG_INFO << "Config tables loaded at startup: source=" << activeIdentity_.source
-			 << " schema_digest=" << activeIdentity_.schemaDigest
-			 << " content_digest=" << (activeIdentity_.contentDigest.empty() ? "none" : activeIdentity_.contentDigest)
-			 << " version=" << activeIdentity_.version
+	LOG_INFO << "Config tables loaded at startup: source=" << activeIdentity.source
+			 << " schema_digest=" << activeIdentity.schemaDigest
+			 << " content_digest=" << (activeIdentity.contentDigest.empty() ? "none" : activeIdentity.contentDigest)
+			 << " version=" << activeIdentity.version
 			 << " tables=" << GetTableCount();
 
 	if (const auto &onCommitted = GlobalHooks().onCommitted)
@@ -706,10 +706,10 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 
 	WriteStatusFile(NowUnixMs());
 
-	if (bundleMode_)
+	if (bundleMode)
 	{
 		const auto weakSelf = weak_from_this();
-		pollTimer_.RunEvery(kPollIntervalSeconds, [weakSelf]
+		pollTimer.RunEvery(kPollIntervalSeconds, [weakSelf]
 							{
 								if (const auto self = weakSelf.lock())
 								{
@@ -723,22 +723,22 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 
 void TableBundleManager::Stop()
 {
-	stopped_ = true;
-	++stagingGeneration_;
-	staging_.reset();
-	pollTimer_.Cancel();
+	stopped = true;
+	++stagingGeneration;
+	staging.reset();
+	pollTimer.Cancel();
 }
 
 void TableBundleManager::PollOnce(const uint64_t nowMs)
 {
-	if (stopped_ || !bundleMode_)
+	if (stopped || !bundleMode)
 	{
 		return;
 	}
 
 	ReapRetired(std::chrono::steady_clock::now());
 
-	const std::string pointerPath = (std::filesystem::path(bundleRoot_) / kPointerFilename).string();
+	const std::string pointerPath = (std::filesystem::path(bundleRoot) / kPointerFilename).string();
 	std::optional<PointerLine> line;
 	std::string err;
 	if (!ReadPointerLine(pointerPath, kTableSchemaDigest, line, err))
@@ -752,11 +752,11 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	}
 
 	std::optional<PointerTarget> desired;
-	if (line->next && line->next->contentDigest != activeIdentity_.contentDigest)
+	if (line->next && line->next->contentDigest != activeIdentity.contentDigest)
 	{
 		desired = line->next;
 	}
-	else if (!line->next && line->current && line->current->contentDigest != activeIdentity_.contentDigest)
+	else if (!line->next && line->current && line->current->contentDigest != activeIdentity.contentDigest)
 	{
 		desired = line->current;
 		desired->immediate = true;
@@ -765,27 +765,27 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	if (!desired)
 	{
 		// 指针撤销了尚未生效的 next:清理正在准备或等待提交的暂存表。
-		if (staging_)
+		if (staging)
 		{
 			LOG_INFO << "Table hot-reload staging cancelled because pointer no longer targets content_digest="
-					 << staging_->target.contentDigest;
-			++stagingGeneration_;
-			staging_.reset();
-			pendingContentDigest_.clear();
-			pendingVersion_ = 0;
-			pendingState_.clear();
-			pendingReason_.clear();
+					 << staging->target.contentDigest;
+			++stagingGeneration;
+			staging.reset();
+			pendingContentDigest.clear();
+			pendingVersion = 0;
+			pendingState.clear();
+			pendingReason.clear();
 			WriteStatusFile(nowMs);
 		}
 		return;
 	}
 
 	// 已经在准备或已准备完毕同一包:只需刷新激活时间并检查是否到点。
-	if (staging_ && staging_->target.contentDigest == desired->contentDigest)
+	if (staging && staging->target.contentDigest == desired->contentDigest)
 	{
-		staging_->target.activateAtMs = desired->activateAtMs;
-		staging_->target.immediate = desired->immediate;
-		if (staging_->prepared && (staging_->target.immediate || nowMs >= staging_->target.activateAtMs))
+		staging->target.activateAtMs = desired->activateAtMs;
+		staging->target.immediate = desired->immediate;
+		if (staging->prepared && (staging->target.immediate || nowMs >= staging->target.activateAtMs))
 		{
 			CommitStaged(nowMs);
 		}
@@ -793,21 +793,21 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	}
 
 	// 同一摘要已被拒绝或标记 needs_restart,不重复尝试,直到指针换新包。
-	if (terminalDigest_ == desired->contentDigest)
+	if (terminalDigest == desired->contentDigest)
 	{
 		return;
 	}
 
 	// 准备途中指针切向另一包:丢弃旧暂存,从头开始。
-	if (staging_)
+	if (staging)
 	{
-		++stagingGeneration_;
-		staging_.reset();
+		++stagingGeneration;
+		staging.reset();
 	}
 
-	const std::string candidateDir = (std::filesystem::path(bundleRoot_) / "bundles" / desired->contentDigest).string();
+	const std::string candidateDir = (std::filesystem::path(bundleRoot) / "bundles" / desired->contentDigest).string();
 	BundleManifest candidateManifest;
-	if (!VerifyTableDirManifest(candidateDir, useBinary_, kTableSchemaDigest, candidateManifest, err))
+	if (!VerifyTableDirManifest(candidateDir, useBinary, kTableSchemaDigest, candidateManifest, err))
 	{
 		RejectCandidate(*desired, "rejected", "manifest verification failed: " + err, false, nowMs);
 		return;
@@ -822,9 +822,9 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	}
 
 	// 逐表比对摘要,检查是否触及不可热更的表(以二进制内编译期名单为准,不以 manifest 为准,设计 §5.3)。
-	if (hasActiveManifest_)
+	if (hasActiveManifest)
 	{
-		const auto changedTables = DiffChangedTables(activeManifest_, candidateManifest, useBinary_);
+		const auto changedTables = DiffChangedTables(activeManifest, candidateManifest, useBinary);
 		std::vector<std::string> nonHotReloadable;
 		for (const auto &tableName : changedTables)
 		{
@@ -862,12 +862,12 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	state.tableSet->identity.source = "bundle";
 	state.startedAt = std::chrono::steady_clock::now();
 
-	const uint64_t gen = ++stagingGeneration_;
-	staging_ = std::move(state);
-	pendingContentDigest_ = desired->contentDigest;
-	pendingVersion_ = desired->version;
-	pendingState_ = "preparing";
-	pendingReason_.clear();
+	const uint64_t gen = ++stagingGeneration;
+	staging = std::move(state);
+	pendingContentDigest = desired->contentDigest;
+	pendingVersion = desired->version;
+	pendingState = "preparing";
+	pendingReason.clear();
 
 	LOG_INFO << "Table hot-reload prepare started: schema_digest=" << std::string(kTableSchemaDigest)
 			 << " content_digest=" << desired->contentDigest
@@ -882,7 +882,7 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 void TableBundleManager::ScheduleNextSlice(const uint64_t generation)
 {
 	const auto weakSelf = weak_from_this();
-	eventLoop_.get().queueInLoop([weakSelf, generation]
+	eventLoop.get().queueInLoop([weakSelf, generation]
 								 {
 									 if (const auto self = weakSelf.lock())
 									 {
@@ -893,12 +893,12 @@ void TableBundleManager::ScheduleNextSlice(const uint64_t generation)
 
 void TableBundleManager::RunOnePrepareSlice(const uint64_t generation)
 {
-	if (stopped_ || !staging_ || generation != stagingGeneration_)
+	if (stopped || !staging || generation != stagingGeneration)
 	{
 		return;
 	}
 
-	if (staging_->nextTableIndex >= GetTableCount())
+	if (staging->nextTableIndex >= GetTableCount())
 	{
 		FinishPrepare(generation);
 		return;
@@ -906,31 +906,31 @@ void TableBundleManager::RunOnePrepareSlice(const uint64_t generation)
 
 	const auto sliceStart = std::chrono::steady_clock::now();
 	std::string err;
-	const bool ok = LoadTableIntoSetAt(staging_->nextTableIndex,
-									   staging_->bundleDir,
-									   useBinary_,
-									   *staging_->tableSet,
+	const bool ok = LoadTableIntoSetAt(staging->nextTableIndex,
+									   staging->bundleDir,
+									   useBinary,
+									   *staging->tableSet,
 									   err);
 	const double sliceSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - sliceStart).count();
-	if (sliceSec > staging_->maxSliceSeconds)
+	if (sliceSec > staging->maxSliceSeconds)
 	{
-		staging_->maxSliceSeconds = sliceSec;
+		staging->maxSliceSeconds = sliceSec;
 	}
-	if (sliceSec > lastMaxSliceSeconds_)
+	if (sliceSec > lastMaxSliceSeconds)
 	{
-		lastMaxSliceSeconds_ = sliceSec;
+		lastMaxSliceSeconds = sliceSec;
 	}
 
 	if (!ok)
 	{
-		const PointerTarget failedTarget = staging_->target;
-		staging_.reset();
+		const PointerTarget failedTarget = staging->target;
+		staging.reset();
 		RejectCandidate(failedTarget, "rejected", "table parse failed: " + err, false, NowUnixMs());
 		return;
 	}
 
-	++staging_->nextTableIndex;
-	if (staging_->nextTableIndex < GetTableCount())
+	++staging->nextTableIndex;
+	if (staging->nextTableIndex < GetTableCount())
 	{
 		ScheduleNextSlice(generation);
 	}
@@ -942,7 +942,7 @@ void TableBundleManager::RunOnePrepareSlice(const uint64_t generation)
 
 void TableBundleManager::FinishPrepare(const uint64_t generation)
 {
-	if (stopped_ || !staging_ || generation != stagingGeneration_)
+	if (stopped || !staging || generation != stagingGeneration)
 	{
 		return;
 	}
@@ -950,80 +950,80 @@ void TableBundleManager::FinishPrepare(const uint64_t generation)
 	if (const auto &validate = GlobalHooks().validate)
 	{
 		std::string err;
-		ScopedTableSetOverride guard(staging_->tableSet);
+		ScopedTableSetOverride guard(staging->tableSet);
 		if (!validate(err))
 		{
-			const PointerTarget failedTarget = staging_->target;
-			staging_.reset();
+			const PointerTarget failedTarget = staging->target;
+			staging.reset();
 			RejectCandidate(failedTarget, "rejected", "validation failed: " + err, false, NowUnixMs());
 			return;
 		}
 	}
 
-	const double totalSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - staging_->startedAt).count();
+	const double totalSec = std::chrono::duration<double>(std::chrono::steady_clock::now() - staging->startedAt).count();
 	ObservePrepareDuration(totalSec);
-	lastMaxSliceSeconds_ = staging_->maxSliceSeconds;
-	staging_->prepared = true;
+	lastMaxSliceSeconds = staging->maxSliceSeconds;
+	staging->prepared = true;
 
 	const uint64_t nowMs = NowUnixMs();
 	LOG_INFO << "Table hot-reload prepared: schema_digest=" << std::string(kTableSchemaDigest)
-			 << " content_digest=" << staging_->target.contentDigest
-			 << " version=" << staging_->target.version
+			 << " content_digest=" << staging->target.contentDigest
+			 << " version=" << staging->target.version
 			 << " prepare_seconds=" << totalSec
-			 << " max_slice_seconds=" << staging_->maxSliceSeconds;
+			 << " max_slice_seconds=" << staging->maxSliceSeconds;
 
-	if (staging_->target.immediate || nowMs >= staging_->target.activateAtMs)
+	if (staging->target.immediate || nowMs >= staging->target.activateAtMs)
 	{
 		CommitStaged(nowMs);
 		return;
 	}
 
-	pendingState_ = "prepared";
-	pendingReason_.clear();
+	pendingState = "prepared";
+	pendingReason.clear();
 	WriteStatusFile(nowMs);
 }
 
 void TableBundleManager::CommitStaged(const uint64_t nowMs)
 {
-	if (!staging_ || !staging_->prepared)
+	if (!staging || !staging->prepared)
 	{
 		return;
 	}
 
-	auto nextSet = std::move(staging_->tableSet);
-	BundleManifest nextManifest = std::move(staging_->manifest);
-	const PointerTarget committedTarget = staging_->target;
-	staging_.reset();
+	auto nextSet = std::move(staging->tableSet);
+	BundleManifest nextManifest = std::move(staging->manifest);
+	const PointerTarget committedTarget = staging->target;
+	staging.reset();
 
 	auto previous = CommitTableSet(std::move(nextSet));
 	if (previous)
 	{
-		retiredSets_.push_back(RetiredEntry{
+		retiredSets.push_back(RetiredEntry{
 			std::move(previous),
 			std::chrono::steady_clock::now() + kRetainDuration,
 		});
 	}
 
-	hasActiveManifest_ = true;
-	activeManifest_ = std::move(nextManifest);
-	activeIdentity_ = CurrentTableSet()->identity;
-	terminalDigest_.clear();
-	pendingContentDigest_.clear();
-	pendingVersion_ = 0;
-	pendingState_.clear();
-	pendingReason_.clear();
-	++committedCount_;
+	hasActiveManifest = true;
+	activeManifest = std::move(nextManifest);
+	activeIdentity = CurrentTableSet()->identity;
+	terminalDigest.clear();
+	pendingContentDigest.clear();
+	pendingVersion = 0;
+	pendingState.clear();
+	pendingReason.clear();
+	++committedCount;
 
 	if (const auto &onCommitted = GlobalHooks().onCommitted)
 	{
 		onCommitted(CurrentTableSet());
 	}
 
-	LOG_INFO << "Table hot-reload committed: schema_digest=" << activeIdentity_.schemaDigest
+	LOG_INFO << "Table hot-reload committed: schema_digest=" << activeIdentity.schemaDigest
 			 << " content_digest=" << committedTarget.contentDigest
 			 << " version=" << committedTarget.version
-			 << " load_seq=" << activeIdentity_.loadSeq
-			 << " retained_sets=" << retiredSets_.size();
+			 << " load_seq=" << activeIdentity.loadSeq
+			 << " retained_sets=" << retiredSets.size();
 
 	WriteStatusFile(nowMs);
 }
@@ -1034,15 +1034,15 @@ void TableBundleManager::RejectCandidate(const PointerTarget &target,
 										 const bool isNeedsRestart,
 										 const uint64_t nowMs)
 {
-	terminalDigest_ = target.contentDigest;
-	pendingContentDigest_ = target.contentDigest;
-	pendingVersion_ = target.version;
-	pendingState_ = std::string(pendingState);
-	pendingReason_ = reason;
+	terminalDigest = target.contentDigest;
+	pendingContentDigest = target.contentDigest;
+	pendingVersion = target.version;
+	this->pendingState = std::string(pendingState);
+	pendingReason = reason;
 
 	if (isNeedsRestart)
 	{
-		++needsRestartCount_;
+		++needsRestartCount;
 		LOG_WARN << "Table hot-reload needs restart: schema_digest=" << std::string(kTableSchemaDigest)
 				 << " content_digest=" << target.contentDigest
 				 << " version=" << target.version
@@ -1050,7 +1050,7 @@ void TableBundleManager::RejectCandidate(const PointerTarget &target,
 	}
 	else
 	{
-		++rejectedCount_;
+		++rejectedCount;
 		LOG_ERROR << "Table hot-reload rejected: schema_digest=" << std::string(kTableSchemaDigest)
 				  << " content_digest=" << target.contentDigest
 				  << " version=" << target.version
@@ -1061,50 +1061,50 @@ void TableBundleManager::RejectCandidate(const PointerTarget &target,
 
 void TableBundleManager::ReapRetired(const std::chrono::steady_clock::time_point now)
 {
-	retiredSets_.erase(
-		std::remove_if(retiredSets_.begin(), retiredSets_.end(),
+	retiredSets.erase(
+		std::remove_if(retiredSets.begin(), retiredSets.end(),
 					   [now](const RetiredEntry &entry)
 					   { return now >= entry.expireAt; }),
-		retiredSets_.end());
+		retiredSets.end());
 }
 
 void TableBundleManager::ObservePrepareDuration(const double seconds)
 {
-	prepareDurationSumSeconds_ += seconds;
+	prepareDurationSumSeconds += seconds;
 	for (std::size_t i = 0; i < kPrepareBuckets.size(); ++i)
 	{
 		if (seconds <= kPrepareBuckets[i])
 		{
-			++prepareBucketCounts_[i];
+			++prepareBucketCounts[i];
 			return;
 		}
 	}
-	++prepareBucketCounts_.back();
+	++prepareBucketCounts.back();
 }
 
 void TableBundleManager::WriteStatusFile(const uint64_t nowMs) const
 {
-	if (statusRoot_.empty())
+	if (statusRoot.empty())
 	{
 		return;
 	}
 	std::ostringstream json;
 	json << "{"
-		 << "\"schema_digest\":\"" << EscapeJson(activeIdentity_.schemaDigest) << "\","
-		 << "\"content_digest\":\"" << EscapeJson(activeIdentity_.contentDigest) << "\","
-		 << "\"version\":" << activeIdentity_.version << ","
-		 << "\"source\":\"" << EscapeJson(activeIdentity_.source) << "\","
-		 << "\"load_seq\":" << activeIdentity_.loadSeq << ","
+		 << "\"schema_digest\":\"" << EscapeJson(activeIdentity.schemaDigest) << "\","
+		 << "\"content_digest\":\"" << EscapeJson(activeIdentity.contentDigest) << "\","
+		 << "\"version\":" << activeIdentity.version << ","
+		 << "\"source\":\"" << EscapeJson(activeIdentity.source) << "\","
+		 << "\"load_seq\":" << activeIdentity.loadSeq << ","
 		 << "\"state\":\"loaded\","
-		 << "\"pending_content_digest\":\"" << EscapeJson(pendingContentDigest_) << "\","
-		 << "\"pending_version\":" << pendingVersion_ << ","
-		 << "\"pending_state\":\"" << EscapeJson(pendingState_) << "\","
-		 << "\"reason\":\"" << EscapeJson(pendingReason_) << "\","
+		 << "\"pending_content_digest\":\"" << EscapeJson(pendingContentDigest) << "\","
+		 << "\"pending_version\":" << pendingVersion << ","
+		 << "\"pending_state\":\"" << EscapeJson(pendingState) << "\","
+		 << "\"reason\":\"" << EscapeJson(pendingReason) << "\","
 		 << "\"updated_at_ms\":" << nowMs
 		 << "}\n";
 
 	std::string err;
-	const auto target = std::filesystem::path(statusRoot_) / kStatusFilename;
+	const auto target = std::filesystem::path(statusRoot) / kStatusFilename;
 	if (!AtomicWriteFile(target, json.str(), err))
 	{
 		LOG_WARN << "Failed to write table status file " << target.string() << ": " << err;
@@ -1113,36 +1113,36 @@ void TableBundleManager::WriteStatusFile(const uint64_t nowMs) const
 
 void TableBundleManager::WriteMetrics(prometheus_text::Writer &writer) const
 {
-	const std::string shortDigest = DigestPrefix12(activeIdentity_.contentDigest);
+	const std::string shortDigest = DigestPrefix12(activeIdentity.contentDigest);
 	writer.BeginFamily("table_bundle_info",
 					   "Active config table bundle identity (always 1).",
 					   prometheus_text::MetricType::kGauge);
-	writer.Sample({{"schema_digest", activeIdentity_.schemaDigest},
+	writer.Sample({{"schema_digest", activeIdentity.schemaDigest},
 				   {"content_digest", shortDigest},
-				   {"source", activeIdentity_.source}},
+				   {"source", activeIdentity.source}},
 				  1);
 
 	writer.BeginFamily("table_reload_total",
 					   "Total number of table hot-reload outcomes by result.",
 					   prometheus_text::MetricType::kCounter);
-	writer.Sample({{"result", "committed"}}, committedCount_);
-	writer.Sample({{"result", "rejected"}}, rejectedCount_);
-	writer.Sample({{"result", "needs_restart"}}, needsRestartCount_);
+	writer.Sample({{"result", "committed"}}, committedCount);
+	writer.Sample({{"result", "rejected"}}, rejectedCount);
+	writer.Sample({{"result", "needs_restart"}}, needsRestartCount);
 
 	writer.BeginFamily("table_reload_prepare_seconds",
 					   "Duration of full table hot-reload staging preparation in seconds.",
 					   prometheus_text::MetricType::kHistogram);
-	writer.HistogramDouble({}, kPrepareBuckets, prepareBucketCounts_, prepareDurationSumSeconds_);
+	writer.HistogramDouble({}, kPrepareBuckets, prepareBucketCounts, prepareDurationSumSeconds);
 
 	writer.BeginFamily("table_reload_slice_max_seconds",
 					   "Maximum single-slice table parse duration on the main loop in seconds.",
 					   prometheus_text::MetricType::kGauge);
-	writer.SampleDouble({}, lastMaxSliceSeconds_);
+	writer.SampleDouble({}, lastMaxSliceSeconds);
 
 	writer.BeginFamily("table_sets_retained",
 					   "Number of retired TableSet snapshots still retained for in-flight safety.",
 					   prometheus_text::MetricType::kGauge);
-	writer.Sample({}, static_cast<uint64_t>(retiredSets_.size()));
+	writer.Sample({}, static_cast<uint64_t>(retiredSets.size()));
 }
 
 } // namespace table_bundle

@@ -124,13 +124,13 @@ bool DetachedReleaseSettled(playerstore::SavePlayerResult result)
 
 
 PlayerStoreClient::PlayerStoreClient(Options options)
-    : lifetime_(std::make_shared<Lifetime>(Lifetime{std::ref(*this)})), options_(std::move(options))
+    : lifetime(std::make_shared<Lifetime>(Lifetime{std::ref(*this)})), options(std::move(options))
 {
 }
 
 PlayerStoreClient::~PlayerStoreClient()
 {
-    lifetime_->owner.reset();
+    lifetime->owner.reset();
 }
 
 PlayerStoreClient* PlayerStoreClient::ResolveOwner(const std::weak_ptr<Lifetime>& original)
@@ -147,7 +147,7 @@ bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEp
     {
         return false;
     }
-    State &state = states_[playerId];
+    State &state = states[playerId];
     state.storageId = storageId;
     state.ownerEpoch = ownerEpoch;
     state.confirmed = std::move(confirmed);
@@ -159,15 +159,15 @@ bool PlayerStoreClient::Seed(Guid playerId, uint32_t storageId, uint64_t ownerEp
     state.releaseCommitted = false;
     state.committedOwnerEpoch = ownerEpoch;
     state.committedSaveSeq = committedSaveSeq;
-    state.backoffSec = options_.retryMinSec;
+    state.backoffSec = options.retryMinSec;
     state.failedAttempts = 0;
     return true;
 }
 
 void PlayerStoreClient::SetOwnerEpoch(Guid playerId, uint64_t ownerEpoch)
 {
-    const auto it = states_.find(playerId);
-    if (it != states_.end())
+    const auto it = states.find(playerId);
+    if (it != states.end())
     {
         it->second.ownerEpoch = ownerEpoch;
     }
@@ -175,18 +175,18 @@ void PlayerStoreClient::SetOwnerEpoch(Guid playerId, uint64_t ownerEpoch)
 
 bool PlayerStoreClient::HasUnsettled(Guid playerId) const
 {
-    if (detachedInFlight_.count(playerId) != 0)
+    if (detachedInFlight.count(playerId) != 0)
     {
         return true;
     }
-    const auto it = states_.find(playerId);
-    return it != states_.end() && (it->second.inflight.has_value() || it->second.pending.has_value());
+    const auto it = states.find(playerId);
+    return it != states.end() && (it->second.inflight.has_value() || it->second.pending.has_value());
 }
 
 std::vector<Guid> PlayerStoreClient::UnsettledPlayers() const
 {
-    std::vector<Guid> players(detachedInFlight_.begin(), detachedInFlight_.end());
-    for (const auto &[playerId, state] : states_)
+    std::vector<Guid> players(detachedInFlight.begin(), detachedInFlight.end());
+    for (const auto &[playerId, state] : states)
     {
         if (state.inflight.has_value() || state.pending.has_value())
         {
@@ -202,7 +202,7 @@ bool PlayerStoreClient::Forget(Guid playerId)
     {
         return false;
     }
-    states_.erase(playerId);
+    states.erase(playerId);
     return true;
 }
 
@@ -251,20 +251,20 @@ const PlayerStoreClient::KindSet &PlayerStoreClient::PiggybackKinds()
 
 bool PlayerStoreClient::DeferPeriodicSave(Guid playerId, const player_store_rows::KindBytes &rows)
 {
-    if (options_.piggybackFallbackSec <= 0)
+    if (options.piggybackFallbackSec <= 0)
     {
         return false;
     }
-    const auto it = states_.find(playerId);
+    const auto it = states.find(playerId);
     // 有在途或排队时不推迟:让这份快照照常并进排队,不改排队与回调的语义。
-    if (it == states_.end() || it->second.inflight.has_value() || it->second.pending.has_value())
+    if (it == states.end() || it->second.inflight.has_value() || it->second.pending.has_value())
     {
         return false;
     }
     State &state = it->second;
     // 有到期的审计记录就不推迟:它们要随这一笔交出去(docs/design/player-audit-outbox.md §5.2)。
     // 这份快照此刻才取,水位就是现在的水位。
-    if (options_.auditDue && options_.auditDue(playerId, options_.commitMark ? options_.commitMark() : 0))
+    if (options.auditDue && options.auditDue(playerId, options.commitMark ? options.commitMark() : 0))
     {
         return false;
     }
@@ -295,13 +295,13 @@ bool PlayerStoreClient::DeferPeriodicSave(Guid playerId, const player_store_rows
         return true;
     }
     const std::chrono::duration<double> deferred = now - *state.piggybackDeferredSince;
-    return deferred.count() < options_.piggybackFallbackSec;
+    return deferred.count() < options.piggybackFallbackSec;
 }
 
 PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_store_rows::KindBytes rows, const SubmitOptions &submitOptions, SaveDone done)
 {
-    const auto it = states_.find(playerId);
-    if (it == states_.end())
+    const auto it = states.find(playerId);
+    if (it == states.end())
     {
         return SubmitResult::kNotSeeded;
     }
@@ -311,7 +311,7 @@ PlayerStoreClient::SubmitResult PlayerStoreClient::Submit(Guid playerId, player_
     // 只在这里接一次;状态机内部再用的行(排队的快照、续笔用的 confirmed)都已经是整行。
     AppendCarried(state, rows);
     // 快照就是调用方此刻的内存,水位要在这时取:之后再发生的改动不在这份快照里。
-    const uint64_t commitMark = options_.commitMark ? options_.commitMark() : 0;
+    const uint64_t commitMark = options.commitMark ? options.commitMark() : 0;
     // pending 非空也算忙:回调里再次 Submit 时,这份快照比 pending 新,不能抢到它前面发出去。
     if (state.inflight.has_value() || state.pending.has_value())
     {
@@ -360,12 +360,12 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     const bool epochBehind = state.committedOwnerEpoch != state.ownerEpoch;
     // 水位不大于这份快照的审计记录还没交出去:没有脏行也要写一笔。净变化为零的改动(先 +100 后 −100)同样有流水要交,
     // 它们只能随存盘进发件箱(docs/design/player-audit-outbox.md §5.2)。
-    const bool auditDue = options_.auditDue && options_.auditDue(playerId, commitMark);
+    const bool auditDue = options.auditDue && options.auditDue(playerId, commitMark);
     if (dirty.none() && !submitOptions.release && !submitOptions.force && !state.releaseCommitted && !epochBehind && !auditDue)
     {
         return StartResult::kNothingToWrite;
     }
-    const std::optional<uint64_t> saveSeq = options_.nextSeq(playerId);
+    const std::optional<uint64_t> saveSeq = options.nextSeq(playerId);
     if (!saveSeq)
     {
         return StartResult::kSeqExhausted;
@@ -377,21 +377,21 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     request.set_owner_epoch(state.ownerEpoch);
     request.set_save_seq(*saveSeq);
     request.set_schema_gen(submitOptions.schemaGen);
-    request.set_instance_id(options_.instanceId());
+    request.set_instance_id(options.instanceId());
     request.set_release(submitOptions.release);
     // 审计记录随这一笔交出去:go/db 在提交存档的同一个事务里写进发件箱。到期的一笔全部带上,只在这里拷一次,重试发的是同一份请求。
-    if (options_.attachAudit)
+    if (options.attachAudit)
     {
-        options_.attachAudit(playerId, commitMark, request);
+        options.attachAudit(playerId, commitMark, request);
     }
     inflight.carriesAudit = request.transaction_logs_size() > 0 || request.audit_snapshots_size() > 0;
 
     std::string stampedProfile;
-    const bool stamped = options_.stampProfile && dirty.any();
+    const bool stamped = options.stampProfile && dirty.any();
     if (stamped)
     {
         stampedProfile = rows[kProfileIndex];
-        options_.stampProfile(playerId, *saveSeq, stampedProfile);
+        options.stampProfile(playerId, *saveSeq, stampedProfile);
         dirty.set(kProfileIndex);
     }
     for (std::size_t kind = 1; kind < player_store_rows::kKindCount; ++kind)
@@ -414,21 +414,21 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     inflight.callbacks = std::move(callbacks);
     inflight.commitMark = commitMark;
     state.inflight.emplace(std::move(inflight));
-    state.backoffSec = options_.retryMinSec;
+    state.backoffSec = options.retryMinSec;
     state.failedAttempts = 0;
-    if (const std::size_t requestBytes = state.inflight->request.ByteSizeLong(); requestBytes > options_.maxRequestBytes)
+    if (const std::size_t requestBytes = state.inflight->request.ByteSizeLong(); requestBytes > options.maxRequestBytes)
     {
         // 和 go/db 回 TOO_LARGE 走同一条路。排到下一轮:调用方可能还在自己的栈上,回调里的处置可能销毁它正在用的实体。
         LOG_ERROR << "[player_store] save of player " << playerId << " is " << requestBytes << " bytes, over the transport budget "
-                  << options_.maxRequestBytes << "; refusing it without sending";
-        const std::weak_ptr<Lifetime> original = lifetime_;
-        options_.schedule(0.0, [original, playerId, attemptGen = ++state.attemptGen]()
+                  << options.maxRequestBytes << "; refusing it without sending";
+        const std::weak_ptr<Lifetime> original = lifetime;
+        options.schedule(0.0, [original, playerId, attemptGen = ++state.attemptGen]()
         {
             if (!SceneTaskScope::IsDurableAccepting()) return;
             auto* owner = ResolveOwner(original);
             if (owner == nullptr) return;
-            const auto it = owner->states_.find(playerId);
-            if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
+            const auto it = owner->states.find(playerId);
+            if (it == owner->states.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
             playerstore::SavePlayerResponse response;
             response.set_result(playerstore::SAVE_PLAYER_TOO_LARGE);
             owner->HandleSaveResponse(playerId, it->second, response);
@@ -443,7 +443,7 @@ void PlayerStoreClient::Attempt(Guid playerId, State &state)
 {
     if (!SceneTaskScope::IsDurableAccepting()) return;
     const uint64_t attemptGen = ++state.attemptGen;
-    (void)SceneTaskScope::TryStartDurable(RunSaveAttempt(lifetime_, playerId, attemptGen), "PlayerStoreSave");
+    (void)SceneTaskScope::TryStartDurable(RunSaveAttempt(lifetime, playerId, attemptGen), "PlayerStoreSave");
 }
 
 boost::cobalt::task<void> PlayerStoreClient::RunSaveAttempt(std::weak_ptr<Lifetime> original, Guid playerId, uint64_t attemptGen)
@@ -452,9 +452,9 @@ boost::cobalt::task<void> PlayerStoreClient::RunSaveAttempt(std::weak_ptr<Lifeti
     auto submit = [&](auto done) {
         auto* owner = ResolveOwner(original);
         if (owner == nullptr) return false;
-        const auto it = owner->states_.find(playerId);
-        if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return false;
-        return owner->options_.send(it->second.inflight->request,
+        const auto it = owner->states.find(playerId);
+        if (it == owner->states.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return false;
+        return owner->options.send(it->second.inflight->request,
             [done = std::move(done)](bool ok, const playerstore::SavePlayerResponse* reply) {
                 DeliverAttempt(done, ok, reply);
             });
@@ -465,8 +465,8 @@ boost::cobalt::task<void> PlayerStoreClient::RunSaveAttempt(std::weak_ptr<Lifeti
     if (!outcome || !SceneTaskScope::IsDurableAccepting()) co_return;
     auto* owner = ResolveOwner(original);
     if (owner == nullptr) co_return;
-    const auto it = owner->states_.find(playerId);
-    if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) co_return;
+    const auto it = owner->states.find(playerId);
+    if (it == owner->states.end() || !it->second.inflight || it->second.attemptGen != attemptGen) co_return;
     auto& state = it->second;
     if (!outcome->reply)
     {
@@ -488,14 +488,14 @@ void PlayerStoreClient::ScheduleRetry(Guid playerId, State &state)
                   << " attempt(s); keeping the snapshot and retrying (metric=player_store_save_retry)";
     }
     const double delay = Jittered(state.backoffSec);
-    state.backoffSec = std::min(state.backoffSec * 2.0, options_.retryMaxSec);
-    const std::weak_ptr<Lifetime> original = lifetime_;
-    options_.schedule(delay, [original, playerId, attemptGen = state.attemptGen]()
+    state.backoffSec = std::min(state.backoffSec * 2.0, options.retryMaxSec);
+    const std::weak_ptr<Lifetime> original = lifetime;
+    options.schedule(delay, [original, playerId, attemptGen = state.attemptGen]()
     {
         auto* owner = ResolveOwner(original);
         if (owner == nullptr) return;
-        const auto it = owner->states_.find(playerId);
-        if (it == owner->states_.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
+        const auto it = owner->states.find(playerId);
+        if (it == owner->states.end() || !it->second.inflight || it->second.attemptGen != attemptGen) return;
         owner->Attempt(playerId, it->second);
     });
 }
@@ -522,12 +522,12 @@ void PlayerStoreClient::HandleSaveResponse(Guid playerId, State &state, const pl
         {
             audit_outbox_stats::IncStoreTooOld();
         }
-        if (!auditWritten && auditNotWrittenCount_++ % kAuditNotWrittenLogEveryN == 0)
+        if (!auditWritten && auditNotWrittenCount++ % kAuditNotWrittenLogEveryN == 0)
         {
             LOG_ERROR << "[player_store] save of player " << playerId << " seq " << request.save_seq()
                       << " committed, but the store did not write its " << request.transaction_logs_size() << " transaction log(s) and "
                       << request.audit_snapshots_size() << " snapshot request(s) to the audit outbox (store older than scene?);"
-                      << " keeping them for the next save (total=" << auditNotWrittenCount_ << ", metric=audit_outbox_store_too_old)";
+                      << " keeping them for the next save (total=" << auditNotWrittenCount << ", metric=audit_outbox_store_too_old)";
         }
         Finish(playerId, state, result, /*committed=*/true, auditWritten);
         return;
@@ -616,9 +616,9 @@ void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &re
 
 void PlayerStoreClient::NotifyCommittedThrough(Guid playerId, uint64_t commitMark) const
 {
-    if (options_.onCommittedThrough)
+    if (options.onCommittedThrough)
     {
-        options_.onCommittedThrough(playerId, commitMark);
+        options.onCommittedThrough(playerId, commitMark);
     }
 }
 
@@ -627,8 +627,8 @@ void PlayerStoreClient::Advance(Guid playerId)
     // pending 可能没有变化，回调也可能再次 Submit 或关闭任务准入。
     while (SceneTaskScope::IsDurableAccepting())
     {
-        const auto it = states_.find(playerId);
-        if (it == states_.end())
+        const auto it = states.find(playerId);
+        if (it == states.end())
         {
             // 回调里销毁了实体、回收了状态(被废黜):等着落定的调用方照样要通知,否则它们永远留在表里。
             NotifySettled(playerId);
@@ -671,19 +671,19 @@ void PlayerStoreClient::RunWhenSettled(Guid playerId, std::function<void()> fn)
         fn();
         return;
     }
-    settledWaiters_[playerId].push_back(std::move(fn));
+    settledWaiters[playerId].push_back(std::move(fn));
 }
 
 void PlayerStoreClient::NotifySettled(Guid playerId)
 {
-    if (options_.onSettled)
+    if (options.onSettled)
     {
-        options_.onSettled(playerId);
+        options.onSettled(playerId);
     }
-    if (const auto waiters = settledWaiters_.find(playerId); waiters != settledWaiters_.end())
+    if (const auto waiters = settledWaiters.find(playerId); waiters != settledWaiters.end())
     {
         auto fns = std::move(waiters->second);
-        settledWaiters_.erase(waiters);
+        settledWaiters.erase(waiters);
         for (const auto &fn : fns)
         {
             fn();
@@ -694,8 +694,8 @@ void PlayerStoreClient::NotifySettled(Guid playerId)
     {
         return;
     }
-    const auto claim = claims_.find(playerId);
-    if (claim != claims_.end() && claim->second.waitingForSettle)
+    const auto claim = claims.find(playerId);
+    if (claim != claims.end() && claim->second.waitingForSettle)
     {
         claim->second.waitingForSettle = false;
         StartClaim(playerId, claim->second);
@@ -704,7 +704,7 @@ void PlayerStoreClient::NotifySettled(Guid playerId)
 
 void PlayerStoreClient::ReleaseDetached(Guid playerId, uint64_t ownerEpoch, uint32_t schemaGen, ReleaseDone done)
 {
-    const std::optional<uint64_t> saveSeq = options_.nextSeq(playerId);
+    const std::optional<uint64_t> saveSeq = options.nextSeq(playerId);
     if (!saveSeq)
     {
         done(false, playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED);
@@ -715,15 +715,15 @@ void PlayerStoreClient::ReleaseDetached(Guid playerId, uint64_t ownerEpoch, uint
     request.set_owner_epoch(ownerEpoch);
     request.set_save_seq(*saveSeq);
     request.set_schema_gen(schemaGen);
-    request.set_instance_id(options_.instanceId());
+    request.set_instance_id(options.instanceId());
     request.set_release(true);
-    detachedInFlight_.insert(playerId);
-    const std::weak_ptr<Lifetime> original = lifetime_;
+    detachedInFlight.insert(playerId);
+    const std::weak_ptr<Lifetime> original = lifetime;
     auto complete = [original, playerId, done = std::move(done)](bool ok, const playerstore::SavePlayerResponse* response)
     {
         auto* owner = ResolveOwner(original);
         if (owner == nullptr) return;
-        owner->detachedInFlight_.erase(playerId);
+        owner->detachedInFlight.erase(playerId);
         done(ok && response != nullptr, response != nullptr ? response->result() : playerstore::SAVE_PLAYER_RESULT_UNSPECIFIED);
         owner = ResolveOwner(original);
         if (owner != nullptr && !owner->HasUnsettled(playerId))
@@ -731,23 +731,23 @@ void PlayerStoreClient::ReleaseDetached(Guid playerId, uint64_t ownerEpoch, uint
             owner->NotifySettled(playerId);
         }
     };
-    if (!options_.send(request, complete)) complete(false, nullptr);
+    if (!options.send(request, complete)) complete(false, nullptr);
 }
 
 double PlayerStoreClient::Jittered(double delaySec) const
 {
-    return options_.jitter ? options_.jitter(delaySec) : delaySec;
+    return options.jitter ? options.jitter(delaySec) : delaySec;
 }
 
 PlayerStoreClient::Clock::time_point PlayerStoreClient::Now() const
 {
-    return options_.now ? options_.now() : Clock::now();
+    return options.now ? options.now() : Clock::now();
 }
 
 void PlayerStoreClient::RequestClaim(Guid playerId)
 {
     if (!SceneTaskScope::IsDurableAccepting()) return;
-    const auto [it, inserted] = claims_.try_emplace(playerId);
+    const auto [it, inserted] = claims.try_emplace(playerId);
     if (!inserted)
     {
         return;
@@ -762,20 +762,20 @@ void PlayerStoreClient::RequestClaim(Guid playerId)
 
 bool PlayerStoreClient::HasPendingClaim(Guid playerId) const
 {
-    return claims_.count(playerId) != 0;
+    return claims.count(playerId) != 0;
 }
 
 void PlayerStoreClient::StartClaim(Guid playerId, Claim &claim)
 {
-    claim.deadline = Now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(options_.claimBudgetSec));
-    claim.backoffSec = options_.retryMinSec;
+    claim.deadline = Now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(options.claimBudgetSec));
+    claim.backoffSec = options.retryMinSec;
     AttemptClaim(playerId, claim);
 }
 
 void PlayerStoreClient::AttemptClaim(Guid playerId, Claim &claim)
 {
     if (!SceneTaskScope::IsDurableAccepting()) return;
-    auto request = options_.claimRequest(playerId);
+    auto request = options.claimRequest(playerId);
     if (!request)
     {
         FinishClaim(playerId, nullptr);
@@ -783,7 +783,7 @@ void PlayerStoreClient::AttemptClaim(Guid playerId, Claim &claim)
     }
     const uint64_t attemptGen = ++claim.attemptGen;
     (void)SceneTaskScope::TryStartDurable(
-        RunClaimAttempt(lifetime_, playerId, attemptGen, std::move(*request)), "PlayerStoreClaim");
+        RunClaimAttempt(lifetime, playerId, attemptGen, std::move(*request)), "PlayerStoreClaim");
 }
 
 boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifetime> original, Guid playerId,
@@ -793,7 +793,7 @@ boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifet
     auto submit = [&](auto done) {
         auto* owner = ResolveOwner(original);
         if (owner == nullptr) return false;
-        return owner->options_.sendClaim(request,
+        return owner->options.sendClaim(request,
             [done = std::move(done)](bool ok, const playerstore::LoadAndClaimResponse* reply) {
                 DeliverAttempt(done, ok, reply);
             });
@@ -803,8 +803,8 @@ boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifet
     if (!outcome || !SceneTaskScope::IsDurableAccepting()) co_return;
     auto* owner = ResolveOwner(original);
     if (owner == nullptr) co_return;
-    const auto it = owner->claims_.find(playerId);
-    if (it == owner->claims_.end() || it->second.attemptGen != attemptGen) co_return;
+    const auto it = owner->claims.find(playerId);
+    if (it == owner->claims.end() || it->second.attemptGen != attemptGen) co_return;
     const auto& response = outcome->reply;
     if (!response)
     {
@@ -839,9 +839,9 @@ boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifet
             co_return;
         }
         // 这一行里本二进制不认识的顶层字段:取出来随播种存下,之后每次写这一行都接回去(头文件类注释)。
-        if (owner->options_.carriedBytes)
+        if (owner->options.carriedBytes)
         {
-            if (!owner->options_.carriedBytes(row.payload(), carried[kind]))
+            if (!owner->options.carriedBytes(row.payload(), carried[kind]))
             {
                 LOG_ERROR << "[player_store] claim of player " << playerId << " returned a row of kind " << kind
                           << " that cannot be parsed; refusing the entry";
@@ -853,11 +853,11 @@ boost::cobalt::task<void> PlayerStoreClient::RunClaimAttempt(std::weak_ptr<Lifet
         confirmed[kind] = row.payload();
     }
     // 全网同一版本、也没有退役字段残留时两个数都是 0,不打。全进程第一次和此后每 kCarriedClaimLogEveryN 次打一条。
-    if ((carriedRows != 0 || newerRows != 0) && owner->carriedClaimCount_++ % kCarriedClaimLogEveryN == 0)
+    if ((carriedRows != 0 || newerRows != 0) && owner->carriedClaimCount++ % kCarriedClaimLogEveryN == 0)
     {
         LOG_INFO << "[player_store] claim of player " << playerId << " holds data this build does not know: unknown top-level fields in "
                  << carriedRows << " row(s) are carried back on every write, " << newerRows
-                 << " row(s) of newer kinds are left untouched (total=" << owner->carriedClaimCount_
+                 << " row(s) of newer kinds are left untouched (total=" << owner->carriedClaimCount
                  << ", metric=player_store_claim_carried)";
     }
     if (!owner->Seed(playerId, response->storage_id(), response->owner_epoch(), response->save_seq(), std::move(confirmed), std::move(carried)))
@@ -881,22 +881,22 @@ void PlayerStoreClient::ScheduleClaimRetry(Guid playerId, Claim &claim)
     }
     ++claim.failedAttempts;
     const double delay = Jittered(claim.backoffSec);
-    claim.backoffSec = std::min(claim.backoffSec * 2.0, options_.retryMaxSec);
-    const std::weak_ptr<Lifetime> original = lifetime_;
-    options_.schedule(delay, [original, playerId, attemptGen = claim.attemptGen]()
+    claim.backoffSec = std::min(claim.backoffSec * 2.0, options.retryMaxSec);
+    const std::weak_ptr<Lifetime> original = lifetime;
+    options.schedule(delay, [original, playerId, attemptGen = claim.attemptGen]()
     {
         auto* owner = ResolveOwner(original);
         if (owner == nullptr) return;
-        const auto it = owner->claims_.find(playerId);
-        if (it == owner->claims_.end() || it->second.attemptGen != attemptGen) return;
+        const auto it = owner->claims.find(playerId);
+        if (it == owner->claims.end() || it->second.attemptGen != attemptGen) return;
         owner->AttemptClaim(playerId, it->second);
     });
 }
 
 void PlayerStoreClient::FinishClaim(Guid playerId, const playerstore::LoadAndClaimResponse *response)
 {
-    claims_.erase(playerId);
-    options_.onClaimed(playerId, response);
+    claims.erase(playerId);
+    options.onClaimed(playerId, response);
 }
 
 bool ValidatePlayerStoreStartup(std::string &error)

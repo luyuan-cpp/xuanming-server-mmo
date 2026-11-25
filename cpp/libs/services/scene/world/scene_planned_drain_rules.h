@@ -106,31 +106,31 @@ class Pacer
 {
 public:
 	Pacer() = default;
-	explicit Pacer(const uint32_t perSecond) : perSecond_(perSecond) {}
+	explicit Pacer(const uint32_t perSecond) : perSecond(perSecond) {}
 
 	// 本拍可以发起几个(不超过 waiting)。第一次调用只起算,不放行。
 	std::size_t Take(const std::chrono::steady_clock::time_point now, const std::size_t waiting)
 	{
-		if (perSecond_ == 0)
+		if (perSecond == 0)
 		{
 			return waiting;
 		}
-		if (last_.has_value() && now > *last_)
+		if (last.has_value() && now > *last)
 		{
-			const double elapsed = std::chrono::duration<double>(now - *last_).count();
-			tokens_ = (std::min)(static_cast<double>(perSecond_), tokens_ + elapsed * static_cast<double>(perSecond_));
+			const double elapsed = std::chrono::duration<double>(now - *last).count();
+			tokens = (std::min)(static_cast<double>(perSecond), tokens + elapsed * static_cast<double>(perSecond));
 		}
-		last_ = now;
-		const auto whole = static_cast<std::size_t>(tokens_);
+		last = now;
+		const auto whole = static_cast<std::size_t>(tokens);
 		const std::size_t taken = (std::min)(whole, waiting);
-		tokens_ -= static_cast<double>(taken);
+		tokens -= static_cast<double>(taken);
 		return taken;
 	}
 
 private:
-	uint32_t perSecond_{0};
-	double tokens_{0.0};
-	std::optional<std::chrono::steady_clock::time_point> last_;
+	uint32_t perSecond{0};
+	double tokens{0.0};
+	std::optional<std::chrono::steady_clock::time_point> last;
 };
 
 } // namespace scene_planned_drain

@@ -55,7 +55,7 @@ public:
 	// 准入。depthLimit 是排队 + 在途的总上限。
 	AdmitResult Admit(Item item, std::size_t depthLimit)
 	{
-		if (redirected_)
+		if (redirected)
 		{
 			return AdmitResult::kRejectedRedirected;
 		}
@@ -63,7 +63,7 @@ public:
 		{
 			return AdmitResult::kRejectedFull;
 		}
-		queued_.push_back(std::move(item));
+		queued.push_back(std::move(item));
 		return AdmitResult::kQueued;
 	}
 
@@ -71,34 +71,34 @@ public:
 	// 取出之后调用方必须二选一:发出成功就 MarkSent;没发出就再次调用本函数继续取下一条。
 	std::optional<Item> TakeNextIfIdle()
 	{
-		if (inFlight_ != kNoCallSeq || queued_.empty())
+		if (inFlight != kNoCallSeq || queued.empty())
 		{
 			return std::nullopt;
 		}
-		Item item = std::move(queued_.front());
-		queued_.pop_front();
+		Item item = std::move(queued.front());
+		queued.pop_front();
 		return item;
 	}
 
 	// 标记已发出。前置条件:当前空闲,且 seq 不为 kNoCallSeq。违反前置条件返回 false、不改状态。
 	bool MarkSent(CallSeq seq)
 	{
-		if (inFlight_ != kNoCallSeq || seq == kNoCallSeq)
+		if (inFlight != kNoCallSeq || seq == kNoCallSeq)
 		{
 			return false;
 		}
-		inFlight_ = seq;
+		inFlight = seq;
 		return true;
 	}
 
 	// 认领完成。只有 seq 等于当前在途序号时才返回 true 并回到空闲;其他序号(迟到、重复、串号)一律忽略。
 	bool Complete(CallSeq seq)
 	{
-		if (seq == kNoCallSeq || seq != inFlight_)
+		if (seq == kNoCallSeq || seq != inFlight)
 		{
 			return false;
 		}
-		inFlight_ = kNoCallSeq;
+		inFlight = kNoCallSeq;
 		return true;
 	}
 
@@ -107,35 +107,35 @@ public:
 	// 在途那一条照常认领。再次调用返回空。
 	[[nodiscard]] std::deque<Item> MarkRedirected()
 	{
-		redirected_ = true;
-		return std::exchange(queued_, std::deque<Item>{});
+		redirected = true;
+		return std::exchange(queued, std::deque<Item>{});
 	}
 
 	// 排队项(不含在途那一条)里有没有满足 pred 的。至多扫一遍队列(≤ 深度上限)。
 	template <typename Pred>
 	bool AnyQueued(Pred pred) const
 	{
-		return std::any_of(queued_.begin(), queued_.end(), pred);
+		return std::any_of(queued.begin(), queued.end(), pred);
 	}
 
 	// 丢弃全部排队项(断线时用:连接已没了,回执无处可发),返回丢弃的条数。在途序号不变,由调用方从在途索引里注销。
 	std::size_t DropQueued()
 	{
-		const std::size_t dropped = queued_.size();
-		queued_.clear();
+		const std::size_t dropped = queued.size();
+		queued.clear();
 		return dropped;
 	}
 
-	CallSeq InFlightSeq() const { return inFlight_; }
-	bool Idle() const { return inFlight_ == kNoCallSeq; }
-	bool Redirected() const { return redirected_; }
-	std::size_t QueuedCount() const { return queued_.size(); }
-	std::size_t Depth() const { return queued_.size() + (inFlight_ == kNoCallSeq ? 0 : 1); }
+	CallSeq InFlightSeq() const { return inFlight; }
+	bool Idle() const { return inFlight == kNoCallSeq; }
+	bool Redirected() const { return redirected; }
+	std::size_t QueuedCount() const { return queued.size(); }
+	std::size_t Depth() const { return queued.size() + (inFlight == kNoCallSeq ? 0 : 1); }
 
 private:
-	std::deque<Item> queued_;
-	CallSeq inFlight_{kNoCallSeq};
-	bool redirected_{false};
+	std::deque<Item> queued;
+	CallSeq inFlight{kNoCallSeq};
+	bool redirected{false};
 };
 
 // 进程级在途索引:按 gate 序号认领,保证每个调用恰好被处理一次;另带一个按截止时刻排序的过期堆。

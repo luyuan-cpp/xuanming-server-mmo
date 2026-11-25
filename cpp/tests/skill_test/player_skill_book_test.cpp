@@ -809,3 +809,92 @@ TEST_F(PlayerSkillBookTest, SupportPreviewUsesAuthoritativeLevelCurvePassiveAndM
     PlayerSupportEffectSystem::Build(player, summary);
     EXPECT_FALSE(summary.healing().complete());
 }
+
+TEST_F(PlayerSkillBookTest, SkillLoadoutEnforcesSlotLimitsExclusiveGroupAndSyncsSnapshot) {
+    const auto player = SpawnPlayer(1, 60, 100000);
+    Own(player, 10002, 1); // 主动技
+    Own(player, 12001, 1); // P01 +12% 物攻
+    Own(player, 12002, 1); // P02 +12% 法攻
+    Own(player, 12003, 1); // P03 +12% 防御
+    Own(player, 12004, 1); // P04 +15% 气血
+    Own(player, 12101, 1); // E03 灵法专修 (exclusive_group=1)
+    Own(player, 12102, 1); // E04 兵锋专修 (exclusive_group=1)
+    Own(player, 13101, 1); // E05 截灵追击
+    Own(player, 14101, 1); // E07 连击破绽
+
+    ListSkillsResponse initialBook;
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, initialBook));
+    ASSERT_TRUE(initialBook.has_loadout());
+    EXPECT_FALSE(initialBook.loadout().custom_enabled());
+    EXPECT_EQ(initialBook.loadout().schemes_size(), 3);
+
+    // 1. 超过 3 个被动槽位被拒绝。
+    SaveSkillLoadoutRequest tooMany;
+    tooMany.set_scheme_id(1);
+    tooMany.set_role_tag(1);
+    tooMany.add_passive_skill_ids(12001);
+    tooMany.add_passive_skill_ids(12002);
+    tooMany.add_passive_skill_ids(12003);
+    tooMany.add_passive_skill_ids(12004);
+    tooMany.set_state_version(initialBook.loadout().state_version());
+    tooMany.set_request_id("loadout-too-many-0001");
+    SaveSkillLoadoutResponse resp;
+    PlayerSkillSystem::SaveLoadout(player, tooMany, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutSlotLimitReached);
+
+    // 2. E03 + E04 互斥组冲突被拒绝。
+    SaveSkillLoadoutRequest conflict;
+    conflict.set_scheme_id(1);
+    conflict.set_role_tag(1);
+    conflict.add_passive_skill_ids(12101);
+    conflict.add_passive_skill_ids(12102);
+    conflict.set_state_version(initialBook.loadout().state_version());
+    conflict.set_request_id("loadout-conflict-0001");
+    PlayerSkillSystem::SaveLoadout(player, conflict, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutConflict);
+
+    // 3. 保存合法方案 1（P01 + P03 + E03 / E05 / E07），仅已装配被动进入属性与战斗快照。
+    SaveSkillLoadoutRequest valid;
+    valid.set_scheme_id(1);
+    valid.set_role_tag(1);
+    valid.add_passive_skill_ids(12001);
+    valid.add_passive_skill_ids(12003);
+    valid.add_passive_skill_ids(12101);
+    valid.add_pursuit_skill_ids(13101);
+    valid.add_opening_skill_ids(14101);
+    valid.set_state_version(initialBook.loadout().state_version());
+    valid.set_request_id("loadout-valid-scheme1-0001");
+    PlayerSkillSystem::SaveLoadout(player, valid, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_TRUE(resp.state().loadout().custom_enabled());
+    EXPECT_EQ(resp.state().loadout().active_scheme_id(), 1u);
+
+    const auto passive = PlayerSkillSystem::CollectPassiveBonus(player);
+    EXPECT_GT(passive.physicalAttack, 0.0);
+    EXPECT_DOUBLE_EQ(passive.magicAttack, 0.0); // P02 未装配，不生效
+    EXPECT_GT(passive.defense, 0.0);
+
+    BattlePlayerSnapshot snap;
+    PlayerSkillSystem::FillBattleSnapshot(player, snap);
+    EXPECT_TRUE(snap.skill_ranks().contains(10002));  // 主动技全量保留
+    EXPECT_TRUE(snap.skill_ranks().contains(12001));  // 已装配被动
+    EXPECT_FALSE(snap.skill_ranks().contains(12002)); // 未装配被动不入战
+    EXPECT_TRUE(snap.skill_ranks().contains(13101));  // 已装配追击
+    EXPECT_TRUE(snap.skill_ranks().contains(14101));  // 已装配开场
+
+    // 4. 切换至空白方案 2 后被动加成归零，且同 request_id 重放幂等。
+    SwitchSkillLoadoutRequest sw;
+    sw.set_scheme_id(2);
+    sw.set_state_version(resp.state().loadout().state_version());
+    sw.set_request_id("loadout-switch-scheme2-0001");
+    SwitchSkillLoadoutResponse swResp;
+    PlayerSkillSystem::SwitchLoadout(player, sw, swResp);
+    ASSERT_FALSE(swResp.has_error_message());
+    EXPECT_EQ(swResp.state().loadout().active_scheme_id(), 2u);
+    EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(player).physicalAttack, 0.0);
+
+    SwitchSkillLoadoutResponse swReplay;
+    PlayerSkillSystem::SwitchLoadout(player, sw, swReplay);
+    ASSERT_FALSE(swReplay.has_error_message());
+    EXPECT_TRUE(swReplay.replayed());
+}

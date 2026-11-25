@@ -24,6 +24,7 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/bag_marshal.h"
 #include "services/scene/player/system/player_equip.h"
+#include "services/scene/player/system/player_feature_snapshot.h"
 #include "table/code/attributeallocratio_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -418,8 +419,8 @@ TEST_F(PlayerEquipV1Test, TopLevelElevenUsesProbabilityWithHardPityNoDowngradeAn
 {
     ASSERT_EQ(kSuccess, Inventory().PutInstance(V1Instance(kEquipmentGuid, kV1Weapon, 10)));
     ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kEquipmentGuid, 3u));
-    // 20 次 × 30 强化石 = 600 强化石，足够覆盖完整保底周期。
-    ASSERT_NO_FATAL_FAILURE(StockStones(600));
+    // 20 次 × 100 强化石 = 2000 强化石，足够覆盖完整保底周期。
+    ASSERT_NO_FATAL_FAILURE(StockStones(2000));
     // 让随机源总是返回 9999（10% 概率不中）。
     PlayerEquipSystem::SetRandomSourceForTest([](uint64_t bound) { return bound - 1; });
 
@@ -433,7 +434,7 @@ TEST_F(PlayerEquipV1Test, TopLevelElevenUsesProbabilityWithHardPityNoDowngradeAn
         EXPECT_EQ(11u, info.enhance_next().next_level());
         EXPECT_EQ(1000u, info.enhance_next().success_rate());
         EXPECT_EQ(2400u, info.enhance_next().bonus_permyriad());
-        EXPECT_EQ(30u, info.enhance_next().material_count());
+        EXPECT_EQ(100u, info.enhance_next().material_count());
         EXPECT_EQ(20u, info.enhance_next().pity_limit());
         EXPECT_EQ(attempt, info.enhance_next().current_pity_count());
         EXPECT_FALSE(info.enhance_next().pity_guaranteed_next());
@@ -488,7 +489,7 @@ TEST_F(PlayerEquipV1Test, TopLevelElevenCanSucceedEarlyAndResetPity)
     auto item = V1Instance(kEquipmentGuid, kV1Weapon, 10);
     item.mutable_equip()->set_enhance_pity_count(5);
     ASSERT_EQ(kSuccess, Inventory().PutInstance(item));
-    ASSERT_NO_FATAL_FAILURE(StockStones(30));
+    ASSERT_NO_FATAL_FAILURE(StockStones(100));
     // 随机源返回 0 (< 1000)，10% 直接提前成功。
     PlayerEquipSystem::SetRandomSourceForTest([](uint64_t) { return uint64_t{0}; });
     PlayerEquipSystem::EnhanceOutcome outcome;
@@ -516,7 +517,7 @@ TEST_F(PlayerEquipV1Test, ShoesKeepSpeedAtEveryLevelAndPreviewMatchesAppliedDefe
 {
     ASSERT_EQ(kSuccess, Inventory().PutInstance(V1Instance(kEquipmentGuid, kV1Shoes)));
     ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, kEquipmentGuid, 6u));
-    ASSERT_NO_FATAL_FAILURE(StockStones(105));
+    ASSERT_NO_FATAL_FAILURE(StockStones(175));
     // 让 +11 一发命中，验证满级鞋防御放大 +24% 而速度恒为 328。
     PlayerEquipSystem::SetRandomSourceForTest([](uint64_t) { return uint64_t{0}; });
     for (uint32_t level = 0; level <= 11; ++level)
@@ -682,5 +683,42 @@ TEST_F(PlayerEquipV1Test, ExistingGemStillContributesAndCanBeRemovedFromV1Equipm
     const auto* kept = Equipment().GetItemCompByGuid(kEquipmentGuid);
     ASSERT_NE(nullptr, kept);
     EXPECT_EQ(0, kept->equip().gems_size());
+}
+
+TEST_F(PlayerEquipV1Test, EnhanceTradableEquipmentBlocksBoundStonesUntilConfirmedAndThenBinds)
+{
+    auto weapon = V1Instance(kEquipmentGuid, kV1Weapon, 0);
+    weapon.set_bound(false);
+    ASSERT_EQ(kSuccess, Inventory().PutInstance(weapon));
+
+    InitItemParam boundStones;
+    boundStones.itemPBComp.set_item_id(kInvalidGuid);
+    boundStones.itemPBComp.set_config_id(kV1Stone);
+    boundStones.itemPBComp.set_size(20);
+    boundStones.itemPBComp.set_bound(true);
+    ASSERT_EQ(kSuccess, BagService::AddItem(player, Inventory(), boundStones));
+
+    BagInfo snap;
+    ASSERT_EQ(kSuccess, PlayerBagSystem::BuildSnapshot(player, kInventory, snap));
+    const BagItemInfo* snapWeapon = nullptr;
+    for (const auto& it : snap.items()) {
+        if (it.item_id() == kEquipmentGuid) { snapWeapon = &it; break; }
+    }
+    ASSERT_NE(nullptr, snapWeapon);
+    ASSERT_TRUE(snapWeapon->has_enhance_next());
+    EXPECT_TRUE(snapWeapon->enhance_next().will_bind_on_enhance());
+    EXPECT_EQ(0u, snapWeapon->enhance_next().tradable_material_available());
+
+    PlayerEquipSystem::EnhanceOutcome result;
+    // 默认仅耗可交易石：背包只有绑定石时必须拦截并要求二次确认，一颗不扣、装备仍可交易。
+    EXPECT_EQ(kEquipBindConfirmRequired, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 0, result, std::nullopt, false));
+    EXPECT_EQ(20u, Inventory().GetTotalItemCount(kV1Stone));
+    EXPECT_FALSE(Inventory().GetItemCompByGuid(kEquipmentGuid)->bound());
+
+    // 显式确认混用绑定石后放行强化，并将装备转为仅自用绑定。
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Enhance(player, kEquipmentGuid, 0, result, std::nullopt, true));
+    EXPECT_TRUE(result.success);
+    EXPECT_EQ(1u, result.level);
+    EXPECT_TRUE(Inventory().GetItemCompByGuid(kEquipmentGuid)->bound());
 }
 } // namespace

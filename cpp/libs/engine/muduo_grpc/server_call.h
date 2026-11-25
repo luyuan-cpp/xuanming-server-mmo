@@ -44,7 +44,7 @@ public:
     ServerCall() = default;
 
     // 句柄是否非空(默认构造的句柄为空;空句柄的 Finish* 只打 ERROR)。
-    explicit operator bool() const { return token_ != nullptr; }
+    explicit operator bool() const { return token != nullptr; }
 
     // ---- 只读信息:任何线程都可调用,服务端销毁后仍然有效 ----
     uint64_t id() const;
@@ -74,7 +74,7 @@ private:
     friend class Server;
     explicit ServerCall(std::shared_ptr<detail::CallToken> token);
 
-    std::shared_ptr<detail::CallToken> token_;
+    std::shared_ptr<detail::CallToken> token;
 };
 
 namespace detail

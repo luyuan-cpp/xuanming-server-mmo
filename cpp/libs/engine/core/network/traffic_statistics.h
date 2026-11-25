@@ -57,14 +57,14 @@ public:
     // Disable stats collection and log final summary.
     void Disable();
 
-    bool IsEnabled() const { return enabled_.load(std::memory_order_relaxed); }
+    bool IsEnabled() const { return enabled.load(std::memory_order_relaxed); }
 
     // Called periodically (e.g., from a timer). Snapshots counters, resets them,
     // and logs a summary of the window.
     void ReportAndReset();
 
     // Get the report interval in seconds (default 30, configurable via env).
-    uint32_t GetReportIntervalSeconds() const { return reportIntervalSeconds_; }
+    uint32_t GetReportIntervalSeconds() const { return reportIntervalSeconds; }
 
     static TrafficStatsCollector &Instance();
 
@@ -74,11 +74,11 @@ private:
     void UpdateMaxSize(std::atomic<uint32_t> &current, uint32_t newSize);
     void LogWindowSummary(double windowSeconds, const std::vector<MessageTrafficSnapshot> &snapshots);
 
-    std::array<MessageTrafficCounters, kMaxRpcMethodCount> counters_{};
-    std::atomic<bool> enabled_{false};
-    std::chrono::steady_clock::time_point windowStart_{};
-    std::chrono::steady_clock::time_point autoDisableTime_{};
-    uint32_t reportIntervalSeconds_ = 30;
+    std::array<MessageTrafficCounters, kMaxRpcMethodCount> counters{};
+    std::atomic<bool> enabled{false};
+    std::chrono::steady_clock::time_point windowStart{};
+    std::chrono::steady_clock::time_point autoDisableTime{};
+    uint32_t reportIntervalSeconds = 30;
 };
 
 // Register the periodic traffic stats reporter on the event loop.

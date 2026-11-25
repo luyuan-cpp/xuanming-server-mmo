@@ -128,6 +128,9 @@ enum GuildAssetOpKind {
   GUILD_ASSET_OP_KIND_ACTIVITY_REWARD = 3;  // 活动发奖(B6):GUILD_CREDIT 流
   // 没有"捐献退款":用户决策 D2(README §3)——离帮 / 被踢 / 解散后已扣款的捐献照记给帮会、不退款。
   // 90 清单原文里的 DONATE_REFUND = 4 随之作废,4 号未占用。
+  GUILD_ASSET_OP_KIND_WAR_REWARD = 5;       // 帮战 V2 奖励:GUILD_CREDIT 流(银两/周宝箱/灵脉分红)
+  GUILD_ASSET_OP_KIND_BOUNTY_ESCROW = 6;    // 追杀令预扣:GUILD_DEBIT 流扣发布者银两
+  GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT = 7;    // 追杀令结单/反杀/过期退本:GUILD_CREDIT 流
 }
 
 enum GuildDailyCounterKind {
@@ -135,6 +138,8 @@ enum GuildDailyCounterKind {
   GUILD_DAILY_COUNTER_KIND_DONATE = 1;
   GUILD_DAILY_COUNTER_KIND_SHOP = 2;
   GUILD_DAILY_COUNTER_KIND_ACTIVITY = 3;    // B6
+  GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT = 4; // 帮战 V2:本人每日领取追杀/反杀银两赏金次数(上限 5)
+  GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY = 5; // 帮战 V2:帮会公费追杀令每日次数(按 player_id=guild_id 记)
 }
 
 message GuildPlayerOpSeqRecord {              // 锁序位置 5
@@ -508,4 +513,181 @@ message GuildNameHoldRecord {
   string name_norm = 2;
   uint64 guild_id = 3;
   uint64 held_until_ms = 4;
+}
+
+// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ────────────────────────────
+// 全库锁序顺延位置 13..19(排在 guild_name_hold=12 之后,单调追加,不回头锁旧表)。
+
+// 锁序位置 13:三座灵脉归属、旗势、整备护盾与每小时分红游标。
+message GuildWarLeylineRecord {
+  option(OptionTableName) = "guild_war_leyline";
+  option(OptionPrimaryKey) = "zone_id,leyline_id";
+  option(OptionIndex) = "owner_guild_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint32 zone_id = 1;
+  uint32 leyline_id = 2;             // 1=八仙岛(scene 2) / 2=碧渊水宫(scene 5) / 3=月汐湾(scene 3)
+  uint64 owner_guild_id = 3;         // 0 = 无主(原生灵脉守卫镇守)
+  uint32 banner_hp = 4;              // 0..1000
+  uint64 shield_until_ms = 5;        // 易主整备护盾截止时刻
+  uint64 captured_at_ms = 6;
+  uint64 last_dividend_at_ms = 7;    // 多副本幂等周期分红推进时间戳
+  uint32 dividend_week_key = 8;      // 本周已产分红计数对应的周键
+  uint32 weekly_dividend_count = 9;  // 本周已产分红份数(上限 24)
+  uint64 last_siege_alert_ms = 10;   // 踢馆警报 60s 节流时间戳
+  uint64 updated_ms = 11;
+}
+
+// 锁序位置 14:本帮 5 槽守旗阵 AI 托管快照(不占用玩家本人在线/战斗)。
+message GuildWarGarrisonRecord {
+  option(OptionTableName) = "guild_war_garrison";
+  option(OptionPrimaryKey) = "guild_id,slot_index";
+  option(OptionUniqueKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 slot_index = 2;             // 1..5
+  uint64 player_id = 3;
+  string player_name = 4;
+  uint32 level = 5;
+  string appearance_id = 6;
+  string pet_name = 7;
+  uint32 pet_table_id = 8;
+  bytes snapshot_payload = 9;        // 序列化 BattlePlayerSnapshot(开局强制置 ai_controlled=true)
+  uint64 updated_ms = 10;
+}
+
+// 锁序位置 15:帮会每周帮战进度(全帮周战功、本帮周分红池与建帮首胜史记)。
+message GuildWarWeeklyProgressRecord {
+  option(OptionTableName) = "guild_war_weekly_progress";
+  option(OptionPrimaryKey) = "guild_id,week_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 week_key = 2;               // gameday.WeekKey(ISO 周,周一 05:00 UTC+8)
+  uint64 guild_merit = 3;            // 本帮本周累计战功
+  uint32 dividend_pool_count = 4;    // 本帮本周累计灵脉分红份数
+  uint64 mvp1_player_id = 5;         // 本周战功第 1 功臣
+  uint64 mvp1_merit = 6;
+  uint64 mvp2_player_id = 7;         // 本周战功第 2 功臣
+  uint64 mvp2_merit = 8;
+  uint64 first_win_player1_id = 9;   // 建帮首胜史记(week_key=0 专用永久行保存)
+  uint64 first_win_player2_id = 10;
+  uint64 first_win_at_ms = 11;
+  uint64 updated_ms = 12;
+}
+
+// 锁序位置 16:玩家帮战个人态(和平免战、挂牌迎战、连胜、周领奖位图防换帮重领)。
+message GuildWarPlayerStateRecord {
+  option(OptionTableName) = "guild_war_player_state";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionIndex) = "zone_id,open_challenge";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 zone_id = 2;
+  uint32 peace_mode = 3;             // 0=战意(默认) / 1=和平免战
+  uint64 peace_ready_at_ms = 4;      // 脱战 60s 冷却截止(now >= 它才可从战意切和平)
+  uint32 open_challenge = 5;         // 0=未挂牌 / 1=界面挂牌迎战
+  uint64 protect_until_ms = 6;       // 战后 10s 防堵门保护截止
+  uint32 streak_count = 7;           // 当前连胜层数
+  uint32 streak_distinct_count = 8;  // 连胜期内击败的不同对手数(悬赏需 >=2)
+  uint64 streak_last_opponent_id = 9;// 防同一人刷连胜
+  uint32 weekly_week_key = 10;       // 下面三列对应的 ISO 周键
+  uint64 weekly_merit = 11;          // 本人本周战功(>=30 解锁周箱与分红)
+  uint32 milestone_claimed_mask = 12;// 本周已领里程碑位图(bit 0..3 对应档位 1..4,换帮不重置)
+  uint32 dividend_claimed_count = 13;// 本周已领灵脉分红份数(上限 12,换帮不重置)
+  uint64 bounty_protect_until_ms = 14;// 被成功追杀销单后 30 分钟免再挂保护截止
+  uint64 last_garrison_refresh_ms = 15;// 守旗刷新 60s 冷却基准
+  uint64 last_track_ms = 16;         // 追杀追踪 15s 冷却基准
+  uint64 updated_ms = 17;
+}
+
+// 锁序位置 17:江湖追杀令托管与生命周期。
+message GuildWarBountyRecord {
+  option(OptionTableName) = "guild_war_bounty";
+  option(OptionPrimaryKey) = "bounty_id";
+  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 bounty_id = 1;              // 发号器永久 ID
+  uint32 zone_id = 2;
+  uint64 issuer_player_id = 3;
+  uint64 issuer_guild_id = 4;
+  uint64 target_player_id = 5;
+  uint64 target_guild_id = 6;
+  uint32 tier = 7;                   // 1=普通5000银两 / 2=重金15000银两 / 3=帮会公费2000资金
+  uint64 escrow_silver = 8;          // 扣 10% 销毁税后入池赏金银两
+  uint32 public_board = 9;           // 0=仅本帮 / 1=全区江湖榜
+  uint32 status = 10;                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED
+  uint64 escrow_op_id = 11;          // 对应 guild_asset_op.op_id(公费档为 0)
+  uint32 counter_kills = 12;         // 目标已成功反杀不同追兵次数(达 2 撕单)
+  uint64 last_counter_attacker_id = 13;// 防止同一追兵刷反杀次数
+  uint64 hunter_player_id = 14;      // 最终结单猎手 ID
+  uint64 created_at_ms = 15;
+  uint64 expires_at_ms = 16;
+  uint64 resolved_at_ms = 17;
+}
+
+// 锁序位置 18:帮战终局幂等闸门、大事记与本人结算回查。
+message GuildWarBattleRecord {
+  option(OptionTableName) = "guild_war_battle";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionIndex) = "attacker_guild_id,finished_at_ms;defender_guild_id,finished_at_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;
+  uint32 zone_id = 2;
+  uint32 war_battle_kind = 3;        // 1..5
+  uint32 leyline_id = 4;
+  uint64 bounty_id = 5;
+  uint64 attacker_guild_id = 6;
+  uint64 defender_guild_id = 7;
+  uint32 outcome = 8;                // eBattleOutcome
+  uint32 total_rounds = 9;
+  uint32 banner_hp_before = 10;
+  uint32 banner_hp_after = 11;
+  uint32 banner_shielded = 12;
+  uint32 bounty_outcome_tag = 13;    // 0无/1终结连胜/2追杀成功/3反杀成功/4反杀撕单/5破旗首功
+  uint64 jackpot_contribution = 14;
+  uint64 jackpot_silver = 15;
+  uint32 diminish_percent = 16;      // 100/50/20/0
+  uint64 attacker_contribution = 17;
+  uint64 attacker_silver = 18;
+  uint64 attacker_funds = 19;
+  uint64 attacker_merit = 20;
+  uint64 defender_contribution = 21;
+  uint64 defender_silver = 22;
+  uint64 defender_funds = 23;
+  uint64 defender_merit = 24;
+  bytes summary_payload = 25;        // 序列化双方成员 ID/名字快照供大事记与结算页展示
+  uint64 finished_at_ms = 26;
+}
+
+// 锁序位置 19:两帮本周宿敌计数(每周交手 >= 5 次或互挂追杀自动结为宿敌,+20% 帮贡与战功)。
+message GuildWarRivalryRecord {
+  option(OptionTableName) = "guild_war_rivalry";
+  option(OptionPrimaryKey) = "guild_id_low,guild_id_high,week_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id_low = 1;
+  uint64 guild_id_high = 2;
+  uint32 week_key = 3;
+  uint32 clash_count = 4;
+  uint32 bounty_marked = 5;          // 1 = 互挂过追杀令直接成宿敌
+  uint64 updated_ms = 6;
 }

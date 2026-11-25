@@ -81,7 +81,7 @@
     11000,
     8000
    ],
-   "cultivation_tier": 1,
+   "cultivation_tier": 2,
    "desc": "金猊:力量型战宠,物伤最高。",
    "exclusive_gift_slots": 0,
    "fixed_initial_aptitude": false,
@@ -115,7 +115,7 @@
     7000,
     9000
    ],
-   "cultivation_tier": 1,
+   "cultivation_tier": 2,
    "desc": "云鹤:法系战宠,法伤与法力出众。",
    "exclusive_gift_slots": 0,
    "fixed_initial_aptitude": false,
@@ -313,7 +313,7 @@
     7000,
     11000
    ],
-   "cultivation_tier": 1,
+   "cultivation_tier": 3,
    "desc": "岚铎仙：随行战斗伙伴。",
    "exclusive_gift_slots": 0,
    "fixed_initial_aptitude": false,
@@ -379,7 +379,7 @@
     7000,
     11000
    ],
-   "cultivation_tier": 1,
+   "cultivation_tier": 3,
    "desc": "苍嶂麟：随行战斗伙伴。",
    "exclusive_gift_slots": 0,
    "fixed_initial_aptitude": false,
@@ -511,7 +511,7 @@
     7000,
     11000
    ],
-   "cultivation_tier": 1,
+   "cultivation_tier": 3,
    "desc": "月弦师：随行战斗伙伴。",
    "exclusive_gift_slots": 0,
    "fixed_initial_aptitude": false,

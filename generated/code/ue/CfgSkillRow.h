@@ -323,6 +323,14 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	int32 rarity_tier = 0;
 
+	/** 副目标策略选人模式：0=随机补选，1=物攻最高，2=法攻最高，3=气血数值最低，4=气血比例最低，5=物防最低，6=法防最低，7=本回合排速最低。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 secondary_target_policy = 0;
+
+	/** 战法构筑互斥组：0=无互斥；>0=同组被动/战法不可同时装配或同时生效（如 E03 灵法专修与 E04 兵锋专修同为 1）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 exclusive_group = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

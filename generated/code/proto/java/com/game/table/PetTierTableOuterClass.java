@@ -45,12 +45,16 @@ public final class PetTierTableOuterClass extends com.google.protobuf.GeneratedF
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023pettier_table.proto\"G\n\014PetTierTable\022\n\n" +
-      "\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\017\n\007art_key\030\003 \001(\t" +
-      "\022\014\n\004desc\030\004 \001(\t\"/\n\020PetTierTableData\022\033\n\004da" +
-      "ta\030\001 \003(\0132\r.PetTierTableB>\n\016com.game.tabl" +
-      "eB\026PetTierTableOuterClassP\001Z\022generated/p" +
-      "b/tableb\006proto3"
+      "\n\023pettier_table.proto\"\330\001\n\014PetTierTable\022\n" +
+      "\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\017\n\007art_key\030\003 \001(" +
+      "\t\022\014\n\004desc\030\004 \001(\t\022\033\n\023ascend_cost_item_id\030\005" +
+      " \001(\r\022\036\n\026ascend_cost_item_count\030\006 \001(\r\022\030\n\020" +
+      "ascend_cost_gold\030\007 \001(\004\022\034\n\024ascend_min_pet" +
+      "_level\030\010 \001(\r\022\032\n\022bonus_entry_points\030\t \001(\r" +
+      "\"/\n\020PetTierTableData\022\033\n\004data\030\001 \003(\0132\r.Pet" +
+      "TierTableB>\n\016com.game.tableB\026PetTierTabl" +
+      "eOuterClassP\001Z\022generated/pb/tableb\006proto" +
+      "3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -61,7 +65,7 @@ public final class PetTierTableOuterClass extends com.google.protobuf.GeneratedF
     internal_static_PetTierTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_PetTierTable_descriptor,
-        new java.lang.String[] { "Id", "Name", "ArtKey", "Desc", });
+        new java.lang.String[] { "Id", "Name", "ArtKey", "Desc", "AscendCostItemId", "AscendCostItemCount", "AscendCostGold", "AscendMinPetLevel", "BonusEntryPoints", });
     internal_static_PetTierTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_PetTierTableData_fieldAccessorTable = new

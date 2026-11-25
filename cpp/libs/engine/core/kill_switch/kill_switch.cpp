@@ -308,7 +308,7 @@ std::vector<std::string> MatchTargets(const MethodName &method, Coverage coverag
 }
 
 KillSwitch::KillSwitch(std::chrono::seconds staleAfter, Clock clock)
-    : staleAfter_(staleAfter), clock_(std::move(clock))
+    : staleAfter(staleAfter), clock(std::move(clock))
 {
 }
 
@@ -320,55 +320,55 @@ KillSwitch &KillSwitch::Process()
 
 std::chrono::steady_clock::time_point KillSwitch::Now() const
 {
-    return clock_ ? clock_() : std::chrono::steady_clock::now();
+    return clock ? clock() : std::chrono::steady_clock::now();
 }
 
 bool KillSwitch::StaleLocked(std::chrono::steady_clock::time_point now) const
 {
-    if (syncedAt_ == std::chrono::steady_clock::time_point{} || staleAfter_.count() <= 0)
+    if (syncedAt == std::chrono::steady_clock::time_point{} || staleAfter.count() <= 0)
     {
         return false;
     }
-    return now - syncedAt_ > staleAfter_;
+    return now - syncedAt > staleAfter;
 }
 
 void KillSwitch::SetIdentity(Identity identity)
 {
-    std::lock_guard lock(mutex_);
-    identity_ = std::move(identity);
+    std::lock_guard lock(mutex);
+    this->identity = std::move(identity);
     RebuildLocked();
 }
 
 void KillSwitch::ReplaceAll(std::map<std::string, std::string> rawRules)
 {
-    std::lock_guard lock(mutex_);
-    syncedAt_ = Now();
-    if (rawRules == raw_ && snapshot_)
+    std::lock_guard lock(mutex);
+    syncedAt = Now();
+    if (rawRules == raw && snapshot)
     {
         return; // 定期复核没有变化:只续新鲜度
     }
-    raw_ = std::move(rawRules);
+    raw = std::move(rawRules);
     RebuildLocked();
 }
 
 void KillSwitch::Put(const std::string &relativeKey, const std::string &rawValue)
 {
-    std::lock_guard lock(mutex_);
-    syncedAt_ = Now();
-    const auto found = raw_.find(relativeKey);
-    if (found != raw_.end() && found->second == rawValue && snapshot_)
+    std::lock_guard lock(mutex);
+    syncedAt = Now();
+    const auto found = raw.find(relativeKey);
+    if (found != raw.end() && found->second == rawValue && snapshot)
     {
         return;
     }
-    raw_[relativeKey] = rawValue;
+    raw[relativeKey] = rawValue;
     RebuildLocked();
 }
 
 void KillSwitch::Erase(const std::string &relativeKey)
 {
-    std::lock_guard lock(mutex_);
-    syncedAt_ = Now();
-    if (raw_.erase(relativeKey) == 0 && snapshot_)
+    std::lock_guard lock(mutex);
+    syncedAt = Now();
+    if (raw.erase(relativeKey) == 0 && snapshot)
     {
         return;
     }
@@ -377,15 +377,15 @@ void KillSwitch::Erase(const std::string &relativeKey)
 
 void KillSwitch::MarkSynced()
 {
-    std::lock_guard lock(mutex_);
-    syncedAt_ = Now();
+    std::lock_guard lock(mutex);
+    syncedAt = Now();
 }
 
 void KillSwitch::RebuildLocked()
 {
     auto next = std::make_shared<Snapshot>();
     std::set<std::string> badKeys;
-    for (const auto &[key, value] : raw_)
+    for (const auto &[key, value] : raw)
     {
         const auto ruleKey = ParseRuleKey(key);
         if (!ruleKey)
@@ -393,7 +393,7 @@ void KillSwitch::RebuildLocked()
             badKeys.insert(key); // 范围段残缺:不是规则,记一笔让运维看见
             continue;
         }
-        if (!AppliesTo(*ruleKey, identity_))
+        if (!AppliesTo(*ruleKey, identity))
         {
             continue; // 别的节点类型 / 别的进程的规则:不解析、不记日志
         }
@@ -416,23 +416,23 @@ void KillSwitch::RebuildLocked()
 
     for (const auto &key : badKeys)
     {
-        if (!badKeys_.contains(key))
+        if (!this->badKeys.contains(key))
         {
             LOG_ERROR << "[KillSwitch] Malformed rule ignored (requests stay allowed): key=" << key << " value=\""
-                      << raw_[key] << "\"";
+                      << raw[key] << "\"";
         }
     }
-    for (const auto &key : badKeys_)
+    for (const auto &key : this->badKeys)
     {
         if (!badKeys.contains(key))
         {
             LOG_INFO << "[KillSwitch] Previously malformed rule is gone or fixed: key=" << key;
         }
     }
-    badKeys_ = std::move(badKeys);
+    this->badKeys = std::move(badKeys);
 
     static const std::map<std::string, Rule> kNoRules;
-    const auto &previous = snapshot_ ? snapshot_->byKey : kNoRules;
+    const auto &previous = snapshot ? snapshot->byKey : kNoRules;
     for (const auto &[key, rule] : next->byKey)
     {
         const auto old = previous.find(key);
@@ -450,24 +450,24 @@ void KillSwitch::RebuildLocked()
         }
     }
 
-    hasRules_.store(!next->byKey.empty(), std::memory_order_release);
-    snapshot_ = std::move(next);
+    hasRules.store(!next->byKey.empty(), std::memory_order_release);
+    snapshot = std::move(next);
 }
 
 std::optional<Rule> KillSwitch::Check(const MethodName &method, Coverage coverage) const
 {
-    if (!hasRules_.load(std::memory_order_acquire))
+    if (!hasRules.load(std::memory_order_acquire))
     {
         return std::nullopt; // 常态:没有适用规则
     }
     std::shared_ptr<const Snapshot> snapshot;
     {
-        std::lock_guard lock(mutex_);
+        std::lock_guard lock(mutex);
         if (StaleLocked(Now()))
         {
             return std::nullopt; // 与 etcd 失联太久:快照作废,整体放行
         }
-        snapshot = snapshot_;
+        snapshot = this->snapshot;
     }
     if (!snapshot)
     {
@@ -496,31 +496,31 @@ std::optional<Rule> KillSwitch::Check(const MethodName &method, Coverage coverag
 
 size_t KillSwitch::ApplicableRuleCount() const
 {
-    std::lock_guard lock(mutex_);
-    if (!snapshot_ || StaleLocked(Now()))
+    std::lock_guard lock(mutex);
+    if (!snapshot || StaleLocked(Now()))
     {
         return 0;
     }
-    return snapshot_->byKey.size();
+    return snapshot->byKey.size();
 }
 
 bool KillSwitch::Synced() const
 {
-    std::lock_guard lock(mutex_);
-    return syncedAt_ != std::chrono::steady_clock::time_point{} && !StaleLocked(Now());
+    std::lock_guard lock(mutex);
+    return syncedAt != std::chrono::steady_clock::time_point{} && !StaleLocked(Now());
 }
 
 void KillSwitch::RecordBlocked(const MethodName &method)
 {
     const std::string label = JoinTarget(ShortServiceName(method.service), method.method);
-    std::lock_guard lock(mutex_);
-    ++blocked_[label];
+    std::lock_guard lock(mutex);
+    ++blocked[label];
 }
 
 std::map<std::string, uint64_t> KillSwitch::BlockedCounts() const
 {
-    std::lock_guard lock(mutex_);
-    return blocked_;
+    std::lock_guard lock(mutex);
+    return blocked;
 }
 
 bool IsProtectedMessageId(uint32_t messageId)

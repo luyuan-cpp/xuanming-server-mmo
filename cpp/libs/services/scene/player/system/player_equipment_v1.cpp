@@ -578,14 +578,14 @@ uint32_t ResolveProxyMaster(entt::entity buyer, uint64_t proxyMasterId, Prepared
 void PlanBoundPolicy(entt::entity player, const Bag& inventory, const EquipmentCraftChoice& choice,
                      bool isCreateNew, PreparedCraft& prepared) {
     bool allTradableEnough = true;
-    bool anyBoundPresent = false;
+    bool anyCountableBound = false;
     for (const auto& [configId, count] : prepared.consumed) {
         if (count == 0) continue;
         if (BagService::RemovableTradableCount(player, inventory, configId) < count) {
             allTradableEnough = false;
         }
         if (inventory.GetTotalItemCount(configId) > inventory.GetTotalTradableItemCount(configId)) {
-            anyBoundPresent = true;
+            anyCountableBound = true;
         }
     }
     if (isCreateNew) {
@@ -595,8 +595,7 @@ void PlanBoundPolicy(entt::entity player, const Bag& inventory, const EquipmentC
             return;
         }
         prepared.tradableOnly = false;
-        prepared.willBindItem = anyBoundPresent;
-        if (anyBoundPresent) prepared.result.set_bound(true);
+        prepared.willBindItem = anyCountableBound;
         return;
     }
     if (prepared.original.bound()) {
@@ -604,20 +603,22 @@ void PlanBoundPolicy(entt::entity player, const Bag& inventory, const EquipmentC
         prepared.willBindItem = false;
         return;
     }
-    // 既有可交易装备：默认强制 TRADEABLE_ONLY，防误混绑定重铸砂/绑定定星保底符染毒变绑。
+    // 既有可交易装备：可交易材料充足时一律强制 TRADEABLE_ONLY（哪怕包里另有绑定堆或透传 allow_bound_materials=true，
+    // 也绝不误耗绑定堆染毒纯 T 装备）；仅当可交易料不足时，未确认拦 kEquipBindConfirmRequired，确认后由提交段按实际
+    // consumedBound 决定是否转绑。
+    if (allTradableEnough) {
+        prepared.tradableOnly = true;
+        prepared.willBindItem = false;
+        return;
+    }
     if (!choice.allow_bound_materials()) {
         prepared.tradableOnly = true;
-        if (!allTradableEnough) {
-            prepared.willBindItem = true;
-            prepared.bindConfirmBlocked = true;
-        }
+        prepared.willBindItem = true;
+        prepared.bindConfirmBlocked = true;
         return;
     }
     prepared.tradableOnly = false;
-    if (anyBoundPresent) {
-        prepared.willBindItem = true;
-        prepared.result.set_bound(true);
-    }
+    prepared.willBindItem = anyCountableBound;
 }
 
 uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, PreparedCraft& prepared) {
@@ -774,6 +775,83 @@ uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, 
         return kSuccess;
     }
 
+    if (choice.operation() == EquipmentCraftChoice::UNSEAL_TO_TRADABLE) {
+        if (choice.config_id() != 0 || choice.item_id() == 0 || choice.affix_slot() != 0 || choice.affix_id() != 0 ||
+            choice.source_item_id() != 0 || choice.use_guarantee_charm() || choice.proxy_master_player_id() != 0 ||
+            choice.has_expected_polish_pity_count()) {
+            return kInvalidParameter;
+        }
+        if (ItemRow(equipcraft::kUnsealTalismanConfigId) == nullptr) return kInvalidTableData;
+        if (!LocateEquipment(*bags, choice.item_id(), prepared.original, prepared.holder)) return kEquipItemNotFound;
+        const auto* itemRow = ItemRow(prepared.original.config_id());
+        if (itemRow == nullptr || itemRow->equip_kind() == 0 || prepared.original.size() != 1 ||
+            !prepared.original.has_equip()) {
+            return kInvalidParameter;
+        }
+        if (UnknownFields(prepared.original) || UnknownFields(prepared.original.equip())) return kFeatureUnavailable;
+        if (!prepared.original.bound()) return kInvalidParameter; // 已是可交易装备无需剥离
+        // 要求先取下所有宝石，防止剥离过程误销毁玩家宝石。
+        for (const auto& gem : prepared.original.equip().gems()) {
+            if (gem.gem_config_id() != 0) return kInvalidParameter;
+        }
+        prepared.result = prepared.original;
+        prepared.result.set_bound(false);
+        auto* eq = prepared.result.mutable_equip();
+        eq->set_enhance_level(0);
+        eq->set_enhance_pity_count(0);
+        eq->clear_fixed_affixes();
+        eq->clear_crafter_name();
+        eq->set_crafter_player_id(0);
+        prepared.materialId = equipcraft::kUnsealTalismanConfigId;
+        prepared.materialCount = 1;
+        prepared.consumed[prepared.materialId] += prepared.materialCount;
+        prepared.tradableOnly = false;
+        prepared.willBindItem = false;
+        return kSuccess;
+    }
+
+    if (choice.operation() == EquipmentCraftChoice::INHERIT_ENHANCE) {
+        if (choice.config_id() != 0 || choice.item_id() == 0 || choice.source_item_id() == 0 ||
+            choice.source_item_id() == choice.item_id() || choice.affix_slot() != 0 || choice.affix_id() != 0 ||
+            choice.use_guarantee_charm() || choice.proxy_master_player_id() != 0 ||
+            choice.has_expected_polish_pity_count()) {
+            return kInvalidParameter;
+        }
+        if (ItemRow(equipcraft::kInheritTalismanConfigId) == nullptr) return kInvalidTableData;
+        if (!LocateEquipment(*bags, choice.item_id(), prepared.original, prepared.holder)) return kEquipItemNotFound;
+        ItemComp sourceItem;
+        BagType sourceHolder = kInventory;
+        if (!LocateEquipment(*bags, choice.source_item_id(), sourceItem, sourceHolder)) return kEquipItemNotFound;
+        const auto* targetRow = ItemRow(prepared.original.config_id());
+        const auto* sourceRow = ItemRow(sourceItem.config_id());
+        if (targetRow == nullptr || sourceRow == nullptr || targetRow->equip_kind() == 0 ||
+            targetRow->equip_kind() != sourceRow->equip_kind() ||
+            targetRow->equip_profile() != sourceRow->equip_profile() ||
+            targetRow->equip_level() != sourceRow->equip_level() ||
+            prepared.original.size() != 1 || sourceItem.size() != 1 ||
+            !prepared.original.has_equip() || !sourceItem.has_equip()) {
+            return kInvalidParameter;
+        }
+        if (UnknownFields(prepared.original) || UnknownFields(prepared.original.equip()) ||
+            UnknownFields(sourceItem) || UnknownFields(sourceItem.equip())) {
+            return kFeatureUnavailable;
+        }
+        const uint32_t sourceLevel = sourceItem.equip().enhance_level();
+        const uint32_t targetLevel = prepared.original.equip().enhance_level();
+        if (sourceLevel == 0 || sourceLevel <= targetLevel) return kInvalidParameter;
+        prepared.result = prepared.original;
+        prepared.result.mutable_equip()->set_enhance_level(sourceLevel);
+        prepared.result.mutable_equip()->set_enhance_pity_count(sourceItem.equip().enhance_pity_count());
+        // 目标副套装备强制绑定仅自用，避免通过流派副套继承复制/洗白多件可交易高强成品。
+        prepared.result.set_bound(true);
+        prepared.willBindItem = !prepared.original.bound();
+        prepared.materialId = equipcraft::kInheritTalismanConfigId;
+        prepared.materialCount = 1;
+        prepared.consumed[prepared.materialId] += prepared.materialCount;
+        prepared.tradableOnly = false;
+        return kSuccess;
+    }
+
     return kInvalidParameter;
 }
 
@@ -798,7 +876,8 @@ uint32_t Availability(entt::entity player, const PreparedCraft& prepared) {
     }
     if (prepared.original.item_id() == 0) {
         return BagService::CheckInventoryExchangeSpace(player, prepared.consumed,
-                                                       {{prepared.result.config_id(), 1}}, prepared.tradableOnly);
+                                                       {{prepared.result.config_id(), 1}}, prepared.tradableOnly,
+                                                       prepared.result.bound() || prepared.willBindItem);
     }
     return kSuccess;
 }
@@ -847,6 +926,7 @@ uint32_t PlayerEquipmentV1System::Preview(entt::entity player, const PreviewEqui
     preview.set_rules_fingerprint(cached.rules.rules_fingerprint());
     preview.set_expected_forge_revision(tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).forge_revision());
     ItemComp previewItem = prepared.result;
+    if (prepared.willBindItem) previewItem.set_bound(true);
     if (request.choice().operation() == EquipmentCraftChoice::POLISH_AFFIX && prepared.targetAffixIndex >= 0) {
         auto* target = previewItem.mutable_equip()->mutable_fixed_affixes(prepared.targetAffixIndex);
         if (request.choice().use_guarantee_charm() || target->polish_pity_count() + 1 >= equipcraft::kPolishPityLimit) {
@@ -959,6 +1039,10 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
     const uint64_t totalGold = prepared.baseGoldCost + prepared.proxyFeeGold;
     const TransactionType goldTxType = (op == EquipmentCraftChoice::POLISH_AFFIX || op == EquipmentCraftChoice::REFORGE_AFFIX)
         ? TX_EQUIP_POLISH_REFORGE : TX_CRAFT_PROXY_FEE;
+    const bool bindOnConsumedBound =
+        op == EquipmentCraftChoice::CREATE_ITEM || op == EquipmentCraftChoice::INSTALL_AFFIX ||
+        op == EquipmentCraftChoice::REFORGE_AFFIX || op == EquipmentCraftChoice::POLISH_AFFIX;
+    bool consumedBound = false;
     std::vector<GuidVector> written;
     const auto error = BagService::ExchangeInventoryExact(player, prepared.consumed,
         gained, replacements, request.client_request_id(), "{\"operation\":\"equipment_craft\"}", written,
@@ -1006,8 +1090,9 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                 (void)CurrencySystem::AddCurrency(proxyMaster, kCurrencyGold, static_cast<int64_t>(proxyNetGold),
                                                   TX_CRAFT_PROXY_FEE, request.client_request_id());
             }
-            // 本人打造/装条/打磨自然涨 1 点铸器熟练度（无体力、无日清、只增不减）。
-            if (prepared.proxyMasterPlayerId == 0 && op != EquipmentCraftChoice::REFORGE_AFFIX) {
+            // 本人打造/装条/打磨自然涨 1 点铸器熟练度（无体力、无日清、只增不减；重铸/解封/继承不涨熟练度）。
+            if (prepared.proxyMasterPlayerId == 0 && op != EquipmentCraftChoice::REFORGE_AFFIX &&
+                op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE && op != EquipmentCraftChoice::INHERIT_ENHANCE) {
                 if (auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
                     craft != nullptr && craft->forge_mastery_exp() < std::numeric_limits<uint32_t>::max()) {
                     craft->set_forge_mastery_exp(craft->forge_mastery_exp() + 1);
@@ -1015,7 +1100,7 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
             }
             ledger.Swap(&next);
             return kSuccess;
-        }, prepared.tradableOnly);
+        }, prepared.tradableOnly, &consumedBound, bindOnConsumedBound);
     if (error != kSuccess) { reject(error); return; }
     if (!replacements.empty() && prepared.holder == kEquipment) {
         PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);

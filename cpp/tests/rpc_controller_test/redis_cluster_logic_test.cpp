@@ -810,7 +810,7 @@ namespace
 
 		const redisReply* String(std::string_view text)
 		{
-			std::string& stored = strings_.emplace_back(text);
+			std::string& stored = strings.emplace_back(text);
 			redisReply& reply = New(REDIS_REPLY_STRING);
 			reply.str = stored.data();
 			reply.len = stored.size();
@@ -824,7 +824,7 @@ namespace
 
 		const redisReply* Array(std::initializer_list<const redisReply*> elements)
 		{
-			std::vector<redisReply*>& stored = arrays_.emplace_back();
+			std::vector<redisReply*>& stored = arrays.emplace_back();
 			for (const redisReply* element : elements)
 			{
 				// hiredis 的 element 字段不带 const,解析函数只读。
@@ -845,14 +845,14 @@ namespace
 	private:
 		redisReply& New(int type)
 		{
-			redisReply& reply = replies_.emplace_back();
+			redisReply& reply = replies.emplace_back();
 			reply.type = type;
 			return reply;
 		}
 
-		std::deque<redisReply> replies_;
-		std::deque<std::string> strings_;
-		std::deque<std::vector<redisReply*>> arrays_;
+		std::deque<redisReply> replies;
+		std::deque<std::string> strings;
+		std::deque<std::vector<redisReply*>> arrays;
 	};
 
 	TEST(RedisClusterTopologyTest, ParsesClusterSlotsAndIgnoresReplicasAndMetadata)

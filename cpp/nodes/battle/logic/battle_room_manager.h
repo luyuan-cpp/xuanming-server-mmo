@@ -118,7 +118,7 @@ public:
     using RoomLifecycleHooks = battle_room_table::Hooks;
 
     // 只在 Node 构造完成、EventLoop 开始 loop() 之前调用一次(main 的 configure 回调)。
-    void SetRoomLifecycleHooks(RoomLifecycleHooks hooks) { rooms_.SetHooks(std::move(hooks)); }
+    void SetRoomLifecycleHooks(RoomLifecycleHooks hooks) { rooms.SetHooks(std::move(hooks)); }
 
     // ---- 客户端直连面(main.cpp 装配;BattleClientEdge 生命周期由 main 的运行时上下文持有) ----
 
@@ -181,7 +181,7 @@ public:
 
     // 本节点此刻的房间数:表里的全部房间,含停机作废后还在等 SQL 决定的(它们仍占着资源)。
     // CreateBattle 成功应答把它捎回给 match 比较负载(R6,BattleNodeImpl::HandleCreateBattle)。只在 loop 线程调用。
-    uint32_t RoomCount() const { return static_cast<uint32_t>(rooms_.Size()); }
+    uint32_t RoomCount() const { return static_cast<uint32_t>(rooms.Size()); }
 
     // 房间还在就什么都不做:房间只由 Match 的持久决定收尾(COMPLETE / ABORT),过期的补偿不能把一局在打的房间作废。
     // 房间不存在时幂等成功;带放置操作的请求同时立一条操作墓碑,挡住同 battle_id 迟到的 CreateBattle。
@@ -241,7 +241,7 @@ public:
     // 注入观战帧出口(显式依赖);空 = 默认的真实 Kafka 生产者。给测试用,生产不调用;只能在 loop 线程调用。
     void SetSpectateFrameSink(battle_spectate_relay::FrameSink sink)
     {
-        spectateFramePublisher_.SetSink(std::move(sink));
+        spectateFramePublisher.SetSink(std::move(sink));
     }
 
     // ---- 客户端直连消息(BattleClientEdge 派发;权威身份来自已验证的票据,不信请求体) ----
@@ -273,6 +273,10 @@ public:
     void HandleSurrenderBattle(const ::SessionDetails &sessionDetails,
                                const ::SurrenderBattleRequest &request,
                                ::SurrenderBattleResponse &response);
+    // 论剑 V3 战前 15 秒明牌变阵（换赛季印 / 换首发宠 / 锁定出战）；仅向同队单播，全员锁定立即开打。
+    void HandleUpdateBattlePrep(const ::SessionDetails &sessionDetails,
+                                const ::UpdateBattlePrepRequest &request,
+                                ::UpdateBattlePrepResponse &response);
 
     // 停机收尾,供 SetBeforeShutdown 与维护流程的 source 关闭调用:先关观战准入(此后新观众、新中继 gate 与升档一律回
     // kServiceUnavailable),再停掉房间定时器、关闭房间直连,不铸造任何终局。
@@ -340,7 +344,7 @@ public:
     // 注入节点级观众席配额。生产由 SetClientEdge 在装配时注入;测试在借用直连面之后直接注入小值
     // (借用非空直连面会按连接上限重新注入)。只约束此后的新准入:调低后在册人数可能暂时高于配额,
     // 已登记的观众不会因此被摘除,同 op 幂等重放照常成功。只能在 loop 线程调用(与准入同线程,无锁)。
-    void SetObserverSeatQuota(const size_t quota) { observerSeatQuota_ = quota; }
+    void SetObserverSeatQuota(const size_t quota) { observerSeatQuota = quota; }
 
     // 满员按名单人数判定(routingByObserver),名单里除了已挂直连的观众,还有登记后尚未建直连、
     // 或直连断开等重连的观众。客户端崩溃 / 放弃观战而 match 没来 Remove 时,后两类会一直占座,
@@ -433,10 +437,14 @@ private:
         {
             return !routingByObserver.empty() || !relayGates.empty() || spectateBroadcast;
         }
+        TimerTaskComp prepTimer;       // 论剑 V3 战前 15 秒明牌变阵窗口
         TimerTaskComp roundTimer;      // 回合 action_deadline
         TimerTaskComp battleTimer;     // 整场 deadline_ms(强制收尾,防房间泄漏)
+        uint64_t prepDeadlineMs = 0;   // 战前变阵截止(Unix 毫秒，非变阵期为 0)
         uint64_t actionDeadlineMs = 0; // 当前回合行动截止(Unix 毫秒,GetBattleState 回填)
         uint64_t deadlineMs = 0;       // 整场作废期限(与 battleTimer 同值;补发确认事件时带给 scene)
+        bool recordReplay = false;     // CreateBattleRequest.record_replay 冻结标志（变阵期延迟至亮牌后创建录制器）
+        uint64_t createdAtMs = 0;      // CreateBattleRequest.created_at_ms 冻结时间戳
         // BattleConfirmedEvent 补发:开局后 kConfirmResendWindowMs 内每 kConfirmResendIntervalSec
         // 向全部参战玩家重发一次(scene 幂等)。没有 scene→battle 的确认回执通道(proto 已定),
         // 用有界周期补发覆盖"首发 produce 失败 / Kafka 积压 / scene 消费者 rebalance"这类
@@ -464,9 +472,9 @@ private:
         std::string &matchedFingerprint);
     void ReapRetiredProviders(std::chrono::steady_clock::time_point now);
 
-    std::shared_ptr<turnbattle::BattleDataProvider> dataProvider_;
-    std::string activeTableFingerprint_;
-    std::unordered_map<std::string, RetainedProvider> providersByFingerprint_;
+    std::shared_ptr<turnbattle::BattleDataProvider> dataProvider;
+    std::string activeTableFingerprint;
+    std::unordered_map<std::string, RetainedProvider> providersByFingerprint;
     BattleRoom *FindRoom(uint64_t battleId);
 
     // 房间插表(键 = room->battleId):成功后房间表触发一次 onCreated,返回表内的房间。
@@ -482,6 +490,10 @@ private:
 
     // 确认事件周期补发(confirmResendTimer 回调):窗口已过则停表,否则对全员重发。
     void ResendBattleConfirmed(uint64_t battleId);
+
+    // 装填战前 15 秒明牌变阵窗口并在到期或全员锁定后统一亮牌开打。
+    void ArmPrepTimer(BattleRoom &room);
+    void FinalizeBattlePrep(uint64_t battleId);
 
     // 装填下一回合行动收集窗口并记录截止时间。
     void ArmRoundTimer(BattleRoom &room);
@@ -697,48 +709,48 @@ private:
     // 本类是进程级单例(Instance() 里的函数静态对象),不由 shared_ptr 持有,拿不到 weak_from_this();
     // 这里用别名构造把 this 挂在 lifeToken_ 的控制块上:lifeToken_ 随本对象析构,之后 lock() 必然失败。
     // 实际上单例寿命覆盖整个 loop,这层是按 §11.7 "只绑 weak_ptr<自己>"写的防线,不是在修某个已知的悬垂路径。
-    std::weak_ptr<BattleRoomManager> WeakSelf() { return std::shared_ptr<BattleRoomManager>(lifeToken_, this); }
+    std::weak_ptr<BattleRoomManager> WeakSelf() { return std::shared_ptr<BattleRoomManager>(lifeToken, this); }
 
     // 仅借用运行时上下文持有的直连面；清空借用不销毁对象。
-    std::optional<std::reference_wrapper<BattleClientEdge>> edge_;
+    std::optional<std::reference_wrapper<BattleClientEdge>> edge;
     // 节点级观众席配额(SetObserverSeatQuota)。装配前(还没借到直连面)只留一个满员房间的余量。
-    size_t observerSeatQuota_ = kMaxObserversPerRoom;
+    size_t observerSeatQuota = kMaxObserversPerRoom;
     // 观战中继 / 广播的出口;默认走真实 Kafka 生产者(SetSpectateFrameSink 可换)。
-    battle_spectate_relay::SpectateFramePublisher spectateFramePublisher_;
+    battle_spectate_relay::SpectateFramePublisher spectateFramePublisher;
     // 心跳名单:开了中继或广播通道、还没发 END 的房间 → 上一次往全部通道发帧的单调时刻。
     // 增:TrackSpectateChannels;刷新:PublishToAllSpectateChannels;删:发 END、EraseRoom、过期限、StopSqlOutcomes。
-    std::map<uint64_t, std::chrono::steady_clock::time_point> spectateChannelFrameAt_;
-    TimerTaskComp spectateKeepaliveTimer_;
+    std::map<uint64_t, std::chrono::steady_clock::time_point> spectateChannelFrameAt;
+    TimerTaskComp spectateKeepaliveTimer;
     // BeginRoomShutdown 置位,此后不再接纳新观众、新中继 gate 与升档(停机排空期间房间已冻结,不会再出帧)。只升不降:进程随后退出。
-    bool spectateAdmissionClosed_ = false;
+    bool spectateAdmissionClosed = false;
 
     // 房间表:增删与生命周期回调(SetRoomLifecycleHooks)绑死在 RoomTable 里,本类只经
     // EmplaceRoom / EraseRoom 调它的 Emplace / Erase,其余路径只读(FindRoom / BeginRoomShutdown 抄 id)。
-    battle_room_table::RoomTable<BattleRoom> rooms_;
+    battle_room_table::RoomTable<BattleRoom> rooms;
     // 本实例操作墓碑只在loop线程访问；进程重启后精确target_instance使旧RPC失效。
     struct CreationOperation {std::string operationId;std::string canonicalRequest;uint64_t expiresMs=0;bool aborted=false;};
-    std::unordered_map<uint64_t,CreationOperation> creationOperations_;
+    std::unordered_map<uint64_t,CreationOperation> creationOperations;
     // 建房准入与建房操作墓碑共用的墙钟(Unix 毫秒):HandleCreateBattle 入口一次(墓碑过期清理与准入判定)、插房前复核一次,
     // HandleDestroyBattle 写墓碑期限一次。三处读同一个钟,墓碑的写入与过期比较才在同一时间轴上。
     // 生产恒为 TimeSystem::NowMillisecondsUTC();房间期限、票据、签名等其余时刻照旧直接读 TimeSystem。
     uint64_t CreationNowMs() const;
     // CreationNowMs 的替身:空 = 生产实现。只有单测经 BattleRoomManagerTestAccess 换,用来把入口与插房前两次准入判定分开、
     // 钉住墓碑保留期,不等真实时间(2026-11-06 补,match 提前 ABORT 依赖的 battle 不变量回归)。
-    std::function<uint64_t()> creationClock_;
+    std::function<uint64_t()> creationClock;
     // 取消先于Add时房间可能尚不存在；墓碑在manager而非room，保留到原准入截止。
     // rejectTip:本操作首次被拒的码,同 op、同请求的重放回同一结论(0 = 不是被拒关闭,而是被 Remove / 回收封闭)。
     struct SpectatorOperation { uint64_t admitBeforeMs{0}; std::string canonicalRequest; bool cancelled{true}; uint32_t rejectTip{0}; };
     using SpectatorKey = std::tuple<uint64_t, uint64_t, std::string>;
-    std::map<SpectatorKey, SpectatorOperation> spectatorOperations_;
-    std::multimap<uint64_t, SpectatorKey> spectatorDeadlines_;
+    std::map<SpectatorKey, SpectatorOperation> spectatorOperations;
+    std::multimap<uint64_t, SpectatorKey> spectatorDeadlines;
     void PruneSpectatorOperations(uint64_t now);
-    bool outcomeStopping_ = false;
+    bool outcomeStopping = false;
     // 停机排空窗口:BeginRoomShutdown 置位,只升不降(进程随后退出)。窗口内终局补提交不受每拍上限约束,要补提交的局
     // 没拿到决定就下一拍重发(PumpSqlOutcomes / SendSqlOutcome)。
-    bool outcomeShutdownFlush_ = false;
-    bool outcomeKeyUnavailableLogged_ = false;
-    std::set<uint64_t> sqlOutcomeRooms_;
-    TimerTaskComp sqlOutcomeTimer_;
+    bool outcomeShutdownFlush = false;
+    bool outcomeKeyUnavailableLogged = false;
+    std::set<uint64_t> sqlOutcomeRooms;
+    TimerTaskComp sqlOutcomeTimer;
     // 终局重放每拍至多发出的局数(停机排空窗口外)。常态下每拍到期的只有刚冻结的几局,碰不到上限;它只在 match 全部
     // 不可达之后恢复时起作用,把积压摊到多拍上(缺省 64/拍,积压 2000 局约 30 拍;启动期可经
     // MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP 在 [1, 1024] 内覆盖)。
@@ -748,13 +760,13 @@ private:
                       kSqlOutcomeSendsPerPump <= kMaxSqlOutcomeSendsPerPump,
                   "缺省每拍上限必须落在合法区间内");
     // 启动期经 SetSqlOutcomeSendsPerPump 注入(默认 kSqlOutcomeSendsPerPump);单测亦经 BattleRoomManagerTestAccess 调小。
-    std::size_t sqlOutcomeSendsPerPump_ = kSqlOutcomeSendsPerPump;
+    std::size_t sqlOutcomeSendsPerPump = kSqlOutcomeSendsPerPump;
     // PickSqlOutcomeSend 的替身:空 = 生产实现(按 READY 的 match 通道随机挑)。只有单测经 BattleRoomManagerTestAccess 换,
     // 用来模拟「通道没就绪 / 已就绪」、捕获请求并按需回放回复,不起 match。
-    std::function<SqlOutcomeSend()> sqlOutcomeRoute_;
+    std::function<SqlOutcomeSend()> sqlOutcomeRoute;
     // 滞留房间提醒(EnsureStuckRoomReporter);装填后常驻。
-    TimerTaskComp stuckRoomReportTimer_;
+    TimerTaskComp stuckRoomReportTimer;
 
     // WeakSelf() 的存活令牌。声明在最后 = 最先析构:析构期间任何迟到回调都已 lock 不到本对象。
-    std::shared_ptr<char> lifeToken_ = std::make_shared<char>();
+    std::shared_ptr<char> lifeToken = std::make_shared<char>();
 };

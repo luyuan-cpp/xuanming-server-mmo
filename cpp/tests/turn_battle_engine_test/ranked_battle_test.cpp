@@ -729,4 +729,206 @@ TEST(RankedBattleTest, PvpSurrenderUnlockVoteCooldownIdleExclusionAndPrivacy) {
     }
 }
 
+TEST(RankedBattleTest, TacticalPrepFormalRankedSwapSealAndPetPrivacyAndLockIn) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    auto makeSeal = [](uint32_t id, uint32_t effectId, const char* name, uint32_t activeRounds, uint32_t battleLimit) {
+        SeasonSealEffect s;
+        s.set_season_id(1);
+        s.set_seal_id(id);
+        s.set_effect_id(effectId);
+        s.set_bonus_bps(1000);
+        s.set_cap_bps(activeRounds > 0 ? 300 : 0);
+        s.set_per_round_limit(activeRounds == 0 ? 1 : 0);
+        s.set_battle_limit(battleLimit);
+        s.set_active_rounds(activeRounds);
+        s.set_name(name);
+        return s;
+    };
+    const auto seal101 = makeSeal(101, 1, "破阵锐印", 0, 0);
+    const auto seal103 = makeSeal(103, 6, "固阵守印", 2, 1);
+
+    auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t tableId, const char* name, uint64_t hp, uint64_t spd) {
+        BattlePetSnapshot p;
+        p.set_pet_id(petId);
+        p.set_owner_player_id(ownerId);
+        p.set_pet_table_id(tableId);
+        p.set_pet_name(name);
+        p.set_level(30);
+        p.set_max_health(hp);
+        p.set_max_mana(1000);
+        p.set_physical_attack(200);
+        p.set_magic_attack(100);
+        p.set_defense(120);
+        p.mutable_base_attributes()->set_health(hp);
+        p.mutable_base_attributes()->set_mana(1000);
+        p.mutable_base_attributes()->set_speed(spd);
+        return p;
+    };
+
+    CreateBattleRequest req;
+    req.set_battle_id(99301);
+    req.set_battle_config_id(5);
+    req.set_match_mode(7);
+    req.set_seed(301);
+    auto* rctx = req.mutable_ranked_context();
+    rctx->set_season_id(1);
+    rctx->set_season_key("s1");
+    rctx->set_rank_generation(1);
+    rctx->set_rule_version(2);
+    rctx->set_team_size(1);
+    rctx->set_use_free_preset(false);
+
+    auto* p1 = req.add_players();
+    p1->set_player_id(101);
+    p1->set_team_index(0);
+    p1->set_level(30);
+    p1->set_active_season_id(1);
+    p1->set_max_health(10000);
+    p1->mutable_base_attributes()->set_health(10000);
+    p1->mutable_base_attributes()->set_speed(200);
+    p1->set_physical_attack(300);
+    p1->set_defense(100);
+    *p1->mutable_equipment_effects()->mutable_season_seal() = seal101;
+    *p1->add_available_season_seals() = seal101;
+    *p1->add_available_season_seals() = seal103;
+    *p1->add_pets() = makePet(5001, 101, 1, "灵狐", 3000, 260);
+    *p1->add_standby_pets() = makePet(5002, 101, 2, "石灵", 5500, 140);
+
+    auto* p2 = req.add_players();
+    p2->set_player_id(201);
+    p2->set_team_index(1);
+    p2->set_level(30);
+    p2->set_active_season_id(1);
+    p2->set_max_health(10000);
+    p2->mutable_base_attributes()->set_health(10000);
+    p2->mutable_base_attributes()->set_speed(190);
+    p2->set_physical_attack(300);
+    p2->set_defense(100);
+    *p2->mutable_equipment_effects()->mutable_season_seal() = seal101;
+    *p2->add_available_season_seals() = seal101;
+    *p2->add_available_season_seals() = seal103;
+    *p2->add_pets() = makePet(6001, 201, 3, "金猊", 3200, 280);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.IsInPrepPhase());
+    EXPECT_FALSE(engine.AllPrepPlayersReady());
+
+    // 变阵期严禁提交行动、切自动或投降；pending_actor_ids 为空。
+    EXPECT_EQ(engine.ValidateAction(101, Attack(201)), kFeatureUnavailable);
+    EXPECT_FALSE(engine.SubmitAction(101, Attack(201)));
+    EXPECT_EQ(engine.SetActorAuto(101, true), kFeatureUnavailable);
+    EXPECT_EQ(engine.SubmitSurrenderVote(101, true), kFeatureUnavailable);
+
+    auto snap = engine.BuildStateSnapshot();
+    EXPECT_TRUE(snap.pending_actor_ids().empty());
+    uint64_t initialPetActorId = 0;
+    uint32_t initialPetSlot = 0;
+    for (const auto& a : snap.actors()) {
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_PET && a.owner_player_id() == 101) {
+            initialPetActorId = a.actor_id();
+            initialPetSlot = a.formation_slot();
+        }
+    }
+    ASSERT_NE(initialPetActorId, 0u);
+
+    // 视角脱敏：101 只能看到自己的选项与同队状态，看不到 201；观众仅看倒计时。
+    engine.FillPrepStateForViewer(snap, 101, 123456);
+    ASSERT_TRUE(snap.has_prep_state());
+    EXPECT_TRUE(snap.prep_state().active());
+    EXPECT_EQ(snap.prep_state().deadline_ms(), 123456u);
+    EXPECT_EQ(snap.prep_state().self_available_seals_size(), 2);
+    EXPECT_EQ(snap.prep_state().self_available_pets_size(), 2);
+    ASSERT_EQ(snap.prep_state().team_states_size(), 1);
+    EXPECT_EQ(snap.prep_state().team_states(0).player_id(), 101u);
+
+    BattleStateS2C obsSnap;
+    engine.FillPrepStateForViewer(obsSnap, 0, 123456);
+    EXPECT_TRUE(obsSnap.prep_state().active());
+    EXPECT_EQ(obsSnap.prep_state().deadline_ms(), 123456u);
+    EXPECT_EQ(obsSnap.prep_state().self_available_seals_size(), 0);
+    EXPECT_EQ(obsSnap.prep_state().self_available_pets_size(), 0);
+    EXPECT_EQ(obsSnap.prep_state().team_states_size(), 0);
+
+    // 越权选择对手灵宠或非法赛季印一律拒绝。
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 999, 0, false), kInvalidParameter);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 6001, false), kInvalidParameter);
+
+    // 101 临场切换固阵守印 + 石灵并锁定；锁定后禁止再改，重复锁定幂等。
+    BattlePrepState prepOut;
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 103, 5002, true, &prepOut), 0u);
+    ASSERT_EQ(prepOut.team_states_size(), 1);
+    EXPECT_EQ(prepOut.team_states(0).selected_seal_id(), 103u);
+    EXPECT_EQ(prepOut.team_states(0).selected_pet_id(), 5002u);
+    EXPECT_TRUE(prepOut.team_states(0).ready());
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 101, 0, true), kFeatureUnavailable);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 103, 5002, true), 0u);
+    EXPECT_FALSE(engine.AllPrepPlayersReady());
+
+    // 201 保持原配锁定 -> 全员就绪。
+    ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true), 0u);
+    EXPECT_TRUE(engine.AllPrepPlayersReady());
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+    EXPECT_FALSE(engine.IsInPrepPhase());
+
+    // 验证亮牌后的最终阵容：101 赛季印为 103，宝宝原地换为石灵(5002)并保留原局内号与阵位。
+    const auto postSnap = engine.BuildStateSnapshot();
+    EXPECT_FALSE(postSnap.has_prep_state());
+    EXPECT_FALSE(postSnap.pending_actor_ids().empty());
+    bool found101 = false;
+    bool foundSwappedPet = false;
+    for (const auto& a : postSnap.actors()) {
+        if (a.actor_id() == 101) {
+            found101 = true;
+            EXPECT_EQ(a.equipment_effects().season_seal().seal_id(), 103u);
+        }
+        if (a.actor_type() == BATTLE_ACTOR_TYPE_PET && a.owner_player_id() == 101) {
+            foundSwappedPet = true;
+            EXPECT_EQ(a.actor_id(), initialPetActorId);
+            EXPECT_EQ(a.formation_slot(), initialPetSlot);
+            EXPECT_EQ(a.pet_id(), 5002u);
+            EXPECT_EQ(a.pet_table_id(), 2u);
+            EXPECT_EQ(a.max_health(), 5500u);
+        }
+    }
+    EXPECT_TRUE(found101);
+    EXPECT_TRUE(foundSwappedPet);
+
+    // 亮牌后第 1 回合正常接收指令并结算。
+    EXPECT_EQ(engine.ValidateAction(101, Attack(201)), 0u);
+    engine.SubmitAction(101, Attack(201));
+    engine.SubmitAction(201, Defend());
+    const auto turn1 = engine.ResolveCurrentRound();
+    EXPECT_EQ(turn1.round_index(), 1u);
+}
+
+TEST(RankedBattleTest, TacticalPrepSkippedForFreePresetAndZeroOptionMatches) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_time_limit(720);
+    dungeon.set_max_team_size(5);
+
+    auto req = MakeRanked1v1Request(302, 5);
+    req.set_match_mode(7);
+    req.mutable_ranked_context()->set_use_free_preset(true);
+    TurnBattleEngine freePresetEngine(data);
+    ASSERT_TRUE(freePresetEngine.Initialize(req));
+    EXPECT_FALSE(freePresetEngine.IsInPrepPhase());
+
+    req.mutable_ranked_context()->set_use_free_preset(false);
+    req.mutable_players(0)->clear_pets();
+    req.mutable_players(1)->clear_pets();
+    TurnBattleEngine noOptionEngine(data);
+    ASSERT_TRUE(noOptionEngine.Initialize(req));
+    EXPECT_FALSE(noOptionEngine.IsInPrepPhase());
+}
+
 }  // namespace

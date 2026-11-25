@@ -133,11 +133,11 @@ namespace gate_spectate
 		// 没有订阅者的这类条目直接删除;到期的墓碑删除。顺带按 metricInterval 打指标行。
 		void SweepIdle(SteadyTime nowSteady, uint64_t nowWallMs);
 
-		void NoteTicketRejected() { ++counters_.ticketRejects; }
+		void NoteTicketRejected() { ++counters.ticketRejects; }
 
-		const HubCounters &Counters() const { return counters_; }
-		std::size_t SubscriberCount() const { return battleOfSession_.size(); }
-		std::size_t EntryCount() const { return entries_.size(); }
+		const HubCounters &Counters() const { return counters; }
+		std::size_t SubscriberCount() const { return battleOfSession.size(); }
+		std::size_t EntryCount() const { return entries.size(); }
 
 	private:
 		enum class Phase : uint8_t
@@ -211,12 +211,12 @@ namespace gate_spectate
 		void DeliverToTarget(Entry &entry, SessionId sessionId);
 		void LogMetricsIfDue(SteadyTime now);
 
-		HubPorts ports_;
-		HubLimits limits_;
-		std::unordered_map<uint64_t, Entry> entries_;
-		std::unordered_map<SessionId, uint64_t> battleOfSession_; // 不变量:有记录 ⇔ 会话在该场条目的 subscribers 里
-		HubCounters counters_;
-		uint64_t lastContinuationToken_{0};
-		SteadyTime lastMetricAt_{};
+		HubPorts ports;
+		HubLimits limits;
+		std::unordered_map<uint64_t, Entry> entries;
+		std::unordered_map<SessionId, uint64_t> battleOfSession; // 不变量:有记录 ⇔ 会话在该场条目的 subscribers 里
+		HubCounters counters;
+		uint64_t lastContinuationToken{0};
+		SteadyTime lastMetricAt{};
 	};
 } // namespace gate_spectate

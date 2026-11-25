@@ -67,6 +67,10 @@ set(SOURCE_FILES
     code/guildrule_table.cpp
     code/guildshop_table.cpp
     code/guildshop_table_fk.cpp
+    code/guildwarmilestone_table.cpp
+    code/guildwarmilestone_table_fk.cpp
+    code/guildwarrule_table.cpp
+    code/guildwarrule_table_fk.cpp
     code/equipslot_table.cpp
     code/item_table.cpp
     code/playmode_table.cpp
@@ -143,6 +147,8 @@ set(SOURCE_FILES
     proto/guildlevel_table.pb.cc
     proto/guildrule_table.pb.cc
     proto/guildshop_table.pb.cc
+    proto/guildwarmilestone_table.pb.cc
+    proto/guildwarrule_table.pb.cc
     proto/equipslot_table.pb.cc
     proto/item_table.pb.cc
     proto/messagelimiter_table.pb.cc

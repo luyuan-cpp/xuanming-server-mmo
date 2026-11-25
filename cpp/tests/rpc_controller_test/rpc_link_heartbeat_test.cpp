@@ -163,7 +163,7 @@ class FrameRecorder
 {
 public:
     FrameRecorder()
-        : codec_([this](const TcpConnectionPtr&, const RpcMessagePtr& frame, muduo::Timestamp) { Push(*frame); })
+        : codec([this](const TcpConnectionPtr&, const RpcMessagePtr& frame, muduo::Timestamp) { Push(*frame); })
     {
     }
 
@@ -173,38 +173,38 @@ public:
     // loop 线程:作为连接的消息回调,直接消费输入。
     void OnMessage(const TcpConnectionPtr& conn, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime)
     {
-        codec_.onMessage(conn, buffer, receiveTime);
+        codec.onMessage(conn, buffer, receiveTime);
     }
 
     // loop 线程:按线上格式发一帧。
-    void Send(const TcpConnectionPtr& conn, const GameRpcMessage& frame) { codec_.send(conn, frame); }
+    void Send(const TcpConnectionPtr& conn, const GameRpcMessage& frame) { codec.send(conn, frame); }
 
     std::vector<GameRpcMessage> Frames() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return frames_;
+        std::lock_guard<std::mutex> lock(mutex);
+        return frames;
     }
 
     bool WaitForCount(std::size_t count) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return frames_.size() >= count; });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return frames.size() >= count; });
     }
 
 private:
     void Push(const GameRpcMessage& frame)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            frames_.push_back(frame);
+            std::lock_guard<std::mutex> lock(mutex);
+            frames.push_back(frame);
         }
-        cv_.notify_all();
+        cv.notify_all();
     }
 
-    mutable std::mutex mutex_;
-    mutable std::condition_variable cv_;
-    std::vector<GameRpcMessage> frames_;
-    RpcCodec codec_;   // 解码回调绑 this:codec_ 是本对象的成员,寿命相同
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
+    std::vector<GameRpcMessage> frames;
+    RpcCodec codec;   // 解码回调绑 this:codec_ 是本对象的成员,寿命相同
 };
 
 // 调用的完成状态。done 在 loop 线程上写,测试线程等待并读取。
@@ -214,34 +214,34 @@ public:
     void Push(const RpcStatus& status)
     {
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            statuses_.push_back(status);
+            std::lock_guard<std::mutex> lock(mutex);
+            statuses.push_back(status);
         }
-        cv_.notify_all();
+        cv.notify_all();
     }
 
     bool WaitForCount(std::size_t count) const
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        return cv_.wait_for(lock, kLiveness, [&] { return statuses_.size() >= count; });
+        std::unique_lock<std::mutex> lock(mutex);
+        return cv.wait_for(lock, kLiveness, [&] { return statuses.size() >= count; });
     }
 
     std::size_t Count() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return statuses_.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        return statuses.size();
     }
 
     std::vector<RpcStatus> Statuses() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return statuses_;
+        std::lock_guard<std::mutex> lock(mutex);
+        return statuses;
     }
 
 private:
-    mutable std::mutex mutex_;
-    mutable std::condition_variable cv_;
-    std::vector<RpcStatus> statuses_;
+    mutable std::mutex mutex;
+    mutable std::condition_variable cv;
+    std::vector<RpcStatus> statuses;
 };
 
 ClientDoneCallback RecordInto(const std::shared_ptr<StatusLog>& log)
@@ -262,40 +262,40 @@ class RpcLinkHeartbeatLoopback : public ::testing::Test
 protected:
     void SetUp() override
     {
-        loop_.emplace(*loopThread_.startLoop());
-        port_ = FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0);
+        loop.emplace(*loopThread.startLoop());
+        port = FindFreeLoopbackPort();
+        ASSERT_NE(port, 0);
         ASSERT_TRUE(IsDispatchableMessageId(kProcessId))
             << "gRpcMethodRegistry is empty: the global RpcRegistryEnvironment (rpc_channel_loopback_test.cpp) did not run";
     }
 
     void TearDown() override
     {
-        if (!loop_)
+        if (!loop)
         {
             return;
         }
         // 先拆主动连接的一侧(各自连接的唯一持有者 → forceClose → 对端 DOWN),等对端每条连接都报过 DOWN,
         // 再在 loop 线程销毁两个服务端(~TcpServer 断言 in-loop)。
         RunInLoopAndWait([this] {
-            client_.reset();
-            rawClient_.reset();
+            client.reset();
+            rawClient.reset();
         });
         PumpLoop(3);
         EXPECT_TRUE(WaitUntil([this] {
-            return peerDowns_.load() == peerUps_.load() && inboundDowns_.load() == inboundUps_.load();
-        })) << "a server side did not see DOWN for every connection: peer ups=" << peerUps_.load()
-            << " downs=" << peerDowns_.load() << ", inbound ups=" << inboundUps_.load()
-            << " downs=" << inboundDowns_.load();
+            return peerDowns.load() == peerUps.load() && inboundDowns.load() == inboundUps.load();
+        })) << "a server side did not see DOWN for every connection: peer ups=" << peerUps.load()
+            << " downs=" << peerDowns.load() << ", inbound ups=" << inboundUps.load()
+            << " downs=" << inboundDowns.load();
         RunInLoopAndWait([this] {
-            peer_.reset();
-            rpcServer_.reset();
+            peer.reset();
+            rpcServer.reset();
         });
         PumpLoop(2);
         // loopThread_ 析构 = quit + join。
     }
 
-    muduo::net::EventLoop& Loop() { return loop_->get(); }
+    muduo::net::EventLoop& Loop() { return loop->get(); }
 
     template <typename F>
     void RunInLoopAndWait(F&& fn)
@@ -343,23 +343,23 @@ protected:
     void StartPeer()
     {
         RunInLoopAndWait([this] {
-            peer_ = std::make_unique<muduo::net::TcpServer>(
-                &Loop(), muduo::net::InetAddress(port_, /*loopbackOnly=*/true), "rpc_link_heartbeat_peer");
+            peer = std::make_unique<muduo::net::TcpServer>(
+                &Loop(), muduo::net::InetAddress(port, /*loopbackOnly=*/true), "rpc_link_heartbeat_peer");
             // 回调捕获夹具 this:peer_ 在 TearDown 里先于夹具销毁(AGENTS §11.7 允许的同寿命例外)。
-            peer_->setConnectionCallback([this](const TcpConnectionPtr& conn) {
+            peer->setConnectionCallback([this](const TcpConnectionPtr& conn) {
                 if (conn->connected())
                 {
-                    peerConn_ = conn;
+                    peerConn = conn;
                     conn->setMessageCallback(
                         [this](const TcpConnectionPtr& c, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime) {
-                            peerRecorder_.OnMessage(c, buffer, receiveTime);
+                            peerRecorder.OnMessage(c, buffer, receiveTime);
                         });
-                    ++peerUps_;
+                    ++peerUps;
                     return;
                 }
-                ++peerDowns_;
+                ++peerDowns;
             });
-            peer_->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
+            peer->start();   // 在 loop 线程上即时 listen,随后的 connect 不会撞拒连
         });
     }
 
@@ -367,27 +367,27 @@ protected:
     void ConnectClient(bool heartbeat)
     {
         RunInLoopAndWait([this, heartbeat] {
-            client_ = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", port_));
+            client = std::make_shared<RpcClient>(&Loop(), muduo::net::InetAddress("127.0.0.1", port));
             if (heartbeat)
             {
-                client_->setLinkHeartbeat(kTestHeartbeat);
+                client->setLinkHeartbeat(kTestHeartbeat);
             }
-            client_->connect();
+            client->connect();
         });
-        ASSERT_TRUE(WaitUntil([this] { return client_->connected() && !peerConn_.expired(); }))
+        ASSERT_TRUE(WaitUntil([this] { return client->connected() && !peerConn.expired(); }))
             << "RpcClient never connected";
     }
 
     // loop 线程:由对端发一帧。
     void SendFromPeer(const GameRpcMessage& frame)
     {
-        const auto conn = peerConn_.lock();
+        const auto conn = peerConn.lock();
         if (!conn)
         {
             ADD_FAILURE() << "peer connection is gone";
             return;
         }
-        peerRecorder_.Send(conn, frame);
+        peerRecorder.Send(conn, frame);
     }
 
     // ---- 入站 ----
@@ -395,49 +395,49 @@ protected:
     void StartRpcServer()
     {
         RunInLoopAndWait([this] {
-            rpcServer_ = std::make_unique<muduo::net::RpcServer>(
-                &Loop(), muduo::net::InetAddress(port_, /*loopbackOnly=*/true));
-            rpcServer_->setLinkHeartbeat(kTestHeartbeat);
+            rpcServer = std::make_unique<muduo::net::RpcServer>(
+                &Loop(), muduo::net::InetAddress(port, /*loopbackOnly=*/true));
+            rpcServer->setLinkHeartbeat(kTestHeartbeat);
             // 同寿命例外:rpcServer_ 在 TearDown 里先于夹具销毁。
-            rpcServer_->setConnectionObserver([this](const TcpConnectionPtr& conn) {
+            rpcServer->setConnectionObserver([this](const TcpConnectionPtr& conn) {
                 if (conn->connected())
                 {
-                    inboundConn_ = conn;
-                    ++inboundUps_;
+                    inboundConn = conn;
+                    ++inboundUps;
                     return;
                 }
-                ++inboundDowns_;
+                ++inboundDowns;
             });
-            rpcServer_->start();
+            rpcServer->start();
         });
     }
 
     void ConnectRawClient()
     {
         RunInLoopAndWait([this] {
-            rawClient_ = std::make_unique<muduo::net::TcpClient>(
-                &Loop(), muduo::net::InetAddress("127.0.0.1", port_), "rpc_link_heartbeat_raw");
+            rawClient = std::make_unique<muduo::net::TcpClient>(
+                &Loop(), muduo::net::InetAddress("127.0.0.1", port), "rpc_link_heartbeat_raw");
             // 同寿命例外:rawClient_ 在 TearDown 里先于夹具销毁;没有 enableRetry,断了不重连。
-            rawClient_->setConnectionCallback([this](const TcpConnectionPtr& conn) {
+            rawClient->setConnectionCallback([this](const TcpConnectionPtr& conn) {
                 if (!conn->connected())
                 {
-                    ++rawDowns_;
+                    ++rawDowns;
                 }
             });
-            rawClient_->setMessageCallback(
+            rawClient->setMessageCallback(
                 [this](const TcpConnectionPtr& c, muduo::net::Buffer* buffer, muduo::Timestamp receiveTime) {
-                    rawRecorder_.OnMessage(c, buffer, receiveTime);
+                    rawRecorder.OnMessage(c, buffer, receiveTime);
                 });
-            rawClient_->connect();
+            rawClient->connect();
         });
-        ASSERT_TRUE(WaitUntil([this] { return rawClient_->connection() != nullptr && !inboundConn_.expired(); }))
+        ASSERT_TRUE(WaitUntil([this] { return rawClient->connection() != nullptr && !inboundConn.expired(); }))
             << "raw client never connected to the RpcServer";
     }
 
     // loop 线程:RpcServer 给入站连接建的 channel(存在连接的 context 里);连接已断或 context 已清时为空。
     RpcChannelPtr InboundChannel() const
     {
-        const auto conn = inboundConn_.lock();
+        const auto conn = inboundConn.lock();
         if (!conn)
         {
             return nullptr;
@@ -447,26 +447,26 @@ protected:
     }
 
     // loopThread_ 排第一:最后析构,保证其余成员析构时 loop 仍在。
-    muduo::net::EventLoopThread loopThread_;
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    uint16_t port_{0};
+    muduo::net::EventLoopThread loopThread;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    uint16_t port{0};
 
     // 出站拓扑。两个 weak 只在 loop 线程上读写。
-    std::unique_ptr<muduo::net::TcpServer> peer_;
-    FrameRecorder peerRecorder_;
-    std::weak_ptr<muduo::net::TcpConnection> peerConn_;
-    std::atomic<int> peerUps_{0};
-    std::atomic<int> peerDowns_{0};
-    RpcClientPtr client_;
+    std::unique_ptr<muduo::net::TcpServer> peer;
+    FrameRecorder peerRecorder;
+    std::weak_ptr<muduo::net::TcpConnection> peerConn;
+    std::atomic<int> peerUps{0};
+    std::atomic<int> peerDowns{0};
+    RpcClientPtr client;
 
     // 入站拓扑。
-    std::unique_ptr<muduo::net::RpcServer> rpcServer_;
-    std::weak_ptr<muduo::net::TcpConnection> inboundConn_;
-    std::atomic<int> inboundUps_{0};
-    std::atomic<int> inboundDowns_{0};
-    std::unique_ptr<muduo::net::TcpClient> rawClient_;
-    FrameRecorder rawRecorder_;
-    std::atomic<int> rawDowns_{0};
+    std::unique_ptr<muduo::net::RpcServer> rpcServer;
+    std::weak_ptr<muduo::net::TcpConnection> inboundConn;
+    std::atomic<int> inboundUps{0};
+    std::atomic<int> inboundDowns{0};
+    std::unique_ptr<muduo::net::TcpClient> rawClient;
+    FrameRecorder rawRecorder;
+    std::atomic<int> rawDowns{0};
 };
 
 } // namespace
@@ -660,7 +660,7 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundSendsOneHeartbeatFrameWhenWriteIdle)
     RpcLinkLiveness::Verdict early;
     RpcLinkLiveness::Verdict due;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -670,15 +670,15 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundSendsOneHeartbeatFrameWhenWriteIdle)
         early = channel->CheckLinkLiveness(t0 + kTestHeartbeat.interval - 1ns);
         due = channel->CheckLinkLiveness(t1 + kTestHeartbeat.interval);
         // 屏障:同一连接 FIFO,对端在它之前收到的就是之前发出的全部帧。
-        EXPECT_TRUE(client_->SendRequest(kProcessId, ProcessRequest(kBarrierSession)));
+        EXPECT_TRUE(client->SendRequest(kProcessId, ProcessRequest(kBarrierSession)));
     });
     EXPECT_TRUE(enabled) << "setLinkHeartbeat did not reach the channel created on connect";
     EXPECT_FALSE(early.sendHeartbeat) << "heartbeat sent before a full write-idle interval";
     EXPECT_TRUE(due.sendHeartbeat);
     EXPECT_FALSE(due.closeIdle);
 
-    ASSERT_TRUE(peerRecorder_.WaitForCount(2));
-    const auto frames = peerRecorder_.Frames();
+    ASSERT_TRUE(peerRecorder.WaitForCount(2));
+    const auto frames = peerRecorder.Frames();
     const auto& heartbeat = frames[0];
     EXPECT_EQ(heartbeat.type(), HEARTBEAT) << Describe(frames);
     EXPECT_EQ(heartbeat.id(), 0u);
@@ -707,7 +707,7 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundIdleTimeoutClosesTheLinkAndTheClientRec
     bool readyAfterVerdict = true;
     std::size_t completionsAtVerdict = 99;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -715,7 +715,7 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundIdleTimeoutClosesTheLinkAndTheClientRec
         }
         oldChannel = channel;
         // 一次在途调用:对端从不回包,判死之后由既有的 DOWN 路径以 kDisconnected 失败。
-        client_->CallMethod(kProcessId, ProcessRequest(1), RecordInto(calls), RpcCallOptions{kLongTimeout});
+        client->CallMethod(kProcessId, ProcessRequest(1), RecordInto(calls), RpcCallOptions{kLongTimeout});
         // 对端一个字节都不发。相邻两次检查不超过 2 × checkPeriod,否则按本端卡顿推迟判死。
         for (int hour = 1; hour <= 3; ++hour)
         {
@@ -723,7 +723,7 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundIdleTimeoutClosesTheLinkAndTheClientRec
         }
         beforeTimeout.push_back(channel->CheckLinkLiveness(t0 + kTestHeartbeat.idleTimeout - 1ns));
         atTimeout = channel->CheckLinkLiveness(t1 + kTestHeartbeat.idleTimeout);
-        readyAfterVerdict = client_->IsReady();
+        readyAfterVerdict = client->IsReady();
         completionsAtVerdict = calls->Count();
     });
     for (const auto& verdict : beforeTimeout)
@@ -740,19 +740,19 @@ TEST_F(RpcLinkHeartbeatLoopback, OutboundIdleTimeoutClosesTheLinkAndTheClientRec
 
     ASSERT_TRUE(calls->WaitForCount(1));
     const auto status = calls->Statuses().front();
-    EXPECT_EQ(status.code(), RpcStatusCode::kDisconnected) << status.name();
+    EXPECT_EQ(status.Code(), RpcStatusCode::kDisconnected) << status.name();
     EXPECT_TRUE(status.OutcomeUnknown());
     EXPECT_EQ(Load(stats.disconnected) - disconnectedBefore, 1u);
-    ASSERT_TRUE(WaitUntil([this] { return peerDowns_.load() >= 1; })) << "the peer never saw the forced close";
+    ASSERT_TRUE(WaitUntil([this] { return peerDowns.load() >= 1; })) << "the peer never saw the forced close";
 
     // enableRetry 重连:新连接上是新 channel,同样带心跳(setLinkHeartbeat 跨重连保留)。
-    ASSERT_TRUE(WaitUntil([this] { return peerUps_.load() >= 2 && client_->connected(); }))
+    ASSERT_TRUE(WaitUntil([this] { return peerUps.load() >= 2 && client->connected(); }))
         << "RpcClient did not reconnect";
     bool oldExpired = false;
     bool newHasHeartbeat = false;
     RunInLoopAndWait([&] {
         oldExpired = oldChannel.expired();
-        newHasHeartbeat = client_->channel() != nullptr && client_->channel()->HasLinkHeartbeat();
+        newHasHeartbeat = client->Channel() != nullptr && client->Channel()->HasLinkHeartbeat();
     });
     EXPECT_TRUE(oldExpired) << "the closed link's channel must be dropped on DOWN";
     EXPECT_TRUE(newHasHeartbeat);
@@ -770,14 +770,14 @@ TEST_F(RpcLinkHeartbeatLoopback, HeartbeatFromThePeerRestartsTheIdleClock)
     // 写方向顺带发一帧心跳,无妨;读方向离判死还差 3 个 interval。
     const auto seenAt = t1 + kTestHeartbeat.interval;
     ASSERT_TRUE(WaitUntil([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         return channel != nullptr && channel->CheckLinkLiveness(seenAt).inboundSeen;
     })) << "the peer's heartbeat never reached the channel";
 
     std::vector<RpcLinkLiveness::Verdict> beforeTimeout;
     RpcLinkLiveness::Verdict atTimeout;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -812,8 +812,8 @@ TEST_F(RpcLinkHeartbeatLoopback, HeartbeatFrameIsNeitherDispatchedNorAnswered)
         // 屏障:id≠0 的请求。RpcClient 没装服务,框架回 RPC_ERROR(NO_SERVICE) 并回显这个 id。
         SendFromPeer(MakeRequestFrame(kBarrierId, kProcessId, ProcessRequest(kBarrierSession)));
     });
-    ASSERT_TRUE(peerRecorder_.WaitForCount(1));
-    const auto frames = peerRecorder_.Frames();
+    ASSERT_TRUE(peerRecorder.WaitForCount(1));
+    const auto frames = peerRecorder.Frames();
     EXPECT_EQ(frames.front().id(), kBarrierId) << "something answered the heartbeat: " << Describe(frames);
     EXPECT_EQ(frames.front().type(), RPC_ERROR);
     EXPECT_EQ(frames.front().error(), NO_SERVICE);
@@ -821,7 +821,7 @@ TEST_F(RpcLinkHeartbeatLoopback, HeartbeatFrameIsNeitherDispatchedNorAnswered)
     EXPECT_EQ(Load(stats.requestsRejected) - rejectedBefore, 1u) << "only the barrier should have been rejected";
     EXPECT_EQ(Load(stats.requestsDispatched) - dispatchedBefore, 0u);
     bool stillConnected = false;
-    RunInLoopAndWait([&] { stillConnected = client_->connected(); });
+    RunInLoopAndWait([&] { stillConnected = client->connected(); });
     EXPECT_TRUE(stillConnected);
 }
 
@@ -868,13 +868,13 @@ TEST_F(RpcLinkHeartbeatLoopback, InboundRpcServerHeartbeatsAndClosesIdleLinks)
     EXPECT_EQ(Load(GetRpcChannelStats().linkIdleClosed) - closedBefore, 1u);
 
     // 判死只关传输:原始客户端看到 DOWN,RpcServer 的 DOWN 分支照常执行、清掉连接的 context。
-    ASSERT_TRUE(WaitUntil([this] { return rawDowns_.load() >= 1 && inboundDowns_.load() >= 1; }))
+    ASSERT_TRUE(WaitUntil([this] { return rawDowns.load() >= 1 && inboundDowns.load() >= 1; }))
         << "the idle inbound link was not closed";
     bool contextCleared = false;
     RunInLoopAndWait([&] { contextCleared = InboundChannel() == nullptr; });
     EXPECT_TRUE(contextCleared);
     // 判死之前发出的心跳都已在线上(输出缓冲为空时 send 直接写 socket),原始客户端在 DOWN 之前全部读到。
-    const auto frames = rawRecorder_.Frames();
+    const auto frames = rawRecorder.Frames();
     EXPECT_EQ(frames.size(), 3u) << Describe(frames);
     for (const auto& frame : frames)
     {
@@ -891,7 +891,7 @@ TEST_F(RpcLinkHeartbeatLoopback, ChannelsWithoutHeartbeatNeverSendOrClose)
     bool enabled = true;
     RpcLinkLiveness::Verdict verdict;
     RunInLoopAndWait([&] {
-        const RpcChannelPtr channel = client_->channel();
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -899,16 +899,16 @@ TEST_F(RpcLinkHeartbeatLoopback, ChannelsWithoutHeartbeatNeverSendOrClose)
         }
         enabled = channel->HasLinkHeartbeat();
         verdict = channel->CheckLinkLiveness(t1 + std::chrono::hours(24 * 365));
-        EXPECT_TRUE(client_->SendRequest(kProcessId, ProcessRequest(kBarrierSession)));
+        EXPECT_TRUE(client->SendRequest(kProcessId, ProcessRequest(kBarrierSession)));
     });
     EXPECT_FALSE(enabled);
     EXPECT_FALSE(verdict.sendHeartbeat);
     EXPECT_FALSE(verdict.closeIdle);
     EXPECT_FALSE(verdict.idleDeferred);
-    ASSERT_TRUE(peerRecorder_.WaitForCount(1));
-    EXPECT_EQ(peerRecorder_.Frames().front().type(), REQUEST) << "the barrier must be the first frame";
+    ASSERT_TRUE(peerRecorder.WaitForCount(1));
+    EXPECT_EQ(peerRecorder.Frames().front().type(), REQUEST) << "the barrier must be the first frame";
     bool stillConnected = false;
-    RunInLoopAndWait([&] { stillConnected = client_->connected(); });
+    RunInLoopAndWait([&] { stillConnected = client->connected(); });
     EXPECT_TRUE(stillConnected);
 }
 
@@ -921,8 +921,8 @@ TEST_F(RpcLinkHeartbeatLoopback, HeartbeatKeepsRunningAfterTheChannelIsClosed)
     bool closed = false;
     RpcLinkLiveness::Verdict due;
     RunInLoopAndWait([&] {
-        client_->CloseChannel();   // 节点关机阶段 0:拒新调用,链路仍在
-        const RpcChannelPtr channel = client_->channel();
+        client->CloseChannel();   // 节点关机阶段 0:拒新调用,链路仍在
+        const RpcChannelPtr channel = client->Channel();
         if (!channel)
         {
             ADD_FAILURE() << "client has no channel";
@@ -933,8 +933,8 @@ TEST_F(RpcLinkHeartbeatLoopback, HeartbeatKeepsRunningAfterTheChannelIsClosed)
     });
     EXPECT_TRUE(closed);
     EXPECT_TRUE(due.sendHeartbeat) << "Close() must not stop heartbeats, or the peer kills the link while we drain";
-    ASSERT_TRUE(peerRecorder_.WaitForCount(1));
-    EXPECT_EQ(peerRecorder_.Frames().front().type(), HEARTBEAT);
+    ASSERT_TRUE(peerRecorder.WaitForCount(1));
+    EXPECT_EQ(peerRecorder.Frames().front().type(), HEARTBEAT);
 }
 
 // ===========================================================================

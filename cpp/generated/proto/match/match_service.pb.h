@@ -787,6 +787,8 @@ enum MatchMode : int {
   MATCH_MODE_PVP_CHALLENGE = 6,
   MATCH_MODE_PVP_TEAM = 7,
   MATCH_MODE_POLARITY_5V5 = 8,
+  MATCH_MODE_GUILD_WAR_PVP = 9,
+  MATCH_MODE_GUILD_WAR_SIEGE = 10,
   MATCH_MODE_SEASON_TOURNAMENT = 11,
   MatchMode_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
@@ -800,7 +802,7 @@ inline constexpr MatchMode MatchMode_MIN =
 inline constexpr MatchMode MatchMode_MAX =
     static_cast<MatchMode>(11);
 [[nodiscard]] inline bool MatchMode_IsValid(int value) {
-  return 0 <= value && value <= 11 && ((2559u >> value) & 1) != 0;
+  return 0 <= value && value <= 11;
 }
 inline constexpr int MatchMode_ARRAYSIZE = 11 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL

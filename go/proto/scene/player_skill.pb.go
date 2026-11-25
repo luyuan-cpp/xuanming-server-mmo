@@ -73,7 +73,7 @@ func (x CraftSkillBookRequest_CraftMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CraftSkillBookRequest_CraftMode.Descriptor instead.
 func (CraftSkillBookRequest_CraftMode) EnumDescriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{12, 0}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{18, 0}
 }
 
 type ReleaseSkillRequest struct {
@@ -397,6 +397,7 @@ type ListSkillsResponse struct {
 	ClassId         uint32                         `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
 	CurrencyBalance uint64                         `protobuf:"varint,6,opt,name=currency_balance,json=currencyBalance,proto3" json:"currency_balance,omitempty"` // 修习货币余额(CurrencySystem kCurrencyGold,客户端称"银两")
 	PetId           uint64                         `protobuf:"varint,7,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                               // 返回本次目录主体，防止切换人物/宝宝后的迟到响应覆盖界面。
+	Loadout         *SkillLoadoutSnapshot          `protobuf:"bytes,8,opt,name=loadout,proto3" json:"loadout,omitempty"`                                         // 仅人物（pet_id == 0）填充：战法构筑 3 方案与槽位上限。
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -480,40 +481,50 @@ func (x *ListSkillsResponse) GetPetId() uint64 {
 	return 0
 }
 
+func (x *ListSkillsResponse) GetLoadout() *SkillLoadoutSnapshot {
+	if x != nil {
+		return x.Loadout
+	}
+	return nil
+}
+
 // 技能书的一行:配置表的展示投影 + 本角色的等级与可修习性。数值真源是 Skill 表与服务端规则,
 // 客户端只展示,不得据此推算、也不回传这些派生值。
 type SkillCatalogEntry struct {
-	state               protoimpl.MessageState         `protogen:"open.v1"`
-	SkillTableId        uint32                         `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
-	Name                string                         `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description         string                         `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	IconKey             string                         `protobuf:"bytes,4,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"` // Unity Resources 相对键,不带扩展名、不带 Assets/Resources/ 前缀(如 "UI/Skills/1101")
-	ClassId             uint32                         `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
-	Category            string                         `protobuf:"bytes,6,opt,name=category,proto3" json:"category,omitempty"` // 表里的分类文案(主动 / 被动 …),只用于展示
-	Passive             bool                           `protobuf:"varint,7,opt,name=passive,proto3" json:"passive,omitempty"`
-	TargetTeam          uint32                         `protobuf:"varint,8,opt,name=target_team,json=targetTeam,proto3" json:"target_team,omitempty"` // 1 = 敌方,2 = 友方,3 = 自身(class_skill_rules.h TargetTeam)
-	MaxTargets          uint32                         `protobuf:"varint,9,opt,name=max_targets,json=maxTargets,proto3" json:"max_targets,omitempty"`
-	UnlockLevel         uint32                         `protobuf:"varint,10,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
-	MaxRank             uint32                         `protobuf:"varint,11,opt,name=max_rank,json=maxRank,proto3" json:"max_rank,omitempty"`
-	Rank                uint32                         `protobuf:"varint,12,opt,name=rank,proto3" json:"rank,omitempty"`                                   // 已学等级;0 = 未学
-	RankLimit           uint32                         `protobuf:"varint,13,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"`        // 按当前角色等级能修到的最高重;未到解锁等级为 0
-	ManaPercent         float64                        `protobuf:"fixed64,14,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"` // 耗蓝比例(0.03 = 最大法力的 3%,战斗内向上取整、至少 1)
-	CooldownRounds      uint32                         `protobuf:"varint,15,opt,name=cooldown_rounds,json=cooldownRounds,proto3" json:"cooldown_rounds,omitempty"`
-	NextRankCost        uint64                         `protobuf:"varint,16,opt,name=next_rank_cost,json=nextRankCost,proto3" json:"next_rank_cost,omitempty"`                      // 再修一重的价格;已满重为 0
-	UpgradeBlockTipId   uint32                         `protobuf:"varint,17,opt,name=upgrade_block_tip_id,json=upgradeBlockTipId,proto3" json:"upgrade_block_tip_id,omitempty"`     // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
-	DurationRounds      uint32                         `protobuf:"varint,18,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`                  // 附带增益 / 减益的持续回合;没有为 0
-	AllowDeadTarget     bool                           `protobuf:"varint,19,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`             // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
-	AbilityKind         uint32                         `protobuf:"varint,20,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`                           // 1主动、2被动、3追击、4开场。
-	CasterMask          uint32                         `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                              // 1人物、2宝宝；按施法者资格区分。
-	ActionTags          uint32                         `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                              // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
-	SupportPreview      *component.SupportSkillPreview `protobuf:"bytes,23,opt,name=support_preview,json=supportPreview,proto3" json:"support_preview,omitempty"`                   // 服务端中立参考值，缺省表示没有权威预览。
-	SeasonId            uint32                         `protobuf:"varint,24,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                    // 0 = 常驻永久技能；> 0 = 本季免费限定技能（无需消耗银两修习，随角色等级自动生效）。
-	ScrollId            uint32                         `protobuf:"varint,25,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                                    // 所属永久制书卷宗（SkillScrollCraft.id；0 = 非卷宗制书技）。
-	RarityTier          uint32                         `protobuf:"varint,26,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`                              // 0 = 常规（90%）；1 = 稀世绝学（<=10%）。
-	CraftUnlockRequired bool                           `protobuf:"varint,27,opt,name=craft_unlock_required,json=craftUnlockRequired,proto3" json:"craft_unlock_required,omitempty"` // true = 当前服开启了制书解锁门槛，需研习技能书后方可修习。
-	UnlockedByBook      bool                           `protobuf:"varint,28,opt,name=unlocked_by_book,json=unlockedByBook,proto3" json:"unlocked_by_book,omitempty"`                // true = 已通过技能书永久解锁（跨赛季永不重置）。
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                 protoimpl.MessageState         `protogen:"open.v1"`
+	SkillTableId          uint32                         `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	Name                  string                         `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description           string                         `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	IconKey               string                         `protobuf:"bytes,4,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"` // Unity Resources 相对键,不带扩展名、不带 Assets/Resources/ 前缀(如 "UI/Skills/1101")
+	ClassId               uint32                         `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Category              string                         `protobuf:"bytes,6,opt,name=category,proto3" json:"category,omitempty"` // 表里的分类文案(主动 / 被动 …),只用于展示
+	Passive               bool                           `protobuf:"varint,7,opt,name=passive,proto3" json:"passive,omitempty"`
+	TargetTeam            uint32                         `protobuf:"varint,8,opt,name=target_team,json=targetTeam,proto3" json:"target_team,omitempty"` // 1 = 敌方,2 = 友方,3 = 自身(class_skill_rules.h TargetTeam)
+	MaxTargets            uint32                         `protobuf:"varint,9,opt,name=max_targets,json=maxTargets,proto3" json:"max_targets,omitempty"`
+	UnlockLevel           uint32                         `protobuf:"varint,10,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
+	MaxRank               uint32                         `protobuf:"varint,11,opt,name=max_rank,json=maxRank,proto3" json:"max_rank,omitempty"`
+	Rank                  uint32                         `protobuf:"varint,12,opt,name=rank,proto3" json:"rank,omitempty"`                                   // 已学等级;0 = 未学
+	RankLimit             uint32                         `protobuf:"varint,13,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"`        // 按当前角色等级能修到的最高重;未到解锁等级为 0
+	ManaPercent           float64                        `protobuf:"fixed64,14,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"` // 耗蓝比例(0.03 = 最大法力的 3%,战斗内向上取整、至少 1)
+	CooldownRounds        uint32                         `protobuf:"varint,15,opt,name=cooldown_rounds,json=cooldownRounds,proto3" json:"cooldown_rounds,omitempty"`
+	NextRankCost          uint64                         `protobuf:"varint,16,opt,name=next_rank_cost,json=nextRankCost,proto3" json:"next_rank_cost,omitempty"`                            // 再修一重的价格;已满重为 0
+	UpgradeBlockTipId     uint32                         `protobuf:"varint,17,opt,name=upgrade_block_tip_id,json=upgradeBlockTipId,proto3" json:"upgrade_block_tip_id,omitempty"`           // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
+	DurationRounds        uint32                         `protobuf:"varint,18,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`                        // 附带增益 / 减益的持续回合;没有为 0
+	AllowDeadTarget       bool                           `protobuf:"varint,19,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`                   // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
+	AbilityKind           uint32                         `protobuf:"varint,20,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`                                 // 1主动、2被动、3追击、4开场。
+	CasterMask            uint32                         `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                                    // 1人物、2宝宝；按施法者资格区分。
+	ActionTags            uint32                         `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                                    // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
+	SupportPreview        *component.SupportSkillPreview `protobuf:"bytes,23,opt,name=support_preview,json=supportPreview,proto3" json:"support_preview,omitempty"`                         // 服务端中立参考值，缺省表示没有权威预览。
+	SeasonId              uint32                         `protobuf:"varint,24,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                          // 0 = 常驻永久技能；> 0 = 本季免费限定技能（无需消耗银两修习，随角色等级自动生效）。
+	ScrollId              uint32                         `protobuf:"varint,25,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                                          // 所属永久制书卷宗（SkillScrollCraft.id；0 = 非卷宗制书技）。
+	RarityTier            uint32                         `protobuf:"varint,26,opt,name=rarity_tier,json=rarityTier,proto3" json:"rarity_tier,omitempty"`                                    // 0 = 常规（90%）；1 = 稀世绝学（<=10%）。
+	CraftUnlockRequired   bool                           `protobuf:"varint,27,opt,name=craft_unlock_required,json=craftUnlockRequired,proto3" json:"craft_unlock_required,omitempty"`       // true = 当前服开启了制书解锁门槛，需研习技能书后方可修习。
+	UnlockedByBook        bool                           `protobuf:"varint,28,opt,name=unlocked_by_book,json=unlockedByBook,proto3" json:"unlocked_by_book,omitempty"`                      // true = 已通过技能书永久解锁（跨赛季永不重置）。
+	SecondaryTargetPolicy uint32                         `protobuf:"varint,29,opt,name=secondary_target_policy,json=secondaryTargetPolicy,proto3" json:"secondary_target_policy,omitempty"` // 副目标定向策略：0随机/1物攻最高/2法攻最高/3气血数值最低/4气血比例最低/5物防最低/6法防最低/7排速最低。
+	ExclusiveGroup        uint32                         `protobuf:"varint,30,opt,name=exclusive_group,json=exclusiveGroup,proto3" json:"exclusive_group,omitempty"`                        // 互斥组：0无互斥；>0同组战法不可同时装配。
+	Equipped              bool                           `protobuf:"varint,31,opt,name=equipped,proto3" json:"equipped,omitempty"`                                                          // 在当前生效战法构筑方案中是否已装配生效（主动技默认随习得生效）。
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *SkillCatalogEntry) Reset() {
@@ -742,6 +753,491 @@ func (x *SkillCatalogEntry) GetUnlockedByBook() bool {
 	return false
 }
 
+func (x *SkillCatalogEntry) GetSecondaryTargetPolicy() uint32 {
+	if x != nil {
+		return x.SecondaryTargetPolicy
+	}
+	return 0
+}
+
+func (x *SkillCatalogEntry) GetExclusiveGroup() uint32 {
+	if x != nil {
+		return x.ExclusiveGroup
+	}
+	return 0
+}
+
+func (x *SkillCatalogEntry) GetEquipped() bool {
+	if x != nil {
+		return x.Equipped
+	}
+	return false
+}
+
+type SkillLoadoutSchemeInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..3
+	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                  // 0默认 / 1输出 / 2控场 / 3辅助
+	PassiveSkillIds []uint32               `protobuf:"varint,3,rep,packed,name=passive_skill_ids,json=passiveSkillIds,proto3" json:"passive_skill_ids,omitempty"` // 已装配被动战法 ID（按升序）
+	PursuitSkillIds []uint32               `protobuf:"varint,4,rep,packed,name=pursuit_skill_ids,json=pursuitSkillIds,proto3" json:"pursuit_skill_ids,omitempty"` // 已装配追击战法 ID
+	OpeningSkillIds []uint32               `protobuf:"varint,5,rep,packed,name=opening_skill_ids,json=openingSkillIds,proto3" json:"opening_skill_ids,omitempty"` // 已装配开场战法 ID
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SkillLoadoutSchemeInfo) Reset() {
+	*x = SkillLoadoutSchemeInfo{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillLoadoutSchemeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillLoadoutSchemeInfo) ProtoMessage() {}
+
+func (x *SkillLoadoutSchemeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillLoadoutSchemeInfo.ProtoReflect.Descriptor instead.
+func (*SkillLoadoutSchemeInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SkillLoadoutSchemeInfo) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSchemeInfo) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSchemeInfo) GetPassiveSkillIds() []uint32 {
+	if x != nil {
+		return x.PassiveSkillIds
+	}
+	return nil
+}
+
+func (x *SkillLoadoutSchemeInfo) GetPursuitSkillIds() []uint32 {
+	if x != nil {
+		return x.PursuitSkillIds
+	}
+	return nil
+}
+
+func (x *SkillLoadoutSchemeInfo) GetOpeningSkillIds() []uint32 {
+	if x != nil {
+		return x.OpeningSkillIds
+	}
+	return nil
+}
+
+type SkillLoadoutSnapshot struct {
+	state           protoimpl.MessageState    `protogen:"open.v1"`
+	CustomEnabled   bool                      `protobuf:"varint,1,opt,name=custom_enabled,json=customEnabled,proto3" json:"custom_enabled,omitempty"`         // false = 尚未自定义保存（兼容全量非互斥模式）；true = 严格按当前方案生效
+	ActiveSchemeId  uint32                    `protobuf:"varint,2,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`    // 当前选中流派方案号（1..3）
+	StateVersion    uint64                    `protobuf:"varint,3,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`            // 乐观锁版本号
+	MaxPassiveSlots uint32                    `protobuf:"varint,4,opt,name=max_passive_slots,json=maxPassiveSlots,proto3" json:"max_passive_slots,omitempty"` // 被动槽位上限（固定 3）
+	MaxPursuitSlots uint32                    `protobuf:"varint,5,opt,name=max_pursuit_slots,json=maxPursuitSlots,proto3" json:"max_pursuit_slots,omitempty"` // 追击槽位上限（固定 1）
+	MaxOpeningSlots uint32                    `protobuf:"varint,6,opt,name=max_opening_slots,json=maxOpeningSlots,proto3" json:"max_opening_slots,omitempty"` // 开场槽位上限（固定 1）
+	Schemes         []*SkillLoadoutSchemeInfo `protobuf:"bytes,7,rep,name=schemes,proto3" json:"schemes,omitempty"`                                           // 全部 3 套方案（按 scheme_id 升序）
+	LastRequestId   string                    `protobuf:"bytes,8,opt,name=last_request_id,json=lastRequestId,proto3" json:"last_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SkillLoadoutSnapshot) Reset() {
+	*x = SkillLoadoutSnapshot{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillLoadoutSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillLoadoutSnapshot) ProtoMessage() {}
+
+func (x *SkillLoadoutSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillLoadoutSnapshot.ProtoReflect.Descriptor instead.
+func (*SkillLoadoutSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SkillLoadoutSnapshot) GetCustomEnabled() bool {
+	if x != nil {
+		return x.CustomEnabled
+	}
+	return false
+}
+
+func (x *SkillLoadoutSnapshot) GetActiveSchemeId() uint32 {
+	if x != nil {
+		return x.ActiveSchemeId
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetMaxPassiveSlots() uint32 {
+	if x != nil {
+		return x.MaxPassiveSlots
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetMaxPursuitSlots() uint32 {
+	if x != nil {
+		return x.MaxPursuitSlots
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetMaxOpeningSlots() uint32 {
+	if x != nil {
+		return x.MaxOpeningSlots
+	}
+	return 0
+}
+
+func (x *SkillLoadoutSnapshot) GetSchemes() []*SkillLoadoutSchemeInfo {
+	if x != nil {
+		return x.Schemes
+	}
+	return nil
+}
+
+func (x *SkillLoadoutSnapshot) GetLastRequestId() string {
+	if x != nil {
+		return x.LastRequestId
+	}
+	return ""
+}
+
+type SaveSkillLoadoutRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"` // 1..3
+	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`    // 0..3
+	PassiveSkillIds []uint32               `protobuf:"varint,3,rep,packed,name=passive_skill_ids,json=passiveSkillIds,proto3" json:"passive_skill_ids,omitempty"`
+	PursuitSkillIds []uint32               `protobuf:"varint,4,rep,packed,name=pursuit_skill_ids,json=pursuitSkillIds,proto3" json:"pursuit_skill_ids,omitempty"`
+	OpeningSkillIds []uint32               `protobuf:"varint,5,rep,packed,name=opening_skill_ids,json=openingSkillIds,proto3" json:"opening_skill_ids,omitempty"`
+	StateVersion    uint64                 `protobuf:"varint,6,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`
+	RequestId       string                 `protobuf:"bytes,7,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 16-64字节ASCII标识
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SaveSkillLoadoutRequest) Reset() {
+	*x = SaveSkillLoadoutRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveSkillLoadoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveSkillLoadoutRequest) ProtoMessage() {}
+
+func (x *SaveSkillLoadoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveSkillLoadoutRequest.ProtoReflect.Descriptor instead.
+func (*SaveSkillLoadoutRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SaveSkillLoadoutRequest) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SaveSkillLoadoutRequest) GetRoleTag() uint32 {
+	if x != nil {
+		return x.RoleTag
+	}
+	return 0
+}
+
+func (x *SaveSkillLoadoutRequest) GetPassiveSkillIds() []uint32 {
+	if x != nil {
+		return x.PassiveSkillIds
+	}
+	return nil
+}
+
+func (x *SaveSkillLoadoutRequest) GetPursuitSkillIds() []uint32 {
+	if x != nil {
+		return x.PursuitSkillIds
+	}
+	return nil
+}
+
+func (x *SaveSkillLoadoutRequest) GetOpeningSkillIds() []uint32 {
+	if x != nil {
+		return x.OpeningSkillIds
+	}
+	return nil
+}
+
+func (x *SaveSkillLoadoutRequest) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SaveSkillLoadoutRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type SaveSkillLoadoutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *ListSkillsResponse    `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // 返回最新完整技能书与装配快照
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Replayed      bool                   `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveSkillLoadoutResponse) Reset() {
+	*x = SaveSkillLoadoutResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveSkillLoadoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveSkillLoadoutResponse) ProtoMessage() {}
+
+func (x *SaveSkillLoadoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveSkillLoadoutResponse.ProtoReflect.Descriptor instead.
+func (*SaveSkillLoadoutResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SaveSkillLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SaveSkillLoadoutResponse) GetState() *ListSkillsResponse {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *SaveSkillLoadoutResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SaveSkillLoadoutResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+type SwitchSkillLoadoutRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemeId      uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"` // 1..3
+	StateVersion  uint64                 `protobuf:"varint,2,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 16-64字节ASCII标识
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchSkillLoadoutRequest) Reset() {
+	*x = SwitchSkillLoadoutRequest{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchSkillLoadoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchSkillLoadoutRequest) ProtoMessage() {}
+
+func (x *SwitchSkillLoadoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchSkillLoadoutRequest.ProtoReflect.Descriptor instead.
+func (*SwitchSkillLoadoutRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SwitchSkillLoadoutRequest) GetSchemeId() uint32 {
+	if x != nil {
+		return x.SchemeId
+	}
+	return 0
+}
+
+func (x *SwitchSkillLoadoutRequest) GetStateVersion() uint64 {
+	if x != nil {
+		return x.StateVersion
+	}
+	return 0
+}
+
+func (x *SwitchSkillLoadoutRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type SwitchSkillLoadoutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *ListSkillsResponse    `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	RequestId     string                 `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Replayed      bool                   `protobuf:"varint,4,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwitchSkillLoadoutResponse) Reset() {
+	*x = SwitchSkillLoadoutResponse{}
+	mi := &file_proto_scene_player_skill_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwitchSkillLoadoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwitchSkillLoadoutResponse) ProtoMessage() {}
+
+func (x *SwitchSkillLoadoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_skill_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwitchSkillLoadoutResponse.ProtoReflect.Descriptor instead.
+func (*SwitchSkillLoadoutResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SwitchSkillLoadoutResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SwitchSkillLoadoutResponse) GetState() *ListSkillsResponse {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *SwitchSkillLoadoutResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *SwitchSkillLoadoutResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
 type SkillCraftMasterySnapshot struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tier          uint32                 `protobuf:"varint,1,opt,name=tier,proto3" json:"tier,omitempty"` // 1学徒、2巧匠、3宗师。
@@ -755,7 +1251,7 @@ type SkillCraftMasterySnapshot struct {
 
 func (x *SkillCraftMasterySnapshot) Reset() {
 	*x = SkillCraftMasterySnapshot{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[7]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -767,7 +1263,7 @@ func (x *SkillCraftMasterySnapshot) String() string {
 func (*SkillCraftMasterySnapshot) ProtoMessage() {}
 
 func (x *SkillCraftMasterySnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[7]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -780,7 +1276,7 @@ func (x *SkillCraftMasterySnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillCraftMasterySnapshot.ProtoReflect.Descriptor instead.
 func (*SkillCraftMasterySnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SkillCraftMasterySnapshot) GetTier() uint32 {
@@ -842,7 +1338,7 @@ type SkillScrollCatalogInfo struct {
 
 func (x *SkillScrollCatalogInfo) Reset() {
 	*x = SkillScrollCatalogInfo{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[8]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1350,7 @@ func (x *SkillScrollCatalogInfo) String() string {
 func (*SkillScrollCatalogInfo) ProtoMessage() {}
 
 func (x *SkillScrollCatalogInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[8]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1363,7 @@ func (x *SkillScrollCatalogInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillScrollCatalogInfo.ProtoReflect.Descriptor instead.
 func (*SkillScrollCatalogInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SkillScrollCatalogInfo) GetScrollId() uint32 {
@@ -1004,7 +1500,7 @@ type SkillCraftingStateSnapshot struct {
 
 func (x *SkillCraftingStateSnapshot) Reset() {
 	*x = SkillCraftingStateSnapshot{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[9]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1016,7 +1512,7 @@ func (x *SkillCraftingStateSnapshot) String() string {
 func (*SkillCraftingStateSnapshot) ProtoMessage() {}
 
 func (x *SkillCraftingStateSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[9]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1029,7 +1525,7 @@ func (x *SkillCraftingStateSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillCraftingStateSnapshot.ProtoReflect.Descriptor instead.
 func (*SkillCraftingStateSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SkillCraftingStateSnapshot) GetScrollCraftRevision() uint64 {
@@ -1138,7 +1634,7 @@ type GetSkillCraftingStateRequest struct {
 
 func (x *GetSkillCraftingStateRequest) Reset() {
 	*x = GetSkillCraftingStateRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[10]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1150,7 +1646,7 @@ func (x *GetSkillCraftingStateRequest) String() string {
 func (*GetSkillCraftingStateRequest) ProtoMessage() {}
 
 func (x *GetSkillCraftingStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[10]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1163,7 +1659,7 @@ func (x *GetSkillCraftingStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSkillCraftingStateRequest.ProtoReflect.Descriptor instead.
 func (*GetSkillCraftingStateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{16}
 }
 
 type GetSkillCraftingStateResponse struct {
@@ -1176,7 +1672,7 @@ type GetSkillCraftingStateResponse struct {
 
 func (x *GetSkillCraftingStateResponse) Reset() {
 	*x = GetSkillCraftingStateResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[11]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1188,7 +1684,7 @@ func (x *GetSkillCraftingStateResponse) String() string {
 func (*GetSkillCraftingStateResponse) ProtoMessage() {}
 
 func (x *GetSkillCraftingStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[11]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1201,7 +1697,7 @@ func (x *GetSkillCraftingStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSkillCraftingStateResponse.ProtoReflect.Descriptor instead.
 func (*GetSkillCraftingStateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetSkillCraftingStateResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1232,7 +1728,7 @@ type CraftSkillBookRequest struct {
 
 func (x *CraftSkillBookRequest) Reset() {
 	*x = CraftSkillBookRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[12]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1244,7 +1740,7 @@ func (x *CraftSkillBookRequest) String() string {
 func (*CraftSkillBookRequest) ProtoMessage() {}
 
 func (x *CraftSkillBookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[12]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1257,7 +1753,7 @@ func (x *CraftSkillBookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CraftSkillBookRequest.ProtoReflect.Descriptor instead.
 func (*CraftSkillBookRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CraftSkillBookRequest) GetMode() CraftSkillBookRequest_CraftMode {
@@ -1316,7 +1812,7 @@ type CraftSkillBookResponse struct {
 
 func (x *CraftSkillBookResponse) Reset() {
 	*x = CraftSkillBookResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[13]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1328,7 +1824,7 @@ func (x *CraftSkillBookResponse) String() string {
 func (*CraftSkillBookResponse) ProtoMessage() {}
 
 func (x *CraftSkillBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[13]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1341,7 +1837,7 @@ func (x *CraftSkillBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CraftSkillBookResponse.ProtoReflect.Descriptor instead.
 func (*CraftSkillBookResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{13}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CraftSkillBookResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1398,7 +1894,7 @@ type LearnSkillBookRequest struct {
 
 func (x *LearnSkillBookRequest) Reset() {
 	*x = LearnSkillBookRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[14]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1906,7 @@ func (x *LearnSkillBookRequest) String() string {
 func (*LearnSkillBookRequest) ProtoMessage() {}
 
 func (x *LearnSkillBookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[14]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1919,7 @@ func (x *LearnSkillBookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LearnSkillBookRequest.ProtoReflect.Descriptor instead.
 func (*LearnSkillBookRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{14}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *LearnSkillBookRequest) GetBookId() uint64 {
@@ -1467,7 +1963,7 @@ type LearnSkillBookResponse struct {
 
 func (x *LearnSkillBookResponse) Reset() {
 	*x = LearnSkillBookResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[15]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1479,7 +1975,7 @@ func (x *LearnSkillBookResponse) String() string {
 func (*LearnSkillBookResponse) ProtoMessage() {}
 
 func (x *LearnSkillBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[15]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1492,7 +1988,7 @@ func (x *LearnSkillBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LearnSkillBookResponse.ProtoReflect.Descriptor instead.
 func (*LearnSkillBookResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{15}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LearnSkillBookResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1541,7 +2037,7 @@ type DismantleSkillBookRequest struct {
 
 func (x *DismantleSkillBookRequest) Reset() {
 	*x = DismantleSkillBookRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[16]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1553,7 +2049,7 @@ func (x *DismantleSkillBookRequest) String() string {
 func (*DismantleSkillBookRequest) ProtoMessage() {}
 
 func (x *DismantleSkillBookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[16]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1566,7 +2062,7 @@ func (x *DismantleSkillBookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismantleSkillBookRequest.ProtoReflect.Descriptor instead.
 func (*DismantleSkillBookRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{16}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DismantleSkillBookRequest) GetBookId() uint64 {
@@ -1603,7 +2099,7 @@ type DismantleSkillBookResponse struct {
 
 func (x *DismantleSkillBookResponse) Reset() {
 	*x = DismantleSkillBookResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[17]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1615,7 +2111,7 @@ func (x *DismantleSkillBookResponse) String() string {
 func (*DismantleSkillBookResponse) ProtoMessage() {}
 
 func (x *DismantleSkillBookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[17]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1628,7 +2124,7 @@ func (x *DismantleSkillBookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismantleSkillBookResponse.ProtoReflect.Descriptor instead.
 func (*DismantleSkillBookResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{17}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DismantleSkillBookResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1677,7 +2173,7 @@ type SetCraftProxyStallRequest struct {
 
 func (x *SetCraftProxyStallRequest) Reset() {
 	*x = SetCraftProxyStallRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[18]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1689,7 +2185,7 @@ func (x *SetCraftProxyStallRequest) String() string {
 func (*SetCraftProxyStallRequest) ProtoMessage() {}
 
 func (x *SetCraftProxyStallRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[18]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1702,7 +2198,7 @@ func (x *SetCraftProxyStallRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCraftProxyStallRequest.ProtoReflect.Descriptor instead.
 func (*SetCraftProxyStallRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{18}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SetCraftProxyStallRequest) GetOpen() bool {
@@ -1736,7 +2232,7 @@ type SetCraftProxyStallResponse struct {
 
 func (x *SetCraftProxyStallResponse) Reset() {
 	*x = SetCraftProxyStallResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[19]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +2244,7 @@ func (x *SetCraftProxyStallResponse) String() string {
 func (*SetCraftProxyStallResponse) ProtoMessage() {}
 
 func (x *SetCraftProxyStallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[19]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +2257,7 @@ func (x *SetCraftProxyStallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCraftProxyStallResponse.ProtoReflect.Descriptor instead.
 func (*SetCraftProxyStallResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{19}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SetCraftProxyStallResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1794,7 +2290,7 @@ type CraftProxyStallInfo struct {
 
 func (x *CraftProxyStallInfo) Reset() {
 	*x = CraftProxyStallInfo{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[20]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1806,7 +2302,7 @@ func (x *CraftProxyStallInfo) String() string {
 func (*CraftProxyStallInfo) ProtoMessage() {}
 
 func (x *CraftProxyStallInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[20]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1819,7 +2315,7 @@ func (x *CraftProxyStallInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CraftProxyStallInfo.ProtoReflect.Descriptor instead.
 func (*CraftProxyStallInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{20}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *CraftProxyStallInfo) GetMasterPlayerId() uint64 {
@@ -1886,7 +2382,7 @@ type ListCraftProxyStallsRequest struct {
 
 func (x *ListCraftProxyStallsRequest) Reset() {
 	*x = ListCraftProxyStallsRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[21]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1898,7 +2394,7 @@ func (x *ListCraftProxyStallsRequest) String() string {
 func (*ListCraftProxyStallsRequest) ProtoMessage() {}
 
 func (x *ListCraftProxyStallsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[21]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1911,7 +2407,7 @@ func (x *ListCraftProxyStallsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCraftProxyStallsRequest.ProtoReflect.Descriptor instead.
 func (*ListCraftProxyStallsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{21}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{27}
 }
 
 type ListCraftProxyStallsResponse struct {
@@ -1924,7 +2420,7 @@ type ListCraftProxyStallsResponse struct {
 
 func (x *ListCraftProxyStallsResponse) Reset() {
 	*x = ListCraftProxyStallsResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[22]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1936,7 +2432,7 @@ func (x *ListCraftProxyStallsResponse) String() string {
 func (*ListCraftProxyStallsResponse) ProtoMessage() {}
 
 func (x *ListCraftProxyStallsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[22]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1949,7 +2445,7 @@ func (x *ListCraftProxyStallsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCraftProxyStallsResponse.ProtoReflect.Descriptor instead.
 func (*ListCraftProxyStallsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{22}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ListCraftProxyStallsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1979,7 +2475,7 @@ type UpgradeSkillRequest struct {
 
 func (x *UpgradeSkillRequest) Reset() {
 	*x = UpgradeSkillRequest{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[23]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1991,7 +2487,7 @@ func (x *UpgradeSkillRequest) String() string {
 func (*UpgradeSkillRequest) ProtoMessage() {}
 
 func (x *UpgradeSkillRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[23]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2004,7 +2500,7 @@ func (x *UpgradeSkillRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeSkillRequest.ProtoReflect.Descriptor instead.
 func (*UpgradeSkillRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{23}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *UpgradeSkillRequest) GetSkillTableId() uint32 {
@@ -2047,7 +2543,7 @@ type UpgradeSkillResponse struct {
 
 func (x *UpgradeSkillResponse) Reset() {
 	*x = UpgradeSkillResponse{}
-	mi := &file_proto_scene_player_skill_proto_msgTypes[24]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2059,7 +2555,7 @@ func (x *UpgradeSkillResponse) String() string {
 func (*UpgradeSkillResponse) ProtoMessage() {}
 
 func (x *UpgradeSkillResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_skill_proto_msgTypes[24]
+	mi := &file_proto_scene_player_skill_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2072,7 +2568,7 @@ func (x *UpgradeSkillResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeSkillResponse.ProtoReflect.Descriptor instead.
 func (*UpgradeSkillResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{24}
+	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *UpgradeSkillResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2130,7 +2626,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\n" +
 	"time_stamp\x18\x05 \x01(\x04R\ttimeStamp\"*\n" +
 	"\x11ListSkillsRequest\x12\x15\n" +
-	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\"\xad\x02\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\"\xde\x02\n" +
 	"\x12ListSkillsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
 	"\n" +
@@ -2139,7 +2635,8 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\fplayer_level\x18\x04 \x01(\rR\vplayerLevel\x12\x19\n" +
 	"\bclass_id\x18\x05 \x01(\rR\aclassId\x12)\n" +
 	"\x10currency_balance\x18\x06 \x01(\x04R\x0fcurrencyBalance\x12\x15\n" +
-	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xe3\a\n" +
+	"\x06pet_id\x18\a \x01(\x04R\x05petId\x12/\n" +
+	"\aloadout\x18\b \x01(\v2\x15.SkillLoadoutSnapshotR\aloadout\"\xe0\b\n" +
 	"\x11SkillCatalogEntry\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2175,7 +2672,51 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\vrarity_tier\x18\x1a \x01(\rR\n" +
 	"rarityTier\x122\n" +
 	"\x15craft_unlock_required\x18\x1b \x01(\bR\x13craftUnlockRequired\x12(\n" +
-	"\x10unlocked_by_book\x18\x1c \x01(\bR\x0eunlockedByBook\"\xa8\x01\n" +
+	"\x10unlocked_by_book\x18\x1c \x01(\bR\x0eunlockedByBook\x126\n" +
+	"\x17secondary_target_policy\x18\x1d \x01(\rR\x15secondaryTargetPolicy\x12'\n" +
+	"\x0fexclusive_group\x18\x1e \x01(\rR\x0eexclusiveGroup\x12\x1a\n" +
+	"\bequipped\x18\x1f \x01(\bR\bequipped\"\xd4\x01\n" +
+	"\x16SkillLoadoutSchemeInfo\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x19\n" +
+	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +
+	"\x11passive_skill_ids\x18\x03 \x03(\rR\x0fpassiveSkillIds\x12*\n" +
+	"\x11pursuit_skill_ids\x18\x04 \x03(\rR\x0fpursuitSkillIds\x12*\n" +
+	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\"\xeb\x02\n" +
+	"\x14SkillLoadoutSnapshot\x12%\n" +
+	"\x0ecustom_enabled\x18\x01 \x01(\bR\rcustomEnabled\x12(\n" +
+	"\x10active_scheme_id\x18\x02 \x01(\rR\x0eactiveSchemeId\x12#\n" +
+	"\rstate_version\x18\x03 \x01(\x04R\fstateVersion\x12*\n" +
+	"\x11max_passive_slots\x18\x04 \x01(\rR\x0fmaxPassiveSlots\x12*\n" +
+	"\x11max_pursuit_slots\x18\x05 \x01(\rR\x0fmaxPursuitSlots\x12*\n" +
+	"\x11max_opening_slots\x18\x06 \x01(\rR\x0fmaxOpeningSlots\x121\n" +
+	"\aschemes\x18\a \x03(\v2\x17.SkillLoadoutSchemeInfoR\aschemes\x12&\n" +
+	"\x0flast_request_id\x18\b \x01(\tR\rlastRequestId\"\x99\x02\n" +
+	"\x17SaveSkillLoadoutRequest\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x19\n" +
+	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +
+	"\x11passive_skill_ids\x18\x03 \x03(\rR\x0fpassiveSkillIds\x12*\n" +
+	"\x11pursuit_skill_ids\x18\x04 \x03(\rR\x0fpursuitSkillIds\x12*\n" +
+	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\x12#\n" +
+	"\rstate_version\x18\x06 \x01(\x04R\fstateVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\a \x01(\tR\trequestId\"\xb6\x01\n" +
+	"\x18SaveSkillLoadoutResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
+	"\x05state\x18\x02 \x01(\v2\x13.ListSkillsResponseR\x05state\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"|\n" +
+	"\x19SwitchSkillLoadoutRequest\x12\x1b\n" +
+	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12#\n" +
+	"\rstate_version\x18\x02 \x01(\x04R\fstateVersion\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\"\xb8\x01\n" +
+	"\x1aSwitchSkillLoadoutResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
+	"\x05state\x18\x02 \x01(\v2\x13.ListSkillsResponseR\x05state\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tR\trequestId\x12\x1a\n" +
+	"\breplayed\x18\x04 \x01(\bR\breplayed\"\xa8\x01\n" +
 	"\x19SkillCraftMasterySnapshot\x12\x12\n" +
 	"\x04tier\x18\x01 \x01(\rR\x04tier\x12\x1b\n" +
 	"\ttier_name\x18\x02 \x01(\tR\btierName\x12\x10\n" +
@@ -2292,7 +2833,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x05state\x18\x02 \x01(\v2\x13.ListSkillsResponseR\x05state\x12%\n" +
 	"\x0eupgraded_count\x18\x03 \x01(\rR\rupgradedCount\x12\x1e\n" +
-	"\vstop_tip_id\x18\x04 \x01(\rR\tstopTipId2\x96\x06\n" +
+	"\vstop_tip_id\x18\x04 \x01(\rR\tstopTipId2\xae\a\n" +
 	"\x16SceneSkillClientPlayer\x12;\n" +
 	"\fReleaseSkill\x12\x14.ReleaseSkillRequest\x1a\x15.ReleaseSkillResponse\x12/\n" +
 	"\x0fNotifySkillUsed\x12\r.SkillUsedS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12=\n" +
@@ -2305,7 +2846,9 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x0eLearnSkillBook\x12\x16.LearnSkillBookRequest\x1a\x17.LearnSkillBookResponse\x12M\n" +
 	"\x12DismantleSkillBook\x12\x1a.DismantleSkillBookRequest\x1a\x1b.DismantleSkillBookResponse\x12M\n" +
 	"\x12SetCraftProxyStall\x12\x1a.SetCraftProxyStallRequest\x1a\x1b.SetCraftProxyStallResponse\x12S\n" +
-	"\x14ListCraftProxyStalls\x12\x1c.ListCraftProxyStallsRequest\x1a\x1d.ListCraftProxyStallsResponse\x1a\n" +
+	"\x14ListCraftProxyStalls\x12\x1c.ListCraftProxyStallsRequest\x1a\x1d.ListCraftProxyStallsResponse\x12G\n" +
+	"\x10SaveSkillLoadout\x12\x18.SaveSkillLoadoutRequest\x1a\x19.SaveSkillLoadoutResponse\x12M\n" +
+	"\x12SwitchSkillLoadout\x12\x1a.SwitchSkillLoadoutRequest\x1a\x1b.SwitchSkillLoadoutResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -2321,7 +2864,7 @@ func file_proto_scene_player_skill_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_skill_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_scene_player_skill_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_proto_scene_player_skill_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_scene_player_skill_proto_goTypes = []any{
 	(CraftSkillBookRequest_CraftMode)(0),    // 0: CraftSkillBookRequest.CraftMode
 	(*ReleaseSkillRequest)(nil),             // 1: ReleaseSkillRequest
@@ -2331,88 +2874,104 @@ var file_proto_scene_player_skill_proto_goTypes = []any{
 	(*ListSkillsRequest)(nil),               // 5: ListSkillsRequest
 	(*ListSkillsResponse)(nil),              // 6: ListSkillsResponse
 	(*SkillCatalogEntry)(nil),               // 7: SkillCatalogEntry
-	(*SkillCraftMasterySnapshot)(nil),       // 8: SkillCraftMasterySnapshot
-	(*SkillScrollCatalogInfo)(nil),          // 9: SkillScrollCatalogInfo
-	(*SkillCraftingStateSnapshot)(nil),      // 10: SkillCraftingStateSnapshot
-	(*GetSkillCraftingStateRequest)(nil),    // 11: GetSkillCraftingStateRequest
-	(*GetSkillCraftingStateResponse)(nil),   // 12: GetSkillCraftingStateResponse
-	(*CraftSkillBookRequest)(nil),           // 13: CraftSkillBookRequest
-	(*CraftSkillBookResponse)(nil),          // 14: CraftSkillBookResponse
-	(*LearnSkillBookRequest)(nil),           // 15: LearnSkillBookRequest
-	(*LearnSkillBookResponse)(nil),          // 16: LearnSkillBookResponse
-	(*DismantleSkillBookRequest)(nil),       // 17: DismantleSkillBookRequest
-	(*DismantleSkillBookResponse)(nil),      // 18: DismantleSkillBookResponse
-	(*SetCraftProxyStallRequest)(nil),       // 19: SetCraftProxyStallRequest
-	(*SetCraftProxyStallResponse)(nil),      // 20: SetCraftProxyStallResponse
-	(*CraftProxyStallInfo)(nil),             // 21: CraftProxyStallInfo
-	(*ListCraftProxyStallsRequest)(nil),     // 22: ListCraftProxyStallsRequest
-	(*ListCraftProxyStallsResponse)(nil),    // 23: ListCraftProxyStallsResponse
-	(*UpgradeSkillRequest)(nil),             // 24: UpgradeSkillRequest
-	(*UpgradeSkillResponse)(nil),            // 25: UpgradeSkillResponse
-	(*component.Vector3)(nil),               // 26: Vector3
-	(*component.Rotation)(nil),              // 27: Rotation
-	(*base.TipInfoMessage)(nil),             // 28: TipInfoMessage
-	(*component.PlayerSkillListComp)(nil),   // 29: PlayerSkillListComp
-	(*component.SupportSkillPreview)(nil),   // 30: SupportSkillPreview
-	(*component.CraftedSkillBookEntry)(nil), // 31: CraftedSkillBookEntry
-	(*base.Empty)(nil),                      // 32: Empty
+	(*SkillLoadoutSchemeInfo)(nil),          // 8: SkillLoadoutSchemeInfo
+	(*SkillLoadoutSnapshot)(nil),            // 9: SkillLoadoutSnapshot
+	(*SaveSkillLoadoutRequest)(nil),         // 10: SaveSkillLoadoutRequest
+	(*SaveSkillLoadoutResponse)(nil),        // 11: SaveSkillLoadoutResponse
+	(*SwitchSkillLoadoutRequest)(nil),       // 12: SwitchSkillLoadoutRequest
+	(*SwitchSkillLoadoutResponse)(nil),      // 13: SwitchSkillLoadoutResponse
+	(*SkillCraftMasterySnapshot)(nil),       // 14: SkillCraftMasterySnapshot
+	(*SkillScrollCatalogInfo)(nil),          // 15: SkillScrollCatalogInfo
+	(*SkillCraftingStateSnapshot)(nil),      // 16: SkillCraftingStateSnapshot
+	(*GetSkillCraftingStateRequest)(nil),    // 17: GetSkillCraftingStateRequest
+	(*GetSkillCraftingStateResponse)(nil),   // 18: GetSkillCraftingStateResponse
+	(*CraftSkillBookRequest)(nil),           // 19: CraftSkillBookRequest
+	(*CraftSkillBookResponse)(nil),          // 20: CraftSkillBookResponse
+	(*LearnSkillBookRequest)(nil),           // 21: LearnSkillBookRequest
+	(*LearnSkillBookResponse)(nil),          // 22: LearnSkillBookResponse
+	(*DismantleSkillBookRequest)(nil),       // 23: DismantleSkillBookRequest
+	(*DismantleSkillBookResponse)(nil),      // 24: DismantleSkillBookResponse
+	(*SetCraftProxyStallRequest)(nil),       // 25: SetCraftProxyStallRequest
+	(*SetCraftProxyStallResponse)(nil),      // 26: SetCraftProxyStallResponse
+	(*CraftProxyStallInfo)(nil),             // 27: CraftProxyStallInfo
+	(*ListCraftProxyStallsRequest)(nil),     // 28: ListCraftProxyStallsRequest
+	(*ListCraftProxyStallsResponse)(nil),    // 29: ListCraftProxyStallsResponse
+	(*UpgradeSkillRequest)(nil),             // 30: UpgradeSkillRequest
+	(*UpgradeSkillResponse)(nil),            // 31: UpgradeSkillResponse
+	(*component.Vector3)(nil),               // 32: Vector3
+	(*component.Rotation)(nil),              // 33: Rotation
+	(*base.TipInfoMessage)(nil),             // 34: TipInfoMessage
+	(*component.PlayerSkillListComp)(nil),   // 35: PlayerSkillListComp
+	(*component.SupportSkillPreview)(nil),   // 36: SupportSkillPreview
+	(*component.CraftedSkillBookEntry)(nil), // 37: CraftedSkillBookEntry
+	(*base.Empty)(nil),                      // 38: Empty
 }
 var file_proto_scene_player_skill_proto_depIdxs = []int32{
-	26, // 0: ReleaseSkillRequest.position:type_name -> Vector3
-	27, // 1: ReleaseSkillRequest.rotation:type_name -> Rotation
-	28, // 2: ReleaseSkillResponse.error_message:type_name -> TipInfoMessage
-	26, // 3: SkillUsedS2C.position:type_name -> Vector3
-	28, // 4: ListSkillsResponse.error_message:type_name -> TipInfoMessage
-	29, // 5: ListSkillsResponse.skill_list:type_name -> PlayerSkillListComp
+	32, // 0: ReleaseSkillRequest.position:type_name -> Vector3
+	33, // 1: ReleaseSkillRequest.rotation:type_name -> Rotation
+	34, // 2: ReleaseSkillResponse.error_message:type_name -> TipInfoMessage
+	32, // 3: SkillUsedS2C.position:type_name -> Vector3
+	34, // 4: ListSkillsResponse.error_message:type_name -> TipInfoMessage
+	35, // 5: ListSkillsResponse.skill_list:type_name -> PlayerSkillListComp
 	7,  // 6: ListSkillsResponse.catalog:type_name -> SkillCatalogEntry
-	30, // 7: SkillCatalogEntry.support_preview:type_name -> SupportSkillPreview
-	8,  // 8: SkillCraftingStateSnapshot.forge_mastery:type_name -> SkillCraftMasterySnapshot
-	8,  // 9: SkillCraftingStateSnapshot.scroll_mastery:type_name -> SkillCraftMasterySnapshot
-	9,  // 10: SkillCraftingStateSnapshot.scrolls:type_name -> SkillScrollCatalogInfo
-	31, // 11: SkillCraftingStateSnapshot.skill_books:type_name -> CraftedSkillBookEntry
-	28, // 12: GetSkillCraftingStateResponse.error_message:type_name -> TipInfoMessage
-	10, // 13: GetSkillCraftingStateResponse.state:type_name -> SkillCraftingStateSnapshot
-	0,  // 14: CraftSkillBookRequest.mode:type_name -> CraftSkillBookRequest.CraftMode
-	28, // 15: CraftSkillBookResponse.error_message:type_name -> TipInfoMessage
-	31, // 16: CraftSkillBookResponse.crafted_book:type_name -> CraftedSkillBookEntry
-	10, // 17: CraftSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	28, // 18: LearnSkillBookResponse.error_message:type_name -> TipInfoMessage
-	10, // 19: LearnSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	28, // 20: DismantleSkillBookResponse.error_message:type_name -> TipInfoMessage
-	10, // 21: DismantleSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
-	28, // 22: SetCraftProxyStallResponse.error_message:type_name -> TipInfoMessage
-	10, // 23: SetCraftProxyStallResponse.state:type_name -> SkillCraftingStateSnapshot
-	28, // 24: ListCraftProxyStallsResponse.error_message:type_name -> TipInfoMessage
-	21, // 25: ListCraftProxyStallsResponse.stalls:type_name -> CraftProxyStallInfo
-	28, // 26: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
-	6,  // 27: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
-	1,  // 28: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
-	4,  // 29: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
-	3,  // 30: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
-	5,  // 31: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
-	24, // 32: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
-	11, // 33: SceneSkillClientPlayer.GetSkillCraftingState:input_type -> GetSkillCraftingStateRequest
-	13, // 34: SceneSkillClientPlayer.CraftSkillBook:input_type -> CraftSkillBookRequest
-	15, // 35: SceneSkillClientPlayer.LearnSkillBook:input_type -> LearnSkillBookRequest
-	17, // 36: SceneSkillClientPlayer.DismantleSkillBook:input_type -> DismantleSkillBookRequest
-	19, // 37: SceneSkillClientPlayer.SetCraftProxyStall:input_type -> SetCraftProxyStallRequest
-	22, // 38: SceneSkillClientPlayer.ListCraftProxyStalls:input_type -> ListCraftProxyStallsRequest
-	2,  // 39: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
-	32, // 40: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
-	32, // 41: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
-	6,  // 42: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
-	25, // 43: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
-	12, // 44: SceneSkillClientPlayer.GetSkillCraftingState:output_type -> GetSkillCraftingStateResponse
-	14, // 45: SceneSkillClientPlayer.CraftSkillBook:output_type -> CraftSkillBookResponse
-	16, // 46: SceneSkillClientPlayer.LearnSkillBook:output_type -> LearnSkillBookResponse
-	18, // 47: SceneSkillClientPlayer.DismantleSkillBook:output_type -> DismantleSkillBookResponse
-	20, // 48: SceneSkillClientPlayer.SetCraftProxyStall:output_type -> SetCraftProxyStallResponse
-	23, // 49: SceneSkillClientPlayer.ListCraftProxyStalls:output_type -> ListCraftProxyStallsResponse
-	39, // [39:50] is the sub-list for method output_type
-	28, // [28:39] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	9,  // 7: ListSkillsResponse.loadout:type_name -> SkillLoadoutSnapshot
+	36, // 8: SkillCatalogEntry.support_preview:type_name -> SupportSkillPreview
+	8,  // 9: SkillLoadoutSnapshot.schemes:type_name -> SkillLoadoutSchemeInfo
+	34, // 10: SaveSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
+	6,  // 11: SaveSkillLoadoutResponse.state:type_name -> ListSkillsResponse
+	34, // 12: SwitchSkillLoadoutResponse.error_message:type_name -> TipInfoMessage
+	6,  // 13: SwitchSkillLoadoutResponse.state:type_name -> ListSkillsResponse
+	14, // 14: SkillCraftingStateSnapshot.forge_mastery:type_name -> SkillCraftMasterySnapshot
+	14, // 15: SkillCraftingStateSnapshot.scroll_mastery:type_name -> SkillCraftMasterySnapshot
+	15, // 16: SkillCraftingStateSnapshot.scrolls:type_name -> SkillScrollCatalogInfo
+	37, // 17: SkillCraftingStateSnapshot.skill_books:type_name -> CraftedSkillBookEntry
+	34, // 18: GetSkillCraftingStateResponse.error_message:type_name -> TipInfoMessage
+	16, // 19: GetSkillCraftingStateResponse.state:type_name -> SkillCraftingStateSnapshot
+	0,  // 20: CraftSkillBookRequest.mode:type_name -> CraftSkillBookRequest.CraftMode
+	34, // 21: CraftSkillBookResponse.error_message:type_name -> TipInfoMessage
+	37, // 22: CraftSkillBookResponse.crafted_book:type_name -> CraftedSkillBookEntry
+	16, // 23: CraftSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	34, // 24: LearnSkillBookResponse.error_message:type_name -> TipInfoMessage
+	16, // 25: LearnSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	34, // 26: DismantleSkillBookResponse.error_message:type_name -> TipInfoMessage
+	16, // 27: DismantleSkillBookResponse.state:type_name -> SkillCraftingStateSnapshot
+	34, // 28: SetCraftProxyStallResponse.error_message:type_name -> TipInfoMessage
+	16, // 29: SetCraftProxyStallResponse.state:type_name -> SkillCraftingStateSnapshot
+	34, // 30: ListCraftProxyStallsResponse.error_message:type_name -> TipInfoMessage
+	27, // 31: ListCraftProxyStallsResponse.stalls:type_name -> CraftProxyStallInfo
+	34, // 32: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
+	6,  // 33: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
+	1,  // 34: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
+	4,  // 35: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
+	3,  // 36: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
+	5,  // 37: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
+	30, // 38: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
+	17, // 39: SceneSkillClientPlayer.GetSkillCraftingState:input_type -> GetSkillCraftingStateRequest
+	19, // 40: SceneSkillClientPlayer.CraftSkillBook:input_type -> CraftSkillBookRequest
+	21, // 41: SceneSkillClientPlayer.LearnSkillBook:input_type -> LearnSkillBookRequest
+	23, // 42: SceneSkillClientPlayer.DismantleSkillBook:input_type -> DismantleSkillBookRequest
+	25, // 43: SceneSkillClientPlayer.SetCraftProxyStall:input_type -> SetCraftProxyStallRequest
+	28, // 44: SceneSkillClientPlayer.ListCraftProxyStalls:input_type -> ListCraftProxyStallsRequest
+	10, // 45: SceneSkillClientPlayer.SaveSkillLoadout:input_type -> SaveSkillLoadoutRequest
+	12, // 46: SceneSkillClientPlayer.SwitchSkillLoadout:input_type -> SwitchSkillLoadoutRequest
+	2,  // 47: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
+	38, // 48: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
+	38, // 49: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
+	6,  // 50: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
+	31, // 51: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
+	18, // 52: SceneSkillClientPlayer.GetSkillCraftingState:output_type -> GetSkillCraftingStateResponse
+	20, // 53: SceneSkillClientPlayer.CraftSkillBook:output_type -> CraftSkillBookResponse
+	22, // 54: SceneSkillClientPlayer.LearnSkillBook:output_type -> LearnSkillBookResponse
+	24, // 55: SceneSkillClientPlayer.DismantleSkillBook:output_type -> DismantleSkillBookResponse
+	26, // 56: SceneSkillClientPlayer.SetCraftProxyStall:output_type -> SetCraftProxyStallResponse
+	29, // 57: SceneSkillClientPlayer.ListCraftProxyStalls:output_type -> ListCraftProxyStallsResponse
+	11, // 58: SceneSkillClientPlayer.SaveSkillLoadout:output_type -> SaveSkillLoadoutResponse
+	13, // 59: SceneSkillClientPlayer.SwitchSkillLoadout:output_type -> SwitchSkillLoadoutResponse
+	47, // [47:60] is the sub-list for method output_type
+	34, // [34:47] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_skill_proto_init() }
@@ -2426,7 +2985,7 @@ func file_proto_scene_player_skill_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_skill_proto_rawDesc), len(file_proto_scene_player_skill_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   25,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

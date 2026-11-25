@@ -36,8 +36,8 @@ public:
     size_t PopBatch(std::vector<SpanRecord>& out, size_t maxCount);
 
     size_t Size() const;
-    size_t Capacity() const { return capacity_; }
-    size_t BatchThreshold() const { return batchThreshold_; }
+    size_t Capacity() const { return capacity; }
+    size_t BatchThreshold() const { return batchThreshold; }
 
     // 「攒够一批」回调,由导出线程设置,nullptr = 摘掉。回调在 Submit 的调用线程上、持着本队列的锁执行:
     // 必须便宜、不阻塞、不回头调本队列(通常是 queueInLoop 到导出线程)。持锁调用换来一个保证:
@@ -47,21 +47,21 @@ public:
     // 导出线程停下之前把剩下的全部丢掉,返回丢了几个(计入 DroppedOnShutdown)。
     size_t DiscardAll();
 
-    uint64_t Accepted() const { return accepted_.load(std::memory_order_relaxed); }
-    uint64_t DroppedQueueFull() const { return droppedQueueFull_.load(std::memory_order_relaxed); }
-    uint64_t DroppedOnShutdown() const { return droppedOnShutdown_.load(std::memory_order_relaxed); }
+    uint64_t Accepted() const { return accepted.load(std::memory_order_relaxed); }
+    uint64_t DroppedQueueFull() const { return droppedQueueFull.load(std::memory_order_relaxed); }
+    uint64_t DroppedOnShutdown() const { return droppedOnShutdown.load(std::memory_order_relaxed); }
 
 private:
-    mutable std::mutex mutex_;
-    const size_t capacity_;
-    const size_t batchThreshold_;
-    std::vector<SpanRecord> ring_;   // 构造时一次分配 capacity_ 个
-    size_t head_{0};                 // 最旧元素的下标
-    size_t size_{0};
-    std::function<void()> onBatchReady_;
-    std::atomic<uint64_t> accepted_{0};
-    std::atomic<uint64_t> droppedQueueFull_{0};
-    std::atomic<uint64_t> droppedOnShutdown_{0};
+    mutable std::mutex mutex;
+    const size_t capacity;
+    const size_t batchThreshold;
+    std::vector<SpanRecord> ring;   // 构造时一次分配 capacity_ 个
+    size_t head{0};                 // 最旧元素的下标
+    size_t size{0};
+    std::function<void()> onBatchReady;
+    std::atomic<uint64_t> accepted{0};
+    std::atomic<uint64_t> droppedQueueFull{0};
+    std::atomic<uint64_t> droppedOnShutdown{0};
 };
 
 // OTel SDK 规范(BatchSpanProcessor)的默认值,阶段三定案就用它们(设计 §10.3)。

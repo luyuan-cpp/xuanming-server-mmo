@@ -65,5 +65,5 @@ public:
 private:
     BagProfileRegistry() = default;
 
-    std::unordered_map<uint32_t, BagProfileFactory> factories_;
+    std::unordered_map<uint32_t, BagProfileFactory> factories;
 };

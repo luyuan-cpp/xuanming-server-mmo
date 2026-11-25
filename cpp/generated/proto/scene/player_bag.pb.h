@@ -461,6 +461,8 @@ enum EquipmentCraftChoice_Operation : int {
   EquipmentCraftChoice_Operation_INSTALL_AFFIX = 2,
   EquipmentCraftChoice_Operation_REFORGE_AFFIX = 3,
   EquipmentCraftChoice_Operation_POLISH_AFFIX = 4,
+  EquipmentCraftChoice_Operation_UNSEAL_TO_TRADABLE = 5,
+  EquipmentCraftChoice_Operation_INHERIT_ENHANCE = 6,
   EquipmentCraftChoice_Operation_EquipmentCraftChoice_Operation_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   EquipmentCraftChoice_Operation_EquipmentCraftChoice_Operation_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -471,11 +473,11 @@ extern const uint32_t EquipmentCraftChoice_Operation_internal_data_[];
 inline constexpr EquipmentCraftChoice_Operation EquipmentCraftChoice_Operation_Operation_MIN =
     static_cast<EquipmentCraftChoice_Operation>(0);
 inline constexpr EquipmentCraftChoice_Operation EquipmentCraftChoice_Operation_Operation_MAX =
-    static_cast<EquipmentCraftChoice_Operation>(4);
+    static_cast<EquipmentCraftChoice_Operation>(6);
 [[nodiscard]] inline bool EquipmentCraftChoice_Operation_IsValid(int value) {
-  return 0 <= value && value <= 4;
+  return 0 <= value && value <= 6;
 }
-inline constexpr int EquipmentCraftChoice_Operation_Operation_ARRAYSIZE = 4 + 1;
+inline constexpr int EquipmentCraftChoice_Operation_Operation_ARRAYSIZE = 6 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 EquipmentCraftChoice_Operation_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(EquipmentCraftChoice_Operation) {
@@ -490,7 +492,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& EquipmentCraftChoice_Operation_Name(EquipmentCraftChoice_Operation value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<EquipmentCraftChoice_Operation_descriptor, 0, 4>(
+  return ::google::protobuf::internal::NameOfDenseEnum<EquipmentCraftChoice_Operation_descriptor, 0, 6>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool EquipmentCraftChoice_Operation_Parse(
@@ -2753,6 +2755,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
   static constexpr Operation INSTALL_AFFIX = EquipmentCraftChoice_Operation_INSTALL_AFFIX;
   static constexpr Operation REFORGE_AFFIX = EquipmentCraftChoice_Operation_REFORGE_AFFIX;
   static constexpr Operation POLISH_AFFIX = EquipmentCraftChoice_Operation_POLISH_AFFIX;
+  static constexpr Operation UNSEAL_TO_TRADABLE = EquipmentCraftChoice_Operation_UNSEAL_TO_TRADABLE;
+  static constexpr Operation INHERIT_ENHANCE = EquipmentCraftChoice_Operation_INHERIT_ENHANCE;
   [[nodiscard]] static inline bool Operation_IsValid(int value) {
     return EquipmentCraftChoice_Operation_IsValid(value);
   }
@@ -2782,6 +2786,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
     kAllowBoundMaterialsFieldNumber = 7,
     kExpectedPolishPityCountFieldNumber = 9,
     kProxyMasterPlayerIdFieldNumber = 8,
+    kSourceItemIdFieldNumber = 10,
   };
   // .EquipmentCraftChoice.Operation operation = 1;
   void clear_operation() ;
@@ -2875,11 +2880,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
   void _internal_set_proxy_master_player_id(::uint64_t value);
 
   public:
+  // uint64 source_item_id = 10;
+  void clear_source_item_id() ;
+  [[nodiscard]] ::uint64_t source_item_id() const;
+  void set_source_item_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_source_item_id() const;
+  void _internal_set_source_item_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipmentCraftChoice)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2917,6 +2932,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentCraftChoice final : public
     bool allow_bound_materials_;
     ::uint32_t expected_polish_pity_count_;
     ::uint64_t proxy_master_player_id_;
+    ::uint64_t source_item_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4020,7 +4036,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhancePreview final : public 
     kFailLevelLossFieldNumber = 8,
     kPityLimitFieldNumber = 10,
     kCurrentPityCountFieldNumber = 11,
+    kTradableMaterialAvailableFieldNumber = 14,
     kPityGuaranteedNextFieldNumber = 12,
+    kWillBindOnEnhanceFieldNumber = 13,
   };
   // string material_name = 5;
   void clear_material_name() ;
@@ -4142,6 +4160,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhancePreview final : public 
   void _internal_set_current_pity_count(::uint32_t value);
 
   public:
+  // uint64 tradable_material_available = 14;
+  void clear_tradable_material_available() ;
+  [[nodiscard]] ::uint64_t tradable_material_available() const;
+  void set_tradable_material_available(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_tradable_material_available() const;
+  void _internal_set_tradable_material_available(::uint64_t value);
+
+  public:
   // bool pity_guaranteed_next = 12;
   void clear_pity_guaranteed_next() ;
   [[nodiscard]] bool pity_guaranteed_next() const;
@@ -4152,11 +4180,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhancePreview final : public 
   void _internal_set_pity_guaranteed_next(bool value);
 
   public:
+  // bool will_bind_on_enhance = 13;
+  void clear_will_bind_on_enhance() ;
+  [[nodiscard]] bool will_bind_on_enhance() const;
+  void set_will_bind_on_enhance(bool value);
+
+  private:
+  bool _internal_will_bind_on_enhance() const;
+  void _internal_set_will_bind_on_enhance(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipEnhancePreview)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4196,7 +4234,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhancePreview final : public 
     ::uint32_t fail_level_loss_;
     ::uint32_t pity_limit_;
     ::uint32_t current_pity_count_;
+    ::uint64_t tradable_material_available_;
     bool pity_guaranteed_next_;
+    bool will_bind_on_enhance_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5231,6 +5271,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipRequest final : public 
     kClientRequestIdFieldNumber = 3,
     kExpectedLevelFieldNumber = 2,
     kExpectedPityCountFieldNumber = 4,
+    kAllowBoundMaterialsFieldNumber = 5,
   };
   // uint64 item_id = 1;
   void clear_item_id() ;
@@ -5274,11 +5315,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipRequest final : public 
   void _internal_set_expected_pity_count(::uint32_t value);
 
   public:
+  // bool allow_bound_materials = 5;
+  void clear_allow_bound_materials() ;
+  [[nodiscard]] bool allow_bound_materials() const;
+  void set_allow_bound_materials(bool value);
+
+  private:
+  bool _internal_allow_bound_materials() const;
+  void _internal_set_allow_bound_materials(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EnhanceEquipRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5311,6 +5362,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipRequest final : public 
     ::uint64_t client_request_id_;
     ::uint32_t expected_level_;
     ::uint32_t expected_pity_count_;
+    bool allow_bound_materials_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -14449,7 +14501,7 @@ inline void EquipEnhancePreview::_internal_set_current_pity_count(::uint32_t val
 inline void EquipEnhancePreview::clear_pity_guaranteed_next() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pity_guaranteed_next_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline bool EquipEnhancePreview::pity_guaranteed_next() const {
   // @@protoc_insertion_point(field_get:EquipEnhancePreview.pity_guaranteed_next)
@@ -14457,7 +14509,7 @@ inline bool EquipEnhancePreview::pity_guaranteed_next() const {
 }
 inline void EquipEnhancePreview::set_pity_guaranteed_next(bool value) {
   _internal_set_pity_guaranteed_next(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:EquipEnhancePreview.pity_guaranteed_next)
 }
 inline bool EquipEnhancePreview::_internal_pity_guaranteed_next() const {
@@ -14467,6 +14519,54 @@ inline bool EquipEnhancePreview::_internal_pity_guaranteed_next() const {
 inline void EquipEnhancePreview::_internal_set_pity_guaranteed_next(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pity_guaranteed_next_ = value;
+}
+
+// bool will_bind_on_enhance = 13;
+inline void EquipEnhancePreview::clear_will_bind_on_enhance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.will_bind_on_enhance_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool EquipEnhancePreview::will_bind_on_enhance() const {
+  // @@protoc_insertion_point(field_get:EquipEnhancePreview.will_bind_on_enhance)
+  return _internal_will_bind_on_enhance();
+}
+inline void EquipEnhancePreview::set_will_bind_on_enhance(bool value) {
+  _internal_set_will_bind_on_enhance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:EquipEnhancePreview.will_bind_on_enhance)
+}
+inline bool EquipEnhancePreview::_internal_will_bind_on_enhance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.will_bind_on_enhance_;
+}
+inline void EquipEnhancePreview::_internal_set_will_bind_on_enhance(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.will_bind_on_enhance_ = value;
+}
+
+// uint64 tradable_material_available = 14;
+inline void EquipEnhancePreview::clear_tradable_material_available() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tradable_material_available_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t EquipEnhancePreview::tradable_material_available() const {
+  // @@protoc_insertion_point(field_get:EquipEnhancePreview.tradable_material_available)
+  return _internal_tradable_material_available();
+}
+inline void EquipEnhancePreview::set_tradable_material_available(::uint64_t value) {
+  _internal_set_tradable_material_available(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:EquipEnhancePreview.tradable_material_available)
+}
+inline ::uint64_t EquipEnhancePreview::_internal_tradable_material_available() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tradable_material_available_;
+}
+inline void EquipEnhancePreview::_internal_set_tradable_material_available(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tradable_material_available_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -17801,6 +17901,30 @@ inline void EnhanceEquipRequest::_internal_set_expected_pity_count(::uint32_t va
   _impl_.expected_pity_count_ = value;
 }
 
+// bool allow_bound_materials = 5;
+inline void EnhanceEquipRequest::clear_allow_bound_materials() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_bound_materials_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline bool EnhanceEquipRequest::allow_bound_materials() const {
+  // @@protoc_insertion_point(field_get:EnhanceEquipRequest.allow_bound_materials)
+  return _internal_allow_bound_materials();
+}
+inline void EnhanceEquipRequest::set_allow_bound_materials(bool value) {
+  _internal_set_allow_bound_materials(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:EnhanceEquipRequest.allow_bound_materials)
+}
+inline bool EnhanceEquipRequest::_internal_allow_bound_materials() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allow_bound_materials_;
+}
+inline void EnhanceEquipRequest::_internal_set_allow_bound_materials(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_bound_materials_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EnhanceEquipResponse
@@ -20997,6 +21121,30 @@ inline ::uint32_t EquipmentCraftChoice::_internal_expected_polish_pity_count() c
 inline void EquipmentCraftChoice::_internal_set_expected_polish_pity_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_polish_pity_count_ = value;
+}
+
+// uint64 source_item_id = 10;
+inline void EquipmentCraftChoice::clear_source_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_item_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t EquipmentCraftChoice::source_item_id() const {
+  // @@protoc_insertion_point(field_get:EquipmentCraftChoice.source_item_id)
+  return _internal_source_item_id();
+}
+inline void EquipmentCraftChoice::set_source_item_id(::uint64_t value) {
+  _internal_set_source_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:EquipmentCraftChoice.source_item_id)
+}
+inline ::uint64_t EquipmentCraftChoice::_internal_source_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_item_id_;
+}
+inline void EquipmentCraftChoice::_internal_set_source_item_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_item_id_ = value;
 }
 
 // -------------------------------------------------------------------

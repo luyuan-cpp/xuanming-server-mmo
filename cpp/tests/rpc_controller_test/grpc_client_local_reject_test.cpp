@@ -43,25 +43,25 @@ protected:
     // 5ms 空转定时器只为让 loop 勤转、不依赖 wakeup:在 loop 线程上、pending functor 之外排队不会唤醒 poll。
     void RunLoopUntilQuiet()
     {
-        const auto ticker = loop_.runEvery(0.005, [] {});
-        loop_.runAfter(0.5, [&loop = loop_] { loop.quit(); });
-        loop_.loop();
-        loop_.cancel(ticker);
+        const auto ticker = this->loop.runEvery(0.005, [] {});
+        this->loop.runAfter(0.5, [&loop = this->loop] { loop.quit(); });
+        this->loop.loop();
+        this->loop.cancel(ticker);
         // 仓库测试约定(AGENTS.md §13.3 的 TimerTaskComp 段):loop 退出后、loop 仍存活时清掉实体定时器。
         tlsEcs.actorRegistry.clear();
     }
 
     // 最先构造、最后析构:其余成员与排队的回调都在 loop 还在时处理掉。
-    muduo::net::EventLoop loop_;
+    muduo::net::EventLoop loop;
     // 节点注册表的替身:生成的 Send 只按 (registry, entity) 取通道,不需要 tlsNodeContextManager。
-    entt::registry registry_;
+    entt::registry registry;
 };
 
 // 每次调用回调版 Send 打到没挂通道的节点实体:done 以 UNAVAILABLE 异步完成恰好一次,reply 为空;
 // 完成排在发起 Send 的那一批 pending functor 之后,执行期间排空判据关闭,执行完打开。
 TEST_F(GrpcClientLocalRejectTest, PerCallDoneOnEntityWithoutChannelIsDeferredOnceWithUnavailable)
 {
-    const auto nodeWithoutChannel = registry_.create();
+    const auto nodeWithoutChannel = this->registry.create();
     // 回调只在 loop 线程执行,不需要原子量。
     struct Observed
     {
@@ -76,7 +76,7 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneOnEntityWithoutChannelIsDeferredOnc
     };
     const auto observed = std::make_shared<Observed>();
 
-    loop_.queueInLoop([&registry = registry_, nodeWithoutChannel, observed]
+    loop.queueInLoop([&registry = this->registry, nodeWithoutChannel, observed]
     {
         GetPlayerHomeZoneRequest request;
         request.set_player_id(42);
@@ -96,7 +96,7 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneOnEntityWithoutChannelIsDeferredOnc
         EXPECT_FALSE(GrpcClientLocalCompletionsDrained()) << "排队中的本地完成要计入排空判据";
     });
     // 与 Send 同一批、排在它后面:本地完成排进的是下一批,这里还不能已经执行。
-    loop_.queueInLoop([observed]
+    loop.queueInLoop([observed]
     {
         observed->laterFunctorInSameBatchRan = true;
         EXPECT_EQ(observed->calls, 0);
@@ -117,11 +117,11 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneOnEntityWithoutChannelIsDeferredOnc
 // 异步完成恰好一次;完成不依赖请求对象在 Send 返回后继续存活。
 TEST_F(GrpcClientLocalRejectTest, PerCallDoneRejectsAllThreeMissingChannelForms)
 {
-    const auto withoutComponent = registry_.create();
-    const auto withNullChannel = registry_.create();
-    registry_.emplace<MuduoGrpcChannelPtr>(withNullChannel);
-    const auto destroyed = registry_.create();
-    registry_.destroy(destroyed);
+    const auto withoutComponent = this->registry.create();
+    const auto withNullChannel = this->registry.create();
+    this->registry.emplace<MuduoGrpcChannelPtr>(withNullChannel);
+    const auto destroyed = this->registry.create();
+    this->registry.destroy(destroyed);
     const std::vector<entt::entity> targets{withoutComponent, withNullChannel, destroyed};
 
     struct Observed
@@ -132,7 +132,7 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneRejectsAllThreeMissingChannelForms)
     const auto observed = std::make_shared<Observed>();
     observed->calls.resize(targets.size(), 0);
 
-    loop_.queueInLoop([&registry = registry_, targets, observed]
+    loop.queueInLoop([&registry = this->registry, targets, observed]
     {
         for (std::size_t index = 0; index < targets.size(); ++index)
         {
@@ -164,7 +164,7 @@ TEST_F(GrpcClientLocalRejectTest, PerCallDoneRejectsAllThreeMissingChannelForms)
 // Erased 入口在获取通道前校验请求类型。错误动态类型必须异步回 INTERNAL,不得退化成缺通道的 UNAVAILABLE。
 TEST_F(GrpcClientLocalRejectTest, ErasedWrongRequestTypeIsDeferredOnceWithInternal)
 {
-    const auto nodeWithoutChannel = registry_.create();
+    const auto nodeWithoutChannel = this->registry.create();
     struct Observed
     {
         bool sendReturned{false};
@@ -179,7 +179,7 @@ TEST_F(GrpcClientLocalRejectTest, ErasedWrongRequestTypeIsDeferredOnceWithIntern
     };
     const auto observed = std::make_shared<Observed>();
 
-    loop_.queueInLoop([&registry = registry_, nodeWithoutChannel, observed]
+    loop.queueInLoop([&registry = this->registry, nodeWithoutChannel, observed]
     {
         const GetPlayerHomeZoneResponse wrongRequest;
         data_service::SendDataServiceGetPlayerHomeZoneErased(registry, nodeWithoutChannel, wrongRequest,
@@ -197,7 +197,7 @@ TEST_F(GrpcClientLocalRejectTest, ErasedWrongRequestTypeIsDeferredOnceWithIntern
         EXPECT_EQ(observed->calls, 0) << "类型错误也不能在 Send 栈内同步回调";
         EXPECT_FALSE(GrpcClientLocalCompletionsDrained());
     });
-    loop_.queueInLoop([observed]
+    loop.queueInLoop([observed]
     {
         observed->laterFunctorInSameBatchRan = true;
         EXPECT_EQ(observed->calls, 0);
@@ -217,7 +217,7 @@ TEST_F(GrpcClientLocalRejectTest, ErasedWrongRequestTypeIsDeferredOnceWithIntern
 // 同一个 descriptor 也可能对应 DynamicMessage。Erased 入口不能仅凭 descriptor 相同就 static_cast 成生成类型。
 TEST_F(GrpcClientLocalRejectTest, ErasedDynamicMessageWithMatchingDescriptorIsDeferredOnceWithInternal)
 {
-    const auto nodeWithoutChannel = registry_.create();
+    const auto nodeWithoutChannel = this->registry.create();
     struct Observed
     {
         bool sendReturned{false};
@@ -229,7 +229,7 @@ TEST_F(GrpcClientLocalRejectTest, ErasedDynamicMessageWithMatchingDescriptorIsDe
     };
     const auto observed = std::make_shared<Observed>();
 
-    loop_.queueInLoop([&registry = registry_, nodeWithoutChannel, observed]
+    loop.queueInLoop([&registry = this->registry, nodeWithoutChannel, observed]
     {
         // 默认不委托 generated factory,New() 返回 DynamicMessage,descriptor 仍是生成请求的同一个对象。
         google::protobuf::DynamicMessageFactory factory;
@@ -269,7 +269,7 @@ TEST_F(GrpcClientLocalRejectTest, ErasedDynamicMessageWithMatchingDescriptorIsDe
 // 仍成立的部分。重发按「重新选点、没有可用节点」写成 entt::null:完成回调不捕获节点实体句柄(§14.2)。
 TEST_F(GrpcClientLocalRejectTest, SendFromLocalCompletionKeepsDrainGateClosedUntilItCompletes)
 {
-    const auto nodeWithoutChannel = registry_.create();
+    const auto nodeWithoutChannel = registry.create();
     struct Observed
     {
         int outerCalls{0};
@@ -283,23 +283,23 @@ TEST_F(GrpcClientLocalRejectTest, SendFromLocalCompletionKeepsDrainGateClosedUnt
     };
     const auto observed = std::make_shared<Observed>();
 
-    loop_.queueInLoop([this, nodeWithoutChannel = nodeWithoutChannel, observed]
+    loop.queueInLoop([this, nodeWithoutChannel = nodeWithoutChannel, observed]
     {
         const GetPlayerHomeZoneRequest request;
         data_service::SendDataServiceGetPlayerHomeZone(
-            registry_, nodeWithoutChannel, request,
+            registry, nodeWithoutChannel, request,
             [this, observed](const GrpcCallOutcome &, const GetPlayerHomeZoneResponse *)
             {
                 ++observed->outerCalls;
                 // 先于重发排队:执行时外层回调已退栈,重发的本地完成排在它后面。
-                loop_.queueInLoop([observed]
+                loop.queueInLoop([observed]
                 {
                     observed->probeRanBeforeInner = observed->innerCalls == 0;
                     observed->drainedAtProbe = GrpcClientLocalCompletionsDrained();
                 });
                 const GetPlayerHomeZoneRequest retry;
                 data_service::SendDataServiceGetPlayerHomeZone(
-                    registry_, entt::entity{entt::null}, retry,
+                    registry, entt::entity{entt::null}, retry,
                     [observed](const GrpcCallOutcome &outcome, const GetPlayerHomeZoneResponse *)
                     {
                         ++observed->innerCalls;

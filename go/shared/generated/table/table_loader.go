@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "06b4950b3c21900a"
+const SchemaDigest = "243c1949baf529dc"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -22,6 +22,8 @@ var hotReloadableTables = map[string]bool{
 	"FestivalBeastTier": true,
 	"GuildDonate": true,
 	"GuildShop": true,
+	"GuildWarMilestone": true,
+	"GuildWarRule": true,
 	"MessageLimiter": true,
 	"Monster": true,
 	"MysteryMerchantGoods": true,
@@ -76,6 +78,8 @@ var allTableNames = []string{
 	"GuildLevel",
 	"GuildRule",
 	"GuildShop",
+	"GuildWarMilestone",
+	"GuildWarRule",
 	"Item",
 	"MessageLimiter",
 	"Mirror",
@@ -172,6 +176,8 @@ type TableSet struct {
 	GuildLevel *GuildLevelTableManager
 	GuildRule *GuildRuleTableManager
 	GuildShop *GuildShopTableManager
+	GuildWarMilestone *GuildWarMilestoneTableManager
+	GuildWarRule *GuildWarRuleTableManager
 	Item *ItemTableManager
 	MessageLimiter *MessageLimiterTableManager
 	Mirror *MirrorTableManager
@@ -264,6 +270,8 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		GuildLevel: NewGuildLevelTableManager(),
 		GuildRule: NewGuildRuleTableManager(),
 		GuildShop: NewGuildShopTableManager(),
+		GuildWarMilestone: NewGuildWarMilestoneTableManager(),
+		GuildWarRule: NewGuildWarRuleTableManager(),
 		Item: NewItemTableManager(),
 		MessageLimiter: NewMessageLimiterTableManager(),
 		Mirror: NewMirrorTableManager(),
@@ -412,6 +420,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.GuildShop.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare GuildShop table failed: %w", err)
+	}
+	if err := ts.GuildWarMilestone.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildWarMilestone table failed: %w", err)
+	}
+	if err := ts.GuildWarRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare GuildWarRule table failed: %w", err)
 	}
 	if err := ts.Item.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Item table failed: %w", err)
@@ -633,6 +647,12 @@ func Commit(ts *TableSet) {
 	if ts.GuildShop != nil {
 		GuildShopTableManagerInstance.swapSnapshot(ts.GuildShop.snap.Load())
 	}
+	if ts.GuildWarMilestone != nil {
+		GuildWarMilestoneTableManagerInstance.swapSnapshot(ts.GuildWarMilestone.snap.Load())
+	}
+	if ts.GuildWarRule != nil {
+		GuildWarRuleTableManagerInstance.swapSnapshot(ts.GuildWarRule.snap.Load())
+	}
 	if ts.Item != nil {
 		ItemTableManagerInstance.swapSnapshot(ts.Item.snap.Load())
 	}
@@ -809,6 +829,8 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		GuildLevel: NewGuildLevelTableManager(),
 		GuildRule: NewGuildRuleTableManager(),
 		GuildShop: NewGuildShopTableManager(),
+		GuildWarMilestone: NewGuildWarMilestoneTableManager(),
+		GuildWarRule: NewGuildWarRuleTableManager(),
 		Item: NewItemTableManager(),
 		MessageLimiter: NewMessageLimiterTableManager(),
 		Mirror: NewMirrorTableManager(),
@@ -842,7 +864,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(70)
+	wg.Add(72)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1075,6 +1097,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.GuildShop.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load GuildShop table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildWarMilestone.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildWarMilestone table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.GuildWarRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load GuildWarRule table: %v", err)
 		}
 	}()
 	go func() {

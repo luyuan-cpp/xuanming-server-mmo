@@ -40,13 +40,13 @@ constexpr double kHandshakeDeadlineSec = 0.1;
 class ScopedFd
 {
 public:
-    explicit ScopedFd(int fd = -1) : fd_(fd) {}
-    ~ScopedFd() { if (fd_ >= 0) ::close(fd_); }
+    explicit ScopedFd(int fd = -1) : fd(fd) {}
+    ~ScopedFd() { if (fd >= 0) ::close(fd); }
     ScopedFd(const ScopedFd&) = delete;
     ScopedFd& operator=(const ScopedFd&) = delete;
-    int Get() const { return fd_; }
+    int Get() const { return fd; }
 private:
-    int fd_;
+    int fd;
 };
 
 bool EventsBefore(int fd, short events, Clock::time_point deadline)
@@ -189,7 +189,7 @@ class ScopedLogObservation
 {
 public:
     ScopedLogObservation(BatchObservation& observation, muduo::net::EventLoop& loop)
-        : oldLevel_(muduo::Logger::logLevel())
+        : oldLevel(muduo::Logger::logLevel())
     {
         gObservation = &observation;
         gObservedLoop = &loop;
@@ -199,57 +199,57 @@ public:
     ~ScopedLogObservation()
     {
         muduo::Logger::setOutput(StdoutLog);
-        muduo::Logger::setLogLevel(oldLevel_);
+        muduo::Logger::setLogLevel(oldLevel);
         gObservation = nullptr;
         gObservedLoop = nullptr;
     }
 private:
-    muduo::Logger::LogLevel oldLevel_;
+    muduo::Logger::LogLevel oldLevel;
 };
 
 class FakeRedis : public std::enable_shared_from_this<FakeRedis>
 {
 public:
     FakeRedis(muduo::net::EventLoop& loop, BatchObservation& observation, bool listenNow = true)
-        : loop_(loop), observation_(observation),
-          listener_(::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))
+        : loop(loop), observation(observation),
+          listener(::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0))
     {
         sockaddr_in address{};
         address.sin_family = AF_INET;
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if (listener_.Get() < 0 || ::bind(listener_.Get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+        if (listener.Get() < 0 || ::bind(listener.Get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
             (listenNow && !Listen())) return;
         socklen_t size = sizeof(address);
-        if (::getsockname(listener_.Get(), reinterpret_cast<sockaddr*>(&address), &size) == 0)
-            port_ = ntohs(address.sin_port);
+        if (::getsockname(listener.Get(), reinterpret_cast<sockaddr*>(&address), &size) == 0)
+            port = ntohs(address.sin_port);
     }
     ~FakeRedis() { Stop(); }
 
-    void Start() { worker_ = std::thread([this] { Serve(); }); }
+    void Start() { worker = std::thread([this] { Serve(); }); }
     void Stop()
     {
-        stopping_ = true;
-        if (worker_.joinable()) worker_.join();
+        stopping = true;
+        if (worker.joinable()) worker.join();
     }
-    std::uint16_t Port() const { return port_; }
-    int Accepted() const { return accepted_.load(); }
-    int AuthCommands() const { return authCommands_.load(); }
-    bool WorkerFailed() const { return workerFailed_.load(); }
-    bool Listen() { return ::listen(listener_.Get(), 4) == 0; }
-    bool WaitAccepted() { return acceptedFuture_.wait_for(1s) == std::future_status::ready; }
-    void SetImmediateAuth() { immediateAuth_ = true; }
-    void SetDeadlineReadyAction(std::function<void()> action) { deadlineReadyAction_ = std::move(action); }
+    std::uint16_t Port() const { return port; }
+    int Accepted() const { return accepted.load(); }
+    int AuthCommands() const { return authCommands.load(); }
+    bool WorkerFailed() const { return workerFailed.load(); }
+    bool Listen() { return ::listen(listener.Get(), 4) == 0; }
+    bool WaitAccepted() { return acceptedFuture.wait_for(1s) == std::future_status::ready; }
+    void SetImmediateAuth() { immediateAuth = true; }
+    void SetDeadlineReadyAction(std::function<void()> action) { deadlineReadyAction = std::move(action); }
 
 private:
     void Serve()
     {
         const auto deadline = Clock::now() + 2500ms;
-        if (!ReadableBefore(listener_.Get(), deadline)) { workerFailed_ = true; return; }
-        acceptedSocket_ = std::make_unique<ScopedFd>(::accept4(listener_.Get(), nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK));
-        const int accepted = acceptedSocket_->Get();
-        if (accepted < 0) { workerFailed_ = true; return; }
-        ++accepted_;
-        acceptedSignal_.set_value();
+        if (!ReadableBefore(listener.Get(), deadline)) { workerFailed = true; return; }
+        acceptedSocket = std::make_unique<ScopedFd>(::accept4(listener.Get(), nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK));
+        const int accepted = acceptedSocket->Get();
+        if (accepted < 0) { workerFailed = true; return; }
+        ++this->accepted;
+        acceptedSignal.set_value();
         const std::string expected = "*2\r\n$4\r\nAUTH\r\n$" + std::to_string(sizeof(kFakePassword) - 1) +
             "\r\n" + kFakePassword + "\r\n";
         std::string request;
@@ -257,31 +257,31 @@ private:
         {
             std::array<char, 256> bytes{};
             const ssize_t count = ::recv(accepted, bytes.data(), bytes.size(), 0);
-            if (count <= 0) { workerFailed_ = true; return; }
+            if (count <= 0) { workerFailed = true; return; }
             request.append(bytes.data(), static_cast<std::size_t>(count));
         }
-        if (request != expected) { workerFailed_ = true; return; }
-        ++authCommands_;
-        if (immediateAuth_)
+        if (request != expected) { workerFailed = true; return; }
+        ++authCommands;
+        if (immediateAuth)
         {
-            if (!SendBefore(accepted, "+OK\r\n", deadline)) { workerFailed_ = true; return; }
+            if (!SendBefore(accepted, "+OK\r\n", deadline)) { workerFailed = true; return; }
         }
         else
         {
-            loop_.queueInLoop([weak = weak_from_this()]
+            loop.queueInLoop([weak = weak_from_this()]
             {
                 if (const auto self = weak.lock()) self->PrepareBatch();
             });
         }
         request.clear();
-        while (!stopping_ && Clock::now() < deadline)
+        while (!stopping && Clock::now() < deadline)
         {
-            pollfd items[]{{listener_.Get(), POLLIN, 0}, {accepted, POLLIN, 0}};
-            if (::poll(items, 2, 10) < 0 && errno != EINTR) { workerFailed_ = true; return; }
+            pollfd items[]{{listener.Get(), POLLIN, 0}, {accepted, POLLIN, 0}};
+            if (::poll(items, 2, 10) < 0 && errno != EINTR) { workerFailed = true; return; }
             if ((items[0].revents & POLLIN) != 0)
             {
-                const ScopedFd unexpected(::accept4(listener_.Get(), nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK));
-                if (unexpected.Get() >= 0) ++accepted_;
+                const ScopedFd unexpected(::accept4(listener.Get(), nullptr, nullptr, SOCK_CLOEXEC | SOCK_NONBLOCK));
+                if (unexpected.Get() >= 0) ++this->accepted;
             }
             if ((items[1].revents & POLLIN) == 0) continue;
             std::array<char, 256> bytes{};
@@ -291,7 +291,7 @@ private:
             if (request.size() < kPing.size()) continue;
             if (request != kPing || !SendBefore(accepted, "+PONG\r\n", deadline))
             {
-                workerFailed_ = true;
+                workerFailed = true;
                 return;
             }
             request.clear();
@@ -301,47 +301,47 @@ private:
 
     void PrepareBatch()
     {
-        const BatchFds fds = FindBatchFds(port_);
+        const BatchFds fds = FindBatchFds(port);
         if (fds.timerCount != 1 || fds.clientCount != 1)
         {
-            observation_.preparationFailed = true;
+            observation.preparationFailed = true;
             return;
         }
         // 在 pending 阶段有界等待真正的握手截止 timerfd；不读取它，让下一轮 poll 同时看到两个 POLLIN。
-        observation_.timerReady = ReadableBefore(fds.timer, Clock::now() + 1s);
-        if (observation_.timerReady && deadlineReadyAction_)
+        observation.timerReady = ReadableBefore(fds.timer, Clock::now() + 1s);
+        if (observation.timerReady && deadlineReadyAction)
         {
-            observation_.preparedIteration = loop_.iteration();
-            observation_.prepared = true;
-            deadlineReadyAction_();
+            observation.preparedIteration = loop.iteration();
+            observation.prepared = true;
+            deadlineReadyAction();
             return;
         }
-        if (!observation_.timerReady || !SendBefore(acceptedSocket_->Get(), "+OK\r\n", Clock::now() + 500ms))
+        if (!observation.timerReady || !SendBefore(acceptedSocket->Get(), "+OK\r\n", Clock::now() + 500ms))
         {
-            observation_.preparationFailed = true;
+            observation.preparationFailed = true;
             return;
         }
-        observation_.socketReady = ReadableBefore(fds.client, Clock::now() + 500ms);
-        observation_.preparationFailed = !observation_.socketReady;
-        observation_.preparedIteration = loop_.iteration();
-        observation_.prepared = !observation_.preparationFailed;
+        observation.socketReady = ReadableBefore(fds.client, Clock::now() + 500ms);
+        observation.preparationFailed = !observation.socketReady;
+        observation.preparedIteration = loop.iteration();
+        observation.prepared = !observation.preparationFailed;
     }
 
-    muduo::net::EventLoop& loop_;
-    BatchObservation& observation_;
-    ScopedFd listener_;
-    std::uint16_t port_ = 0;
+    muduo::net::EventLoop& loop;
+    BatchObservation& observation;
+    ScopedFd listener;
+    std::uint16_t port = 0;
     // accept 写入先于入队锁及 promise 的通知；准备任务读取时已有同步关系，Stop 后也继续持有 fd。
-    std::unique_ptr<ScopedFd> acceptedSocket_;
-    std::promise<void> acceptedSignal_;
-    std::future<void> acceptedFuture_{acceptedSignal_.get_future()};
-    bool immediateAuth_ = false;
-    std::function<void()> deadlineReadyAction_;
-    std::thread worker_;
-    std::atomic<bool> stopping_{false};
-    std::atomic<bool> workerFailed_{false};
-    std::atomic<int> accepted_{0};
-    std::atomic<int> authCommands_{0};
+    std::unique_ptr<ScopedFd> acceptedSocket;
+    std::promise<void> acceptedSignal;
+    std::future<void> acceptedFuture{acceptedSignal.get_future()};
+    bool immediateAuth = false;
+    std::function<void()> deadlineReadyAction;
+    std::thread worker;
+    std::atomic<bool> stopping{false};
+    std::atomic<bool> workerFailed{false};
+    std::atomic<int> accepted{0};
+    std::atomic<int> authCommands{0};
 };
 
 std::unique_ptr<muduo::net::EventLoop> MakePollLoop()

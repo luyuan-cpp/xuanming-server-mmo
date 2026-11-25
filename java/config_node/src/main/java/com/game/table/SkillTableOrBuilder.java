@@ -439,6 +439,18 @@ public interface SkillTableOrBuilder extends
   int getRarityTier();
 
   /**
+   * <code>uint32 secondary_target_policy = 61;</code>
+   * @return The secondaryTargetPolicy.
+   */
+  int getSecondaryTargetPolicy();
+
+  /**
+   * <code>uint32 exclusive_group = 62;</code>
+   * @return The exclusiveGroup.
+   */
+  int getExclusiveGroup();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

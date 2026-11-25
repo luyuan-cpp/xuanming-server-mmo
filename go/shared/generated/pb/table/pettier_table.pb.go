@@ -22,13 +22,18 @@ const (
 )
 
 type PetTierTable struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	ArtKey        string                 `protobuf:"bytes,3,opt,name=art_key,json=artKey,proto3" json:"art_key,omitempty"`
-	Desc          string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ArtKey              string                 `protobuf:"bytes,3,opt,name=art_key,json=artKey,proto3" json:"art_key,omitempty"`
+	Desc                string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`
+	AscendCostItemId    uint32                 `protobuf:"varint,5,opt,name=ascend_cost_item_id,json=ascendCostItemId,proto3" json:"ascend_cost_item_id,omitempty"`
+	AscendCostItemCount uint32                 `protobuf:"varint,6,opt,name=ascend_cost_item_count,json=ascendCostItemCount,proto3" json:"ascend_cost_item_count,omitempty"`
+	AscendCostGold      uint64                 `protobuf:"varint,7,opt,name=ascend_cost_gold,json=ascendCostGold,proto3" json:"ascend_cost_gold,omitempty"`
+	AscendMinPetLevel   uint32                 `protobuf:"varint,8,opt,name=ascend_min_pet_level,json=ascendMinPetLevel,proto3" json:"ascend_min_pet_level,omitempty"`
+	BonusEntryPoints    uint32                 `protobuf:"varint,9,opt,name=bonus_entry_points,json=bonusEntryPoints,proto3" json:"bonus_entry_points,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PetTierTable) Reset() {
@@ -89,6 +94,41 @@ func (x *PetTierTable) GetDesc() string {
 	return ""
 }
 
+func (x *PetTierTable) GetAscendCostItemId() uint32 {
+	if x != nil {
+		return x.AscendCostItemId
+	}
+	return 0
+}
+
+func (x *PetTierTable) GetAscendCostItemCount() uint32 {
+	if x != nil {
+		return x.AscendCostItemCount
+	}
+	return 0
+}
+
+func (x *PetTierTable) GetAscendCostGold() uint64 {
+	if x != nil {
+		return x.AscendCostGold
+	}
+	return 0
+}
+
+func (x *PetTierTable) GetAscendMinPetLevel() uint32 {
+	if x != nil {
+		return x.AscendMinPetLevel
+	}
+	return 0
+}
+
+func (x *PetTierTable) GetBonusEntryPoints() uint32 {
+	if x != nil {
+		return x.BonusEntryPoints
+	}
+	return 0
+}
+
 type PetTierTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*PetTierTable        `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -137,12 +177,17 @@ var File_pettier_table_proto protoreflect.FileDescriptor
 
 const file_pettier_table_proto_rawDesc = "" +
 	"\n" +
-	"\x13pettier_table.proto\"_\n" +
+	"\x13pettier_table.proto\"\xcc\x02\n" +
 	"\fPetTierTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
 	"\aart_key\x18\x03 \x01(\tR\x06artKey\x12\x12\n" +
-	"\x04desc\x18\x04 \x01(\tR\x04desc\"5\n" +
+	"\x04desc\x18\x04 \x01(\tR\x04desc\x12-\n" +
+	"\x13ascend_cost_item_id\x18\x05 \x01(\rR\x10ascendCostItemId\x123\n" +
+	"\x16ascend_cost_item_count\x18\x06 \x01(\rR\x13ascendCostItemCount\x12(\n" +
+	"\x10ascend_cost_gold\x18\a \x01(\x04R\x0eascendCostGold\x12/\n" +
+	"\x14ascend_min_pet_level\x18\b \x01(\rR\x11ascendMinPetLevel\x12,\n" +
+	"\x12bonus_entry_points\x18\t \x01(\rR\x10bonusEntryPoints\"5\n" +
 	"\x10PetTierTableData\x12!\n" +
 	"\x04data\x18\x01 \x03(\v2\r.PetTierTableR\x04dataB>\n" +
 	"\x0ecom.game.tableB\x16PetTierTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

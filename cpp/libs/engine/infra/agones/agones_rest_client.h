@@ -145,12 +145,12 @@ namespace agones
 		// (AgonesClientEndpointSource);两项超时都必须 > 0(curl 的 0 表示不限时)。
 		HttpResponse GameServer(const HttpTimeouts& timeouts);
 
-		const std::string& BaseUrl() const { return baseUrl_; }
+		const std::string& BaseUrl() const { return baseUrl; }
 
 	private:
-		std::string baseUrl_;
-		HttpTransport& transport_;
-		HttpTimeouts timeouts_;
+		std::string baseUrl;
+		HttpTransport& transport;
+		HttpTimeouts timeouts;
 	};
 
 } // namespace agones

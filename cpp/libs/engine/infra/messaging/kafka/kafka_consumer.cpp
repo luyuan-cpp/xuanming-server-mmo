@@ -44,14 +44,14 @@ namespace
 
 int32_t KafkaConsumer::queryTopicPartitionCount(const std::string &topic)
 {
-	if (!consumer_)
+	if (!consumer)
 	{
 		return -1;
 	}
 
 	std::string errstr;
 	std::unique_ptr<RdKafka::Topic> topicHandle{
-		RdKafka::Topic::create(consumer_.get(), topic, nullptr, errstr)};
+		RdKafka::Topic::create(consumer.get(), topic, nullptr, errstr)};
 	if (!topicHandle)
 	{
 		LOG_WARN << "KafkaConsumer: cannot create topic handle for metadata query. topic="
@@ -60,7 +60,7 @@ int32_t KafkaConsumer::queryTopicPartitionCount(const std::string &topic)
 	}
 
 	RdKafka::Metadata *rawMetadata = nullptr;
-	const auto err = consumer_->metadata(/*all_topics=*/false, topicHandle.get(),
+	const auto err = consumer->metadata(/*all_topics=*/false, topicHandle.get(),
 										 &rawMetadata, kPartitionContractQueryTimeoutMs);
 	std::unique_ptr<RdKafka::Metadata> metadata{rawMetadata};
 	if (err != RdKafka::ERR_NO_ERROR || !metadata)
@@ -95,11 +95,11 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 						 const KafkaPartitionAssignPolicy &assignPolicy,
                          const Maintenance::ManualConsumerAssignment& manualIdentity, bool prepareClosed)
 {
-    std::lock_guard<std::mutex> ownerLock(ownerMutex_);
-    groupId_=groupId; topics_=topics; manual_=!partitions.empty(); prepareClosed_=prepareClosed;
-    manualIdentity_=manualIdentity; readinessLost_=false; successfulPoll_=false; assignmentRevision_=0;
-    prepared_.reset(); stoppedManual_.reset(); manualStartOffsets_.clear(); manualDrainEnds_.clear(); manualDrainStarted_=false;
-	msgCallback_ = callback;
+    std::lock_guard<std::mutex> ownerLock(ownerMutex);
+    this->groupId=groupId; this->topics=topics; manual=!partitions.empty(); this->prepareClosed=prepareClosed;
+    this->manualIdentity=manualIdentity; readinessLost=false; successfulPoll=false; assignmentRevision=0;
+    prepared.reset(); stoppedManual.reset(); manualStartOffsets.clear(); manualDrainEnds.clear(); manualDrainStarted=false;
+	msgCallback = callback;
 
 	std::string errstr;
 
@@ -117,14 +117,14 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 		return false;
 	}
 
-	conf_.reset(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-    if(conf_->set("rebalance_cb", static_cast<RdKafka::RebalanceCb*>(this), errstr)!=RdKafka::Conf::CONF_OK) return false;
-	if (conf_->set("bootstrap.servers", brokers, errstr) != RdKafka::Conf::CONF_OK)
+	conf.reset(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+    if(conf->set("rebalance_cb", static_cast<RdKafka::RebalanceCb*>(this), errstr)!=RdKafka::Conf::CONF_OK) return false;
+	if (conf->set("bootstrap.servers", brokers, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set bootstrap.servers: " << errstr;
 		return false;
 	}
-	if (conf_->set("group.id", groupId, errstr) != RdKafka::Conf::CONF_OK)
+	if (conf->set("group.id", groupId, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set group.id: " << errstr;
 		return false;
@@ -133,19 +133,19 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 	// 共享分区时 offset 是没有主人的,提交只会互相覆盖。
 	const char *const autoCommit = assignPolicy.ownOffsets ? "false" : "true";
 	const char *const offsetReset = assignPolicy.ownOffsets ? "latest" : "earliest";
-	if (conf_->set("enable.auto.commit", autoCommit, errstr) != RdKafka::Conf::CONF_OK)
+	if (conf->set("enable.auto.commit", autoCommit, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set enable.auto.commit: " << errstr;
 	}
-	if (conf_->set("auto.offset.reset", offsetReset, errstr) != RdKafka::Conf::CONF_OK)
+	if (conf->set("auto.offset.reset", offsetReset, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set auto.offset.reset: " << errstr;
 	}
-	if (conf_->set("enable.sparse.connections", "true", errstr) != RdKafka::Conf::CONF_OK)
+	if (conf->set("enable.sparse.connections", "true", errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set enable.sparse.connections: " << errstr;
 	}
-	if (conf_->set("allow.auto.create.topics", "true", errstr) != RdKafka::Conf::CONF_OK)
+	if (conf->set("allow.auto.create.topics", "true", errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set allow.auto.create.topics: " << errstr;
 	}
@@ -190,15 +190,15 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 	{
 		const std::string name(t.name);
 		const std::string value(t.value);
-		if (conf_->set(name, value, errstr) != RdKafka::Conf::CONF_OK)
+		if (conf->set(name, value, errstr) != RdKafka::Conf::CONF_OK)
 		{
 			LOG_WARN << "KafkaConsumer: failed to set " << name
 					 << "=" << value << ": " << errstr;
 		}
 	}
 
-	consumer_.reset(RdKafka::KafkaConsumer::create(conf_.get(), errstr));
-	if (!consumer_)
+	consumer.reset(RdKafka::KafkaConsumer::create(conf.get(), errstr));
+	if (!consumer)
 	{
 		LOG_ERROR << "Failed to create KafkaConsumer: " << errstr;
 		return false;
@@ -210,8 +210,8 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 		if (topics.empty())
 		{
 			LOG_ERROR << "KafkaConsumer: topics is empty, cannot assign partitions";
-			consumer_->close();
-			consumer_.reset();
+			consumer->close();
+			consumer.reset();
 			return false;
 		}
 
@@ -254,8 +254,8 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 						  << "(deploy/docker-compose.yml kafka-topic-init / k8s_deploy.ps1 "
 						  << "-Command infra-kafka-topics);if the partition count change is intentional,"
 						  << "increment Kafka.CommandTopicGeneration to use a new set of topics.";
-				consumer_->close();
-				consumer_.reset();
+				consumer->close();
+				consumer.reset();
 				return false;
 			}
 
@@ -283,30 +283,30 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 			// startAtEnd:每次进程启动都从分区末尾开始,不重放别人的历史。
 			// 理由见 kafka_consumer.h::KafkaPartitionAssignPolicy。
             std::int64_t offset=RdKafka::Topic::OFFSET_STORED;
-            if(assignPolicy.startAtEnd && !manualIdentity_.consumer_id().empty()) {
+            if(assignPolicy.startAtEnd && !this->manualIdentity.consumer_id().empty()) {
                 std::int64_t low=-1,high=-1;
-                if(consumer_->query_watermark_offsets(topics[0],partition,&low,&high,3000)!=RdKafka::ERR_NO_ERROR || low<0 || high<low) {
-                    RdKafka::TopicPartition::destroy(assignedPartitions); consumer_->close(); consumer_.reset(); return false;
+                if(consumer->query_watermark_offsets(topics[0],partition,&low,&high,3000)!=RdKafka::ERR_NO_ERROR || low<0 || high<low) {
+                    RdKafka::TopicPartition::destroy(assignedPartitions); consumer->close(); consumer.reset(); return false;
                 }
-                offset=high; manualStartOffsets_[partition]=offset;
+                offset=high; manualStartOffsets[partition]=offset;
             } else if(assignPolicy.startAtEnd) offset=RdKafka::Topic::OFFSET_END;
             assignedPartitions.push_back(RdKafka::TopicPartition::create(topics[0],partition,offset));
 		}
-		const auto err = consumer_->assign(assignedPartitions);
-        ++assignmentRevision_;
-        if(prepareClosed_){
-            if(consumer_->pause(assignedPartitions)!=RdKafka::ERR_NO_ERROR) readinessLost_=true;
-            for(const auto* p:assignedPartitions)if(consumer_->seek(*p,3000)!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
+		const auto err = consumer->assign(assignedPartitions);
+        ++assignmentRevision;
+        if(this->prepareClosed){
+            if(consumer->pause(assignedPartitions)!=RdKafka::ERR_NO_ERROR) readinessLost=true;
+            for(const auto* p:assignedPartitions)if(consumer->seek(*p,3000)!=RdKafka::ERR_NO_ERROR)readinessLost=true;
         }
 		for (auto *assignedPartition : assignedPartitions)
 		{
 			delete assignedPartition;
 		}
-		if (err || readinessLost_)
+		if (err || readinessLost)
 		{
 			LOG_ERROR << "Failed to assign Kafka partitions: " << RdKafka::err2str(err);
-			consumer_->close();
-			consumer_.reset();
+			consumer->close();
+			consumer.reset();
 			return false;
 		}
 		LOG_INFO << "Assigned to specific partitions. topic=" << topics[0]
@@ -317,12 +317,12 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 	else
 	{
 		// No specific partitions — use group-managed subscription
-		RdKafka::ErrorCode err = consumer_->subscribe(topics);
+		RdKafka::ErrorCode err = consumer->subscribe(topics);
 		if (err)
 		{
 			LOG_ERROR << "Failed to subscribe to topics: " << RdKafka::err2str(err);
-			consumer_->close();
-			consumer_.reset();
+			consumer->close();
+			consumer.reset();
 			return false;
 		}
 	}
@@ -338,45 +338,45 @@ KafkaConsumer::~KafkaConsumer()
 
 bool KafkaConsumer::start()
 {
-	if (!consumer_)
+	if (!consumer)
 	{
 		LOG_ERROR << "KafkaConsumer start requested before successful initialization.";
-		running_ = false;
+		running = false;
 		return false;
 	}
 
-	running_ = true;
+	running = true;
 	return true;
 }
 
 void KafkaConsumer::stop()
 {
-	const bool wasRunning = running_.exchange(false);
+	const bool wasRunning = running.exchange(false);
 
 	// Tear down background poll thread first. The thread checks running_
 	// every loop iteration and bails out within kBackgroundConsumeTimeoutMs,
 	// so this join is short even mid-fetch.
-	if (pollThreadRunning_.exchange(false))
+	if (pollThreadRunning.exchange(false))
 	{
-		if (pollThread_.joinable())
+		if (pollThread.joinable())
 		{
-			pollThread_.join();
+			pollThread.join();
 		}
 	}
 
-    std::lock_guard<std::mutex> ownerLock(ownerMutex_);
-    if (consumer_) {
-        if(wasRunning && manual_ && !manualIdentity_.consumer_id().empty()) {
-            try { stoppedManual_=ReadManualLocked("","",manualIdentity_.issuer_id(),manualIdentity_.instance_id()); }
-            catch (...) { readinessLost_=true; }
+    std::lock_guard<std::mutex> ownerLock(ownerMutex);
+    if (consumer) {
+        if(wasRunning && manual && !manualIdentity.consumer_id().empty()) {
+            try { stoppedManual=ReadManualLocked("","",manualIdentity.issuer_id(),manualIdentity.instance_id()); }
+            catch (...) { readinessLost=true; }
         }
-        consumer_->close(); consumer_.reset();
+        consumer->close(); consumer.reset();
     }
 }
 
 void KafkaConsumer::startBackgroundPolling(muduo::net::EventLoop* dispatchLoop)
 {
-	if (!consumer_ || !running_)
+	if (!consumer || !running)
 	{
 		LOG_ERROR << "KafkaConsumer::startBackgroundPolling called before init/start.";
 		return;
@@ -386,7 +386,7 @@ void KafkaConsumer::startBackgroundPolling(muduo::net::EventLoop* dispatchLoop)
 		LOG_ERROR << "KafkaConsumer::startBackgroundPolling requires a non-null dispatch loop.";
 		return;
 	}
-	if (pollThreadRunning_.exchange(true))
+	if (pollThreadRunning.exchange(true))
 	{
 		// Already running — refuse to double-spawn. The thread-local singleton
 		// pattern guarantees there's only one consumer per worker thread, so a
@@ -395,8 +395,8 @@ void KafkaConsumer::startBackgroundPolling(muduo::net::EventLoop* dispatchLoop)
 		return;
 	}
 
-	dispatchLoop_ = std::ref(*dispatchLoop);
-	pollThread_ = std::thread([this]() {
+	this->dispatchLoop = std::ref(*dispatchLoop);
+	pollThread = std::thread([this]() {
 		backgroundPollLoop();
 	});
 	LOG_INFO << "KafkaConsumer background polling thread started.";
@@ -411,7 +411,7 @@ void KafkaConsumer::backgroundPollLoop()
 	// 100ms EventLoop timer driver missed poll() under client-connect storms,
 	// blowing past max.poll.interval.ms and getting the consumer kicked out
 	// of the group.
-	while (pollThreadRunning_.load(std::memory_order_acquire) && running_.load(std::memory_order_acquire))
+	while (pollThreadRunning.load(std::memory_order_acquire) && running.load(std::memory_order_acquire))
 	{
 		consumeOnce(/*blocking=*/true);
 	}
@@ -419,8 +419,8 @@ void KafkaConsumer::backgroundPollLoop()
 
 void KafkaConsumer::dispatch(const std::string& topic, std::string payload, const tracing::TraceContext& trace)
 {
-    if(!msgCallback_) return;
-    const auto ledger=dispatchLedger_;
+    if(!msgCallback) return;
+    const auto ledger=dispatchLedger;
     { std::lock_guard<std::mutex> lock(ledger->mutex); if(ledger->accepted==std::numeric_limits<std::uint64_t>::max()){ledger->unknown=true;return;} ++ledger->accepted; }
     struct Ticket { std::shared_ptr<DispatchLedger> ledger; bool returned=false; ~Ticket(){std::lock_guard<std::mutex> lock(ledger->mutex);++ledger->settled;if(!returned)ledger->unknown=true;} };
     // 回调在消息头带来的 trace 下执行:合法就建子 span,没有或不合法就开新根(docs/design/distributed-tracing.md §5.4)。
@@ -429,16 +429,16 @@ void KafkaConsumer::dispatch(const std::string& topic, std::string payload, cons
     struct Work { std::shared_ptr<Ticket> ticket; MessageCallback callback; std::string topic,payload; tracing::TraceContext trace;
         void Run(){ tracing::ScopedIncoming incoming(trace, tracing::SpanKind::kConsumer, tracing::SpanSystem::kKafka, tracing::SpanName{topic}); callback(topic,payload); callback={}; ticket->returned=true; } };
     const auto work=std::make_shared<Work>(); work->ticket=std::make_shared<Ticket>();work->ticket->ledger=ledger;
-    work->callback=msgCallback_;work->topic=topic;work->payload=std::move(payload);work->trace=trace;
-    if(dispatchLoop_) dispatchLoop_->get().queueInLoop([work]{work->Run();}); else work->Run();
+    work->callback=msgCallback;work->topic=topic;work->payload=std::move(payload);work->trace=trace;
+    if(dispatchLoop) dispatchLoop->get().queueInLoop([work]{work->Run();}); else work->Run();
 }
 
 void KafkaConsumer::consumeOnce(bool blocking)
 {
-    std::unique_lock<std::mutex> ownerLock(ownerMutex_);
-    if(!consumer_ || !running_) return;
+    std::unique_lock<std::mutex> ownerLock(ownerMutex);
+    if(!consumer || !running) return;
 	std::unique_ptr<RdKafka::Message> msg{
-		consumer_->consume(blocking ? kBackgroundConsumeTimeoutMs : 0)};
+		consumer->consume(blocking ? kBackgroundConsumeTimeoutMs : 0)};
 	if (!msg)
 	{
 		return;
@@ -447,26 +447,26 @@ void KafkaConsumer::consumeOnce(bool blocking)
 	switch (msg->err())
 	{
 	case RdKafka::ERR_NO_ERROR:
-        successfulPoll_=true;
-        if(prepareClosed_) {
+        successfulPoll=true;
+        if(prepareClosed) {
             std::unique_ptr<RdKafka::TopicPartition> rewind(RdKafka::TopicPartition::create(msg->topic_name(),msg->partition(),msg->offset()));
-            if(consumer_->seek(*rewind,1000)!=RdKafka::ERR_NO_ERROR) readinessLost_=true;
+            if(consumer->seek(*rewind,1000)!=RdKafka::ERR_NO_ERROR) readinessLost=true;
             std::vector<RdKafka::TopicPartition*> one{rewind.get()};
-            if(consumer_->pause(one)!=RdKafka::ERR_NO_ERROR) readinessLost_=true;
+            if(consumer->pause(one)!=RdKafka::ERR_NO_ERROR) readinessLost=true;
             return; // pause之前已排入native队列的记录回退到原offset，绝不丢弃。
         }
-        if(manualDrainStarted_) {
-            const auto target=manualDrainEnds_.find(msg->partition());
-            if(target==manualDrainEnds_.end()){readinessLost_=true;return;}
+        if(manualDrainStarted) {
+            const auto target=manualDrainEnds.find(msg->partition());
+            if(target==manualDrainEnds.end()){readinessLost=true;return;}
             if(msg->offset()>=target->second){
                 std::unique_ptr<RdKafka::TopicPartition> rewind(RdKafka::TopicPartition::create(msg->topic_name(),msg->partition(),target->second));
                 std::vector<RdKafka::TopicPartition*> one{rewind.get()};
-                if(consumer_->seek(*rewind,1000)!=RdKafka::ERR_NO_ERROR||consumer_->pause(one)!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
+                if(consumer->seek(*rewind,1000)!=RdKafka::ERR_NO_ERROR||consumer->pause(one)!=RdKafka::ERR_NO_ERROR)readinessLost=true;
                 return; // 尾部之后的记录保留在原offset，不把未知新增流量计成已处理。
             }
             if(msg->offset()+1==target->second){
                 std::unique_ptr<RdKafka::TopicPartition> part(RdKafka::TopicPartition::create(msg->topic_name(),msg->partition()));
-                std::vector<RdKafka::TopicPartition*> one{part.get()};if(consumer_->pause(one)!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
+                std::vector<RdKafka::TopicPartition*> one{part.get()};if(consumer->pause(one)!=RdKafka::ERR_NO_ERROR)readinessLost=true;
             }
         }
         ownerLock.unlock();
@@ -477,7 +477,7 @@ void KafkaConsumer::consumeOnce(bool blocking)
 		return;
 
 	case RdKafka::ERR__TIMED_OUT:
-        successfulPoll_=true;
+        successfulPoll=true;
 		return;
 
 	case RdKafka::ERR__UNKNOWN_TOPIC:
@@ -513,13 +513,13 @@ void KafkaConsumer::poll()
 	// caller is harmless — we still drain whatever the background thread may
 	// have left queued, but consume() is no-op-cheap when the rdkafka queue
 	// is empty.
-	if (!running_ || !consumer_)
+	if (!running || !consumer)
 		return;
 
 	// If background polling owns the consumer, skip — the thread is already
 	// draining records, and a second concurrent consume() across threads on
 	// the same RdKafka::KafkaConsumer is unsafe.
-	if (pollThreadRunning_.load(std::memory_order_acquire))
+	if (pollThreadRunning.load(std::memory_order_acquire))
 	{
 		return;
 	}
@@ -575,76 +575,76 @@ std::pair<std::int32_t,std::string> GroupIdentity(RdKafka::KafkaConsumer& consum
 
 void KafkaConsumer::rebalance_cb(RdKafka::KafkaConsumer* consumer,RdKafka::ErrorCode error,std::vector<RdKafka::TopicPartition*>& partitions){
     // 回调只由持ownerMutex_的consume/close同步派发；不可另锁同一mutex。
-    if(assignmentRevision_==std::numeric_limits<std::uint64_t>::max())readinessLost_=true;else ++assignmentRevision_;
-    prepared_.reset();successfulPoll_=false;
+    if(assignmentRevision==std::numeric_limits<std::uint64_t>::max())readinessLost=true;else ++assignmentRevision;
+    prepared.reset();successfulPoll=false;
     const bool cooperative=consumer->rebalance_protocol()=="COOPERATIVE";
     if(error==RdKafka::ERR__ASSIGN_PARTITIONS){
-        if(cooperative){std::unique_ptr<RdKafka::Error> e(consumer->incremental_assign(partitions));if(e)readinessLost_=true;}
-        else if(consumer->assign(partitions)!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
-        if(prepareClosed_&&consumer->pause(partitions)!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
+        if(cooperative){std::unique_ptr<RdKafka::Error> e(consumer->incremental_assign(partitions));if(e)readinessLost=true;}
+        else if(consumer->assign(partitions)!=RdKafka::ERR_NO_ERROR)readinessLost=true;
+        if(prepareClosed&&consumer->pause(partitions)!=RdKafka::ERR_NO_ERROR)readinessLost=true;
     }else if(error==RdKafka::ERR__REVOKE_PARTITIONS){
-        if(cooperative){std::unique_ptr<RdKafka::Error> e(consumer->incremental_unassign(partitions));if(e)readinessLost_=true;}
-        else if(consumer->unassign()!=RdKafka::ERR_NO_ERROR)readinessLost_=true;
-    }else{readinessLost_=true;consumer->unassign();}
+        if(cooperative){std::unique_ptr<RdKafka::Error> e(consumer->incremental_unassign(partitions));if(e)readinessLost=true;}
+        else if(consumer->unassign()!=RdKafka::ERR_NO_ERROR)readinessLost=true;
+    }else{readinessLost=true;consumer->unassign();}
 }
 
 KafkaConsumer::Maintenance::ManualConsumerEvidence KafkaConsumer::ReadManualLocked(const std::string& operation,const std::string& manifest,const std::string& issuer,const std::string& instance){
-    if(!manual_||!consumer_||manualIdentity_.consumer_id().empty()||instance.size()!=16||manualIdentity_.instance_id()!=instance||manualIdentity_.target_instance_id()!=instance||manualIdentity_.target_node_id()==0||topics_.size()!=1||readinessLost_)throw std::runtime_error("manual owner unavailable");
-    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto catalog=ReadPhysicalCatalog(*consumer_,topics_,deadline);
-    const std::uint32_t count=static_cast<std::uint32_t>(catalog.size());if(count!=manualIdentity_.partition_count())throw std::runtime_error("manual partition count changed");
-    NativeParts assigned;if(consumer_->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||assigned.values.empty()||consumer_->position(assigned.values)!=RdKafka::ERR_NO_ERROR)throw std::runtime_error("manual assignment unavailable");
+    if(!manual||!consumer||manualIdentity.consumer_id().empty()||instance.size()!=16||manualIdentity.instance_id()!=instance||manualIdentity.target_instance_id()!=instance||manualIdentity.target_node_id()==0||topics.size()!=1||readinessLost)throw std::runtime_error("manual owner unavailable");
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto catalog=ReadPhysicalCatalog(*consumer,topics,deadline);
+    const std::uint32_t count=static_cast<std::uint32_t>(catalog.size());if(count!=manualIdentity.partition_count())throw std::runtime_error("manual partition count changed");
+    NativeParts assigned;if(consumer->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||assigned.values.empty()||consumer->position(assigned.values)!=RdKafka::ERR_NO_ERROR)throw std::runtime_error("manual assignment unavailable");
     Maintenance::ManualConsumerEvidence report;report.set_operation_id(operation);report.set_manifest_digest(manifest);
-    for(const auto* p:assigned.values){const PartKey key{p->topic(),p->partition()};const auto physical=catalog.find(key);const auto start=manualStartOffsets_.find(p->partition());
-        if(physical==catalog.end()||p->err()!=RdKafka::ERR_NO_ERROR||p->offset()<0||start==manualStartOffsets_.end()||p->partition()!=static_cast<std::int32_t>(manualIdentity_.target_node_id()%count))throw std::runtime_error("manual assignment mismatch");
-        std::int64_t low=-1,high=-1;Watermarks(*consumer_,key,deadline,low,high);if(p->offset()<low||p->offset()>high||start->second<0)throw std::runtime_error("manual position outside leader range");
-        auto* row=report.add_assignments();*row=manualIdentity_;row->set_issuer_id(issuer);row->set_instance_id(instance);row->set_cluster_id(physical->second.cluster_id());row->set_topic_id(physical->second.topic_id());row->set_topic_name(p->topic());row->set_partition_count(count);row->set_partition(p->partition());row->set_assignment_revision(assignmentRevision_);row->set_start_offset(start->second);row->set_position(p->offset());row->set_earliest(low);row->set_exclusive_end(high);row->set_observed_ms(ObservedMs());
+    for(const auto* p:assigned.values){const PartKey key{p->topic(),p->partition()};const auto physical=catalog.find(key);const auto start=manualStartOffsets.find(p->partition());
+        if(physical==catalog.end()||p->err()!=RdKafka::ERR_NO_ERROR||p->offset()<0||start==manualStartOffsets.end()||p->partition()!=static_cast<std::int32_t>(manualIdentity.target_node_id()%count))throw std::runtime_error("manual assignment mismatch");
+        std::int64_t low=-1,high=-1;Watermarks(*consumer,key,deadline,low,high);if(p->offset()<low||p->offset()>high||start->second<0)throw std::runtime_error("manual position outside leader range");
+        auto* row=report.add_assignments();*row=manualIdentity;row->set_issuer_id(issuer);row->set_instance_id(instance);row->set_cluster_id(physical->second.cluster_id());row->set_topic_id(physical->second.topic_id());row->set_topic_name(p->topic());row->set_partition_count(count);row->set_partition(p->partition());row->set_assignment_revision(assignmentRevision);row->set_start_offset(start->second);row->set_position(p->offset());row->set_earliest(low);row->set_exclusive_end(high);row->set_observed_ms(ObservedMs());
     }
     return report;
 }
 
 bool KafkaConsumer::BeginManualDrain(){
-    std::lock_guard<std::mutex> lock(ownerMutex_);if(!manual_)return true;
-    if(manualDrainStarted_)return !readinessLost_;
-    if(!consumer_||!running_||prepareClosed_||readinessLost_)return false;
+    std::lock_guard<std::mutex> lock(ownerMutex);if(!manual)return true;
+    if(manualDrainStarted)return !readinessLost;
+    if(!consumer||!running||prepareClosed||readinessLost)return false;
     try{
-        const auto snapshot=ReadManualLocked("","",manualIdentity_.issuer_id(),manualIdentity_.instance_id());
+        const auto snapshot=ReadManualLocked("","",manualIdentity.issuer_id(),manualIdentity.instance_id());
         NativeParts pause;
         for(const auto& row:snapshot.assignments()){
-            if(!manualDrainEnds_.emplace(row.partition(),row.exclusive_end()).second)return false;
+            if(!manualDrainEnds.emplace(row.partition(),row.exclusive_end()).second)return false;
             if(row.position()==row.exclusive_end())pause.values.push_back(RdKafka::TopicPartition::create(row.topic_name(),row.partition()));
         }
-        if(!pause.values.empty()&&consumer_->pause(pause.values)!=RdKafka::ERR_NO_ERROR){readinessLost_=true;return false;}
-        manualDrainStarted_=true;return true;
-    }catch(...){readinessLost_=true;return false;}
+        if(!pause.values.empty()&&consumer->pause(pause.values)!=RdKafka::ERR_NO_ERROR){readinessLost=true;return false;}
+        manualDrainStarted=true;return true;
+    }catch(...){readinessLost=true;return false;}
 }
 bool KafkaConsumer::ManualDrainReady(){
-    std::lock_guard<std::mutex> lock(ownerMutex_);if(!manual_)return true;
-    if(!manualDrainStarted_||readinessLost_||!consumer_)return false;
-    NativeParts parts;if(consumer_->assignment(parts.values)!=RdKafka::ERR_NO_ERROR||consumer_->position(parts.values)!=RdKafka::ERR_NO_ERROR||parts.values.size()!=manualDrainEnds_.size())return false;
-    for(const auto* part:parts.values){const auto target=manualDrainEnds_.find(part->partition());if(target==manualDrainEnds_.end()||part->err()!=RdKafka::ERR_NO_ERROR||part->offset()!=target->second)return false;}
+    std::lock_guard<std::mutex> lock(ownerMutex);if(!manual)return true;
+    if(!manualDrainStarted||readinessLost||!consumer)return false;
+    NativeParts parts;if(consumer->assignment(parts.values)!=RdKafka::ERR_NO_ERROR||consumer->position(parts.values)!=RdKafka::ERR_NO_ERROR||parts.values.size()!=manualDrainEnds.size())return false;
+    for(const auto* part:parts.values){const auto target=manualDrainEnds.find(part->partition());if(target==manualDrainEnds.end()||part->err()!=RdKafka::ERR_NO_ERROR||part->offset()!=target->second)return false;}
     return true;
 }
 
 std::optional<KafkaConsumer::Maintenance::ManualConsumerEvidence> KafkaConsumer::ManualEvidence(const std::string& operation,const std::string& manifest,const std::string& issuer,const std::string& instance){
-    std::lock_guard<std::mutex> lock(ownerMutex_);if(!manual_)return std::nullopt;
-    try{auto report=stoppedManual_?*stoppedManual_:ReadManualLocked(operation,manifest,issuer,instance);
+    std::lock_guard<std::mutex> lock(ownerMutex);if(!manual)return std::nullopt;
+    try{auto report=stoppedManual?*stoppedManual:ReadManualLocked(operation,manifest,issuer,instance);
         report.set_operation_id(operation);report.set_manifest_digest(manifest);for(auto& a:*report.mutable_assignments()){a.set_issuer_id(issuer);if(a.instance_id()!=instance)throw std::runtime_error("manual boot changed");}
-        const bool closed=!running_&&!consumer_;
-        std::lock_guard<std::mutex> callbackLock(dispatchLedger_->mutex);report.set_accepting_closed(closed||prepareClosed_);report.set_callbacks_joined(dispatchLedger_->accepted==dispatchLedger_->settled);
-        report.set_accepted(dispatchLedger_->accepted);report.set_settled(dispatchLedger_->settled);report.set_unresolved_publications((readinessLost_||dispatchLedger_->unknown)?1:0);
-        if(closed&&!stoppedManual_)return std::nullopt;
-        if(closed){if(!manualDrainStarted_)return std::nullopt;for(const auto& row:report.assignments()){const auto end=manualDrainEnds_.find(row.partition());if(end==manualDrainEnds_.end()||row.position()!=end->second||row.exclusive_end()!=end->second)return std::nullopt;}}
+        const bool closed=!running&&!consumer;
+        std::lock_guard<std::mutex> callbackLock(dispatchLedger->mutex);report.set_accepting_closed(closed||prepareClosed);report.set_callbacks_joined(dispatchLedger->accepted==dispatchLedger->settled);
+        report.set_accepted(dispatchLedger->accepted);report.set_settled(dispatchLedger->settled);report.set_unresolved_publications((readinessLost||dispatchLedger->unknown)?1:0);
+        if(closed&&!stoppedManual)return std::nullopt;
+        if(closed){if(!manualDrainStarted)return std::nullopt;for(const auto& row:report.assignments()){const auto end=manualDrainEnds.find(row.partition());if(end==manualDrainEnds.end()||row.position()!=end->second||row.exclusive_end()!=end->second)return std::nullopt;}}
         return report;
     }catch(...){return std::nullopt;}
 }
 
 std::optional<KafkaConsumer::Maintenance::ConsumerReadiness> KafkaConsumer::PrepareReadiness(const Maintenance::Plan& plan,const std::string& manifest,const std::string& issuer,const std::string& instance){
-    std::lock_guard<std::mutex> lock(ownerMutex_);
-    if(!consumer_||!running_||!prepareClosed_||!successfulPoll_||readinessLost_||plan.run_id().size()!=16||manifest.size()!=32||issuer.size()!=16||instance.size()!=16)return std::nullopt;
-    {std::lock_guard<std::mutex> cb(dispatchLedger_->mutex);if(dispatchLedger_->accepted!=0||dispatchLedger_->settled!=0||dispatchLedger_->unknown)return std::nullopt;}
+    std::lock_guard<std::mutex> lock(ownerMutex);
+    if(!consumer||!running||!prepareClosed||!successfulPoll||readinessLost||plan.run_id().size()!=16||manifest.size()!=32||issuer.size()!=16||instance.size()!=16)return std::nullopt;
+    {std::lock_guard<std::mutex> cb(dispatchLedger->mutex);if(dispatchLedger->accepted!=0||dispatchLedger->settled!=0||dispatchLedger->unknown)return std::nullopt;}
     try{
         Maintenance::ConsumerReadiness readiness;
-        if(manual_){auto report=ReadManualLocked(plan.run_id(),manifest,issuer,instance);report.set_accepting_closed(true);report.set_callbacks_joined(true);
+        if(manual){auto report=ReadManualLocked(plan.run_id(),manifest,issuer,instance);report.set_accepting_closed(true);report.set_callbacks_joined(true);
             for(const auto& row:report.assignments()){
                 if(row.start_offset()!=row.position()||row.earliest()>row.position()||row.position()>row.exclusive_end())return std::nullopt;
                 bool fixed=false;for(const auto& old:plan.manual_assignments())if(old.issuer_id()==issuer&&old.topic_name()==row.topic_name()&&old.topic_id()==row.topic_id()&&old.cluster_id()==row.cluster_id()&&old.partition_count()==row.partition_count())fixed=true;
@@ -652,58 +652,58 @@ std::optional<KafkaConsumer::Maintenance::ConsumerReadiness> KafkaConsumer::Prep
             }
             *readiness.add_manual_assignments()=std::move(report);
         }else{
-            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto generation=GroupIdentity(*consumer_);const auto revision=assignmentRevision_;
-            const auto catalog=ReadPhysicalCatalog(*consumer_,topics_,deadline);std::map<PartKey,Maintenance::KafkaPartitionClosure> expected;
-            for(const auto& seed:plan.kafka_partitions())if(seed.group()==groupId_&&std::find(topics_.begin(),topics_.end(),seed.topic_name())!=topics_.end()){
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto generation=GroupIdentity(*consumer);const auto revision=assignmentRevision;
+            const auto catalog=ReadPhysicalCatalog(*consumer,topics,deadline);std::map<PartKey,Maintenance::KafkaPartitionClosure> expected;
+            for(const auto& seed:plan.kafka_partitions())if(seed.group()==groupId&&std::find(topics.begin(),topics.end(),seed.topic_name())!=topics.end()){
                 const PartKey key{seed.topic_name(),static_cast<std::int32_t>(seed.partition())};const auto actual=catalog.find(key);
                 if(actual==catalog.end()||actual->second.cluster_id()!=seed.cluster_id()||actual->second.topic_id()!=seed.topic_id()||!expected.emplace(key,seed).second)return std::nullopt;
             }
             if(expected.size()!=catalog.size())return std::nullopt;
-            NativeParts assigned;if(consumer_->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||consumer_->committed(assigned.values,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return std::nullopt;
-            auto* group=readiness.add_groups();group->set_operation_id(plan.run_id());group->set_manifest_digest(manifest);group->set_issuer_id(issuer);group->set_instance_id(instance);group->set_group(groupId_);group->set_generation_id(generation.first);group->set_member_id(generation.second);
+            NativeParts assigned;if(consumer->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||consumer->committed(assigned.values,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return std::nullopt;
+            auto* group=readiness.add_groups();group->set_operation_id(plan.run_id());group->set_manifest_digest(manifest);group->set_issuer_id(issuer);group->set_instance_id(instance);group->set_group(groupId);group->set_generation_id(generation.first);group->set_member_id(generation.second);
             for(const auto& pair:expected)*group->add_expected_partitions()=pair.second;
             std::set<PartKey> seen;for(auto* p:assigned.values){const PartKey key{p->topic(),p->partition()};const auto seed=expected.find(key);if(seed==expected.end()||!seen.insert(key).second||p->err()!=RdKafka::ERR_NO_ERROR||p->offset()<0)return std::nullopt;
-                std::int64_t low=-1,high=-1;Watermarks(*consumer_,key,deadline,low,high);if(p->offset()!=high||low>p->offset()||p->offset()<seed->second.protected_committed_floor())return std::nullopt;
+                std::int64_t low=-1,high=-1;Watermarks(*consumer,key,deadline,low,high);if(p->offset()!=high||low>p->offset()||p->offset()<seed->second.protected_committed_floor())return std::nullopt;
                 auto* row=group->add_assigned_partitions();*row=seed->second;row->set_final_committed(p->offset());row->set_final_earliest(low);row->set_final_exclusive_end(high);
                 // 暂停准备期未派发业务；把尚未解析的position固定到真实已提交next offset，P9不得再seek。
-                if(consumer_->seek(*p,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return std::nullopt;
+                if(consumer->seek(*p,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return std::nullopt;
             }
-            if(generation!=GroupIdentity(*consumer_)||revision!=assignmentRevision_)return std::nullopt;
+            if(generation!=GroupIdentity(*consumer)||revision!=assignmentRevision)return std::nullopt;
         }
-        prepared_=readiness;return readiness;
+        prepared=readiness;return readiness;
     }catch(...){return std::nullopt;}
 }
 
 bool KafkaConsumer::CurrentPreparedMatches(const Maintenance::ConsumerReadiness& expected){
-    if(!consumer_||!running_||!prepareClosed_||readinessLost_||!prepared_||!google::protobuf::util::MessageDifferencer::Equals(*prepared_,expected))return false;
-    {std::lock_guard<std::mutex> cb(dispatchLedger_->mutex);if(dispatchLedger_->accepted!=dispatchLedger_->settled||dispatchLedger_->unknown)return false;}
+    if(!consumer||!running||!prepareClosed||readinessLost||!prepared||!google::protobuf::util::MessageDifferencer::Equals(*prepared,expected))return false;
+    {std::lock_guard<std::mutex> cb(dispatchLedger->mutex);if(dispatchLedger->accepted!=dispatchLedger->settled||dispatchLedger->unknown)return false;}
     try{
-        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto catalog=ReadPhysicalCatalog(*consumer_,topics_,deadline);NativeParts assigned;
-        if(consumer_->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||consumer_->position(assigned.values)!=RdKafka::ERR_NO_ERROR)return false;
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);const auto catalog=ReadPhysicalCatalog(*consumer,topics,deadline);NativeParts assigned;
+        if(consumer->assignment(assigned.values)!=RdKafka::ERR_NO_ERROR||consumer->position(assigned.values)!=RdKafka::ERR_NO_ERROR)return false;
         std::map<PartKey,std::int64_t> wanted;
-        if(manual_){if(expected.manual_assignments_size()!=1||expected.groups_size()!=0)return false;
+        if(manual){if(expected.manual_assignments_size()!=1||expected.groups_size()!=0)return false;
             for(const auto& row:expected.manual_assignments(0).assignments()){
                 const PartKey key{row.topic_name(),static_cast<std::int32_t>(row.partition())};const auto physical=catalog.find(key);
-                if(catalog.size()!=row.partition_count()||row.assignment_revision()!=assignmentRevision_||row.target_instance_id()!=manualIdentity_.target_instance_id()||row.target_node_id()!=manualIdentity_.target_node_id()||physical==catalog.end()||physical->second.topic_id()!=row.topic_id()||physical->second.cluster_id()!=row.cluster_id()||!wanted.emplace(key,row.start_offset()).second)return false;
+                if(catalog.size()!=row.partition_count()||row.assignment_revision()!=assignmentRevision||row.target_instance_id()!=manualIdentity.target_instance_id()||row.target_node_id()!=manualIdentity.target_node_id()||physical==catalog.end()||physical->second.topic_id()!=row.topic_id()||physical->second.cluster_id()!=row.cluster_id()||!wanted.emplace(key,row.start_offset()).second)return false;
             }
         }else{if(expected.groups_size()!=1||expected.manual_assignments_size()!=0)return false;const auto& group=expected.groups(0);
-            if(GroupIdentity(*consumer_)!=std::make_pair(group.generation_id(),group.member_id())||static_cast<std::size_t>(group.expected_partitions_size())!=catalog.size())return false;
+            if(GroupIdentity(*consumer)!=std::make_pair(group.generation_id(),group.member_id())||static_cast<std::size_t>(group.expected_partitions_size())!=catalog.size())return false;
             NativeParts committed;for(const auto* current:assigned.values)committed.values.push_back(RdKafka::TopicPartition::create(current->topic(),current->partition()));
-            if(consumer_->committed(committed.values,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return false;
+            if(consumer->committed(committed.values,Remaining(deadline))!=RdKafka::ERR_NO_ERROR)return false;
             for(const auto* current:committed.values){int found=0;for(const auto& row:group.assigned_partitions())if(row.topic_name()==current->topic()&&row.partition()==static_cast<std::uint32_t>(current->partition())&&row.final_committed()==current->offset()&&current->err()==RdKafka::ERR_NO_ERROR)++found;if(found!=1)return false;}
             for(const auto& row:group.expected_partitions()){const auto physical=catalog.find({row.topic_name(),static_cast<std::int32_t>(row.partition())});if(physical==catalog.end()||physical->second.topic_id()!=row.topic_id()||physical->second.cluster_id()!=row.cluster_id())return false;}
             for(const auto& row:group.assigned_partitions())if(!wanted.emplace(PartKey{row.topic_name(),static_cast<std::int32_t>(row.partition())},row.final_committed()).second)return false;
         }
-        if(wanted.size()!=assigned.values.size())return false;for(const auto* p:assigned.values){const auto found=wanted.find({p->topic(),p->partition()});if(found==wanted.end()||p->err()!=RdKafka::ERR_NO_ERROR||p->offset()!=found->second)return false;std::int64_t low=-1,high=-1;Watermarks(*consumer_,{p->topic(),p->partition()},deadline,low,high);if(p->offset()<low||p->offset()>high)return false;}
+        if(wanted.size()!=assigned.values.size())return false;for(const auto* p:assigned.values){const auto found=wanted.find({p->topic(),p->partition()});if(found==wanted.end()||p->err()!=RdKafka::ERR_NO_ERROR||p->offset()!=found->second)return false;std::int64_t low=-1,high=-1;Watermarks(*consumer,{p->topic(),p->partition()},deadline,low,high);if(p->offset()<low||p->offset()>high)return false;}
         return true; // end增长合法，绝不把当前位置重置到新end。
     }catch(...){return false;}
 }
-KafkaConsumer::PreparedLease::PreparedLease(KafkaConsumer& owner):owner_(owner),lock_(owner.ownerMutex_){}
-KafkaConsumer::PreparedLease::~PreparedLease(){if(resumed_&&!committed_&&owner_.consumer_){NativeParts parts;if(owner_.consumer_->assignment(parts.values)!=RdKafka::ERR_NO_ERROR||owner_.consumer_->pause(parts.values)!=RdKafka::ERR_NO_ERROR)owner_.readinessLost_=true;}}
-bool KafkaConsumer::PreparedLease::Resume(){if(resumed_)return true;NativeParts parts;if(!owner_.consumer_||owner_.consumer_->assignment(parts.values)!=RdKafka::ERR_NO_ERROR)return false;resumed_=true;return owner_.consumer_->resume(parts.values)==RdKafka::ERR_NO_ERROR;}
-void KafkaConsumer::PreparedLease::Commit(){if(!resumed_)throw std::logic_error("consumer lease not resumed");committed_=true;owner_.prepareClosed_=false;owner_.prepared_.reset();}
+KafkaConsumer::PreparedLease::PreparedLease(KafkaConsumer& owner):owner(owner),lock(owner.ownerMutex){}
+KafkaConsumer::PreparedLease::~PreparedLease(){if(resumed&&!committed&&owner.consumer){NativeParts parts;if(owner.consumer->assignment(parts.values)!=RdKafka::ERR_NO_ERROR||owner.consumer->pause(parts.values)!=RdKafka::ERR_NO_ERROR)owner.readinessLost=true;}}
+bool KafkaConsumer::PreparedLease::Resume(){if(resumed)return true;NativeParts parts;if(!owner.consumer||owner.consumer->assignment(parts.values)!=RdKafka::ERR_NO_ERROR)return false;resumed=true;return owner.consumer->resume(parts.values)==RdKafka::ERR_NO_ERROR;}
+void KafkaConsumer::PreparedLease::Commit(){if(!resumed)throw std::logic_error("consumer lease not resumed");committed=true;owner.prepareClosed=false;owner.prepared.reset();}
 std::unique_ptr<KafkaConsumer::PreparedLease> KafkaConsumer::AcquirePrepared(const Maintenance::ConsumerReadiness& expected){auto lease=std::unique_ptr<PreparedLease>(new PreparedLease(*this));if(!CurrentPreparedMatches(expected))return {};return lease;}
 
 bool KafkaConsumer::CallbacksJoined(bool requireKnown) const{
-    std::lock_guard<std::mutex> lock(dispatchLedger_->mutex);return dispatchLedger_->accepted==dispatchLedger_->settled&&(!requireKnown||!dispatchLedger_->unknown);
+    std::lock_guard<std::mutex> lock(dispatchLedger->mutex);return dispatchLedger->accepted==dispatchLedger->settled&&(!requireKnown||!dispatchLedger->unknown);
 }

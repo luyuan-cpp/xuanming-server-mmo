@@ -20,35 +20,46 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GuildService_CreateGuild_FullMethodName             = "/guildpb.GuildService/CreateGuild"
-	GuildService_GetGuild_FullMethodName                = "/guildpb.GuildService/GetGuild"
-	GuildService_GetPlayerGuild_FullMethodName          = "/guildpb.GuildService/GetPlayerGuild"
-	GuildService_LeaveGuild_FullMethodName              = "/guildpb.GuildService/LeaveGuild"
-	GuildService_DisbandGuild_FullMethodName            = "/guildpb.GuildService/DisbandGuild"
-	GuildService_SetAnnouncement_FullMethodName         = "/guildpb.GuildService/SetAnnouncement"
-	GuildService_RenameGuild_FullMethodName             = "/guildpb.GuildService/RenameGuild"
-	GuildService_SetGuildMemberRole_FullMethodName      = "/guildpb.GuildService/SetGuildMemberRole"
-	GuildService_KickGuildMember_FullMethodName         = "/guildpb.GuildService/KickGuildMember"
-	GuildService_TransferGuildLeader_FullMethodName     = "/guildpb.GuildService/TransferGuildLeader"
-	GuildService_ApplyJoinGuild_FullMethodName          = "/guildpb.GuildService/ApplyJoinGuild"
-	GuildService_CancelGuildApplication_FullMethodName  = "/guildpb.GuildService/CancelGuildApplication"
-	GuildService_ListMyGuildApplications_FullMethodName = "/guildpb.GuildService/ListMyGuildApplications"
-	GuildService_ListGuildApplications_FullMethodName   = "/guildpb.GuildService/ListGuildApplications"
-	GuildService_ReviewGuildApplication_FullMethodName  = "/guildpb.GuildService/ReviewGuildApplication"
-	GuildService_NotifyGuildChanged_FullMethodName      = "/guildpb.GuildService/NotifyGuildChanged"
-	GuildService_UpdateGuildScore_FullMethodName        = "/guildpb.GuildService/UpdateGuildScore"
-	GuildService_GetGuildRank_FullMethodName            = "/guildpb.GuildService/GetGuildRank"
-	GuildService_GetGuildRankByGuild_FullMethodName     = "/guildpb.GuildService/GetGuildRankByGuild"
-	GuildService_GetGuildDonateOptions_FullMethodName   = "/guildpb.GuildService/GetGuildDonateOptions"
-	GuildService_DonateToGuild_FullMethodName           = "/guildpb.GuildService/DonateToGuild"
-	GuildService_UpgradeGuild_FullMethodName            = "/guildpb.GuildService/UpgradeGuild"
-	GuildService_GetGuildShop_FullMethodName            = "/guildpb.GuildService/GetGuildShop"
-	GuildService_BuyGuildShopGoods_FullMethodName       = "/guildpb.GuildService/BuyGuildShopGoods"
-	GuildService_GetGuildActivities_FullMethodName      = "/guildpb.GuildService/GetGuildActivities"
-	GuildService_LightGuildLantern_FullMethodName       = "/guildpb.GuildService/LightGuildLantern"
-	GuildService_ClaimGuildReunion_FullMethodName       = "/guildpb.GuildService/ClaimGuildReunion"
-	GuildService_StartGuildTrial_FullMethodName         = "/guildpb.GuildService/StartGuildTrial"
-	GuildService_RespondGuildTrialInvite_FullMethodName = "/guildpb.GuildService/RespondGuildTrialInvite"
+	GuildService_CreateGuild_FullMethodName              = "/guildpb.GuildService/CreateGuild"
+	GuildService_GetGuild_FullMethodName                 = "/guildpb.GuildService/GetGuild"
+	GuildService_GetPlayerGuild_FullMethodName           = "/guildpb.GuildService/GetPlayerGuild"
+	GuildService_LeaveGuild_FullMethodName               = "/guildpb.GuildService/LeaveGuild"
+	GuildService_DisbandGuild_FullMethodName             = "/guildpb.GuildService/DisbandGuild"
+	GuildService_SetAnnouncement_FullMethodName          = "/guildpb.GuildService/SetAnnouncement"
+	GuildService_RenameGuild_FullMethodName              = "/guildpb.GuildService/RenameGuild"
+	GuildService_SetGuildMemberRole_FullMethodName       = "/guildpb.GuildService/SetGuildMemberRole"
+	GuildService_KickGuildMember_FullMethodName          = "/guildpb.GuildService/KickGuildMember"
+	GuildService_TransferGuildLeader_FullMethodName      = "/guildpb.GuildService/TransferGuildLeader"
+	GuildService_ApplyJoinGuild_FullMethodName           = "/guildpb.GuildService/ApplyJoinGuild"
+	GuildService_CancelGuildApplication_FullMethodName   = "/guildpb.GuildService/CancelGuildApplication"
+	GuildService_ListMyGuildApplications_FullMethodName  = "/guildpb.GuildService/ListMyGuildApplications"
+	GuildService_ListGuildApplications_FullMethodName    = "/guildpb.GuildService/ListGuildApplications"
+	GuildService_ReviewGuildApplication_FullMethodName   = "/guildpb.GuildService/ReviewGuildApplication"
+	GuildService_NotifyGuildChanged_FullMethodName       = "/guildpb.GuildService/NotifyGuildChanged"
+	GuildService_UpdateGuildScore_FullMethodName         = "/guildpb.GuildService/UpdateGuildScore"
+	GuildService_GetGuildRank_FullMethodName             = "/guildpb.GuildService/GetGuildRank"
+	GuildService_GetGuildRankByGuild_FullMethodName      = "/guildpb.GuildService/GetGuildRankByGuild"
+	GuildService_GetGuildDonateOptions_FullMethodName    = "/guildpb.GuildService/GetGuildDonateOptions"
+	GuildService_DonateToGuild_FullMethodName            = "/guildpb.GuildService/DonateToGuild"
+	GuildService_UpgradeGuild_FullMethodName             = "/guildpb.GuildService/UpgradeGuild"
+	GuildService_GetGuildShop_FullMethodName             = "/guildpb.GuildService/GetGuildShop"
+	GuildService_BuyGuildShopGoods_FullMethodName        = "/guildpb.GuildService/BuyGuildShopGoods"
+	GuildService_GetGuildActivities_FullMethodName       = "/guildpb.GuildService/GetGuildActivities"
+	GuildService_LightGuildLantern_FullMethodName        = "/guildpb.GuildService/LightGuildLantern"
+	GuildService_ClaimGuildReunion_FullMethodName        = "/guildpb.GuildService/ClaimGuildReunion"
+	GuildService_StartGuildTrial_FullMethodName          = "/guildpb.GuildService/StartGuildTrial"
+	GuildService_RespondGuildTrialInvite_FullMethodName  = "/guildpb.GuildService/RespondGuildTrialInvite"
+	GuildService_GetGuildWarOverview_FullMethodName      = "/guildpb.GuildService/GetGuildWarOverview"
+	GuildService_SetGuildWarStance_FullMethodName        = "/guildpb.GuildService/SetGuildWarStance"
+	GuildService_RegisterGuildWarGarrison_FullMethodName = "/guildpb.GuildService/RegisterGuildWarGarrison"
+	GuildService_StartGuildWarBattle_FullMethodName      = "/guildpb.GuildService/StartGuildWarBattle"
+	GuildService_ClaimGuildWarMilestone_FullMethodName   = "/guildpb.GuildService/ClaimGuildWarMilestone"
+	GuildService_ClaimGuildWarDividend_FullMethodName    = "/guildpb.GuildService/ClaimGuildWarDividend"
+	GuildService_PostGuildWarBounty_FullMethodName       = "/guildpb.GuildService/PostGuildWarBounty"
+	GuildService_TrackGuildWarBounty_FullMethodName      = "/guildpb.GuildService/TrackGuildWarBounty"
+	GuildService_GetGuildWarBattleResult_FullMethodName  = "/guildpb.GuildService/GetGuildWarBattleResult"
+	GuildService_NotifyGuildWarAlert_FullMethodName      = "/guildpb.GuildService/NotifyGuildWarAlert"
+	GuildService_InspectFieldWarTargets_FullMethodName   = "/guildpb.GuildService/InspectFieldWarTargets"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -104,6 +115,18 @@ type GuildServiceClient interface {
 	ClaimGuildReunion(ctx context.Context, in *ClaimGuildReunionRequest, opts ...grpc.CallOption) (*ClaimGuildReunionResponse, error)
 	StartGuildTrial(ctx context.Context, in *StartGuildTrialRequest, opts ...grpc.CallOption) (*StartGuildTrialResponse, error)
 	RespondGuildTrialInvite(ctx context.Context, in *RespondGuildTrialInviteRequest, opts ...grpc.CallOption) (*RespondGuildTrialInviteResponse, error)
+	// 帮会全天帮战 V2(docs/design/guild-play-v2.md):无匹配池直打、三座灵脉、守旗阵、4 层奖励与江湖追杀令。
+	GetGuildWarOverview(ctx context.Context, in *GetGuildWarOverviewRequest, opts ...grpc.CallOption) (*GetGuildWarOverviewResponse, error)
+	SetGuildWarStance(ctx context.Context, in *SetGuildWarStanceRequest, opts ...grpc.CallOption) (*SetGuildWarStanceResponse, error)
+	RegisterGuildWarGarrison(ctx context.Context, in *RegisterGuildWarGarrisonRequest, opts ...grpc.CallOption) (*RegisterGuildWarGarrisonResponse, error)
+	StartGuildWarBattle(ctx context.Context, in *StartGuildWarBattleRequest, opts ...grpc.CallOption) (*StartGuildWarBattleResponse, error)
+	ClaimGuildWarMilestone(ctx context.Context, in *ClaimGuildWarMilestoneRequest, opts ...grpc.CallOption) (*ClaimGuildWarMilestoneResponse, error)
+	ClaimGuildWarDividend(ctx context.Context, in *ClaimGuildWarDividendRequest, opts ...grpc.CallOption) (*ClaimGuildWarDividendResponse, error)
+	PostGuildWarBounty(ctx context.Context, in *PostGuildWarBountyRequest, opts ...grpc.CallOption) (*PostGuildWarBountyResponse, error)
+	TrackGuildWarBounty(ctx context.Context, in *TrackGuildWarBountyRequest, opts ...grpc.CallOption) (*TrackGuildWarBountyResponse, error)
+	GetGuildWarBattleResult(ctx context.Context, in *GetGuildWarBattleResultRequest, opts ...grpc.CallOption) (*GetGuildWarBattleResultResponse, error)
+	NotifyGuildWarAlert(ctx context.Context, in *GuildWarAlertS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	InspectFieldWarTargets(ctx context.Context, in *InspectFieldWarTargetsRequest, opts ...grpc.CallOption) (*InspectFieldWarTargetsResponse, error)
 }
 
 type guildServiceClient struct {
@@ -404,6 +427,116 @@ func (c *guildServiceClient) RespondGuildTrialInvite(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *guildServiceClient) GetGuildWarOverview(ctx context.Context, in *GetGuildWarOverviewRequest, opts ...grpc.CallOption) (*GetGuildWarOverviewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildWarOverviewResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildWarOverview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) SetGuildWarStance(ctx context.Context, in *SetGuildWarStanceRequest, opts ...grpc.CallOption) (*SetGuildWarStanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetGuildWarStanceResponse)
+	err := c.cc.Invoke(ctx, GuildService_SetGuildWarStance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) RegisterGuildWarGarrison(ctx context.Context, in *RegisterGuildWarGarrisonRequest, opts ...grpc.CallOption) (*RegisterGuildWarGarrisonResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterGuildWarGarrisonResponse)
+	err := c.cc.Invoke(ctx, GuildService_RegisterGuildWarGarrison_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) StartGuildWarBattle(ctx context.Context, in *StartGuildWarBattleRequest, opts ...grpc.CallOption) (*StartGuildWarBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartGuildWarBattleResponse)
+	err := c.cc.Invoke(ctx, GuildService_StartGuildWarBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) ClaimGuildWarMilestone(ctx context.Context, in *ClaimGuildWarMilestoneRequest, opts ...grpc.CallOption) (*ClaimGuildWarMilestoneResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimGuildWarMilestoneResponse)
+	err := c.cc.Invoke(ctx, GuildService_ClaimGuildWarMilestone_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) ClaimGuildWarDividend(ctx context.Context, in *ClaimGuildWarDividendRequest, opts ...grpc.CallOption) (*ClaimGuildWarDividendResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimGuildWarDividendResponse)
+	err := c.cc.Invoke(ctx, GuildService_ClaimGuildWarDividend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) PostGuildWarBounty(ctx context.Context, in *PostGuildWarBountyRequest, opts ...grpc.CallOption) (*PostGuildWarBountyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PostGuildWarBountyResponse)
+	err := c.cc.Invoke(ctx, GuildService_PostGuildWarBounty_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) TrackGuildWarBounty(ctx context.Context, in *TrackGuildWarBountyRequest, opts ...grpc.CallOption) (*TrackGuildWarBountyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TrackGuildWarBountyResponse)
+	err := c.cc.Invoke(ctx, GuildService_TrackGuildWarBounty_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) GetGuildWarBattleResult(ctx context.Context, in *GetGuildWarBattleResultRequest, opts ...grpc.CallOption) (*GetGuildWarBattleResultResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildWarBattleResultResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildWarBattleResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) NotifyGuildWarAlert(ctx context.Context, in *GuildWarAlertS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, GuildService_NotifyGuildWarAlert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) InspectFieldWarTargets(ctx context.Context, in *InspectFieldWarTargetsRequest, opts ...grpc.CallOption) (*InspectFieldWarTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InspectFieldWarTargetsResponse)
+	err := c.cc.Invoke(ctx, GuildService_InspectFieldWarTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations must embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -457,6 +590,18 @@ type GuildServiceServer interface {
 	ClaimGuildReunion(context.Context, *ClaimGuildReunionRequest) (*ClaimGuildReunionResponse, error)
 	StartGuildTrial(context.Context, *StartGuildTrialRequest) (*StartGuildTrialResponse, error)
 	RespondGuildTrialInvite(context.Context, *RespondGuildTrialInviteRequest) (*RespondGuildTrialInviteResponse, error)
+	// 帮会全天帮战 V2(docs/design/guild-play-v2.md):无匹配池直打、三座灵脉、守旗阵、4 层奖励与江湖追杀令。
+	GetGuildWarOverview(context.Context, *GetGuildWarOverviewRequest) (*GetGuildWarOverviewResponse, error)
+	SetGuildWarStance(context.Context, *SetGuildWarStanceRequest) (*SetGuildWarStanceResponse, error)
+	RegisterGuildWarGarrison(context.Context, *RegisterGuildWarGarrisonRequest) (*RegisterGuildWarGarrisonResponse, error)
+	StartGuildWarBattle(context.Context, *StartGuildWarBattleRequest) (*StartGuildWarBattleResponse, error)
+	ClaimGuildWarMilestone(context.Context, *ClaimGuildWarMilestoneRequest) (*ClaimGuildWarMilestoneResponse, error)
+	ClaimGuildWarDividend(context.Context, *ClaimGuildWarDividendRequest) (*ClaimGuildWarDividendResponse, error)
+	PostGuildWarBounty(context.Context, *PostGuildWarBountyRequest) (*PostGuildWarBountyResponse, error)
+	TrackGuildWarBounty(context.Context, *TrackGuildWarBountyRequest) (*TrackGuildWarBountyResponse, error)
+	GetGuildWarBattleResult(context.Context, *GetGuildWarBattleResultRequest) (*GetGuildWarBattleResultResponse, error)
+	NotifyGuildWarAlert(context.Context, *GuildWarAlertS2C) (*base.Empty, error)
+	InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
 }
 
@@ -553,6 +698,39 @@ func (UnimplementedGuildServiceServer) StartGuildTrial(context.Context, *StartGu
 }
 func (UnimplementedGuildServiceServer) RespondGuildTrialInvite(context.Context, *RespondGuildTrialInviteRequest) (*RespondGuildTrialInviteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RespondGuildTrialInvite not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildWarOverview(context.Context, *GetGuildWarOverviewRequest) (*GetGuildWarOverviewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildWarOverview not implemented")
+}
+func (UnimplementedGuildServiceServer) SetGuildWarStance(context.Context, *SetGuildWarStanceRequest) (*SetGuildWarStanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetGuildWarStance not implemented")
+}
+func (UnimplementedGuildServiceServer) RegisterGuildWarGarrison(context.Context, *RegisterGuildWarGarrisonRequest) (*RegisterGuildWarGarrisonResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterGuildWarGarrison not implemented")
+}
+func (UnimplementedGuildServiceServer) StartGuildWarBattle(context.Context, *StartGuildWarBattleRequest) (*StartGuildWarBattleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartGuildWarBattle not implemented")
+}
+func (UnimplementedGuildServiceServer) ClaimGuildWarMilestone(context.Context, *ClaimGuildWarMilestoneRequest) (*ClaimGuildWarMilestoneResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimGuildWarMilestone not implemented")
+}
+func (UnimplementedGuildServiceServer) ClaimGuildWarDividend(context.Context, *ClaimGuildWarDividendRequest) (*ClaimGuildWarDividendResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimGuildWarDividend not implemented")
+}
+func (UnimplementedGuildServiceServer) PostGuildWarBounty(context.Context, *PostGuildWarBountyRequest) (*PostGuildWarBountyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PostGuildWarBounty not implemented")
+}
+func (UnimplementedGuildServiceServer) TrackGuildWarBounty(context.Context, *TrackGuildWarBountyRequest) (*TrackGuildWarBountyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TrackGuildWarBounty not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildWarBattleResult(context.Context, *GetGuildWarBattleResultRequest) (*GetGuildWarBattleResultResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildWarBattleResult not implemented")
+}
+func (UnimplementedGuildServiceServer) NotifyGuildWarAlert(context.Context, *GuildWarAlertS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyGuildWarAlert not implemented")
+}
+func (UnimplementedGuildServiceServer) InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InspectFieldWarTargets not implemented")
 }
 func (UnimplementedGuildServiceServer) mustEmbedUnimplementedGuildServiceServer() {}
 func (UnimplementedGuildServiceServer) testEmbeddedByValue()                      {}
@@ -1097,6 +1275,204 @@ func _GuildService_RespondGuildTrialInvite_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_GetGuildWarOverview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildWarOverviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildWarOverview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildWarOverview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildWarOverview(ctx, req.(*GetGuildWarOverviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_SetGuildWarStance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetGuildWarStanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).SetGuildWarStance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_SetGuildWarStance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).SetGuildWarStance(ctx, req.(*SetGuildWarStanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_RegisterGuildWarGarrison_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterGuildWarGarrisonRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).RegisterGuildWarGarrison(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_RegisterGuildWarGarrison_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).RegisterGuildWarGarrison(ctx, req.(*RegisterGuildWarGarrisonRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_StartGuildWarBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartGuildWarBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).StartGuildWarBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_StartGuildWarBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).StartGuildWarBattle(ctx, req.(*StartGuildWarBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_ClaimGuildWarMilestone_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimGuildWarMilestoneRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).ClaimGuildWarMilestone(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_ClaimGuildWarMilestone_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).ClaimGuildWarMilestone(ctx, req.(*ClaimGuildWarMilestoneRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_ClaimGuildWarDividend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimGuildWarDividendRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).ClaimGuildWarDividend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_ClaimGuildWarDividend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).ClaimGuildWarDividend(ctx, req.(*ClaimGuildWarDividendRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_PostGuildWarBounty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PostGuildWarBountyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).PostGuildWarBounty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_PostGuildWarBounty_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).PostGuildWarBounty(ctx, req.(*PostGuildWarBountyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_TrackGuildWarBounty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TrackGuildWarBountyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).TrackGuildWarBounty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_TrackGuildWarBounty_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).TrackGuildWarBounty(ctx, req.(*TrackGuildWarBountyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_GetGuildWarBattleResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildWarBattleResultRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildWarBattleResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildWarBattleResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildWarBattleResult(ctx, req.(*GetGuildWarBattleResultRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_NotifyGuildWarAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GuildWarAlertS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).NotifyGuildWarAlert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_NotifyGuildWarAlert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).NotifyGuildWarAlert(ctx, req.(*GuildWarAlertS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_InspectFieldWarTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InspectFieldWarTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).InspectFieldWarTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_InspectFieldWarTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).InspectFieldWarTargets(ctx, req.(*InspectFieldWarTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1219,6 +1595,50 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RespondGuildTrialInvite",
 			Handler:    _GuildService_RespondGuildTrialInvite_Handler,
+		},
+		{
+			MethodName: "GetGuildWarOverview",
+			Handler:    _GuildService_GetGuildWarOverview_Handler,
+		},
+		{
+			MethodName: "SetGuildWarStance",
+			Handler:    _GuildService_SetGuildWarStance_Handler,
+		},
+		{
+			MethodName: "RegisterGuildWarGarrison",
+			Handler:    _GuildService_RegisterGuildWarGarrison_Handler,
+		},
+		{
+			MethodName: "StartGuildWarBattle",
+			Handler:    _GuildService_StartGuildWarBattle_Handler,
+		},
+		{
+			MethodName: "ClaimGuildWarMilestone",
+			Handler:    _GuildService_ClaimGuildWarMilestone_Handler,
+		},
+		{
+			MethodName: "ClaimGuildWarDividend",
+			Handler:    _GuildService_ClaimGuildWarDividend_Handler,
+		},
+		{
+			MethodName: "PostGuildWarBounty",
+			Handler:    _GuildService_PostGuildWarBounty_Handler,
+		},
+		{
+			MethodName: "TrackGuildWarBounty",
+			Handler:    _GuildService_TrackGuildWarBounty_Handler,
+		},
+		{
+			MethodName: "GetGuildWarBattleResult",
+			Handler:    _GuildService_GetGuildWarBattleResult_Handler,
+		},
+		{
+			MethodName: "NotifyGuildWarAlert",
+			Handler:    _GuildService_NotifyGuildWarAlert_Handler,
+		},
+		{
+			MethodName: "InspectFieldWarTargets",
+			Handler:    _GuildService_InspectFieldWarTargets_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

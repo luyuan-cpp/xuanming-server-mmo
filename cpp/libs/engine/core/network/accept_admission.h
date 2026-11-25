@@ -149,12 +149,12 @@ public:
 	// 换参数,并把桶重新装满。perSecond / burst 为 0 时按 1 处理(调用方都经 ResolveRateLimit,不会给 0)。
 	void Reset(RateLimit limit)
 	{
-		limit_ = RateLimit{(std::max<uint32_t>)(limit.perSecond, 1), (std::max<uint32_t>)(limit.burst, 1)};
+		this->limit = RateLimit{(std::max<uint32_t>)(limit.perSecond, 1), (std::max<uint32_t>)(limit.burst, 1)};
 		const SteadyTime::duration oneSecond = std::chrono::duration_cast<SteadyTime::duration>(std::chrono::seconds(1));
-		const SteadyTime::duration perConnection = oneSecond / static_cast<SteadyTime::duration::rep>(limit_.perSecond);
-		interval_ = (std::max)(perConnection, SteadyTime::duration(1));
-		tolerance_ = interval_ * static_cast<SteadyTime::duration::rep>(limit_.burst - 1);
-		tat_ = SteadyTime{};
+		const SteadyTime::duration perConnection = oneSecond / static_cast<SteadyTime::duration::rep>(this->limit.perSecond);
+		interval = (std::max)(perConnection, SteadyTime::duration(1));
+		tolerance = interval * static_cast<SteadyTime::duration::rep>(this->limit.burst - 1);
+		tat = SteadyTime{};
 	}
 
 	// 取一个名额。取不到返回 false:这条连接不接。
@@ -164,25 +164,25 @@ public:
 		{
 			return false;
 		}
-		tat_ = (std::max)(tat_, now) + interval_;
+		tat = (std::max)(tat, now) + interval;
 		return true;
 	}
 
 	// 现在取不取得到名额,不改状态。按来源分桶时(gate 的 SourceRateGate)判定阶段只问,所有闸都放行之后才 TryTake,
 	// 被别的闸拒掉的连接因此不消耗这个桶的名额。
-	bool CanTake(SteadyTime now) const { return (std::max)(tat_, now) - now <= tolerance_; }
+	bool CanTake(SteadyTime now) const { return (std::max)(tat, now) - now <= tolerance; }
 
 	// 桶是满的(空闲得够久,攒满了一个突发)。这时丢掉这个闸与重新建一个等价,按来源分桶时据此清表。
-	bool Full(SteadyTime now) const { return tat_ <= now; }
+	bool Full(SteadyTime now) const { return tat <= now; }
 
-	const RateLimit &Limit() const { return limit_; }
+	const RateLimit &Limit() const { return limit; }
 
 private:
-	RateLimit limit_{};
-	SteadyTime::duration interval_{};
-	SteadyTime::duration tolerance_{};
+	RateLimit limit{};
+	SteadyTime::duration interval{};
+	SteadyTime::duration tolerance{};
 	// 理论到达时刻。时钟零点 = 桶是满的:第一条一定放行,并且立刻有一个完整的突发可用。
-	SteadyTime tat_{};
+	SteadyTime tat{};
 };
 
 // 握手耗时直方图(建连到验签成功)的桶上界,毫秒。最大的有限上界就是握手期限:期限内完成的握手都落在有限桶里,
@@ -525,55 +525,55 @@ class SourceRateGate
 {
 public:
 	explicit SourceRateGate(RateLimit limit, size_t maxTracked = kMaxTrackedSources)
-		: limit_(limit), maxTracked_(maxTracked)
+		: limit(limit), maxTracked(maxTracked)
 	{
 	}
 
 	bool WouldAdmit(const SourcePrefix &prefix, SteadyTime now) const
 	{
-		const auto it = gates_.find(prefix);
-		return it == gates_.end() || it->second.CanTake(now);
+		const auto it = gates.find(prefix);
+		return it == gates.end() || it->second.CanTake(now);
 	}
 
 	// 放行之后记一笔。表满时先清掉桶已回满的前缀;仍然满就不登记、返回 false(这个前缀这次没被计入,调用方计一次 untracked)。
 	bool Take(const SourcePrefix &prefix, SteadyTime now)
 	{
-		auto it = gates_.find(prefix);
-		if (it == gates_.end())
+		auto it = gates.find(prefix);
+		if (it == gates.end())
 		{
-			if (gates_.size() >= maxTracked_)
+			if (gates.size() >= maxTracked)
 			{
 				PruneIfDue(now);
 			}
-			if (gates_.size() >= maxTracked_)
+			if (gates.size() >= maxTracked)
 			{
 				return false;
 			}
-			it = gates_.emplace(prefix, AcceptRateGate(limit_)).first;
+			it = gates.emplace(prefix, AcceptRateGate(limit)).first;
 		}
 		it->second.TryTake(now);
 		return true;
 	}
 
-	size_t Tracked() const { return gates_.size(); }
-	const RateLimit &Limit() const { return limit_; }
+	size_t Tracked() const { return gates.size(); }
+	const RateLimit &Limit() const { return limit; }
 
 private:
 	// 桶已回满的前缀与没登记过等价,可以删。只在表满时清、每秒最多一次:撑满时不至于每条连接都扫一遍表。
 	void PruneIfDue(SteadyTime now)
 	{
-		if (lastPruneAt_ && now - *lastPruneAt_ < std::chrono::seconds(1))
+		if (lastPruneAt && now - *lastPruneAt < std::chrono::seconds(1))
 		{
 			return;
 		}
-		lastPruneAt_ = now;
-		std::erase_if(gates_, [now](const auto &entry) { return entry.second.Full(now); });
+		lastPruneAt = now;
+		std::erase_if(gates, [now](const auto &entry) { return entry.second.Full(now); });
 	}
 
-	RateLimit limit_;
-	size_t maxTracked_;
-	std::unordered_map<SourcePrefix, AcceptRateGate, SourcePrefixHash> gates_;
-	std::optional<SteadyTime> lastPruneAt_;
+	RateLimit limit;
+	size_t maxTracked;
+	std::unordered_map<SourcePrefix, AcceptRateGate, SourcePrefixHash> gates;
+	std::optional<SteadyTime> lastPruneAt;
 };
 
 // 承压:未验签池到了早拒起点,或全局速率闸在最近一个握手期限内拒过连接(lastAcceptRateRejectAt 由节点在速率闸拒绝时记)。

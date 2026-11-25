@@ -40,9 +40,9 @@ public:
 			bool operator==(const Snapshot&) const = default;
 		};
 		static std::optional<Snapshot> Read(entt::entity player, SessionId requestSession);
-		entt::entity player_;
-		SessionId requestSession_;
-		std::optional<Snapshot> snapshot_;
+		entt::entity player;
+		SessionId requestSession;
+		std::optional<Snapshot> snapshot;
 	};
 
 	// 只读解析业务场景号;不存在时返回 null,不把业务号当成本地句柄。

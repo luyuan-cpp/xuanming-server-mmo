@@ -300,22 +300,22 @@ protected:
         }
         const auto address = ParseRouterAddress(raw);
         ASSERT_TRUE(address.has_value()) << "MUDUO_GRPC_INTEROP_ROUTER must be ip:port, got '" << raw << "'";
-        channel_ = Channel::Create(loop_, address->first, address->second);
-        ASSERT_NE(channel_, nullptr) << "only IPv4 literals are supported, got '" << raw << "'";
+        channel = Channel::Create(loop, address->first, address->second);
+        ASSERT_NE(channel, nullptr) << "only IPv4 literals are supported, got '" << raw << "'";
         // 任意合法的 SessionDetails;10 字节 → base64 带 "==" padding,顺带覆盖 padding 的往返。
-        sessionValue_ = Base64EncodePadded(EncodeSessionDetails(1, 2, 3, "ab"));
-        ASSERT_EQ(sessionValue_, "CAEQAhgDIgJhYg==");
+        sessionValue = Base64EncodePadded(EncodeSessionDetails(1, 2, 3, "ab"));
+        ASSERT_EQ(sessionValue, "CAEQAhgDIgJhYg==");
     }
 
     void TearDown() override
     {
-        if (!channel_)
+        if (!channel)
         {
             return; // 跳过的用例没有建通道,也就没有要转空的 loop
         }
-        channel_.reset();
+        channel.reset();
         // 让排队的完成回调、连接释放、forceClose、connectDestroyed 跑完,再析构 EventLoop。
-        muduo_grpc_test::RunLoopFor(loop_, 500ms);
+        muduo_grpc_test::RunLoopFor(loop, 500ms);
     }
 
     UnaryCallRequest MakeForward(uint64_t requestId, bool withSession) const
@@ -325,7 +325,7 @@ protected:
         request.message = EncodeForwardRequest(requestId, kUnknownMessageId, kZoneId);
         if (withSession)
         {
-            request.metadata.emplace_back(kSessionKey, sessionValue_);
+            request.metadata.emplace_back(kSessionKey, sessionValue);
         }
         request.deadline = std::chrono::steady_clock::now() + 5s;
         return request;
@@ -334,8 +334,8 @@ protected:
     CallRecordPtr Call(UnaryCallRequest request)
     {
         const auto record = std::make_shared<CallRecord>();
-        channel_->StartUnaryCall(std::move(request), Recorder(record));
-        EXPECT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [&] { return record->count > 0; }, 10s))
+        channel->StartUnaryCall(std::move(request), Recorder(record));
+        EXPECT_TRUE(muduo_grpc_test::RunLoopUntil(loop, [&] { return record->count > 0; }, 10s))
             << "call did not complete";
         return record;
     }
@@ -346,7 +346,7 @@ protected:
         ASSERT_TRUE(result.status.ok()) << result.status.ToString();
         const std::string *echoed = muduo_grpc::FindMetadata(result.initialMetadata, kSessionKey);
         ASSERT_NE(echoed, nullptr) << "路由服必须在响应头回写 " << kSessionKey;
-        EXPECT_EQ(*echoed, sessionValue_) << "应用层值逐字节往返(传输层只解线上那一层)";
+        EXPECT_EQ(*echoed, sessionValue) << "应用层值逐字节往返(传输层只解线上那一层)";
         const auto content = DecodeMessageContent(result.response);
         ASSERT_TRUE(content.has_value()) << "response is not a valid MessageContent";
         EXPECT_EQ(content->id, requestId);
@@ -356,9 +356,9 @@ protected:
         EXPECT_EQ(content->tipId, kInvalidParameterTip);
     }
 
-    muduo::net::EventLoop loop_;
-    std::shared_ptr<Channel> channel_;
-    std::string sessionValue_;
+    muduo::net::EventLoop loop;
+    std::shared_ptr<Channel> channel;
+    std::string sessionValue;
 };
 
 TEST_F(GoRouterInteropTest, MissingSessionMetadataIsUnauthenticated)
@@ -366,7 +366,7 @@ TEST_F(GoRouterInteropTest, MissingSessionMetadataIsUnauthenticated)
     const auto record = Call(MakeForward(41, false));
     ASSERT_EQ(record->count, 1);
     const auto &status = record->result.status;
-    EXPECT_EQ(status.code(), StatusCode::kUnauthenticated) << status.ToString();
+    EXPECT_EQ(status.Code(), StatusCode::kUnauthenticated) << status.ToString();
     EXPECT_EQ(status.code_value(), 16u);
     EXPECT_NE(status.message().find(kSessionKey), std::string::npos) << status.message();
     EXPECT_TRUE(record->result.initialMetadata.empty()) << "grpc-go 对还没写过响应头的错误回 trailers-only";
@@ -387,13 +387,13 @@ TEST_F(GoRouterInteropTest, TwoHundredConcurrentCallsAllSucceed)
     for (int i = 0; i < kCalls; ++i)
     {
         records.push_back(std::make_shared<CallRecord>());
-        channel_->StartUnaryCall(MakeForward(kFirstId + i, true), Recorder(records.back()));
+        channel->StartUnaryCall(MakeForward(kFirstId + i, true), Recorder(records.back()));
     }
     const auto allDone = [&]
     {
         return std::all_of(records.begin(), records.end(), [](const CallRecordPtr &r) { return r->count > 0; });
     };
-    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, allDone, 20s));
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop, allDone, 20s));
     for (int i = 0; i < kCalls; ++i)
     {
         SCOPED_TRACE("call " + std::to_string(i));
@@ -413,10 +413,10 @@ TEST_F(GoRouterInteropTest, CallAfterServerIdleTimeoutStillSucceeds)
     const auto first = Call(MakeForward(51, true));
     ExpectRejectedEnvelope(first->result, 51);
 
-    muduo_grpc_test::RunLoopFor(loop_, 6min);
+    muduo_grpc_test::RunLoopFor(loop, 6min);
     // 收到 go-zero 的空闲 GOAWAY 后连接被退役,通道回 IDLE;只打印,不作断言(服务端配置可能不同)。
     std::cout << "[ INFO     ] channel state after 6 minutes idle: "
-              << muduo_grpc::ConnectivityStateName(channel_->GetState(false)) << std::endl;
+              << muduo_grpc::ConnectivityStateName(channel->GetState(false)) << std::endl;
 
     const auto second = Call(MakeForward(52, true));
     ExpectRejectedEnvelope(second->result, 52);

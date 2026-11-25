@@ -38,14 +38,14 @@ private:
     // Reference-wrapper instead of raw EventLoop* to satisfy the project's
     // no-raw-pointer-member lint (cpp/plugin). Set by Initialize(), unset means
     // Initialize() never ran, so Shutdown() is a no-op.
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
-    muduo::net::TimerId retryTimerId_;
-    muduo::net::TimerId snapshotTimerId_;
-    muduo::net::TimerId periodicSaveTimerId_;
-    bool retryTimerActive_ = false;
-    bool snapshotTimerActive_ = false;
-    bool periodicSaveTimerActive_ = false;
-    bool shutdownBegun_ = false;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop;
+    muduo::net::TimerId retryTimerId;
+    muduo::net::TimerId snapshotTimerId;
+    muduo::net::TimerId periodicSaveTimerId;
+    bool retryTimerActive = false;
+    bool snapshotTimerActive = false;
+    bool periodicSaveTimerActive = false;
+    bool shutdownBegun = false;
 };
 
 

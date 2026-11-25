@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "06b4950b3c21900a";
+    public static final String SCHEMA_DIGEST = "243c1949baf529dc";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -23,6 +23,8 @@ public class TableLoader {
             "FestivalBeastTier",
             "GuildDonate",
             "GuildShop",
+            "GuildWarMilestone",
+            "GuildWarRule",
             "MessageLimiter",
             "Monster",
             "MysteryMerchantGoods",
@@ -127,6 +129,10 @@ public class TableLoader {
 
         GuildShopTableManager.getInstance().load(configDir, useBinary);
 
+        GuildWarMilestoneTableManager.getInstance().load(configDir, useBinary);
+
+        GuildWarRuleTableManager.getInstance().load(configDir, useBinary);
+
         ItemTableManager.getInstance().load(configDir, useBinary);
 
         MessageLimiterTableManager.getInstance().load(configDir, useBinary);
@@ -204,7 +210,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(70);
+        CountDownLatch latch = new CountDownLatch(72);
 
         new Thread(() -> {
             try {
@@ -591,6 +597,26 @@ public class TableLoader {
                 GuildShopTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load GuildShop table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                GuildWarMilestoneTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load GuildWarMilestone table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                GuildWarRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load GuildWarRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -1003,6 +1029,10 @@ public class TableLoader {
         GuildRuleTableManager.getInstance().load(configDir, useBinary);
 
         GuildShopTableManager.getInstance().load(configDir, useBinary);
+
+        GuildWarMilestoneTableManager.getInstance().load(configDir, useBinary);
+
+        GuildWarRuleTableManager.getInstance().load(configDir, useBinary);
 
         ItemTableManager.getInstance().load(configDir, useBinary);
 

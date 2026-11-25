@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 #include <entt/src/entt/entity/entity.hpp>
 
 class BattleSettlementData;
@@ -11,6 +12,7 @@ class EquipSeasonSealResponse;
 class EquipmentEffects;
 class GetSeasonStateResponse;
 class PlayerSeasonComp;
+class SeasonSealEffect;
 
 // 赛季技能与单槽赛季印（方案 A）的场景权威入口（设计见 docs/design/season-skills-and-seal-design.md）。
 // 只在 scene EventLoop 线程调用：
@@ -32,6 +34,8 @@ public:
 
     // 汇总当前活跃赛季单槽赛季印的轻属性与机制到 EquipmentEffects（无活跃赛季或组件缺失则留空）。
     static void CollectEffects(entt::entity player, uint64_t nowMs, EquipmentEffects& effects);
+    // 论剑 V3 战前 15 秒明牌变阵：收集当前唯一活跃赛季下全部合法赛季印快照（按 seal_id 升序）。
+    static void CollectAvailableSeals(uint64_t nowMs, std::vector<SeasonSealEffect>& out);
 
     static uint32_t GetState(entt::entity player, uint64_t nowMs, GetSeasonStateResponse& response);
     static void EquipSeal(entt::entity player, uint64_t nowMs,

@@ -56,6 +56,12 @@ public:
     static void SavePetEntries(entt::entity player,
         const ::SavePetEntriesRequest* request,
         ::SavePetEntriesResponse* response);
+    static void SwitchPetEntryPreset(entt::entity player,
+        const ::SwitchPetEntryPresetRequest* request,
+        ::SwitchPetEntryPresetResponse* response);
+    static void AscendPetTier(entt::entity player,
+        const ::AscendPetTierRequest* request,
+        ::AscendPetTierResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -186,6 +192,24 @@ public:
             SavePetEntries(player,
                 static_cast<const ::SavePetEntriesRequest*>(request),
                 static_cast<::SavePetEntriesResponse*>(response));
+			}
+            break;
+        case 14:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SwitchPetEntryPresetResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SwitchPetEntryPreset(player,
+                static_cast<const ::SwitchPetEntryPresetRequest*>(request),
+                static_cast<::SwitchPetEntryPresetResponse*>(response));
+			}
+            break;
+        case 15:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::AscendPetTierResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            AscendPetTier(player,
+                static_cast<const ::AscendPetTierRequest*>(request),
+                static_cast<::AscendPetTierResponse*>(response));
 			}
             break;
         default:

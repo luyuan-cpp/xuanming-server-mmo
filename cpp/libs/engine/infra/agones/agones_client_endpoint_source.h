@@ -66,10 +66,10 @@ namespace agones
 	private:
 		bool FetchOnce(const HttpTimeouts& timeouts, client_endpoint::Advertised& out, std::string& error);
 
-		std::unique_ptr<HttpTransport> transport_;
+		std::unique_ptr<HttpTransport> transport;
 		// 引用 *transport_,声明顺序保证它先于 transport_ 析构。
-		std::unique_ptr<AgonesRestClient> client_;
-		ClientEndpointSourceOptions options_;
+		std::unique_ptr<AgonesRestClient> client;
+		ClientEndpointSourceOptions options;
 	};
 
 	// 按进程环境构造 Agones 地址来源,供节点的 THooks::ClientEndpointSourceFactory 直接返回。

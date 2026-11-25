@@ -285,8 +285,9 @@ var bootstrapTables = map[string]string{
 	AccountRoleRemovalTableName:      accountRoleRemovalDDL,
 	AccountRoleRenameTableName:       accountRoleRenameDDL,
 	AccountChannelIdentityTableName:  accountChannelIdentityDDL,
-	AccountRoleRefTableName:          accountRoleRefDDL,
-	AccountDeletionReceiptTableName:  accountDeletionReceiptDDL,
+	AccountRoleRefTableName:           accountRoleRefDDL,
+	AccountRoleTradableQuotaTableName: accountRoleTradableQuotaDDL,
+	AccountDeletionReceiptTableName:   accountDeletionReceiptDDL,
 	DirectoryShardTableName:          directoryShardDDL,
 	PlayerNameTableName:              playerNameBootstrapDDL,
 	PlayerNameOwnerTableName:         playerNameOwnerBootstrapDDL,
@@ -1145,6 +1146,7 @@ func directoryTableMessages(slot int) []proto.Message {
 		&dbpb.AccountRoleRemoval{},
 		&dbpb.AccountRoleRename{},
 		&dbpb.AccountChannelIdentity{},
+		&dbpb.AccountRoleTradableQuota{},
 		&dbpb.AccountDeletionReceipt{},
 	}
 	if slot == 0 {

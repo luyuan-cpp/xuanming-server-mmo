@@ -235,28 +235,28 @@ struct Counters
 class Admission
 {
 public:
-    explicit Admission(RateLimit rateLimit) : rateGate_(rateLimit) {}
+    explicit Admission(RateLimit rateLimit) : rateGate(rateLimit) {}
 
     // 换速率闸参数并把桶装满,换未验签预算与按来源限速(sourceRateLimit 为空 = 关闭)。启动时调一次
     // (main.cpp ConfigureClientAdmissionOrDie)。
     void Configure(RateLimit rateLimit, PreAuthBudget preAuthBudget, std::optional<RateLimit> sourceRateLimit = std::nullopt)
     {
-        rateGate_.Reset(rateLimit);
-        preAuthBudget_ = preAuthBudget;
+        rateGate.Reset(rateLimit);
+        this->preAuthBudget = preAuthBudget;
         if (sourceRateLimit)
         {
-            sourceRate_.emplace(*sourceRateLimit);
+            sourceRate.emplace(*sourceRateLimit);
         }
         else
         {
-            sourceRate_.reset();
+            sourceRate.reset();
         }
     }
 
     // 关源:从这一刻起新直连一律在 accept 处拒绝(reason = shutting_down)。停机 / 维护关源时调,不可撤销
     // (关源之后进程随即排空退出;计划排空不关源,打着的房间还要接重连)。
-    void CloseSource() { sourceClosed_ = true; }
-    bool SourceClosed() const { return sourceClosed_; }
+    void CloseSource() { sourceClosed = true; }
+    bool SourceClosed() const { return sourceClosed; }
 
     // 准入回调的判定:放行时 rejected 为空(已取走一个速率名额),evictOldestUnauthenticated 为真时调用方要先淘汰
     // 最老的一条未认证直连(淘汰后调 NotePreAuthEvicted),sourceUntracked 为真时调用方采样打日志;拒绝时带原因,
@@ -276,13 +276,13 @@ public:
     // 承压时淘汰了一条未认证直连给新连接让位:计一次淘汰。
     void NotePreAuthEvicted();
 
-    const Counters &GetCounters() const { return counters_; }
-    const RateLimit &CurrentRateLimit() const { return rateGate_.Limit(); }
-    const PreAuthBudget &CurrentPreAuthBudget() const { return preAuthBudget_; }
+    const Counters &GetCounters() const { return counters; }
+    const RateLimit &CurrentRateLimit() const { return rateGate.Limit(); }
+    const PreAuthBudget &CurrentPreAuthBudget() const { return preAuthBudget; }
     // 生效的按来源限速参数;关闭时为空。
     std::optional<RateLimit> CurrentSourceRateLimit() const
     {
-        return sourceRate_ ? std::optional<RateLimit>(sourceRate_->Limit()) : std::nullopt;
+        return sourceRate ? std::optional<RateLimit>(sourceRate->Limit()) : std::nullopt;
     }
 
     // 把连接类指标写进一次抓取(BattleClientEdge 登记的采集回调在 battle 主 loop 上调用):
@@ -305,18 +305,18 @@ public:
                         size_t unauthenticatedConnections) const;
 
 private:
-    bool sourceClosed_{false};
-    accept_admission::AcceptRateGate rateGate_;
+    bool sourceClosed{false};
+    accept_admission::AcceptRateGate rateGate;
     // 没 Configure 时(只有不 Install 的单测)取速率下限推导的缺省:起点 500、预算 1000。main.cpp 启动时换成正式参数。
-    PreAuthBudget preAuthBudget_{DefaultPreAuthBudget(0)};
+    PreAuthBudget preAuthBudget{DefaultPreAuthBudget(0)};
     // 按来源限速:空 = 关闭(缺省)。
-    std::optional<accept_admission::SourceRateGate> sourceRate_;
+    std::optional<accept_admission::SourceRateGate> sourceRate;
     // 全局速率闸最近一次拒绝的时刻:之后一个握手期限内算承压(SourceRateUnderPressure)。
-    std::optional<SteadyTime> lastAcceptRateRejectAt_;
+    std::optional<SteadyTime> lastAcceptRateRejectAt;
     // 最近一次判定时按来源限速是否在生效,给指标用。
-    bool sourceRateActive_{false};
-    Counters counters_;
-    accept_admission::HandshakeHistogram handshake_;
+    bool sourceRateActive{false};
+    Counters counters;
+    accept_admission::HandshakeHistogram handshake;
 };
 
 } // namespace battle_connection_admission

@@ -41,8 +41,8 @@ public:
     const UnaryMethodHandler *Find(std::string_view path) const;
     // fullServiceName 即 SplitMethodPath 拆出的第一段;用来区分两种 UNIMPLEMENTED 文案(§15.5.3)。
     bool HasService(std::string_view fullServiceName) const;
-    bool valid() const { return valid_; }
-    size_t size() const { return methods_.size(); }
+    bool Valid() const { return valid; }
+    size_t size() const { return methods.size(); }
     // 已登记的全部路径,升序。Server::Start 据此冻结自己的派发表(下标 → handler)与按方法的统计维度
     // (§15.4.3 server.h 的 methods_);§15.4.3 草稿之外的补充。
     std::vector<std::string> Paths() const;
@@ -55,9 +55,9 @@ private:
         size_t operator()(std::string_view value) const { return std::hash<std::string_view>{}(value); }
     };
 
-    std::unordered_map<std::string, UnaryMethodHandler, StringHash, std::equal_to<>> methods_;
-    std::unordered_set<std::string, StringHash, std::equal_to<>> services_;
-    bool valid_{true};
+    std::unordered_map<std::string, UnaryMethodHandler, StringHash, std::equal_to<>> methods;
+    std::unordered_set<std::string, StringHash, std::equal_to<>> services;
+    bool valid{true};
 };
 
 class Service

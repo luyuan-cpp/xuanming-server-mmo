@@ -227,6 +227,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::UpdateRoleAppearanceResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::SyncAccountStage1TradableRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::SyncAccountStage1TradableResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -755,6 +759,162 @@ const ::_pbi::ClassData* TransactionLogRow_get_class_data() {
   return TransactionLogRow_globals_.GetClassData();
 #else
   return TransactionLogRow_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SyncAccountStage1TradableResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SyncAccountStage1TradableResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_._has_bits_);
+};
+
+constexpr SyncAccountStage1TradableResponse::ParseTableT_ SyncAccountStage1TradableResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::SyncAccountStage1TradableResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // bool found = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SyncAccountStage1TradableResponse, _impl_.found_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.found_)}},
+      // uint32 confirmed_char_total = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SyncAccountStage1TradableResponse, _impl_.confirmed_char_total_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.confirmed_char_total_)}},
+      // uint32 account_used_total = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SyncAccountStage1TradableResponse, _impl_.account_used_total_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.account_used_total_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool found = 1;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.found_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 confirmed_char_total = 2;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.confirmed_char_total_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 account_used_total = 3;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.account_used_total_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SyncAccountStage1TradableResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        found_{false},
+        confirmed_char_total_{0u},
+        account_used_total_{0u} {}
+
+template <typename>
+constexpr SyncAccountStage1TradableResponse::SyncAccountStage1TradableResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SyncAccountStage1TradableResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SyncAccountStage1TradableResponse(arena);
+}
+constexpr auto SyncAccountStage1TradableResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SyncAccountStage1TradableResponse), alignof(SyncAccountStage1TradableResponse));
+}
+constexpr auto SyncAccountStage1TradableResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SyncAccountStage1TradableResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SyncAccountStage1TradableResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SyncAccountStage1TradableResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SyncAccountStage1TradableResponse>(), &SyncAccountStage1TradableResponse::ByteSizeLong,
+              &SyncAccountStage1TradableResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[100],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SyncAccountStage1TradableResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SyncAccountStage1TradableResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SyncAccountStage1TradableResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SyncAccountStage1TradableResponse::InternalGenerateClassData_(
+            _default, &SyncAccountStage1TradableResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SyncAccountStage1TradableResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SyncAccountStage1TradableResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SyncAccountStage1TradableResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SyncAccountStage1TradableResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SyncAccountStage1TradableResponseGlobalsTypeInternal SyncAccountStage1TradableResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SyncAccountStage1TradableResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SyncAccountStage1TradableResponse_globals_.GetClassData();
+#else
+  return SyncAccountStage1TradableResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -8975,6 +9135,168 @@ const ::_pbi::ClassData* TransferAccountRoleRequest_get_class_data() {
   return TransferAccountRoleRequest_globals_.GetClassData();
 #else
   return TransferAccountRoleRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SyncAccountStage1TradableRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SyncAccountStage1TradableRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_._has_bits_);
+};
+
+constexpr SyncAccountStage1TradableRequest::ParseTableT_ SyncAccountStage1TradableRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::SyncAccountStage1TradableRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SyncAccountStage1TradableRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.player_id_)}},
+      // uint32 desired_char_total = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SyncAccountStage1TradableRequest, _impl_.desired_char_total_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.desired_char_total_)}},
+      // .common.base.ServiceCallAuth auth = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.auth_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 desired_char_total = 2;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.desired_char_total_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 3;
+      {PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SyncAccountStage1TradableRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        auth_{nullptr},
+        player_id_{::uint64_t{0u}},
+        desired_char_total_{0u} {}
+
+template <typename>
+constexpr SyncAccountStage1TradableRequest::SyncAccountStage1TradableRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SyncAccountStage1TradableRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SyncAccountStage1TradableRequest(arena);
+}
+constexpr auto SyncAccountStage1TradableRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SyncAccountStage1TradableRequest), alignof(SyncAccountStage1TradableRequest));
+}
+constexpr auto SyncAccountStage1TradableRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SyncAccountStage1TradableRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SyncAccountStage1TradableRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SyncAccountStage1TradableRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SyncAccountStage1TradableRequest>(), &SyncAccountStage1TradableRequest::ByteSizeLong,
+              &SyncAccountStage1TradableRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[99],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SyncAccountStage1TradableRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SyncAccountStage1TradableRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SyncAccountStage1TradableRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SyncAccountStage1TradableRequest::InternalGenerateClassData_(
+            _default, &SyncAccountStage1TradableRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SyncAccountStage1TradableRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SyncAccountStage1TradableRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SyncAccountStage1TradableRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SyncAccountStage1TradableRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SyncAccountStage1TradableRequestGlobalsTypeInternal SyncAccountStage1TradableRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SyncAccountStage1TradableRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SyncAccountStage1TradableRequest_globals_.GetClassData();
+#else
+  return SyncAccountStage1TradableRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -17548,6 +17870,24 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceResponse, _impl_.updated_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableRequest, _impl_.desired_char_total_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableRequest, _impl_.auth_),
+        1,
+        2,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableResponse, _impl_.found_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableResponse, _impl_.confirmed_char_total_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SyncAccountStage1TradableResponse, _impl_.account_used_total_),
+        0,
+        1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -17651,6 +17991,8 @@ static const ::_pbi::MigrationSchema
         {946, sizeof(::data_service::GetPlayerChannelIdentityResponse)},
         {963, sizeof(::data_service::UpdateRoleAppearanceRequest)},
         {972, sizeof(::data_service::UpdateRoleAppearanceResponse)},
+        {977, sizeof(::data_service::SyncAccountStage1TradableRequest)},
+        {986, sizeof(::data_service::SyncAccountStage1TradableResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -17753,6 +18095,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::data_service::GetPlayerChannelIdentityResponse_globals_,
         &::data_service::UpdateRoleAppearanceRequest_globals_,
         &::data_service::UpdateRoleAppearanceResponse_globals_,
+        &::data_service::SyncAccountStage1TradableRequest_globals_,
+        &::data_service::SyncAccountStage1TradableResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -18059,185 +18403,194 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "aranceRequest\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rappe"
     "arance_id\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.b"
     "ase.ServiceCallAuth\"/\n\034UpdateRoleAppeara"
-    "nceResponse\022\017\n\007updated\030\001 \001(\010*\200\001\n\024Account"
-    "DeletionState\022\037\n\033ACCOUNT_DELETION_STATE_"
-    "NONE\020\000\022\"\n\036ACCOUNT_DELETION_STATE_PENDING"
-    "\020\001\022#\n\037ACCOUNT_DELETION_STATE_DELETING\020\002*"
-    "\374\001\n\026AccountDeletionOutcome\022(\n$ACCOUNT_DE"
-    "LETION_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_"
-    "DELETION_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETIO"
-    "N_OUTCOME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETIO"
-    "N_OUTCOME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_"
-    "OUTCOME_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTC"
-    "OME_TOO_LATE\020\005*\264\002\n\025AccountRoleTradeState"
-    "\022(\n$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED"
-    "\020\000\022%\n!ACCOUNT_ROLE_TRADE_STATE_FREEZING\020"
-    "\001\022#\n\037ACCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&"
-    "\n\"ACCOUNT_ROLE_TRADE_STATE_CANCELLED\020\003\022("
-    "\n$ACCOUNT_ROLE_TRADE_STATE_TRANSFERRED\020\004"
-    "\022+\n\'ACCOUNT_ROLE_TRADE_STATE_CANCEL_PEND"
-    "ING\020\005\022&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPAR"
-    "ING\020\006*\351\001\n\035AccountRoleFreezeEvidenceKind\022"
-    "1\n-ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNS"
-    "PECIFIED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDEN"
-    "CE_KIND_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_F"
-    "REEZE_EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_R"
-    "OLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT\020"
-    "\003*\207\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022"
-    "\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_M"
-    "AINTENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022"
-    "\022\n\016SNAPSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027REC"
-    "ALL_KIND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CU"
-    "RRENCY\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022Recal"
-    "lReviewReason\022$\n RECALL_REVIEW_REASON_UN"
-    "SPECIFIED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELAT"
-    "ION\020\001\022!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002"
-    "\022\037\n\033RECALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036REC"
-    "ALL_REVIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_"
-    "REVIEW_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIE"
-    "W_LEDGER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDG"
-    "ER_NOT_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_D"
-    "ISAGREE\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME"
-    "_ROLE_RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROL"
-    "E_OK\020\001\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_"
-    "ROLE_INVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004"
-    "\022\026\n\022RENAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_"
-    "STALE_SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031"
-    "\n\025RENAME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE"
-    "_EXPIRED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\210)\n\013Dat"
-    "aService\022k\n\024ReadAccountDirectory\022).data_"
-    "service.ReadAccountDirectoryRequest\032&.da"
-    "ta_service.AccountDirectoryResponse\"\000\022e\n"
-    "\021CreateAccountRole\022&.data_service.Create"
-    "AccountRoleRequest\032&.data_service.Accoun"
-    "tDirectoryResponse\"\000\022a\n\021LookupAccountRol"
-    "e\022&.data_service.LookupAccountRoleReques"
-    "t\032\".data_service.AccountRoleOwnership\"\000\022"
-    "e\n\021RepairAccountRole\022&.data_service.Repa"
-    "irAccountRoleRequest\032&.data_service.Acco"
-    "untDirectoryResponse\"\000\022W\n\022RemoveAccountR"
-    "oles\022\'.data_service.RemoveAccountRolesRe"
-    "quest\032\026.google.protobuf.Empty\"\000\022i\n\022SetAc"
-    "countRealName\022\'.data_service.SetAccountR"
-    "ealNameRequest\032(.data_service.SetAccount"
-    "RealNameResponse\"\000\022i\n\022GetAccountRealName"
-    "\022\'.data_service.GetAccountRealNameReques"
-    "t\032(.data_service.GetAccountRealNameRespo"
-    "nse\"\000\022o\n\024ResetAccountRealName\022).data_ser"
-    "vice.ResetAccountRealNameRequest\032*.data_"
-    "service.ResetAccountRealNameResponse\"\000\022k"
-    "\n\034UpsertAccountChannelIdentity\0221.data_se"
-    "rvice.UpsertAccountChannelIdentityReques"
-    "t\032\026.google.protobuf.Empty\"\000\022{\n\030GetPlayer"
-    "ChannelIdentity\022-.data_service.GetPlayer"
-    "ChannelIdentityRequest\032..data_service.Ge"
-    "tPlayerChannelIdentityResponse\"\000\022l\n\025Begi"
-    "nAccountRoleTrade\022*.data_service.BeginAc"
-    "countRoleTradeRequest\032%.data_service.Acc"
-    "ountRoleTradeReceipt\"\000\022|\n\035ConfirmAccount"
-    "RoleTradeFreeze\0222.data_service.ConfirmAc"
-    "countRoleTradeFreezeRequest\032%.data_servi"
-    "ce.AccountRoleTradeReceipt\"\000\022n\n\026CancelAc"
-    "countRoleTrade\022+.data_service.CancelAcco"
-    "untRoleTradeRequest\032%.data_service.Accou"
-    "ntRoleTradeReceipt\"\000\022k\n\023TransferAccountR"
-    "ole\022(.data_service.TransferAccountRoleRe"
-    "quest\032(.data_service.AccountRoleTransfer"
-    "Receipt\"\000\022o\n\024CheckAccountRoleSlot\022).data"
-    "_service.CheckAccountRoleSlotRequest\032*.d"
-    "ata_service.CheckAccountRoleSlotResponse"
-    "\"\000\022f\n\021GetRoleFenceState\022&.data_service.G"
-    "etRoleFenceStateRequest\032\'.data_service.G"
-    "etRoleFenceStateResponse\"\000\022l\n\023VerifyRole"
-    "Admission\022(.data_service.VerifyRoleAdmis"
-    "sionRequest\032).data_service.VerifyRoleAdm"
-    "issionResponse\"\000\022r\n\025RegisterRoleAdmissio"
-    "n\022*.data_service.RegisterRoleAdmissionRe"
-    "quest\032+.data_service.RegisterRoleAdmissi"
-    "onResponse\"\000\022l\n\023CloseRoleAdmissions\022(.da"
-    "ta_service.CloseRoleAdmissionsRequest\032)."
-    "data_service.CloseRoleAdmissionsResponse"
-    "\"\000\022U\n\021AckRoleTradeDrain\022&.data_service.A"
-    "ckRoleTradeDrainRequest\032\026.google.protobu"
-    "f.Empty\"\000\022n\n\026RequestAccountDeletion\022+.da"
-    "ta_service.RequestAccountDeletionRequest"
-    "\032%.data_service.AccountDeletionResponse\""
-    "\000\022l\n\025CancelAccountDeletion\022*.data_servic"
-    "e.CancelAccountDeletionRequest\032%.data_se"
-    "rvice.AccountDeletionResponse\"\000\022r\n\025Claim"
-    "AccountDeletions\022*.data_service.ClaimAcc"
-    "ountDeletionsRequest\032+.data_service.Clai"
-    "mAccountDeletionsResponse\"\000\022r\n\025FinishAcc"
-    "ountDeletion\022*.data_service.FinishAccoun"
-    "tDeletionRequest\032+.data_service.FinishAc"
-    "countDeletionResponse\"\000\022k\n\034ReleaseDeadPl"
-    "ayerStoreHolder\0221.data_service.ReleaseDe"
-    "adPlayerStoreHolderRequest\032\026.google.prot"
-    "obuf.Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*."
-    "data_service.ReadPlayerStoreHolderReques"
-    "t\032+.data_service.ReadPlayerStoreHolderRe"
-    "sponse\"\000\022W\n\022RegisterPlayerZone\022\'.data_se"
-    "rvice.RegisterPlayerZoneRequest\032\026.google"
-    ".protobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&"
-    ".data_service.GetPlayerHomeZoneRequest\032\'"
-    ".data_service.GetPlayerHomeZoneResponse\""
-    "\000\022u\n\026BatchGetPlayerHomeZone\022+.data_servi"
-    "ce.BatchGetPlayerHomeZoneRequest\032,.data_"
-    "service.BatchGetPlayerHomeZoneResponse\"\000"
-    "\022P\n\016GetMergedZones\022\026.google.protobuf.Emp"
-    "ty\032$.data_service.GetMergedZonesResponse"
-    "\"\000\022]\n\016CountZoneRoles\022#.data_service.Coun"
-    "tZoneRolesRequest\032$.data_service.CountZo"
-    "neRolesResponse\"\000\022]\n\016GetPlayerRoute\022#.da"
-    "ta_service.GetPlayerRouteRequest\032$.data_"
-    "service.GetPlayerRouteResponse\"\000\022l\n\023List"
-    "PlayerSnapshots\022(.data_service.ListPlaye"
-    "rSnapshotsRequest\032).data_service.ListPla"
-    "yerSnapshotsResponse\"\000\022c\n\020BatchRecallIte"
-    "ms\022%.data_service.BatchRecallItemsReques"
-    "t\032&.data_service.BatchRecallItemsRespons"
-    "e\"\000\022_\n\016GetRecallBatch\022#.data_service.Get"
-    "RecallBatchRequest\032&.data_service.BatchR"
-    "ecallItemsResponse\"\000\022e\n\021CancelRecallBatc"
-    "h\022&.data_service.CancelRecallBatchReques"
-    "t\032&.data_service.BatchRecallItemsRespons"
-    "e\"\000\022`\n\017ResolveRecallOp\022$.data_service.Re"
-    "solveRecallOpRequest\032%.data_service.Reso"
-    "lveRecallOpResponse\"\000\022\204\001\n\033RegisterRecall"
-    "ReviewHandled\0220.data_service.RegisterRec"
-    "allReviewHandledRequest\0321.data_service.R"
-    "egisterRecallReviewHandledResponse\"\000\022l\n\023"
-    "QueryTransactionLog\022(.data_service.Query"
-    "TransactionLogRequest\032).data_service.Que"
-    "ryTransactionLogResponse\"\000\022f\n\021AllocateId"
-    "Segment\022&.data_service.AllocateIdSegment"
-    "Request\032\'.data_service.AllocateIdSegment"
-    "Response\"\000\022f\n\021ReservePlayerName\022&.data_s"
-    "ervice.ReservePlayerNameRequest\032\'.data_s"
-    "ervice.ReservePlayerNameResponse\"\000\022U\n\021Re"
-    "leasePlayerName\022&.data_service.ReleasePl"
-    "ayerNameRequest\032\026.google.protobuf.Empty\""
-    "\000\022i\n\022BatchGetPlayerName\022\'.data_service.B"
-    "atchGetPlayerNameRequest\032(.data_service."
-    "BatchGetPlayerNameResponse\"\000\022Q\n\nRenameRo"
-    "le\022\037.data_service.RenameRoleRequest\032 .da"
-    "ta_service.RenameRoleResponse\"\000\022r\n\025Batch"
-    "GetPlayerDisplay\022*.data_service.BatchGet"
-    "PlayerDisplayRequest\032+.data_service.Batc"
-    "hGetPlayerDisplayResponse\"\000\022u\n\026GetPlayer"
-    "AssetOpLedger\022+.data_service.GetPlayerAs"
-    "setOpLedgerRequest\032,.data_service.GetPla"
-    "yerAssetOpLedgerResponse\"\000\022o\n\024GetPlayerI"
-    "nboxLedger\022).data_service.GetPlayerInbox"
-    "LedgerRequest\032*.data_service.GetPlayerIn"
-    "boxLedgerResponse\"\000\022u\n\026GetPlayerItemGain"
-    "Block\022+.data_service.GetPlayerItemGainBl"
-    "ockRequest\032,.data_service.GetPlayerItemG"
-    "ainBlockResponse\"\000\022o\n\024UpdateRoleAppearan"
-    "ce\022).data_service.UpdateRoleAppearanceRe"
-    "quest\032*.data_service.UpdateRoleAppearanc"
-    "eResponse\"\000B\033Z\031data_service/data_service"
-    "b\006proto3"
+    "nceResponse\022\017\n\007updated\030\001 \001(\010\"}\n SyncAcco"
+    "untStage1TradableRequest\022\021\n\tplayer_id\030\001 "
+    "\001(\004\022\032\n\022desired_char_total\030\002 \001(\r\022*\n\004auth\030"
+    "\003 \001(\0132\034.common.base.ServiceCallAuth\"l\n!S"
+    "yncAccountStage1TradableResponse\022\r\n\005foun"
+    "d\030\001 \001(\010\022\034\n\024confirmed_char_total\030\002 \001(\r\022\032\n"
+    "\022account_used_total\030\003 \001(\r*\200\001\n\024AccountDel"
+    "etionState\022\037\n\033ACCOUNT_DELETION_STATE_NON"
+    "E\020\000\022\"\n\036ACCOUNT_DELETION_STATE_PENDING\020\001\022"
+    "#\n\037ACCOUNT_DELETION_STATE_DELETING\020\002*\374\001\n"
+    "\026AccountDeletionOutcome\022(\n$ACCOUNT_DELET"
+    "ION_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_DEL"
+    "ETION_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETION_O"
+    "UTCOME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETION_O"
+    "UTCOME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_OUT"
+    "COME_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTCOME"
+    "_TOO_LATE\020\005*\264\002\n\025AccountRoleTradeState\022(\n"
+    "$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022"
+    "%\n!ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#"
+    "\n\037ACCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"A"
+    "CCOUNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$A"
+    "CCOUNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n"
+    "\'ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING"
+    "\020\005\022&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING"
+    "\020\006*\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-"
+    "ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPEC"
+    "IFIED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_"
+    "KIND_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREE"
+    "ZE_EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE"
+    "_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207"
+    "\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021"
+    "SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAIN"
+    "TENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016"
+    "SNAPSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL"
+    "_KIND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRE"
+    "NCY\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRe"
+    "viewReason\022$\n RECALL_REVIEW_REASON_UNSPE"
+    "CIFIED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION"
+    "\020\001\022!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n"
+    "\033RECALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL"
+    "_REVIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REV"
+    "IEW_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_L"
+    "EDGER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_"
+    "NOT_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISA"
+    "GREE\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME_RO"
+    "LE_RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROLE_O"
+    "K\020\001\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_ROL"
+    "E_INVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004\022\026\n"
+    "\022RENAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_STA"
+    "LE_SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031\n\025R"
+    "ENAME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE_EX"
+    "PIRED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\210*\n\013DataSe"
+    "rvice\022k\n\024ReadAccountDirectory\022).data_ser"
+    "vice.ReadAccountDirectoryRequest\032&.data_"
+    "service.AccountDirectoryResponse\"\000\022e\n\021Cr"
+    "eateAccountRole\022&.data_service.CreateAcc"
+    "ountRoleRequest\032&.data_service.AccountDi"
+    "rectoryResponse\"\000\022a\n\021LookupAccountRole\022&"
+    ".data_service.LookupAccountRoleRequest\032\""
+    ".data_service.AccountRoleOwnership\"\000\022e\n\021"
+    "RepairAccountRole\022&.data_service.RepairA"
+    "ccountRoleRequest\032&.data_service.Account"
+    "DirectoryResponse\"\000\022W\n\022RemoveAccountRole"
+    "s\022\'.data_service.RemoveAccountRolesReque"
+    "st\032\026.google.protobuf.Empty\"\000\022i\n\022SetAccou"
+    "ntRealName\022\'.data_service.SetAccountReal"
+    "NameRequest\032(.data_service.SetAccountRea"
+    "lNameResponse\"\000\022i\n\022GetAccountRealName\022\'."
+    "data_service.GetAccountRealNameRequest\032("
+    ".data_service.GetAccountRealNameResponse"
+    "\"\000\022o\n\024ResetAccountRealName\022).data_servic"
+    "e.ResetAccountRealNameRequest\032*.data_ser"
+    "vice.ResetAccountRealNameResponse\"\000\022k\n\034U"
+    "psertAccountChannelIdentity\0221.data_servi"
+    "ce.UpsertAccountChannelIdentityRequest\032\026"
+    ".google.protobuf.Empty\"\000\022{\n\030GetPlayerCha"
+    "nnelIdentity\022-.data_service.GetPlayerCha"
+    "nnelIdentityRequest\032..data_service.GetPl"
+    "ayerChannelIdentityResponse\"\000\022l\n\025BeginAc"
+    "countRoleTrade\022*.data_service.BeginAccou"
+    "ntRoleTradeRequest\032%.data_service.Accoun"
+    "tRoleTradeReceipt\"\000\022|\n\035ConfirmAccountRol"
+    "eTradeFreeze\0222.data_service.ConfirmAccou"
+    "ntRoleTradeFreezeRequest\032%.data_service."
+    "AccountRoleTradeReceipt\"\000\022n\n\026CancelAccou"
+    "ntRoleTrade\022+.data_service.CancelAccount"
+    "RoleTradeRequest\032%.data_service.AccountR"
+    "oleTradeReceipt\"\000\022k\n\023TransferAccountRole"
+    "\022(.data_service.TransferAccountRoleReque"
+    "st\032(.data_service.AccountRoleTransferRec"
+    "eipt\"\000\022o\n\024CheckAccountRoleSlot\022).data_se"
+    "rvice.CheckAccountRoleSlotRequest\032*.data"
+    "_service.CheckAccountRoleSlotResponse\"\000\022"
+    "f\n\021GetRoleFenceState\022&.data_service.GetR"
+    "oleFenceStateRequest\032\'.data_service.GetR"
+    "oleFenceStateResponse\"\000\022l\n\023VerifyRoleAdm"
+    "ission\022(.data_service.VerifyRoleAdmissio"
+    "nRequest\032).data_service.VerifyRoleAdmiss"
+    "ionResponse\"\000\022r\n\025RegisterRoleAdmission\022*"
+    ".data_service.RegisterRoleAdmissionReque"
+    "st\032+.data_service.RegisterRoleAdmissionR"
+    "esponse\"\000\022l\n\023CloseRoleAdmissions\022(.data_"
+    "service.CloseRoleAdmissionsRequest\032).dat"
+    "a_service.CloseRoleAdmissionsResponse\"\000\022"
+    "U\n\021AckRoleTradeDrain\022&.data_service.AckR"
+    "oleTradeDrainRequest\032\026.google.protobuf.E"
+    "mpty\"\000\022n\n\026RequestAccountDeletion\022+.data_"
+    "service.RequestAccountDeletionRequest\032%."
+    "data_service.AccountDeletionResponse\"\000\022l"
+    "\n\025CancelAccountDeletion\022*.data_service.C"
+    "ancelAccountDeletionRequest\032%.data_servi"
+    "ce.AccountDeletionResponse\"\000\022r\n\025ClaimAcc"
+    "ountDeletions\022*.data_service.ClaimAccoun"
+    "tDeletionsRequest\032+.data_service.ClaimAc"
+    "countDeletionsResponse\"\000\022r\n\025FinishAccoun"
+    "tDeletion\022*.data_service.FinishAccountDe"
+    "letionRequest\032+.data_service.FinishAccou"
+    "ntDeletionResponse\"\000\022k\n\034ReleaseDeadPlaye"
+    "rStoreHolder\0221.data_service.ReleaseDeadP"
+    "layerStoreHolderRequest\032\026.google.protobu"
+    "f.Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*.dat"
+    "a_service.ReadPlayerStoreHolderRequest\032+"
+    ".data_service.ReadPlayerStoreHolderRespo"
+    "nse\"\000\022W\n\022RegisterPlayerZone\022\'.data_servi"
+    "ce.RegisterPlayerZoneRequest\032\026.google.pr"
+    "otobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.da"
+    "ta_service.GetPlayerHomeZoneRequest\032\'.da"
+    "ta_service.GetPlayerHomeZoneResponse\"\000\022u"
+    "\n\026BatchGetPlayerHomeZone\022+.data_service."
+    "BatchGetPlayerHomeZoneRequest\032,.data_ser"
+    "vice.BatchGetPlayerHomeZoneResponse\"\000\022P\n"
+    "\016GetMergedZones\022\026.google.protobuf.Empty\032"
+    "$.data_service.GetMergedZonesResponse\"\000\022"
+    "]\n\016CountZoneRoles\022#.data_service.CountZo"
+    "neRolesRequest\032$.data_service.CountZoneR"
+    "olesResponse\"\000\022]\n\016GetPlayerRoute\022#.data_"
+    "service.GetPlayerRouteRequest\032$.data_ser"
+    "vice.GetPlayerRouteResponse\"\000\022l\n\023ListPla"
+    "yerSnapshots\022(.data_service.ListPlayerSn"
+    "apshotsRequest\032).data_service.ListPlayer"
+    "SnapshotsResponse\"\000\022c\n\020BatchRecallItems\022"
+    "%.data_service.BatchRecallItemsRequest\032&"
+    ".data_service.BatchRecallItemsResponse\"\000"
+    "\022_\n\016GetRecallBatch\022#.data_service.GetRec"
+    "allBatchRequest\032&.data_service.BatchReca"
+    "llItemsResponse\"\000\022e\n\021CancelRecallBatch\022&"
+    ".data_service.CancelRecallBatchRequest\032&"
+    ".data_service.BatchRecallItemsResponse\"\000"
+    "\022`\n\017ResolveRecallOp\022$.data_service.Resol"
+    "veRecallOpRequest\032%.data_service.Resolve"
+    "RecallOpResponse\"\000\022\204\001\n\033RegisterRecallRev"
+    "iewHandled\0220.data_service.RegisterRecall"
+    "ReviewHandledRequest\0321.data_service.Regi"
+    "sterRecallReviewHandledResponse\"\000\022l\n\023Que"
+    "ryTransactionLog\022(.data_service.QueryTra"
+    "nsactionLogRequest\032).data_service.QueryT"
+    "ransactionLogResponse\"\000\022f\n\021AllocateIdSeg"
+    "ment\022&.data_service.AllocateIdSegmentReq"
+    "uest\032\'.data_service.AllocateIdSegmentRes"
+    "ponse\"\000\022f\n\021ReservePlayerName\022&.data_serv"
+    "ice.ReservePlayerNameRequest\032\'.data_serv"
+    "ice.ReservePlayerNameResponse\"\000\022U\n\021Relea"
+    "sePlayerName\022&.data_service.ReleasePlaye"
+    "rNameRequest\032\026.google.protobuf.Empty\"\000\022i"
+    "\n\022BatchGetPlayerName\022\'.data_service.Batc"
+    "hGetPlayerNameRequest\032(.data_service.Bat"
+    "chGetPlayerNameResponse\"\000\022Q\n\nRenameRole\022"
+    "\037.data_service.RenameRoleRequest\032 .data_"
+    "service.RenameRoleResponse\"\000\022r\n\025BatchGet"
+    "PlayerDisplay\022*.data_service.BatchGetPla"
+    "yerDisplayRequest\032+.data_service.BatchGe"
+    "tPlayerDisplayResponse\"\000\022u\n\026GetPlayerAss"
+    "etOpLedger\022+.data_service.GetPlayerAsset"
+    "OpLedgerRequest\032,.data_service.GetPlayer"
+    "AssetOpLedgerResponse\"\000\022o\n\024GetPlayerInbo"
+    "xLedger\022).data_service.GetPlayerInboxLed"
+    "gerRequest\032*.data_service.GetPlayerInbox"
+    "LedgerResponse\"\000\022u\n\026GetPlayerItemGainBlo"
+    "ck\022+.data_service.GetPlayerItemGainBlock"
+    "Request\032,.data_service.GetPlayerItemGain"
+    "BlockResponse\"\000\022o\n\024UpdateRoleAppearance\022"
+    ").data_service.UpdateRoleAppearanceReque"
+    "st\032*.data_service.UpdateRoleAppearanceRe"
+    "sponse\"\000\022~\n\031SyncAccountStage1Tradable\022.."
+    "data_service.SyncAccountStage1TradableRe"
+    "quest\032/.data_service.SyncAccountStage1Tr"
+    "adableResponse\"\000B\033Z\031data_service/data_se"
+    "rviceb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[8] = {
@@ -18254,13 +18607,13 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    19248,
+    19613,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
     8,
-    99,
+    101,
     schemas,
     file_message_globals,
     TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto::offsets,
@@ -45507,6 +45860,537 @@ void UpdateRoleAppearanceResponse::InternalSwap(UpdateRoleAppearanceResponse* PR
 }
 
 ::google::protobuf::Metadata UpdateRoleAppearanceResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SyncAccountStage1TradableRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SyncAccountStage1TradableRequest::SyncAccountStage1TradableRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SyncAccountStage1TradableRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.SyncAccountStage1TradableRequest)
+}
+PROTOBUF_NDEBUG_INLINE SyncAccountStage1TradableRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::SyncAccountStage1TradableRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SyncAccountStage1TradableRequest::SyncAccountStage1TradableRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SyncAccountStage1TradableRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SyncAccountStage1TradableRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SyncAccountStage1TradableRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, desired_char_total_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::desired_char_total_));
+
+  // @@protoc_insertion_point(copy_constructor:data_service.SyncAccountStage1TradableRequest)
+}
+PROTOBUF_NDEBUG_INLINE SyncAccountStage1TradableRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SyncAccountStage1TradableRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, desired_char_total_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::desired_char_total_));
+}
+SyncAccountStage1TradableRequest::~SyncAccountStage1TradableRequest() {
+  // @@protoc_insertion_point(destructor:data_service.SyncAccountStage1TradableRequest)
+  SharedDtor(*this);
+}
+inline void SyncAccountStage1TradableRequest::SharedDtor(MessageLite& self) {
+  SyncAccountStage1TradableRequest& this_ = static_cast<SyncAccountStage1TradableRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SyncAccountStage1TradableRequest_class_data_ =
+        SyncAccountStage1TradableRequest::InternalGenerateClassData_(SyncAccountStage1TradableRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SyncAccountStage1TradableRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SyncAccountStage1TradableRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SyncAccountStage1TradableRequest_class_data_.tc_table);
+  return SyncAccountStage1TradableRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SyncAccountStage1TradableRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SyncAccountStage1TradableRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SyncAccountStage1TradableRequest_globals_));
+  return SyncAccountStage1TradableRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SyncAccountStage1TradableRequest::ParseTableT_
+    SyncAccountStage1TradableRequest::_table_ =
+        SyncAccountStage1TradableRequest::InternalGenerateParseTable_(SyncAccountStage1TradableRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SyncAccountStage1TradableRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.SyncAccountStage1TradableRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.auth_ != nullptr);
+    _impl_.auth_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.desired_char_total_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.desired_char_total_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SyncAccountStage1TradableRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SyncAccountStage1TradableRequest& this_ = static_cast<const SyncAccountStage1TradableRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SyncAccountStage1TradableRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SyncAccountStage1TradableRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.SyncAccountStage1TradableRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint32 desired_char_total = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_desired_char_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_desired_char_total(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.SyncAccountStage1TradableRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SyncAccountStage1TradableRequest::ByteSizeLong(const MessageLite& base) {
+  const SyncAccountStage1TradableRequest& this_ = static_cast<const SyncAccountStage1TradableRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SyncAccountStage1TradableRequest::ByteSizeLong() const {
+  const SyncAccountStage1TradableRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.SyncAccountStage1TradableRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .common.base.ServiceCallAuth auth = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 desired_char_total = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_desired_char_total() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_desired_char_total());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SyncAccountStage1TradableRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SyncAccountStage1TradableRequest*>(&to_msg);
+  auto& from = static_cast<const SyncAccountStage1TradableRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.SyncAccountStage1TradableRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_desired_char_total() != 0) {
+        _this->_impl_.desired_char_total_ = from._impl_.desired_char_total_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SyncAccountStage1TradableRequest::CopyFrom(const SyncAccountStage1TradableRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.SyncAccountStage1TradableRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SyncAccountStage1TradableRequest::InternalSwap(SyncAccountStage1TradableRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.desired_char_total_)
+      + sizeof(SyncAccountStage1TradableRequest::_impl_.desired_char_total_)
+      - PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata SyncAccountStage1TradableRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SyncAccountStage1TradableResponse::SyncAccountStage1TradableResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SyncAccountStage1TradableResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.SyncAccountStage1TradableResponse)
+}
+SyncAccountStage1TradableResponse::SyncAccountStage1TradableResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SyncAccountStage1TradableResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SyncAccountStage1TradableResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SyncAccountStage1TradableResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SyncAccountStage1TradableResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, found_),
+           0,
+           offsetof(Impl_, account_used_total_) -
+               offsetof(Impl_, found_) +
+               sizeof(Impl_::account_used_total_));
+}
+SyncAccountStage1TradableResponse::~SyncAccountStage1TradableResponse() {
+  // @@protoc_insertion_point(destructor:data_service.SyncAccountStage1TradableResponse)
+  SharedDtor(*this);
+}
+inline void SyncAccountStage1TradableResponse::SharedDtor(MessageLite& self) {
+  SyncAccountStage1TradableResponse& this_ = static_cast<SyncAccountStage1TradableResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SyncAccountStage1TradableResponse_class_data_ =
+        SyncAccountStage1TradableResponse::InternalGenerateClassData_(SyncAccountStage1TradableResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SyncAccountStage1TradableResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SyncAccountStage1TradableResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SyncAccountStage1TradableResponse_class_data_.tc_table);
+  return SyncAccountStage1TradableResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SyncAccountStage1TradableResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SyncAccountStage1TradableResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SyncAccountStage1TradableResponse_globals_));
+  return SyncAccountStage1TradableResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SyncAccountStage1TradableResponse::ParseTableT_
+    SyncAccountStage1TradableResponse::_table_ =
+        SyncAccountStage1TradableResponse::InternalGenerateParseTable_(SyncAccountStage1TradableResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SyncAccountStage1TradableResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.SyncAccountStage1TradableResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.found_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.account_used_total_) -
+        reinterpret_cast<char*>(&_impl_.found_)) + sizeof(_impl_.account_used_total_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SyncAccountStage1TradableResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SyncAccountStage1TradableResponse& this_ = static_cast<const SyncAccountStage1TradableResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SyncAccountStage1TradableResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SyncAccountStage1TradableResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.SyncAccountStage1TradableResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool found = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_found() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_found(), target);
+    }
+  }
+
+  // uint32 confirmed_char_total = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_confirmed_char_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_confirmed_char_total(), target);
+    }
+  }
+
+  // uint32 account_used_total = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_account_used_total() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_account_used_total(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.SyncAccountStage1TradableResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SyncAccountStage1TradableResponse::ByteSizeLong(const MessageLite& base) {
+  const SyncAccountStage1TradableResponse& this_ = static_cast<const SyncAccountStage1TradableResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SyncAccountStage1TradableResponse::ByteSizeLong() const {
+  const SyncAccountStage1TradableResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.SyncAccountStage1TradableResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // bool found = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_found() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 confirmed_char_total = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_confirmed_char_total() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_confirmed_char_total());
+      }
+    }
+    // uint32 account_used_total = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_account_used_total() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_account_used_total());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SyncAccountStage1TradableResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SyncAccountStage1TradableResponse*>(&to_msg);
+  auto& from = static_cast<const SyncAccountStage1TradableResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.SyncAccountStage1TradableResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_found() != 0) {
+        _this->_impl_.found_ = from._impl_.found_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_confirmed_char_total() != 0) {
+        _this->_impl_.confirmed_char_total_ = from._impl_.confirmed_char_total_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_account_used_total() != 0) {
+        _this->_impl_.account_used_total_ = from._impl_.account_used_total_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SyncAccountStage1TradableResponse::CopyFrom(const SyncAccountStage1TradableResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.SyncAccountStage1TradableResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SyncAccountStage1TradableResponse::InternalSwap(SyncAccountStage1TradableResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.account_used_total_)
+      + sizeof(SyncAccountStage1TradableResponse::_impl_.account_used_total_)
+      - PROTOBUF_FIELD_OFFSET(SyncAccountStage1TradableResponse, _impl_.found_)>(
+          reinterpret_cast<char*>(&_impl_.found_),
+          reinterpret_cast<char*>(&other->_impl_.found_));
+}
+
+::google::protobuf::Metadata SyncAccountStage1TradableResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

@@ -67,26 +67,26 @@ namespace
 
 void TeamFollowTrail::Reset(const FollowPoint& head)
 {
-	nodes_.clear();
-	nodes_.push_back(Node{head, 0.0});
+	nodes.clear();
+	nodes.push_back(Node{head, 0.0});
 }
 
 void TeamFollowTrail::Append(const FollowPoint& point)
 {
-	const Node& head = nodes_.back();
-	nodes_.push_back(Node{point, head.odo + FollowHorizontalDistance(head.point, point)});
+	const Node& head = nodes.back();
+	nodes.push_back(Node{point, head.odo + FollowHorizontalDistance(head.point, point)});
 }
 
 TeamFollowTrail::FeedResult TeamFollowTrail::Feed(const FollowPoint& leader, const double protectOdo,
 	const WalkableCheck& walkable)
 {
-	if (nodes_.empty())
+	if (nodes.empty())
 	{
 		Reset(leader);
 		return FeedResult::kAppended;
 	}
 	// 拷贝:下面可能截断 nodes_。
-	const Node head = nodes_.back();
+	const Node head = nodes.back();
 	const double stepFromHead = FollowHorizontalDistance(head.point, leader);
 	if (stepFromHead < kTrailMinStep)
 	{
@@ -100,10 +100,10 @@ TeamFollowTrail::FeedResult TeamFollowTrail::Feed(const FollowPoint& leader, con
 	std::optional<Node> best;
 	std::size_t bestSegmentEnd = 0;
 	double bestGain = kTrailRewindMinGain;
-	for (std::size_t end = nodes_.size() - 1; end >= 1; --end)
+	for (std::size_t end = nodes.size() - 1; end >= 1; --end)
 	{
-		const Node& a = nodes_[end - 1];
-		const Node& b = nodes_[end];
+		const Node& a = nodes[end - 1];
+		const Node& b = nodes[end];
 		if (b.odo <= floorOdo)
 		{
 			break;
@@ -131,12 +131,12 @@ TeamFollowTrail::FeedResult TeamFollowTrail::Feed(const FollowPoint& leader, con
 	if (best && (!walkable || walkable(best->point, leader)))
 	{
 		// 剪掉 best 之后的全部点(best 落在 [bestSegmentEnd-1, bestSegmentEnd] 这一段上),再接上新位置。
-		nodes_.erase(nodes_.begin() + static_cast<std::ptrdiff_t>(bestSegmentEnd), nodes_.end());
-		if (FollowHorizontalDistance(nodes_.back().point, best->point) >= kTrailMinStep)
+		nodes.erase(nodes.begin() + static_cast<std::ptrdiff_t>(bestSegmentEnd), nodes.end());
+		if (FollowHorizontalDistance(nodes.back().point, best->point) >= kTrailMinStep)
 		{
-			nodes_.push_back(*best);
+			nodes.push_back(*best);
 		}
-		if (FollowHorizontalDistance(nodes_.back().point, leader) >= kTrailMinStep)
+		if (FollowHorizontalDistance(nodes.back().point, leader) >= kTrailMinStep)
 		{
 			Append(leader);
 		}
@@ -149,31 +149,31 @@ TeamFollowTrail::FeedResult TeamFollowTrail::Feed(const FollowPoint& leader, con
 
 FollowPoint TeamFollowTrail::PointAt(const double odo) const
 {
-	if (odo <= nodes_.front().odo)
+	if (odo <= nodes.front().odo)
 	{
-		return nodes_.front().point;
+		return nodes.front().point;
 	}
-	if (odo >= nodes_.back().odo)
+	if (odo >= nodes.back().odo)
 	{
-		return nodes_.back().point;
+		return nodes.back().point;
 	}
 	// 第一个里程 >= odo 的点;上面已排除落在尾部之前,所以它前面一定还有点。
-	const auto it = std::lower_bound(nodes_.begin(), nodes_.end(), odo,
+	const auto it = std::lower_bound(nodes.begin(), nodes.end(), odo,
 		[](const Node& node, double value) { return node.odo < value; });
 	return NodeAtOdo(*std::prev(it), *it, odo).point;
 }
 
 std::optional<double> TeamFollowTrail::NearestOdo(const FollowPoint& point, const double maxDistance) const
 {
-	if (nodes_.empty())
+	if (nodes.empty())
 	{
 		return std::nullopt;
 	}
-	double bestDistance = FollowHorizontalDistance(nodes_.front().point, point);
-	double bestOdo = nodes_.front().odo;
-	for (std::size_t end = 1; end < nodes_.size(); ++end)
+	double bestDistance = FollowHorizontalDistance(nodes.front().point, point);
+	double bestOdo = nodes.front().odo;
+	for (std::size_t end = 1; end < nodes.size(); ++end)
 	{
-		const Node projected = ProjectOntoSegment(nodes_[end - 1], nodes_[end], point);
+		const Node projected = ProjectOntoSegment(nodes[end - 1], nodes[end], point);
 		const double distance = FollowHorizontalDistance(projected.point, point);
 		// 等距时取里程更大的(离队长更近的那一趟):发夹处不必把折返的路再走一遍。
 		if (distance <= bestDistance)
@@ -191,50 +191,50 @@ std::optional<double> TeamFollowTrail::NearestOdo(const FollowPoint& point, cons
 
 void TeamFollowTrail::PrependPath(std::span<const FollowPoint> path)
 {
-	if (nodes_.empty())
+	if (nodes.empty())
 	{
 		return;
 	}
 	// 从近到远逐点往前接:里程从当前尾部往回减。
 	for (auto it = path.rbegin(); it != path.rend(); ++it)
 	{
-		const Node& tail = nodes_.front();
+		const Node& tail = nodes.front();
 		const double distance = FollowHorizontalDistance(*it, tail.point);
 		if (distance < kTrailMinStep)
 		{
 			continue;
 		}
-		nodes_.push_front(Node{*it, tail.odo - distance});
+		nodes.push_front(Node{*it, tail.odo - distance});
 	}
 }
 
 void TeamFollowTrail::TrimTailTo(const double odo)
 {
-	if (nodes_.size() < 2 || odo <= nodes_.front().odo)
+	if (nodes.size() < 2 || odo <= nodes.front().odo)
 	{
 		return;
 	}
-	if (odo >= nodes_.back().odo)
+	if (odo >= nodes.back().odo)
 	{
-		const Node head = nodes_.back();
-		nodes_.clear();
-		nodes_.push_back(head);
+		const Node head = nodes.back();
+		nodes.clear();
+		nodes.push_back(head);
 		return;
 	}
 	const FollowPoint cut = PointAt(odo);
-	while (nodes_.size() >= 2 && nodes_[1].odo <= odo)
+	while (nodes.size() >= 2 && nodes[1].odo <= odo)
 	{
-		nodes_.pop_front();
+		nodes.pop_front();
 	}
 	// 此时 nodes_[0].odo <= odo < nodes_[1].odo:新尾点落在原来那一段上,沿段可走。
-	nodes_.front() = Node{cut, odo};
+	nodes.front() = Node{cut, odo};
 }
 
 void TeamFollowTrail::PruneBefore(const double odo)
 {
-	while (nodes_.size() >= 2 && nodes_[1].odo <= odo)
+	while (nodes.size() >= 2 && nodes[1].odo <= odo)
 	{
-		nodes_.pop_front();
+		nodes.pop_front();
 	}
 }
 
@@ -243,37 +243,37 @@ void TeamFollowTrail::PruneBefore(const double odo)
 // ---------------------------------------------------------------------------
 
 TeamFollowFormation::TeamFollowFormation(const FollowPoint& leader, const double spacing)
-	: spacing_(spacing)
+	: spacing(spacing)
 {
-	trail_.Reset(leader);
+	trail.Reset(leader);
 }
 
 TeamFollowMember* TeamFollowFormation::Find(const uint64_t playerId)
 {
-	const auto it = std::ranges::find(members_, playerId, &TeamFollowMember::playerId);
-	return it != members_.end() ? &*it : nullptr;
+	const auto it = std::ranges::find(members, playerId, &TeamFollowMember::playerId);
+	return it != members.end() ? &*it : nullptr;
 }
 
 const TeamFollowMember* TeamFollowFormation::Find(const uint64_t playerId) const
 {
-	const auto it = std::ranges::find(members_, playerId, &TeamFollowMember::playerId);
-	return it != members_.end() ? &*it : nullptr;
+	const auto it = std::ranges::find(members, playerId, &TeamFollowMember::playerId);
+	return it != members.end() ? &*it : nullptr;
 }
 
 std::optional<std::size_t> TeamFollowFormation::RankOf(const uint64_t playerId) const
 {
-	const auto it = std::ranges::find(members_, playerId, &TeamFollowMember::playerId);
-	if (it == members_.end())
+	const auto it = std::ranges::find(members, playerId, &TeamFollowMember::playerId);
+	if (it == members.end())
 	{
 		return std::nullopt;
 	}
-	return static_cast<std::size_t>(std::distance(members_.begin(), it));
+	return static_cast<std::size_t>(std::distance(members.begin(), it));
 }
 
 std::size_t TeamFollowFormation::RankFor(const uint32_t joinSeq, const uint64_t playerId) const
 {
 	std::size_t rank = 0;
-	for (const auto& member : members_)
+	for (const auto& member : members)
 	{
 		if (member.playerId != playerId && RanksBefore(member.joinSeq, member.playerId, joinSeq, playerId))
 		{
@@ -285,25 +285,25 @@ std::size_t TeamFollowFormation::RankFor(const uint32_t joinSeq, const uint64_t 
 
 bool TeamFollowFormation::Add(const TeamFollowMember& member)
 {
-	if (member.playerId == 0 || Find(member.playerId) != nullptr || members_.size() >= kTeamFollowMaxMembers)
+	if (member.playerId == 0 || Find(member.playerId) != nullptr || members.size() >= kTeamFollowMaxMembers)
 	{
 		return false;
 	}
-	const auto position = std::ranges::find_if(members_, [&member](const TeamFollowMember& existing) {
+	const auto position = std::ranges::find_if(members, [&member](const TeamFollowMember& existing) {
 		return RanksBefore(member.joinSeq, member.playerId, existing.joinSeq, existing.playerId);
 	});
-	members_.insert(position, member);
+	members.insert(position, member);
 	return true;
 }
 
 bool TeamFollowFormation::Remove(const uint64_t playerId)
 {
-	const auto it = std::ranges::find(members_, playerId, &TeamFollowMember::playerId);
-	if (it == members_.end())
+	const auto it = std::ranges::find(members, playerId, &TeamFollowMember::playerId);
+	if (it == members.end())
 	{
 		return false;
 	}
-	members_.erase(it);
+	members.erase(it);
 	return true;
 }
 
@@ -317,13 +317,13 @@ void TeamFollowFormation::SetSuspended(const uint64_t playerId, const bool suspe
 
 double TeamFollowFormation::SlotOdo(const std::size_t rank) const
 {
-	return std::max(trail_.TailOdo(), trail_.HeadOdo() - static_cast<double>(rank + 1) * spacing_);
+	return std::max(trail.TailOdo(), trail.HeadOdo() - static_cast<double>(rank + 1) * spacing);
 }
 
 double TeamFollowFormation::ProtectOdo() const
 {
 	double protect = std::numeric_limits<double>::lowest();
-	for (const auto& member : members_)
+	for (const auto& member : members)
 	{
 		if (!member.needsPlacement)
 		{
@@ -336,8 +336,8 @@ double TeamFollowFormation::ProtectOdo() const
 double TeamFollowFormation::KeepOdo() const
 {
 	// 头部之后至少保留到队尾槽位再往后一个间距:第一名队员加入时能落到"队长身后的路上",而不是队长旁边。
-	double keep = trail_.HeadOdo() - static_cast<double>(kTeamFollowMaxMembers + 1) * spacing_;
-	for (const auto& member : members_)
+	double keep = trail.HeadOdo() - static_cast<double>(kTeamFollowMaxMembers + 1) * spacing;
+	for (const auto& member : members)
 	{
 		if (!member.needsPlacement)
 		{
@@ -349,31 +349,31 @@ double TeamFollowFormation::KeepOdo() const
 
 void TeamFollowFormation::TrimTailForNewcomer(const std::size_t rank)
 {
-	double trimTo = trail_.HeadOdo() - static_cast<double>(rank + 1) * spacing_;
-	for (const auto& member : members_)
+	double trimTo = trail.HeadOdo() - static_cast<double>(rank + 1) * spacing;
+	for (const auto& member : members)
 	{
 		if (!member.needsPlacement)
 		{
 			trimTo = std::min(trimTo, member.cursorOdo);
 		}
 	}
-	trail_.TrimTailTo(trimTo);
+	trail.TrimTailTo(trimTo);
 }
 
 void TeamFollowFormation::Tick(const FollowPoint& leader, const double deltaSeconds,
 	const TeamFollowTrail::WalkableCheck& walkable, std::vector<TeamFollowStep>& out)
 {
 	out.clear();
-	const double headBefore = trail_.HeadOdo();
-	trail_.Feed(leader, ProtectOdo(), walkable);
+	const double headBefore = trail.HeadOdo();
+	trail.Feed(leader, ProtectOdo(), walkable);
 	// 跟上之后与队长同速:队长这一 tick 走了多远,队员至少能走多远。队长偶尔一 tick 走得比追赶速度还多
 	// (一次上报把位置纠正了几十厘米)时,已跟上的队员一起前进,间距不被拉开。
-	const double headAdvance = std::max(0.0, trail_.HeadOdo() - headBefore);
+	const double headAdvance = std::max(0.0, trail.HeadOdo() - headBefore);
 	const double maxStep = std::max(headAdvance, kTeamFollowCatchUpSpeed * std::max(0.0, deltaSeconds));
 
-	for (std::size_t rank = 0; rank < members_.size(); ++rank)
+	for (std::size_t rank = 0; rank < members.size(); ++rank)
 	{
-		auto& member = members_[rank];
+		auto& member = members[rank];
 		const double slot = SlotOdo(rank);
 		TeamFollowStep step;
 		step.playerId = member.playerId;
@@ -394,7 +394,7 @@ void TeamFollowFormation::Tick(const FollowPoint& leader, const double deltaSeco
 		{
 			member.cursorOdo = slot;
 			member.needsPlacement = false;
-			step.position = trail_.PointAt(slot);
+			step.position = trail.PointAt(slot);
 			step.placed = true;
 			out.push_back(step);
 			continue;
@@ -404,11 +404,11 @@ void TeamFollowFormation::Tick(const FollowPoint& leader, const double deltaSeco
 		const double next = member.cursorOdo < slot ? std::min(slot, member.cursorOdo + maxStep) : member.cursorOdo;
 		step.moved = next - member.cursorOdo;
 		member.cursorOdo = next;
-		step.position = trail_.PointAt(next);
+		step.position = trail.PointAt(next);
 		out.push_back(step);
 	}
 
-	trail_.PruneBefore(KeepOdo());
+	trail.PruneBefore(KeepOdo());
 }
 
 // ---------------------------------------------------------------------------

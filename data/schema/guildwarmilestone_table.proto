@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+// GuildWarMilestone 表的权威 schema。源表 data/GuildWarMilestone.xlsx。
+// 帮会全天帮战 V2 每周全帮战功 4 档里程碑宝箱(docs/design/guild-play-v2.md)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildWarMilestoneTable {
+  option (cfg_sheet)       = "GuildWarMilestone";
+  option (cfg_source_file) = "GuildWarMilestone.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 档位 id(1..4)
+  uint32 id = 1;
+  // 本帮本周累计战功达标门槛
+  uint64 required_guild_merit = 2;
+  // 奖励物品 1(FK -> Item.id)
+  uint32 reward_item1_id = 3 [(cfg_fk) = "Item"];
+  // 奖励物品 1 数量
+  uint32 reward_item1_count = 4;
+  // 奖励物品 2(0=无,FK -> Item.id)
+  uint32 reward_item2_id = 5 [(cfg_fk) = "Item"];
+  // 奖励物品 2 数量
+  uint32 reward_item2_count = 6;
+  // 奖励银两
+  uint64 reward_silver = 7;
+  // 奖励个人帮贡
+  uint64 reward_contribution = 8;
+  // 客户端展示预览文案
+  string reward_preview = 9;
+}

@@ -113,30 +113,30 @@ namespace prometheus_text
 
 	bool Writer::BeginFamily(std::string_view name, std::string_view help, MetricType type)
 	{
-		familyValid_ = IsValidMetricName(name) && type < MetricType::kCount;
-		familyType_ = type;
-		family_.assign(name);
-		if (!familyValid_)
+		familyValid = IsValidMetricName(name) && type < MetricType::kCount;
+		familyType = type;
+		family.assign(name);
+		if (!familyValid)
 		{
 			return false;
 		}
-		text_ += "# HELP ";
-		text_ += name;
-		text_ += ' ';
-		AppendEscapedHelp(text_, help);
-		text_ += "\n# TYPE ";
-		text_ += name;
-		text_ += ' ';
-		text_ += kTypeNames[static_cast<size_t>(type)];
-		text_ += '\n';
+		text += "# HELP ";
+		text += name;
+		text += ' ';
+		AppendEscapedHelp(text, help);
+		text += "\n# TYPE ";
+		text += name;
+		text += ' ';
+		text += kTypeNames[static_cast<size_t>(type)];
+		text += '\n';
 		return true;
 	}
 
 	void Writer::Sample(std::initializer_list<Label> labels, uint64_t value)
 	{
-		if (!familyValid_ || familyType_ == MetricType::kHistogram || !LabelsValid(labels))
+		if (!familyValid || familyType == MetricType::kHistogram || !LabelsValid(labels))
 		{
-			++droppedSamples_;
+			++droppedSamples;
 			return;
 		}
 		AppendSample({}, labels, nullptr, value);
@@ -144,9 +144,9 @@ namespace prometheus_text
 
 	void Writer::SampleDouble(std::initializer_list<Label> labels, double value)
 	{
-		if (!familyValid_ || familyType_ == MetricType::kHistogram || !LabelsValid(labels) || !std::isfinite(value))
+		if (!familyValid || familyType == MetricType::kHistogram || !LabelsValid(labels) || !std::isfinite(value))
 		{
-			++droppedSamples_;
+			++droppedSamples;
 			return;
 		}
 		char buf[64]{};
@@ -157,7 +157,7 @@ namespace prometheus_text
 	void Writer::Histogram(std::initializer_list<Label> labels, std::span<const uint64_t> upperBounds,
 						   std::span<const uint64_t> bucketCounts, uint64_t sum)
 	{
-		bool valid = familyValid_ && familyType_ == MetricType::kHistogram && LabelsValid(labels) &&
+		bool valid = familyValid && familyType == MetricType::kHistogram && LabelsValid(labels) &&
 					 bucketCounts.size() == upperBounds.size() + 1;
 		for (const auto &label : labels)
 		{
@@ -169,7 +169,7 @@ namespace prometheus_text
 		}
 		if (!valid)
 		{
-			++droppedSamples_;
+			++droppedSamples;
 			return;
 		}
 
@@ -191,7 +191,7 @@ namespace prometheus_text
 	void Writer::HistogramDouble(std::initializer_list<Label> labels, std::span<const double> upperBounds,
 								 std::span<const uint64_t> bucketCounts, double sum)
 	{
-		bool valid = familyValid_ && familyType_ == MetricType::kHistogram && LabelsValid(labels) &&
+		bool valid = familyValid && familyType == MetricType::kHistogram && LabelsValid(labels) &&
 					 bucketCounts.size() == upperBounds.size() + 1 && std::isfinite(sum);
 		for (const auto &label : labels)
 		{
@@ -203,7 +203,7 @@ namespace prometheus_text
 		}
 		if (!valid)
 		{
-			++droppedSamples_;
+			++droppedSamples;
 			return;
 		}
 
@@ -234,23 +234,23 @@ namespace prometheus_text
 	void Writer::AppendSampleText(std::string_view suffix, std::initializer_list<Label> labels, const Label *extra,
 								  std::string_view valueText)
 	{
-		text_ += family_;
-		text_ += suffix;
+		text += family;
+		text += suffix;
 		if (labels.size() > 0 || extra != nullptr)
 		{
-			text_ += '{';
+			text += '{';
 			bool first = true;
 			const auto appendLabel = [this, &first](const Label &label)
 			{
 				if (!first)
 				{
-					text_ += ',';
+					text += ',';
 				}
 				first = false;
-				text_ += label.name;
-				text_ += "=\"";
-				AppendEscapedLabelValue(text_, label.value);
-				text_ += '"';
+				text += label.name;
+				text += "=\"";
+				AppendEscapedLabelValue(text, label.value);
+				text += '"';
 			};
 			for (const auto &label : labels)
 			{
@@ -260,10 +260,10 @@ namespace prometheus_text
 			{
 				appendLabel(*extra);
 			}
-			text_ += '}';
+			text += '}';
 		}
-		text_ += ' ';
-		text_ += valueText;
-		text_ += '\n';
+		text += ' ';
+		text += valueText;
+		text += '\n';
 	}
 } // namespace prometheus_text

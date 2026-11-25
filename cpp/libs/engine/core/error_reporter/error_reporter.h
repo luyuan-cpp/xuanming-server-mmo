@@ -64,7 +64,7 @@ struct Event {
 
 class Buffer {
 public:
-    explicit Buffer(size_t capacity = 1024) : capacity_(capacity) {}
+    explicit Buffer(size_t capacity = 1024) : capacity(capacity) {}
 
     // Record one event. Allocates only inside the lock (mutex + deque
     // push); call sites are expected to be on the rare error path, so
@@ -83,13 +83,13 @@ public:
         e.trace = trace;
         e.player_id = playerId;
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (buffer_.size() >= capacity_) {
-            buffer_.pop_front();
-            ++dropped_count_;
+        std::lock_guard<std::mutex> lock(mutex);
+        if (buffer.size() >= capacity) {
+            buffer.pop_front();
+            ++droppedCount;
         }
-        buffer_.push_back(std::move(e));
-        ++total_count_;
+        buffer.push_back(std::move(e));
+        ++totalCount;
     }
 
     // Move out all currently buffered events. Atomically clears the
@@ -97,13 +97,13 @@ public:
     // Intended for periodic shippers (metric exporter, HTTP push loop).
     std::vector<Event> Drain()
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(mutex);
         std::vector<Event> out;
-        out.reserve(buffer_.size());
-        for (auto& e : buffer_) {
+        out.reserve(buffer.size());
+        for (auto& e : buffer) {
             out.push_back(std::move(e));
         }
-        buffer_.clear();
+        buffer.clear();
         return out;
     }
 
@@ -111,26 +111,26 @@ public:
     // happened?" diagnostic RPC.
     std::vector<Event> Snapshot() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return std::vector<Event>(buffer_.begin(), buffer_.end());
+        std::lock_guard<std::mutex> lock(mutex);
+        return std::vector<Event>(buffer.begin(), buffer.end());
     }
 
     // Counters for Prometheus-style observability. Both are monotonic
     // since process start.
-    uint64_t TotalCount() const { return total_count_.load(std::memory_order_relaxed); }
-    uint64_t DroppedCount() const { return dropped_count_.load(std::memory_order_relaxed); }
+    uint64_t TotalCount() const { return totalCount.load(std::memory_order_relaxed); }
+    uint64_t DroppedCount() const { return droppedCount.load(std::memory_order_relaxed); }
     size_t CurrentSize() const
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return buffer_.size();
+        std::lock_guard<std::mutex> lock(mutex);
+        return buffer.size();
     }
 
 private:
-    mutable std::mutex mutex_;
-    std::deque<Event> buffer_;
-    const size_t capacity_;
-    std::atomic<uint64_t> total_count_{0};
-    std::atomic<uint64_t> dropped_count_{0};
+    mutable std::mutex mutex;
+    std::deque<Event> buffer;
+    const size_t capacity;
+    std::atomic<uint64_t> totalCount{0};
+    std::atomic<uint64_t> droppedCount{0};
 };
 
 // Process-wide singleton. Acquire-then-Record from any thread. The

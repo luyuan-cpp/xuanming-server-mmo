@@ -1041,3 +1041,63 @@ TEST_F(SeasonBattleTest, BossTrialV2TrialJournalSealConditionsWorkCorrectly) {
     EXPECT_FALSE(trialjournal::EvaluateSealCondition(
         static_cast<uint32_t>(trialjournal::SealConditionType::kDualGuardBreak), 0, settle));
 }
+
+TEST_F(SeasonBattleTest, BossTrialV2BarrierShatterAndVenomParryTriggerExposed) {
+    // 1. 灵障首领（kind=3）：击破灵障护盾立即触发 +35% 破绽与崩势破盾事件。
+    auto memBarrier = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*memBarrier, 105, turnbattle::kBossTrialKindBarrier, /*difficulty=*/1, /*roundLimit=*/12, 10000, 4000);
+    auto reqBarrier = MakeBossTrialRequest(5110, 105, 1, 200);
+    reqBarrier.mutable_players(0)->set_physical_attack(5000);
+    reqBarrier.mutable_trial_context()->set_journal_entry_id(201);
+    TurnBattleEngine engBarrier(memBarrier);
+    ASSERT_TRUE(engBarrier.Initialize(reqBarrier));
+    uint64_t barrierBossId = 0;
+    for (const auto& a : engBarrier.BuildStateSnapshot().actors()) {
+        if (a.is_boss()) barrierBossId = a.actor_id();
+    }
+    ASSERT_NE(barrierBossId, 0u);
+    // R1：灵障护卫为首领附加 12% 灵障护盾（1200）。
+    engBarrier.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    engBarrier.ResolveCurrentRound();
+    // R2：单点普攻击破灵障护盾 -> 首领陷入 +35% 破绽并记录 stance_break_count。
+    engBarrier.SubmitAction(30001, Command(BATTLE_ACTION_ATTACK, barrierBossId));
+    const auto br2 = engBarrier.ResolveCurrentRound();
+    EXPECT_EQ(br2.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+    bool sawShieldShatterExpose = false;
+    for (const auto& ev : br2.events()) {
+        if (ev.event_type() == BATTLE_EVENT_BOSS_MECHANIC &&
+            ev.mechanic_kind() == turnbattle::kBossMechanicStanceBreak &&
+            ev.value() == turnbattle::kBossExposedFullPct) {
+            sawShieldShatterExpose = true;
+        }
+    }
+    EXPECT_TRUE(sawShieldShatterExpose);
+    EXPECT_GE(engBarrier.BuildSettlement(30001).trial_facts().stance_break_count(), 1u);
+
+    // 2. 幽毒首领（kind=4）：2 人局 R2 群体玄毒 1/2 防御触发 +20% 轻破绽，全员防御触发 +35% 完整破绽。
+    auto memVenom = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*memVenom, 107, turnbattle::kBossTrialKindVenom, /*difficulty=*/1, /*roundLimit=*/12, 30000, 8000);
+    auto reqVenomHalf = MakeBossTrialRequest(5111, 107, 2, 200);
+    auto reqVenomFull = MakeBossTrialRequest(5112, 107, 2, 200);
+    TurnBattleEngine engHalf(memVenom);
+    TurnBattleEngine engFull(memVenom);
+    ASSERT_TRUE(engHalf.Initialize(reqVenomHalf));
+    ASSERT_TRUE(engFull.Initialize(reqVenomFull));
+    // R1 预告玄毒群体冲击 -> R2 兑现。
+    for (uint64_t pid : {30001ULL, 30002ULL}) {
+        engHalf.SubmitAction(pid, Command(BATTLE_ACTION_DEFEND));
+        engFull.SubmitAction(pid, Command(BATTLE_ACTION_DEFEND));
+    }
+    engHalf.ResolveCurrentRound();
+    engFull.ResolveCurrentRound();
+    // R2：半数防御 vs 全员防御。
+    engHalf.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    engHalf.SubmitAction(30002, Command(BATTLE_ACTION_ATTACK, 0));
+    const auto vrHalf = engHalf.ResolveCurrentRound();
+    EXPECT_EQ(vrHalf.state().boss_exposed_pct(), turnbattle::kBossExposedPartialPct);
+
+    engFull.SubmitAction(30001, Command(BATTLE_ACTION_DEFEND));
+    engFull.SubmitAction(30002, Command(BATTLE_ACTION_DEFEND));
+    const auto vrFull = engFull.ResolveCurrentRound();
+    EXPECT_EQ(vrFull.state().boss_exposed_pct(), turnbattle::kBossExposedFullPct);
+}

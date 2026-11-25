@@ -164,7 +164,7 @@ namespace
 	class LoopbackConnection
 	{
 	public:
-		explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop_(loop) {}
+		explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop(loop) {}
 		~LoopbackConnection() { Close(); }
 		LoopbackConnection(const LoopbackConnection &) = delete;
 		LoopbackConnection &operator=(const LoopbackConnection &) = delete;
@@ -177,9 +177,9 @@ namespace
 			{
 				return false;
 			}
-			server_ = std::make_unique<muduo::net::TcpServer>(
-				&loop_, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
-			server_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+			server = std::make_unique<muduo::net::TcpServer>(
+				&loop, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
+			server->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 				const auto probe = weak.lock();
 				if (!probe)
 				{
@@ -195,10 +195,10 @@ namespace
 					probe->serverDown = true;
 				}
 			});
-			server_->start();
-			client_ = std::make_unique<muduo::net::TcpClient>(
-				&loop_, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
-			client_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+			server->start();
+			client = std::make_unique<muduo::net::TcpClient>(
+				&loop, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
+			client->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 				const auto probe = weak.lock();
 				if (!probe)
 				{
@@ -214,7 +214,7 @@ namespace
 				}
 			});
 			// 客户端侧按到达顺序收下全部字节,供用例比对服务端写出的帧。
-			client_->setMessageCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &,
+			client->setMessageCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &,
 																			  muduo::net::Buffer *buffer, muduo::Timestamp) {
 				const auto probe = weak.lock();
 				if (!probe)
@@ -224,15 +224,15 @@ namespace
 				}
 				probe->clientReceived.append(buffer->retrieveAllAsString());
 			});
-			client_->connect();
-			return DriveLoopUntil(loop_, [probe = probe_] { return probe->serverUp && probe->clientUp; });
+			client->connect();
+			return DriveLoopUntil(loop, [probe = this->probe] { return probe->serverUp && probe->clientUp; });
 		}
 
-		muduo::net::TcpConnectionPtr ServerSide() const { return probe_->serverSide.lock(); }
+		muduo::net::TcpConnectionPtr ServerSide() const { return probe->serverSide.lock(); }
 		// 客户端侧至今收到的全部字节。只在测试线程(即 loop_ 线程)读。
-		const std::string &ClientReceived() const { return probe_->clientReceived; }
-		bool ServerDown() const { return probe_->serverDown; }
-		bool ClientDown() const { return probe_->clientDown; }
+		const std::string &ClientReceived() const { return probe->clientReceived; }
+		bool ServerDown() const { return probe->serverDown; }
+		bool ClientDown() const { return probe->clientDown; }
 
 	private:
 		struct Probe
@@ -247,15 +247,15 @@ namespace
 
 		void Close()
 		{
-			if (!client_ && !server_)
+			if (!client && !server)
 			{
 				return;
 			}
-			if (client_)
+			if (client)
 			{
-				client_->disconnect();
+				client->disconnect();
 			}
-			const bool closed = DriveLoopUntil(loop_, [probe = probe_] {
+			const bool closed = DriveLoopUntil(loop, [probe = this->probe] {
 				return (!probe->serverUp || probe->serverDown) && (!probe->clientUp || probe->clientDown);
 			});
 			if (!closed)
@@ -263,20 +263,20 @@ namespace
 				// 活性上限内没关完:此时析构会让连接带着非 kDisconnected 状态析构(TcpConnection.cc:71),
 				// 或让连接的 close 回调打到已析构的 TcpServer / TcpClient。宁可泄漏这对测试端点并报失败。
 				ADD_FAILURE() << "loopback connection did not close within liveness bound";
-				(void)client_.release();
-				(void)server_.release();
+				(void)client.release();
+				(void)server.release();
 				return;
 			}
-			client_.reset();
-			server_.reset();
+			client.reset();
+			server.reset();
 			// 再转一圈:TcpClient 析构排队的 Connector 收尾等 functor 在本用例内跑完。
-			(void)DriveLoopUntil(loop_, [] { return true; });
+			(void)DriveLoopUntil(loop, [] { return true; });
 		}
 
-		muduo::net::EventLoop &loop_;
-		const std::shared_ptr<Probe> probe_ = std::make_shared<Probe>();
-		std::unique_ptr<muduo::net::TcpServer> server_;
-		std::unique_ptr<muduo::net::TcpClient> client_;
+		muduo::net::EventLoop &loop;
+		const std::shared_ptr<Probe> probe = std::make_shared<Probe>();
+		std::unique_ptr<muduo::net::TcpServer> server;
+		std::unique_ptr<muduo::net::TcpClient> client;
 	};
 
 	// 回包经 GetGateCodec() 发送。这里的回调不会被调用:用例只写不解码。进程内只留一份,不会留下悬空的全局指针。
@@ -298,27 +298,27 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
+			loop = std::make_unique<muduo::net::EventLoop>();
 			InitGateCodec(SharedCodec());
 			tlsSessionManager.sessions().clear();
 			static int caseIndex = 0;
-			base_ = SteadyTime{} + std::chrono::hours(24) * (++caseIndex);
+			base = SteadyTime{} + std::chrono::hours(24) * (++caseIndex);
 			// 丢弃前面用例留下的检查点(会话都已清掉),并让本用例之后的 1 秒节拍不算迟到。
-			gate_client_heartbeat::SweepLiveness(base_);
-			baseline_ = gate_client_heartbeat::GetCounters();
+			gate_client_heartbeat::SweepLiveness(base);
+			baseline = gate_client_heartbeat::GetCounters();
 		}
 
 		void TearDown() override
 		{
 			tlsSessionManager.sessions().clear();
-			connections_.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-			loop_.reset();
+			connections.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+			loop.reset();
 		}
 
 		// 建一条回环连接并放进会话表。连不上时这里报失败,之后的核对也会失败,不会误过。
 		LoopbackConnection &AddSession(const SessionId sessionId, const bool verified)
 		{
-			auto connection = std::make_unique<LoopbackConnection>(*loop_);
+			auto connection = std::make_unique<LoopbackConnection>(*loop);
 			EXPECT_TRUE(connection->Open("gate_heartbeat_" + std::to_string(sessionId)));
 			const auto serverSide = connection->ServerSide();
 			if (serverSide)
@@ -331,8 +331,8 @@ namespace
 			session.verified = verified;
 			session.playerId = kPlayer;
 			session.incarnation = NextTestIncarnation();
-			connections_.push_back(std::move(connection));
-			return *connections_.back();
+			connections.push_back(std::move(connection));
+			return *connections.back();
 		}
 
 		SessionInfo &Session(const SessionId sessionId) { return tlsSessionManager.sessions().at(sessionId); }
@@ -376,21 +376,21 @@ namespace
 			sentinel.set_serialized_message("sentinel");
 			const std::string all = expected + FrameBytes(sentinel);
 			GetGateCodec().send(serverSide, sentinel);
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
+			ASSERT_TRUE(DriveLoopUntil(*loop, [&connection, &all] { return connection.ClientReceived().size() >= all.size(); }));
 			EXPECT_EQ(connection.ClientReceived(), all);
 		}
 
 		// 被测代码 forceClose 之后,两端都应看到断开。
 		void ExpectClosed(const LoopbackConnection &connection)
 		{
-			EXPECT_TRUE(DriveLoopUntil(*loop_, [&connection] { return connection.ServerDown() && connection.ClientDown(); }))
+			EXPECT_TRUE(DriveLoopUntil(*loop, [&connection] { return connection.ServerDown() && connection.ClientDown(); }))
 				<< "the gate side should have force-closed the connection";
 		}
 
 		// 转一圈 loop,让可能已排队的 forceCloseInLoop 跑完,再确认服务端没有断开。
 		void ExpectStillOpen(const LoopbackConnection &connection)
 		{
-			(void)DriveLoopUntil(*loop_, [] { return true; });
+			(void)DriveLoopUntil(*loop, [] { return true; });
 			EXPECT_FALSE(connection.ServerDown());
 			EXPECT_FALSE(connection.ClientDown());
 		}
@@ -400,22 +400,22 @@ namespace
 		{
 			const Counters &now = gate_client_heartbeat::GetCounters();
 			Counters delta;
-			delta.answered = now.answered - baseline_.answered;
-			delta.excess = now.excess - baseline_.excess;
-			delta.beforeVerify = now.beforeVerify - baseline_.beforeVerify;
-			delta.tracked = now.tracked - baseline_.tracked;
-			delta.idleClosed = now.idleClosed - baseline_.idleClosed;
-			delta.handshakeTimeouts = now.handshakeTimeouts - baseline_.handshakeTimeouts;
-			delta.deferred = now.deferred - baseline_.deferred;
+			delta.answered = now.answered - baseline.answered;
+			delta.excess = now.excess - baseline.excess;
+			delta.beforeVerify = now.beforeVerify - baseline.beforeVerify;
+			delta.tracked = now.tracked - baseline.tracked;
+			delta.idleClosed = now.idleClosed - baseline.idleClosed;
+			delta.handshakeTimeouts = now.handshakeTimeouts - baseline.handshakeTimeouts;
+			delta.deferred = now.deferred - baseline.deferred;
 			return delta;
 		}
 
-		SteadyTime base_{};
+		SteadyTime base{};
 
 	private:
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::vector<std::unique_ptr<LoopbackConnection>> connections_;
-		Counters baseline_{};
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::vector<std::unique_ptr<LoopbackConnection>> connections;
+		Counters baseline{};
 	};
 } // namespace
 
@@ -424,14 +424,14 @@ namespace
 TEST_F(GateClientHeartbeat, TokenVerifiedAdvertisesHeartbeatAndStartsTrackingOnce)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const ClientTokenVerifyResponse response = VerifySucceeded(kSession, base_ + seconds(1));
+	const ClientTokenVerifyResponse response = VerifySucceeded(kSession, base + seconds(1));
 	EXPECT_TRUE(response.success());
 	EXPECT_EQ(response.heartbeat_interval_ms(), 10000u);
 	EXPECT_EQ(response.heartbeat_timeout_ms(), 30000u);
 	EXPECT_TRUE(Session(kSession).liveness.tracked);
 
 	// 已验证会话重发验签:照样通告,不重复登记。
-	const ClientTokenVerifyResponse again = VerifySucceeded(kSession, base_ + seconds(2));
+	const ClientTokenVerifyResponse again = VerifySucceeded(kSession, base + seconds(2));
 	EXPECT_EQ(again.heartbeat_interval_ms(), 10000u);
 	EXPECT_EQ(Delta(), (Counters{.tracked = 1}));
 	ExpectStillOpen(connection);
@@ -442,9 +442,9 @@ TEST_F(GateClientHeartbeat, TokenVerifiedAdvertisesHeartbeatAndStartsTrackingOnc
 TEST_F(GateClientHeartbeat, HeartbeatIsEchoedWithItsSeq)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	VerifySucceeded(kSession, base_ + seconds(1));
-	Heartbeat(connection, 7, base_ + seconds(1));
-	Heartbeat(connection, 8, base_ + seconds(11));
+	VerifySucceeded(kSession, base + seconds(1));
+	Heartbeat(connection, 7, base + seconds(1));
+	Heartbeat(connection, 8, base + seconds(11));
 
 	ExpectReceived(connection, HeartbeatReplyBytes(7) + HeartbeatReplyBytes(8));
 	EXPECT_EQ(Delta(), (Counters{.answered = 2, .tracked = 1}));
@@ -455,7 +455,7 @@ TEST_F(GateClientHeartbeat, HeartbeatIsEchoedWithItsSeq)
 TEST_F(GateClientHeartbeat, HeartbeatWithoutAVerifyReplyStartsTracking)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/true);
-	Heartbeat(connection, 1, base_ + seconds(1));
+	Heartbeat(connection, 1, base + seconds(1));
 
 	EXPECT_TRUE(Session(kSession).liveness.tracked);
 	ExpectReceived(connection, HeartbeatReplyBytes(1));
@@ -466,7 +466,7 @@ TEST_F(GateClientHeartbeat, HeartbeatWithoutAVerifyReplyStartsTracking)
 TEST_F(GateClientHeartbeat, HeartbeatBeforeTokenVerifyClosesTheConnection)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	Heartbeat(connection, 1, base_ + seconds(1));
+	Heartbeat(connection, 1, base + seconds(1));
 
 	ExpectClosed(connection);
 	EXPECT_TRUE(connection.ClientReceived().empty());
@@ -478,7 +478,7 @@ TEST_F(GateClientHeartbeat, HeartbeatBeforeTokenVerifyClosesTheConnection)
 TEST_F(GateClientHeartbeat, FourthHeartbeatInOneWindowIsNotAnsweredAndCountsAsIllegal)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime burst = base_ + seconds(1);
+	const SteadyTime burst = base + seconds(1);
 	VerifySucceeded(kSession, burst);
 	for (uint64_t seq = 1; seq <= 4; ++seq)
 	{
@@ -497,7 +497,7 @@ TEST_F(GateClientHeartbeat, FourthHeartbeatInOneWindowIsNotAnsweredAndCountsAsIl
 TEST_F(GateClientHeartbeat, VerifiedClientThatNeverHeartbeatsIsClosedOnceAfterTheIdleTimeout)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime start = base_ + seconds(1);
+	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 
 	SweepEachSecond(start, start + kClientLiveness.idleTimeout - seconds(1));
@@ -516,7 +516,7 @@ TEST_F(GateClientHeartbeat, VerifiedClientThatNeverHeartbeatsIsClosedOnceAfterTh
 TEST_F(GateClientHeartbeat, InboundFramePostponesTheIdleClose)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime start = base_ + seconds(1);
+	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 
 	SweepEachSecond(start, start + seconds(20));
@@ -534,7 +534,7 @@ TEST_F(GateClientHeartbeat, InboundFramePostponesTheIdleClose)
 TEST_F(GateClientHeartbeat, RegularHeartbeatsKeepTheConnectionOpen)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime start = base_ + seconds(1);
+	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	std::string expected;
 	uint64_t seq = 0;
@@ -557,7 +557,7 @@ TEST_F(GateClientHeartbeat, RegularHeartbeatsKeepTheConnectionOpen)
 TEST_F(GateClientHeartbeat, DevBypassSessionThatNeverAskedToVerifyIsNotTracked)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/true);
-	SweepEachSecond(base_ + seconds(1), base_ + 3 * kClientLiveness.idleTimeout);
+	SweepEachSecond(base + seconds(1), base + 3 * kClientLiveness.idleTimeout);
 
 	EXPECT_FALSE(Session(kSession).liveness.tracked);
 	EXPECT_EQ(Delta(), Counters{});
@@ -568,7 +568,7 @@ TEST_F(GateClientHeartbeat, DevBypassSessionThatNeverAskedToVerifyIsNotTracked)
 TEST_F(GateClientHeartbeat, StaleCheckpointDoesNotCloseANewConnectionWithTheSameSessionId)
 {
 	const auto &oldConnection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime start = base_ + seconds(1);
+	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	tlsSessionManager.sessions().erase(kSession); // 断开回调删了会话
 
@@ -584,7 +584,7 @@ TEST_F(GateClientHeartbeat, StaleCheckpointDoesNotCloseANewConnectionWithTheSame
 TEST_F(GateClientHeartbeat, StalledLoopDefersTheVerdictToTheNextOnTimeSweep)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime start = base_ + seconds(1);
+	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	SweepEachSecond(start, start + kClientLiveness.idleTimeout - seconds(1));
 
@@ -605,7 +605,7 @@ TEST_F(GateClientHeartbeat, StalledLoopDefersTheVerdictToTheNextOnTimeSweep)
 TEST_F(GateClientHeartbeat, UnverifiedConnectionIsClosedAtTheHandshakeDeadline)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime connectedAt = base_ + seconds(1);
+	const SteadyTime connectedAt = base + seconds(1);
 	gate_client_heartbeat::ExpectHandshake(kSession, Session(kSession), connectedAt);
 
 	SweepEachSecond(connectedAt, connectedAt + kClientLiveness.handshakeTimeout - seconds(1));
@@ -621,7 +621,7 @@ TEST_F(GateClientHeartbeat, UnverifiedConnectionIsClosedAtTheHandshakeDeadline)
 TEST_F(GateClientHeartbeat, VerifyingBeforeTheHandshakeDeadlineKeepsTheConnection)
 {
 	const auto &connection = AddSession(kSession, /*verified=*/false);
-	const SteadyTime connectedAt = base_ + seconds(1);
+	const SteadyTime connectedAt = base + seconds(1);
 	gate_client_heartbeat::ExpectHandshake(kSession, Session(kSession), connectedAt);
 	const SteadyTime verifiedAt = connectedAt + seconds(2);
 	VerifySucceeded(kSession, verifiedAt);

@@ -53,8 +53,8 @@ public:
     struct State;
 
 private:
-    explicit RpcDoneCallback(std::shared_ptr<State> state) : state_(std::move(state)) {}
+    explicit RpcDoneCallback(std::shared_ptr<State> state) : state(std::move(state)) {}
     ::google::protobuf::Message& ResponseMessage(const ::google::protobuf::Descriptor& expected) const;
 
-    std::shared_ptr<State> state_;
+    std::shared_ptr<State> state;
 };

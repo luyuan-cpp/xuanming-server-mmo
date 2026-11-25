@@ -84,7 +84,7 @@ public:
 
 
     using Maintenance = sql_writer_maintenance_receipt;
-    bool HasManualAssignment() const { return manual_; }
+    bool HasManualAssignment() const { return manual; }
     bool BeginManualDrain(); // P2之后在owner锁内固定leader尾部，继续消费至该位置再pause。
     bool ManualDrainReady();
     bool CallbacksJoined(bool requireKnown) const;
@@ -105,10 +105,10 @@ public:
     private:
         friend class KafkaConsumer;
         explicit PreparedLease(KafkaConsumer& owner);
-        KafkaConsumer& owner_;
-        std::unique_lock<std::mutex> lock_;
-        bool resumed_ = false;
-        bool committed_ = false;
+        KafkaConsumer& owner;
+        std::unique_lock<std::mutex> lock;
+        bool resumed = false;
+        bool committed = false;
     };
     std::unique_ptr<PreparedLease> AcquirePrepared(const Maintenance::ConsumerReadiness& expected);
 
@@ -127,26 +127,26 @@ private:
         const std::string& manifest, const std::string& issuer, const std::string& instance);
     // 本机账本不与正式proto重复：只计队列闭包的实际进入、回调返回及target析构。
     struct DispatchLedger { std::mutex mutex; std::uint64_t accepted=0, settled=0; bool unknown=false; };
-    std::shared_ptr<DispatchLedger> dispatchLedger_=std::make_shared<DispatchLedger>();
-    std::mutex ownerMutex_;
-    std::string groupId_;
-    std::vector<std::string> topics_;
-    bool manual_=false, prepareClosed_=false, readinessLost_=false, successfulPoll_=false;
-    std::uint64_t assignmentRevision_=0;
-    Maintenance::ManualConsumerAssignment manualIdentity_;
-    std::optional<Maintenance::ManualConsumerEvidence> stoppedManual_;
-    std::optional<Maintenance::ConsumerReadiness> prepared_;
-    std::map<std::int32_t,std::int64_t> manualStartOffsets_;
-    std::map<std::int32_t,std::int64_t> manualDrainEnds_;
-    bool manualDrainStarted_=false;
+    std::shared_ptr<DispatchLedger> dispatchLedger=std::make_shared<DispatchLedger>();
+    std::mutex ownerMutex;
+    std::string groupId;
+    std::vector<std::string> topics;
+    bool manual=false, prepareClosed=false, readinessLost=false, successfulPoll=false;
+    std::uint64_t assignmentRevision=0;
+    Maintenance::ManualConsumerAssignment manualIdentity;
+    std::optional<Maintenance::ManualConsumerEvidence> stoppedManual;
+    std::optional<Maintenance::ConsumerReadiness> prepared;
+    std::map<std::int32_t,std::int64_t> manualStartOffsets;
+    std::map<std::int32_t,std::int64_t> manualDrainEnds;
+    bool manualDrainStarted=false;
     // callback基类及账本活过native handle；stop先join线程、close/reset handle，最后才销毁本对象。
-	std::unique_ptr<RdKafka::KafkaConsumer> consumer_;
-	std::unique_ptr<RdKafka::Conf> conf_;
-	MessageCallback msgCallback_;
-	std::atomic<bool> running_{false};
+	std::unique_ptr<RdKafka::KafkaConsumer> consumer;
+	std::unique_ptr<RdKafka::Conf> conf;
+	MessageCallback msgCallback;
+	std::atomic<bool> running{false};
 
 	// Background poll thread state.
-	std::thread pollThread_;
-	std::atomic<bool> pollThreadRunning_{false};
-	std::optional<std::reference_wrapper<muduo::net::EventLoop>> dispatchLoop_;
+	std::thread pollThread;
+	std::atomic<bool> pollThreadRunning{false};
+	std::optional<std::reference_wrapper<muduo::net::EventLoop>> dispatchLoop;
 };

@@ -1,5 +1,6 @@
 #include "player_battle.h"
 #include "ranked_preset_rules.h"
+#include "player/system/afk_pass.h"
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_equipment_material_reward.h"
 #include "player/system/player_season.h"
@@ -1016,7 +1017,7 @@ namespace
 			// 要人看配置(IdSegments 的 Enabled / MaxStep)。结算不能拒收,照样整笔 DEFER。
 			LOG_ERROR << "[PlayerBattle] metric=battle_settlement_item_guid_shortage player_id=" << playerId
 					  << " battle_id=" << battleId << " needed=" << needed << " available=" << available
-					  << " max_step=" << segment.options().maxStep << " top_up=" << TopUpOutcomeName(topUp)
+					  << " max_step=" << segment.GetOptions().maxStep << " top_up=" << TopUpOutcomeName(topUp)
 					  << ",item guid segment cannot cover drops and a top-up cannot help;whole settlement deferred";
 		}
 		return false;
@@ -1575,6 +1576,25 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		}
 		snap->clear_items();
 		snap->set_pet_capture_slots(0);
+	}
+	// 论剑 V3 战前 15 秒明牌变阵：仅正式自养论剑与赛季锦标赛打包备选灵宠（至多 5 只）与当季全部赛季印。
+	if (!useFreePreset &&
+		(isFormalRanked || request.match_mode() == turnbattle::kMatchModeSeasonTournament))
+	{
+		auto* snap = response.mutable_snapshot();
+		const uint64_t activePetId = snap->pets_size() > 0 ? snap->pets(0).pet_id() : 0;
+		std::vector<::BattlePetSnapshot> standbyPets;
+		PetSystem::BuildStandbyBattleSnapshots(player, activePetId, 5, /*fullResources=*/isolateBattleTempState, standbyPets);
+		for (auto& standby : standbyPets)
+		{
+			*snap->add_standby_pets() = std::move(standby);
+		}
+		std::vector<::SeasonSealEffect> availableSeals;
+		PlayerSeasonSystem::CollectAvailableSeals(TimeSystem::NowMillisecondsUTC(), availableSeals);
+		for (auto& seal : availableSeals)
+		{
+			*snap->add_available_season_seals() = std::move(seal);
+		}
 	}
 
 	// 备战作废期限:match 在 gather 阶段崩溃时,已冻结成员只等这个短期限而不是整场战斗时限;
@@ -2720,8 +2740,12 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
         if (ledger == nullptr || tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) return false;
         materialRewardBefore = ledger->SerializeAsString();
+        const bool lightCardActive = AfkPassSystem::ExpiresAt(player) > (settlementNowMs / 1000ULL);
+        const uint32_t accountStage1TradableUsed =
+            PlayerEquipmentMaterialRewardSystem::KnownAccountStage1TradableUsed(player);
         if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
-            settlementNowMs, materialRewardCandidate, &materialCreditDelta) != kSuccess) return false;
+            settlementNowMs, materialRewardCandidate, &materialCreditDelta, lightCardActive,
+            accountStage1TradableUsed) != kSuccess) return false;
     } else if (const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
                ledger != nullptr && !tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) {
         // 非达标局（例如 PVP 挂机未满足 3 回合/2 手动/有效贡献）同样记录 pvpLossIneligible 提示，不改动账本。
@@ -2802,7 +2826,12 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             currentFestival->SerializeAsString() != festivalBeastBefore)) {
             return false;
         }
-        if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
+        if (creditsMaterialReward) {
+            currentLedger->Swap(&materialRewardCandidate);
+            if (materialCreditDelta.tradableUnitsAdded > 0) {
+                PlayerEquipmentMaterialRewardSystem::OnStage1TradableCredited(player, settlementNowMs);
+            }
+        }
         if (creditsSeasonProgress && seasonPointsIncreased) currentSeason->Swap(&seasonProgressCandidate);
         if (creditsTrialJournal && trialJournalDelta.changed) currentTrialJournal->Swap(&trialJournalCandidate);
         if (isFestivalBeast && festivalBeastDelta.changed) currentFestival->Swap(&festivalBeastCandidate);
@@ -2946,6 +2975,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         BagService::ConsumeInventoryAndGrant(player, inboxConsumed, inboxGained, battleId,
             "{\"source\":\"battle-inbox\"}", credit, /*consumeFromHoldId=*/battleId, &toMail);
     if (result != kSuccess) return false;
+    if (creditsMaterialReward && materialCreditDelta.tradableUnitsAdded > 0) {
+        PlayerEquipmentMaterialRewardSystem::OnStage1TradableCredited(player, settlementNowMs);
+    }
     PetSystem::CommitCapturedPets(player, capturedPets);
     for (const auto& mail : mailed)
         LOG_INFO << "[PlayerBattle] metric=battle_items_mailed player_id=" << playerId << " battle_id=" << battleId

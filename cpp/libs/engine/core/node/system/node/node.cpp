@@ -1157,7 +1157,7 @@ Node::Node(muduo::net::EventLoop *loop, const std::string &logFilePath)
 	}
 
 	gNode = this;
-	InstallLocalNodeInfo(&localNodeInfo_);
+	InstallLocalNodeInfo(&localNodeInfo);
 	gNodeAtomic.store(this, std::memory_order_release);
 }
 
@@ -1170,16 +1170,16 @@ Node::Node(muduo::net::EventLoop *loop,
 {
 	if (rpcService != nullptr)
 	{
-		rpcService_ = std::ref(*rpcService);
+		this->rpcService = std::ref(*rpcService);
 	}
 	MutableNodeInfo().set_node_type(nodeType);
 	targetNodeTypeWhitelist = std::move(connectTo);
-	discoveryNodeTypes_ = std::move(discover);
+	discoveryNodeTypes = std::move(discover);
 	// 连得上的前提是发现得到(docs/design/connection-fanout-subsetting-20261106.md §3.4)。在 Initialize 之前查:
 	// 那里的 InitEtcdService 就按发现集合 Range。
 	for (const uint32_t connectType : targetNodeTypeWhitelist)
 	{
-		if (!discoveryNodeTypes_.contains(connectType))
+		if (!discoveryNodeTypes.contains(connectType))
 		{
 			LOG_FATAL << eNodeType_Name(static_cast<eNodeType>(nodeType)) << " connects to "
 					  << eNodeType_Name(static_cast<eNodeType>(connectType))
@@ -1208,8 +1208,8 @@ Node::~Node()
 		bool fallbackLogged = false;
 		for (;;)
 		{
-			std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
-			if (shutdownComplete_)
+			std::unique_lock<std::mutex> lock(shutdownCompletionMutex);
+			if (shutdownComplete)
 			{
 				break;
 			}
@@ -1226,9 +1226,9 @@ Node::~Node()
 	// EventLoop 外销毁时,Shutdown() 的公开等待预算只用于向调用方报告卡顿;
 	// 析构本身不能在仍有捕获 this 的回调/worker 时继续释放成员。
 	{
-		std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
-		shutdownCompletionCv_.wait(lock, [this]
-								   { return shutdownComplete_; });
+		std::unique_lock<std::mutex> lock(shutdownCompletionMutex);
+		shutdownCompletionCv.wait(lock, [this]
+								   { return shutdownComplete; });
 	}
 
 	if (gNode == this)
@@ -1247,7 +1247,7 @@ int64_t Node::GetLeaseId() const
 NodeInfo &Node::MutableNodeInfo()
 {
 	assert(eventLoop.isInLoopThread());
-	return localNodeInfo_;
+	return localNodeInfo;
 }
 
 void Node::Initialize()
@@ -1310,8 +1310,8 @@ void Node::InitKillSwitch()
 		return;
 	}
 	// 独立的 etcd 连接,与注册 / 发现分开(§9);与 EtcdService 同一个地址,也在节点构造期建好(传输构造时解析地址)。
-	killSwitchSync_ = std::make_unique<KillSwitchEtcdSync>(kill_switch::KillSwitch::Process());
-	killSwitchSync_->Start(eventLoop, *etcdHosts.begin());
+	killSwitchSync = std::make_unique<KillSwitchEtcdSync>(kill_switch::KillSwitch::Process());
+	killSwitchSync->Start(eventLoop, *etcdHosts.begin());
 	LOG_INFO << "Kill switch identity: node_type=" << eNodeType_Name(static_cast<eNodeType>(info.node_type()))
 			 << " node_uuid=" << info.node_uuid();
 }
@@ -1339,11 +1339,11 @@ void Node::StartMetricsExporter()
 	}
 	// 回调捕获 this:出口是本 Node 的成员,在 FinalizeTeardownInLoop 里先于 Node 释放,
 	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。
-	metricsExporter_ = std::make_unique<MetricsHttpExporter>(&eventLoop, *port, [this]
+	metricsExporter = std::make_unique<MetricsHttpExporter>(&eventLoop, *port, [this]
 	{
 		return RenderNodeIdentityMetrics(GetNodeInfo()) + RenderProcessFdMetrics() + GlobalMetricsRegistry().Render();
 	});
-	metricsExporter_->Start();
+	metricsExporter->Start();
 }
 
 namespace
@@ -1414,9 +1414,9 @@ void Node::StartSpanExporter()
 	options.resource.serviceVersion = info.build();
 	options.resource.extraAttributes.emplace_back("mmorpg.zone_id", std::to_string(info.zone_id()));
 	// 导出器挂在本节点的主 loop 上,不另起线程(负责人 2026-11-19:C++ 节点除主线程不再开线程)。
-	spanExporter_ = std::make_unique<tracing::OtlpSpanExporter>(eventLoop, tracing::ProcessSpanExportQueue(),
+	spanExporter = std::make_unique<tracing::OtlpSpanExporter>(eventLoop, tracing::ProcessSpanExportQueue(),
 																 tracing::ProcessSpanExportStats(), std::move(options));
-	spanExporter_->Start();
+	spanExporter->Start();
 	tracing::RegisterSpanExportMetrics();
 	// 导出器起来之后才装去处:之前结束的 span 不记录(没装去处时接缝只多一次原子读)。
 	tracing::InstallSpanSink(&tracing::ProcessSpanExportQueue());
@@ -1428,19 +1428,19 @@ void Node::StartSpanExporter()
 bool Node::FinishSpanExportInLoop()
 {
 	eventLoop.assertInLoopThread();
-	if (!spanExporter_)
+	if (!spanExporter)
 	{
 		return true;
 	}
 	// 第一次进来:先摘去处,之后结束的 span 不再入队;再开始有界冲刷(OtlpSpanExporterOptions::shutdownTimeout)。
 	// 冲刷靠本 loop 推进,所以这里不等,由调用方让一轮后再来问。重复调用是空操作。
 	tracing::InstallSpanSink(nullptr);
-	spanExporter_->BeginShutdown();
-	if (!spanExporter_->Finished())
+	spanExporter->BeginShutdown();
+	if (!spanExporter->Finished())
 	{
 		return false;
 	}
-	spanExporter_.reset();
+	spanExporter.reset();
 	return true;
 }
 
@@ -1562,7 +1562,7 @@ void Node::InitClientEndpoint()
 	{
 		*localNodeInfo.mutable_client_endpoint() = *clientEndpoint;
 	}
-	clientEndpointRequired_ = settings.required;
+	clientEndpointRequired = settings.required;
 
 	// 小游戏的 WebSocket 地址(docs/design/minigame-websocket-gate.md W7)要用终值端口拼,由 AcquireNodePort 在端口定下来之后写进
 	// NodeInfo。这里先把配置校验掉,理由同上:带着一个客户端永远连不通的地址发布,比起不来更难查。
@@ -1631,9 +1631,9 @@ bool Node::RegisterKafkaMessageHandler(const std::vector<std::string> &topics,
 
 	auto &kafkaConfig = tlsNodeConfigManager.GetBaseDeployConfig().kafka();
     MaintenanceReceipt::ManualConsumerAssignment manual;
-    if(!partitions.empty()&&maintenanceControl_){
+    if(!partitions.empty()&&maintenanceControl){
         if(topics.size()!=1||partitions.size()!=1||assignPolicy.expectedTopicPartitions<=0||!assignPolicy.ownOffsets||!assignPolicy.startAtEnd)return false;
-        manual.set_consumer_id(groupId);manual.set_instance_id(maintenanceControl_->instance);manual.set_target_instance_id(maintenanceControl_->instance);
+        manual.set_consumer_id(groupId);manual.set_instance_id(maintenanceControl->instance);manual.set_target_instance_id(maintenanceControl->instance);
         manual.set_target_node_id(GetNodeId());manual.set_partition_count(assignPolicy.expectedTopicPartitions);
     }
 	if (!GetKafkaManager().Subscribe(kafkaConfig, topics, groupId, partitions, std::move(handler), assignPolicy, manual))
@@ -1659,13 +1659,13 @@ void Node::InitEtcdService()
 
 void Node::RegisterGrpcService(muduo_grpc::Service &service)
 {
-	if (grpcServer_)
+	if (grpcServer)
 	{
 		// 方法表在 Server::Start 之前定型;启动之后再注册不会生效,不能静默接受。
 		LOG_ERROR << "RegisterGrpcService called after the gRPC server started; ignored.";
 		return;
 	}
-	grpcServices_.push_back(std::ref(service));
+	grpcServices.push_back(std::ref(service));
 }
 
 void Node::StartGrpcServer()
@@ -1674,12 +1674,12 @@ void Node::StartGrpcServer()
 	// etcd 端口分配可能晚于关机开始。此时不再启动服务端,也不发布发现键:ShutdownInLoop 调 ShutdownGrpcServer 时还没有
 	// 服务端,已把 gRPC 排空记为完成;这里再起服务端,它会在排空之后才开始监听,只能被 Finalize 的防御分支不发 GOAWAY
 	// 地销毁,而发布发现键会让 Go 侧在收尾期间拨号进来(docs/design/grpc-muduo-transport.md §15.16 第 4 条)。
-	if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl_ && maintenanceControl_->sourceClosed))
+	if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl && maintenanceControl->sourceClosed))
 	{
 		LOG_WARN << "Shutdown already started; not starting the gRPC server and not publishing discovery.";
 		return;
 	}
-	if (grpcServices_.empty())
+	if (grpcServices.empty())
 	{
 		// No gRPC server to start. The discovery publish was deferred from
 		// OnTxnSucceeded(allocKey), so we must publish now or this node will
@@ -1738,7 +1738,7 @@ void Node::StartGrpcServer()
 		LOG_FATAL << "Failed to create gRPC server on " << serverAddress;
 		return;
 	}
-	for (auto &service : grpcServices_)
+	for (auto &service : grpcServices)
 	{
 		// 路径非法或与已注册的方法重复:fail-closed,不带着残缺的方法表上线。
 		if (!server->RegisterService(service.get()))
@@ -1749,8 +1749,8 @@ void Node::StartGrpcServer()
 	}
 	// Start 建 Acceptor 并 listen;bind 失败由 muduo 按 LOG_SYSFATAL 退出(与旧服务端 BuildAndStart 失败同样 fail-fast)。
 	// §15.11 的启动日志("gRPC server (muduo_grpc) listening on ... threads=0")由 Server::Start 自己打,这里不重复。
-	grpcServer_ = std::move(server);
-	grpcServer_->Start();
+	grpcServer = std::move(server);
+	grpcServer->Start();
 
 	// gRPC port is now bound and accepting connections (Start() returns after
 	// the listener is bound and listening). Safe to advertise this node in etcd
@@ -1763,9 +1763,9 @@ void Node::StartGrpcServer()
 void Node::ShutdownGrpcServer()
 {
 	eventLoop.assertInLoopThread();
-	if (!grpcServer_)
+	if (!grpcServer)
 	{
-		shutdownGrpcDrainComplete_ = true;
+		shutdownGrpcDrainComplete = true;
 		MaybeFinalizeShutdownInLoop();
 		return;
 	}
@@ -1780,42 +1780,42 @@ void Node::ShutdownGrpcServer()
 	// 回调捕获 this:与本类其它排队任务同理,shutdownComplete_ 只在收尾的两跳 quit 之后置位,~Node 会等它
 	// (loop 异常退出时重新驱动 loop),所以投递到时 Node 一定还在。
 	// "gRPC server draining: ..." 由 BeginShutdown 自己打;这里只记起点,给 "gRPC server drained. drain_ms=" 用。
-	grpcDrainStart_ = std::chrono::steady_clock::now();
+	grpcDrainStart = std::chrono::steady_clock::now();
 
 	muduo_grpc::ServerShutdownOptions shutdownOptions;
 	shutdownOptions.drainTimeout = kGrpcDrainTimeout;
 	shutdownOptions.goawayPingTimeout = kGrpcGoawayPingTimeout;
 	shutdownOptions.closeGrace = kGrpcCloseGrace;
-	grpcServer_->BeginShutdown(shutdownOptions, [this]
+	grpcServer->BeginShutdown(shutdownOptions, [this]
 							   { OnGrpcServerDrained(); });
 }
 
 void Node::OnGrpcServerDrained()
 {
 	eventLoop.assertInLoopThread();
-	if (shutdownGrpcDrainComplete_ || !grpcServer_)
+	if (shutdownGrpcDrainComplete || !grpcServer)
 	{
 		// 已记为排空,或收尾已防御销毁了 Server(FinalizeShutdownInLoop 开头):迟到 / 重复的通知,忽略。
 		return;
 	}
 
 	const auto drainMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-							 std::chrono::steady_clock::now() - grpcDrainStart_)
+							 std::chrono::steady_clock::now() - grpcDrainStart)
 							 .count();
-	const auto stats = grpcServer_->Stats();
+	const auto stats = grpcServer->Stats();
 	if (stats.deadlineAfterStart != 0 || stats.abortedAfterStart != 0 || stats.unavailableOnShutdown != 0 ||
 		stats.lateFinish != 0 || stats.dropped != 0 || stats.droppedOffLoop != 0)
 	{
-		shutdownFailure_.store(true, std::memory_order_release);
+		shutdownFailure.store(true, std::memory_order_release);
 		LOG_ERROR << "gRPC lifecycle HOLD: accepted work had timeouts, drops or unknown completions; drained connections are not a successful closure";
 	}
 	LOG_INFO << "gRPC server drained. drain_ms=" << drainMs << " "
 			 << muduo_grpc::FormatServerStats(stats);
 	// 这里是排队任务:不在 Server 自己的栈上,也不在 I/O 事件处理期间,可以同步销毁(server.h 的析构前置条件)。
 	// 此时连接表已空、Acceptor 早已销毁;~Server 万一再排进 forceClose / connectDestroyed,由收尾末尾的两跳 quit 覆盖。
-	grpcServer_.reset();
+	grpcServer.reset();
 
-	shutdownGrpcDrainComplete_ = true;
+	shutdownGrpcDrainComplete = true;
 	MaybeFinalizeShutdownInLoop();
 }
 
@@ -1824,11 +1824,11 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 	// 触发点有两个(都是 kReRegistrationFailed):重注册时分配键的 CAS 发现 node_id 已归别的 uuid,
 	// 以及 Watch 发现身份被抢。keepalive TTL=0 与本地租约 deadline 2026-09-08 起只请求重注册、不再到这里(node.h 的枚举注释)。
 	// 两个触发点都可能重复触发,而且 keepalive 还在跑,必须幂等。
-	if (conflictShutdownStarted_)
+	if (conflictShutdownStarted)
 	{
 		return;
 	}
-	conflictShutdownStarted_ = true;
+	conflictShutdownStarted = true;
 
 	LOG_ERROR << "Node identity conflict detected (reason=" << static_cast<int>(reason)
 			  << "), node_id=" << GetNodeId()
@@ -1845,10 +1845,10 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 	serviceDiscoveryManager.etcdService.StopRegistrationRetries();
 
 	// 3) 业务收尾:scene 节点在这里存盘并把玩家改派到别的 scene node。
-	if (onConflictShutdownFn_)
+	if (onConflictShutdownFn)
 	{
 		LOG_INFO << "Running conflict-shutdown hook...";
-		onConflictShutdownFn_(*this, reason);
+		onConflictShutdownFn(*this, reason);
 	}
 
 	// 4) 有界等待收尾落地后再退出。
@@ -1872,12 +1872,12 @@ void Node::StartConflictDrainWatchdog()
 				 << " value; falling back to default conflict drain budget_s=" << drainBudget.count();
 	}
 
-	conflictDrainDeadline_ = std::chrono::steady_clock::now() + drainBudget;
+	conflictDrainDeadline = std::chrono::steady_clock::now() + drainBudget;
 
 	conflictDrainTimer.RunEvery(kDrainPollIntervalSec, [this, drainBudget]
 								{
-		const bool drained = !conflictDrainCompleteFn_ || conflictDrainCompleteFn_(*this);
-		const bool expired = std::chrono::steady_clock::now() >= conflictDrainDeadline_;
+		const bool drained = !conflictDrainCompleteFn || conflictDrainCompleteFn(*this);
+		const bool expired = std::chrono::steady_clock::now() >= conflictDrainDeadline;
 		if (!drained && !expired)
 		{
 			return;
@@ -1902,7 +1902,7 @@ void Node::StartConflictDrainWatchdog()
 void Node::StartRpcServer()
 {
 	eventLoop.assertInLoopThread();
-    if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl_ && maintenanceControl_->sourceClosed)) return;
+    if (shutdownStarted.load(std::memory_order_acquire) || (maintenanceControl && maintenanceControl->sourceClosed)) return;
 	if (rpcServer)
 	{
 		LOG_TRACE << "RPC server already started, skipping.";
@@ -1931,7 +1931,7 @@ void Node::StartRpcServer()
 	// 入站节点链路的心跳(docs/design/muduo-rpc-channel.md §21),对端出站 RpcClient 由 NodeConnector 同样开启。
 	// gate / battle 的这个端口给客户端与战斗边缘,SetAfterStart 会换掉 RpcServer 的回调,实际只有 scene 的入站节点链路用到。
 	rpcServer->setLinkHeartbeat(kNodeLinkHeartbeat);
-	if(!maintenancePrepareBoot_)rpcServer->start();
+	if(!maintenancePrepareBoot)rpcServer->start();
 	auto *nodeRpcService = GetNodeRpcService();
 	if (nodeRpcService != nullptr)
 	{
@@ -1960,9 +1960,9 @@ void Node::StartRpcServer()
 		LOG_FATAL << "RegisterKafkaHandlers failed for node_type=" << GetNodeInfo().node_type();
 	}
 
-	if(!maintenancePrepareBoot_)StartNodeRegistrationHealthMonitor();
+	if(!maintenancePrepareBoot)StartNodeRegistrationHealthMonitor();
 
-	if(!maintenancePrepareBoot_)StartGrpcServer();
+	if(!maintenancePrepareBoot)StartGrpcServer();
 
 
 	auto nodeTypeName = boost::to_upper_copy(eNodeType_Name(GetNodeInfo().node_type()));
@@ -2039,18 +2039,18 @@ void Node::StartRpcServer()
 												   "=============================================================\n";
 	LOG_INFO << banner;
 
-    maintenancePreparedStart_=true;
-	if (afterStartFn_&&!maintenancePrepareBoot_)afterStartFn_(*this);
+    maintenancePreparedStart=true;
+	if (afterStartFn&&!maintenancePrepareBoot)afterStartFn(*this);
 }
 
 
 void Node::StartPreparedSourceInLoop(){
     eventLoop.assertInLoopThread();
-    if(!maintenancePrepareBoot_||!maintenancePreparedStart_||!rpcServer||!afterStartFn_||shutdownStarted.load())throw std::runtime_error("SOURCE未实际准备");
+    if(!maintenancePrepareBoot||!maintenancePreparedStart||!rpcServer||!afterStartFn||shutdownStarted.load())throw std::runtime_error("SOURCE未实际准备");
     // consumer owner lease中的提交只切准入闸，不在可失败的校验回调中发SQL/Kafka/Redis。
     // 此函数在提交成功后、同一loop调用栈尚未让出时完成已准备listener和域启动；失败保UNKNOWN，不重放open。
-    if(!maintenanceSourceOpened_)throw std::runtime_error("SOURCE尚未原子提交");
-    afterStartFn_(*this);StartGrpcServer();rpcServer->start();StartNodeRegistrationHealthMonitor();
+    if(!maintenanceSourceOpened)throw std::runtime_error("SOURCE尚未原子提交");
+    afterStartFn(*this);StartGrpcServer();rpcServer->start();StartNodeRegistrationHealthMonitor();
 }
 
 void Node::InitMaintenanceControl()
@@ -2068,42 +2068,42 @@ void Node::InitMaintenanceControl()
     }
     auto control = std::make_unique<NodeMaintenanceControl>();
     control->directory = directory; control->helper = helper;
-    control->prepareBoot=prepare!=nullptr;maintenancePrepareBoot_=control->prepareBoot;
-    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot_)||(maintenancePrepareBoot_&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only must take effect before the first receive");
+    control->prepareBoot=prepare!=nullptr;maintenancePrepareBoot=control->prepareBoot;
+    if(!kafkaManager.PrepareOnlyBeforeSubscribe(maintenancePrepareBoot)||(maintenancePrepareBoot&&!RpcChannel::ProcessMaintenance()->PrepareSources()))FatalStartupConfig("maintenance","prepare-only must take effect before the first receive");
     control->helperHash = boost::to_lower_copy(std::string(helperHash));
     try {
         const auto uuid = boost::uuids::string_generator()(GetNodeInfo().node_uuid());
         control->instance.assign(reinterpret_cast<const char*>(uuid.data()), uuid.size());
     } catch (...) { FatalStartupConfig("maintenance", "actual node boot UUID is invalid"); }
-    maintenanceControl_ = std::move(control);
-    maintenanceControlTimer_.RunEvery(0.1, [this] { PollMaintenanceControl(); });
+    maintenanceControl = std::move(control);
+    maintenanceControlTimer.RunEvery(0.1, [this] { PollMaintenanceControl(); });
 }
 
 void Node::CloseMaintenanceSource()
 {
-    auto& control = *maintenanceControl_;
+    auto& control = *maintenanceControl;
     if (control.sourceClosed) return;
     control.sourceClosed = true; control.sourceClosedMs = NodeMaintenanceControl::NowMs();
     control.stageDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-    if(!maintenanceInboundRelay_) RpcChannel::ProcessMaintenance()->CloseSources();
-    if (!maintenanceSourceClose_ || !shutdownDrainCompleteFn_ || !maintenanceRelayStop_) {
-        control.held = true; shutdownFailure_.store(true, std::memory_order_release);
+    if(!maintenanceInboundRelay) RpcChannel::ProcessMaintenance()->CloseSources();
+    if (!maintenanceSourceClose || !shutdownDrainCompleteFn || !maintenanceRelayStop) {
+        control.held = true; shutdownFailure.store(true, std::memory_order_release);
         LOG_ERROR << "Maintenance HOLD: actual node has no source/relay lifecycle hooks installed";
-    } else if (!sourceBusinessClosed_) {
-        sourceBusinessClosed_ = true; maintenanceSourceClose_(*this);
+    } else if (!sourceBusinessClosed) {
+        sourceBusinessClosed = true; maintenanceSourceClose(*this);
     }
-    if(!maintenanceInboundRelay_) ShutdownGrpcServer();
+    if(!maintenanceInboundRelay) ShutdownGrpcServer();
     // Kafka consumers、Redis 和出站 RPC 在 P1 继续推动已接收工作；不能以 Shutdown 代替关闭根。
 }
 
 void Node::PollMaintenanceControl()
 {
     eventLoop.assertInLoopThread();
-    if (!maintenanceControl_ || shutdownStarted.load(std::memory_order_acquire)) return;
-    auto& control = *maintenanceControl_;
+    if (!maintenanceControl || shutdownStarted.load(std::memory_order_acquire)) return;
+    auto& control = *maintenanceControl;
     const auto hold = [&] {
         if (!control.held) LOG_ERROR << "Maintenance HOLD: private original, actual owner result or lifecycle gate not satisfied";
-        control.held = true; shutdownFailure_.store(true, std::memory_order_release);
+        control.held = true; shutdownFailure.store(true, std::memory_order_release);
         CloseMaintenanceSource();
     };
     if (control.held) return;
@@ -2129,8 +2129,8 @@ void Node::PollMaintenanceControl()
         control.writingOther=0;
     }
     control.PollFiles();
-    if(maintenancePreparedStart_&&!control.identityWritten){if(!control.writing.valid())try{control.WriteIdentity(GetNodeInfo());}catch(...){hold();}return;}
-    if(control.baselineIntent&&!control.baselineWritten&&!control.loaded&&maintenancePreparedStart_){
+    if(maintenancePreparedStart&&!control.identityWritten){if(!control.writing.valid())try{control.WriteIdentity(GetNodeInfo());}catch(...){hold();}return;}
+    if(control.baselineIntent&&!control.baselineWritten&&!control.loaded&&maintenancePreparedStart){
         if(!control.manualReading.valid()&&!control.writing.valid())control.manualReading=kafkaManager.ManualEvidence(control.baselineIntent->operation_id(),"",control.baselineIntent->assignments(0).issuer_id(),control.instance);
         if(control.manualReading.valid()&&control.manualReading.wait_for(std::chrono::seconds(0))==std::future_status::ready){auto actual=control.manualReading.get();if(!actual){if(std::chrono::steady_clock::now()>=control.stageDeadline)hold();return;}if(actual->assignments().empty()){hold();return;}try{control.WriteManual(std::move(*actual),true);}catch(...){hold();return;}}
     }
@@ -2139,7 +2139,7 @@ void Node::PollMaintenanceControl()
         if(control.runtime.sourceRequested||control.runtime.relayRequested){hold();return;}
         if(control.opened)return;
         if(!control.preparedWritten&&std::chrono::steady_clock::now()>=control.stageDeadline){hold();return;}
-        if(!maintenancePreparedStart_||!afterStartFn_)return;
+        if(!maintenancePreparedStart||!afterStartFn)return;
         if(!control.preparedWritten&&!control.writing.valid()){
             if(!control.preparing.valid())control.preparing=kafkaManager.PrepareReadiness(control.runtime.plan,control.runtime.request.evidence().manifest_digest(),control.runtime.source->issuer_id(),control.instance);
             if(control.preparing.wait_for(std::chrono::seconds(0))==std::future_status::ready){auto actual=control.preparing.get();if(actual){try{control.WritePrepared(std::move(*actual));}catch(...){hold();return;}}}
@@ -2149,9 +2149,9 @@ void Node::PollMaintenanceControl()
             if(!control.ValidOpen()){hold();return;}
             try{
                 if(!kafkaManager.OpenPrepared(control.consumers,[&]{
-                    if(maintenanceSourceOpened_||shutdownStarted.load()||!rpcServer||!afterStartFn_)return false;
+                    if(maintenanceSourceOpened||shutdownStarted.load()||!rpcServer||!afterStartFn)return false;
                     if(!RpcChannel::ProcessMaintenance()->OpenPreparedSources())return false;
-                    maintenanceSourceOpened_=true;return true;
+                    maintenanceSourceOpened=true;return true;
                 })){hold();return;}
                 StartPreparedSourceInLoop();control.WriteOpen();
             }catch(...){hold();return;}
@@ -2163,15 +2163,15 @@ void Node::PollMaintenanceControl()
     if (HasKnownShutdownFailure()) { hold(); return; }
     if (!control.sourceWritten && std::chrono::steady_clock::now() >= control.stageDeadline) { hold(); return; }
     const auto ingressSettled=[&](std::string& frontier) {
-        const bool rpcReady=maintenanceInboundRelay_?RpcChannel::ProcessMaintenance()->SettledFrontier(frontier):RpcChannel::ProcessMaintenance()->Frontier(true,frontier);
+        const bool rpcReady=maintenanceInboundRelay?RpcChannel::ProcessMaintenance()->SettledFrontier(frontier):RpcChannel::ProcessMaintenance()->Frontier(true,frontier);
         if(!rpcReady)return false;
-        if(grpcServer_){const auto stats=grpcServer_->Stats();
+        if(grpcServer){const auto stats=grpcServer->Stats();
             if(stats.inFlight!=0||stats.deadlineAfterStart!=0||stats.abortedAfterStart!=0||stats.unavailableOnShutdown!=0||stats.lateFinish!=0||stats.dropped!=0||stats.droppedOffLoop!=0)return false;
             frontier+="\ngrpc-server:"+std::to_string(stats.dispatched)+":"+std::to_string(stats.inFlight);
-        }else if(!grpcServices_.empty()&&!shutdownGrpcDrainComplete_)return false;
+        }else if(!grpcServices.empty()&&!shutdownGrpcDrainComplete)return false;
         return true;
     };
-    if (!control.sourceWritten && !control.writing.valid() && shutdownDrainCompleteFn_(*this)) {
+    if (!control.sourceWritten && !control.writing.valid() && shutdownDrainCompleteFn(*this)) {
         std::string rpc, grpc, redis;
         const auto kafka = KafkaProducer::ProcessPublicationFrontier();
         if (ingressSettled(rpc) && muduo_grpc::Channel::ProcessMaintenance()->SettledFrontier(grpc) &&
@@ -2192,13 +2192,13 @@ void Node::PollMaintenanceControl()
     }
     if (!control.relayClosed) {
         if(!control.manualConsumersStopped){if(!kafkaManager.ManualDrainReady())return;kafkaManager.StopConsumers();control.manualConsumersStopped=true;}
-        if (!shutdownGrpcDrainComplete_ || !kafkaManager.ConsumersJoined() || !shutdownDrainCompleteFn_(*this)) return;
+        if (!shutdownGrpcDrainComplete || !kafkaManager.ConsumersJoined() || !shutdownDrainCompleteFn(*this)) return;
         std::string rpc, grpc, redis;
         const auto kafka = KafkaProducer::ProcessPublicationFrontier();
         if (!RpcChannel::ProcessMaintenance()->Frontier(true, rpc) || !muduo_grpc::Channel::ProcessMaintenance()->SettledFrontier(grpc) ||
             !hiredis::Hiredis::ProcessMaintenance()->SettledFrontier(redis) || kafka.unknown || kafka.activeSends != 0 || kafka.activeCallbacks != 0 || kafka.accepted != kafka.confirmed) return;
         control.relayClosed = true; control.relayClosedMs = NodeMaintenanceControl::NowMs();
-        maintenanceRelayStop_(*this); beforeTeardownRan_ = true;
+        maintenanceRelayStop(*this); beforeTeardownRan = true;
         CloseTransportOwnersInLoop();
         ReleaseLocalOwnersInLoop();
         kafkaManager.Shutdown(std::chrono::milliseconds(0));
@@ -2212,7 +2212,7 @@ void Node::PollMaintenanceControl()
     }
     std::string rpc, grpc, redis;
     const auto kafka = kafkaManager.ClosedPublicationFrontier();
-    if (!control.writing.valid() && rpcNativeJoined_ && kafkaManager.LocalWorkJoined() && RpcChannel::ProcessMaintenance()->LocalCallbacksJoined() &&
+    if (!control.writing.valid() && rpcNativeJoined && kafkaManager.LocalWorkJoined() && RpcChannel::ProcessMaintenance()->LocalCallbacksJoined() &&
         muduo_grpc::Channel::ProcessMaintenance()->Joined() && muduo_grpc::Channel::ProcessMaintenance()->NativeJoined() &&
         muduo_grpc::Channel::ProcessControlMaintenance()->Joined() && muduo_grpc::Channel::ProcessControlMaintenance()->NativeJoined() &&
         hiredis::Hiredis::ProcessMaintenance()->Joined() && RpcChannel::ProcessMaintenance()->Frontier(false, rpc) &&
@@ -2224,13 +2224,13 @@ void Node::PollMaintenanceControl()
 void Node::CloseTransportOwnersInLoop()
 {
     eventLoop.assertInLoopThread();
-    if (transportCloseStarted_) return;
-    transportCloseStarted_ = true;
+    if (transportCloseStarted) return;
+    transportCloseStarted = true;
     ReleaseNodeId();
     serviceDiscoveryManager.Shutdown();
     // 热关停的独立 etcd 连接与注册那条同时拆(传输要求 loop 仍在运行)。之后规则停在最后一份快照上,
     // 停机期间仍照它判;没有新请求进来,这不改变任何结果。
-    if (killSwitchSync_) killSwitchSync_->Shutdown();
+    if (killSwitchSync) killSwitchSync->Shutdown();
     serviceHealthMonitorTimer.Cancel(); conflictDrainTimer.Cancel();
     RpcChannel::ProcessMaintenance()->ClosePublications();
     muduo_grpc::Channel::ProcessMaintenance()->Close();
@@ -2242,8 +2242,8 @@ void Node::CloseTransportOwnersInLoop()
 void Node::ReleaseLocalOwnersInLoop()
 {
     eventLoop.assertInLoopThread();
-    if (localOwnerReleaseStarted_) return;
-    localOwnerReleaseStarted_ = true;
+    if (localOwnerReleaseStarted) return;
+    localOwnerReleaseStarted = true;
     hiredis::Hiredis::ProcessMaintenance()->Close();
     // 两个句柄都只有 scene 连过;其它节点这里是空操作。
     tlsControlRedis.Shutdown();
@@ -2251,7 +2251,7 @@ void Node::ReleaseLocalOwnersInLoop()
     // TcpServer 析构不能发生在 I/O 分发栈；所有 TCP owner 都在原 loop 释放，随后两跳覆盖 forceClose/connectDestroyed。
     eventLoop.queueInLoop([this] {
         rpcServer.reset(); tlsNodeContextManager.Clear();
-        eventLoop.queueInLoop([this] { eventLoop.queueInLoop([this] { rpcNativeJoined_ = true; }); });
+        eventLoop.queueInLoop([this] { eventLoop.queueInLoop([this] { rpcNativeJoined = true; }); });
     });
 }
 
@@ -2265,19 +2265,19 @@ Node &Node::SetPlannedDrain(PlannedDrainBeginFn begin, PlannedDrainCompleteFn is
 												" must be 0 (disabled) or a whole number of seconds up to " +
 												std::to_string(planned_drain::kMaxBudget.count()));
 	case planned_drain::BudgetKind::kDisabled:
-		plannedDrainBudget_ = std::chrono::seconds{0};
+		plannedDrainBudget = std::chrono::seconds{0};
 		break;
 	case planned_drain::BudgetKind::kSeconds:
-		plannedDrainBudget_ = budget.seconds;
+		plannedDrainBudget = budget.seconds;
 		break;
 	default:
-		plannedDrainBudget_ = defaultBudget;
+		plannedDrainBudget = defaultBudget;
 		break;
 	}
-	plannedDrainBeginFn_ = std::move(begin);
-	plannedDrainCompleteFn_ = std::move(isComplete);
-	LOG_INFO << "Planned drain configured: budget_s=" << plannedDrainBudget_.count()
-			 << (plannedDrainBudget_.count() == 0 ? " (disabled; SIGTERM shuts down directly)" : "");
+	plannedDrainBeginFn = std::move(begin);
+	plannedDrainCompleteFn = std::move(isComplete);
+	LOG_INFO << "Planned drain configured: budget_s=" << plannedDrainBudget.count()
+			 << (plannedDrainBudget.count() == 0 ? " (disabled; SIGTERM shuts down directly)" : "");
 	return *this;
 }
 
@@ -2299,25 +2299,25 @@ void Node::RequestPlannedStop()
 void Node::BeginPlannedDrainInLoop()
 {
 	eventLoop.assertInLoopThread();
-	if (shutdownStarted.load(std::memory_order_acquire) || plannedDrainStarted_)
+	if (shutdownStarted.load(std::memory_order_acquire) || plannedDrainStarted)
 	{
 		return;
 	}
 	// 退回普通停机的三种情形:没登记(这类节点的 SIGTERM 本来就是直接停机)、预算为 0(部署关掉了计划排空)、
 	// 维护流程已关源(节点的生命周期归维护流程的 P1 / P3,不另起一套交接)。
-	const bool registered = plannedDrainBeginFn_ && plannedDrainCompleteFn_;
-	const bool maintenanceOwnsLifecycle = maintenanceControl_ && maintenanceControl_->sourceClosed;
-	if (!registered || plannedDrainBudget_.count() == 0 || maintenanceOwnsLifecycle)
+	const bool registered = plannedDrainBeginFn && plannedDrainCompleteFn;
+	const bool maintenanceOwnsLifecycle = maintenanceControl && maintenanceControl->sourceClosed;
+	if (!registered || plannedDrainBudget.count() == 0 || maintenanceOwnsLifecycle)
 	{
 		ShutdownInLoop();
 		return;
 	}
 
-	plannedDrainStarted_ = true;
-	plannedDrainDeadline_ = std::chrono::steady_clock::now() + plannedDrainBudget_;
+	plannedDrainStarted = true;
+	plannedDrainDeadline = std::chrono::steady_clock::now() + plannedDrainBudget;
 	LOG_INFO << "Planned drain started; the node keeps serving while its work is handed over. budget_s="
-			 << plannedDrainBudget_.count();
-	plannedDrainBeginFn_(*this);
+			 << plannedDrainBudget.count();
+	plannedDrainBeginFn(*this);
 
 	// 每拍现场重查业务状态,不锁存:排空期间仍可能有晚到的工作(例如选点提示还没传到的进场)。
 	constexpr double kPlannedDrainPollIntervalSec = 0.2;
@@ -2334,8 +2334,8 @@ void Node::PollPlannedDrainInLoop()
 		plannedDrainTimer.Cancel();
 		return;
 	}
-	const auto verdict = planned_drain::Decide(plannedDrainCompleteFn_(*this), std::chrono::steady_clock::now(),
-											   plannedDrainDeadline_);
+	const auto verdict = planned_drain::Decide(plannedDrainCompleteFn(*this), std::chrono::steady_clock::now(),
+											   plannedDrainDeadline);
 	if (verdict == planned_drain::Verdict::kWait)
 	{
 		return;
@@ -2348,7 +2348,7 @@ void Node::PollPlannedDrainInLoop()
 	else
 	{
 		LOG_ERROR << "Planned drain budget expired with work remaining; shutting down through the normal path. budget_s="
-				  << plannedDrainBudget_.count();
+				  << plannedDrainBudget.count();
 	}
 	ShutdownInLoop();
 }
@@ -2380,10 +2380,10 @@ void Node::Shutdown()
 		return;
 	}
 
-	std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
-	if (!shutdownCompletionCv_.wait_for(lock, kShutdownCompletionWaitTimeout,
+	std::unique_lock<std::mutex> lock(shutdownCompletionMutex);
+	if (!shutdownCompletionCv.wait_for(lock, kShutdownCompletionWaitTimeout,
 										[this]
-										{ return shutdownComplete_; }))
+										{ return shutdownComplete; }))
 	{
 		LOG_ERROR << "Node shutdown timed out waiting for loop thread. timeout_s="
 				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownCompletionWaitTimeout).count();
@@ -2406,11 +2406,11 @@ void Node::ShutdownInLoop()
 	kafkaManager.StopConsumers();
 
 	RpcChannel::ProcessMaintenance()->CloseSources();
-	if (!sourceBusinessClosed_ && beforeShutdownFn_)
+	if (!sourceBusinessClosed && beforeShutdownFn)
 	{
-		sourceBusinessClosed_ = true;
+		sourceBusinessClosed = true;
 		LOG_INFO << "Running before-shutdown hook...";
-		beforeShutdownFn_(*this);
+		beforeShutdownFn(*this);
 	}
 
 	// 业务 barrier 与 gRPC 排空并行推进。先执行 hook 生成待落地工作,随后立刻进入
@@ -2428,7 +2428,7 @@ void Node::StartShutdownDrainWatchdog()
 
 	// 即使业务 hook 同步完成，Kafka 已排入 loop 的回调仍须真实返回。
 	constexpr double kDrainPollIntervalSec = 0.1;
-	shutdownDrainDeadline_ = std::chrono::steady_clock::now() + kShutdownDrainBudget;
+	shutdownDrainDeadline = std::chrono::steady_clock::now() + kShutdownDrainBudget;
 	LOG_INFO << "Waiting for before-shutdown work to drain. timeout_s="
 			 << std::chrono::duration_cast<std::chrono::seconds>(kShutdownDrainBudget).count();
 
@@ -2441,21 +2441,21 @@ void Node::StartShutdownDrainWatchdog()
 void Node::MaybeFinalizeShutdownInLoop()
 {
 	eventLoop.assertInLoopThread();
-	if (!shutdownStarted.load(std::memory_order_acquire) || shutdownFinalizationStarted_)
+	if (!shutdownStarted.load(std::memory_order_acquire) || shutdownFinalizationStarted)
 	{
 		return;
 	}
 
-	const bool businessDrained = !shutdownDrainCompleteFn_ || shutdownDrainCompleteFn_(*this);
-	const bool businessExpired = std::chrono::steady_clock::now() >= shutdownDrainDeadline_;
+	const bool businessDrained = !shutdownDrainCompleteFn || shutdownDrainCompleteFn(*this);
+	const bool businessExpired = std::chrono::steady_clock::now() >= shutdownDrainDeadline;
 	const bool kafkaCallbacksJoined = kafkaManager.ConsumersJoined();
-	if (!shutdownGrpcDrainComplete_ || !kafkaCallbacksJoined || (!businessDrained && !businessExpired))
+	if (!shutdownGrpcDrainComplete || !kafkaCallbacksJoined || (!businessDrained && !businessExpired))
 	{
-		if (businessExpired) shutdownFailure_.store(true, std::memory_order_release);
+		if (businessExpired) shutdownFailure.store(true, std::memory_order_release);
 		return;
 	}
 
-	shutdownFinalizationStarted_ = true;
+	shutdownFinalizationStarted = true;
 	shutdownDrainTimer.Cancel();
 	if (businessDrained && kafkaCallbacksJoined)
 	{
@@ -2463,7 +2463,7 @@ void Node::MaybeFinalizeShutdownInLoop()
 	}
 	else
 	{
-		shutdownFailure_.store(true, std::memory_order_release);
+		shutdownFailure.store(true, std::memory_order_release);
 		LOG_ERROR << "Lifecycle HOLD: shutdown budget expired with unresolved work; teardown is not a closure receipt. timeout_s="
 				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownDrainBudget).count();
 	}
@@ -2478,18 +2478,18 @@ void Node::FinalizeShutdownInLoop()
 	// 回调就跑在事件处理期间,此时销毁 Acceptor 会撞上 EventLoop removeChannel 的断言。移进排队任务销毁,
 	// FIFO 排在下面的 FinalizeTeardownInLoop 之前;~Server 排进的 forceClose / connectDestroyed 由拆除末尾的
 	// 两跳 quit 覆盖。
-	if (grpcServer_)
+	if (grpcServer)
 	{
 		LOG_ERROR << "gRPC server still alive at shutdown finalization; destroying it in a queued task. listen="
-				  << grpcServer_->listenAddress();
-		eventLoop.queueInLoop([server = std::move(grpcServer_)]() mutable
+				  << grpcServer->ListenAddress();
+		eventLoop.queueInLoop([server = std::move(grpcServer)]() mutable
 							  { server.reset(); });
 	}
 	shutdownDrainTimer.Cancel();
-	maintenanceControlTimer_.Cancel();
-	if (tableBundleManager_)
+	maintenanceControlTimer.Cancel();
+	if (tableBundleManager)
 	{
-		tableBundleManager_->Stop();
+		tableBundleManager->Stop();
 	}
 	CloseTransportOwnersInLoop();
 	eventLoop.queueInLoop([this]
@@ -2506,26 +2506,26 @@ void Node::FinalizeTeardownInLoop()
 	// 取消,不在这里。
 	if (!kafkaManager.Shutdown())
 	{
-		shutdownFailure_.store(true, std::memory_order_release);
+		shutdownFailure.store(true, std::memory_order_release);
 		LOG_ERROR << "Kafka lifecycle HOLD: native producer or accepted callbacks not yet confirmed; process exit must not be signed off as a closure";
 	}
 	// 拆除前钩子(SetBeforeTeardown):排在 producer 最后一次有界 flush 之后(重入时 kafkaManager.Shutdown 只返回缓存结果,
 	// 不再 flush),排在 Redis / ECS / 注册表拆除与 logSystem.stop() 之前 —— 业务在这里停掉自己的定时器并把未落定的事
 	// 打进日志(scene:未落定玩家清单)。只在第一次进入时调用:下面的让轮会重入本函数,
 	// 先停掉的定时器也就不会在让轮期间、在半拆的节点上再推业务。
-	if (!beforeTeardownRan_)
+	if (!beforeTeardownRan)
 	{
-		beforeTeardownRan_ = true;
-		if (beforeTeardownFn_)
+		beforeTeardownRan = true;
+		if (beforeTeardownFn)
 		{
-			beforeTeardownFn_(*this);
+			beforeTeardownFn(*this);
 		}
 	}
 	// Hiredis 持有 muduo Channel 和待回调命令;必须在 EventLoop 与回调目标都存活时释放。
 	ReleaseLocalOwnersInLoop();
 	// 阶段 0 与本函数之间、以及 Redis 取消回调里，都可能向已关闭节点 Send:那是排在本函数之后的异步本地失败。
 	// 让一轮,等它们在 ECS / 日志仍活着时执行完再拆(Kafka / Redis 的 Shutdown 可重入)。
-	if (!rpcNativeJoined_ || !GrpcClientLocalCompletionsDrained() || !kafkaManager.LocalWorkJoined() ||
+	if (!rpcNativeJoined || !GrpcClientLocalCompletionsDrained() || !kafkaManager.LocalWorkJoined() ||
         !RpcChannel::ProcessMaintenance()->LocalCallbacksJoined() ||
         !muduo_grpc::Channel::ProcessMaintenance()->Joined() || !muduo_grpc::Channel::ProcessMaintenance()->NativeJoined() ||
         !muduo_grpc::Channel::ProcessControlMaintenance()->Joined() || !muduo_grpc::Channel::ProcessControlMaintenance()->NativeJoined() ||
@@ -2545,8 +2545,8 @@ void Node::FinalizeTeardownInLoop()
 	tlsNodeContextManager.Clear();
 	// /metrics 出口同理趁 EventLoop 还活着释放(~TcpServer 要在 loop 线程上关掉已有连接);它的采集回调读 tlsEcs,
 	// 必须排在 tlsEcs.Clear() 之前。关闭排进队列的连接收尾由下面的两跳 queueInLoop 排空。
-	metricsExporter_.reset();
-	tableBundleManager_.reset();
+	metricsExporter.reset();
+	tableBundleManager.reset();
 	// span 导出:RPC 通道、Kafka、Redis 都已收尾,最后一批 client / consumer span 已经入队。导出器在本 loop 上有界冲刷
 	// (≤ shutdownTimeout,默认 2 秒),没冲完就同上面一样让一轮再进来:重入时上面各步都是空操作。在 logSystem.stop() 之前,
 	// 收尾日志还写得出去;它排进队列的连接收尾由下面的两跳 queueInLoop 排空。
@@ -2594,11 +2594,11 @@ void Node::FinalizeTeardownInLoop()
 		loop->queueInLoop([this, loop]
 		{
 			loop->quit();
-			if (shutdownFailure_.load(std::memory_order_acquire)) { LOG_ERROR << "Node teardown complete with lifecycle HOLD"; }
+			if (shutdownFailure.load(std::memory_order_acquire)) { LOG_ERROR << "Node teardown complete with lifecycle HOLD"; }
 			else { LOG_DEBUG << "Node teardown complete; maintenance closure requires original owner receipts"; }
-			std::lock_guard<std::mutex> lock(shutdownCompletionMutex_);
-			shutdownComplete_ = true;
-			shutdownCompletionCv_.notify_all();
+			std::lock_guard<std::mutex> lock(shutdownCompletionMutex);
+			shutdownComplete = true;
+			shutdownCompletionCv.notify_all();
 		});
 	});
 }
@@ -2641,8 +2641,8 @@ void Node::LoadConfigs()
 
 void Node::LoadAllConfigData()
 {
-	tableBundleManager_ = std::make_shared<table_bundle::TableBundleManager>(eventLoop);
-	tableBundleManager_->LoadAtStartup(GetConfigDir(), UseProtoBinaryTables());
+	tableBundleManager = std::make_shared<table_bundle::TableBundleManager>(eventLoop);
+	tableBundleManager->LoadAtStartup(GetConfigDir(), UseProtoBinaryTables());
 }
 
 void Node::SetupTimeZone()
@@ -2778,10 +2778,10 @@ void Node::HandleServiceNodeStop(const std::string &key, const std::string &node
 		const auto &nodeUuid = stoppedNode.node_uuid();
 
 		// Already pending? Reset timer.
-		if (pendingNodeRemovals_.count(nodeUuid))
+		if (pendingNodeRemovals.count(nodeUuid))
 		{
 			LOG_INFO << "Node removal already pending, resetting grace timer. uuid=" << nodeUuid;
-			pendingNodeRemovals_.erase(nodeUuid);
+			pendingNodeRemovals.erase(nodeUuid);
 		}
 
 		auto pending = std::make_unique<PendingNodeRemoval>();
@@ -2791,8 +2791,8 @@ void Node::HandleServiceNodeStop(const std::string &key, const std::string &node
 		std::string capturedUuid = nodeUuid;
 		pending->timer.RunAfter(static_cast<double>(graceSeconds), [this, capturedUuid]()
 								{
-			auto it = pendingNodeRemovals_.find(capturedUuid);
-			if (it == pendingNodeRemovals_.end())
+			auto it = pendingNodeRemovals.find(capturedUuid);
+			if (it == pendingNodeRemovals.end())
 			{
 				return; // Already cancelled by a re-register PUT event.
 			}
@@ -2800,12 +2800,12 @@ void Node::HandleServiceNodeStop(const std::string &key, const std::string &node
 			LOG_WARN << "Grace period expired, removing node. uuid=" << capturedUuid;
 			NodeInfo expiredNode;
 			expiredNode.CopyFrom(it->second->nodeInfo);
-			pendingNodeRemovals_.erase(it);
+			pendingNodeRemovals.erase(it);
 
 			// Execute the actual removal (same logic as the immediate path below).
 			ExecuteNodeRemoval(expiredNode); });
 
-		pendingNodeRemovals_[nodeUuid] = std::move(pending);
+		pendingNodeRemovals[nodeUuid] = std::move(pending);
 		LOG_INFO << "Node removal deferred for " << graceSeconds << "s grace period. uuid=" << nodeUuid;
 		return;
 	}
@@ -2816,15 +2816,15 @@ void Node::HandleServiceNodeStop(const std::string &key, const std::string &node
 
 void Node::CancelPendingNodeRemoval(const std::string &nodeUuid)
 {
-	auto it = pendingNodeRemovals_.find(nodeUuid);
-	if (it == pendingNodeRemovals_.end())
+	auto it = pendingNodeRemovals.find(nodeUuid);
+	if (it == pendingNodeRemovals.end())
 	{
 		return;
 	}
 
 	LOG_INFO << "Node re-registered during grace period, cancelling pending removal. uuid=" << nodeUuid;
 	it->second->timer.Cancel();
-	pendingNodeRemovals_.erase(it);
+	pendingNodeRemovals.erase(it);
 }
 
 namespace
@@ -2901,42 +2901,42 @@ void Node::ExecuteNodeRemoval(const NodeInfo &stoppedNode)
 Node &Node::SetConnectionAdmission(uint32_t nodeType, ConnectionAdmissionFn fn)
 {
 	eventLoop.assertInLoopThread();
-	if (nodeType >= connectionAdmission_.size())
+	if (nodeType >= connectionAdmission.size())
 	{
 		LOG_FATAL << "SetConnectionAdmission: invalid node type " << nodeType;
 	}
-	connectionAdmission_[nodeType] = std::move(fn);
+	connectionAdmission[nodeType] = std::move(fn);
 	return *this;
 }
 
 Node &Node::SetDiscoveryObserver(uint32_t nodeType, DiscoveryObserverFn fn)
 {
 	eventLoop.assertInLoopThread();
-	if (nodeType >= discoveryObservers_.size())
+	if (nodeType >= discoveryObservers.size())
 	{
 		LOG_FATAL << "SetDiscoveryObserver: invalid node type " << nodeType;
 	}
-	discoveryObservers_[nodeType] = std::move(fn);
+	discoveryObservers[nodeType] = std::move(fn);
 	return *this;
 }
 
 bool Node::AdmitsConnection(const NodeInfo &node) const
 {
 	const uint32_t nodeType = node.node_type();
-	if (!targetNodeTypeWhitelist.contains(nodeType) || nodeType >= connectionAdmission_.size())
+	if (!targetNodeTypeWhitelist.contains(nodeType) || nodeType >= connectionAdmission.size())
 	{
 		return false;
 	}
-	const auto &admit = connectionAdmission_[nodeType];
+	const auto &admit = connectionAdmission[nodeType];
 	return !admit || admit(node);
 }
 
 void Node::NotifyDiscoveryChanged(uint32_t nodeType)
 {
 	eventLoop.assertInLoopThread();
-	if (nodeType < discoveryObservers_.size() && discoveryObservers_[nodeType])
+	if (nodeType < discoveryObservers.size() && discoveryObservers[nodeType])
 	{
-		discoveryObservers_[nodeType]();
+		discoveryObservers[nodeType]();
 	}
 }
 

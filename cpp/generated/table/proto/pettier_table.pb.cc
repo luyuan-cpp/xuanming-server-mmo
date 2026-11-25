@@ -48,11 +48,11 @@ constexpr PetTierTable::ParseTableT_ PetTierTable::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,10 +62,7 @@ constexpr PetTierTable::ParseTableT_ PetTierTable::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::PetTierTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string desc = 4;
-      {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
-        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.desc_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTierTable, _impl_.id_), 3>(),
        {8, 3, 0,
@@ -78,6 +75,36 @@ constexpr PetTierTable::ParseTableT_ PetTierTable::InternalGenerateParseTable_(c
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.art_key_)}},
+      // string desc = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.desc_)}},
+      // uint32 ascend_cost_item_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTierTable, _impl_.ascend_cost_item_id_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_item_id_)}},
+      // uint32 ascend_cost_item_count = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTierTable, _impl_.ascend_cost_item_count_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_item_count_)}},
+      // uint64 ascend_cost_gold = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetTierTable, _impl_.ascend_cost_gold_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_gold_)}},
+      // uint32 ascend_min_pet_level = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTierTable, _impl_.ascend_min_pet_level_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_min_pet_level_)}},
+      // uint32 bonus_entry_points = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetTierTable, _impl_.bonus_entry_points_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.bonus_entry_points_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -89,10 +116,20 @@ constexpr PetTierTable::ParseTableT_ PetTierTable::InternalGenerateParseTable_(c
       {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.art_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string desc = 4;
       {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.desc_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 ascend_cost_item_id = 5;
+      {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_item_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 ascend_cost_item_count = 6;
+      {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_item_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 ascend_cost_gold = 7;
+      {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_cost_gold_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 ascend_min_pet_level = 8;
+      {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.ascend_min_pet_level_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 bonus_entry_points = 9;
+      {PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.bonus_entry_points_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\14\0\4\7\4\0\0\0"
+      "\14\0\4\7\4\0\0\0\0\0\0\0\0\0\0\0"
       "PetTierTable"
       "name"
       "art_key"
@@ -115,7 +152,12 @@ inline constexpr PetTierTable::Impl_::Impl_(
         desc_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        id_{0u} {}
+        id_{0u},
+        ascend_cost_item_id_{0u},
+        ascend_cost_gold_{::uint64_t{0u}},
+        ascend_cost_item_count_{0u},
+        ascend_min_pet_level_{0u},
+        bonus_entry_points_{0u} {}
 
 template <typename>
 constexpr PetTierTable::PetTierTable(::_pbi::ConstantInitialized,
@@ -369,15 +411,25 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_._has_bits_),
-        7, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.art_key_),
         PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.ascend_cost_item_id_),
+        PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.ascend_cost_item_count_),
+        PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.ascend_cost_gold_),
+        PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.ascend_min_pet_level_),
+        PROTOBUF_FIELD_OFFSET(::PetTierTable, _impl_.bonus_entry_points_),
         3,
         0,
         1,
         2,
+        4,
+        6,
+        5,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetTierTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -388,7 +440,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PetTierTable)},
-        {11, sizeof(::PetTierTableData)},
+        {21, sizeof(::PetTierTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -397,18 +449,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_pettier_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023pettier_table.proto\"G\n\014PetTierTable\022\n\n"
-    "\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\017\n\007art_key\030\003 \001(\t"
-    "\022\014\n\004desc\030\004 \001(\t\"/\n\020PetTierTableData\022\033\n\004da"
-    "ta\030\001 \003(\0132\r.PetTierTableB>\n\016com.game.tabl"
-    "eB\026PetTierTableOuterClassP\001Z\022generated/p"
-    "b/tableb\006proto3"
+    "\n\023pettier_table.proto\"\330\001\n\014PetTierTable\022\n"
+    "\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\017\n\007art_key\030\003 \001("
+    "\t\022\014\n\004desc\030\004 \001(\t\022\033\n\023ascend_cost_item_id\030\005"
+    " \001(\r\022\036\n\026ascend_cost_item_count\030\006 \001(\r\022\030\n\020"
+    "ascend_cost_gold\030\007 \001(\004\022\034\n\024ascend_min_pet"
+    "_level\030\010 \001(\r\022\032\n\022bonus_entry_points\030\t \001(\r"
+    "\"/\n\020PetTierTableData\022\033\n\004data\030\001 \003(\0132\r.Pet"
+    "TierTableB>\n\016com.game.tableB\026PetTierTabl"
+    "eOuterClassP\001Z\022generated/pb/tableb\006proto"
+    "3"
 };
 static ::absl::once_flag descriptor_table_pettier_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pettier_5ftable_2eproto = {
     false,
     false,
-    215,
+    361,
     descriptor_table_protodef_pettier_5ftable_2eproto,
     "pettier_table.proto",
     &descriptor_table_pettier_5ftable_2eproto_once,
@@ -456,7 +512,13 @@ PetTierTable::PetTierTable(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.id_ = from._impl_.id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, id_),
+           offsetof(Impl_, bonus_entry_points_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::bonus_entry_points_));
 
   // @@protoc_insertion_point(copy_constructor:PetTierTable)
 }
@@ -470,7 +532,12 @@ PROTOBUF_NDEBUG_INLINE PetTierTable::Impl_::Impl_(
 
 inline void PetTierTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           0,
+           offsetof(Impl_, bonus_entry_points_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::bonus_entry_points_));
 }
 PetTierTable::~PetTierTable() {
   // @@protoc_insertion_point(destructor:PetTierTable)
@@ -534,7 +601,12 @@ PROTOBUF_NOINLINE void PetTierTable::Clear() {
       _impl_.desc_.ClearNonDefaultToEmpty();
     }
   }
-  _impl_.id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.ascend_min_pet_level_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.ascend_min_pet_level_));
+  }
+  _impl_.bonus_entry_points_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -597,6 +669,51 @@ PROTOBUF_NOINLINE void PetTierTable::Clear() {
     }
   }
 
+  // uint32 ascend_cost_item_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_ascend_cost_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_ascend_cost_item_id(), target);
+    }
+  }
+
+  // uint32 ascend_cost_item_count = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_ascend_cost_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_ascend_cost_item_count(), target);
+    }
+  }
+
+  // uint64 ascend_cost_gold = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_ascend_cost_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_ascend_cost_gold(), target);
+    }
+  }
+
+  // uint32 ascend_min_pet_level = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_ascend_min_pet_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_ascend_min_pet_level(), target);
+    }
+  }
+
+  // uint32 bonus_entry_points = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_bonus_entry_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_bonus_entry_points(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -622,7 +739,7 @@ PROTOBUF_NOINLINE void PetTierTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string name = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
@@ -651,6 +768,43 @@ PROTOBUF_NOINLINE void PetTierTable::Clear() {
             this_._internal_id());
       }
     }
+    // uint32 ascend_cost_item_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_ascend_cost_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ascend_cost_item_id());
+      }
+    }
+    // uint64 ascend_cost_gold = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_ascend_cost_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_ascend_cost_gold());
+      }
+    }
+    // uint32 ascend_cost_item_count = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_ascend_cost_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ascend_cost_item_count());
+      }
+    }
+    // uint32 ascend_min_pet_level = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_ascend_min_pet_level() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ascend_min_pet_level());
+      }
+    }
+  }
+   {
+    // uint32 bonus_entry_points = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_bonus_entry_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_entry_points());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -669,7 +823,7 @@ void PetTierTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_name().empty()) {
         _this->_internal_set_name(from._internal_name());
@@ -702,6 +856,31 @@ void PetTierTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_ascend_cost_item_id() != 0) {
+        _this->_impl_.ascend_cost_item_id_ = from._impl_.ascend_cost_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_ascend_cost_gold() != 0) {
+        _this->_impl_.ascend_cost_gold_ = from._impl_.ascend_cost_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_ascend_cost_item_count() != 0) {
+        _this->_impl_.ascend_cost_item_count_ = from._impl_.ascend_cost_item_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_ascend_min_pet_level() != 0) {
+        _this->_impl_.ascend_min_pet_level_ = from._impl_.ascend_min_pet_level_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_bonus_entry_points() != 0) {
+      _this->_impl_.bonus_entry_points_ = from._impl_.bonus_entry_points_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -725,7 +904,12 @@ void PetTierTable::InternalSwap(PetTierTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.art_key_, &other->_impl_.art_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
-  swap(_impl_.id_, other->_impl_.id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.bonus_entry_points_)
+      + sizeof(PetTierTable::_impl_.bonus_entry_points_)
+      - PROTOBUF_FIELD_OFFSET(PetTierTable, _impl_.id_)>(
+          reinterpret_cast<char*>(&_impl_.id_),
+          reinterpret_cast<char*>(&other->_impl_.id_));
 }
 
 ::google::protobuf::Metadata PetTierTable::GetMetadata() const {

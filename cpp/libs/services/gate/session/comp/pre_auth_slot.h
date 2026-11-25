@@ -18,15 +18,15 @@ class PreAuthSlot
 public:
 	using SteadyTime = std::chrono::steady_clock::time_point;
 
-	PreAuthSlot(uint64_t &heldCount, SteadyTime openedAt) : heldCount_(heldCount), openedAt_(openedAt) { ++heldCount_; }
-	~PreAuthSlot() { --heldCount_; }
+	PreAuthSlot(uint64_t &heldCount, SteadyTime openedAt) : heldCount(heldCount), openedAt(openedAt) { ++this->heldCount; }
+	~PreAuthSlot() { --heldCount; }
 	PreAuthSlot(const PreAuthSlot &) = delete;
 	PreAuthSlot &operator=(const PreAuthSlot &) = delete;
 
 	// 建连时刻(单调时钟):验签成功时用它算握手耗时。
-	SteadyTime OpenedAt() const { return openedAt_; }
+	SteadyTime OpenedAt() const { return openedAt; }
 
 private:
-	uint64_t &heldCount_;
-	SteadyTime openedAt_;
+	uint64_t &heldCount;
+	SteadyTime openedAt;
 };

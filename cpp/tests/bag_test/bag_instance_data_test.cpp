@@ -920,7 +920,7 @@ TEST_F(BagInstanceDataTest, DynamicBagMarshalRoundTripKeepsEquipPresenceAndConte
 	const auto source = NewPlayer();
 	{
 		auto &bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(source);
-		Bag &dynamicBag = bags.dynamicBags_[kDynamicBagId];
+		Bag &dynamicBag = bags.dynamicBags[kDynamicBagId];
 		dynamicBag.RestoreItems({{twoRows, 2}});
 		dynamicBag.RestoreItems({{zeroRows, 5}});
 		dynamicBag.RestoreItems({{plain, 6}});
@@ -945,8 +945,8 @@ TEST_F(BagInstanceDataTest, DynamicBagMarshalRoundTripKeepsEquipPresenceAndConte
 	bag_marshal::Unmarshal(dest, parsed);
 	auto *restored = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(dest);
 	ASSERT_NE(nullptr, restored);
-	const auto dynamicIt = restored->dynamicBags_.find(kDynamicBagId);
-	ASSERT_NE(restored->dynamicBags_.end(), dynamicIt);
+	const auto dynamicIt = restored->dynamicBags.find(kDynamicBagId);
+	ASSERT_NE(restored->dynamicBags.end(), dynamicIt);
 	Bag &restoredBag = dynamicIt->second;
 	ASSERT_EQ(3u, restoredBag.OccupiedGridCount());
 	ASSERT_NO_FATAL_FAILURE(ExpectStoredInstance(restoredBag, twoRows));
@@ -967,9 +967,9 @@ TEST_F(BagInstanceDataTest, FixedAndDynamicSqlSnapshotRoundTripKeepsCompleteInst
 	item.mutable_equip()->GetReflection()->MutableUnknownFields(item.mutable_equip())->AddLengthDelimited(101, "future-growth");
 	bags.bags[kInventory].RestoreItems({{item, 3}});
 	item.set_item_id(kGuidB);
-	bags.dynamicBags_[kDynamicBagId].RestoreItems({{item, 5}});
+	bags.dynamicBags[kDynamicBagId].RestoreItems({{item, 5}});
 	const auto fixedBefore = Capture(bags.bags[kInventory]);
-	const auto dynamicBefore = Capture(bags.dynamicBags_[kDynamicBagId]);
+	const auto dynamicBefore = Capture(bags.dynamicBags[kDynamicBagId]);
 	BagAllData wire;
 	bag_marshal::Marshal(source, wire);
 	ASSERT_EQ(1, wire.items_size());
@@ -982,8 +982,8 @@ TEST_F(BagInstanceDataTest, FixedAndDynamicSqlSnapshotRoundTripKeepsCompleteInst
 	bag_marshal::Unmarshal(dest, parsed);
 	const auto& restored = tlsEcs.actorRegistry.get<PlayerBagsComp>(dest);
 	EXPECT_EQ(fixedBefore, Capture(restored.bags[kInventory]));
-	const auto dynamic = restored.dynamicBags_.find(kDynamicBagId);
-	ASSERT_NE(restored.dynamicBags_.end(), dynamic);
+	const auto dynamic = restored.dynamicBags.find(kDynamicBagId);
+	ASSERT_NE(restored.dynamicBags.end(), dynamic);
 	EXPECT_EQ(dynamicBefore, Capture(dynamic->second));
 }
 
@@ -1607,7 +1607,7 @@ TEST_F(BagInstanceDataTest, EnhanceLevelAndGemsSurviveACrossZoneRoundTrip)
 		auto &bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(home);
 		ASSERT_EQ(kSuccess, bags.bags[kEquipment].PutInstance(worn, kSlotKind1Second));
 		bags.bags[kInventory].RestoreItems({{inInventory, 4}});
-		bags.dynamicBags_[kDynamicBagId].RestoreItems({{inDynamicBag, 3}});
+		bags.dynamicBags[kDynamicBagId].RestoreItems({{inDynamicBag, 3}});
 	}
 
 	const auto away = RoundTripBags(home); // 去程
@@ -1627,8 +1627,8 @@ TEST_F(BagInstanceDataTest, EnhanceLevelAndGemsSurviveACrossZoneRoundTrip)
 		ASSERT_NO_FATAL_FAILURE(ExpectStoredInstance(inventory, inInventory));
 		EXPECT_EQ(4u, inventory.GetItemPosByGuid(kGuidB));
 
-		const auto dynamicIt = restored->dynamicBags_.find(kDynamicBagId);
-		ASSERT_NE(restored->dynamicBags_.end(), dynamicIt);
+		const auto dynamicIt = restored->dynamicBags.find(kDynamicBagId);
+		ASSERT_NE(restored->dynamicBags.end(), dynamicIt);
 		ASSERT_EQ(1u, dynamicIt->second.OccupiedGridCount());
 		ASSERT_NO_FATAL_FAILURE(ExpectStoredInstance(dynamicIt->second, inDynamicBag));
 		EXPECT_EQ(3u, dynamicIt->second.GetItemPosByGuid(kGuidC));

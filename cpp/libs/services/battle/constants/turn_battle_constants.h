@@ -19,6 +19,9 @@ inline constexpr uint64_t kRoundDurationMs = 6000;
 inline constexpr uint64_t kActionTimeoutMs = 25000;
 // 首领试炼 V2 手动指令窗收紧至 18 秒，减少多人干等（boss-trial-planning-ui.md §3.1）。
 inline constexpr uint64_t kBossTrialActionTimeoutMs = 18000;
+// 论剑 V3 战前 15 秒明牌变阵窗口（仅正式自养论剑与赛季锦标赛开启，全员锁定或到期立即进第 1 回合）。
+inline constexpr uint64_t kTacticalPrepTimeoutMs = 15000;
+inline constexpr uint32_t kTacticalPrepDurationSeconds = 15;
 
 // DungeonTable.time_limit 为 0 时的回合上限缺省值
 inline constexpr uint32_t kDefaultMaxRounds = 300;

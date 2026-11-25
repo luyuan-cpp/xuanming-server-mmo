@@ -819,6 +819,22 @@ extern const ::google::protobuf::internal::ClassDataFull SnapshotInfo_class_data
 #else
 extern const SnapshotInfoGlobalsTypeInternal SnapshotInfo_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SyncAccountStage1TradableRequest;
+struct SyncAccountStage1TradableRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SyncAccountStage1TradableRequestGlobalsTypeInternal SyncAccountStage1TradableRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SyncAccountStage1TradableRequest_class_data_;
+#else
+extern const SyncAccountStage1TradableRequestGlobalsTypeInternal SyncAccountStage1TradableRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SyncAccountStage1TradableResponse;
+struct SyncAccountStage1TradableResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SyncAccountStage1TradableResponseGlobalsTypeInternal SyncAccountStage1TradableResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SyncAccountStage1TradableResponse_class_data_;
+#else
+extern const SyncAccountStage1TradableResponseGlobalsTypeInternal SyncAccountStage1TradableResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class TransactionLogRow;
 struct TransactionLogRowGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2035,6 +2051,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransactionLogRow final : public ::
     ::uint64_t balance_before_;
     ::uint64_t balance_after_;
     ::uint64_t correlation_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SyncAccountStage1TradableResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.SyncAccountStage1TradableResponse) */ {
+ public:
+  inline SyncAccountStage1TradableResponse() : SyncAccountStage1TradableResponse(nullptr) {}
+  ~SyncAccountStage1TradableResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SyncAccountStage1TradableResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SyncAccountStage1TradableResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SyncAccountStage1TradableResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SyncAccountStage1TradableResponse(const SyncAccountStage1TradableResponse& from) : SyncAccountStage1TradableResponse(nullptr, from) {}
+  inline SyncAccountStage1TradableResponse(SyncAccountStage1TradableResponse&& from) noexcept : SyncAccountStage1TradableResponse(nullptr, ::std::move(from)) {}
+  inline SyncAccountStage1TradableResponse& operator=(const SyncAccountStage1TradableResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SyncAccountStage1TradableResponse& operator=(SyncAccountStage1TradableResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SyncAccountStage1TradableResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SyncAccountStage1TradableResponse>(&SyncAccountStage1TradableResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 100;
+  friend void swap(SyncAccountStage1TradableResponse& a, SyncAccountStage1TradableResponse& b) { a.Swap(&b); }
+  inline void Swap(SyncAccountStage1TradableResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SyncAccountStage1TradableResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SyncAccountStage1TradableResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SyncAccountStage1TradableResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SyncAccountStage1TradableResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SyncAccountStage1TradableResponse& from) { SyncAccountStage1TradableResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SyncAccountStage1TradableResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.SyncAccountStage1TradableResponse"; }
+
+  explicit SyncAccountStage1TradableResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SyncAccountStage1TradableResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SyncAccountStage1TradableResponse& from);
+  SyncAccountStage1TradableResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SyncAccountStage1TradableResponse&& from) noexcept
+      : SyncAccountStage1TradableResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFoundFieldNumber = 1,
+    kConfirmedCharTotalFieldNumber = 2,
+    kAccountUsedTotalFieldNumber = 3,
+  };
+  // bool found = 1;
+  void clear_found() ;
+  [[nodiscard]] bool found() const;
+  void set_found(bool value);
+
+  private:
+  bool _internal_found() const;
+  void _internal_set_found(bool value);
+
+  public:
+  // uint32 confirmed_char_total = 2;
+  void clear_confirmed_char_total() ;
+  [[nodiscard]] ::uint32_t confirmed_char_total() const;
+  void set_confirmed_char_total(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_confirmed_char_total() const;
+  void _internal_set_confirmed_char_total(::uint32_t value);
+
+  public:
+  // uint32 account_used_total = 3;
+  void clear_account_used_total() ;
+  [[nodiscard]] ::uint32_t account_used_total() const;
+  void set_account_used_total(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_account_used_total() const;
+  void _internal_set_account_used_total(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.SyncAccountStage1TradableResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SyncAccountStage1TradableResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool found_;
+    ::uint32_t confirmed_char_total_;
+    ::uint32_t account_used_total_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13511,6 +13752,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferAccountRoleRequest final : 
     ::uint64_t listing_id_;
     ::uint64_t player_id_;
     ::uint64_t expected_owner_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SyncAccountStage1TradableRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.SyncAccountStage1TradableRequest) */ {
+ public:
+  inline SyncAccountStage1TradableRequest() : SyncAccountStage1TradableRequest(nullptr) {}
+  ~SyncAccountStage1TradableRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SyncAccountStage1TradableRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SyncAccountStage1TradableRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SyncAccountStage1TradableRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SyncAccountStage1TradableRequest(const SyncAccountStage1TradableRequest& from) : SyncAccountStage1TradableRequest(nullptr, from) {}
+  inline SyncAccountStage1TradableRequest(SyncAccountStage1TradableRequest&& from) noexcept : SyncAccountStage1TradableRequest(nullptr, ::std::move(from)) {}
+  inline SyncAccountStage1TradableRequest& operator=(const SyncAccountStage1TradableRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SyncAccountStage1TradableRequest& operator=(SyncAccountStage1TradableRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SyncAccountStage1TradableRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SyncAccountStage1TradableRequest>(&SyncAccountStage1TradableRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 99;
+  friend void swap(SyncAccountStage1TradableRequest& a, SyncAccountStage1TradableRequest& b) { a.Swap(&b); }
+  inline void Swap(SyncAccountStage1TradableRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SyncAccountStage1TradableRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SyncAccountStage1TradableRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SyncAccountStage1TradableRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SyncAccountStage1TradableRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SyncAccountStage1TradableRequest& from) { SyncAccountStage1TradableRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SyncAccountStage1TradableRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.SyncAccountStage1TradableRequest"; }
+
+  explicit SyncAccountStage1TradableRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SyncAccountStage1TradableRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SyncAccountStage1TradableRequest& from);
+  SyncAccountStage1TradableRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SyncAccountStage1TradableRequest&& from) noexcept
+      : SyncAccountStage1TradableRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAuthFieldNumber = 3,
+    kPlayerIdFieldNumber = 1,
+    kDesiredCharTotalFieldNumber = 2,
+  };
+  // .common.base.ServiceCallAuth auth = 3;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 desired_char_total = 2;
+  void clear_desired_char_total() ;
+  [[nodiscard]] ::uint32_t desired_char_total() const;
+  void set_desired_char_total(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_desired_char_total() const;
+  void _internal_set_desired_char_total(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.SyncAccountStage1TradableRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SyncAccountStage1TradableRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::uint64_t player_id_;
+    ::uint32_t desired_char_total_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -38653,6 +39125,227 @@ inline bool UpdateRoleAppearanceResponse::_internal_updated() const {
 inline void UpdateRoleAppearanceResponse::_internal_set_updated(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SyncAccountStage1TradableRequest
+
+// uint64 player_id = 1;
+inline void SyncAccountStage1TradableRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SyncAccountStage1TradableRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableRequest.player_id)
+  return _internal_player_id();
+}
+inline void SyncAccountStage1TradableRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:data_service.SyncAccountStage1TradableRequest.player_id)
+}
+inline ::uint64_t SyncAccountStage1TradableRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void SyncAccountStage1TradableRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 desired_char_total = 2;
+inline void SyncAccountStage1TradableRequest::clear_desired_char_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desired_char_total_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SyncAccountStage1TradableRequest::desired_char_total() const {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableRequest.desired_char_total)
+  return _internal_desired_char_total();
+}
+inline void SyncAccountStage1TradableRequest::set_desired_char_total(::uint32_t value) {
+  _internal_set_desired_char_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.SyncAccountStage1TradableRequest.desired_char_total)
+}
+inline ::uint32_t SyncAccountStage1TradableRequest::_internal_desired_char_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.desired_char_total_;
+}
+inline void SyncAccountStage1TradableRequest::_internal_set_desired_char_total(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desired_char_total_ = value;
+}
+
+// .common.base.ServiceCallAuth auth = 3;
+inline bool SyncAccountStage1TradableRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& SyncAccountStage1TradableRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& SyncAccountStage1TradableRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableRequest.auth)
+  return _internal_auth();
+}
+inline void SyncAccountStage1TradableRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:data_service.SyncAccountStage1TradableRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SyncAccountStage1TradableRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE SyncAccountStage1TradableRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.SyncAccountStage1TradableRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SyncAccountStage1TradableRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL SyncAccountStage1TradableRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:data_service.SyncAccountStage1TradableRequest.auth)
+  return _msg;
+}
+inline void SyncAccountStage1TradableRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:data_service.SyncAccountStage1TradableRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// SyncAccountStage1TradableResponse
+
+// bool found = 1;
+inline void SyncAccountStage1TradableResponse::clear_found() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool SyncAccountStage1TradableResponse::found() const {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableResponse.found)
+  return _internal_found();
+}
+inline void SyncAccountStage1TradableResponse::set_found(bool value) {
+  _internal_set_found(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:data_service.SyncAccountStage1TradableResponse.found)
+}
+inline bool SyncAccountStage1TradableResponse::_internal_found() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.found_;
+}
+inline void SyncAccountStage1TradableResponse::_internal_set_found(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = value;
+}
+
+// uint32 confirmed_char_total = 2;
+inline void SyncAccountStage1TradableResponse::clear_confirmed_char_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirmed_char_total_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t SyncAccountStage1TradableResponse::confirmed_char_total() const {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableResponse.confirmed_char_total)
+  return _internal_confirmed_char_total();
+}
+inline void SyncAccountStage1TradableResponse::set_confirmed_char_total(::uint32_t value) {
+  _internal_set_confirmed_char_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:data_service.SyncAccountStage1TradableResponse.confirmed_char_total)
+}
+inline ::uint32_t SyncAccountStage1TradableResponse::_internal_confirmed_char_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.confirmed_char_total_;
+}
+inline void SyncAccountStage1TradableResponse::_internal_set_confirmed_char_total(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.confirmed_char_total_ = value;
+}
+
+// uint32 account_used_total = 3;
+inline void SyncAccountStage1TradableResponse::clear_account_used_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_used_total_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t SyncAccountStage1TradableResponse::account_used_total() const {
+  // @@protoc_insertion_point(field_get:data_service.SyncAccountStage1TradableResponse.account_used_total)
+  return _internal_account_used_total();
+}
+inline void SyncAccountStage1TradableResponse::set_account_used_total(::uint32_t value) {
+  _internal_set_account_used_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.SyncAccountStage1TradableResponse.account_used_total)
+}
+inline ::uint32_t SyncAccountStage1TradableResponse::_internal_account_used_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_used_total_;
+}
+inline void SyncAccountStage1TradableResponse::_internal_set_account_used_total(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_used_total_ = value;
 }
 
 #ifdef __GNUC__

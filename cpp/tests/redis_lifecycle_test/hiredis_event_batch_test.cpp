@@ -30,13 +30,13 @@ using namespace std::chrono_literals;
 class OwnedFd
 {
 public:
-    explicit OwnedFd(int value) : value_(value) {}
-    ~OwnedFd() { if (value_ >= 0) ::close(value_); }
+    explicit OwnedFd(int value) : value(value) {}
+    ~OwnedFd() { if (value >= 0) ::close(value); }
     OwnedFd(const OwnedFd&) = delete;
     OwnedFd& operator=(const OwnedFd&) = delete;
-    int Get() const { return value_; }
+    int Get() const { return value; }
 private:
-    int value_;
+    int value;
 };
 
 bool WaitForFd(int fd, short events)

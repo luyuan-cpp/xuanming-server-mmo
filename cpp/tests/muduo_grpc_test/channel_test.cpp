@@ -81,7 +81,7 @@ public:
     // 按已收到的消息逐条应答,不必等请求 END_STREAM。
     using ActivityHandler = std::function<void(LoopbackH2Server &server, Connection &connection)>;
 
-    LoopbackH2Server(muduo::net::EventLoop &loop, uint16_t port) : loop_(loop), port_(port) {}
+    LoopbackH2Server(muduo::net::EventLoop &loop, uint16_t port) : loop(loop), port(port) {}
     ~LoopbackH2Server() { Stop(); }
     LoopbackH2Server(const LoopbackH2Server &) = delete;
     LoopbackH2Server &operator=(const LoopbackH2Server &) = delete;
@@ -89,17 +89,17 @@ public:
     // 必须已由 shared_ptr 持有。
     void Start(RequestHandler handler)
     {
-        handler_ = std::move(handler);
-        server_ = std::make_unique<muduo::net::TcpServer>(&loop_, muduo::net::InetAddress(port_, true),
+        this->handler = std::move(handler);
+        server = std::make_unique<muduo::net::TcpServer>(&loop, muduo::net::InetAddress(port, true),
                                                           "muduo_grpc_test_server");
         const std::weak_ptr<LoopbackH2Server> weakSelf = weak_from_this();
-        server_->setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr &conn)
+        server->setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr &conn)
                                        {
             if (const auto self = weakSelf.lock())
             {
                 self->HandleConnection(conn);
             } });
-        server_->setMessageCallback(
+        server->setMessageCallback(
             [weakSelf](const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buffer, muduo::Timestamp)
             {
                 if (const auto self = weakSelf.lock())
@@ -109,18 +109,18 @@ public:
                 }
                 buffer->retrieveAll();
             });
-        server_->start();
+        server->start();
     }
 
-    void SetHandler(RequestHandler handler) { handler_ = std::move(handler); }
-    void SetActivityHandler(ActivityHandler handler) { activityHandler_ = std::move(handler); }
+    void SetHandler(RequestHandler handler) { this->handler = std::move(handler); }
+    void SetActivityHandler(ActivityHandler handler) { activityHandler = std::move(handler); }
 
     // 析构 TcpServer:它在 loop 线程上同步 connectDestroyed 所有连接。
     void Stop()
     {
-        handler_ = nullptr;
-        activityHandler_ = nullptr;
-        server_.reset();
+        handler = nullptr;
+        activityHandler = nullptr;
+        server.reset();
     }
 
     // 把 peer 里待发的帧写进 TCP。
@@ -147,11 +147,11 @@ public:
         }
     }
 
-    size_t connectionCount() const { return connections_.size(); }
-    Connection &connection(size_t index) { return *connections_.at(index); }
+    size_t connectionCount() const { return connections.size(); }
+    Connection &connection(size_t index) { return *connections.at(index); }
     // 所有连接上收完的请求数(含透明重试的那一次)。
-    size_t requestCount() const { return requestCount_; }
-    const std::vector<std::string> &errors() const { return errors_; }
+    size_t RequestCount() const { return requestCount; }
+    const std::vector<std::string> &Errors() const { return errors; }
 
 private:
     void HandleConnection(const muduo::net::TcpConnectionPtr &conn)
@@ -159,12 +159,12 @@ private:
         if (conn->connected())
         {
             auto connection = std::make_unique<Connection>();
-            connection->index = connections_.size();
+            connection->index = connections.size();
             connection->tcp = conn;
-            indexByName_[conn->name()] = connection->index;
+            indexByName[conn->name()] = connection->index;
             conn->setTcpNoDelay(true);
-            connections_.push_back(std::move(connection));
-            Flush(*connections_.back()); // 服务端 SETTINGS
+            connections.push_back(std::move(connection));
+            Flush(*connections.back()); // 服务端 SETTINGS
             return;
         }
         if (Connection *connection = Find(conn->name()))
@@ -186,41 +186,41 @@ private:
         buffer->retrieveAll();
         if (!received)
         {
-            errors_.push_back("connection #" + std::to_string(connection->index) + ": " +
-                              connection->peer.lastError());
+            errors.push_back("connection #" + std::to_string(connection->index) + ": " +
+                              connection->peer.LastError());
             Disconnect(*connection);
             return;
         }
         for (const int32_t streamId : connection->peer.TakeCompletedRequests())
         {
-            ++requestCount_;
-            if (handler_)
+            ++requestCount;
+            if (handler)
             {
-                handler_(*this, *connection, streamId);
+                handler(*this, *connection, streamId);
             }
         }
-        if (activityHandler_)
+        if (activityHandler)
         {
-            activityHandler_(*this, *connection);
+            activityHandler(*this, *connection);
         }
         Flush(*connection); // SETTINGS ACK / WINDOW_UPDATE / PING ACK / 应答
     }
 
     Connection *Find(const std::string &name)
     {
-        const auto it = indexByName_.find(name);
-        return it == indexByName_.end() ? nullptr : connections_.at(it->second).get();
+        const auto it = indexByName.find(name);
+        return it == indexByName.end() ? nullptr : connections.at(it->second).get();
     }
 
-    muduo::net::EventLoop &loop_;
-    const uint16_t port_;
-    RequestHandler handler_;
-    ActivityHandler activityHandler_;
-    std::vector<std::unique_ptr<Connection>> connections_; // 断开后保留,供用例检查
-    std::map<std::string, size_t> indexByName_;
-    size_t requestCount_{0};
-    std::vector<std::string> errors_;
-    std::unique_ptr<muduo::net::TcpServer> server_; // 最后声明:析构时最先拆,其余成员仍有效
+    muduo::net::EventLoop &loop;
+    const uint16_t port;
+    RequestHandler handler;
+    ActivityHandler activityHandler;
+    std::vector<std::unique_ptr<Connection>> connections; // 断开后保留,供用例检查
+    std::map<std::string, size_t> indexByName;
+    size_t requestCount{0};
+    std::vector<std::string> errors;
+    std::unique_ptr<muduo::net::TcpServer> server; // 最后声明:析构时最先拆,其余成员仍有效
 };
 
 using Connection = LoopbackH2Server::Connection;
@@ -243,12 +243,12 @@ void RespondEcho(LoopbackH2Server &, Connection &connection, int32_t streamId)
         initial.emplace_back("x-session-detail-bin", *session);
     }
     const std::string payload = stream->body.size() >= 5 ? stream->body.substr(5) : std::string();
-    EXPECT_TRUE(connection.peer.SendUnaryOk(streamId, "echo:" + payload, initial)) << connection.peer.lastError();
+    EXPECT_TRUE(connection.peer.SendUnaryOk(streamId, "echo:" + payload, initial)) << connection.peer.LastError();
 }
 
 void RespondSmallOk(LoopbackH2Server &, Connection &connection, int32_t streamId)
 {
-    EXPECT_TRUE(connection.peer.SendUnaryOk(streamId, "ok")) << connection.peer.lastError();
+    EXPECT_TRUE(connection.peer.SendUnaryOk(streamId, "ok")) << connection.peer.LastError();
 }
 
 void IgnoreRequest(LoopbackH2Server &, Connection &, int32_t)
@@ -314,67 +314,67 @@ protected:
 
     void SetUp() override
     {
-        port_ = muduo_grpc_test::FindFreeLoopbackPort();
-        ASSERT_NE(port_, 0) << "no free loopback port";
+        port = muduo_grpc_test::FindFreeLoopbackPort();
+        ASSERT_NE(port, 0) << "no free loopback port";
     }
 
     void TearDown() override
     {
         // 用例体里的通道此时已析构:先转空 loop,让排队的完成回调、连接释放、forceClose、connectDestroyed 跑完。
-        if (server_)
+        if (server)
         {
-            server_->SetHandler(nullptr);
-            server_->SetActivityHandler(nullptr);
+            server->SetHandler(nullptr);
+            server->SetActivityHandler(nullptr);
         }
-        muduo_grpc_test::RunLoopFor(loop_, drainAfterTest_);
-        if (server_)
+        muduo_grpc_test::RunLoopFor(loop, drainAfterTest);
+        if (server)
         {
-            for (const auto &error : server_->errors())
+            for (const auto &error : server->Errors())
             {
                 ADD_FAILURE() << "server side: " << error;
             }
-            server_->Stop();
-            muduo_grpc_test::RunLoopFor(loop_, 100ms);
-            server_.reset();
+            server->Stop();
+            muduo_grpc_test::RunLoopFor(loop, 100ms);
+            server.reset();
         }
     }
 
     void StartServer(LoopbackH2Server::RequestHandler handler)
     {
-        server_ = std::make_shared<LoopbackH2Server>(loop_, port_);
-        server_->Start(std::move(handler));
+        server = std::make_shared<LoopbackH2Server>(loop, port);
+        server->Start(std::move(handler));
     }
 
     std::shared_ptr<Channel> MakeChannel(ChannelOptions options = {})
     {
-        auto channel = Channel::Create(loop_, "127.0.0.1", port_, std::move(options));
+        auto channel = Channel::Create(loop, "127.0.0.1", port, std::move(options));
         EXPECT_NE(channel, nullptr);
         return channel;
     }
 
     bool RunUntil(const std::function<bool()> &done, std::chrono::milliseconds timeout)
     {
-        return muduo_grpc_test::RunLoopUntil(loop_, done, timeout);
+        return muduo_grpc_test::RunLoopUntil(loop, done, timeout);
     }
 
-    void RunFor(std::chrono::milliseconds duration) { muduo_grpc_test::RunLoopFor(loop_, duration); }
+    void RunFor(std::chrono::milliseconds duration) { muduo_grpc_test::RunLoopFor(loop, duration); }
 
     // 第 index 条连接上第 n 个流;没有返回 nullptr。
     const ReceivedStream *ServerStream(size_t index, size_t n)
     {
-        if (!server_ || server_->connectionCount() <= index)
+        if (!server || server->connectionCount() <= index)
         {
             return nullptr;
         }
-        const TestH2Peer &peer = server_->connection(index).peer;
+        const TestH2Peer &peer = server->connection(index).peer;
         return n < peer.StreamIds().size() ? peer.FindStream(peer.StreamIds()[n]) : nullptr;
     }
 
     // 声明顺序 = 析构逆序:EventLoop 最先构造、最后析构。
-    muduo::net::EventLoop loop_;
-    uint16_t port_{0};
-    std::chrono::milliseconds drainAfterTest_{300};
-    std::shared_ptr<LoopbackH2Server> server_;
+    muduo::net::EventLoop loop;
+    uint16_t port{0};
+    std::chrono::milliseconds drainAfterTest{300};
+    std::shared_ptr<LoopbackH2Server> server;
 };
 
 // ── 用例 ────────────────────────────────────────────────────────────────
@@ -385,7 +385,7 @@ TEST_F(ChannelLoopbackTest, SuccessfulCallCompletesExactlyOnceAndNeverInsideStar
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle);
-    EXPECT_EQ(channel->target(), "127.0.0.1:" + std::to_string(port_));
+    EXPECT_EQ(channel->Target(), "127.0.0.1:" + std::to_string(port));
 
     const auto record = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("ping", 5s, {{"x-session-detail-bin", kSessionAppValue}}), Recorder(record));
@@ -406,11 +406,11 @@ TEST_F(ChannelLoopbackTest, SuccessfulCallCompletesExactlyOnceAndNeverInsideStar
     EXPECT_EQ(channel->outstandingCalls(), 0u);
 
     // 服务端看到的请求。
-    ASSERT_EQ(server_->connectionCount(), 1u);
+    ASSERT_EQ(server->connectionCount(), 1u);
     const ReceivedStream *stream = ServerStream(0, 0);
     ASSERT_NE(stream, nullptr);
     EXPECT_EQ(HeaderOf(*stream, ":path"), kMethod);
-    EXPECT_EQ(HeaderOf(*stream, ":authority"), "127.0.0.1:" + std::to_string(port_));
+    EXPECT_EQ(HeaderOf(*stream, ":authority"), "127.0.0.1:" + std::to_string(port));
     EXPECT_EQ(HeaderOf(*stream, "user-agent"), ChannelOptions{}.userAgent);
     EXPECT_EQ(HeaderOf(*stream, "x-session-detail-bin"), kSessionWireValue);
     const auto timeout = muduo_grpc::ParseGrpcTimeout(HeaderOf(*stream, "grpc-timeout"));
@@ -440,9 +440,9 @@ TEST_F(ChannelLoopbackTest, LocalFailuresAreAlsoDeliveredAsynchronously)
     RunFor(100ms);
     EXPECT_EQ(expired->count, 1);
     EXPECT_EQ(badKey->count, 1);
-    EXPECT_EQ(expired->result.status.code(), StatusCode::kDeadlineExceeded) << expired->result.status.ToString();
-    EXPECT_EQ(badKey->result.status.code(), StatusCode::kInternal) << badKey->result.status.ToString();
-    EXPECT_EQ(server_->connectionCount(), 0u) << "本地就失败的调用不应触发建连";
+    EXPECT_EQ(expired->result.status.Code(), StatusCode::kDeadlineExceeded) << expired->result.status.ToString();
+    EXPECT_EQ(badKey->result.status.Code(), StatusCode::kInternal) << badKey->result.status.ToString();
+    EXPECT_EQ(server->connectionCount(), 0u) << "本地就失败的调用不应触发建连";
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle);
 }
 
@@ -454,7 +454,7 @@ TEST_F(ChannelLoopbackTest, GetStateWithTryToConnectReachesReadyOnPeerSettings)
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle);
     EXPECT_EQ(channel->GetState(true), ConnectivityState::kConnecting);
     ASSERT_TRUE(RunUntil([&] { return channel->GetState(false) == ConnectivityState::kReady; }, 5s));
-    EXPECT_EQ(server_->connectionCount(), 1u);
+    EXPECT_EQ(server->connectionCount(), 1u);
 }
 
 TEST_F(ChannelLoopbackTest, DeadlineExceededResetsStreamWithCancel)
@@ -474,7 +474,7 @@ TEST_F(ChannelLoopbackTest, DeadlineExceededResetsStreamWithCancel)
         return stream != nullptr && stream->rstReceived;
     };
     ASSERT_TRUE(RunUntil([&] { return record->count > 0 && streamReset(); }, 5s));
-    EXPECT_EQ(record->result.status.code(), StatusCode::kDeadlineExceeded) << record->result.status.ToString();
+    EXPECT_EQ(record->result.status.Code(), StatusCode::kDeadlineExceeded) << record->result.status.ToString();
     EXPECT_GE(record->completedAt, deadline) << "截止回调不得早于截止时间(steady_clock 复核)";
     const ReceivedStream *stream = ServerStream(0, 0);
     ASSERT_NE(stream, nullptr);
@@ -483,7 +483,7 @@ TEST_F(ChannelLoopbackTest, DeadlineExceededResetsStreamWithCancel)
     RunFor(200ms);
     EXPECT_EQ(record->count, 1);
     // §4.4:截止时若连接一帧没收到,至多发一次存活探测。
-    EXPECT_LE(server_->connection(0).peer.pingsReceived(), 1u);
+    EXPECT_LE(server->connection(0).peer.PingsReceived(), 1u);
 }
 
 TEST_F(ChannelLoopbackTest, UnreachableTargetFailsFastInTransientFailure)
@@ -494,12 +494,12 @@ TEST_F(ChannelLoopbackTest, UnreachableTargetFailsFastInTransientFailure)
     options.backoff.initial = 10s; // 用例期间不触发后台重连
     const auto channel = MakeChannel(options);
     ASSERT_NE(channel, nullptr);
-    drainAfterTest_ = 1200ms; // 让 ~TcpClient 挂的 1s removeConnector 定时器也走完
+    drainAfterTest = 1200ms; // 让 ~TcpClient 挂的 1s removeConnector 定时器也走完
 
     const auto first = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("x", 5s), Recorder(first));
     ASSERT_TRUE(RunUntil([&] { return first->count > 0; }, 4s));
-    EXPECT_EQ(first->result.status.code(), StatusCode::kUnavailable) << first->result.status.ToString();
+    EXPECT_EQ(first->result.status.Code(), StatusCode::kUnavailable) << first->result.status.ToString();
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kTransientFailure);
     EXPECT_EQ(channel->GetState(true), ConnectivityState::kTransientFailure) << "退避期间 tryToConnect 不改变状态";
 
@@ -509,7 +509,7 @@ TEST_F(ChannelLoopbackTest, UnreachableTargetFailsFastInTransientFailure)
     channel->StartUnaryCall(MakeRequest("y", 5s), Recorder(second));
     EXPECT_EQ(second->count, 0);
     ASSERT_TRUE(RunUntil([&] { return second->count > 0; }, 1s));
-    EXPECT_EQ(second->result.status.code(), StatusCode::kUnavailable) << second->result.status.ToString();
+    EXPECT_EQ(second->result.status.Code(), StatusCode::kUnavailable) << second->result.status.ToString();
     EXPECT_LT(second->completedAt - secondStart, std::chrono::steady_clock::duration(250ms));
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kTransientFailure);
 }
@@ -523,11 +523,11 @@ TEST_F(ChannelLoopbackTest, RefusedConnectionEntersTransientFailureWithoutWaitin
     options.backoff.initial = 10s; // 用例期间不触发后台重连
     const auto channel = MakeChannel(options);
     ASSERT_NE(channel, nullptr);
-    drainAfterTest_ = 1200ms; // 让 ~TcpClient 挂的 1s removeConnector 定时器也走完
+    drainAfterTest = 1200ms; // 让 ~TcpClient 挂的 1s removeConnector 定时器也走完
 
     const auto record = std::make_shared<CallRecord>();
     const auto start = std::chrono::steady_clock::now();
-    const int64_t iterationsBefore = loop_.iteration();
+    const int64_t iterationsBefore = loop.iteration();
     channel->StartUnaryCall(MakeRequest("x", 30s), Recorder(record));
     EXPECT_EQ(record->count, 0) << "完成回调不得在 StartUnaryCall 内同步执行";
 
@@ -536,7 +536,7 @@ TEST_F(ChannelLoopbackTest, RefusedConnectionEntersTransientFailureWithoutWaitin
     ASSERT_TRUE(RunUntil([&] { return record->count > 0; }, 8s)) << "拒连没有在 connectTimeout 之前报出";
     const auto elapsed = record->completedAt - start;
     EXPECT_LT(elapsed, std::chrono::steady_clock::duration(5s));
-    EXPECT_EQ(record->result.status.code(), StatusCode::kUnavailable) << record->result.status.ToString();
+    EXPECT_EQ(record->result.status.Code(), StatusCode::kUnavailable) << record->result.status.ToString();
     EXPECT_EQ(record->result.status.message().find("connect timeout"), std::string::npos)
         << record->result.status.ToString();
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kTransientFailure);
@@ -545,7 +545,7 @@ TEST_F(ChannelLoopbackTest, RefusedConnectionEntersTransientFailureWithoutWaitin
     // 水平触发的 WSAPoll 会每轮立即返回。正常情况下只有 RunLoopUntil 的 5ms 检查定时器在推动循环
     // (约每毫秒 0.2 轮),这里放宽到每毫秒 1 轮再加 500 的余量;空转会多出几个数量级。
     const int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-    EXPECT_LT(loop_.iteration() - iterationsBefore, 500 + elapsedMs);
+    EXPECT_LT(loop.iteration() - iterationsBefore, 500 + elapsedMs);
 
     RunFor(200ms);
     EXPECT_EQ(record->count, 1) << "完成回调恰好一次";
@@ -570,8 +570,8 @@ TEST_F(ChannelLoopbackTest, PeerDisconnectFailsInFlightCallAndNextCallReconnects
     const auto first = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("first", 5s), Recorder(first));
     ASSERT_TRUE(RunUntil([&] { return first->count > 0; }, 5s));
-    EXPECT_EQ(first->result.status.code(), StatusCode::kUnavailable) << first->result.status.ToString();
-    EXPECT_EQ(server_->requestCount(), 1u) << "请求已交给对端:结果未知,不得透明重试";
+    EXPECT_EQ(first->result.status.Code(), StatusCode::kUnavailable) << first->result.status.ToString();
+    EXPECT_EQ(this->server->RequestCount(), 1u) << "请求已交给对端:结果未知,不得透明重试";
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle) << "READY 连接断开回 IDLE(pick_first)";
 
     const auto second = std::make_shared<CallRecord>();
@@ -579,8 +579,8 @@ TEST_F(ChannelLoopbackTest, PeerDisconnectFailsInFlightCallAndNextCallReconnects
     ASSERT_TRUE(RunUntil([&] { return second->count > 0; }, 5s));
     ASSERT_TRUE(second->result.status.ok()) << second->result.status.ToString();
     EXPECT_EQ(second->result.response, "echo:second");
-    EXPECT_EQ(server_->connectionCount(), 2u);
-    EXPECT_TRUE(server_->connection(0).disconnected);
+    EXPECT_EQ(this->server->connectionCount(), 2u);
+    EXPECT_TRUE(this->server->connection(0).disconnected);
     EXPECT_EQ(first->count, 1);
 }
 
@@ -600,13 +600,13 @@ TEST_F(ChannelLoopbackTest, TwoPhaseGoawayDrainsOldConnectionAndMovesNewCallsToN
 
     const auto first = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("first", 10s), Recorder(first));
-    ASSERT_TRUE(RunUntil([&] { return server_->requestCount() == 1; }, 5s));
-    Connection &old = server_->connection(0);
+    ASSERT_TRUE(RunUntil([&] { return this->server->RequestCount() == 1; }, 5s));
+    Connection &old = this->server->connection(0);
     const int32_t firstStream = old.peer.StreamIds().at(0);
 
     // 第一段:last_stream_id = 2^31-1(go-zero MaxConnectionIdle 的优雅关闭)。
-    ASSERT_TRUE(old.peer.SendShutdownNotice()) << old.peer.lastError();
-    server_->Flush(old);
+    ASSERT_TRUE(old.peer.SendShutdownNotice()) << old.peer.LastError();
+    this->server->Flush(old);
     ASSERT_TRUE(RunUntil([&] { return channel->GetState(false) == ConnectivityState::kIdle; }, 5s))
         << "收到 GOAWAY 即把连接标为 draining,通道回 IDLE";
 
@@ -615,22 +615,22 @@ TEST_F(ChannelLoopbackTest, TwoPhaseGoawayDrainsOldConnectionAndMovesNewCallsToN
     ASSERT_TRUE(RunUntil([&] { return second->count > 0; }, 5s));
     ASSERT_TRUE(second->result.status.ok()) << second->result.status.ToString();
     EXPECT_EQ(second->result.response, "echo:second");
-    ASSERT_EQ(server_->connectionCount(), 2u) << "新调用必须走新连接";
+    ASSERT_EQ(this->server->connectionCount(), 2u) << "新调用必须走新连接";
     EXPECT_EQ(old.peer.StreamIds().size(), 1u) << "draining 连接上不得再开新流";
-    EXPECT_EQ(server_->connection(1).peer.StreamIds().size(), 1u);
+    EXPECT_EQ(this->server->connection(1).peer.StreamIds().size(), 1u);
     EXPECT_EQ(first->count, 0) << "老连接上已接收的流照常等完";
 
     // 第二段:真实的 last_stream_id,然后把老流应答完。
-    ASSERT_TRUE(old.peer.SendGoaway(firstStream, h2::kNoError, "graceful")) << old.peer.lastError();
-    ASSERT_TRUE(old.peer.SendUnaryOk(firstStream, "late")) << old.peer.lastError();
-    server_->Flush(old);
+    ASSERT_TRUE(old.peer.SendGoaway(firstStream, h2::kNoError, "graceful")) << old.peer.LastError();
+    ASSERT_TRUE(old.peer.SendUnaryOk(firstStream, "late")) << old.peer.LastError();
+    this->server->Flush(old);
     ASSERT_TRUE(RunUntil([&] { return first->count > 0; }, 5s));
     ASSERT_TRUE(first->result.status.ok()) << first->result.status.ToString();
     EXPECT_EQ(first->result.response, "late");
 
-    ASSERT_TRUE(RunUntil([&] { return server_->connection(0).disconnected; }, 5s))
+    ASSERT_TRUE(RunUntil([&] { return this->server->connection(0).disconnected; }, 5s))
         << "draining 连接的流清空后应由通道释放";
-    EXPECT_FALSE(server_->connection(1).disconnected);
+    EXPECT_FALSE(this->server->connection(1).disconnected);
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kReady);
 }
 
@@ -654,8 +654,8 @@ TEST_F(ChannelLoopbackTest, RefusedStreamIsRetriedTransparentlyOnce)
     ASSERT_TRUE(RunUntil([&] { return record->count > 0; }, 5s));
     ASSERT_TRUE(record->result.status.ok()) << record->result.status.ToString();
     EXPECT_EQ(record->result.response, "echo:retry-me");
-    EXPECT_EQ(server_->connectionCount(), 1u);
-    ASSERT_EQ(server_->requestCount(), 2u) << "原请求 + 一次透明重试";
+    EXPECT_EQ(this->server->connectionCount(), 1u);
+    ASSERT_EQ(this->server->RequestCount(), 2u) << "原请求 + 一次透明重试";
     const ReceivedStream *original = ServerStream(0, 0);
     const ReceivedStream *retried = ServerStream(0, 1);
     ASSERT_NE(original, nullptr);
@@ -674,9 +674,9 @@ TEST_F(ChannelLoopbackTest, RefusedTwiceFailsWithUnavailable)
     const auto record = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("refuse-me", 5s), Recorder(record));
     ASSERT_TRUE(RunUntil([&] { return record->count > 0; }, 5s));
-    EXPECT_EQ(record->result.status.code(), StatusCode::kUnavailable) << record->result.status.ToString();
+    EXPECT_EQ(record->result.status.Code(), StatusCode::kUnavailable) << record->result.status.ToString();
     RunFor(300ms);
-    EXPECT_EQ(server_->requestCount(), 2u) << "透明重试只做一次";
+    EXPECT_EQ(server->RequestCount(), 2u) << "透明重试只做一次";
     EXPECT_EQ(record->count, 1);
 }
 
@@ -688,7 +688,7 @@ TEST_F(ChannelLoopbackTest, ChannelDestructionFailsInFlightCallsAfterDestruction
 
     const auto record = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest("pending", 10s), Recorder(record, channel));
-    ASSERT_TRUE(RunUntil([&] { return server_->requestCount() == 1; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return server->RequestCount() == 1; }, 5s));
 
     const std::weak_ptr<Channel> weak = channel;
     channel.reset();
@@ -698,10 +698,10 @@ TEST_F(ChannelLoopbackTest, ChannelDestructionFailsInFlightCallsAfterDestruction
     ASSERT_TRUE(RunUntil([&] { return record->count > 0; }, 2s));
     RunFor(200ms);
     EXPECT_EQ(record->count, 1) << "恰好一次";
-    EXPECT_EQ(record->result.status.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(record->result.status.Code(), StatusCode::kUnavailable);
     EXPECT_EQ(record->result.status.message(), "channel shut down");
     EXPECT_FALSE(record->channelAliveAtCompletion) << "回调在通道析构之后执行";
-    ASSERT_TRUE(RunUntil([&] { return server_->connection(0).disconnected; }, 5s)) << "析构应关闭 TCP 连接";
+    ASSERT_TRUE(RunUntil([&] { return server->connection(0).disconnected; }, 5s)) << "析构应关闭 TCP 连接";
 }
 
 TEST_F(ChannelLoopbackTest, OutstandingCallLimitIsResourceExhausted)
@@ -722,9 +722,9 @@ TEST_F(ChannelLoopbackTest, OutstandingCallLimitIsResourceExhausted)
                          5s));
     EXPECT_TRUE(records[0]->result.status.ok()) << records[0]->result.status.ToString();
     EXPECT_TRUE(records[1]->result.status.ok()) << records[1]->result.status.ToString();
-    EXPECT_EQ(records[2]->result.status.code(), StatusCode::kResourceExhausted)
+    EXPECT_EQ(records[2]->result.status.Code(), StatusCode::kResourceExhausted)
         << records[2]->result.status.ToString();
-    EXPECT_EQ(server_->requestCount(), 2u) << "超限的调用不发出";
+    EXPECT_EQ(server->RequestCount(), 2u) << "超限的调用不发出";
 
     // 上限按「在途」计,不是累计:前两个结束后可以再发。
     const auto later = std::make_shared<CallRecord>();
@@ -743,8 +743,8 @@ TEST_F(ChannelLoopbackTest, OversizedRequestIsRejectedLocally)
     const auto tooBig = std::make_shared<CallRecord>();
     channel->StartUnaryCall(MakeRequest(std::string(kLimit + 1, 'x'), 5s), Recorder(tooBig));
     ASSERT_TRUE(RunUntil([&] { return tooBig->count > 0; }, 2s));
-    EXPECT_EQ(tooBig->result.status.code(), StatusCode::kResourceExhausted) << tooBig->result.status.ToString();
-    EXPECT_EQ(server_->connectionCount(), 0u) << "超限请求一个字节都不发";
+    EXPECT_EQ(tooBig->result.status.Code(), StatusCode::kResourceExhausted) << tooBig->result.status.ToString();
+    EXPECT_EQ(server->connectionCount(), 0u) << "超限请求一个字节都不发";
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kIdle);
 
     // 恰好等于上限的请求能发出(多帧 + 流控 + 输出缓冲背压一并走一遍)。
@@ -786,7 +786,7 @@ TEST_F(ChannelLoopbackTest, NoThreadIsCreatedForConnectionsOrCalls)
         records.push_back(std::make_shared<CallRecord>());
         channel->StartUnaryCall(MakeRequest("call-" + std::to_string(i), 10s), Recorder(records.back()));
     }
-    ASSERT_TRUE(RunUntil([&] { return server_->requestCount() > 1; }, 5s)); // 第二条连接已建好、调用在途
+    ASSERT_TRUE(RunUntil([&] { return server->RequestCount() > 1; }, 5s)); // 第二条连接已建好、调用在途
     const std::set<uint64_t> during = muduo_grpc_test::SnapshotThreadIds();
 
     const auto allDone = [&]
@@ -880,22 +880,22 @@ LoopbackH2Server::ActivityHandler EchoStreams(const std::shared_ptr<EchoStreamSt
                 {
                     EXPECT_TRUE(connection.peer.SendHeaders(
                         streamId, {{":status", "200"}, {"content-type", "application/grpc"}}, false))
-                        << connection.peer.lastError();
+                        << connection.peer.LastError();
                 }
                 EXPECT_TRUE(connection.peer.SendData(streamId, TestH2Peer::Frame("echo:" + payload), false))
-                    << connection.peer.lastError();
+                    << connection.peer.LastError();
             }
             if (stream->requestEnded && offset == stream->body.size())
             {
                 state->finished.insert(streamId);
                 if (state->headersSent.insert(streamId).second)
                 {
-                    EXPECT_TRUE(connection.peer.SendTrailersOnly(streamId, 0, "")) << connection.peer.lastError();
+                    EXPECT_TRUE(connection.peer.SendTrailersOnly(streamId, 0, "")) << connection.peer.LastError();
                 }
                 else
                 {
                     EXPECT_TRUE(connection.peer.SendHeaders(streamId, {{"grpc-status", "0"}, {"grpc-message", ""}}, true))
-                        << connection.peer.lastError();
+                        << connection.peer.LastError();
                 }
             }
         }
@@ -905,7 +905,7 @@ LoopbackH2Server::ActivityHandler EchoStreams(const std::shared_ptr<EchoStreamSt
 TEST_F(ChannelLoopbackTest, BidiStreamDeliversEachMessageInOrderAndClosesExactlyOnce)
 {
     StartServer(&IgnoreRequest);
-    server_->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
+    server->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
 
@@ -946,7 +946,7 @@ TEST_F(ChannelLoopbackTest, BidiStreamDeliversEachMessageInOrderAndClosesExactly
 TEST_F(ChannelLoopbackTest, CancelledStreamIsResetWithCancelAndNeverCallsBackAgain)
 {
     StartServer(&IgnoreRequest);
-    server_->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
+    server->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);
 
@@ -977,7 +977,7 @@ TEST_F(ChannelLoopbackTest, CancelledStreamIsResetWithCancelAndNeverCallsBackAga
     EXPECT_TRUE(again->Write("second"));
     ASSERT_TRUE(RunUntil([&] { return !second->messages.empty(); }, 5s));
     EXPECT_EQ(second->messages.front(), "echo:second");
-    EXPECT_EQ(server_->connectionCount(), 1u);
+    EXPECT_EQ(server->connectionCount(), 1u);
 }
 
 TEST_F(ChannelLoopbackTest, ChannelDestructionClosesStreamsWithUnavailableUnlessCancelled)
@@ -1001,7 +1001,7 @@ TEST_F(ChannelLoopbackTest, ChannelDestructionClosesStreamsWithUnavailableUnless
     RunFor(200ms);
 
     EXPECT_EQ(kept->closes, 1);
-    EXPECT_EQ(kept->status.code(), StatusCode::kUnavailable) << kept->status.ToString();
+    EXPECT_EQ(kept->status.Code(), StatusCode::kUnavailable) << kept->status.ToString();
     EXPECT_EQ(cancelled->closes, 0);
     EXPECT_TRUE(keptStream->closed());
     EXPECT_FALSE(keptStream->Write("after")) << "通道没了,句柄的操作一律失败、不崩";
@@ -1015,7 +1015,7 @@ TEST_F(ChannelLoopbackTest, StreamToUnreachableTargetClosesWithUnavailable)
     options.backoff.initial = 10s; // 用例期间不触发后台重连
     const auto channel = MakeChannel(options);
     ASSERT_NE(channel, nullptr);
-    drainAfterTest_ = 1200ms;
+    drainAfterTest = 1200ms;
 
     const auto events = std::make_shared<StreamEvents>();
     const auto stream = channel->StartStream(kStreamMethod, {}, StreamRecorder(events));
@@ -1023,7 +1023,7 @@ TEST_F(ChannelLoopbackTest, StreamToUnreachableTargetClosesWithUnavailable)
     ASSERT_TRUE(RunUntil([&] { return events->closes > 0; }, 4s));
     RunFor(100ms);
     EXPECT_EQ(events->closes, 1);
-    EXPECT_EQ(events->status.code(), StatusCode::kUnavailable) << events->status.ToString();
+    EXPECT_EQ(events->status.Code(), StatusCode::kUnavailable) << events->status.ToString();
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kTransientFailure);
 
     // TRANSIENT_FAILURE 期间新开的流:不等连接,下一轮就以 UNAVAILABLE 结束(仍是异步)。
@@ -1032,7 +1032,7 @@ TEST_F(ChannelLoopbackTest, StreamToUnreachableTargetClosesWithUnavailable)
     EXPECT_EQ(late->closes, 0);
     EXPECT_TRUE(lateStream->closed());
     ASSERT_TRUE(RunUntil([&] { return late->closes > 0; }, 1s));
-    EXPECT_EQ(late->status.code(), StatusCode::kUnavailable) << late->status.ToString();
+    EXPECT_EQ(late->status.Code(), StatusCode::kUnavailable) << late->status.ToString();
 }
 
 TEST_F(ChannelLoopbackTest, OversizedStreamWriteEndsTheStreamWithResourceExhausted)
@@ -1051,7 +1051,7 @@ TEST_F(ChannelLoopbackTest, OversizedStreamWriteEndsTheStreamWithResourceExhaust
     ASSERT_TRUE(RunUntil([&] { return events->closes > 0; }, 2s));
     RunFor(100ms);
     EXPECT_EQ(events->closes, 1);
-    EXPECT_EQ(events->status.code(), StatusCode::kResourceExhausted) << events->status.ToString();
+    EXPECT_EQ(events->status.Code(), StatusCode::kResourceExhausted) << events->status.ToString();
 }
 
 TEST_F(ChannelLoopbackTest, PeriodicKeepalivePingsOnlyWhenEnabledAndAStreamIsActive)
@@ -1066,19 +1066,19 @@ TEST_F(ChannelLoopbackTest, PeriodicKeepalivePingsOnlyWhenEnabledAndAStreamIsAct
     ASSERT_EQ(channel->GetState(true), ConnectivityState::kConnecting);
     ASSERT_TRUE(RunUntil([&] { return channel->GetState(false) == ConnectivityState::kReady; }, 5s));
     RunFor(600ms);
-    ASSERT_EQ(server_->connectionCount(), 1u);
-    EXPECT_EQ(server_->connection(0).peer.pingsReceived(), 0u) << "没有活跃流时不发周期 PING(grpc-go 不放行无流 PING)";
+    ASSERT_EQ(server->connectionCount(), 1u);
+    EXPECT_EQ(server->connection(0).peer.PingsReceived(), 0u) << "没有活跃流时不发周期 PING(grpc-go 不放行无流 PING)";
 
     const auto events = std::make_shared<StreamEvents>();
     const auto stream = channel->StartStream(kStreamMethod, {}, StreamRecorder(events));
     EXPECT_TRUE(stream->Write("open"));
-    ASSERT_TRUE(RunUntil([&] { return server_->connection(0).peer.pingsReceived() >= 2; }, 5s));
+    ASSERT_TRUE(RunUntil([&] { return server->connection(0).peer.PingsReceived() >= 2; }, 5s));
     // 服务端自动回 PING ACK:连接不因探测超时被判死,流仍开着。
     RunFor(300ms);
     EXPECT_EQ(channel->GetState(false), ConnectivityState::kReady);
     EXPECT_EQ(events->closes, 0);
     EXPECT_FALSE(stream->closed());
-    EXPECT_EQ(server_->connectionCount(), 1u);
+    EXPECT_EQ(server->connectionCount(), 1u);
 }
 
 TEST_F(ChannelLoopbackTest, NoPeriodicPingWhenKeepaliveIsDisabledEvenWithAnActiveStream)
@@ -1092,7 +1092,7 @@ TEST_F(ChannelLoopbackTest, NoPeriodicPingWhenKeepaliveIsDisabledEvenWithAnActiv
     EXPECT_TRUE(stream->Write("open"));
     ASSERT_TRUE(RunUntil([&] { return ServerStream(0, 0) != nullptr; }, 5s));
     RunFor(800ms);
-    EXPECT_EQ(server_->connection(0).peer.pingsReceived(), 0u)
+    EXPECT_EQ(server->connection(0).peer.PingsReceived(), 0u)
         << "关掉周期 keepalive 的通道只在调用截止时探测(§4.4),流上不发 PING";
     EXPECT_EQ(events->closes, 0);
 }
@@ -1103,7 +1103,7 @@ TEST_F(ChannelLoopbackTest, PeerTrailersWithoutRstStillCloseTheStreamWithThePeer
     // 不处理的话 nghttp2 只把流置为 half-closed(remote),onClose 永远不来。
     StartServer(&IgnoreRequest);
     const auto answered = std::make_shared<std::set<int32_t>>(); // 状态随用例走,--gtest_repeat 也不串
-    server_->SetActivityHandler(
+    server->SetActivityHandler(
         [answered](LoopbackH2Server &, Connection &connection)
         {
             for (const int32_t streamId : connection.peer.StreamIds())
@@ -1130,7 +1130,7 @@ TEST_F(ChannelLoopbackTest, PeerTrailersWithoutRstStillCloseTheStreamWithThePeer
     RunFor(200ms);
 
     EXPECT_EQ(events->closes, 1);
-    EXPECT_EQ(events->status.code(), StatusCode::kNotFound) << events->status.ToString();
+    EXPECT_EQ(events->status.Code(), StatusCode::kNotFound) << events->status.ToString();
     EXPECT_EQ(events->status.message(), "gone");
     EXPECT_EQ(events->messages, (std::vector<std::string>{"echo:x"}));
     EXPECT_FALSE(stream->Write("after")) << "流已结束";
@@ -1160,7 +1160,7 @@ TEST_F(ChannelLoopbackTest, SingleLargeMessageFitsAnEmptyStreamBufferButABacklog
     ASSERT_TRUE(RunUntil([&] { return events->closes > 0; }, 2s));
     RunFor(100ms);
     EXPECT_EQ(events->closes, 1);
-    EXPECT_EQ(events->status.code(), StatusCode::kResourceExhausted) << events->status.ToString();
+    EXPECT_EQ(events->status.Code(), StatusCode::kResourceExhausted) << events->status.ToString();
 }
 
 TEST_F(ChannelLoopbackTest, MaintenanceWaitsForSuccessfulUnaryCallbackToReturn)
@@ -1200,14 +1200,14 @@ TEST_F(ChannelLoopbackTest, MaintenanceTracksRejectedCallbacksAndTheirNestedCall
     const std::weak_ptr<Channel> weakChannel = channel;
     channel->StartUnaryCall(MakeRequest("rejected", 5s), [maintenance, callbacks, weakChannel](UnaryCallResult &&result)
     {
-        EXPECT_EQ(result.status.code(), StatusCode::kUnavailable);
+        EXPECT_EQ(result.status.Code(), StatusCode::kUnavailable);
         EXPECT_FALSE(maintenance->Joined());
         ++*callbacks;
         if (const auto current = weakChannel.lock())
         {
             current->StartUnaryCall(MakeRequest("nested", 5s), [maintenance, callbacks](UnaryCallResult &&nested)
             {
-                EXPECT_EQ(nested.status.code(), StatusCode::kUnavailable);
+                EXPECT_EQ(nested.status.Code(), StatusCode::kUnavailable);
                 EXPECT_FALSE(maintenance->Joined());
                 ++*callbacks;
             });
@@ -1246,7 +1246,7 @@ TEST_F(ChannelLoopbackTest, MaintenanceTracksRejectedStreamCloseCallback)
     EXPECT_FALSE(maintenance->Joined());
     ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
     EXPECT_EQ(events->closes, 1);
-    EXPECT_EQ(events->status.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(events->status.Code(), StatusCode::kUnavailable);
     std::string frontier;
     EXPECT_TRUE(maintenance->Frontier(frontier));
 }
@@ -1265,7 +1265,7 @@ TEST_F(ChannelLoopbackTest, MaintenanceSeparatesDestroyedCallJoinFromUnknownRemo
     EXPECT_FALSE(maintenance->Joined());
     ASSERT_TRUE(RunUntil([maintenance] { return maintenance->Joined(); }, 2s));
     EXPECT_EQ(record->count, 1);
-    EXPECT_EQ(record->result.status.code(), StatusCode::kUnavailable);
+    EXPECT_EQ(record->result.status.Code(), StatusCode::kUnavailable);
     std::string frontier;
     EXPECT_FALSE(maintenance->Frontier(frontier));
 }
@@ -1290,7 +1290,7 @@ TEST_F(ChannelLoopbackTest, MaintenanceSeparatesCancelledStreamJoinFromUnknownRe
 TEST_F(ChannelLoopbackTest, MaintenanceStreamFrontierWaitsForAllSuccessfulCallbacks)
 {
     StartServer(&IgnoreRequest);
-    server_->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
+    server->SetActivityHandler(EchoStreams(std::make_shared<EchoStreamState>()));
     const auto maintenance = std::make_shared<muduo_grpc::MaintenanceState>();
     ChannelOptions options;
     options.maintenance = maintenance;
@@ -1358,10 +1358,10 @@ TEST_F(ChannelLoopbackTest, MaintenanceWaitsForCallbackTargetDestructionAndItsDe
         delete value;
         EXPECT_FALSE(state->Joined()) << "target 析构必须早于完成票据";
         if (const auto locked = weak.lock()) locked->StartUnaryCall(MakeRequest("derived-on-destroy", 5s), [state, calls](UnaryCallResult&& result) {
-            EXPECT_FALSE(state->Joined()); EXPECT_EQ(result.status.code(), StatusCode::kUnavailable); ++*calls;
+            EXPECT_FALSE(state->Joined()); EXPECT_EQ(result.status.Code(), StatusCode::kUnavailable); ++*calls;
         });
     });
-    channel->StartUnaryCall(MakeRequest("closed", 5s), [target, calls](UnaryCallResult&& result) { EXPECT_EQ(result.status.code(), StatusCode::kUnavailable); ++*calls; });
+    channel->StartUnaryCall(MakeRequest("closed", 5s), [target, calls](UnaryCallResult&& result) { EXPECT_EQ(result.status.Code(), StatusCode::kUnavailable); ++*calls; });
     target.reset();
     ASSERT_TRUE(RunUntil([state] { return state->Joined(); }, 2s));
     EXPECT_EQ(*calls, 2);

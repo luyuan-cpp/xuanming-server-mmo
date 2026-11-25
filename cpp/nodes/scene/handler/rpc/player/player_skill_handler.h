@@ -47,6 +47,12 @@ public:
     static void ListCraftProxyStalls(entt::entity player,
         const ::ListCraftProxyStallsRequest* request,
         ::ListCraftProxyStallsResponse* response);
+    static void SaveSkillLoadout(entt::entity player,
+        const ::SaveSkillLoadoutRequest* request,
+        ::SaveSkillLoadoutResponse* response);
+    static void SwitchSkillLoadout(entt::entity player,
+        const ::SwitchSkillLoadoutRequest* request,
+        ::SwitchSkillLoadoutResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -148,6 +154,24 @@ public:
             ListCraftProxyStalls(player,
                 static_cast<const ::ListCraftProxyStallsRequest*>(request),
                 static_cast<::ListCraftProxyStallsResponse*>(response));
+			}
+            break;
+        case 11:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SaveSkillLoadoutResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SaveSkillLoadout(player,
+                static_cast<const ::SaveSkillLoadoutRequest*>(request),
+                static_cast<::SaveSkillLoadoutResponse*>(response));
+			}
+            break;
+        case 12:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SwitchSkillLoadoutResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SwitchSkillLoadout(player,
+                static_cast<const ::SwitchSkillLoadoutRequest*>(request),
+                static_cast<::SwitchSkillLoadoutResponse*>(response));
 			}
             break;
         default:

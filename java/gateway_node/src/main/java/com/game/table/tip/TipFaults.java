@@ -74,6 +74,7 @@ public final class TipFaults {
             new Fault(14008, "guild_error", "GuildIdGenUnavailable"),
             new Fault(14041, "guild_error", "GuildTrialServiceBusy"),
             new Fault(14045, "guild_error", "GuildTextCheckUnavailable"),
+            new Fault(14071, "guild_error", "GuildWarServiceBusy"),
             new Fault(16004, "match_error", "MatchInternal"),
             new Fault(18001, "chat_error", "ChatContentCheckUnavailable"),
             new Fault(20017, "trade_error", "TradeTextCheckUnavailable"),

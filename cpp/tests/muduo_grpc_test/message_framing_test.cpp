@@ -150,12 +150,12 @@ TEST(MuduoGrpcFraming, OverLimitIsResourceExhaustedAndSticky)
     std::vector<std::string> out;
     // 只看前缀就要拒绝,不必等消息体到齐。
     const Status first = Feed(deframer, Prefix(0, 5), out);
-    EXPECT_EQ(first.code(), StatusCode::kResourceExhausted) << first.ToString();
+    EXPECT_EQ(first.Code(), StatusCode::kResourceExhausted) << first.ToString();
     EXPECT_TRUE(out.empty());
 
     // 之后一直返回同一个错误,哪怕喂的是合法消息。
     const Status second = Feed(deframer, Framed("ok"), out);
-    EXPECT_EQ(second.code(), StatusCode::kResourceExhausted);
+    EXPECT_EQ(second.Code(), StatusCode::kResourceExhausted);
     EXPECT_EQ(second.message(), first.message());
     EXPECT_TRUE(out.empty());
 }
@@ -172,7 +172,7 @@ TEST(MuduoGrpcFraming, DefaultFourMiBLimitBoundary)
     {
         MessageDeframer deframer(kLimit);
         std::vector<std::string> out;
-        EXPECT_EQ(Feed(deframer, Prefix(0, static_cast<uint32_t>(kLimit + 1)), out).code(),
+        EXPECT_EQ(Feed(deframer, Prefix(0, static_cast<uint32_t>(kLimit + 1)), out).Code(),
                   StatusCode::kResourceExhausted);
     }
 }
@@ -182,9 +182,9 @@ TEST(MuduoGrpcFraming, CompressedFlagIsInternalAndSticky)
     MessageDeframer deframer(1024);
     std::vector<std::string> out;
     const Status first = Feed(deframer, Prefix(1, 3) + "abc", out);
-    EXPECT_EQ(first.code(), StatusCode::kInternal) << first.ToString();
+    EXPECT_EQ(first.Code(), StatusCode::kInternal) << first.ToString();
     EXPECT_TRUE(out.empty());
-    EXPECT_EQ(Feed(deframer, Framed("ok"), out).code(), StatusCode::kInternal);
+    EXPECT_EQ(Feed(deframer, Framed("ok"), out).Code(), StatusCode::kInternal);
     EXPECT_TRUE(out.empty());
 }
 
@@ -195,7 +195,7 @@ TEST(MuduoGrpcFraming, UnknownFlagByteIsInternal)
         MessageDeframer deframer(1024);
         std::vector<std::string> out;
         const Status status = Feed(deframer, Prefix(flag, 1) + "x", out);
-        EXPECT_EQ(status.code(), StatusCode::kInternal) << static_cast<int>(flag);
+        EXPECT_EQ(status.Code(), StatusCode::kInternal) << static_cast<int>(flag);
         EXPECT_TRUE(out.empty());
     }
 }

@@ -44,7 +44,7 @@ public:
 		const KafkaPartitionAssignPolicy& assignPolicy = {},
         const sql_writer_maintenance_receipt::ManualConsumerAssignment& manualIdentity = {});
     using Maintenance=sql_writer_maintenance_receipt;
-    bool PrepareOnlyBeforeSubscribe(bool enabled) { if(!consumers_.empty()||consumersStopped_||shutdown_)return false;prepareOnly_=enabled;return true; }
+    bool PrepareOnlyBeforeSubscribe(bool enabled) { if(!consumers.empty()||consumersStopped||shutdown)return false;prepareOnly=enabled;return true; }
     std::future<bool> BeginManualDrain();
     bool ManualDrainReady() const;
     std::future<std::optional<Maintenance::ConsumerReadiness>> PrepareReadiness(const Maintenance::Plan& plan,
@@ -90,13 +90,13 @@ private:
 		bool joined = false;
 		bool unknown = false;
 	};
-	std::shared_ptr<CallbackState> callbacks_ = std::make_shared<CallbackState>();
+	std::shared_ptr<CallbackState> callbacks = std::make_shared<CallbackState>();
     struct PreparedState { std::mutex mutex;std::optional<Maintenance::ConsumerReadiness> aggregate;std::vector<Maintenance::ConsumerReadiness> owners; };
-    std::shared_ptr<PreparedState> prepared_=std::make_shared<PreparedState>();
-    bool prepareOnly_=false;
-	std::vector<std::shared_ptr<KafkaConsumer>> consumers_;
-	std::optional<std::reference_wrapper<muduo::net::EventLoop>> dispatchLoop_;
-	bool shutdown_ = false;
-	bool shutdownResult_ = true;
-	bool consumersStopped_ = false;
+    std::shared_ptr<PreparedState> prepared=std::make_shared<PreparedState>();
+    bool prepareOnly=false;
+	std::vector<std::shared_ptr<KafkaConsumer>> consumers;
+	std::optional<std::reference_wrapper<muduo::net::EventLoop>> dispatchLoop;
+	bool shutdown = false;
+	bool shutdownResult = true;
+	bool consumersStopped = false;
 };

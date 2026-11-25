@@ -118,3 +118,47 @@ constexpr uint32_t GuildServiceStartGuildTrialIndex = 27;
 constexpr uint32_t GuildServiceRespondGuildTrialInviteMessageId = 243;
 constexpr uint32_t GuildServiceRespondGuildTrialInviteIndex = 28;
 #define GuildServiceRespondGuildTrialInviteMethod  ::GuildService_Stub::descriptor()->method(28)
+
+constexpr uint32_t GuildServiceGetGuildWarOverviewMessageId = 485;
+constexpr uint32_t GuildServiceGetGuildWarOverviewIndex = 29;
+#define GuildServiceGetGuildWarOverviewMethod  ::GuildService_Stub::descriptor()->method(29)
+
+constexpr uint32_t GuildServiceSetGuildWarStanceMessageId = 486;
+constexpr uint32_t GuildServiceSetGuildWarStanceIndex = 30;
+#define GuildServiceSetGuildWarStanceMethod  ::GuildService_Stub::descriptor()->method(30)
+
+constexpr uint32_t GuildServiceRegisterGuildWarGarrisonMessageId = 487;
+constexpr uint32_t GuildServiceRegisterGuildWarGarrisonIndex = 31;
+#define GuildServiceRegisterGuildWarGarrisonMethod  ::GuildService_Stub::descriptor()->method(31)
+
+constexpr uint32_t GuildServiceStartGuildWarBattleMessageId = 488;
+constexpr uint32_t GuildServiceStartGuildWarBattleIndex = 32;
+#define GuildServiceStartGuildWarBattleMethod  ::GuildService_Stub::descriptor()->method(32)
+
+constexpr uint32_t GuildServiceClaimGuildWarMilestoneMessageId = 489;
+constexpr uint32_t GuildServiceClaimGuildWarMilestoneIndex = 33;
+#define GuildServiceClaimGuildWarMilestoneMethod  ::GuildService_Stub::descriptor()->method(33)
+
+constexpr uint32_t GuildServiceClaimGuildWarDividendMessageId = 490;
+constexpr uint32_t GuildServiceClaimGuildWarDividendIndex = 34;
+#define GuildServiceClaimGuildWarDividendMethod  ::GuildService_Stub::descriptor()->method(34)
+
+constexpr uint32_t GuildServicePostGuildWarBountyMessageId = 491;
+constexpr uint32_t GuildServicePostGuildWarBountyIndex = 35;
+#define GuildServicePostGuildWarBountyMethod  ::GuildService_Stub::descriptor()->method(35)
+
+constexpr uint32_t GuildServiceTrackGuildWarBountyMessageId = 492;
+constexpr uint32_t GuildServiceTrackGuildWarBountyIndex = 36;
+#define GuildServiceTrackGuildWarBountyMethod  ::GuildService_Stub::descriptor()->method(36)
+
+constexpr uint32_t GuildServiceGetGuildWarBattleResultMessageId = 493;
+constexpr uint32_t GuildServiceGetGuildWarBattleResultIndex = 37;
+#define GuildServiceGetGuildWarBattleResultMethod  ::GuildService_Stub::descriptor()->method(37)
+
+constexpr uint32_t GuildServiceNotifyGuildWarAlertMessageId = 494;
+constexpr uint32_t GuildServiceNotifyGuildWarAlertIndex = 38;
+#define GuildServiceNotifyGuildWarAlertMethod  ::GuildService_Stub::descriptor()->method(38)
+
+constexpr uint32_t GuildServiceInspectFieldWarTargetsMessageId = 499;
+constexpr uint32_t GuildServiceInspectFieldWarTargetsIndex = 39;
+#define GuildServiceInspectFieldWarTargetsMethod  ::GuildService_Stub::descriptor()->method(39)

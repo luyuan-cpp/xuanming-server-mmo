@@ -42,15 +42,15 @@ namespace node::kafka
 		// 取 (节点类型, topic 基名) 的计数。同一对再取返回同一份:同一 topic 注册两次也只有一条序列。
 		CommandConsumeCounters &CountersFor(const std::string &nodeType, const std::string &topicBase)
 		{
-			std::lock_guard lock(mutex_);
-			for (auto &counters : counters_)
+			std::lock_guard lock(mutex);
+			for (auto &counters : this->counters)
 			{
 				if (counters.nodeType == nodeType && counters.topicBase == topicBase)
 				{
 					return counters;
 				}
 			}
-			return counters_.emplace_back(nodeType, topicBase);
+			return this->counters.emplace_back(nodeType, topicBase);
 		}
 
 		// 写出 node_command_consumed_total(MetricsRegistry 的采集回调)。锁只在启动期注册时有竞争。
@@ -61,8 +61,8 @@ namespace node::kafka
 							   "by topic base and whether the command targeted this node (own) or another node on the same "
 							   "partition (foreign).",
 							   prometheus_text::MetricType::kCounter);
-			std::lock_guard lock(mutex_);
-			for (const auto &counters : counters_)
+			std::lock_guard lock(mutex);
+			for (const auto &counters : this->counters)
 			{
 				writer.Sample({{"node_type", counters.nodeType}, {"topic", counters.topicBase}, {"target", "own"}},
 							  counters.own.load(std::memory_order_relaxed));
@@ -72,7 +72,7 @@ namespace node::kafka
 		}
 
 	private:
-		mutable std::mutex mutex_;
-		std::deque<CommandConsumeCounters> counters_;
+		mutable std::mutex mutex;
+		std::deque<CommandConsumeCounters> counters;
 	};
 } // namespace node::kafka

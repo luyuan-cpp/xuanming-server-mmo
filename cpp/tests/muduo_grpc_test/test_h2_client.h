@@ -96,7 +96,7 @@ public:
     TestH2Client &operator=(const TestH2Client &) = delete;
 
     // ---- 字节进出 ----
-    // 喂入服务端发来的字节;false = nghttp2 致命错误(lastError() 说明原因)。
+    // 喂入服务端发来的字节;false = nghttp2 致命错误(LastError() 说明原因)。
     bool Receive(std::string_view bytes);
     // 取走所有待发给服务端的字节(先把 nghttp2 队列里的帧序列化出来)。
     std::string TakeOutput();
@@ -108,19 +108,19 @@ public:
     // ---- 观察 ----
     const ClientStream *FindStream(int32_t streamId) const;
     // 连接上收到的全部帧类型,按到达顺序。
-    const std::vector<uint8_t> &frameTypes() const { return frameTypes_; }
-    size_t settingsFramesReceived() const { return settingsFramesReceived_; }
+    const std::vector<uint8_t> &FrameTypes() const { return frameTypes; }
+    size_t SettingsFramesReceived() const { return settingsFramesReceived; }
     // 最近一个非 ACK SETTINGS 帧的全部项,顺序与线上一致。
-    const std::vector<SettingEntry> &lastPeerSettings() const { return lastPeerSettings_; }
-    size_t pingsReceived() const { return pingsReceived_; }       // 服务端发来的非 ACK PING(ACK 由 nghttp2 自动回)
-    size_t pingAcksReceived() const { return pingAcksReceived_; }
-    const std::vector<ReceivedGoaway> &goawaysReceived() const { return goawaysReceived_; }
+    const std::vector<SettingEntry> &LastPeerSettings() const { return lastPeerSettings; }
+    size_t PingsReceived() const { return pingsReceived; }       // 服务端发来的非 ACK PING(ACK 由 nghttp2 自动回)
+    size_t PingAcksReceived() const { return pingAcksReceived; }
+    const std::vector<ReceivedGoaway> &GoawaysReceived() const { return goawaysReceived; }
     // 客户端视角下服务端的连接级接收窗口(验证服务端放大了连接窗口)。
     int32_t RemoteConnectionWindow() const;
-    const std::string &lastError() const { return lastError_; }
+    const std::string &LastError() const { return lastError; }
 
     // ---- 脚本:每个调用立即序列化成帧 ----
-    // 开一个新流发请求头;返回流 id(> 0),失败返回 -1(lastError() 说明原因)。
+    // 开一个新流发请求头;返回流 id(> 0),失败返回 -1(LastError() 说明原因)。
     int32_t OpenStream(const HeaderList &headers, bool endStream);
     // 仅供非法头名用例:绕过提交时的头名小写化,仍由同一个 nghttp2 会话编码、分配流和接收响应。
     // 头名由本对象深拷贝并持有到会话析构后,不借用调用方或临时字符串;头值照常由 nghttp2 拷贝。
@@ -152,18 +152,18 @@ private:
 
     // NO_COPY_NAME 借用的名称必须活过会话;放在 session_ 前,按逆序析构在会话释放后才销毁。
     // unique_ptr 所有的 HeaderList 不会随外层 vector 扩容移动,提交之后也不再修改。
-    std::vector<std::unique_ptr<HeaderList>> retainedHeaderNames_;
-    std::unique_ptr<nghttp2_session, SessionDeleter> session_;
-    std::map<int32_t, ClientStream> streams_;
-    std::map<int32_t, PendingData> pendingData_;
-    std::string output_;
-    std::vector<uint8_t> frameTypes_;
-    size_t settingsFramesReceived_{0};
-    std::vector<SettingEntry> lastPeerSettings_;
-    size_t pingsReceived_{0};
-    size_t pingAcksReceived_{0};
-    std::vector<ReceivedGoaway> goawaysReceived_;
-    std::string lastError_;
+    std::vector<std::unique_ptr<HeaderList>> retainedHeaderNames;
+    std::unique_ptr<nghttp2_session, SessionDeleter> session;
+    std::map<int32_t, ClientStream> streams;
+    std::map<int32_t, PendingData> pendingData;
+    std::string output;
+    std::vector<uint8_t> frameTypes;
+    size_t settingsFramesReceived{0};
+    std::vector<SettingEntry> lastPeerSettings;
+    size_t pingsReceived{0};
+    size_t pingAcksReceived{0};
+    std::vector<ReceivedGoaway> goawaysReceived;
+    std::string lastError;
 };
 
 } // namespace muduo_grpc_test

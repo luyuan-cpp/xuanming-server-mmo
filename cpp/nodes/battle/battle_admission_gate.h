@@ -62,17 +62,17 @@ public:
 	bool Open()
 	{
 		auto expected = AdmissionPhase::kNotStarted;
-		return phase_.compare_exchange_strong(expected, AdmissionPhase::kOpen, std::memory_order_acq_rel,
+		return phase.compare_exchange_strong(expected, AdmissionPhase::kOpen, std::memory_order_acq_rel,
 											  std::memory_order_acquire);
 	}
 
 	// 任意阶段 → kClosed(终态,幂等)。
-	void Close() { phase_.store(AdmissionPhase::kClosed, std::memory_order_release); }
+	void Close() { phase.store(AdmissionPhase::kClosed, std::memory_order_release); }
 
-	AdmissionPhase Phase() const { return phase_.load(std::memory_order_acquire); }
+	AdmissionPhase Phase() const { return phase.load(std::memory_order_acquire); }
 
 private:
-	std::atomic<AdmissionPhase> phase_{AdmissionPhase::kNotStarted};
+	std::atomic<AdmissionPhase> phase{AdmissionPhase::kNotStarted};
 };
 
 } // namespace battle_admission

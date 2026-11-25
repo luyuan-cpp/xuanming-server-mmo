@@ -263,7 +263,7 @@ public:
 	// 不是存档原值 —— 上限下调后客户端只看得到夹取后的等级。expectedPityCount 用于保底档失败不掉级时的弱网重放防护。
 	// 对不上整笔拒绝,不扣、不掷。outcome 在函数开头被重置;只有返回 kSuccess 时有意义。
 	static uint32_t Enhance(entt::entity player, Guid itemId, uint32_t expectedLevel, EnhanceOutcome& outcome,
-		std::optional<uint32_t> expectedPityCount = std::nullopt);
+		std::optional<uint32_t> expectedPityCount = std::nullopt, bool allowBoundMaterials = false);
 
 	// 镶嵌:消耗人物背包里 1 颗 gemConfigId(按 config 扣,不指定哪一堆),记到装备实例的 socket 号孔上。
 	// 孔里已有宝石就拒绝,要先取下(不做「顶替并退回」)。

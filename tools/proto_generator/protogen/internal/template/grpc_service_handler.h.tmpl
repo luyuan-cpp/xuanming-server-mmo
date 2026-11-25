@@ -27,6 +27,6 @@ private:{{range .Methods}}
     using {{.Method}}Call = GrpcUnaryCall<{{.CppRequest}}, {{.CppResponse}}>;{{end}}{{range .Methods}}
     void {{.Method}}(const std::shared_ptr<{{.Method}}Call>& call);{{end}}{{range .Methods}}
     static void Handle{{.Method}}(const {{.CppRequest}}* request{{handleResponseParam .}});{{end}}
-    muduo::net::EventLoop& loop_;
+    muduo::net::EventLoop& loop;
 {{.PrivateCode}}
 };

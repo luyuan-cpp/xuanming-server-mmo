@@ -393,10 +393,10 @@ SceneOwnershipReconciler::~SceneOwnershipReconciler()
 void SceneOwnershipReconciler::Start(IdentityProbe identityConfirmed)
 {
 	Stop();
-	session_ = std::make_shared<Session>();
-	session_->identityConfirmed = std::move(identityConfirmed);
-	const bool armed = timer_.RunEvery(static_cast<double>(scene_ownership::kSweepInterval.count()),
-									   [weak = std::weak_ptr<Session>(session_)]
+	this->session = std::make_shared<Session>();
+	this->session->identityConfirmed = std::move(identityConfirmed);
+	const bool armed = timer.RunEvery(static_cast<double>(scene_ownership::kSweepInterval.count()),
+									   [weak = std::weak_ptr<Session>(this->session)]
 									   {
 										   if (const auto session = weak.lock())
 										   {
@@ -417,21 +417,21 @@ void SceneOwnershipReconciler::Start(IdentityProbe identityConfirmed)
 
 void SceneOwnershipReconciler::Stop()
 {
-	timer_.Cancel();
-	if (session_)
+	timer.Cancel();
+	if (session)
 	{
-		session_.reset();
+		session.reset();
 		LOG_INFO << "[SceneOwnership] reconcile stopped";
 	}
 }
 
 std::optional<scene_ownership::SweepOutcome> SceneOwnershipReconciler::SweepOnce()
 {
-	if (!session_)
+	if (!session)
 	{
 		return std::nullopt;
 	}
-	return Sweep(session_);
+	return Sweep(session);
 }
 
 bool SceneOwnershipReconciler::SendOwnerRead(RedisClusterClient &redis, const std::shared_ptr<Session> &session,

@@ -39,11 +39,11 @@ public:
         const muduo::net::InetAddress& serverAddr,
         Readiness readiness = Readiness::kOnConnect,
         std::shared_ptr<RpcMaintenanceState> maintenance = RpcChannel::ProcessMaintenance())
-        : client_(loop, serverAddr, "RpcClient"),
-        serverAddr_(serverAddr), readiness_(readiness), maintenance_(std::move(maintenance))
+        : client(loop, serverAddr, "RpcClient"),
+        serverAddr(serverAddr), readiness(readiness), maintenance(std::move(maintenance))
     {
         // 回调在 connect() 里绑:构造函数里还拿不到 weak_from_this()。
-        client_.enableRetry();
+        client.enableRetry();
     }
 
     // 只为连接指标配平(断线重连 R17):销毁时还算着可用,就按本端主动拆减掉。与连接生命周期无关(见类注释)。
@@ -51,65 +51,65 @@ public:
 
     const muduo::net::InetAddress& local_addr()const
     {
-        if (client_.connection() == nullptr)
+        if (client.connection() == nullptr)
         {
             static muduo::net::InetAddress s;
             return s;
         }
 
-        return client_.connection()->localAddress();
+        return client.connection()->localAddress();
     }
 
     const muduo::net::InetAddress& peer_addr()const
     {
-        if (client_.connection() == nullptr)
+        if (client.connection() == nullptr)
         {
             static muduo::net::InetAddress s;
             return s;
         }
 
-        return client_.connection()->peerAddress();
+        return client.connection()->peerAddress();
     }
 
     // 只在所属 loop 线程调用；connected 表示通信连接存在，业务发送统一使用 IsReady。
     bool connected() const
     {
-        const auto conn = client_.connection();
-        return conn && conn->connected() && channel_ && !channel_->IsClosed() && channel_->IsBoundTo(conn);
+        const auto conn = client.connection();
+        return conn && conn->connected() && channel && !channel->IsClosed() && channel->IsBoundTo(conn);
     }
 
-    bool IsReady() const { return ready_ && !channelsClosed_ && connected(); }
+    bool IsReady() const { return ready && !channelsClosed && connected(); }
 
     // 来源校验必须匹配传入的那条连接，不能把替代连接上的确认借给旧连接。
     bool IsReadyOn(const muduo::net::TcpConnectionPtr& conn) const
     {
-        return conn && IsReady() && channel_->IsBoundTo(conn);
+        return conn && IsReady() && channel->IsBoundTo(conn);
     }
 
     // 仅通信握手模块在验证对端身份后调用。旧连接回包与关机后的晚回包不能恢复 Ready。
     bool MarkReady(const muduo::net::TcpConnectionPtr& conn)
     {
-        if (channelsClosed_ || !conn || !connected() || !channel_->IsBoundTo(conn)) return false;
+        if (channelsClosed || !conn || !connected() || !channel->IsBoundTo(conn)) return false;
         SetReady(true, /*expected=*/false);
-        consecutiveHandshakeFailures_ = 0;
+        consecutiveHandshakeFailures = 0;
         return true;
     }
 
     // 仅通信握手模块在一条连接握手失败时调用,返回含本次在内的连续失败次数(握手成功时清零)。
     // 握手模块据此拉长关闭失败连接前的等待;计数跨重连保留,只描述这条链路,不承载业务状态。
-    uint32_t RecordHandshakeFailure() { return ++consecutiveHandshakeFailures_; }
+    uint32_t RecordHandshakeFailure() { return ++consecutiveHandshakeFailures; }
 
     // 必须在 connect() 之前调用:每次连上时把服务表拷进新的 RpcChannel。
     void registerService(google::protobuf::Service* service)
     {
         const google::protobuf::ServiceDescriptor* desc = service->GetDescriptor();
-        services_[std::string(desc->full_name())] = service;
+        services[std::string(desc->full_name())] = service;
     }
 
     // 与 registerService 一样，必须在 connect() 之前设置；在 loop 线程同步观察 UP/DOWN。
     void setConnectionObserver(ConnectionObserver observer)
     {
-        connectionObserver_ = std::move(observer);
+        connectionObserver = std::move(observer);
     }
 
     // 链路心跳(docs/design/muduo-rpc-channel.md §21):之后每次连上新建的 channel 都带心跳,写空闲时发 HEARTBEAT,
@@ -117,7 +117,7 @@ public:
     // 只由节点装配(NodeConnector)开启,默认关;对端(入站 RpcServer)必须同样开启。
     void setLinkHeartbeat(const RpcLinkHeartbeat& heartbeat)
     {
-        heartbeat_ = heartbeat;
+        this->heartbeat = heartbeat;
     }
 
     void connect()
@@ -131,14 +131,14 @@ public:
         // muduo 会把这两个回调拷到 TcpConnection 上,并可能在本对象析构之后才调用
         // (forceClose 一律 queueInLoop)。绑 weak_ptr:对象已亡则回调什么都不做。
         std::weak_ptr<RpcClient> weakSelf = weak_from_this();
-        client_.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn)
+        client.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn)
         {
             if (const auto self = weakSelf.lock())
             {
                 self->onConnection(conn);
             }
         });
-        client_.setMessageCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn,
+        client.setMessageCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn,
                                               muduo::net::Buffer* buf, muduo::Timestamp ts)
         {
             // 只在取 channel 的这一行持有 RpcClient,派发期间不强持它 —— 这只是为了不延长 RpcClient 的寿命。
@@ -148,7 +148,7 @@ public:
             RpcChannelPtr channel;
             if (const auto self = weakSelf.lock())
             {
-                channel = self->channel_;
+                channel = self->channel;
             }
             if (channel && channel->IsBoundTo(conn))
             {
@@ -157,7 +157,7 @@ public:
             }
             buf->retrieveAll();   // 对象已亡或连接已被替换:丢弃,不让缓冲无界增长
         });
-        client_.connect();
+        client.connect();
     }
 
     // 未就绪时异步投递 kNotSent；不缓存请求，连接恢复也不自动重放业务。
@@ -166,11 +166,11 @@ public:
     {
         if (!IsReady())
         {
-            RpcChannel::FailNotSent(*client_.getLoop(), messageId, std::move(done), "link not ready",
-                                    serverAddr_.toIpPort(), maintenance_);
+            RpcChannel::FailNotSent(*client.getLoop(), messageId, std::move(done), "link not ready",
+                                    serverAddr.toIpPort(), maintenance);
             return;
         }
-        channel_->CallMethod(messageId, request, std::move(done), options);
+        channel->CallMethod(messageId, request, std::move(done), options);
     }
 
     template <typename Method, typename Done>
@@ -179,15 +179,15 @@ public:
         if (!IsReady())
         {
             RpcChannel::FailNotSent(
-                *client_.getLoop(), Method::kMessageId,
+                *client.getLoop(), Method::kMessageId,
                 [typedDone = std::forward<Done>(done)](const RpcStatus& status, const MessagePtr&) mutable
                 {
                     typedDone(status, std::shared_ptr<typename Method::Response>{});
                 },
-                "link not ready", serverAddr_.toIpPort(), maintenance_);
+                "link not ready", serverAddr.toIpPort(), maintenance);
             return;
         }
-        channel_->CallMethod<Method>(request, std::forward<Done>(done), options);
+        channel->CallMethod<Method>(request, std::forward<Done>(done), options);
     }
 
     // 单向(调用方不要应答)。未就绪时返回 false 并计数。
@@ -199,11 +199,11 @@ public:
             if (ShouldLogRpcEvent(n))
             {
                 LOG_WARN << "[RpcChannel] one-way request dropped: reason=link not ready, message_id=" << messageId
-                         << ", peer=" << serverAddr_.toIpPort() << ", occurrences=" << n;
+                         << ", peer=" << serverAddr.toIpPort() << ", occurrences=" << n;
             }
             return false;
         }
-        return channel_->SendRequest(messageId, message);
+        return channel->SendRequest(messageId, message);
     }
 
     template <typename Method>
@@ -218,18 +218,18 @@ public:
     void CloseChannel()
     {
         SetReady(false, /*expected=*/true);
-        channelsClosed_ = true;
-        if (channel_)
+        channelsClosed = true;
+        if (channel)
         {
-            channel_->Close();
+            channel->Close();
         }
     }
 
     // 没连接时 TcpClient::connection() 本来就返回空指针,不需要再造一个 static 哨兵。
-    muduo::net::TcpConnectionPtr GetConnection() const { return client_.connection(); }
+    muduo::net::TcpConnectionPtr GetConnection() const { return client.connection(); }
 
     // 当前连接上的 channel(未连接时为空)。仅通信握手、测试与关机使用；业务走上面的 Ready 门禁。
-    const RpcChannelPtr& channel() const { return channel_; }
+    const RpcChannelPtr& Channel() const { return channel; }
 
 private:
     // 节点间发送缓冲的高水位保护。客户端-facing 连接早就有(gate 2MB forceClose),
@@ -257,31 +257,31 @@ private:
             SetReady(false, /*expected=*/false); // 没等到旧连接的 DOWN 就来了新连接(不应发生):旧的按意外断开减
             conn->setTcpNoDelay(true);
             conn->setHighWaterMarkCallback(OnInterNodeHighWaterMark, kInterNodeHighWaterMark);
-            if (channel_)
+            if (channel)
             {
                 // 没等到旧连接的 DOWN 就来了新连接(不应发生):旧 channel 上的在途调用先按断连失败。
-                channel_->OnDisconnect();
+                channel->OnDisconnect();
             }
-            channel_ = RpcChannel::Create(*conn->getLoop(), conn, services_, maintenance_, heartbeat_);
-            if (channelsClosed_)
+            channel = RpcChannel::Create(*conn->getLoop(), conn, services, maintenance, heartbeat);
+            if (channelsClosed)
             {
-                channel_->Close();   // 节点已进入关机阶段 0(见 CloseChannel)
+                channel->Close();   // 节点已进入关机阶段 0(见 CloseChannel)
             }
             else
             {
-                SetReady(readiness_ == Readiness::kOnConnect, /*expected=*/false);
+                SetReady(readiness == Readiness::kOnConnect, /*expected=*/false);
             }
             LOG_INFO << "Connected to server at " << conn->peerAddress().toIpPort() << ".";
         }
         else
         {
-            if (channel_ && channel_->IsBoundTo(conn))
+            if (channel && channel->IsBoundTo(conn))
             {
                 SetReady(false, /*expected=*/false);
                 // 在途调用以 kDisconnected 失败(回调 queueInLoop,不在本回调栈上执行);channel 随之丢弃 ——
                 // 本端在它上面接管(Adopt)的延后回复此后一律 lock 失败而丢弃,不会落到下一条连接上。
-                channel_->OnDisconnect();
-                channel_.reset();
+                channel->OnDisconnect();
+                channel.reset();
             }
             // 断开一律 WARN,不按连接存活时长降级。这里曾有 5s「启动宽限」(kStartupGraceSeconds),把连上后 5s 内的
             // 断开降为 INFO,依据是旧 win_connect 在 loop 里阻塞 select、无条件返回 0 造成的假阳性连接。
@@ -291,9 +291,9 @@ private:
             LOG_WARN << "Disconnected from server at " << conn->peerAddress().toIpPort() << ".";
         }
 
-        if (connectionObserver_)
+        if (connectionObserver)
         {
-            connectionObserver_(conn);
+            connectionObserver(conn);
         }
     }
 
@@ -301,11 +301,11 @@ private:
     // expected 为真表示本端主动拆(关机阶段 0、销毁),不计意外断开。
     void SetReady(bool ready, bool expected)
     {
-        if (ready == ready_)
+        if (ready == this->ready)
         {
             return;
         }
-        ready_ = ready;
+        this->ready = ready;
         if (ready)
         {
             dependency_link_metrics::OnUp(dependency_link_metrics::Dependency::kNodeLink);
@@ -316,20 +316,20 @@ private:
         }
     }
 
-    muduo::net::TcpClient client_;
-    muduo::net::InetAddress serverAddr_;
-    Readiness readiness_;
+    muduo::net::TcpClient client;
+    muduo::net::InetAddress serverAddr;
+    Readiness readiness;
     // 与 RpcChannel 使用同一维护域；生产默认进程域，独立域允许测试隔离节点关机的永久终态。
-    std::shared_ptr<RpcMaintenanceState> maintenance_;
-    bool ready_{false};
-    uint32_t consecutiveHandshakeFailures_{0};
-    RpcServiceMap services_;
+    std::shared_ptr<RpcMaintenanceState> maintenance;
+    bool ready{false};
+    uint32_t consecutiveHandshakeFailures{0};
+    RpcServiceMap services;
     // 有值时每次连上的 channel 都带链路心跳(setLinkHeartbeat)。
-    std::optional<RpcLinkHeartbeat> heartbeat_;
-    bool channelsClosed_{false};
+    std::optional<RpcLinkHeartbeat> heartbeat;
+    bool channelsClosed{false};
     // 声明在 client_ 之后:析构时先于 client_ 释放(~RpcChannel 在 loop 还活着时把在途调用排进队列)。
-    RpcChannelPtr channel_;
-    ConnectionObserver connectionObserver_;
+    RpcChannelPtr channel;
+    ConnectionObserver connectionObserver;
 };
 
 using RpcClientPtr = std::shared_ptr<RpcClient>;

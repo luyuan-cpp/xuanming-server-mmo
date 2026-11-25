@@ -55,7 +55,7 @@ public:
     {
         for (std::size_t i = 0; i < kGuidKindCount; ++i)
         {
-            fn(static_cast<GuidKind>(i), clients_[i]);
+            fn(static_cast<GuidKind>(i), clients[i]);
         }
     }
 
@@ -80,7 +80,7 @@ public:
     void ResetAll();
 
 private:
-    std::array<GuidSegmentClient, kGuidKindCount> clients_;
+    std::array<GuidSegmentClient, kGuidKindCount> clients;
 };
 
 // 每线程一份:只有 scene 的主循环线程启用其中的实例。

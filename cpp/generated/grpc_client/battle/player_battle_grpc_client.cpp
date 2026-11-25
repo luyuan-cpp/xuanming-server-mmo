@@ -1299,6 +1299,188 @@ void SendBattleClientPlayerNotifySurrenderVoteErased(entt::registry& registry, e
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region BattleClientPlayerUpdateBattlePrep
+namespace {
+void QueueLocalBattleClientPlayerUpdateBattlePrepFailure(GrpcDone<::UpdateBattlePrepResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerUpdateBattlePrepGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartBattleClientPlayerUpdateBattlePrepCall(entt::registry& registry, entt::entity nodeEntity, const ::UpdateBattlePrepRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::UpdateBattlePrepResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleClientPlayer.UpdateBattlePrep requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kBattleClientPlayerUpdateBattlePrepGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalBattleClientPlayerUpdateBattlePrepFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalBattleClientPlayerUpdateBattlePrepFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::UpdateBattlePrepResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the BattleClientPlayer.UpdateBattlePrep response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendBattleClientPlayerUpdateBattlePrep(entt::registry& registry, entt::entity nodeEntity, const ::UpdateBattlePrepRequest& request,
+                                            GrpcDone<::UpdateBattlePrepResponse> done, const GrpcCallOptions& options) {
+    StartBattleClientPlayerUpdateBattlePrepCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendBattleClientPlayerUpdateBattlePrepErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleClientPlayer.UpdateBattlePrep requires a done callback";
+    }
+    if (message.GetDescriptor() != ::UpdateBattlePrepRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC BattleClientPlayer.UpdateBattlePrep: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerUpdateBattlePrepGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::UpdateBattlePrepRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC BattleClientPlayer.UpdateBattlePrep: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerUpdateBattlePrepGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartBattleClientPlayerUpdateBattlePrepCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::UpdateBattlePrepResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region BattleClientPlayerNotifyBattlePrepUpdate
+namespace {
+void QueueLocalBattleClientPlayerNotifyBattlePrepUpdateFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattlePrepUpdateGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartBattleClientPlayerNotifyBattlePrepUpdateCall(entt::registry& registry, entt::entity nodeEntity, const ::BattlePrepUpdateS2C& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::Empty> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleClientPlayer.NotifyBattlePrepUpdate requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kBattleClientPlayerNotifyBattlePrepUpdateGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalBattleClientPlayerNotifyBattlePrepUpdateFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalBattleClientPlayerNotifyBattlePrepUpdateFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::Empty reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the BattleClientPlayer.NotifyBattlePrepUpdate response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendBattleClientPlayerNotifyBattlePrepUpdate(entt::registry& registry, entt::entity nodeEntity, const ::BattlePrepUpdateS2C& request,
+                                            GrpcDone<::Empty> done, const GrpcCallOptions& options) {
+    StartBattleClientPlayerNotifyBattlePrepUpdateCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendBattleClientPlayerNotifyBattlePrepUpdateErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC BattleClientPlayer.NotifyBattlePrepUpdate requires a done callback";
+    }
+    if (message.GetDescriptor() != ::BattlePrepUpdateS2C::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattlePrepUpdate: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattlePrepUpdateGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::BattlePrepUpdateS2C*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattlePrepUpdate: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattlePrepUpdateGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartBattleClientPlayerNotifyBattlePrepUpdateCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetPlayerBattleCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

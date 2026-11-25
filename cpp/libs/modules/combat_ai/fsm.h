@@ -61,57 +61,57 @@ class FsmEventView
 {
 public:
     FsmEventView(EventEnum event, StateEnum src, StateEnum dst) noexcept
-        : event_(event)
-        , src_(src)
-        , dst_(dst)
+        : event(event)
+        , src(src)
+        , dst(dst)
     {
     }
 
-    [[nodiscard]] EventEnum Event() const noexcept { return event_; }
-    [[nodiscard]] StateEnum Src() const noexcept { return src_; }
-    [[nodiscard]] StateEnum Dst() const noexcept { return dst_; }
+    [[nodiscard]] EventEnum Event() const noexcept { return event; }
+    [[nodiscard]] StateEnum Src() const noexcept { return src; }
+    [[nodiscard]] StateEnum Dst() const noexcept { return dst; }
 
     // 在 Before* 或 Leave* 阶段中止本次转移(fail-closed,状态不改变,不进入 Enter/After)。
     void Cancel(uint32_t errorCode = 0) noexcept
     {
-        if (!allowCancel_)
+        if (!allowCancel)
         {
             return;
         }
-        canceled_ = true;
-        cancelError_ = errorCode;
-        async_ = false;
+        canceled = true;
+        cancelError = errorCode;
+        async = false;
     }
 
     // 在 Leave* 阶段声明异步挂起:等待外部完成异步动作后再调用 CommitPendingTransition / CancelPendingTransition。
     void Async() noexcept
     {
-        if (!allowAsync_ || canceled_)
+        if (!allowAsync || canceled)
         {
             return;
         }
-        async_ = true;
+        async = true;
     }
 
-    [[nodiscard]] bool Canceled() const noexcept { return canceled_; }
-    [[nodiscard]] uint32_t CancelError() const noexcept { return cancelError_; }
-    [[nodiscard]] bool IsAsync() const noexcept { return async_; }
+    [[nodiscard]] bool Canceled() const noexcept { return canceled; }
+    [[nodiscard]] uint32_t CancelError() const noexcept { return cancelError; }
+    [[nodiscard]] bool IsAsync() const noexcept { return async; }
 
     void SetPhasePermissions(bool allowCancel, bool allowAsync) noexcept
     {
-        allowCancel_ = allowCancel;
-        allowAsync_ = allowAsync;
+        this->allowCancel = allowCancel;
+        this->allowAsync = allowAsync;
     }
 
 private:
-    EventEnum event_{};
-    StateEnum src_{};
-    StateEnum dst_{};
-    bool allowCancel_{false};
-    bool allowAsync_{false};
-    bool canceled_{false};
-    bool async_{false};
-    uint32_t cancelError_{0};
+    EventEnum event{};
+    StateEnum src{};
+    StateEnum dst{};
+    bool allowCancel{false};
+    bool allowAsync{false};
+    bool canceled{false};
+    bool async{false};
+    uint32_t cancelError{0};
 };
 
 template <typename StateEnum, typename EventEnum, typename Context>
@@ -151,7 +151,7 @@ public:
     };
 
     explicit Fsm(StateEnum initialState) noexcept
-        : current_(initialState)
+        : current(initialState)
     {
     }
 
@@ -165,7 +165,7 @@ public:
         {
             return;
         }
-        transitions_[Slot(fromIdx, eventIdx)].push_back(
+        transitions[Slot(fromIdx, eventIdx)].push_back(
             TransitionRule{from, event, to, std::move(guard), std::move(onTransition)});
     }
 
@@ -196,7 +196,7 @@ public:
         {
             return;
         }
-        anyTransitions_[eventIdx].push_back(
+        anyTransitions[eventIdx].push_back(
             AnyTransitionRule{to, std::move(guard), std::move(onTransition), allowSelf});
     }
 
@@ -206,20 +206,20 @@ public:
     {
         if (const auto idx = ToIndex(event); idx < kEventCount)
         {
-            onBeforeEvent_[idx] = std::move(hook);
+            onBeforeEvent[idx] = std::move(hook);
         }
     }
 
     void OnBeforeAnyEvent(EventHookFn hook)
     {
-        onBeforeAnyEvent_ = std::move(hook);
+        onBeforeAnyEvent = std::move(hook);
     }
 
     void OnLeave(StateEnum state, StateHookFn hook)
     {
         if (const auto idx = ToIndex(state); idx < kStateCount)
         {
-            onLeave_[idx] = std::move(hook);
+            onLeave[idx] = std::move(hook);
         }
     }
 
@@ -227,20 +227,20 @@ public:
     {
         if (const auto idx = ToIndex(state); idx < kStateCount)
         {
-            onLeaveEvent_[idx] = std::move(hook);
+            onLeaveEvent[idx] = std::move(hook);
         }
     }
 
     void OnLeaveAnyState(EventHookFn hook)
     {
-        onLeaveAnyState_ = std::move(hook);
+        onLeaveAnyState = std::move(hook);
     }
 
     void OnEnter(StateEnum state, StateHookFn hook)
     {
         if (const auto idx = ToIndex(state); idx < kStateCount)
         {
-            onEnter_[idx] = std::move(hook);
+            onEnter[idx] = std::move(hook);
         }
     }
 
@@ -248,26 +248,26 @@ public:
     {
         if (const auto idx = ToIndex(state); idx < kStateCount)
         {
-            onEnterEvent_[idx] = std::move(hook);
+            onEnterEvent[idx] = std::move(hook);
         }
     }
 
     void OnEnterAnyState(EventHookFn hook)
     {
-        onEnterAnyState_ = std::move(hook);
+        onEnterAnyState = std::move(hook);
     }
 
     void OnAfterEvent(EventEnum event, EventHookFn hook)
     {
         if (const auto idx = ToIndex(event); idx < kEventCount)
         {
-            onAfterEvent_[idx] = std::move(hook);
+            onAfterEvent[idx] = std::move(hook);
         }
     }
 
     void OnAfterAnyEvent(EventHookFn hook)
     {
-        onAfterAnyEvent_ = std::move(hook);
+        onAfterAnyEvent = std::move(hook);
     }
 
     // ---- 查询与自省 ----
@@ -275,25 +275,25 @@ public:
     // 纯只读判定:此刻触发 event 是否有合法且满足 Guard 的转移(存在挂起异步转移时返回 false)。
     [[nodiscard]] bool CanTrigger(EventEnum event, const Context& ctx) const
     {
-        if (pendingAsync_.has_value())
+        if (pendingAsync.has_value())
         {
             return false;
         }
-        return FindMatch(current_, event, ctx).matched;
+        return FindMatch(current, event, ctx).matched;
     }
 
     // 返回当前状态下所有可触发的事件列表(对应 looplab/fsm 的 AvailableTransitions)。
     [[nodiscard]] std::vector<EventEnum> AvailableTransitions(const Context& ctx) const
     {
         std::vector<EventEnum> result;
-        if (pendingAsync_.has_value())
+        if (pendingAsync.has_value())
         {
             return result;
         }
         for (std::size_t e = 0; e < kEventCount; ++e)
         {
             const auto ev = static_cast<EventEnum>(e);
-            if (FindMatch(current_, ev, ctx).matched)
+            if (FindMatch(current, ev, ctx).matched)
             {
                 result.push_back(ev);
             }
@@ -312,7 +312,7 @@ public:
             for (std::size_t e = 0; e < kEventCount; ++e)
             {
                 const auto ev = static_cast<EventEnum>(e);
-                for (const auto& rule : transitions_[Slot(s, e)])
+                for (const auto& rule : transitions[Slot(s, e)])
                 {
                     out += "    ";
                     out += std::string(stateName(from));
@@ -327,7 +327,7 @@ public:
         for (std::size_t e = 0; e < kEventCount; ++e)
         {
             const auto ev = static_cast<EventEnum>(e);
-            for (const auto& rule : anyTransitions_[e])
+            for (const auto& rule : anyTransitions[e])
             {
                 out += "    [*] --> ";
                 out += std::string(stateName(rule.to));
@@ -344,18 +344,18 @@ public:
     // 完整语义触发:返回 FsmResult(区分 kOk / kAsyncPending / kNoTransition / kCanceled / kInProgress / kQueueFull)。
     FsmResult TriggerEx(EventEnum event, Context& ctx)
     {
-        if (pendingAsync_.has_value())
+        if (pendingAsync.has_value())
         {
             return FsmResult{FsmStatus::kInProgress, 0};
         }
-        if (inTransition_)
+        if (inTransition)
         {
-            if (deferredCount_ >= kMaxDeferredEvents)
+            if (deferredCount >= kMaxDeferredEvents)
             {
                 return FsmResult{FsmStatus::kQueueFull, 0};
             }
-            deferredQueue_[(deferredHead_ + deferredCount_) % kMaxDeferredEvents] = event;
-            ++deferredCount_;
+            deferredQueue[(deferredHead + deferredCount) % kMaxDeferredEvents] = event;
+            ++deferredCount;
             return FsmResult{FsmStatus::kOk, 0};
         }
 
@@ -377,23 +377,23 @@ public:
 
     [[nodiscard]] bool HasPendingTransition() const noexcept
     {
-        return pendingAsync_.has_value();
+        return pendingAsync.has_value();
     }
 
     // 完成先前由 ev.Async() 挂起的迁移(对应 looplab/fsm 的 fsm.Transition()):
     // 提交状态 -> 执行规则 onTransition -> Enter* -> After* -> 消化重入队列。
     FsmResult CommitPendingTransition(Context& ctx)
     {
-        if (!pendingAsync_.has_value())
+        if (!pendingAsync.has_value())
         {
             return FsmResult{FsmStatus::kNoTransition, 0};
         }
-        if (inTransition_)
+        if (inTransition)
         {
             return FsmResult{FsmStatus::kInProgress, 0};
         }
-        const PendingAsync pending = *pendingAsync_;
-        pendingAsync_.reset();
+        const PendingAsync pending = *pendingAsync;
+        pendingAsync.reset();
 
         FinishCommitAndAfter(pending.from, pending.match, pending.event, ctx);
         DrainDeferredQueue(ctx);
@@ -403,13 +403,13 @@ public:
     // 放弃先前由 ev.Async() 挂起的迁移,保持原状态不变。
     bool CancelPendingTransition() noexcept
     {
-        if (!pendingAsync_.has_value())
+        if (!pendingAsync.has_value())
         {
             return false;
         }
-        pendingAsync_.reset();
-        deferredHead_ = 0;
-        deferredCount_ = 0;
+        pendingAsync.reset();
+        deferredHead = 0;
+        deferredCount = 0;
         return true;
     }
 
@@ -418,22 +418,22 @@ public:
     {
         if (ToIndex(state) < kStateCount)
         {
-            current_ = state;
+            current = state;
         }
-        inTransition_ = false;
-        pendingAsync_.reset();
-        deferredHead_ = 0;
-        deferredCount_ = 0;
+        inTransition = false;
+        pendingAsync.reset();
+        deferredHead = 0;
+        deferredCount = 0;
     }
 
     [[nodiscard]] StateEnum Current() const noexcept
     {
-        return current_;
+        return current;
     }
 
     [[nodiscard]] bool Is(StateEnum state) const noexcept
     {
-        return current_ == state;
+        return current == state;
     }
 
 private:
@@ -491,7 +491,7 @@ private:
             return {};
         }
 
-        const auto& specific = transitions_[Slot(fromIdx, eventIdx)];
+        const auto& specific = transitions[Slot(fromIdx, eventIdx)];
         for (std::size_t i = 0; i < specific.size(); ++i)
         {
             if (!specific[i].guard || specific[i].guard(ctx))
@@ -500,7 +500,7 @@ private:
             }
         }
 
-        const auto& globals = anyTransitions_[eventIdx];
+        const auto& globals = anyTransitions[eventIdx];
         for (std::size_t i = 0; i < globals.size(); ++i)
         {
             if (!globals[i].allowSelf && globals[i].to == from)
@@ -517,7 +517,7 @@ private:
 
     FsmResult ExecuteSingle(EventEnum event, Context& ctx)
     {
-        const StateEnum from = current_;
+        const StateEnum from = current;
         const MatchResult match = FindMatch(from, event, ctx);
         if (!match.matched)
         {
@@ -529,11 +529,11 @@ private:
         EventView ev(event, from, match.to);
 
         {
-            TransitionGuard guard{inTransition_};
+            TransitionGuard guard{inTransition};
 
             // 阶段 1: BeforeEvent -> BeforeAnyEvent (允许 Cancel,不允许 Async)
             ev.SetPhasePermissions(/*allowCancel=*/true, /*allowAsync=*/false);
-            if (const auto& hook = onBeforeEvent_[eventIdx])
+            if (const auto& hook = onBeforeEvent[eventIdx])
             {
                 hook(ev, ctx);
                 if (ev.Canceled())
@@ -541,9 +541,9 @@ private:
                     return FsmResult{FsmStatus::kCanceled, ev.CancelError()};
                 }
             }
-            if (onBeforeAnyEvent_)
+            if (onBeforeAnyEvent)
             {
-                onBeforeAnyEvent_(ev, ctx);
+                onBeforeAnyEvent(ev, ctx);
                 if (ev.Canceled())
                 {
                     return FsmResult{FsmStatus::kCanceled, ev.CancelError()};
@@ -552,7 +552,7 @@ private:
 
             // 阶段 2: LeaveState -> LeaveAnyState -> simpleLeave (允许 Cancel 与 Async;先跑可取消钩子)
             ev.SetPhasePermissions(/*allowCancel=*/true, /*allowAsync=*/true);
-            if (const auto& hook = onLeaveEvent_[fromIdx])
+            if (const auto& hook = onLeaveEvent[fromIdx])
             {
                 hook(ev, ctx);
                 if (ev.Canceled())
@@ -560,22 +560,22 @@ private:
                     return FsmResult{FsmStatus::kCanceled, ev.CancelError()};
                 }
             }
-            if (onLeaveAnyState_)
+            if (onLeaveAnyState)
             {
-                onLeaveAnyState_(ev, ctx);
+                onLeaveAnyState(ev, ctx);
                 if (ev.Canceled())
                 {
                     return FsmResult{FsmStatus::kCanceled, ev.CancelError()};
                 }
             }
-            if (const auto& simpleLeave = onLeave_[fromIdx])
+            if (const auto& simpleLeave = onLeave[fromIdx])
             {
                 simpleLeave(ctx);
             }
 
             if (ev.IsAsync())
             {
-                pendingAsync_ = PendingAsync{from, event, match};
+                pendingAsync = PendingAsync{from, event, match};
                 return FsmResult{FsmStatus::kAsyncPending, 0};
             }
         }
@@ -594,58 +594,58 @@ private:
         EventView ev(event, from, match.to);
         ev.SetPhasePermissions(/*allowCancel=*/false, /*allowAsync=*/false);
 
-        TransitionGuard guard{inTransition_};
+        TransitionGuard guard{inTransition};
 
         // 阶段 3: 提交新状态 + 规则转移回调
-        current_ = match.to;
+        current = match.to;
         if (match.isAnyRule)
         {
-            if (const auto& hook = anyTransitions_[eventIdx][match.ruleIndex].onTransition)
+            if (const auto& hook = anyTransitions[eventIdx][match.ruleIndex].onTransition)
             {
                 hook(from, match.to, event, ctx);
             }
         }
         else
         {
-            if (const auto& hook = transitions_[Slot(fromIdx, eventIdx)][match.ruleIndex].onTransition)
+            if (const auto& hook = transitions[Slot(fromIdx, eventIdx)][match.ruleIndex].onTransition)
             {
                 hook(from, match.to, event, ctx);
             }
         }
 
         // 阶段 4: EnterState -> EnterAnyState
-        if (const auto& simpleEnter = onEnter_[toIdx])
+        if (const auto& simpleEnter = onEnter[toIdx])
         {
             simpleEnter(ctx);
         }
-        if (const auto& hook = onEnterEvent_[toIdx])
+        if (const auto& hook = onEnterEvent[toIdx])
         {
             hook(ev, ctx);
         }
-        if (onEnterAnyState_)
+        if (onEnterAnyState)
         {
-            onEnterAnyState_(ev, ctx);
+            onEnterAnyState(ev, ctx);
         }
 
         // 阶段 5: AfterEvent -> AfterAnyEvent
-        if (const auto& hook = onAfterEvent_[eventIdx])
+        if (const auto& hook = onAfterEvent[eventIdx])
         {
             hook(ev, ctx);
         }
-        if (onAfterAnyEvent_)
+        if (onAfterAnyEvent)
         {
-            onAfterAnyEvent_(ev, ctx);
+            onAfterAnyEvent(ev, ctx);
         }
     }
 
     void DrainDeferredQueue(Context& ctx)
     {
         std::size_t drained = 0;
-        while (deferredCount_ > 0 && drained < kMaxDeferredEvents && !pendingAsync_.has_value())
+        while (deferredCount > 0 && drained < kMaxDeferredEvents && !pendingAsync.has_value())
         {
-            const EventEnum next = deferredQueue_[deferredHead_];
-            deferredHead_ = (deferredHead_ + 1) % kMaxDeferredEvents;
-            --deferredCount_;
+            const EventEnum next = deferredQueue[deferredHead];
+            deferredHead = (deferredHead + 1) % kMaxDeferredEvents;
+            --deferredCount;
             ++drained;
             const FsmResult res = ExecuteSingle(next, ctx);
             if (res.PendingAsync())
@@ -655,24 +655,24 @@ private:
         }
     }
 
-    StateEnum current_{};
-    bool inTransition_{false};
-    std::optional<PendingAsync> pendingAsync_{};
-    std::array<EventEnum, kMaxDeferredEvents> deferredQueue_{};
-    std::size_t deferredHead_{0};
-    std::size_t deferredCount_{0};
-    std::array<std::vector<TransitionRule>, kStateCount * kEventCount> transitions_{};
-    std::array<std::vector<AnyTransitionRule>, kEventCount> anyTransitions_{};
-    std::array<EventHookFn, kEventCount> onBeforeEvent_{};
-    EventHookFn onBeforeAnyEvent_{};
-    std::array<StateHookFn, kStateCount> onLeave_{};
-    std::array<EventHookFn, kStateCount> onLeaveEvent_{};
-    EventHookFn onLeaveAnyState_{};
-    std::array<StateHookFn, kStateCount> onEnter_{};
-    std::array<EventHookFn, kStateCount> onEnterEvent_{};
-    EventHookFn onEnterAnyState_{};
-    std::array<EventHookFn, kEventCount> onAfterEvent_{};
-    EventHookFn onAfterAnyEvent_{};
+    StateEnum current{};
+    bool inTransition{false};
+    std::optional<PendingAsync> pendingAsync{};
+    std::array<EventEnum, kMaxDeferredEvents> deferredQueue{};
+    std::size_t deferredHead{0};
+    std::size_t deferredCount{0};
+    std::array<std::vector<TransitionRule>, kStateCount * kEventCount> transitions{};
+    std::array<std::vector<AnyTransitionRule>, kEventCount> anyTransitions{};
+    std::array<EventHookFn, kEventCount> onBeforeEvent{};
+    EventHookFn onBeforeAnyEvent{};
+    std::array<StateHookFn, kStateCount> onLeave{};
+    std::array<EventHookFn, kStateCount> onLeaveEvent{};
+    EventHookFn onLeaveAnyState{};
+    std::array<StateHookFn, kStateCount> onEnter{};
+    std::array<EventHookFn, kStateCount> onEnterEvent{};
+    EventHookFn onEnterAnyState{};
+    std::array<EventHookFn, kEventCount> onAfterEvent{};
+    EventHookFn onAfterAnyEvent{};
 };
 
 } // namespace combat_ai

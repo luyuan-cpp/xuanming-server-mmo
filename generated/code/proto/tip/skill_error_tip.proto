@@ -55,4 +55,14 @@ enum skill_error {
 
   kSkillProxyFeeInvalid = 7022;
 
+  kSkillLoadoutSlotLimitReached = 7023;
+
+  kSkillLoadoutConflict = 7024;
+
+  kSkillLoadoutNotLearned = 7025;
+
+  kSkillLoadoutSchemeInvalid = 7026;
+
+  kSkillLoadoutVersionChanged = 7027;
+
 };

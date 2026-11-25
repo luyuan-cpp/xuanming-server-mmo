@@ -209,7 +209,7 @@ void SceneBagClientPlayerHandler::EnhanceEquip(entt::entity player,const ::Enhan
 	{
 		const std::optional<uint32_t> expectedPity = request->has_expected_pity_count()
 			? std::optional<uint32_t>{request->expected_pity_count()} : std::nullopt;
-		if (const auto err = PlayerEquipSystem::Enhance(player, request->item_id(), request->expected_level(), outcome, expectedPity);
+		if (const auto err = PlayerEquipSystem::Enhance(player, request->item_id(), request->expected_level(), outcome, expectedPity, request->allow_bound_materials());
 			err != kSuccess)
 		{
 			response->mutable_error_message()->set_id(err);

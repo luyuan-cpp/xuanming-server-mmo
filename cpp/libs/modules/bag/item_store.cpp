@@ -17,8 +17,8 @@
 
 ItemComp *ItemStore::Find(Guid guid)
 {
-    auto it = items_.find(guid);
-    if (it == items_.end())
+    auto it = items.find(guid);
+    if (it == items.end())
     {
         return nullptr;
     }
@@ -28,8 +28,8 @@ ItemComp *ItemStore::Find(Guid guid)
 
 const ItemComp *ItemStore::Find(Guid guid) const
 {
-    auto it = items_.find(guid);
-    if (it == items_.end())
+    auto it = items.find(guid);
+    if (it == items.end())
     {
         return nullptr;
     }
@@ -40,7 +40,7 @@ const ItemComp *ItemStore::Find(Guid guid) const
 ItemComp *ItemStore::Insert(ItemComp proto)
 {
     const Guid guid = proto.item_id();
-    if (items_.contains(guid))
+    if (items.contains(guid))
     {
         return nullptr; // 重复请求不占用入包序号,也不抬高水位。
     }
@@ -52,38 +52,38 @@ ItemComp *ItemStore::Insert(ItemComp proto)
     // 加载边界先调用 RaiseAcquireSeq 扫全包水位，避免零章条目与后到的既有序号冲突。
     if (proto.acquire_seq() == 0)
     {
-        proto.set_acquire_seq(nextAcquireSeq_++);
+        proto.set_acquire_seq(nextAcquireSeq++);
     }
-    else if (proto.acquire_seq() >= nextAcquireSeq_)
+    else if (proto.acquire_seq() >= nextAcquireSeq)
     {
-        nextAcquireSeq_ = proto.acquire_seq() + 1;
+        nextAcquireSeq = proto.acquire_seq() + 1;
     }
 
-    auto [it, inserted] = items_.emplace(guid, std::move(proto));
+    auto [it, inserted] = items.emplace(guid, std::move(proto));
     assert(inserted); // 单线程所有权,上面的查重与插入之间没有回调。
     return &it->second;
 }
 
 void ItemStore::RaiseAcquireSeq(uint64_t sequence)
 {
-    if (sequence >= nextAcquireSeq_)
+    if (sequence >= nextAcquireSeq)
     {
-        nextAcquireSeq_ = sequence + 1;
+        nextAcquireSeq = sequence + 1;
     }
 }
 
 bool ItemStore::Erase(Guid guid)
 {
-    return items_.erase(guid) != 0;
+    return items.erase(guid) != 0;
 }
 
 void ItemStore::Clear()
 {
-    items_.clear();
+    items.clear();
     // 水位跟着清空一起复位:ResetFromSnapshot 之后紧跟着的就是按快照顺序重放,
     // 那批实例会带着自己的章回来(或没章、由这里重新按顺序盖)。不复位的话,
     // 一个反复还原的实体水位会单调涨到没有意义的大数。
-    nextAcquireSeq_ = 1;
+    nextAcquireSeq = 1;
 }
 
 bool ItemStore::AcquiredBefore(const ItemComp &lhs, const ItemComp &rhs)
@@ -95,8 +95,8 @@ bool ItemStore::AcquiredBefore(const ItemComp &lhs, const ItemComp &rhs)
 std::vector<const ItemStore::Items::value_type *> ItemStore::InAcquireOrder() const
 {
     std::vector<const Items::value_type *> ordered;
-    ordered.reserve(items_.size());
-    for (const auto &entry : items_)
+    ordered.reserve(items.size());
+    for (const auto &entry : items)
     {
         assert(entry.first == entry.second.item_id());
         ordered.push_back(&entry);
@@ -109,8 +109,8 @@ std::vector<const ItemStore::Items::value_type *> ItemStore::InAcquireOrder() co
 std::vector<ItemStore::Items::value_type *> ItemStore::InAcquireOrder()
 {
     std::vector<Items::value_type *> ordered;
-    ordered.reserve(items_.size());
-    for (auto &entry : items_)
+    ordered.reserve(items.size());
+    for (auto &entry : items)
     {
         assert(entry.first == entry.second.item_id());
         ordered.push_back(&entry);
@@ -129,7 +129,7 @@ std::size_t ItemStore::TotalCountOf(uint32_t configId) const
 {
     std::size_t totalSize = 0;
     // 总量与遍历顺序无关。
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         if (item.config_id() == configId && IsCountableByConfig(item))
         {
@@ -142,7 +142,7 @@ std::size_t ItemStore::TotalCountOf(uint32_t configId) const
 std::size_t ItemStore::TotalTradableCountOf(uint32_t configId) const
 {
     std::size_t totalSize = 0;
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         if (item.config_id() == configId && !item.bound() && IsCountableByConfig(item))
         {
@@ -161,7 +161,7 @@ ItemStore::QuantityVerdict ItemStore::CheckQuantities(const ItemCountMap &requir
         uint64_t withheld{0};
     };
     std::unordered_map<uint32_t, Held> heldByConfig;
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         if (!required.contains(item.config_id()))
         {
@@ -198,7 +198,7 @@ ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted, boo
 {
     ItemCountMap freeRoomByConfig;
     // 空余总量与遍历顺序无关；Bag 已在扣空时释放实例，加载也跳过旧档零堆。
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         if (!wanted.contains(item.config_id()))
         {
@@ -287,7 +287,7 @@ uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
 {
     // 每个候选只查一次 rank,比较器不调用外部逻辑。空 rank 时仅按实例序。
     std::vector<std::pair<uint64_t, Items::value_type *>> ordered;
-    for (auto &entry : items_)
+    for (auto &entry : items)
     {
         assert(entry.first == entry.second.item_id());
         // 带更新版本字段的堆不当普通单位扣(IsCountableByConfig,与 TotalCountOf / CheckQuantities 同口径)。
@@ -338,7 +338,7 @@ bool ItemStore::HasMergeablePartials() const
     // 同一个 (config, bound) 一旦出现 >= 2 个未满堆(一高一低 / 两个半堆),就能合并出
     // 更少的实例。绑定与可交易绝不跨组并堆。
     std::map<std::pair<uint32_t, bool>, uint32_t> partialCountByKey;
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         LookupItemOrContinue(item.config_id());
         if (!IsMergeCandidate(item, itemRow->max_stack_size()))
@@ -420,7 +420,7 @@ void ItemStore::MergePartialStacks()
 bool ItemStore::HasEmptyInstances() const
 {
     // 是否存在空堆与遍历顺序无关。
-    for (const auto &[guid, item] : items_)
+    for (const auto &[guid, item] : items)
     {
         if (item.size() == 0)
         {

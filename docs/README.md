@@ -140,6 +140,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-script.md](design/battle-script.md) — 战斗剧本(battle script)
 - [battle-season-one-simple-design.md](design/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
 - [battle-season-one-ui-handoff.md](design/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
+- [battle-skill-and-pet-cultivation-expansion.md](design/battle-skill-and-pet-cultivation-expansion.md) — 战斗战法深度与宝宝养成全量扩展设计（扩展包 A+B+C+D）
 - [battle-spectate-tiered-fanout.md](design/battle-spectate-tiered-fanout.md) — 观战分级扩容：直连席 → gate 中继 → 全服广播
 - [battle-transport-decision.md](design/battle-transport-decision.md) — battle 节点传输选型定谳(gRPC vs muduo TCP RPC vs Go)
 - [pve-team-size-matching.md](design/pve-team-size-matching.md) — PVE 人数档匹配:人越多怪越多
@@ -193,6 +194,9 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [season-skills-and-seal-design.md](design/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [season-team-tournament-v1.md](design/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
 - [season-team-tournament-v1-ui-handoff.md](design/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
+- [season-team-tournament-v2.md](design/season-team-tournament-v2.md) — 《群仙问道赛》全服赛季战队锦标赛 V2 趣味扩展设计案
+- [season-team-tournament-v2-ui-handoff.md](design/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
+- [spirit-shop-and-starter-packs-v1.md](design/spirit-shop-and-starter-packs-v1.md) — 《五行奇谈》P0 官方灵石百宝阁与绑定/终身限购首套提速包设计（V1）
 - [stall-system.md](design/stall-system.md) — 摆摊系统设计(草案)
 - [team-system.md](design/team-system.md) — 组队系统设计(team-in-match)
 
@@ -359,6 +363,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [ranked-play-v1-implementation.md](design/ranked-play-v1-implementation.md) — 《论剑排位首发 V1》工程落盘设计
 - [ranked-play-v2-overhaul.md](design/ranked-play-v2-overhaul.md) — 《论剑 / 人宠会武》V2 玩法体验重做与双服客户端落地设计
 - [ranked-play-v2-ui-handoff.md](design/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
+- [ranked-play-v3-tactical-prep.md](design/ranked-play-v3-tactical-prep.md) — 《论剑 / 人宠会武》V3 扩展设计：战前 15 秒明牌变阵（换赛季印 / 换首发宠）
 - [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷
 - [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留
 - [redis-cluster-all-domains-20261110.md](design/redis-cluster-all-domains-20261110.md) — 全部 Redis 上 Cluster:控制集群与各用途的分片设计(2026-11-10)

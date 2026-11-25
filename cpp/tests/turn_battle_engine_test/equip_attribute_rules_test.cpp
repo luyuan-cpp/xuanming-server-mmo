@@ -72,28 +72,28 @@ constexpr uint32_t kAgility = 104;
 // 必须以**左值**传给 RollAffixes(按引用推导),否则记在副本上、这里什么都看不到。
 class ScriptedRand {
 public:
-    explicit ScriptedRand(std::vector<uint64_t> script) : script_(std::move(script)) {}
+    explicit ScriptedRand(std::vector<uint64_t> script) : script(std::move(script)) {}
 
     uint64_t operator()(uint64_t n) {
-        requested_.push_back(n);
-        if (next_ >= script_.size()) {
-            ADD_FAILURE() << "rand called more times than scripted: call #" << requested_.size() << " n=" << n;
+        requested.push_back(n);
+        if (next >= script.size()) {
+            ADD_FAILURE() << "rand called more times than scripted: call #" << requested.size() << " n=" << n;
             return 0;
         }
-        const uint64_t value = script_[next_++];
-        EXPECT_LT(value, n) << "scripted value out of range at call #" << requested_.size();
+        const uint64_t value = script[next++];
+        EXPECT_LT(value, n) << "scripted value out of range at call #" << requested.size();
         return value;
     }
 
     // 每次调用要的 n,按调用顺序
-    const std::vector<uint64_t>& Requested() const { return requested_; }
+    const std::vector<uint64_t>& Requested() const { return requested; }
     // 脚本是否恰好用完(少掷了同样算错)
-    bool Exhausted() const { return next_ == script_.size(); }
+    bool Exhausted() const { return next == script.size(); }
 
 private:
-    std::vector<uint64_t> script_;
-    std::size_t next_ = 0;
-    std::vector<uint64_t> requested_;
+    std::vector<uint64_t> script;
+    std::size_t next = 0;
+    std::vector<uint64_t> requested;
 };
 
 using RangeTable = std::map<uint32_t, ValueRange>;

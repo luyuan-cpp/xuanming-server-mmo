@@ -73,14 +73,14 @@ const char *StatusCodeName(StatusCode code)
 
 std::string Status::ToString() const
 {
-    std::string text = StatusCodeName(code_);
+    std::string text = StatusCodeName(code);
     text += '(';
     text += std::to_string(code_value());
     text += ')';
-    if (!message_.empty())
+    if (!detailMessage.empty())
     {
         text += ": ";
-        text += message_;
+        text += detailMessage;
     }
     return text;
 }

@@ -50,3 +50,7 @@ constexpr uint32_t MatchInternalListPendingBattleScriptsIndex = 10;
 constexpr uint32_t MatchInternalReviewBattleScriptMessageId = 388;
 constexpr uint32_t MatchInternalReviewBattleScriptIndex = 11;
 #define MatchInternalReviewBattleScriptMethod  ::MatchInternal_Stub::descriptor()->method(11)
+
+constexpr uint32_t MatchInternalStartGuildWarBattleMessageId = 495;
+constexpr uint32_t MatchInternalStartGuildWarBattleIndex = 12;
+#define MatchInternalStartGuildWarBattleMethod  ::MatchInternal_Stub::descriptor()->method(12)

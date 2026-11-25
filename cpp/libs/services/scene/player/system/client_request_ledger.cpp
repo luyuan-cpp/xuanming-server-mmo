@@ -176,6 +176,7 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 		// 兼容迁移前老存档：不得携带未迁移的 v2 字段，沿用旧日限与 10 份步长不变量。
 		uint64_t dayStart = 0, nextDay = 0;
 		if (material.lifetime_earned() != 0 || material.tradable_earned_total() != 0 ||
+			material.stage1_tradable_confirmed() != 0 ||
 			material.available_tradable_units() != 0 || material.week_starts_at_ms() != 0 ||
 			material.earned_this_week() != 0 ||
 			material.earned_today() > PlayerEquipmentMaterialRewardSystem::kDailyLimit ||
@@ -189,15 +190,17 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 	}
 	else
 	{
-		// 两阶段 v2 账本不变量（合入 A）：首套 660（可交易<=60）+ 二阶段每周 100 全绑定，5 份步长。
+		// 两阶段 v2 账本不变量（合入 A）：首套 660（跨角色可交易<=60）+ 二阶段每周 150（月卡胜局解锁可交易），5 份步长。
 		uint64_t weekStart = 0, nextWeek = 0;
 		if (material.lifetime_earned() > PlayerEquipmentMaterialRewardSystem::kLifetimeLimit ||
 			material.lifetime_earned() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
 			material.tradable_earned_total() > PlayerEquipmentMaterialRewardSystem::kTradableLifetimeLimit ||
 			material.tradable_earned_total() > material.lifetime_earned() / PlayerEquipmentMaterialRewardSystem::kBattleUnits ||
+			material.stage1_tradable_confirmed() > material.tradable_earned_total() ||
 			material.available_units() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
 			material.available_tradable_units() > material.available_units() ||
-			material.available_tradable_units() > material.tradable_earned_total() ||
+			(material.lifetime_earned() < PlayerEquipmentMaterialRewardSystem::kLifetimeLimit &&
+				material.available_tradable_units() > material.tradable_earned_total()) ||
 			material.earned_this_week() > PlayerEquipmentMaterialRewardSystem::kWeeklyLimit ||
 			material.earned_this_week() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
 			(material.week_starts_at_ms() == 0 && material.earned_this_week() != 0) ||

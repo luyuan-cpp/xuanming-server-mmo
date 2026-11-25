@@ -199,7 +199,7 @@
 - [x] **步骤 3（本轮已完成）**：已同步对齐 [project-vision.md](project-vision.md)、[equipment-v1-affixes-artifacts.md](equipment-v1-affixes-artifacts.md)、[equipment-economy-charter.md](equipment-economy-charter.md) 与 [skill-planning/README.md](skill-planning/README.md) 的上位衔接条款。
 - [x] **步骤 4（已完成）**：已完成服务端源表/proto 修改、`dev.bat gen`、3 个回合叠层成长战法、装备 5 档品相/打磨/换词条无损继承、分卷宗制书与主城原子代打实现、单测与串行 `msbuild /m:1` 构建验收、同级 `mmorpg-client` 契约同步，并在独立 Java 仓 `PARITY.md` 登记双服对齐项。
 - [x] **步骤 5（已完成）**：已完成 Unity 客户端（`mmorpg-client`）全链路代码实现与验证：`PlayerFeaturesClient.Crafting.cs`（打磨/重铸/防染毒/代打/中文 Tip）、`EquipmentCraftUiState.cs` & `EquipmentScreenModel.cs`（5 档品相/8 次保底/宗师署名/概率公示/新道具图标键）、`SkillBookMapper.cs` & `SkillBookModels.cs`（卷宗/稀世/解锁门槛与新 Tip）、`SkillCraftClient.cs` & `SkillCraftModels.cs`（6 个新 RPC + 弱网持久幂等重放 + 名匠摊位）、`EquipmentWindow.Polish.cs` & `SkillCraftWindow.cs`（完整可交互 uGUI 窗口且零破坏既有像素还原布局），6 组 NUnit 无头单测 `134/134` 全绿。
-- [ ] **步骤 6（待 ChatGPT / 美术侧产出图片后落盘替换）**：按 §7.1 交付的零代码道家 Q 版 UI 任务书生成透明预览图、7 张独立图标与 16 张无字切图，导入 `mmorpg-client/Assets/Resources/UI/Ugui/CraftQualitySkill/` 即可自动替换默认控件与图标。
+- [x] **步骤 6（已完成）**：已同步更新 `data/Item.xlsx`（`3405..3408` 正式图标路径）与 `data/MessageLimiter.xlsx`（`404..406`、`459..464` 限流规则），导表并通过 `scene.exe --validate-tables` 与客户端 `sync_tables.ps1` 同步；已将 `D:\work\image\designs\craft-quality-skill-ui-20261124` 正式交付的 16 张无字控件、7 张独立图标（替换早期草稿）及 3 张技能图标（`Assets/Resources/UI/Skills/{12020,12021,12022}.png` 及对应 `.meta`）完整合入 `mmorpg-client`；已完成 `EquipmentWindow.{Overview,Crafting,Polish}.cs`、`SkillCraftWindow.cs`（含官方商城补秘墨与名匠代打双向跳转）、`WorldHudNavigation.cs`（「修行→典籍制书」与「交易→名匠代打」入口）及 `GameClient.cs` / `JubaozhaiUiRoot.cs` 跨模块刷新联动。
 
 ---
 

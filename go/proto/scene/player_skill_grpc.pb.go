@@ -31,6 +31,8 @@ const (
 	SceneSkillClientPlayer_DismantleSkillBook_FullMethodName     = "/SceneSkillClientPlayer/DismantleSkillBook"
 	SceneSkillClientPlayer_SetCraftProxyStall_FullMethodName     = "/SceneSkillClientPlayer/SetCraftProxyStall"
 	SceneSkillClientPlayer_ListCraftProxyStalls_FullMethodName   = "/SceneSkillClientPlayer/ListCraftProxyStalls"
+	SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName       = "/SceneSkillClientPlayer/SaveSkillLoadout"
+	SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName     = "/SceneSkillClientPlayer/SwitchSkillLoadout"
 )
 
 // SceneSkillClientPlayerClient is the client API for SceneSkillClientPlayer service.
@@ -49,6 +51,8 @@ type SceneSkillClientPlayerClient interface {
 	DismantleSkillBook(ctx context.Context, in *DismantleSkillBookRequest, opts ...grpc.CallOption) (*DismantleSkillBookResponse, error)
 	SetCraftProxyStall(ctx context.Context, in *SetCraftProxyStallRequest, opts ...grpc.CallOption) (*SetCraftProxyStallResponse, error)
 	ListCraftProxyStalls(ctx context.Context, in *ListCraftProxyStallsRequest, opts ...grpc.CallOption) (*ListCraftProxyStallsResponse, error)
+	SaveSkillLoadout(ctx context.Context, in *SaveSkillLoadoutRequest, opts ...grpc.CallOption) (*SaveSkillLoadoutResponse, error)
+	SwitchSkillLoadout(ctx context.Context, in *SwitchSkillLoadoutRequest, opts ...grpc.CallOption) (*SwitchSkillLoadoutResponse, error)
 }
 
 type sceneSkillClientPlayerClient struct {
@@ -169,6 +173,26 @@ func (c *sceneSkillClientPlayerClient) ListCraftProxyStalls(ctx context.Context,
 	return out, nil
 }
 
+func (c *sceneSkillClientPlayerClient) SaveSkillLoadout(ctx context.Context, in *SaveSkillLoadoutRequest, opts ...grpc.CallOption) (*SaveSkillLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveSkillLoadoutResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) SwitchSkillLoadout(ctx context.Context, in *SwitchSkillLoadoutRequest, opts ...grpc.CallOption) (*SwitchSkillLoadoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SwitchSkillLoadoutResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSkillClientPlayerServer is the server API for SceneSkillClientPlayer service.
 // All implementations must embed UnimplementedSceneSkillClientPlayerServer
 // for forward compatibility.
@@ -185,6 +209,8 @@ type SceneSkillClientPlayerServer interface {
 	DismantleSkillBook(context.Context, *DismantleSkillBookRequest) (*DismantleSkillBookResponse, error)
 	SetCraftProxyStall(context.Context, *SetCraftProxyStallRequest) (*SetCraftProxyStallResponse, error)
 	ListCraftProxyStalls(context.Context, *ListCraftProxyStallsRequest) (*ListCraftProxyStallsResponse, error)
+	SaveSkillLoadout(context.Context, *SaveSkillLoadoutRequest) (*SaveSkillLoadoutResponse, error)
+	SwitchSkillLoadout(context.Context, *SwitchSkillLoadoutRequest) (*SwitchSkillLoadoutResponse, error)
 	mustEmbedUnimplementedSceneSkillClientPlayerServer()
 }
 
@@ -227,6 +253,12 @@ func (UnimplementedSceneSkillClientPlayerServer) SetCraftProxyStall(context.Cont
 }
 func (UnimplementedSceneSkillClientPlayerServer) ListCraftProxyStalls(context.Context, *ListCraftProxyStallsRequest) (*ListCraftProxyStallsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListCraftProxyStalls not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) SaveSkillLoadout(context.Context, *SaveSkillLoadoutRequest) (*SaveSkillLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSkillLoadout not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) SwitchSkillLoadout(context.Context, *SwitchSkillLoadoutRequest) (*SwitchSkillLoadoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SwitchSkillLoadout not implemented")
 }
 func (UnimplementedSceneSkillClientPlayerServer) mustEmbedUnimplementedSceneSkillClientPlayerServer() {
 }
@@ -448,6 +480,42 @@ func _SceneSkillClientPlayer_ListCraftProxyStalls_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSkillClientPlayer_SaveSkillLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSkillLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).SaveSkillLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_SaveSkillLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).SaveSkillLoadout(ctx, req.(*SaveSkillLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_SwitchSkillLoadout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SwitchSkillLoadoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).SwitchSkillLoadout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_SwitchSkillLoadout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).SwitchSkillLoadout(ctx, req.(*SwitchSkillLoadoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSkillClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSkillClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -498,6 +566,14 @@ var SceneSkillClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListCraftProxyStalls",
 			Handler:    _SceneSkillClientPlayer_ListCraftProxyStalls_Handler,
+		},
+		{
+			MethodName: "SaveSkillLoadout",
+			Handler:    _SceneSkillClientPlayer_SaveSkillLoadout_Handler,
+		},
+		{
+			MethodName: "SwitchSkillLoadout",
+			Handler:    _SceneSkillClientPlayer_SwitchSkillLoadout_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

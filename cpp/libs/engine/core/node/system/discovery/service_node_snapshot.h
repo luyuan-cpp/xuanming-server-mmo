@@ -22,24 +22,24 @@ public:
     // 说明读它的调用方漏进了发现集合。不声明 = 不检查(单测与只用快照做数据结构的地方)。
     void DeclareReadableTypes(const ReadableTypes &readable, UndeclaredReadFn onUndeclaredRead)
     {
-        readable_ = readable;
-        onUndeclaredRead_ = onUndeclaredRead;
-        reported_.fill(false);
+        this->readable = readable;
+        this->onUndeclaredRead = onUndeclaredRead;
+        reported.fill(false);
     }
 
     const NodeList &NodesOfType(uint32_t nodeType) const
     {
         static const NodeList empty;
-        if (nodeType >= byType_.size())
+        if (nodeType >= byType.size())
         {
             return empty;
         }
-        if (onUndeclaredRead_ != nullptr && !readable_[nodeType] && !reported_[nodeType])
+        if (onUndeclaredRead != nullptr && !readable[nodeType] && !reported[nodeType])
         {
-            reported_[nodeType] = true;
-            onUndeclaredRead_(nodeType);
+            reported[nodeType] = true;
+            onUndeclaredRead(nodeType);
         }
-        return byType_[nodeType];
+        return byType[nodeType];
     }
 
     bool HasNodesOfType(uint32_t nodeType) const
@@ -51,17 +51,17 @@ public:
     // 拿它判断缓存是否过期;非法类型恒为 0。
     uint64_t Generation(uint32_t nodeType) const
     {
-        return nodeType < generations_.size() ? generations_[nodeType] : 0;
+        return nodeType < generations.size() ? generations[nodeType] : 0;
     }
 
     UpsertResult Upsert(uint32_t nodeType, const NodeInfo &node)
     {
-        if (nodeType >= byType_.size())
+        if (nodeType >= byType.size())
         {
             return UpsertResult::kRejected;
         }
-        ++generations_[nodeType];
-        auto &nodes = byType_[nodeType];
+        ++generations[nodeType];
+        auto &nodes = byType[nodeType];
         for (auto &existing : nodes)
         {
             if (existing.node_uuid() == node.node_uuid())
@@ -77,11 +77,11 @@ public:
     // 删除全部匹配项,未命中或非法类型返回 0;不影响其他类型或 uuid。
     int Remove(uint32_t nodeType, const std::string &nodeUuid)
     {
-        if (nodeType >= byType_.size())
+        if (nodeType >= byType.size())
         {
             return 0;
         }
-        auto &nodes = byType_[nodeType];
+        auto &nodes = byType[nodeType];
         int removed = 0;
         for (int i = nodes.size() - 1; i >= 0; --i)
         {
@@ -93,16 +93,16 @@ public:
         }
         if (removed > 0)
         {
-            ++generations_[nodeType];
+            ++generations[nodeType];
         }
         return removed;
     }
 
 private:
-    std::array<NodeList, common::base::eNodeType_ARRAYSIZE> byType_;
-    std::array<uint64_t, common::base::eNodeType_ARRAYSIZE> generations_{};
-    ReadableTypes readable_{};
-    UndeclaredReadFn onUndeclaredRead_ = nullptr;
+    std::array<NodeList, common::base::eNodeType_ARRAYSIZE> byType;
+    std::array<uint64_t, common::base::eNodeType_ARRAYSIZE> generations{};
+    ReadableTypes readable{};
+    UndeclaredReadFn onUndeclaredRead = nullptr;
     // 每个类型只报一次;读路径是 const,报过的标记放在 mutable 里(只在所属 loop 线程读写)。
-    mutable ReadableTypes reported_{};
+    mutable ReadableTypes reported{};
 };

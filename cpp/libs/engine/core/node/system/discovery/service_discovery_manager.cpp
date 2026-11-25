@@ -45,7 +45,7 @@ void ServiceDiscoveryManager::Init()
 	{
 		readable[gNode->GetNodeType()] = true;
 	}
-	serviceNodes_.DeclareReadableTypes(readable, &ReportUndeclaredDiscoveryRead);
+	serviceNodes.DeclareReadableTypes(readable, &ReportUndeclaredDiscoveryRead);
 
 	const auto plan = NodeUtils::PlanDiscoveryScopes(ConfiguredDiscoveryPrefixes(), gNode->GetDiscoveryNodeTypes(),
 													 gNode->GetNodeInfo().zone_id());
@@ -76,7 +76,7 @@ void ServiceDiscoveryManager::Init()
 
 void ServiceDiscoveryManager::Shutdown()
 {
-	serviceNodeSyncTimer_.Cancel();
+	serviceNodeSyncTimer.Cancel();
 	etcdService.Shutdown();
 }
 
@@ -84,7 +84,7 @@ void ServiceDiscoveryManager::ScheduleNextResync()
 {
 	// 兜底全量 Range:约 60 秒一次、±20% 抖动(discovery_resync_policy.h)。RunAfter 链而不是 RunEvery,每一拍重新抽抖动。
 	std::uniform_real_distribution<double> unit(0.0, 1.0);
-	serviceNodeSyncTimer_.RunAfter(discovery_resync::ResyncDelaySeconds(unit(resyncJitter_)), [this] {
+	serviceNodeSyncTimer.RunAfter(discovery_resync::ResyncDelaySeconds(unit(resyncJitter)), [this] {
 		FetchServiceNodes();
 		ScheduleNextResync();
 	});
@@ -98,9 +98,9 @@ std::vector<std::string> ServiceDiscoveryManager::EffectiveDiscoveryPrefixes() c
 	auto scopes = NodeUtils::PlanDiscoveryScopes(ConfiguredDiscoveryPrefixes(), gNode->GetDiscoveryNodeTypes(),
 												 gNode->GetNodeInfo().zone_id())
 					  .scopes;
-	if (!ownRegistrationKey_.empty())
+	if (!ownRegistrationKey.empty())
 	{
-		scopes.push_back(ownRegistrationKey_);
+		scopes.push_back(ownRegistrationKey);
 	}
 	return scopes;
 }
@@ -115,16 +115,16 @@ void ServiceDiscoveryManager::FetchServiceNodes()
 
 void ServiceDiscoveryManager::WatchOwnRegistrationKey()
 {
-	if (gNode->DiscoversNodeType(gNode->GetNodeType()) || !ownRegistrationKey_.empty())
+	if (gNode->DiscoversNodeType(gNode->GetNodeType()) || !ownRegistrationKey.empty())
 	{
 		return;
 	}
 	// 与 EtcdManager::PublishNodeInfoAfterAllocation 发布的是同一条键。这时 node_id 已由分配键 CAS 定下。
-	ownRegistrationKey_ = gNode->GetEtcdManager().MakeNodeEtcdKey(gNode->GetNodeInfo());
-	etcdService.AddExactDiscoveryKey(ownRegistrationKey_);
-	LOG_INFO << "Own node type is not in the discovery set; watching only this node's own key " << ownRegistrationKey_;
+	ownRegistrationKey = gNode->GetEtcdManager().MakeNodeEtcdKey(gNode->GetNodeInfo());
+	etcdService.AddExactDiscoveryKey(ownRegistrationKey);
+	LOG_INFO << "Own node type is not in the discovery set; watching only this node's own key " << ownRegistrationKey;
 	// 应答到了走 OnPrefixRange:对账,并从快照之后建这条键的 watch。发布之前拿到的是空快照,发布的 PUT 由 watch 送到。
-	etcdService.RangeDiscoveryScope(ownRegistrationKey_);
+	etcdService.RangeDiscoveryScope(ownRegistrationKey);
 }
 
 void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32_t nodeType)
@@ -205,7 +205,7 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 	// Cancel any pending grace-period removal for this node.
 	gNode->CancelPendingNodeRemoval(discoveredNode.node_uuid());
 
-	const auto result = serviceNodes_.Upsert(nodeType, discoveredNode);
+	const auto result = serviceNodes.Upsert(nodeType, discoveredNode);
 	if (result == ServiceNodeSnapshot::UpsertResult::kRejected)
 	{
 		return;

@@ -144,7 +144,7 @@ uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, B
     layout->set_bag_type(bagType);
     layout->set_capacity(static_cast<uint32_t>(bag.Capacity()));
     layout->set_can_sort(CanSortBagType(bagType));
-    bag.ForEachItem([&out, layout, &bag](Guid guid, const ItemComp& item) {
+    bag.ForEachItem([player, bags, &out, layout, &bag](Guid guid, const ItemComp& item) {
         auto* info = out.add_items();
         info->set_item_id(guid);
         info->set_config_id(item.config_id());
@@ -158,6 +158,17 @@ uint32_t PlayerBagSystem::BuildSnapshot(entt::entity player, uint32_t bagType, B
         // 名称 / 描述 / 图标 / 佩戴要求 / 属性行(BagItemInfo 6–13 号字段)。客户端不加载配表,
         // 装备 tooltip 上的每一个字都来自这里;上限按当前表现查,所以改表后下一次开包就生效。
         PlayerEquipSystem::FillItemDisplay(item, *info);
+        if (info->has_enhance_next() && info->enhance_next().material_config_id() != 0 &&
+            info->enhance_next().material_count() > 0) {
+            const uint32_t matId = info->enhance_next().material_config_id();
+            const uint32_t matCount = info->enhance_next().material_count();
+            const uint64_t tradableAvail = BagService::RemovableTradableCount(player, bags->bags[kInventory], matId);
+            const uint64_t totalAvail = BagService::RemovableCount(player, bags->bags[kInventory], matId);
+            info->mutable_enhance_next()->set_tradable_material_available(tradableAvail);
+            if (!item.bound() && tradableAvail < matCount && totalAvail >= matCount) {
+                info->mutable_enhance_next()->set_will_bind_on_enhance(true);
+            }
+        }
         auto* slot = layout->add_slots();
         slot->set_slot(bag.GetItemPosByGuid(guid));
         slot->set_item_id(guid);

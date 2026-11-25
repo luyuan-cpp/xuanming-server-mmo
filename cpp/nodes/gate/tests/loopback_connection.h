@@ -123,7 +123,7 @@ inline bool DriveLoopUntil(muduo::net::EventLoop &loop, std::function<bool()> do
 class LoopbackConnection
 {
 public:
-	explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop_(loop) {}
+	explicit LoopbackConnection(muduo::net::EventLoop &loop) : loop(loop) {}
 	~LoopbackConnection() { Close(); }
 	LoopbackConnection(const LoopbackConnection &) = delete;
 	LoopbackConnection &operator=(const LoopbackConnection &) = delete;
@@ -136,9 +136,9 @@ public:
 		{
 			return false;
 		}
-		server_ = std::make_unique<muduo::net::TcpServer>(
-			&loop_, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
-		server_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+		server = std::make_unique<muduo::net::TcpServer>(
+			&loop, muduo::net::InetAddress(port, /*loopbackOnly=*/true), name + "_server");
+		server->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 			const auto probe = weak.lock();
 			if (!probe)
 			{
@@ -154,10 +154,10 @@ public:
 				probe->serverDown = true;
 			}
 		});
-		server_->start();
-		client_ = std::make_unique<muduo::net::TcpClient>(
-			&loop_, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
-		client_->setConnectionCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &conn) {
+		server->start();
+		client = std::make_unique<muduo::net::TcpClient>(
+			&loop, muduo::net::InetAddress("127.0.0.1", port), name + "_client");
+		client->setConnectionCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &conn) {
 			const auto probe = weak.lock();
 			if (!probe)
 			{
@@ -173,7 +173,7 @@ public:
 			}
 		});
 		// 客户端侧按到达顺序收下全部字节,供用例比对服务端写出的帧。
-		client_->setMessageCallback([weak = std::weak_ptr<Probe>(probe_)](const muduo::net::TcpConnectionPtr &,
+		client->setMessageCallback([weak = std::weak_ptr<Probe>(this->probe)](const muduo::net::TcpConnectionPtr &,
 																		  muduo::net::Buffer *buffer, muduo::Timestamp) {
 			const auto probe = weak.lock();
 			if (!probe)
@@ -183,22 +183,22 @@ public:
 			}
 			probe->clientReceived.append(buffer->retrieveAllAsString());
 		});
-		client_->connect();
-		return DriveLoopUntil(loop_, [probe = probe_] { return probe->serverUp && probe->clientUp; });
+		client->connect();
+		return DriveLoopUntil(loop, [probe = this->probe] { return probe->serverUp && probe->clientUp; });
 	}
 
 	// 服务端连接,挂进会话表用。调用方不要长期持有返回的强引用:muduo 关连接不关 fd、要等连接析构,
 	// 强引用不放手客户端就等不到 EOF。
-	muduo::net::TcpConnectionPtr ServerSide() const { return probe_->serverSide.lock(); }
+	muduo::net::TcpConnectionPtr ServerSide() const { return probe->serverSide.lock(); }
 	bool ServerSideConnected() const
 	{
-		const auto serverSide = probe_->serverSide.lock();
+		const auto serverSide = probe->serverSide.lock();
 		return serverSide && serverSide->connected();
 	}
 	// 两端是否都已断开(服务端关连接之后,客户端读到 EOF)。
-	bool BothSidesDown() const { return probe_->serverDown && probe_->clientDown; }
+	bool BothSidesDown() const { return probe->serverDown && probe->clientDown; }
 	// 客户端侧至今收到的全部字节。只在测试线程(即 loop 线程)读。
-	const std::string &ClientReceived() const { return probe_->clientReceived; }
+	const std::string &ClientReceived() const { return probe->clientReceived; }
 
 private:
 	struct Probe
@@ -213,15 +213,15 @@ private:
 
 	void Close()
 	{
-		if (!client_ && !server_)
+		if (!client && !server)
 		{
 			return;
 		}
-		if (client_)
+		if (client)
 		{
-			client_->disconnect();
+			client->disconnect();
 		}
-		const bool closed = DriveLoopUntil(loop_, [probe = probe_] {
+		const bool closed = DriveLoopUntil(loop, [probe = this->probe] {
 			return (!probe->serverUp || probe->serverDown) && (!probe->clientUp || probe->clientDown);
 		});
 		if (!closed)
@@ -229,20 +229,20 @@ private:
 			// 活性上限内没关完:此时析构会让连接带着非 kDisconnected 状态析构(TcpConnection.cc:71),
 			// 或让连接的 close 回调打到已析构的 TcpServer / TcpClient。宁可泄漏这对测试端点并报失败。
 			ADD_FAILURE() << "loopback connection did not close within liveness bound";
-			(void)client_.release();
-			(void)server_.release();
+			(void)client.release();
+			(void)server.release();
 			return;
 		}
-		client_.reset();
-		server_.reset();
+		client.reset();
+		server.reset();
 		// 再转一圈:TcpClient 析构排队的 Connector 收尾等 functor 在本用例内跑完。
-		(void)DriveLoopUntil(loop_, [] { return true; });
+		(void)DriveLoopUntil(loop, [] { return true; });
 	}
 
-	muduo::net::EventLoop &loop_;
-	const std::shared_ptr<Probe> probe_ = std::make_shared<Probe>();
-	std::unique_ptr<muduo::net::TcpServer> server_;
-	std::unique_ptr<muduo::net::TcpClient> client_;
+	muduo::net::EventLoop &loop;
+	const std::shared_ptr<Probe> probe = std::make_shared<Probe>();
+	std::unique_ptr<muduo::net::TcpServer> server;
+	std::unique_ptr<muduo::net::TcpClient> client;
 };
 
 } // namespace gate_test

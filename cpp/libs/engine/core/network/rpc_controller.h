@@ -41,18 +41,18 @@ public:
     explicit RpcController(const muduo::net::TcpConnectionPtr& conn) : RpcController(conn, NoHandshakePeer()) {}
     // handshakePeerUuid 引用的是派发方 RpcChannel 上的握手身份,channel 活过本次派发(RpcChannel::CallServiceMethod)。
     RpcController(const muduo::net::TcpConnectionPtr& conn, const std::string& handshakePeerUuid)
-        : conn_(conn), handshakePeerUuid_(handshakePeerUuid) {}
+        : conn(conn), handshakePeerUuid(handshakePeerUuid) {}
 
     RpcController(const RpcController&) = delete;
     RpcController& operator=(const RpcController&) = delete;
 
     // --- 本次调用所在的连接。仅在本次派发内有效,不要存起来 ---
-    const muduo::net::TcpConnectionPtr& conn() const { return conn_; }
+    const muduo::net::TcpConnectionPtr& Conn() const { return conn; }
 
     // --- 本次调用来自哪个进程:入站连接握手时认下的对端 node_uuid(docs/design/muduo-rpc-channel.md §8.3)---
     // 空 = 这条连接没有握手成功(出站连接上的调用、测试直接构造的 ctx)。需要按对端进程认身份的 handler 用它,
     // 不用消息体自报的实例号(scene 按 (gate 实例, session_id) 认会话,docs/design/scene-enter-chain-residuals.md §14)。
-    const std::string& HandshakePeerUuid() const { return handshakePeerUuid_; }
+    const std::string& HandshakePeerUuid() const { return handshakePeerUuid; }
 
     // 手写 handler 从生成层拿到的是基类指针;全仓唯一的 CallMethod 派发点
     // (RpcChannel::CallServiceMethod)构造的就是本类型,这里集中做一次受检下转。
@@ -71,11 +71,11 @@ public:
     }
 
     // --- ::google::protobuf::RpcController 接口:只用 Failed / ErrorText / SetFailed;取消语义不支持 ---
-    void Reset() override { failed_ = false; errorText_.clear(); }
-    bool Failed() const override { return failed_; }
-    std::string ErrorText() const override { return errorText_; }
+    void Reset() override { failed = false; errorText.clear(); }
+    bool Failed() const override { return failed; }
+    std::string ErrorText() const override { return errorText; }
     void StartCancel() override {}
-    void SetFailed(const std::string& reason) override { failed_ = true; errorText_ = reason; }
+    void SetFailed(const std::string& reason) override { failed = true; errorText = reason; }
     bool IsCanceled() const override { return false; }
     void NotifyOnCancel(::google::protobuf::Closure* /*callback*/) override {}
 
@@ -86,8 +86,8 @@ private:
         return kNone;
     }
 
-    muduo::net::TcpConnectionPtr conn_;
-    const std::string& handshakePeerUuid_;
-    bool failed_{ false };
-    std::string errorText_;
+    muduo::net::TcpConnectionPtr conn;
+    const std::string& handshakePeerUuid;
+    bool failed{ false };
+    std::string errorText;
 };

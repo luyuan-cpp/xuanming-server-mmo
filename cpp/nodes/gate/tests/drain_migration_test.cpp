@@ -571,34 +571,34 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
+			loop = std::make_unique<muduo::net::EventLoop>();
 			ResetState();
 		}
 
 		void TearDown() override
 		{
 			ResetState();
-			connections_.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-			loop_.reset();
+			connections.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+			loop.reset();
 		}
 
 		// 建一条回环连接,挂成一个已推过 124 的游戏中会话(推送时刻 kT0)。
 		LoopbackConnection &AddRedirectedSession(SessionId sessionId, uint64_t incarnation)
 		{
-			auto connection = std::make_unique<LoopbackConnection>(*loop_);
+			auto connection = std::make_unique<LoopbackConnection>(*loop);
 			EXPECT_TRUE(connection->Open("drain_linger_" + std::to_string(sessionId)));
 			SessionInfo &session = AddInGame(sessionId, kPlayerA, incarnation);
 			session.conn = connection->ServerSide();
 			gate_drain_migration::NoteRedirected(sessionId, session, kT0);
-			connections_.push_back(std::move(connection));
-			return *connections_.back();
+			connections.push_back(std::move(connection));
+			return *connections.back();
 		}
 
-		muduo::net::EventLoop &Loop() { return *loop_; }
+		muduo::net::EventLoop &Loop() { return *loop; }
 
 	private:
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::vector<std::unique_ptr<LoopbackConnection>> connections_;
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::vector<std::unique_ptr<LoopbackConnection>> connections;
 	};
 } // namespace
 

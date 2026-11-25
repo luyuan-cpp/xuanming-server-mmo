@@ -105,4 +105,52 @@ enum guild_error {
 
   kGuildRenameSameName = 14047;
 
+  kGuildWarNotOpen = 14048;
+
+  kGuildWarLevelTooLow = 14049;
+
+  kGuildWarSameGuild = 14050;
+
+  kGuildWarTargetPeaceMode = 14051;
+
+  kGuildWarSelfPeaceMode = 14052;
+
+  kGuildWarPeaceCooldown = 14053;
+
+  kGuildWarTargetProtected = 14054;
+
+  kGuildWarTargetInBattle = 14055;
+
+  kGuildWarTargetOffline = 14056;
+
+  kGuildWarSafeZone = 14057;
+
+  kGuildWarTeamInvalid = 14058;
+
+  kGuildWarTeamSizeExceedsRoadLimit = 14059;
+
+  kGuildWarLeylineNotFound = 14060;
+
+  kGuildWarGarrisonFull = 14061;
+
+  kGuildWarGarrisonCooldown = 14062;
+
+  kGuildWarMilestoneLocked = 14063;
+
+  kGuildWarMilestoneClaimed = 14064;
+
+  kGuildWarDividendEmpty = 14065;
+
+  kGuildWarBountyInvalidTarget = 14066;
+
+  kGuildWarBountyAlreadyActive = 14067;
+
+  kGuildWarBountyLimit = 14068;
+
+  kGuildWarBountyNotFound = 14069;
+
+  kGuildWarTrackCooldown = 14070;
+
+  kGuildWarServiceBusy = 14071;
+
 };

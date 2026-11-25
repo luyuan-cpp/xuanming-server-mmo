@@ -33,3 +33,13 @@ func (s *AdminServer) ListManualContracts(ctx context.Context, in *tradepb.ListM
 func (s *AdminServer) ResolveManualContract(ctx context.Context, in *tradepb.ResolveManualContractRequest) (*tradepb.ResolveManualContractResponse, error) {
 	return s.deps.ManualOps.ResolveManualContract(ctx, in)
 }
+
+// RecordSellerEnvironment 上报卖家登录/交易环境信号（仅换IP不扣分，异地陌生新设备清0正面信用并保留违约黑历史）。
+func (s *AdminServer) RecordSellerEnvironment(ctx context.Context, in *tradepb.RecordSellerEnvironmentRequest) (*tradepb.RecordSellerEnvironmentResponse, error) {
+	return logic.NewAdminLogic(ctx, s.deps).RecordSellerEnvironment(in)
+}
+
+// RecordSellerViolation 记录经核实的卖家违约黑历史（按 case_id 幂等）。
+func (s *AdminServer) RecordSellerViolation(ctx context.Context, in *tradepb.RecordSellerViolationRequest) (*tradepb.RecordSellerViolationResponse, error) {
+	return logic.NewAdminLogic(ctx, s.deps).RecordSellerViolation(in)
+}

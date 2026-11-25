@@ -22,15 +22,19 @@ public static partial class PettierTableReflection {
   static PettierTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChNwZXR0aWVyX3RhYmxlLnByb3RvIkcKDFBldFRpZXJUYWJsZRIKCgJpZBgB",
-          "IAEoDRIMCgRuYW1lGAIgASgJEg8KB2FydF9rZXkYAyABKAkSDAoEZGVzYxgE",
-          "IAEoCSIvChBQZXRUaWVyVGFibGVEYXRhEhsKBGRhdGEYASADKAsyDS5QZXRU",
-          "aWVyVGFibGVCPgoOY29tLmdhbWUudGFibGVCFlBldFRpZXJUYWJsZU91dGVy",
-          "Q2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "ChNwZXR0aWVyX3RhYmxlLnByb3RvItgBCgxQZXRUaWVyVGFibGUSCgoCaWQY",
+          "ASABKA0SDAoEbmFtZRgCIAEoCRIPCgdhcnRfa2V5GAMgASgJEgwKBGRlc2MY",
+          "BCABKAkSGwoTYXNjZW5kX2Nvc3RfaXRlbV9pZBgFIAEoDRIeChZhc2NlbmRf",
+          "Y29zdF9pdGVtX2NvdW50GAYgASgNEhgKEGFzY2VuZF9jb3N0X2dvbGQYByAB",
+          "KAQSHAoUYXNjZW5kX21pbl9wZXRfbGV2ZWwYCCABKA0SGgoSYm9udXNfZW50",
+          "cnlfcG9pbnRzGAkgASgNIi8KEFBldFRpZXJUYWJsZURhdGESGwoEZGF0YRgB",
+          "IAMoCzINLlBldFRpZXJUYWJsZUI+Cg5jb20uZ2FtZS50YWJsZUIWUGV0VGll",
+          "clRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PetTierTable), global::PetTierTable.Parser, new[]{ "Id", "Name", "ArtKey", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PetTierTable), global::PetTierTable.Parser, new[]{ "Id", "Name", "ArtKey", "Desc", "AscendCostItemId", "AscendCostItemCount", "AscendCostGold", "AscendMinPetLevel", "BonusEntryPoints" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PetTierTableData), global::PetTierTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -77,6 +81,11 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     name_ = other.name_;
     artKey_ = other.artKey_;
     desc_ = other.desc_;
+    ascendCostItemId_ = other.ascendCostItemId_;
+    ascendCostItemCount_ = other.ascendCostItemCount_;
+    ascendCostGold_ = other.ascendCostGold_;
+    ascendMinPetLevel_ = other.ascendMinPetLevel_;
+    bonusEntryPoints_ = other.bonusEntryPoints_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -134,6 +143,66 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     }
   }
 
+  /// <summary>Field number for the "ascend_cost_item_id" field.</summary>
+  public const int AscendCostItemIdFieldNumber = 5;
+  private uint ascendCostItemId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AscendCostItemId {
+    get { return ascendCostItemId_; }
+    set {
+      ascendCostItemId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "ascend_cost_item_count" field.</summary>
+  public const int AscendCostItemCountFieldNumber = 6;
+  private uint ascendCostItemCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AscendCostItemCount {
+    get { return ascendCostItemCount_; }
+    set {
+      ascendCostItemCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "ascend_cost_gold" field.</summary>
+  public const int AscendCostGoldFieldNumber = 7;
+  private ulong ascendCostGold_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong AscendCostGold {
+    get { return ascendCostGold_; }
+    set {
+      ascendCostGold_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "ascend_min_pet_level" field.</summary>
+  public const int AscendMinPetLevelFieldNumber = 8;
+  private uint ascendMinPetLevel_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AscendMinPetLevel {
+    get { return ascendMinPetLevel_; }
+    set {
+      ascendMinPetLevel_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "bonus_entry_points" field.</summary>
+  public const int BonusEntryPointsFieldNumber = 9;
+  private uint bonusEntryPoints_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BonusEntryPoints {
+    get { return bonusEntryPoints_; }
+    set {
+      bonusEntryPoints_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -153,6 +222,11 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     if (Name != other.Name) return false;
     if (ArtKey != other.ArtKey) return false;
     if (Desc != other.Desc) return false;
+    if (AscendCostItemId != other.AscendCostItemId) return false;
+    if (AscendCostItemCount != other.AscendCostItemCount) return false;
+    if (AscendCostGold != other.AscendCostGold) return false;
+    if (AscendMinPetLevel != other.AscendMinPetLevel) return false;
+    if (BonusEntryPoints != other.BonusEntryPoints) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -164,6 +238,11 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     if (Name.Length != 0) hash ^= Name.GetHashCode();
     if (ArtKey.Length != 0) hash ^= ArtKey.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (AscendCostItemId != 0) hash ^= AscendCostItemId.GetHashCode();
+    if (AscendCostItemCount != 0) hash ^= AscendCostItemCount.GetHashCode();
+    if (AscendCostGold != 0UL) hash ^= AscendCostGold.GetHashCode();
+    if (AscendMinPetLevel != 0) hash ^= AscendMinPetLevel.GetHashCode();
+    if (BonusEntryPoints != 0) hash ^= BonusEntryPoints.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -198,6 +277,26 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
       output.WriteRawTag(34);
       output.WriteString(Desc);
     }
+    if (AscendCostItemId != 0) {
+      output.WriteRawTag(40);
+      output.WriteUInt32(AscendCostItemId);
+    }
+    if (AscendCostItemCount != 0) {
+      output.WriteRawTag(48);
+      output.WriteUInt32(AscendCostItemCount);
+    }
+    if (AscendCostGold != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(AscendCostGold);
+    }
+    if (AscendMinPetLevel != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(AscendMinPetLevel);
+    }
+    if (BonusEntryPoints != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(BonusEntryPoints);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -224,6 +323,26 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
       output.WriteRawTag(34);
       output.WriteString(Desc);
     }
+    if (AscendCostItemId != 0) {
+      output.WriteRawTag(40);
+      output.WriteUInt32(AscendCostItemId);
+    }
+    if (AscendCostItemCount != 0) {
+      output.WriteRawTag(48);
+      output.WriteUInt32(AscendCostItemCount);
+    }
+    if (AscendCostGold != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(AscendCostGold);
+    }
+    if (AscendMinPetLevel != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(AscendMinPetLevel);
+    }
+    if (BonusEntryPoints != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(BonusEntryPoints);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -245,6 +364,21 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (AscendCostItemId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AscendCostItemId);
+    }
+    if (AscendCostItemCount != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AscendCostItemCount);
+    }
+    if (AscendCostGold != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(AscendCostGold);
+    }
+    if (AscendMinPetLevel != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AscendMinPetLevel);
+    }
+    if (BonusEntryPoints != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BonusEntryPoints);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -269,6 +403,21 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.AscendCostItemId != 0) {
+      AscendCostItemId = other.AscendCostItemId;
+    }
+    if (other.AscendCostItemCount != 0) {
+      AscendCostItemCount = other.AscendCostItemCount;
+    }
+    if (other.AscendCostGold != 0UL) {
+      AscendCostGold = other.AscendCostGold;
+    }
+    if (other.AscendMinPetLevel != 0) {
+      AscendMinPetLevel = other.AscendMinPetLevel;
+    }
+    if (other.BonusEntryPoints != 0) {
+      BonusEntryPoints = other.BonusEntryPoints;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -305,6 +454,26 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
           Desc = input.ReadString();
           break;
         }
+        case 40: {
+          AscendCostItemId = input.ReadUInt32();
+          break;
+        }
+        case 48: {
+          AscendCostItemCount = input.ReadUInt32();
+          break;
+        }
+        case 56: {
+          AscendCostGold = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          AscendMinPetLevel = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          BonusEntryPoints = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -338,6 +507,26 @@ public sealed partial class PetTierTable : pb::IMessage<PetTierTable>
         }
         case 34: {
           Desc = input.ReadString();
+          break;
+        }
+        case 40: {
+          AscendCostItemId = input.ReadUInt32();
+          break;
+        }
+        case 48: {
+          AscendCostItemCount = input.ReadUInt32();
+          break;
+        }
+        case 56: {
+          AscendCostGold = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          AscendMinPetLevel = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          BonusEntryPoints = input.ReadUInt32();
           break;
         }
       }

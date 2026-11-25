@@ -227,6 +227,102 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildRenameSameName = 14047;</code>
      */
     kGuildRenameSameName(14047),
+    /**
+     * <code>kGuildWarNotOpen = 14048;</code>
+     */
+    kGuildWarNotOpen(14048),
+    /**
+     * <code>kGuildWarLevelTooLow = 14049;</code>
+     */
+    kGuildWarLevelTooLow(14049),
+    /**
+     * <code>kGuildWarSameGuild = 14050;</code>
+     */
+    kGuildWarSameGuild(14050),
+    /**
+     * <code>kGuildWarTargetPeaceMode = 14051;</code>
+     */
+    kGuildWarTargetPeaceMode(14051),
+    /**
+     * <code>kGuildWarSelfPeaceMode = 14052;</code>
+     */
+    kGuildWarSelfPeaceMode(14052),
+    /**
+     * <code>kGuildWarPeaceCooldown = 14053;</code>
+     */
+    kGuildWarPeaceCooldown(14053),
+    /**
+     * <code>kGuildWarTargetProtected = 14054;</code>
+     */
+    kGuildWarTargetProtected(14054),
+    /**
+     * <code>kGuildWarTargetInBattle = 14055;</code>
+     */
+    kGuildWarTargetInBattle(14055),
+    /**
+     * <code>kGuildWarTargetOffline = 14056;</code>
+     */
+    kGuildWarTargetOffline(14056),
+    /**
+     * <code>kGuildWarSafeZone = 14057;</code>
+     */
+    kGuildWarSafeZone(14057),
+    /**
+     * <code>kGuildWarTeamInvalid = 14058;</code>
+     */
+    kGuildWarTeamInvalid(14058),
+    /**
+     * <code>kGuildWarTeamSizeExceedsRoadLimit = 14059;</code>
+     */
+    kGuildWarTeamSizeExceedsRoadLimit(14059),
+    /**
+     * <code>kGuildWarLeylineNotFound = 14060;</code>
+     */
+    kGuildWarLeylineNotFound(14060),
+    /**
+     * <code>kGuildWarGarrisonFull = 14061;</code>
+     */
+    kGuildWarGarrisonFull(14061),
+    /**
+     * <code>kGuildWarGarrisonCooldown = 14062;</code>
+     */
+    kGuildWarGarrisonCooldown(14062),
+    /**
+     * <code>kGuildWarMilestoneLocked = 14063;</code>
+     */
+    kGuildWarMilestoneLocked(14063),
+    /**
+     * <code>kGuildWarMilestoneClaimed = 14064;</code>
+     */
+    kGuildWarMilestoneClaimed(14064),
+    /**
+     * <code>kGuildWarDividendEmpty = 14065;</code>
+     */
+    kGuildWarDividendEmpty(14065),
+    /**
+     * <code>kGuildWarBountyInvalidTarget = 14066;</code>
+     */
+    kGuildWarBountyInvalidTarget(14066),
+    /**
+     * <code>kGuildWarBountyAlreadyActive = 14067;</code>
+     */
+    kGuildWarBountyAlreadyActive(14067),
+    /**
+     * <code>kGuildWarBountyLimit = 14068;</code>
+     */
+    kGuildWarBountyLimit(14068),
+    /**
+     * <code>kGuildWarBountyNotFound = 14069;</code>
+     */
+    kGuildWarBountyNotFound(14069),
+    /**
+     * <code>kGuildWarTrackCooldown = 14070;</code>
+     */
+    kGuildWarTrackCooldown(14070),
+    /**
+     * <code>kGuildWarServiceBusy = 14071;</code>
+     */
+    kGuildWarServiceBusy(14071),
     UNRECOGNIZED(-1),
     ;
 
@@ -435,6 +531,102 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildRenameSameName = 14047;</code>
      */
     public static final int kGuildRenameSameName_VALUE = 14047;
+    /**
+     * <code>kGuildWarNotOpen = 14048;</code>
+     */
+    public static final int kGuildWarNotOpen_VALUE = 14048;
+    /**
+     * <code>kGuildWarLevelTooLow = 14049;</code>
+     */
+    public static final int kGuildWarLevelTooLow_VALUE = 14049;
+    /**
+     * <code>kGuildWarSameGuild = 14050;</code>
+     */
+    public static final int kGuildWarSameGuild_VALUE = 14050;
+    /**
+     * <code>kGuildWarTargetPeaceMode = 14051;</code>
+     */
+    public static final int kGuildWarTargetPeaceMode_VALUE = 14051;
+    /**
+     * <code>kGuildWarSelfPeaceMode = 14052;</code>
+     */
+    public static final int kGuildWarSelfPeaceMode_VALUE = 14052;
+    /**
+     * <code>kGuildWarPeaceCooldown = 14053;</code>
+     */
+    public static final int kGuildWarPeaceCooldown_VALUE = 14053;
+    /**
+     * <code>kGuildWarTargetProtected = 14054;</code>
+     */
+    public static final int kGuildWarTargetProtected_VALUE = 14054;
+    /**
+     * <code>kGuildWarTargetInBattle = 14055;</code>
+     */
+    public static final int kGuildWarTargetInBattle_VALUE = 14055;
+    /**
+     * <code>kGuildWarTargetOffline = 14056;</code>
+     */
+    public static final int kGuildWarTargetOffline_VALUE = 14056;
+    /**
+     * <code>kGuildWarSafeZone = 14057;</code>
+     */
+    public static final int kGuildWarSafeZone_VALUE = 14057;
+    /**
+     * <code>kGuildWarTeamInvalid = 14058;</code>
+     */
+    public static final int kGuildWarTeamInvalid_VALUE = 14058;
+    /**
+     * <code>kGuildWarTeamSizeExceedsRoadLimit = 14059;</code>
+     */
+    public static final int kGuildWarTeamSizeExceedsRoadLimit_VALUE = 14059;
+    /**
+     * <code>kGuildWarLeylineNotFound = 14060;</code>
+     */
+    public static final int kGuildWarLeylineNotFound_VALUE = 14060;
+    /**
+     * <code>kGuildWarGarrisonFull = 14061;</code>
+     */
+    public static final int kGuildWarGarrisonFull_VALUE = 14061;
+    /**
+     * <code>kGuildWarGarrisonCooldown = 14062;</code>
+     */
+    public static final int kGuildWarGarrisonCooldown_VALUE = 14062;
+    /**
+     * <code>kGuildWarMilestoneLocked = 14063;</code>
+     */
+    public static final int kGuildWarMilestoneLocked_VALUE = 14063;
+    /**
+     * <code>kGuildWarMilestoneClaimed = 14064;</code>
+     */
+    public static final int kGuildWarMilestoneClaimed_VALUE = 14064;
+    /**
+     * <code>kGuildWarDividendEmpty = 14065;</code>
+     */
+    public static final int kGuildWarDividendEmpty_VALUE = 14065;
+    /**
+     * <code>kGuildWarBountyInvalidTarget = 14066;</code>
+     */
+    public static final int kGuildWarBountyInvalidTarget_VALUE = 14066;
+    /**
+     * <code>kGuildWarBountyAlreadyActive = 14067;</code>
+     */
+    public static final int kGuildWarBountyAlreadyActive_VALUE = 14067;
+    /**
+     * <code>kGuildWarBountyLimit = 14068;</code>
+     */
+    public static final int kGuildWarBountyLimit_VALUE = 14068;
+    /**
+     * <code>kGuildWarBountyNotFound = 14069;</code>
+     */
+    public static final int kGuildWarBountyNotFound_VALUE = 14069;
+    /**
+     * <code>kGuildWarTrackCooldown = 14070;</code>
+     */
+    public static final int kGuildWarTrackCooldown_VALUE = 14070;
+    /**
+     * <code>kGuildWarServiceBusy = 14071;</code>
+     */
+    public static final int kGuildWarServiceBusy_VALUE = 14071;
 
 
     public final int getNumber() {
@@ -510,6 +702,30 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14045: return kGuildTextCheckUnavailable;
         case 14046: return kGuildRenameCooldown;
         case 14047: return kGuildRenameSameName;
+        case 14048: return kGuildWarNotOpen;
+        case 14049: return kGuildWarLevelTooLow;
+        case 14050: return kGuildWarSameGuild;
+        case 14051: return kGuildWarTargetPeaceMode;
+        case 14052: return kGuildWarSelfPeaceMode;
+        case 14053: return kGuildWarPeaceCooldown;
+        case 14054: return kGuildWarTargetProtected;
+        case 14055: return kGuildWarTargetInBattle;
+        case 14056: return kGuildWarTargetOffline;
+        case 14057: return kGuildWarSafeZone;
+        case 14058: return kGuildWarTeamInvalid;
+        case 14059: return kGuildWarTeamSizeExceedsRoadLimit;
+        case 14060: return kGuildWarLeylineNotFound;
+        case 14061: return kGuildWarGarrisonFull;
+        case 14062: return kGuildWarGarrisonCooldown;
+        case 14063: return kGuildWarMilestoneLocked;
+        case 14064: return kGuildWarMilestoneClaimed;
+        case 14065: return kGuildWarDividendEmpty;
+        case 14066: return kGuildWarBountyInvalidTarget;
+        case 14067: return kGuildWarBountyAlreadyActive;
+        case 14068: return kGuildWarBountyLimit;
+        case 14069: return kGuildWarBountyNotFound;
+        case 14070: return kGuildWarTrackCooldown;
+        case 14071: return kGuildWarServiceBusy;
         default: return null;
       }
     }
@@ -575,7 +791,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\336\n\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\245\020\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -610,8 +826,25 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       " \n\033kGuildAnnouncementSensitive\020\334m\022\037\n\032kGu" +
       "ildTextCheckUnavailable\020\335m\022\031\n\024kGuildRena" +
       "meCooldown\020\336m\022\031\n\024kGuildRenameSameName\020\337m" +
-      "B$\n\016com.game.tableZ\022generated/pb/tableb\006" +
-      "proto3"
+      "\022\025\n\020kGuildWarNotOpen\020\340m\022\031\n\024kGuildWarLeve" +
+      "lTooLow\020\341m\022\027\n\022kGuildWarSameGuild\020\342m\022\035\n\030k" +
+      "GuildWarTargetPeaceMode\020\343m\022\033\n\026kGuildWarS" +
+      "elfPeaceMode\020\344m\022\033\n\026kGuildWarPeaceCooldow" +
+      "n\020\345m\022\035\n\030kGuildWarTargetProtected\020\346m\022\034\n\027k" +
+      "GuildWarTargetInBattle\020\347m\022\033\n\026kGuildWarTa" +
+      "rgetOffline\020\350m\022\026\n\021kGuildWarSafeZone\020\351m\022\031" +
+      "\n\024kGuildWarTeamInvalid\020\352m\022&\n!kGuildWarTe" +
+      "amSizeExceedsRoadLimit\020\353m\022\035\n\030kGuildWarLe" +
+      "ylineNotFound\020\354m\022\032\n\025kGuildWarGarrisonFul" +
+      "l\020\355m\022\036\n\031kGuildWarGarrisonCooldown\020\356m\022\035\n\030" +
+      "kGuildWarMilestoneLocked\020\357m\022\036\n\031kGuildWar" +
+      "MilestoneClaimed\020\360m\022\033\n\026kGuildWarDividend" +
+      "Empty\020\361m\022!\n\034kGuildWarBountyInvalidTarget" +
+      "\020\362m\022!\n\034kGuildWarBountyAlreadyActive\020\363m\022\031" +
+      "\n\024kGuildWarBountyLimit\020\364m\022\034\n\027kGuildWarBo" +
+      "untyNotFound\020\365m\022\033\n\026kGuildWarTrackCooldow" +
+      "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367mB$\n\016com.g" +
+      "ame.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

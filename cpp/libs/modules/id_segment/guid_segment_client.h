@@ -187,7 +187,7 @@ public:
     // 回到未启用的初始状态(清空段、计数与定时器)。单测隔离用;生产不调。
     void Reset();
 
-    [[nodiscard]] bool IsEnabled() const { return enabled_; }
+    [[nodiscard]] bool IsEnabled() const { return enabled; }
 
     // 至少还有一个号可发(当前段或下一段非空)。scene 的 DependencyGate 靠它挡玩家进入。
     [[nodiscard]] bool IsReady() const;
@@ -226,8 +226,8 @@ public:
 
     [[nodiscard]] Stats GetStats() const;
     [[nodiscard]] std::string Describe() const;
-    [[nodiscard]] const Options &options() const { return options_; }
-    [[nodiscard]] const std::string &KindName() const { return options_.kindName; }
+    [[nodiscard]] const Options &GetOptions() const { return options; }
+    [[nodiscard]] const std::string &KindName() const { return options.kindName; }
 
 private:
     struct Segment
@@ -254,54 +254,54 @@ private:
     [[nodiscard]] const char *ValidateRange(uint64_t lo, uint64_t hi) const;
     [[nodiscard]] bool OverlapsRecent(uint64_t lo, uint64_t hi) const;
 
-    Options options_;
-    SendFn send_;
-    ScheduleFn schedule_;
-    ClockFn clock_;
-    bool enabled_{false};
-    bool stopped_{false}; // Shutdown() 之后:不再发请求,只发手里的号
+    Options options;
+    SendFn send;
+    ScheduleFn schedule;
+    ClockFn clock;
+    bool enabled{false};
+    bool stopped{false}; // Shutdown() 之后:不再发请求,只发手里的号
 
-    Segment cur_;
-    Segment next_;
-    bool hasNext_{false};
-    double curStartedAtSec_{0}; // cur_ 成为当前段的时刻(NowSec 口径)
+    Segment cur;
+    Segment next;
+    bool hasNext{false};
+    double curStartedAtSec{0}; // cur_ 成为当前段的时刻(NowSec 口径)
 
-    uint32_t step_{0};           // 下一次领段请求的 step(动态)
-    double lastRangeLastedSec_{0};
-    uint64_t rangesConsumed_{0};
-    uint64_t stepChanges_{0};
+    uint32_t step{0};           // 下一次领段请求的 step(动态)
+    double lastRangeLastedSec{0};
+    uint64_t rangesConsumed{0};
+    uint64_t stepChanges{0};
 
-    bool inflight_{false};
-    uint64_t fetchSeq_{0}; // 每次发送 +1;超时回调带着当时的 seq,只对当次生效
-    bool retryPending_{false};
+    bool inflight{false};
+    uint64_t fetchSeq{0}; // 每次发送 +1;超时回调带着当时的 seq,只对当次生效
+    bool retryPending{false};
     // 有调用方经 RequestTopUp 要过号、还没等到新段落下。只影响「退避到期的重试要不要发」:
     // 没有它时重试见剩余高于阈值就跳过,预检判出的不足就又没人管了。
-    bool topUpPending_{false};
-    uint64_t topUpStep_{0}; // 续段需求要求的最小 step(≤ maxStep),只在 topUpPending_ 时生效
-    uint64_t topUpFetches_{0};
-    uint64_t topUpAbandonedIds_{0};
-    uint64_t retryGen_{0}; // 每次安排重试 +1;Reset 也 +1,让旧回调作废
-    double backoffSec_{0.5};
-    uint64_t highWater_{0};
+    bool topUpPending{false};
+    uint64_t topUpStep{0}; // 续段需求要求的最小 step(≤ maxStep),只在 topUpPending_ 时生效
+    uint64_t topUpFetches{0};
+    uint64_t topUpAbandonedIds{0};
+    uint64_t retryGen{0}; // 每次安排重试 +1;Reset 也 +1,让旧回调作废
+    double backoffSec{0.5};
+    uint64_t highWater{0};
     // 最近接受过的范围,环形覆盖;recentCount_ 是接受过的总数。查重叠用,窗口之外的重复查不到。
     static constexpr std::size_t kRecentRangeWindow = 16;
-    std::array<std::pair<uint64_t, uint64_t>, kRecentRangeWindow> recent_{};
-    uint64_t recentCount_{0};
-    uint32_t consecutiveFailures_{0};
+    std::array<std::pair<uint64_t, uint64_t>, kRecentRangeWindow> recent{};
+    uint64_t recentCount{0};
+    uint32_t consecutiveFailures{0};
 
-    uint64_t issued_{0};
-    uint64_t fetches_{0};
-    uint64_t fetchErrors_{0};
-    uint64_t rangeViolations_{0};
-    uint64_t unavailable_{0};
-    uint64_t sendUnavailable_{0};
-    uint64_t timeouts_{0};
-    uint64_t droppedRanges_{0};
+    uint64_t issued{0};
+    uint64_t fetches{0};
+    uint64_t fetchErrors{0};
+    uint64_t rangeViolations{0};
+    uint64_t unavailable{0};
+    uint64_t sendUnavailable{0};
+    uint64_t timeouts{0};
+    uint64_t droppedRanges{0};
 
     // 内置定时器(schedule_ 为空时使用)。两类各一个:RunAfter 重新武装会取消上一枚,
     // 恰好是"同类最多一枚在挂"的语义。
-    TimerTaskComp retryTimer_;
-    TimerTaskComp fetchTimeoutTimer_;
+    TimerTaskComp retryTimer;
+    TimerTaskComp fetchTimeoutTimer;
 };
 
 // RequestTopUp 结局的日志名。越界返回 "?"。

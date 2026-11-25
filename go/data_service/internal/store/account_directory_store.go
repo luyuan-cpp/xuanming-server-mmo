@@ -29,7 +29,9 @@ const accountDirectoryDDL = "CREATE TABLE IF NOT EXISTS account_directory (accou
 	"deletion_execute_after_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:5',deletion_lease_until_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6'," +
 	"deletion_source INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7'," +
 	// real_name_pi:国家防沉迷系统给的 pi,只写一次(account_real_name.go,2026-11-19 加列;项目未上线,旧库重建)。
-	"real_name_pi VARBINARY(38) NOT NULL DEFAULT '' COMMENT 'pb:8',PRIMARY KEY(account)," +
+	"real_name_pi VARBINARY(38) NOT NULL DEFAULT '' COMMENT 'pb:8'," +
+	// stage1_tradable_material_used:阶段一跨角色终身可交易材料已用总额(0..60),删角不重置。
+	"stage1_tradable_material_used INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:9',PRIMARY KEY(account)," +
 	"INDEX idx_account_directory_deletion(deletion_state,deletion_execute_after_ms)) ENGINE=InnoDB"
 const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGINT UNSIGNED NOT NULL COMMENT 'pb:1',account VARBINARY(191) NOT NULL COMMENT 'pb:2',role_proto MEDIUMBLOB NOT NULL COMMENT 'pb:3',owner_revision BIGINT UNSIGNED NOT NULL COMMENT 'pb:4',updated_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:5',trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6',initial_player_commit BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7',fence_version BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'pb:8',prepare_token BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:9',PRIMARY KEY(player_id) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */"
 
@@ -129,6 +131,7 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 		{&dbpb.AccountRole{}, AccountRoleTableName, []string{"player_id"}},
 		{&dbpb.AccountRoleRemoval{}, AccountRoleRemovalTableName, []string{"player_id"}},
 		{&dbpb.AccountRoleRef{}, AccountRoleRefTableName, []string{"account", "player_id"}},
+		{&dbpb.AccountRoleTradableQuota{}, AccountRoleTradableQuotaTableName, []string{"account", "player_id"}},
 	} {
 		if err := assertColumnsPresent(ctx, conn, name, shape.model, shape.table); err != nil {
 			return err

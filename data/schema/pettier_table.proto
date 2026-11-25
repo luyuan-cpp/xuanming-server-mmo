@@ -10,4 +10,14 @@ message PetTierTable {
   string name = 2;
   string art_key = 3;
   string desc = 4;
+  // 升至下一灵阶所需道具表 ID（最高阶 5 圣兽填 0）。
+  uint32 ascend_cost_item_id = 5;
+  // 升至下一灵阶所需道具数量（最高阶填 0）。
+  uint32 ascend_cost_item_count = 6;
+  // 升至下一灵阶所需银两（最高阶填 0）。
+  uint64 ascend_cost_gold = 7;
+  // 升至下一灵阶所需宝宝生效等级门槛（最高阶填 0）。
+  uint32 ascend_min_pet_level = 8;
+  // 该灵阶赋予的额外独立条目点预算（1阶=0，2..5阶递增 +2/+4/+6/+8，单项上限不变）。
+  uint32 bonus_entry_points = 9;
 }

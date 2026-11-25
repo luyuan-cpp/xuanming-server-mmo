@@ -23,7 +23,7 @@ void AppendLengthPrefixedMessage(std::string &out, std::string_view payload);
 class MessageDeframer
 {
 public:
-    explicit MessageDeframer(size_t maxMessageBytes) : maxMessageBytes_(maxMessageBytes) {}
+    explicit MessageDeframer(size_t maxMessageBytes) : maxMessageBytes(maxMessageBytes) {}
 
     // 喂入一段 DATA 负载;拆出的完整消息追加到 out。
     // 返回非 OK 表示流必须终止:声明长度超上限 → RESOURCE_EXHAUSTED;压缩标志为 1 → INTERNAL
@@ -32,15 +32,15 @@ public:
     Status Feed(const uint8_t *data, size_t len, std::vector<std::string> &out);
 
     // 有没有拆了一半的消息(流结束时有残留 = 对端截断,调用方按 INTERNAL 处理)。
-    bool HasPartialMessage() const { return headerFilled_ > 0 || bodyExpected_ > 0; }
+    bool HasPartialMessage() const { return headerFilled > 0 || bodyExpected > 0; }
 
 private:
-    size_t maxMessageBytes_;
-    uint8_t header_[kMessagePrefixBytes]{};
-    size_t headerFilled_{0};
-    size_t bodyExpected_{0};
-    std::string body_;
-    Status error_;
+    size_t maxMessageBytes;
+    uint8_t header[kMessagePrefixBytes]{};
+    size_t headerFilled{0};
+    size_t bodyExpected{0};
+    std::string body;
+    Status error;
 };
 
 } // namespace muduo_grpc

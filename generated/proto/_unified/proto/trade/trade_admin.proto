@@ -4,6 +4,7 @@ option go_package = "proto/trade";
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/service_call_auth.proto";
+import "proto/trade/commerce.proto";
 import "proto/trade/jubaozhai.proto";
 import "proto/trade/trade_table.proto";
 
@@ -140,8 +141,45 @@ message ResolveManualContractResponse {
   string audit_line = 13;                            // DRY_RUN / EXECUTE:服务端打进日志的同一行 [CommerceManual],贴进工单
 }
 
+// 内部调用：上报卖家登录/交易环境信号（IP + 设备标识仅用于服务端哈希比对，绝不落盘明文、绝不进客户端响应）。
+// 仅换 IP（高铁/5G）不扣分；异地新 IP + 陌生新设备同时变化时直接清 0 正面信用并永久保留原有差评与核实违约。
+message RecordSellerEnvironmentRequest {
+  uint64 seller_player_id = 1;
+  string owner_account = 2;
+  uint64 owner_revision = 3;
+  string client_ip = 4;
+  string device_id = 5;
+  uint64 observed_at_ms = 6;
+  common.base.ServiceCallAuth auth = 7;
+}
+
+message RecordSellerEnvironmentResponse {
+  TipInfoMessage error_message = 1;
+  bool env_credit_cleared = 2;
+  SellerCreditView profile = 3;
+}
+
+// 内部调用：记录经人工/争议核实的卖家违约事件（幂等键 case_id；永久保留黑历史，防异地换机洗白）。
+message RecordSellerViolationRequest {
+  string case_id = 1;
+  string order_id = 2;
+  uint64 seller_player_id = 3;
+  string seller_account = 4;
+  uint64 seller_owner_revision = 5;
+  string reason = 6;
+  uint64 recorded_at_ms = 7;
+  common.base.ServiceCallAuth auth = 8;
+}
+
+message RecordSellerViolationResponse {
+  TipInfoMessage error_message = 1;
+  SellerCreditView profile = 2;
+}
+
 service TradeAdmin {
   rpc SeedListing (SeedListingRequest) returns (SeedListingResponse);
   rpc ListManualContracts (ListManualContractsRequest) returns (ListManualContractsResponse);
   rpc ResolveManualContract (ResolveManualContractRequest) returns (ResolveManualContractResponse);
+  rpc RecordSellerEnvironment (RecordSellerEnvironmentRequest) returns (RecordSellerEnvironmentResponse);
+  rpc RecordSellerViolation (RecordSellerViolationRequest) returns (RecordSellerViolationResponse);
 }

@@ -55,7 +55,7 @@ class RpcStatus
 public:
     constexpr RpcStatus() = default;
     constexpr explicit RpcStatus(RpcStatusCode code, GameErrorCode remoteError = RPC_NO_ERROR)
-        : code_(code), remoteError_(remoteError)
+        : code(code), remoteError(remoteError)
     {
     }
 
@@ -77,26 +77,26 @@ public:
         }
     }
 
-    constexpr bool ok() const { return code_ == RpcStatusCode::kOk; }
-    constexpr RpcStatusCode code() const { return code_; }
+    constexpr bool ok() const { return code == RpcStatusCode::kOk; }
+    constexpr RpcStatusCode Code() const { return code; }
     // 只有 kRemoteRejected / kRemoteFailed / kReplyDropped 时有意义。
-    constexpr GameErrorCode remoteError() const { return remoteError_; }
+    constexpr GameErrorCode RemoteError() const { return remoteError; }
 
     constexpr bool DefinitelyNotExecuted() const
     {
-        return code_ == RpcStatusCode::kNotSent || code_ == RpcStatusCode::kRemoteRejected;
+        return code == RpcStatusCode::kNotSent || code == RpcStatusCode::kRemoteRejected;
     }
 
     constexpr bool OutcomeUnknown() const
     {
-        return code_ == RpcStatusCode::kTimeout || code_ == RpcStatusCode::kDisconnected ||
-               code_ == RpcStatusCode::kChannelClosed || code_ == RpcStatusCode::kInvalidResponse ||
-               code_ == RpcStatusCode::kReplyDropped;
+        return code == RpcStatusCode::kTimeout || code == RpcStatusCode::kDisconnected ||
+               code == RpcStatusCode::kChannelClosed || code == RpcStatusCode::kInvalidResponse ||
+               code == RpcStatusCode::kReplyDropped;
     }
 
-    const char* name() const { return RpcStatusCodeName(code_); }
+    const char* name() const { return RpcStatusCodeName(code); }
 
 private:
-    RpcStatusCode code_{RpcStatusCode::kOk};
-    GameErrorCode remoteError_{RPC_NO_ERROR};
+    RpcStatusCode code{RpcStatusCode::kOk};
+    GameErrorCode remoteError{RPC_NO_ERROR};
 };

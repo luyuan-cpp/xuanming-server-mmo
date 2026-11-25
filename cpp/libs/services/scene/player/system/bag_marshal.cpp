@@ -187,15 +187,15 @@ void Marshal(entt::entity player, BagAllData& out)
     // own DynamicBagData carrying bag_id + capacity + items. Empty for
     // most players, so this loop usually does nothing.
     std::vector<uint64_t> dynamicIds;
-    dynamicIds.reserve(bags->dynamicBags_.size());
-    for (const auto &entry : bags->dynamicBags_)
+    dynamicIds.reserve(bags->dynamicBags.size());
+    for (const auto &entry : bags->dynamicBags)
     {
         dynamicIds.push_back(entry.first);
     }
     std::sort(dynamicIds.begin(), dynamicIds.end());
     for (const auto bagId : dynamicIds)
     {
-        const auto &bag = bags->dynamicBags_.at(bagId);
+        const auto &bag = bags->dynamicBags.at(bagId);
         BagAllData::DynamicBagData* dyn = out.add_dynamic_bags();
         dyn->set_bag_id(bagId);
         dyn->set_capacity(static_cast<uint32_t>(bag.Capacity()));
@@ -284,10 +284,10 @@ void Unmarshal(entt::entity player, const BagAllData& in)
     // Transient runtime bags. Rebuild dynamicBags_ from scratch so a
     // re-Unmarshal (e.g. rollback into an already-populated entity)
     // doesn't leave stale bags behind.
-    bags.dynamicBags_.clear();
+    bags.dynamicBags.clear();
     for (const auto& dyn : in.dynamic_bags())
     {
-        Bag& bag = bags.dynamicBags_[dyn.bag_id()];
+        Bag& bag = bags.dynamicBags[dyn.bag_id()];
         bag.SetPlayerGuid(owner);
         bag.ResetFromSnapshot();
         // 先按 profile_id 装回规则,**再**放物品 —— SetProfile 只接受空包

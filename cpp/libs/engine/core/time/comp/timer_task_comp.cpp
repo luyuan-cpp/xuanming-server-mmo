@@ -30,12 +30,12 @@ TimerTaskComp::~TimerTaskComp() {
 TimerTaskComp::TimerTaskComp(const TimerTaskComp& /*unused*/) {}
 
 TimerTaskComp::TimerTaskComp(TimerTaskComp&& param) noexcept
-    : state_(std::move(param.state_)) {}
+    : state(std::move(param.state)) {}
 
 TimerTaskComp& TimerTaskComp::operator=(TimerTaskComp&& param) noexcept {
     if (this != &param) {
-        auto previous = std::move(state_);
-        state_ = std::move(param.state_);
+        auto previous = std::move(state);
+        state = std::move(param.state);
         // 先交接所有权;旧闭包的析构可能再次操作目标,甚至销毁源对象。
         CancelState(std::move(previous));
     }
@@ -48,11 +48,11 @@ bool TimerTaskComp::ScheduleTimer(TimerCallback cb, bool repeating, ScheduleFn&&
     if (!cb || loop == nullptr) {
         return false;
     }
-    if (!state_) {
-        state_ = std::make_shared<State>();
+    if (!this->state) {
+        this->state = std::make_shared<State>();
     }
 
-    const auto state = state_;
+    const auto state = this->state;
     const auto previousId = state->timerId;
     const bool previouslyArmed = state->armed;
     const auto gen = ++state->generation;
@@ -98,7 +98,7 @@ bool TimerTaskComp::RunEvery(double interval, const TimerCallback& cb) {
 }
 
 void TimerTaskComp::Cancel() {
-    CancelState(state_);
+    CancelState(state);
 }
 
 void TimerTaskComp::CancelState(std::shared_ptr<State> state) {
@@ -117,7 +117,7 @@ void TimerTaskComp::CancelState(std::shared_ptr<State> state) {
 }
 
 bool TimerTaskComp::IsActive() const {
-    return state_ && state_->armed;
+    return state && state->armed;
 }
 
 void TimerTaskComp::OnTimer(State& state, uint32_t firedGeneration, bool repeating, const TimerCallback& cb) {

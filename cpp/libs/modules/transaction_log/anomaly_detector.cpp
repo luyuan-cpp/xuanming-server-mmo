@@ -15,12 +15,12 @@
 // ---------------------------------------------------------------------------
 
 thread_local std::unordered_map<uint32_t, AnomalyThreshold>
-    AnomalyDetector::currencyThresholds_;
+    AnomalyDetector::currencyThresholds;
 
 thread_local std::unordered_map<uint32_t, AnomalyThreshold>
-    AnomalyDetector::itemThresholds_;
+    AnomalyDetector::itemThresholds;
 
-thread_local AnomalyThreshold AnomalyDetector::defaultThreshold_{};
+thread_local AnomalyThreshold AnomalyDetector::defaultThreshold{};
 
 namespace
 {
@@ -79,29 +79,29 @@ void AnomalyDetector::SetSteadyNowForTest(SteadyNowFn fn)
 
 void AnomalyDetector::SetCurrencyThreshold(CurrencyType type, const AnomalyThreshold &threshold)
 {
-    currencyThresholds_[static_cast<uint32_t>(type)] = threshold;
+    currencyThresholds[static_cast<uint32_t>(type)] = threshold;
 }
 
 void AnomalyDetector::SetItemThreshold(uint32_t configId, const AnomalyThreshold &threshold)
 {
-    itemThresholds_[configId] = threshold;
+    itemThresholds[configId] = threshold;
 }
 
 void AnomalyDetector::SetDefaultThreshold(const AnomalyThreshold &threshold)
 {
-    defaultThreshold_ = threshold;
+    defaultThreshold = threshold;
 }
 
 const AnomalyThreshold &AnomalyDetector::GetCurrencyThreshold(CurrencyType type)
 {
-    auto it = currencyThresholds_.find(static_cast<uint32_t>(type));
-    return it != currencyThresholds_.end() ? it->second : defaultThreshold_;
+    auto it = currencyThresholds.find(static_cast<uint32_t>(type));
+    return it != currencyThresholds.end() ? it->second : defaultThreshold;
 }
 
 const AnomalyThreshold &AnomalyDetector::GetItemThreshold(uint32_t configId)
 {
-    auto it = itemThresholds_.find(configId);
-    return it != itemThresholds_.end() ? it->second : defaultThreshold_;
+    auto it = itemThresholds.find(configId);
+    return it != itemThresholds.end() ? it->second : defaultThreshold;
 }
 
 // ---------------------------------------------------------------------------

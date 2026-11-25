@@ -32,7 +32,7 @@ namespace
     public:
         FakeEnv &Set(const std::string &name, const std::string &value)
         {
-            values_[name] = value;
+            values[name] = value;
             return *this;
         }
 
@@ -40,13 +40,13 @@ namespace
         {
             return [this](const char *name) -> const char *
             {
-                const auto it = values_.find(name);
-                return it == values_.end() ? nullptr : it->second.c_str();
+                const auto it = values.find(name);
+                return it == values.end() ? nullptr : it->second.c_str();
             };
         }
 
     private:
-        std::map<std::string, std::string> values_;
+        std::map<std::string, std::string> values;
     };
 
     struct ParseOutcome
@@ -70,39 +70,39 @@ namespace
         static std::unique_ptr<FakeSource> Succeed(std::string host, uint32_t port)
         {
             auto source = std::make_unique<FakeSource>();
-            source->ok_ = true;
-            source->advertised_.host = std::move(host);
-            source->advertised_.port = port;
+            source->ok = true;
+            source->advertised.host = std::move(host);
+            source->advertised.port = port;
             return source;
         }
 
         static std::unique_ptr<FakeSource> Fail(std::string error)
         {
             auto source = std::make_unique<FakeSource>();
-            source->ok_ = false;
-            source->error_ = std::move(error);
+            source->ok = false;
+            source->error = std::move(error);
             return source;
         }
 
         bool Fetch(Advertised &out, std::string &error) override
         {
-            ++calls_;
-            if (!ok_)
+            ++calls;
+            if (!ok)
             {
-                error = error_;
+                error = this->error;
                 return false;
             }
-            out = advertised_;
+            out = advertised;
             return true;
         }
 
-        int Calls() const { return calls_; }
+        int Calls() const { return calls; }
 
     private:
-        bool ok_ = false;
-        Advertised advertised_;
-        std::string error_;
-        int calls_ = 0;
+        bool ok = false;
+        Advertised advertised;
+        std::string error;
+        int calls = 0;
     };
 
     EndpointComp MakeEndpoint(const std::string &ip, uint32_t port)

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13pettier_table.proto\"G\n\x0cPetTierTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x61rt_key\x18\x03 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x04 \x01(\t\"/\n\x10PetTierTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.PetTierTableB>\n\x0e\x63om.game.tableB\x16PetTierTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13pettier_table.proto\"\xd8\x01\n\x0cPetTierTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x61rt_key\x18\x03 \x01(\t\x12\x0c\n\x04\x64\x65sc\x18\x04 \x01(\t\x12\x1b\n\x13\x61scend_cost_item_id\x18\x05 \x01(\r\x12\x1e\n\x16\x61scend_cost_item_count\x18\x06 \x01(\r\x12\x18\n\x10\x61scend_cost_gold\x18\x07 \x01(\x04\x12\x1c\n\x14\x61scend_min_pet_level\x18\x08 \x01(\r\x12\x1a\n\x12\x62onus_entry_points\x18\t \x01(\r\"/\n\x10PetTierTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.PetTierTableB>\n\x0e\x63om.game.tableB\x16PetTierTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'pettier_table_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\026PetTierTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_PETTIERTABLE']._serialized_start=23
-  _globals['_PETTIERTABLE']._serialized_end=94
-  _globals['_PETTIERTABLEDATA']._serialized_start=96
-  _globals['_PETTIERTABLEDATA']._serialized_end=143
+  _globals['_PETTIERTABLE']._serialized_start=24
+  _globals['_PETTIERTABLE']._serialized_end=240
+  _globals['_PETTIERTABLEDATA']._serialized_start=242
+  _globals['_PETTIERTABLEDATA']._serialized_end=289
 # @@protoc_insertion_point(module_scope)

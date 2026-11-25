@@ -112,7 +112,7 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			loop_ = std::make_unique<muduo::net::EventLoop>();
+			loop = std::make_unique<muduo::net::EventLoop>();
 			InitGateCodec(SharedCodec());
 			gate_lane::ResetForTesting();
 			tlsSessionManager.sessions().clear();
@@ -122,9 +122,9 @@ namespace
 			// 发出前钩子装的是生产那一个(client_session_handler.cpp 构造时装的同一个函数),发出后钩子换成计数替身。
 			gate_lane::SetSendHooks(&gate_client_entry::LoginTransitionRejectTip, &CountingAfterSend);
 
-			connection_ = std::make_unique<LoopbackConnection>(*loop_);
-			ASSERT_TRUE(connection_->Open("gate_entry_wiring"));
-			const auto serverSide = connection_->ServerSide();
+			connection = std::make_unique<LoopbackConnection>(*loop);
+			ASSERT_TRUE(connection->Open("gate_entry_wiring"));
+			const auto serverSide = connection->ServerSide();
 			ASSERT_NE(serverSide, nullptr);
 			serverSide->setContext(kSession); // 同 HandleConnectionEstablished:连接上下文里是 session_id
 
@@ -143,8 +143,8 @@ namespace
 		{
 			gate_lane::ResetForTesting();
 			tlsSessionManager.sessions().clear();
-			connection_.reset(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-			loop_.reset();
+			connection.reset(); // 拆连接要驱动 loop,必须先于 loop_ 析构
+			loop.reset();
 		}
 
 		static SessionInfo &Session() { return tlsSessionManager.sessions().at(kSession); }
@@ -160,19 +160,19 @@ namespace
 		// 这条连接至今写出的字节必须恰好是 expected。每条连接只核对一次:核对本身会写一帧哨兵。
 		void ExpectReceived(const std::string &expected)
 		{
-			const auto serverSide = connection_->ServerSide();
+			const auto serverSide = connection->ServerSide();
 			ASSERT_NE(serverSide, nullptr);
 			MessageContent sentinel;
 			sentinel.set_message_id(kSentinelMessageId);
 			sentinel.set_serialized_message("sentinel");
 			const std::string all = expected + FrameBytes(sentinel);
 			GetGateCodec().send(serverSide, sentinel);
-			ASSERT_TRUE(DriveLoopUntil(*loop_, [this, &all] { return connection_->ClientReceived().size() >= all.size(); }));
-			EXPECT_EQ(connection_->ClientReceived(), all);
+			ASSERT_TRUE(DriveLoopUntil(*loop, [this, &all] { return connection->ClientReceived().size() >= all.size(); }));
+			EXPECT_EQ(connection->ClientReceived(), all);
 		}
 
-		std::unique_ptr<muduo::net::EventLoop> loop_;
-		std::unique_ptr<LoopbackConnection> connection_;
+		std::unique_ptr<muduo::net::EventLoop> loop;
+		std::unique_ptr<LoopbackConnection> connection;
 	};
 } // namespace
 
@@ -183,15 +183,15 @@ TEST_F(GateClientEntryWiring, ClientSentDisconnectCountsAsIllegalRepliesNothingA
 	SessionInfo &session = Session();
 	const uint32_t illegalBefore = session.illegalPacketCount;
 
-	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection_->ServerSide(),
+	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection->ServerSide(),
 															  ClientPlayerLoginDisconnectMessageId))
 		<< "调用方随即返回,不往下转发";
 	EXPECT_EQ(illegalBefore + 1, session.illegalPacketCount) << "计一次非法包";
-	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection_->ServerSide(),
+	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection->ServerSide(),
 															  ClientPlayerLoginRequestGateMigrationMessageId));
 	EXPECT_EQ(illegalBefore + 2, session.illegalPacketCount);
 
-	EXPECT_FALSE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection_->ServerSide(),
+	EXPECT_FALSE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection->ServerSide(),
 															   ClientPlayerLoginEnterGameMessageId))
 		<< "白名单里的号放行";
 	EXPECT_EQ(illegalBefore + 2, session.illegalPacketCount) << "放行不计数";
@@ -199,7 +199,7 @@ TEST_F(GateClientEntryWiring, ClientSentDisconnectCountsAsIllegalRepliesNothingA
 	EXPECT_EQ(0u, gate_lane::GetCounters().admitted) << "没进任何 lane";
 	EXPECT_EQ(0, RouterSends());
 	ExpectReceived("");
-	EXPECT_TRUE(connection_->ServerSideConnected()) << "没到阈值,不断连";
+	EXPECT_TRUE(connection->ServerSideConnected()) << "没到阈值,不断连";
 }
 
 // 非法包到阈值(IllegalPacketCounter,缺省 50)时这一条照样不回包,并把连接关掉。
@@ -213,11 +213,11 @@ TEST_F(GateClientEntryWiring, ClientSentDisconnectAtTheIllegalPacketThresholdClo
 	SessionInfo &session = Session();
 	session.illegalPacketCount = threshold - 1;
 
-	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection_->ServerSide(),
+	EXPECT_TRUE(gate_client_entry::RejectUnauthorizedMessageId(kSession, session, connection->ServerSide(),
 															  ClientPlayerLoginDisconnectMessageId));
 	EXPECT_EQ(threshold, session.illegalPacketCount);
-	EXPECT_TRUE(DriveLoopUntil(*loop_, [this] { return connection_->BothSidesDown(); })) << "到阈值 forceClose";
-	EXPECT_TRUE(connection_->ClientReceived().empty()) << "断连之前也不回包";
+	EXPECT_TRUE(DriveLoopUntil(*loop, [this] { return connection->BothSidesDown(); })) << "到阈值 forceClose";
+	EXPECT_TRUE(connection->ClientReceived().empty()) << "断连之前也不回包";
 }
 
 // 路由模式:已绑定角色、没 LeaveGame 就 EnterGame 另一个角色。真实的发出前钩子在轮到它发出时拒绝:
@@ -255,5 +255,5 @@ TEST_F(GateClientEntryWiring, RoleSwitchInDirectModeRepliesTheRequestIdEnvelopeA
 	EXPECT_EQ(0, RouterSends());
 
 	ExpectReceived(EnvelopeBytes(41, ClientPlayerLoginEnterGameMessageId, kLoginInProgress));
-	EXPECT_TRUE(connection_->ServerSideConnected()) << "换角闸不断连";
+	EXPECT_TRUE(connection->ServerSideConnected()) << "换角闸不断连";
 }

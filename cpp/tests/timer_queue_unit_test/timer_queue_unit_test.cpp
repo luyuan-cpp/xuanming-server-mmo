@@ -40,7 +40,7 @@ class GameTimerTest
 {
 public:
 	GameTimerTest(std::atomic<int>& afterCount, std::atomic<int>& everyCount)
-		: afterCount_(afterCount), everyCount_(everyCount) {}
+		: afterCount(afterCount), everyCount(everyCount) {}
 	// 本夹具的回调绑定 this,因此宿主地址固定。
 	GameTimerTest(const GameTimerTest&) = delete;
 	GameTimerTest& operator=(const GameTimerTest&) = delete;
@@ -49,44 +49,44 @@ public:
 
 	void RunAfter()
 	{
-		m_Timer.RunAfter(0.01, std::bind(&GameTimerTest::AfterCallBack, this));
-		m_TimerActiveTest.RunAfter(0.05, std::bind(&GameTimerTest::AfterCallBackActiveTest, this));
+		timer.RunAfter(0.01, std::bind(&GameTimerTest::AfterCallBack, this));
+		timerActiveTest.RunAfter(0.05, std::bind(&GameTimerTest::AfterCallBackActiveTest, this));
 	}
 
 
 	void RunEvery()
 	{
-		m_Timer.RunEvery(0.01, std::bind(&GameTimerTest::RunEveryCallBack, this));
+		timer.RunEvery(0.01, std::bind(&GameTimerTest::RunEveryCallBack, this));
 	}
 
 	void Cancel()
 	{
-		m_Timer.Cancel();
-		assert(!m_Timer.IsActive());
+		timer.Cancel();
+		assert(!timer.IsActive());
 	}
 
 private:
 
 	void AfterCallBack()
 	{
-		++afterCount_;
+		++afterCount;
 	}
 
 	void AfterCallBackActiveTest()
 	{
-		assert(!m_Timer.IsActive());
+		assert(!timer.IsActive());
 	}
 
 
 	void RunEveryCallBack()
 	{
-		++everyCount_;
+		++everyCount;
     }
 private:
-	std::atomic<int>& afterCount_;
-	std::atomic<int>& everyCount_;
-	TimerTaskComp m_Timer;
-	TimerTaskComp m_TimerActiveTest;
+	std::atomic<int>& afterCount;
+	std::atomic<int>& everyCount;
+	TimerTaskComp timer;
+	TimerTaskComp timerActiveTest;
 
 };
 
@@ -740,9 +740,9 @@ class TimerOwner
 {
 public:
 	TimerOwner(EventLoop& loop, Timestamp when, std::atomic<int>& firedAfterDeath)
-		: loop_(loop)
+		: loop(loop)
 	{
-		timerId_ = loop.runAt(when, [this, &firedAfterDeath]() {
+		timerId = loop.runAt(when, [this, &firedAfterDeath]() {
 			// Deliberately does NOT touch *this*. We only need to observe
 			// whether the callback ran at all; dereferencing a destroyed
 			// object would make the test itself undefined behaviour instead
@@ -755,15 +755,15 @@ public:
 
 	~TimerOwner()
 	{
-		loop_.cancel(timerId_);
+		loop.cancel(timerId);
 	}
 
 	TimerOwner(const TimerOwner&) = delete;
 	TimerOwner& operator=(const TimerOwner&) = delete;
 
 private:
-	EventLoop& loop_;
-	TimerId timerId_;
+	EventLoop& loop;
+	TimerId timerId;
 };
 
 TEST(TimerQueueTest, TimerOfObjectDestroyedInSameBatchMustNotRun)

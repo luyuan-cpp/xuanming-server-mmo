@@ -86,6 +86,11 @@ enum skill_error : int {
   kSkillAlreadyBookUnlocked = 7020,
   kSkillProxyStallRequiresMaster = 7021,
   kSkillProxyFeeInvalid = 7022,
+  kSkillLoadoutSlotLimitReached = 7023,
+  kSkillLoadoutConflict = 7024,
+  kSkillLoadoutNotLearned = 7025,
+  kSkillLoadoutSchemeInvalid = 7026,
+  kSkillLoadoutVersionChanged = 7027,
   skill_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   skill_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -96,11 +101,11 @@ extern const uint32_t skill_error_internal_data_[];
 inline constexpr skill_error skill_error_MIN =
     static_cast<skill_error>(0);
 inline constexpr skill_error skill_error_MAX =
-    static_cast<skill_error>(7022);
+    static_cast<skill_error>(7027);
 [[nodiscard]] inline bool skill_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, skill_error_internal_data_);
 }
-inline constexpr int skill_error_ARRAYSIZE = 7022 + 1;
+inline constexpr int skill_error_ARRAYSIZE = 7027 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 skill_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(skill_error) {

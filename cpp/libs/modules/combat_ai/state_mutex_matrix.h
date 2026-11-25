@@ -87,7 +87,7 @@ public:
         {
             return false;
         }
-        auto& count = refCounts_[state];
+        auto& count = refCounts[state];
         const bool becameActive = (count == 0);
         if (count < std::numeric_limits<uint16_t>::max())
         {
@@ -95,7 +95,7 @@ public:
         }
         if (becameActive)
         {
-            activeMask_ |= (uint64_t{1} << state);
+            activeMask |= (uint64_t{1} << state);
         }
         return becameActive;
     }
@@ -106,7 +106,7 @@ public:
         {
             return false;
         }
-        auto& count = refCounts_[state];
+        auto& count = refCounts[state];
         if (count == 0)
         {
             return false;
@@ -114,7 +114,7 @@ public:
         --count;
         if (count == 0)
         {
-            activeMask_ &= ~(uint64_t{1} << state);
+            activeMask &= ~(uint64_t{1} << state);
             return true;
         }
         return false;
@@ -127,36 +127,36 @@ public:
         {
             return false;
         }
-        const bool wasActive = (refCounts_[state] != 0);
-        refCounts_[state] = 0;
-        activeMask_ &= ~(uint64_t{1} << state);
+        const bool wasActive = (refCounts[state] != 0);
+        refCounts[state] = 0;
+        activeMask &= ~(uint64_t{1} << state);
         return wasActive;
     }
 
     void Reset() noexcept
     {
-        activeMask_ = 0;
-        refCounts_.fill(0);
+        activeMask = 0;
+        refCounts.fill(0);
     }
 
     [[nodiscard]] bool Has(uint32_t state) const noexcept
     {
-        return state < kMaxMutexStates && ((activeMask_ & (uint64_t{1} << state)) != 0);
+        return state < kMaxMutexStates && ((activeMask & (uint64_t{1} << state)) != 0);
     }
 
     [[nodiscard]] uint16_t RefCount(uint32_t state) const noexcept
     {
-        return state < kMaxMutexStates ? refCounts_[state] : 0;
+        return state < kMaxMutexStates ? refCounts[state] : 0;
     }
 
     [[nodiscard]] uint64_t Mask() const noexcept
     {
-        return activeMask_;
+        return activeMask;
     }
 
 private:
-    uint64_t activeMask_{0};
-    std::array<uint16_t, kMaxMutexStates> refCounts_{};
+    uint64_t activeMask{0};
+    std::array<uint16_t, kMaxMutexStates> refCounts{};
 };
 
 // 状态退出钩子注册表:按状态编号 O(1) 派发子系统收尾(脱跟随 / 下马 / 停施法)。
@@ -172,7 +172,7 @@ public:
         {
             return;
         }
-        hooks_[state] = std::move(hook);
+        hooks[state] = std::move(hook);
     }
 
     void Unregister(uint32_t state)
@@ -181,12 +181,12 @@ public:
         {
             return;
         }
-        hooks_[state] = {};
+        hooks[state] = {};
     }
 
     void Clear()
     {
-        for (auto& hook : hooks_)
+        for (auto& hook : hooks)
         {
             hook = {};
         }
@@ -198,14 +198,14 @@ public:
         {
             return;
         }
-        if (const auto& hook = hooks_[state])
+        if (const auto& hook = hooks[state])
         {
             hook(entity, reason);
         }
     }
 
 private:
-    std::array<Hook, kMaxMutexStates> hooks_{};
+    std::array<Hook, kMaxMutexStates> hooks{};
 };
 
 // 编译期/加载期构建的 O(1) 动作 × 状态互斥矩阵。
@@ -215,13 +215,13 @@ class StateMutexMatrix
 public:
     void Clear()
     {
-        policies_.clear();
+        policies.clear();
     }
 
     // 显式注册某动作(即使全部允许也能通过 HasAction 校验)。
     void EnsureAction(uint32_t action)
     {
-        policies_.try_emplace(action);
+        policies.try_emplace(action);
     }
 
     // 按显式 (action, state) 写入单条规则,不依赖槽位位置。
@@ -231,7 +231,7 @@ public:
         {
             return false;
         }
-        auto& policy = policies_[action];
+        auto& policy = policies[action];
         const uint64_t bit = uint64_t{1} << state;
         policy.blockMask &= ~bit;
         policy.interruptMask &= ~bit;
@@ -285,12 +285,12 @@ public:
 
     [[nodiscard]] bool HasAction(uint32_t action) const
     {
-        return policies_.find(action) != policies_.end();
+        return policies.find(action) != policies.end();
     }
 
     [[nodiscard]] std::size_t ActionCount() const noexcept
     {
-        return policies_.size();
+        return policies.size();
     }
 
     // 纯只读判定:O(1) 位运算,零堆分配,零副作用。
@@ -298,8 +298,8 @@ public:
     [[nodiscard]] MutexEvaluateResult Evaluate(uint64_t activeMask, uint32_t action,
                                                uint32_t successTip, uint32_t unknownActionTip) const
     {
-        const auto it = policies_.find(action);
-        if (it == policies_.end())
+        const auto it = policies.find(action);
+        if (it == policies.end())
         {
             return MutexEvaluateResult{false, unknownActionTip, 0};
         }
@@ -355,7 +355,7 @@ public:
     }
 
 private:
-    std::unordered_map<uint32_t, ActionMutexPolicy> policies_;
+    std::unordered_map<uint32_t, ActionMutexPolicy> policies;
 };
 
 } // namespace combat_ai

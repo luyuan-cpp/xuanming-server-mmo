@@ -15,6 +15,10 @@ class PreviewPetEntriesRequest;
 class PreviewPetEntriesResponse;
 class SavePetEntriesRequest;
 class SavePetEntriesResponse;
+class SwitchPetEntryPresetRequest;
+class SwitchPetEntryPresetResponse;
+class AscendPetTierRequest;
+class AscendPetTierResponse;
 class PetInstance;
 class BattlePetSnapshot;
 class BattlePetSettlementData;
@@ -54,8 +58,11 @@ public:
     static uint32_t BuildEntriesInfo(const PetInstance& pet, PetEntriesInfo& info);
     static uint32_t BuildEntries(entt::entity player, uint64_t petId, PetEntriesInfo& info);
     static void FillCultivationTier(const PetInstance& pet, PetInfo& info);
+    static void FillTierAscension(entt::entity player, const PetInstance& pet, uint32_t effectiveLevel, PetInfo& info);
     static void PreviewEntries(entt::entity player, const PreviewPetEntriesRequest& request, PreviewPetEntriesResponse& response);
     static void SaveEntries(entt::entity player, const SavePetEntriesRequest& request, SavePetEntriesResponse& response);
+    static void SwitchEntryPreset(entt::entity player, const SwitchPetEntryPresetRequest& request, SwitchPetEntryPresetResponse& response);
+    static void AscendTier(entt::entity player, const AscendPetTierRequest& request, AscendPetTierResponse& response);
 	// 从 DB 加载 / 首登后调用:清理已失效引用、同步等级、按上限夹当前 HP/MP。
 	// 已分配点原样携带,不清理、不返还:本版本宝宝池之外的键是未知键(不生效、计入已用),超额的加点整池按 0 生效
 	// (加点统一规则,attribute_allocation_rules.h;docs/design/mixed-version-persist-field-protection.md §12.1 D3 / D4)。
@@ -185,6 +192,11 @@ public:
 	// 出战宝宝的战斗快照。没有出战宝宝返回 false；调用前须确认 PlayerPetComp 存在。
 	// 缺组件同样返回 false，不能据此当作正常开战。
 	static bool BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& snapshot);
+
+	// 论剑 V3 战前 15 秒明牌变阵：打包除 excludePetId 之外最多 maxCount 只合规备选灵宠快照。
+	// fullResources=true 用于隔离态竞技局，按满血满蓝构建且不跳过 0 血场外状态。
+	static void BuildStandbyBattleSnapshots(entt::entity player, uint64_t excludePetId,
+		std::size_t maxCount, bool fullResources, std::vector<::BattlePetSnapshot>& out);
 
 	// 结算回写:HP/MP 终值按现算上限夹后落实例;阵亡宝宝回满(与玩家同口径,
 	// 否则 0 血宝宝会一直被快照进新局、开局即倒)。未知 pet_id 忽略并告警。

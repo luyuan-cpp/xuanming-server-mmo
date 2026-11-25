@@ -40,7 +40,7 @@ class CallbackT : public Callback
                                 muduo::Timestamp)> ProtobufMessageTCallback;
 
   CallbackT(const ProtobufMessageTCallback& callback)
-    : callback_(callback)
+    : callback(callback)
   {
   }
 
@@ -50,11 +50,11 @@ class CallbackT : public Callback
   {
     std::shared_ptr<T> concrete = muduo::down_pointer_cast<T>(message);
     assert(concrete != NULL);
-    callback_(conn, concrete, receiveTime);
+    callback(conn, concrete, receiveTime);
   }
 
  private:
-  ProtobufMessageTCallback callback_;
+  ProtobufMessageTCallback callback;
 };
 
 class ProtobufDispatcher
@@ -65,7 +65,7 @@ class ProtobufDispatcher
                                 muduo::Timestamp)> ProtobufMessageCallback;
 
   explicit ProtobufDispatcher(const ProtobufMessageCallback& defaultCb)
-    : defaultCallback_(defaultCb)
+    : defaultCallback(defaultCb)
   {
   }
 
@@ -73,14 +73,14 @@ class ProtobufDispatcher
                          const MessagePtr& message,
                          muduo::Timestamp receiveTime) const
   {
-    CallbackMap::const_iterator it = callbacks_.find(message->GetDescriptor());
-    if (it != callbacks_.end())
+    CallbackMap::const_iterator it = callbacks.find(message->GetDescriptor());
+    if (it != callbacks.end())
     {
       it->second->onMessage(conn, message, receiveTime);
     }
     else
     {
-      defaultCallback_(conn, message, receiveTime);
+      defaultCallback(conn, message, receiveTime);
     }
   }
 
@@ -88,14 +88,14 @@ class ProtobufDispatcher
   void registerMessageCallback(const typename CallbackT<T>::ProtobufMessageTCallback& callback)
   {
     std::shared_ptr<CallbackT<T> > pd(new CallbackT<T>(callback));
-    callbacks_[T::descriptor()] = pd;
+    callbacks[T::descriptor()] = pd;
   }
 
  private:
   typedef std::map<const google::protobuf::Descriptor*, std::shared_ptr<Callback> > CallbackMap;
 
-  CallbackMap callbacks_;
-  ProtobufMessageCallback defaultCallback_;
+  CallbackMap callbacks;
+  ProtobufMessageCallback defaultCallback;
 };
 #endif  // MUDUO_EXAMPLES_PROTOBUF_CODEC_DISPATCHER_H
 

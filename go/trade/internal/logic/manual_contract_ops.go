@@ -125,6 +125,11 @@ func (o *ManualContractOps) verify(ctx context.Context, method string, in proto.
 	return nil
 }
 
+// VerifyAdminCall 复用与人工处置相同的 serviceauth 验签与客户端会话拒止，供 TradeAdmin 其他生产内部接口共享。
+func (o *ManualContractOps) VerifyAdminCall(ctx context.Context, method string, in proto.Message) error {
+	return o.verify(ctx, method, in)
+}
+
 // ListManualContracts 只读列一页转人工的合同。读失败带内 retry = true:只读查询没有结局未知。
 func (o *ManualContractOps) ListManualContracts(ctx context.Context, in *tradepb.ListManualContractsRequest) (*tradepb.ListManualContractsResponse, error) {
 	if err := o.verify(ctx, tradepb.TradeAdmin_ListManualContracts_FullMethodName, in); err != nil {

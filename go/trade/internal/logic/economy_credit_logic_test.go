@@ -136,3 +136,64 @@ func TestEconomyCreditLogicGetSellerCreditMarketP50AndQuota(t *testing.T) {
 	require.EqualValues(t, 7_500, quotaResp.DailyCurrencyRemaining)
 	require.Equal(t, []uint32{501, 502}, quotaResp.ConsumableItemIds)
 }
+
+func TestAdminLogicRecordSellerEnvironmentAndViolation(t *testing.T) {
+	fixedNow := time.UnixMilli(1_760_000_000_000)
+	creditSvc := &commerce.SellerCreditService{
+		Store: commerce.NewMemorySellerCreditStore(),
+		Ownership: stubLogicOwnership{owners: map[uint64]*dspb.AccountRoleOwnership{
+			7010: {Account: "acct-7010", OwnerRevision: 1},
+		}},
+	}
+	deps := Deps{
+		Config:  config.Config{Mode: "dev", Timeout: 4000},
+		Now:     func() time.Time { return fixedNow },
+		Credits: creditSvc,
+	}
+	admin := NewAdminLogic(context.Background(), deps)
+
+	// 1) 记录常用设备与 IP
+	r1, err := admin.RecordSellerEnvironment(&tradepb.RecordSellerEnvironmentRequest{
+		SellerPlayerId: 7010, OwnerAccount: "acct-7010", OwnerRevision: 1,
+		ClientIp: "203.0.113.5", DeviceId: "phone-a",
+	})
+	require.NoError(t, err)
+	require.Nil(t, r1.ErrorMessage)
+	require.False(t, r1.EnvCreditCleared)
+
+	// 2) 坐高铁仅换 IP（同设备）不扣分、不清零
+	r2, err := admin.RecordSellerEnvironment(&tradepb.RecordSellerEnvironmentRequest{
+		SellerPlayerId: 7010, OwnerAccount: "acct-7010", OwnerRevision: 1,
+		ClientIp: "198.51.100.88", DeviceId: "phone-a",
+	})
+	require.NoError(t, err)
+	require.False(t, r2.EnvCreditCleared)
+
+	// 3) 写入核实违约黑历史（按 case_id 幂等）
+	v1, err := admin.RecordSellerViolation(&tradepb.RecordSellerViolationRequest{
+		CaseId: "DISPUTE-9001", OrderId: "commerce:9001", SellerPlayerId: 7010,
+		SellerAccount: "acct-7010", SellerOwnerRevision: 1, Reason: "verified_chargeback",
+	})
+	require.NoError(t, err)
+	require.Nil(t, v1.ErrorMessage)
+	require.EqualValues(t, 1, v1.Profile.ViolationCount)
+
+	// 4) 异地新 IP + 陌生新设备同时变化 -> 直接清 0，但保留 1 次违约黑历史
+	r3, err := admin.RecordSellerEnvironment(&tradepb.RecordSellerEnvironmentRequest{
+		SellerPlayerId: 7010, OwnerAccount: "acct-7010", OwnerRevision: 1,
+		ClientIp: "192.0.2.99", DeviceId: "stranger-pc",
+	})
+	require.NoError(t, err)
+	require.True(t, r3.EnvCreditCleared)
+	require.Zero(t, r3.Profile.CreditScore)
+	require.EqualValues(t, 1, r3.Profile.ViolationCount)
+
+	// 5) 生产模式无签名校验必须拒绝（PermissionDenied）
+	prodDeps := deps
+	prodDeps.Config.Mode = "prod"
+	_, prodErr := NewAdminLogic(context.Background(), prodDeps).RecordSellerEnvironment(&tradepb.RecordSellerEnvironmentRequest{
+		SellerPlayerId: 7010, OwnerAccount: "acct-7010", OwnerRevision: 1,
+		ClientIp: "203.0.113.5", DeviceId: "phone-a",
+	})
+	require.Error(t, prodErr)
+}
